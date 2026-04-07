@@ -1,0 +1,84 @@
+= Getting Started
+:navtitle: Getting Started
+
+This guide walks you through setting up a project with Vectors.
+
+== Prerequisites
+
+* **JDK 25 or later** -- The Vector API is used via `--add-modules jdk.incubator.vector`
+* **Gradle 8.11+** or **Maven 3.9+**
+
+== Project Setup
+
+=== Gradle (Kotlin DSL)
+
+Add the dependency to your `build.gradle.kts`:
+
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors-core:{vectors-version}")
+    // Add index modules as needed:
+    // implementation("com.integrallis:vectors-hnsw:{vectors-version}")
+}
+----
+
+Configure the Vector API incubator module:
+
+[source,kotlin]
+----
+tasks.withType<JavaCompile> {
+    options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector"))
+}
+
+tasks.withType<Test> {
+    jvmArgs("--add-modules", "jdk.incubator.vector")
+}
+----
+
+=== Maven
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+    <groupId>com.integrallis</groupId>
+    <artifactId>vectors-core</artifactId>
+    <version>{vectors-version}</version>
+</dependency>
+----
+
+Configure the compiler plugin:
+
+[source,xml]
+----
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-compiler-plugin</artifactId>
+    <configuration>
+        <compilerArgs>
+            <arg>--add-modules</arg>
+            <arg>jdk.incubator.vector</arg>
+        </compilerArgs>
+    </configuration>
+</plugin>
+----
+
+== Module Dependency Graph
+
+[source]
+----
+vectors-core              <- foundation, no internal deps
+vectors-storage           <- core
+vectors-quantization      <- core, storage
+vectors-hnsw              <- core, storage, quantization
+vectors-vamana            <- core, storage, quantization
+vectors-ivf               <- core, storage, quantization
+vectors-bench             <- all above
+----
+
+Pick the index module(s) you need and the transitive dependencies will be resolved automatically.
+
+== Next Steps
+
+* Browse the xref:api-reference.adoc[API Reference] for detailed Javadoc
+* Explore the source on {url-vectors-github}[GitHub^]

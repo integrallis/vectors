@@ -1,0 +1,39 @@
+= API Reference
+:navtitle: Javadoc API Reference
+
+Browse the generated Javadoc for the Vectors library.
+
+== Complete API Documentation
+
+link:{javadoc-aggregate-url}/index.html[Complete Javadoc (all modules)^]
+
+== Per-Module Javadoc
+
+[cols="1,2,1"]
+|===
+|Module |Description |Javadoc
+
+|`vectors-core`
+|SIMD distance kernels, vector types, similarity functions
+|link:{javadoc-base-url}/modules/core/index.html[Javadoc^]
+
+|`vectors-storage`
+|Off-heap memory, mmap, arena-based storage
+|link:{javadoc-base-url}/modules/storage/index.html[Javadoc^]
+
+|`vectors-quantization`
+|Scalar, product, binary quantization
+|link:{javadoc-base-url}/modules/quantization/index.html[Javadoc^]
+
+|`vectors-hnsw`
+|HNSW graph index
+|link:{javadoc-base-url}/modules/hnsw/index.html[Javadoc^]
+
+|`vectors-vamana`
+|Vamana/DiskANN graph index
+|link:{javadoc-base-url}/modules/vamana/index.html[Javadoc^]
+
+|`vectors-ivf`
+|IVF family indexes
+|link:{javadoc-base-url}/modules/ivf/index.html[Javadoc^]
+|===

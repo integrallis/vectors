@@ -1,0 +1,80 @@
+= Vectors
+:page-layout: home
+
+A Java SIMD-native vector search framework leveraging the Vector API (`jdk.incubator.vector`) for hardware-accelerated approximate nearest neighbor (ANN) search.
+
+== Overview
+
+Vectors is a pure Java library for building high-performance vector search applications. It provides:
+
+* **SIMD-accelerated distance kernels** -- dot product, L2 (Euclidean), and cosine similarity via the Java Vector API
+* **Multiple index types** -- HNSW, Vamana/DiskANN, and IVF family indexes
+* **Vector quantization** -- scalar int8, product quantization (PQ), binary quantization (BQ), RaBitQ
+* **Off-heap memory management** -- zero-copy storage via `MemorySegment` and `Arena` (Foreign Function & Memory API)
+* **JMH benchmarks** -- microbenchmarks for kernels and ANN-Benchmarks-aligned macrobenchmark harness
+
+== Quick Start
+
+Add the dependency to your project:
+
+[tabs]
+====
+Gradle::
++
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors-hnsw:{vectors-version}")
+}
+----
+
+Maven::
++
+[source,xml,subs="attributes+"]
+----
+<dependency>
+    <groupId>com.integrallis</groupId>
+    <artifactId>vectors-hnsw</artifactId>
+    <version>{vectors-version}</version>
+</dependency>
+----
+====
+
+NOTE: Requires JDK 25+ and `--add-modules jdk.incubator.vector` at compile and runtime.
+
+== Modules
+
+[cols="1,3"]
+|===
+|Module |Description
+
+|`vectors-core`
+|SIMD distance kernels, vector types, distance metrics
+
+|`vectors-storage`
+|Off-heap memory, mmap, arena-based storage
+
+|`vectors-quantization`
+|Scalar, product, binary, and non-uniform vector quantization
+
+|`vectors-hnsw`
+|HNSW graph index (replaces hnswlib)
+
+|`vectors-vamana`
+|Vamana/DiskANN graph index
+
+|`vectors-ivf`
+|IVF family indexes (IVF_FLAT, IVF_PQ)
+
+|`vectors-bench`
+|JMH benchmarks and ANN-Benchmarks harness
+|===
+
+== Requirements
+
+* **JDK 25+** -- Vector API (incubating) + mature Foreign Function & Memory API
+* **Gradle 8.11+** -- build system
+
+== License
+
+Apache License 2.0

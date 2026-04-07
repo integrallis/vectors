@@ -1,0 +1,76 @@
+plugins {
+	id 'base'
+	id 'com.github.node-gradle.node' version '7.0.2'
+}
+
+// Don't publish this module
+tasks.matching { it.name.startsWith('publish') }.configureEach {
+	enabled = false
+}
+
+description = 'Vectors Documentation Site'
+
+ext {
+	nodeVersion = '20.17.0'
+	npmVersion = '10.9.2'
+	antoraVersion = '3.1.12'
+}
+
+node {
+	version = nodeVersion
+	npmVersion = project.ext.npmVersion
+	download = true
+	nodeProjectDir = layout.projectDirectory.asFile
+}
+
+task installAntora(type: NpmTask) {
+	args = [
+		'install',
+		"@antora/cli@${antoraVersion}",
+		"@antora/site-generator-default@${antoraVersion}"
+	]
+}
+
+task copyJavadocs(type: Copy) {
+	description = 'Copy Javadoc outputs to Antora attachments'
+	group = 'documentation'
+
+	dependsOn ':aggregateJavadoc', ':generateModuleJavadocs'
+	from rootProject.layout.buildDirectory.dir('docs/javadoc')
+	into layout.projectDirectory.dir("content/modules/ROOT/attachments/javadoc")
+
+	doFirst {
+		mkdir layout.projectDirectory.dir("content/modules/ROOT/attachments").asFile
+		mkdir layout.projectDirectory.dir("content/modules/ROOT/attachments/javadoc").asFile
+		logger.lifecycle("Copying Javadoc documentation to Antora attachments...")
+	}
+}
+
+task generateSite(type: NodeTask) {
+	dependsOn installAntora, copyJavadocs
+	script = file('node_modules/@antora/cli/bin/antora')
+
+	args = [
+		'--fetch',
+		'--stacktrace',
+		'--log-format=pretty',
+		'antora-playbook.yml',
+		'--to-dir=build/site'
+	]
+
+	outputs.dir(layout.buildDirectory.dir("site"))
+
+	doFirst {
+		mkdir layout.buildDirectory.dir("site").get().asFile
+		logger.lifecycle("Building documentation with Antora...")
+	}
+}
+
+build.dependsOn generateSite
+assemble.dependsOn generateSite
+
+clean {
+	delete 'node_modules'
+	delete layout.buildDirectory
+	delete layout.projectDirectory.dir("content/modules/ROOT/attachments/javadoc")
+}

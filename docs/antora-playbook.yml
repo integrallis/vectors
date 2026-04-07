@@ -1,0 +1,31 @@
+site:
+  title: Vectors Documentation
+  start_page: vectors::index.adoc
+
+content:
+  sources:
+    - url: ..
+      branches: HEAD
+      start_path: docs/content
+
+runtime:
+  fetch: true
+  cache_dir: ./.cache/antora
+
+ui:
+  bundle:
+    url: https://github.com/spring-io/antora-ui-spring/releases/download/v0.4.16/ui-bundle.zip
+    snapshot: true
+  supplemental_files: ./supplemental-ui
+
+asciidoc:
+  attributes:
+    experimental: ''
+    idprefix: ''
+    idseparator: '-'
+    page-pagination: ''
+    toc: ~
+    xrefstyle: short
+    source-language: java
+    javadoc-base-url: '_attachments/javadoc'
+    javadoc-aggregate-url: '{javadoc-base-url}/aggregate'
