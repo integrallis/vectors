@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- VectorizationProvider.getInstance() returns an immutable interface reference -->
+    <Match>
+        <Class name="com.integrallis.vectors.core.VectorizationProvider"/>
+        <Bug pattern="MS_EXPOSE_REP"/>
+    </Match>
+</FindBugsFilter>

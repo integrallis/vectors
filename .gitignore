@@ -1,0 +1,41 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+bin/
+out/
+
+# OS
+**/.DS_Store
+Thumbs.db
+
+# Docs build artifacts
+docs/node_modules/
+docs/node/
+docs/build/
+docs/.cache/
+docs/content/modules/ROOT/attachments/javadoc/
+
+# Security - Never commit secrets
+*.env
+.env
+.env.*
+!.env.example
+credentials.json
+api-keys.txt
+
+# SpotBugs
+spotbugs-output.txt
+
+# JMH
+*.jmh
