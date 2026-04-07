@@ -5,4 +5,17 @@
         <Class name="com.integrallis.vectors.core.VectorizationProvider"/>
         <Bug pattern="MS_EXPOSE_REP"/>
     </Match>
+    <!-- Storage module: segment()/slab() intentionally expose MemorySegment for zero-copy access -->
+    <Match>
+        <Class name="com.integrallis.vectors.storage.io.MappedSegmentInput"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.integrallis.vectors.storage.io.MappedSegmentInputSupplier"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.integrallis.vectors.storage.memory.SlabAllocator"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
 </FindBugsFilter>
