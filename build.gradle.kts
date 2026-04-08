@@ -59,23 +59,33 @@ configure(libraryProjects) {
         maxParallelForks = Runtime.getRuntime().availableProcessors()
     }
 
-    // Custom test tasks
+    // Custom test tasks — must wire testClassesDirs and classpath so Gradle finds compiled tests
     tasks.register<Test>("unitTest") {
         description = "Run only unit tests"
         group = "verification"
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
         useJUnitPlatform {
             includeTags("unit")
         }
         jvmArgs("--add-modules", "jdk.incubator.vector")
+        testLogging {
+            events("passed", "skipped", "failed")
+        }
     }
 
     tasks.register<Test>("slowTest") {
         description = "Run slow tests (large datasets, extended scenarios)"
         group = "verification"
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
         useJUnitPlatform {
             includeTags("slow")
         }
         jvmArgs("--add-modules", "jdk.incubator.vector")
+        testLogging {
+            events("passed", "skipped", "failed")
+        }
     }
 
     tasks.withType<Javadoc> {

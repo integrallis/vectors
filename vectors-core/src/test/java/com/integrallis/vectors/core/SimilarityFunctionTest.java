@@ -3,9 +3,11 @@ package com.integrallis.vectors.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** Tests for {@link SimilarityFunction}. */
+@Tag("unit")
 class SimilarityFunctionTest {
 
   @Test

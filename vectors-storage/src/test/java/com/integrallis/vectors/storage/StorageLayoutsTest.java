@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteOrder;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** Tests for {@link StorageLayouts}. */
+@Tag("unit")
 class StorageLayoutsTest {
 
   @Test
