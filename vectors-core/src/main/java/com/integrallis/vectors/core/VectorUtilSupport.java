@@ -47,6 +47,12 @@ public interface VectorUtilSupport {
   /** Computes the squared L2 distance from off-heap float vectors stored in MemorySegments. */
   float squareDistance(MemorySegment a, MemorySegment b, int dimensions);
 
+  /**
+   * Computes the cosine similarity from off-heap float vectors stored in MemorySegments. Returns
+   * value in [-1, 1].
+   */
+  float cosine(MemorySegment a, MemorySegment b, int dimensions);
+
   // --- Binary distance ---
 
   /** Computes the Hamming distance between two binary vectors stored as packed long arrays. */

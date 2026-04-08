@@ -97,7 +97,7 @@ public enum SimilarityFunction {
    * Scales a raw inner product score to a non-negative value. Piecewise function ensures monotonic
    * ordering: larger dot products always produce larger scores.
    */
-  static float scaleMaxInnerProductScore(float dotProduct) {
+  public static float scaleMaxInnerProductScore(float dotProduct) {
     if (dotProduct >= 0) {
       return dotProduct + 1f;
     } else {

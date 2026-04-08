@@ -10,6 +10,7 @@ import java.util.Random;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -20,6 +21,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * Comprehensive tests for {@link VectorUtilSupport} implementations. Tests run against both scalar
  * and Panama providers to ensure cross-implementation agreement.
  */
+@Tag("unit")
 class VectorUtilSupportTest {
 
   /** Relative epsilon for float comparisons (1e-5 as specified in the plan). */
@@ -446,6 +448,75 @@ class VectorUtilSupportTest {
 
         float actual = panama.squareDistance(segA, segB, dim);
         assertThat(actual).isCloseTo(expected, within(FLOAT_EPSILON * dim));
+      }
+    }
+  }
+
+  // ===========================
+  // MemorySegment cosine tests
+  // ===========================
+
+  @Nested
+  class MemorySegmentCosineTest {
+
+    @ParameterizedTest(name = "dim={0}")
+    @ValueSource(ints = {1, 8, 16, 32, 64, 128, 256, 768})
+    void cosineMatchesArrayVersion(int dim) {
+      Random rng = new Random(SEED);
+      float[] a = randomFloats(dim, rng);
+      float[] b = randomFloats(dim, rng);
+      float expected = panama.cosine(a, b);
+
+      try (Arena arena = Arena.ofConfined()) {
+        MemorySegment segA = arena.allocate(ValueLayout.JAVA_FLOAT, dim);
+        MemorySegment segB = arena.allocate(ValueLayout.JAVA_FLOAT, dim);
+        MemorySegment.copy(a, 0, segA, ValueLayout.JAVA_FLOAT, 0, dim);
+        MemorySegment.copy(b, 0, segB, ValueLayout.JAVA_FLOAT, 0, dim);
+
+        float actual = panama.cosine(segA, segB, dim);
+        assertThat(actual).isCloseTo(expected, within(FLOAT_EPSILON));
+      }
+    }
+
+    @ParameterizedTest(name = "dim={0}")
+    @ValueSource(ints = {1, 8, 16, 32, 64, 128, 256, 768})
+    void panamaMatchesScalar(int dim) {
+      Random rng = new Random(SEED);
+      float[] a = randomFloats(dim, rng);
+      float[] b = randomFloats(dim, rng);
+
+      try (Arena arena = Arena.ofConfined()) {
+        MemorySegment segA = arena.allocate(ValueLayout.JAVA_FLOAT, dim);
+        MemorySegment segB = arena.allocate(ValueLayout.JAVA_FLOAT, dim);
+        MemorySegment.copy(a, 0, segA, ValueLayout.JAVA_FLOAT, 0, dim);
+        MemorySegment.copy(b, 0, segB, ValueLayout.JAVA_FLOAT, 0, dim);
+
+        float scalarResult = scalar.cosine(segA, segB, dim);
+        float panamaResult = panama.cosine(segA, segB, dim);
+        assertThat(panamaResult).isCloseTo(scalarResult, within(FLOAT_EPSILON));
+      }
+    }
+
+    @Test
+    void selfCosineIsOne() {
+      float[] a = {1.0f, 2.0f, 3.0f, 4.0f};
+      try (Arena arena = Arena.ofConfined()) {
+        MemorySegment seg = arena.allocate(ValueLayout.JAVA_FLOAT, a.length);
+        MemorySegment.copy(a, 0, seg, ValueLayout.JAVA_FLOAT, 0, a.length);
+        assertThat(panama.cosine(seg, seg, a.length)).isCloseTo(1.0f, within(FLOAT_EPSILON));
+      }
+    }
+
+    @Test
+    void orthogonalVectorsIsZero() {
+      float[] a = {1.0f, 0.0f};
+      float[] b = {0.0f, 1.0f};
+      try (Arena arena = Arena.ofConfined()) {
+        MemorySegment segA = arena.allocate(ValueLayout.JAVA_FLOAT, 2);
+        MemorySegment segB = arena.allocate(ValueLayout.JAVA_FLOAT, 2);
+        MemorySegment.copy(a, 0, segA, ValueLayout.JAVA_FLOAT, 0, 2);
+        MemorySegment.copy(b, 0, segB, ValueLayout.JAVA_FLOAT, 0, 2);
+        assertThat(panama.cosine(segA, segB, 2)).isCloseTo(0.0f, within(FLOAT_EPSILON));
       }
     }
   }

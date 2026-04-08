@@ -83,8 +83,38 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
     float sum = 0f;
     float norm1 = 0f;
     float norm2 = 0f;
+    int i = 0;
 
-    for (int i = 0; i < a.length; i++) {
+    // 4-way unrolled for ILP (3 FMAs per element, still benefits from multiple accumulators)
+    if (a.length > 16) {
+      float sum1 = 0f, sum2 = 0f, sum3 = 0f, sum4 = 0f;
+      float n1a = 0f, n1b = 0f, n1c = 0f, n1d = 0f;
+      float n2a = 0f, n2b = 0f, n2c = 0f, n2d = 0f;
+      int upperBound = a.length & ~(4 - 1);
+      for (; i < upperBound; i += 4) {
+        sum1 = MathUtil.fma(a[i], b[i], sum1);
+        n1a = MathUtil.fma(a[i], a[i], n1a);
+        n2a = MathUtil.fma(b[i], b[i], n2a);
+
+        sum2 = MathUtil.fma(a[i + 1], b[i + 1], sum2);
+        n1b = MathUtil.fma(a[i + 1], a[i + 1], n1b);
+        n2b = MathUtil.fma(b[i + 1], b[i + 1], n2b);
+
+        sum3 = MathUtil.fma(a[i + 2], b[i + 2], sum3);
+        n1c = MathUtil.fma(a[i + 2], a[i + 2], n1c);
+        n2c = MathUtil.fma(b[i + 2], b[i + 2], n2c);
+
+        sum4 = MathUtil.fma(a[i + 3], b[i + 3], sum4);
+        n1d = MathUtil.fma(a[i + 3], a[i + 3], n1d);
+        n2d = MathUtil.fma(b[i + 3], b[i + 3], n2d);
+      }
+      sum = sum1 + sum2 + sum3 + sum4;
+      norm1 = n1a + n1b + n1c + n1d;
+      norm2 = n2a + n2b + n2c + n2d;
+    }
+
+    // Scalar tail
+    for (; i < a.length; i++) {
       sum = MathUtil.fma(a[i], b[i], sum);
       norm1 = MathUtil.fma(a[i], a[i], norm1);
       norm2 = MathUtil.fma(b[i], b[i], norm2);
@@ -148,6 +178,21 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
       res += diff * diff;
     }
     return res;
+  }
+
+  @Override
+  public float cosine(MemorySegment a, MemorySegment b, int dimensions) {
+    float sum = 0f;
+    float norm1 = 0f;
+    float norm2 = 0f;
+    for (int i = 0; i < dimensions; i++) {
+      float ai = a.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+      float bi = b.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+      sum = MathUtil.fma(ai, bi, sum);
+      norm1 = MathUtil.fma(ai, ai, norm1);
+      norm2 = MathUtil.fma(bi, bi, norm2);
+    }
+    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
   }
 
   @Override

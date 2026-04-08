@@ -91,6 +91,11 @@ public final class VectorUtil {
     return IMPL.squareDistance(a, b, dimensions);
   }
 
+  /** Computes the cosine similarity from off-heap float vectors stored in MemorySegments. */
+  public static float cosine(MemorySegment a, MemorySegment b, int dimensions) {
+    return IMPL.cosine(a, b, dimensions);
+  }
+
   // --- Binary distance ---
 
   /** Computes the Hamming distance between two binary vectors stored as packed long arrays. */

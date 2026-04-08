@@ -4,9 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /** Tests for the {@link VectorUtil} public API facade. */
+@Tag("unit")
 class VectorUtilTest {
 
   @Test
@@ -114,5 +119,32 @@ class VectorUtilTest {
     float[] b = {0.0f, 4.0f, 5.0f, 6.0f, 0.0f};
     // 1*4 + 2*5 + 3*6 = 4+10+18 = 32
     assertThat(VectorUtil.dotProduct(a, 1, b, 1, 3)).isCloseTo(32.0f, within(1e-4f));
+  }
+
+  @Test
+  void cosine_memorySegment_parallelVectors() {
+    float[] a = {1.0f, 2.0f, 3.0f};
+    float[] b = {2.0f, 4.0f, 6.0f};
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segA = arena.allocate(ValueLayout.JAVA_FLOAT, a.length);
+      MemorySegment segB = arena.allocate(ValueLayout.JAVA_FLOAT, b.length);
+      MemorySegment.copy(a, 0, segA, ValueLayout.JAVA_FLOAT, 0, a.length);
+      MemorySegment.copy(b, 0, segB, ValueLayout.JAVA_FLOAT, 0, b.length);
+      assertThat(VectorUtil.cosine(segA, segB, a.length)).isCloseTo(1.0f, within(1e-4f));
+    }
+  }
+
+  @Test
+  void cosine_memorySegment_matchesArrayVersion() {
+    float[] a = {1.0f, 0.5f, -0.5f, 0.3f};
+    float[] b = {0.2f, 0.8f, 0.1f, -0.4f};
+    float expected = VectorUtil.cosine(a, b);
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segA = arena.allocate(ValueLayout.JAVA_FLOAT, a.length);
+      MemorySegment segB = arena.allocate(ValueLayout.JAVA_FLOAT, b.length);
+      MemorySegment.copy(a, 0, segA, ValueLayout.JAVA_FLOAT, 0, a.length);
+      MemorySegment.copy(b, 0, segB, ValueLayout.JAVA_FLOAT, 0, b.length);
+      assertThat(VectorUtil.cosine(segA, segB, a.length)).isCloseTo(expected, within(1e-4f));
+    }
   }
 }
