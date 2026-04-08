@@ -23,11 +23,12 @@
         <Class name="com.integrallis.vectors.quantization.ArrayVectorDataset"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
-    <!-- Deterministic Random(42L) for reservoir sampling is intentional -->
+    <!-- Deterministic Random(seed) for reservoir sampling / rotation generation is intentional -->
     <Match>
         <Or>
             <Class name="com.integrallis.vectors.quantization.ScalarQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.ProductQuantizer"/>
+            <Class name="com.integrallis.vectors.quantization.RandomRotation"/>
         </Or>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
