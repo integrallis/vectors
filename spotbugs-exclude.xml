@@ -18,4 +18,17 @@
         <Class name="com.integrallis.vectors.storage.memory.SlabAllocator"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- Quantization module: ArrayVectorDataset intentionally stores reference for zero-copy access -->
+    <Match>
+        <Class name="com.integrallis.vectors.quantization.ArrayVectorDataset"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Deterministic Random(42L) for reservoir sampling is intentional -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.quantization.ScalarQuantizer"/>
+            <Class name="com.integrallis.vectors.quantization.ProductQuantizer"/>
+        </Or>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
 </FindBugsFilter>
