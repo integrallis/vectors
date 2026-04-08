@@ -24,6 +24,7 @@ import java.util.Arrays;
  * ScoreFunction scorer = compressed.scoreFunctionFor(query, SimilarityFunction.EUCLIDEAN);
  * }</pre>
  *
+ * @see Rotation
  * @see RandomRotation
  * @see RaBitQuantizedVectors
  */
@@ -54,10 +55,9 @@ public final class RaBitQuantizer implements Quantizer<RaBitQuantizedVectors> {
   private final int paddedDimension;
   private final float[] centroid;
   private final float[] paddedCentroid; // precomputed padded centroid for SIMD centerAndPad
-  private final RandomRotation rotation;
+  private final Rotation rotation;
 
-  private RaBitQuantizer(
-      int dimension, int paddedDimension, float[] centroid, RandomRotation rotation) {
+  private RaBitQuantizer(int dimension, int paddedDimension, float[] centroid, Rotation rotation) {
     this.dimension = dimension;
     this.paddedDimension = paddedDimension;
     this.centroid = centroid;
@@ -79,7 +79,7 @@ public final class RaBitQuantizer implements Quantizer<RaBitQuantizedVectors> {
   }
 
   /**
-   * Trains a RaBitQ quantizer on the given dataset.
+   * Trains a RaBitQ quantizer on the given dataset using a dense random rotation.
    *
    * <p>Training computes the dataset centroid and generates a random orthogonal rotation matrix.
    * The dimension is padded to the next multiple of 64 for efficient bit-packing.
@@ -91,8 +91,33 @@ public final class RaBitQuantizer implements Quantizer<RaBitQuantizedVectors> {
   public static RaBitQuantizer train(VectorDataset dataset, long seed) {
     int dim = dataset.dimension();
     int paddedDim = ((dim + 63) / 64) * 64;
+    Rotation rotation = RandomRotation.generate(paddedDim, seed);
+    return train(dataset, rotation);
+  }
+
+  /**
+   * Trains a RaBitQ quantizer on the given dataset with a pluggable rotation strategy.
+   *
+   * <p>The rotation's dimension must match the padded dimension (next multiple of 64 above the
+   * dataset dimension). Use this overload to plug in alternative rotation strategies such as {@link
+   * GivensRotation} or {@link QuaternionRotation} for faster encoding.
+   *
+   * @param dataset the training data
+   * @param rotation the rotation strategy (must have dimension == padded dimension)
+   * @return a trained RaBitQ quantizer
+   * @throws IllegalArgumentException if the rotation dimension doesn't match the padded dimension
+   */
+  public static RaBitQuantizer train(VectorDataset dataset, Rotation rotation) {
+    int dim = dataset.dimension();
+    int paddedDim = ((dim + 63) / 64) * 64;
+    if (rotation.dimension() != paddedDim) {
+      throw new IllegalArgumentException(
+          "Rotation dimension "
+              + rotation.dimension()
+              + " must match padded dimension "
+              + paddedDim);
+    }
     float[] centroid = dataset.computeCentroid();
-    RandomRotation rotation = RandomRotation.generate(paddedDim, seed);
     return new RaBitQuantizer(dim, paddedDim, centroid, rotation);
   }
 
@@ -263,8 +288,8 @@ public final class RaBitQuantizer implements Quantizer<RaBitQuantizedVectors> {
     return paddedCentroid;
   }
 
-  /** Returns the random rotation matrix. */
-  RandomRotation rotation() {
+  /** Returns the rotation strategy. */
+  Rotation rotation() {
     return rotation;
   }
 

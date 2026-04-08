@@ -4,17 +4,20 @@ import com.integrallis.vectors.core.VectorUtil;
 import java.util.Random;
 
 /**
- * Random orthogonal rotation matrix for RaBitQ quantization. Generates a D×D orthogonal matrix via
- * QR decomposition (Modified Gram-Schmidt) of a random Gaussian matrix. The rotation maps vectors
- * to a space where sign-bit quantization produces unbiased distance estimators.
+ * Dense random orthogonal rotation matrix ({@link Rotation} implementation). Generates a D×D
+ * orthogonal matrix via QR decomposition (Modified Gram-Schmidt) of a random Gaussian matrix. The
+ * rotation maps vectors to a space where per-coordinate quantization produces better distance
+ * estimators by decorrelating coordinate dependencies.
+ *
+ * <p>This is the densest (and most expensive) rotation strategy: O(d²) FMAs per rotation. For
+ * faster alternatives with competitive or better quality, see {@link GivensRotation} (O(d) FMAs)
+ * and {@link QuaternionRotation} (O(d) FMAs).
  *
  * <p>The rotation matrix Q satisfies Q<sup>T</sup>Q = I (orthogonal), so it preserves all pairwise
- * distances and inner products. This is the core theoretical ingredient of RaBitQ — it makes
- * quantization error independent of data distribution.
- *
- * <p>Both the matrix and its transpose are stored for SIMD-accelerated {@code rotate()} and {@code
- * inverseRotate()} — each output element is computed as a SIMD dot product of a contiguous matrix
- * row with the input vector via {@link VectorUtil#dotProduct(float[], float[])}.
+ * distances and inner products. Both the matrix and its transpose are stored for SIMD-accelerated
+ * {@code rotate()} and {@code inverseRotate()} — each output element is computed as a SIMD dot
+ * product of a contiguous matrix row with the input vector via {@link
+ * VectorUtil#dotProduct(float[], float[])}.
  *
  * <p>Usage:
  *
@@ -23,8 +26,12 @@ import java.util.Random;
  * float[] rotated = rot.rotate(vector);
  * float[] recovered = rot.inverseRotate(rotated);  // ≈ vector
  * }</pre>
+ *
+ * @see Rotation
+ * @see GivensRotation
+ * @see QuaternionRotation
  */
-public final class RandomRotation {
+public final class RandomRotation implements Rotation {
 
   private final float[][] matrix; // D×D orthogonal matrix (row-major)
   private final float[][] matrixT; // D×D transpose (row-major) for SIMD inverseRotate
@@ -46,7 +53,11 @@ public final class RandomRotation {
    * @param seed random seed for reproducibility
    * @return a random orthogonal rotation
    */
-  static RandomRotation generate(int dimension, long seed) {
+  public static RandomRotation generate(int dimension, long seed) {
+    if (dimension < 1) {
+      throw new IllegalArgumentException(
+          "RandomRotation requires dimension >= 1, got " + dimension);
+    }
     Random rng = new Random(seed);
     float[][] q = new float[dimension][dimension];
 
@@ -93,7 +104,8 @@ public final class RandomRotation {
    * @param vector the input vector (must have length == dimension)
    * @return the rotated vector
    */
-  float[] rotate(float[] vector) {
+  @Override
+  public float[] rotate(float[] vector) {
     if (vector.length != dimension) {
       throw new IllegalArgumentException(
           "Expected dimension " + dimension + " for rotate(), got " + vector.length);
@@ -114,7 +126,8 @@ public final class RandomRotation {
    * @param vector the input vector in rotated space
    * @return the vector in original space
    */
-  float[] inverseRotate(float[] vector) {
+  @Override
+  public float[] inverseRotate(float[] vector) {
     if (vector.length != dimension) {
       throw new IllegalArgumentException(
           "Expected dimension " + dimension + " for inverseRotate(), got " + vector.length);
@@ -126,8 +139,8 @@ public final class RandomRotation {
     return result;
   }
 
-  /** Returns the dimension of this rotation matrix. */
-  int dimension() {
+  @Override
+  public int dimension() {
     return dimension;
   }
 

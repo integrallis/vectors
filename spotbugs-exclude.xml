@@ -29,7 +29,10 @@
             <Class name="com.integrallis.vectors.quantization.ScalarQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.ProductQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.RandomRotation"/>
+            <Class name="com.integrallis.vectors.quantization.GivensRotation"/>
+            <Class name="com.integrallis.vectors.quantization.QuaternionRotation"/>
         </Or>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
+
 </FindBugsFilter>
