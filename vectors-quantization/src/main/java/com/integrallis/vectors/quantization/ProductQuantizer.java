@@ -101,7 +101,7 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
     int[][] sizesAndOffsets = computeSubspaceSizesAndOffsets(dim, numSubspaces);
 
     // Optionally compute and subtract global centroid
-    float[] centroid = center ? computeCentroid(dataset) : null;
+    float[] centroid = center ? dataset.computeCentroid() : null;
 
     // Sample training data if dataset is large
     float[][] trainingData = sampleTrainingData(dataset, centroid);
@@ -323,20 +323,6 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
     }
 
     return result;
-  }
-
-  /** Computes the global centroid (mean vector) of the dataset. */
-  private static float[] computeCentroid(VectorDataset dataset) {
-    int dim = dataset.dimension();
-    int n = dataset.size();
-    float[] centroid = new float[dim];
-
-    for (int i = 0; i < n; i++) {
-      VectorUtil.addInPlace(centroid, dataset.getVector(i));
-    }
-    VectorUtil.scale(centroid, 1.0f / n);
-
-    return centroid;
   }
 
   /**

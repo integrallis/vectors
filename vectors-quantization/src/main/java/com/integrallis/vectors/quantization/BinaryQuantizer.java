@@ -62,7 +62,7 @@ public final class BinaryQuantizer implements Quantizer<BinaryQuantizedVectors> 
     int dim = dataset.dimension();
     return switch (mode) {
       case SIGN_BIT -> new BinaryQuantizer(dim, BinaryMode.SIGN_BIT, null);
-      case BBQ -> new BinaryQuantizer(dim, BinaryMode.BBQ, computeCentroid(dataset));
+      case BBQ -> new BinaryQuantizer(dim, BinaryMode.BBQ, dataset.computeCentroid());
     };
   }
 
@@ -235,17 +235,5 @@ public final class BinaryQuantizer implements Quantizer<BinaryQuantizedVectors> 
     out[0] = distToC;
     out[1] = min; // vl: lower bound
     out[2] = max - min; // width: range
-  }
-
-  /** Computes the global centroid (mean vector) of the dataset. */
-  private static float[] computeCentroid(VectorDataset dataset) {
-    int dim = dataset.dimension();
-    int n = dataset.size();
-    float[] centroid = new float[dim];
-    for (int i = 0; i < n; i++) {
-      VectorUtil.addInPlace(centroid, dataset.getVector(i));
-    }
-    VectorUtil.scale(centroid, 1.0f / n);
-    return centroid;
   }
 }
