@@ -22,7 +22,13 @@ public interface VectorStore extends AutoCloseable {
   /** Returns the encoding used for vectors in this store. */
   VectorEncoding encoding();
 
-  /** Returns the byte size of a single vector (including any alignment padding). */
+  /**
+   * Returns the raw byte size of a single vector's data (without alignment padding). For FLOAT32
+   * this is {@code dimension * 4}; for INT8 this is {@code dimension}; for BINARY this is {@code
+   * ceil(dimension / 64) * 8}. Use {@link
+   * com.integrallis.vectors.storage.store.MappedVectorStore#stride()} for the stride including
+   * alignment padding.
+   */
   int vectorByteSize();
 
   /**

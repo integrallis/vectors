@@ -79,18 +79,16 @@ public final class MappedSegmentInput implements RandomAccessInput {
 
   @Override
   public void readInts(int[] dst, int offset, int count) {
-    for (int i = 0; i < count; i++) {
-      dst[offset + i] = segment.get(StorageLayouts.INT_LE, pos);
-      pos += Integer.BYTES;
-    }
+    // Bulk copy handles little-endian byte-swapping automatically on big-endian platforms
+    MemorySegment.copy(segment, StorageLayouts.INT_LE, pos, dst, offset, count);
+    pos += (long) count * Integer.BYTES;
   }
 
   @Override
   public void readFloats(float[] dst, int offset, int count) {
-    for (int i = 0; i < count; i++) {
-      dst[offset + i] = segment.get(StorageLayouts.FLOAT_LE, pos);
-      pos += Float.BYTES;
-    }
+    // Bulk copy handles little-endian byte-swapping automatically on big-endian platforms
+    MemorySegment.copy(segment, StorageLayouts.FLOAT_LE, pos, dst, offset, count);
+    pos += (long) count * Float.BYTES;
   }
 
   @Override
