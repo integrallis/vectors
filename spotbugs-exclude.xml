@@ -31,8 +31,32 @@
             <Class name="com.integrallis.vectors.quantization.RandomRotation"/>
             <Class name="com.integrallis.vectors.quantization.GivensRotation"/>
             <Class name="com.integrallis.vectors.quantization.QuaternionRotation"/>
+            <Class name="com.integrallis.vectors.hnsw.RandomLevelGenerator"/>
         </Or>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+    <!-- HNSW: SearchResult record exposes/stores arrays intentionally for zero-copy access -->
+    <Match>
+        <Class name="com.integrallis.vectors.hnsw.SearchResult"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <!-- HNSW: InMemoryVectors intentionally stores reference for zero-copy access -->
+    <Match>
+        <Class name="com.integrallis.vectors.hnsw.InMemoryVectors"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- HNSW: VectorStoreVectors.getVector returns shared buffer by design -->
+    <Match>
+        <Class name="com.integrallis.vectors.hnsw.VectorStoreVectors"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <!-- HNSW: HnswGraphBuilder.build() returns internal graph intentionally -->
+    <Match>
+        <Class name="com.integrallis.vectors.hnsw.HnswGraphBuilder"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
 
 </FindBugsFilter>
