@@ -1,6 +1,8 @@
 package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.quantization.CompressedVectors;
+import com.integrallis.vectors.quantization.ScoreFunction;
 
 /**
  * Top-level HNSW index providing build and search functionality via a builder pattern.
@@ -8,6 +10,9 @@ import com.integrallis.vectors.core.SimilarityFunction;
  * <p>Concurrent searches from multiple threads are safe: each thread uses its own {@link
  * HnswSearcher} instance (with its own scratch buffers) retrieved from a {@link ThreadLocal}.
  * Building the index is single-threaded.
+ *
+ * <p>Supports optional quantization via {@link #enableQuantization(CompressedVectors)} for two-pass
+ * search: a fast coarse pass using quantized scoring followed by full-precision rescoring.
  *
  * <p>Usage:
  *
@@ -17,8 +22,12 @@ import com.integrallis.vectors.core.SimilarityFunction;
  *     .efConstruction(200)
  *     .build();
  *
- * // Thread-safe — each calling thread gets its own searcher automatically.
+ * // Full-precision search (thread-safe)
  * SearchResult result = index.search(queryVector, 10);
+ *
+ * // Two-pass quantized search (thread-safe)
+ * index.enableQuantization(compressedVectors);
+ * SearchResult twoPass = index.searchTwoPass(queryVector, 10);
  * }</pre>
  */
 public final class HnswIndex {
@@ -28,6 +37,18 @@ public final class HnswIndex {
   private final SimilarityFunction similarityFunction;
   // One HnswSearcher per thread: each owns its own scratch BitSet and NodeQueues.
   private final ThreadLocal<HnswSearcher> threadLocalSearcher;
+
+  /**
+   * Holds both fields of quantization state in a single record so they can be published atomically
+   * via one {@code volatile} write to {@link #quantizationState}. Two separate {@code volatile}
+   * fields would allow a concurrent reader to observe a torn state (e.g., {@code compressedVectors}
+   * from one call and the old {@code threadLocalSearcher} from before).
+   */
+  private record QuantizationState(
+      CompressedVectors compressed, ThreadLocal<HnswSearcher> searchers) {}
+
+  // Single volatile reference — readers always see a consistent (compressed, searchers) pair.
+  private volatile QuantizationState quantizationState;
 
   private HnswIndex(
       HnswGraph graph, RandomAccessVectors vectors, SimilarityFunction similarityFunction) {
@@ -39,7 +60,57 @@ public final class HnswIndex {
   }
 
   /**
-   * Searches for the k nearest neighbors to the query vector.
+   * Attaches compressed vectors for two-pass search. Creates a {@link ThreadLocal} pool of
+   * quantized searchers and publishes them atomically with the compressed-vector reference.
+   *
+   * @param compressed the compressed vectors (must match this index's size and dimension)
+   * @throws IllegalArgumentException if size or dimension does not match
+   */
+  public void enableQuantization(CompressedVectors compressed) {
+    if (compressed.size() != vectors.size()) {
+      throw new IllegalArgumentException(
+          "CompressedVectors size ("
+              + compressed.size()
+              + ") must match index size ("
+              + vectors.size()
+              + ")");
+    }
+    if (compressed.dimension() != vectors.dimension()) {
+      throw new IllegalArgumentException(
+          "CompressedVectors dimension ("
+              + compressed.dimension()
+              + ") must match index dimension ("
+              + vectors.dimension()
+              + ")");
+    }
+    SimilarityFunction sim = this.similarityFunction;
+    ThreadLocal<HnswSearcher> tl =
+        ThreadLocal.withInitial(
+            () -> {
+              NodeScorerFactory quantizedFactory =
+                  query -> {
+                    ScoreFunction sf = compressed.scoreFunctionFor(query, sim);
+                    return sf::score;
+                  };
+              return new HnswSearcher(graph, vectors, sim, quantizedFactory);
+            });
+    // Single volatile write — atomically publishes both the compressed vectors and the
+    // thread-local searcher pool.
+    this.quantizationState = new QuantizationState(compressed, tl);
+  }
+
+  /** Removes quantization attachment. Subsequent {@link #searchTwoPass} falls back to exact. */
+  public void disableQuantization() {
+    this.quantizationState = null;
+  }
+
+  /** Returns true if quantized vectors are attached. */
+  public boolean isQuantizationEnabled() {
+    return quantizationState != null;
+  }
+
+  /**
+   * Searches for the k nearest neighbors to the query vector using full-precision scoring.
    *
    * <p>Thread-safe: each calling thread uses its own scratch buffers.
    *
@@ -57,7 +128,38 @@ public final class HnswIndex {
     return threadLocalSearcher.get().search(query, k);
   }
 
-  /** Creates a new per-thread searcher instance with its own scratch buffers. */
+  /**
+   * Two-pass search: fast quantized coarse pass followed by full-precision rescore.
+   *
+   * <p>If no quantization is enabled, falls back to the full-precision searcher running the same
+   * two-pass pipeline (over-fetch {@code overQueryFactor × k} candidates with exact scoring, then
+   * rescore to the final top-k). {@code overQueryFactor} is always honoured regardless of whether
+   * quantization is enabled — the no-quantization path is not a short-circuit that discards it.
+   *
+   * @param query the query vector
+   * @param k number of final results
+   * @param efSearch beam width for the coarse pass
+   * @param overQueryFactor multiplier for coarse-pass k (e.g., 2.0 retrieves 2*k candidates)
+   * @return the top-k results after rescoring, sorted by score descending
+   */
+  public SearchResult searchTwoPass(float[] query, int k, int efSearch, float overQueryFactor) {
+    // Single volatile read — guaranteed to see a consistent (compressed, searchers) pair.
+    QuantizationState qs = this.quantizationState;
+    HnswSearcher searcher = qs != null ? qs.searchers().get() : threadLocalSearcher.get();
+    return searcher.searchTwoPass(query, k, efSearch, overQueryFactor);
+  }
+
+  /** Two-pass search with default efSearch=max(k,100) and overQueryFactor=2.0. Thread-safe. */
+  public SearchResult searchTwoPass(float[] query, int k) {
+    return searchTwoPass(query, k, Math.max(k, 100), 2.0f);
+  }
+
+  /**
+   * Creates a new full-precision searcher instance with its own scratch buffers.
+   *
+   * <p><b>Always returns a full-precision searcher</b>, regardless of whether quantization is
+   * enabled. For quantized two-pass search, call {@link #searchTwoPass} directly instead.
+   */
   public HnswSearcher searcher() {
     return new HnswSearcher(graph, vectors, similarityFunction);
   }

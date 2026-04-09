@@ -58,5 +58,10 @@
         <Class name="com.integrallis.vectors.hnsw.HnswGraphBuilder"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- HNSW: RandomAccessVectorDataset intentionally stores reference for zero-copy bridge -->
+    <Match>
+        <Class name="com.integrallis.vectors.hnsw.RandomAccessVectorDataset"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 
 </FindBugsFilter>
