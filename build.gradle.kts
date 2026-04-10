@@ -46,10 +46,11 @@ configure(libraryProjects) {
         ))
     }
 
+    // Common JVM args and logging for ALL Test tasks — no tag filters here.
+    // Tag filters must live on each individual task so they do not accumulate
+    // (tasks.withType<Test> applies to every Test task including slowTest and
+    // unitTest; adding excludeTags here would fight with their includeTags).
     tasks.withType<Test> {
-        useJUnitPlatform {
-            excludeTags("slow", "benchmark")
-        }
         jvmArgs("--add-modules", "jdk.incubator.vector")
         testLogging {
             events("passed", "skipped", "failed")
@@ -57,6 +58,13 @@ configure(libraryProjects) {
             showStandardStreams = false
         }
         maxParallelForks = Runtime.getRuntime().availableProcessors()
+    }
+
+    // Default 'test' task: exclude slow and benchmark; include everything else.
+    tasks.named<Test>("test") {
+        useJUnitPlatform {
+            excludeTags("slow", "benchmark")
+        }
     }
 
     // Custom test tasks — must wire testClassesDirs and classpath so Gradle finds compiled tests
@@ -68,7 +76,6 @@ configure(libraryProjects) {
         useJUnitPlatform {
             includeTags("unit")
         }
-        jvmArgs("--add-modules", "jdk.incubator.vector")
         testLogging {
             events("passed", "skipped", "failed")
         }
@@ -82,7 +89,6 @@ configure(libraryProjects) {
         useJUnitPlatform {
             includeTags("slow")
         }
-        jvmArgs("--add-modules", "jdk.incubator.vector")
         testLogging {
             events("passed", "skipped", "failed")
         }

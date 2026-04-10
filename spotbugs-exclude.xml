@@ -134,5 +134,28 @@
         <Class name="com.integrallis.vectors.db.internal.StagingBuffer"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- vectors-bench: FvecsLoader returns raw float[][], int[][], byte[][] arrays
+         for zero-copy benchmark setup. Defensive copies would defeat the purpose. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.dataset.FvecsLoader"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS"/>
+        </Or>
+    </Match>
+    <!-- vectors-bench: Hdf5Loader returns reshaped arrays directly from HDF5 file data. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.dataset.Hdf5Loader"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="PZLA_PREFER_ZERO_LENGTH_ARRAYS"/>
+        </Or>
+    </Match>
+    <!-- vectors-bench: RecallUtil.bruteForceGroundTruth returns raw int[][] ground-truth
+         arrays; callers own the result and may not copy it. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.RecallUtil"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
 
 </FindBugsFilter>
