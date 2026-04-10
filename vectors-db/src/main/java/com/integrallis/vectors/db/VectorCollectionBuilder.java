@@ -17,6 +17,7 @@ public final class VectorCollectionBuilder {
   private SimilarityFunction metric;
   private IndexType indexType = IndexType.FLAT;
   private QuantizerKind quantizerKind = QuantizerKind.NONE;
+  private int autoCommitThreshold = Integer.MAX_VALUE;
 
   VectorCollectionBuilder() {}
 
@@ -56,6 +57,21 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
+  /**
+   * Sets the staging buffer size at which {@code add}/{@code addAll} auto-commit before returning.
+   * Must be positive. Pass {@link Integer#MAX_VALUE} to disable auto-commit (the default), which
+   * forces the caller to drive {@link VectorCollection#commit()} explicitly.
+   */
+  public VectorCollectionBuilder autoCommitThreshold(int autoCommitThreshold) {
+    if (autoCommitThreshold <= 0) {
+      throw new IllegalArgumentException(
+          "autoCommitThreshold must be positive (use Integer.MAX_VALUE to disable): "
+              + autoCommitThreshold);
+    }
+    this.autoCommitThreshold = autoCommitThreshold;
+    return this;
+  }
+
   /** Builds the collection. Applies Step 2 restrictions on backend and quantizer. */
   public VectorCollection build() {
     if (dimension == null) {
@@ -76,7 +92,9 @@ public final class VectorCollectionBuilder {
               + quantizerKind
               + " deferred to a later step (Step 2 only supports QuantizerKind.NONE)");
     }
-    var config = new VectorCollectionConfig(dimension, metric, indexType, quantizerKind);
+    var config =
+        new VectorCollectionConfig(
+            dimension, metric, indexType, quantizerKind, autoCommitThreshold);
     return new VectorCollectionImpl(config);
   }
 }

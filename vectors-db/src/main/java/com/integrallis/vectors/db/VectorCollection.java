@@ -6,7 +6,7 @@ import java.util.Collection;
 /**
  * Public facade for an embedded vector database collection.
  *
- * <p>Step 2 subset: in-memory only, flat-scan reference backend, no persistence, no filter
+ * <p>Step 3 subset: in-memory only, flat-scan reference backend, no persistence, no filter
  * execution beyond {@link com.integrallis.vectors.db.filter.Filter.All}. {@code upsert}, {@code
  * delete}, {@code deleteWhere}, and {@code compact} throw {@link UnsupportedOperationException}.
  *
@@ -17,7 +17,11 @@ import java.util.Collection;
  *   <li>{@link #add(Document)} or {@link #addAll(Collection)} documents. They accumulate in a
  *       staging buffer and are not visible to {@link #search(SearchRequest)} until commit.
  *   <li>{@link #commit()} atomically installs a new backend containing the previously live
- *       documents plus the newly staged ones.
+ *       documents plus the newly staged ones. Commits are published via a volatile snapshot so
+ *       concurrent searches are never blocked.
+ *   <li>If {@code autoCommitThreshold} has been set on the builder, {@code add}/{@code addAll} will
+ *       auto-commit before returning as soon as the staging buffer reaches that size. By default
+ *       the threshold is {@link Integer#MAX_VALUE}, so the caller must drive commits explicitly.
  *   <li>{@link #search(SearchRequest)} returns hits from the last committed generation.
  *   <li>{@link #close()} releases resources.
  * </ol>
@@ -41,27 +45,27 @@ public interface VectorCollection extends AutoCloseable {
   void addAll(Collection<Document> docs);
 
   /**
-   * Upserts a document (insert or replace). Deferred to Step 3.
+   * Upserts a document (insert or replace). Deferred to Step 6.
    *
-   * @throws UnsupportedOperationException always (Step 2)
+   * @throws UnsupportedOperationException always
    */
   default void upsert(Document doc) {
-    throw new UnsupportedOperationException("upsert deferred to Step 3");
+    throw new UnsupportedOperationException("upsert deferred to Step 6");
   }
 
   /**
-   * Deletes a document by id. Deferred to Step 3.
+   * Deletes a document by id. Deferred to Step 6.
    *
-   * @throws UnsupportedOperationException always (Step 2)
+   * @throws UnsupportedOperationException always
    */
   default void delete(String id) {
-    throw new UnsupportedOperationException("delete deferred to Step 3");
+    throw new UnsupportedOperationException("delete deferred to Step 6");
   }
 
   /**
    * Deletes documents matching a filter. Deferred to Step 5.
    *
-   * @throws UnsupportedOperationException always (Step 2)
+   * @throws UnsupportedOperationException always
    */
   default void deleteWhere(Filter filter) {
     throw new UnsupportedOperationException("deleteWhere deferred to Step 5");
@@ -74,7 +78,7 @@ public interface VectorCollection extends AutoCloseable {
    */
   void commit();
 
-  /** No-op in Step 2 (in-memory only; persistence lands in Step 4). */
+  /** No-op in Step 3 (in-memory only). Step 4 adds fsync semantics over the persistence layer. */
   default void flush() {
     // in-memory: nothing to flush
   }
@@ -82,7 +86,7 @@ public interface VectorCollection extends AutoCloseable {
   /**
    * Compacts tombstoned documents out of the current generation. Deferred to Step 6.
    *
-   * @throws UnsupportedOperationException always (Step 2)
+   * @throws UnsupportedOperationException always
    */
   default void compact() {
     throw new UnsupportedOperationException("compact deferred to Step 6");
@@ -102,7 +106,7 @@ public interface VectorCollection extends AutoCloseable {
 
   /**
    * Number of vectors physically stored across live and staged buffers (including tombstones in
-   * later steps). Equal to {@link #size()} in Step 2.
+   * later steps). Equal to {@link #size()} in Step 3.
    */
   int physicalSize();
 

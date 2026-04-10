@@ -5,10 +5,27 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/** In-memory {@link MetadataStore} backed by a {@link HashMap}. */
+/**
+ * In-memory {@link MetadataStore} backed by a {@link HashMap}.
+ *
+ * <p>Not thread-safe on its own. The facade ({@code VectorCollectionImpl}) protects a store
+ * instance by mutating it only under the writer lock and publishing the fully-populated successor
+ * to readers via a volatile {@code Generation} record.
+ */
 public final class InMemoryMetadataStore implements MetadataStore {
 
   private final Map<Integer, Document> byOrdinal = new HashMap<>();
+
+  /**
+   * Copy constructor used by the commit pipeline to produce a mutable successor generation without
+   * touching the predecessor. The returned store is fully independent of {@code other}.
+   */
+  public static InMemoryMetadataStore copyOf(InMemoryMetadataStore other) {
+    Objects.requireNonNull(other, "other must not be null");
+    InMemoryMetadataStore copy = new InMemoryMetadataStore();
+    copy.byOrdinal.putAll(other.byOrdinal);
+    return copy;
+  }
 
   @Override
   public Document get(int ordinal) {

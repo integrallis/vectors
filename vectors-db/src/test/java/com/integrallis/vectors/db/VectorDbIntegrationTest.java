@@ -361,6 +361,72 @@ class VectorDbIntegrationTest {
 
   @Nested
   @Tag("unit")
+  class AutoCommit {
+
+    @Test
+    void defaultConfigNeverAutoCommits() {
+      try (var col = newCollection(4, SimilarityFunction.EUCLIDEAN)) {
+        // Default builder leaves autoCommitThreshold at Integer.MAX_VALUE → no auto-commit.
+        List<Document> docs = new ArrayList<>(1000);
+        for (int i = 0; i < 1000; i++) {
+          docs.add(Document.of("doc-" + i, new float[] {i, 0f, 0f, 0f}));
+        }
+        col.addAll(docs);
+
+        // Nothing should be visible to search() yet.
+        assertThat(col.size()).isZero();
+        var result = col.search(SearchRequest.builder(new float[] {0f, 0f, 0f, 0f}, 10).build());
+        assertThat(result.hits()).isEmpty();
+
+        // Explicit commit makes them visible.
+        col.commit();
+        assertThat(col.size()).isEqualTo(1000);
+      }
+    }
+
+    @Test
+    void addAllBeyondThresholdAutoCommits() {
+      try (var col =
+          VectorCollection.builder()
+              .dimension(4)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .autoCommitThreshold(100)
+              .build()) {
+        List<Document> docs = new ArrayList<>(200);
+        for (int i = 0; i < 200; i++) {
+          docs.add(Document.of("doc-" + i, new float[] {i, 0f, 0f, 0f}));
+        }
+        // addAll batches all 200 and then runs a single auto-commit on the way out.
+        col.addAll(docs);
+
+        // NO explicit commit() call.
+        assertThat(col.size()).isEqualTo(200);
+        var result = col.search(SearchRequest.builder(new float[] {0f, 0f, 0f, 0f}, 200).build());
+        assertThat(result.hits()).hasSize(200);
+      }
+    }
+
+    @Test
+    void individualAddBeyondThresholdAutoCommits() {
+      try (var col =
+          VectorCollection.builder()
+              .dimension(4)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .autoCommitThreshold(5)
+              .build()) {
+        for (int i = 0; i < 10; i++) {
+          col.add(Document.of("doc-" + i, new float[] {i, 0f, 0f, 0f}));
+        }
+        // No explicit commit — auto-commit fired at size=5 and then again at size=5 after reset.
+        assertThat(col.size()).isEqualTo(10);
+        var result = col.search(SearchRequest.builder(new float[] {0f, 0f, 0f, 0f}, 10).build());
+        assertThat(result.hits()).hasSize(10);
+      }
+    }
+  }
+
+  @Nested
+  @Tag("unit")
   class FilterStubs {
 
     @Test

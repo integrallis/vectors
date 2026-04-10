@@ -10,13 +10,35 @@ import java.util.Objects;
  * In-memory bidirectional mapping between external string ids and dense int ordinals. Ordinals are
  * assigned sequentially starting from 0.
  *
- * <p>Step 2 scope: only {@link #put(String)} is used by the add path. Duplicates throw because
- * {@code add} is strict; {@code upsert} is deferred to Step 3.
+ * <p>Only {@link #put(String)} is used by the add path. Duplicates throw because {@code add} is
+ * strict; {@code upsert} is deferred to Step 6.
+ *
+ * <p>Not thread-safe on its own. The facade ({@code VectorCollectionImpl}) protects a mapper
+ * instance by holding the writer lock during mutation and publishing a fresh, fully-populated
+ * mapper via a volatile {@code Generation} record for readers.
  */
 public final class InMemoryIdMapper {
 
-  private final Map<String, Integer> idToOrdinal = new HashMap<>();
-  private final List<String> ordinalToId = new ArrayList<>();
+  private final Map<String, Integer> idToOrdinal;
+  private final List<String> ordinalToId;
+
+  /** Creates an empty mapper. */
+  public InMemoryIdMapper() {
+    this.idToOrdinal = new HashMap<>();
+    this.ordinalToId = new ArrayList<>();
+  }
+
+  /**
+   * Copy constructor used by the commit pipeline to produce a mutable successor generation without
+   * touching the predecessor. The returned mapper is fully independent of {@code other}.
+   */
+  public static InMemoryIdMapper copyOf(InMemoryIdMapper other) {
+    Objects.requireNonNull(other, "other must not be null");
+    InMemoryIdMapper copy = new InMemoryIdMapper();
+    copy.idToOrdinal.putAll(other.idToOrdinal);
+    copy.ordinalToId.addAll(other.ordinalToId);
+    return copy;
+  }
 
   /**
    * Registers an external id and returns its assigned ordinal.
