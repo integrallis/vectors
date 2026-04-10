@@ -6,6 +6,7 @@ include("vectors-quantization")
 include("vectors-hnsw")
 include("vectors-vamana")
 include("vectors-ivf")
+include("vectors-db")
 include("vectors-bench")
 include("docs")
 

@@ -94,5 +94,37 @@
         <Class name="com.integrallis.vectors.vamana.RandomAccessVectorDataset"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- vectors-db: public records intentionally expose internal array references -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.Document"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <Match>
+        <Class name="com.integrallis.vectors.db.SearchRequest"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <Match>
+        <Class name="com.integrallis.vectors.db.SearchResult"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <!-- vectors-db: IndexSpi.SearchOutcome and FlatScanAdapter intentionally share
+         array references for zero-copy between the backend and the facade. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.index.IndexSpi$SearchOutcome"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <Match>
+        <Class name="com.integrallis.vectors.db.index.FlatScanAdapter"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 
 </FindBugsFilter>
