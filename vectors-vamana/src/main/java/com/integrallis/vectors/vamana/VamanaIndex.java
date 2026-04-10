@@ -1,6 +1,8 @@
 package com.integrallis.vectors.vamana;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.quantization.CompressedVectors;
+import com.integrallis.vectors.quantization.ScoreFunction;
 import java.util.Objects;
 
 /**
@@ -8,6 +10,9 @@ import java.util.Objects;
  *
  * <p>Uses {@link ThreadLocal} searchers for lock-free concurrent search. Construction is
  * single-threaded.
+ *
+ * <p>Supports optional quantization via {@link #enableQuantization(CompressedVectors)} for two-pass
+ * search: a fast coarse pass using quantized scoring followed by full-precision rescoring.
  *
  * <p>Usage:
  *
@@ -19,7 +24,12 @@ import java.util.Objects;
  *     .seed(42L)
  *     .build();
  *
+ * // Full-precision search (thread-safe)
  * SearchResult result = index.search(query, 10);
+ *
+ * // Two-pass quantized search (thread-safe)
+ * index.enableQuantization(compressedVectors);
+ * SearchResult twoPass = index.searchTwoPass(query, 10);
  * }</pre>
  */
 public final class VamanaIndex {
@@ -29,12 +39,74 @@ public final class VamanaIndex {
   private final SimilarityFunction sim;
   private final ThreadLocal<VamanaSearcher> threadLocalSearcher;
 
+  /**
+   * Holds both fields of quantization state in a single record so they can be published atomically
+   * via one {@code volatile} write to {@link #quantizationState}. Two separate {@code volatile}
+   * fields would allow a concurrent reader to observe a torn state (e.g., {@code compressed} from
+   * one call and the old {@code searchers} from before).
+   */
+  private record QuantizationState(
+      CompressedVectors compressed, ThreadLocal<VamanaSearcher> searchers) {}
+
+  // Single volatile reference — readers always see a consistent (compressed, searchers) pair.
+  private volatile QuantizationState quantizationState;
+
   private VamanaIndex(VamanaGraph graph, RandomAccessVectors vectors, SimilarityFunction sim) {
     this.graph = Objects.requireNonNull(graph, "graph must not be null");
     this.vectors = Objects.requireNonNull(vectors, "vectors must not be null");
     this.sim = Objects.requireNonNull(sim, "sim must not be null");
     this.threadLocalSearcher =
         ThreadLocal.withInitial(() -> new VamanaSearcher(graph, vectors, sim));
+  }
+
+  /**
+   * Attaches compressed vectors for two-pass search. Creates a {@link ThreadLocal} pool of
+   * quantized searchers and publishes them atomically with the compressed-vector reference.
+   *
+   * @param compressed the compressed vectors (must match this index's size and dimension)
+   * @throws IllegalArgumentException if size or dimension does not match
+   */
+  public void enableQuantization(CompressedVectors compressed) {
+    if (compressed.size() != vectors.size()) {
+      throw new IllegalArgumentException(
+          "CompressedVectors size ("
+              + compressed.size()
+              + ") must match index size ("
+              + vectors.size()
+              + ")");
+    }
+    if (compressed.dimension() != vectors.dimension()) {
+      throw new IllegalArgumentException(
+          "CompressedVectors dimension ("
+              + compressed.dimension()
+              + ") must match index dimension ("
+              + vectors.dimension()
+              + ")");
+    }
+    SimilarityFunction localSim = this.sim;
+    ThreadLocal<VamanaSearcher> tl =
+        ThreadLocal.withInitial(
+            () -> {
+              NodeScorerFactory quantizedFactory =
+                  query -> {
+                    ScoreFunction sf = compressed.scoreFunctionFor(query, localSim);
+                    return sf::score;
+                  };
+              return new VamanaSearcher(graph, vectors, localSim, quantizedFactory);
+            });
+    // Single volatile write — atomically publishes both the compressed vectors and the
+    // thread-local searcher pool.
+    this.quantizationState = new QuantizationState(compressed, tl);
+  }
+
+  /** Removes quantization attachment. Subsequent {@link #searchTwoPass} falls back to exact. */
+  public void disableQuantization() {
+    this.quantizationState = null;
+  }
+
+  /** Returns true if quantized vectors are attached. */
+  public boolean isQuantizationEnabled() {
+    return quantizationState != null;
   }
 
   /**
@@ -61,6 +133,43 @@ public final class VamanaIndex {
   }
 
   /**
+   * Two-pass search: fast quantized coarse pass followed by full-precision rescore.
+   *
+   * <p>If no quantization is enabled, falls back to the full-precision searcher running the same
+   * two-pass pipeline (over-fetch {@code overQueryFactor × k} candidates with exact scoring, then
+   * rescore to the final top-k). {@code overQueryFactor} is always honoured regardless of whether
+   * quantization is enabled — the no-quantization path is not a short-circuit that discards it.
+   *
+   * @param query the query vector
+   * @param k number of final results
+   * @param searchListSize beam width for the coarse pass
+   * @param overQueryFactor multiplier for coarse-pass k (e.g., 2.0 retrieves 2*k candidates)
+   * @return the top-k results after rescoring, sorted by score descending
+   */
+  public SearchResult searchTwoPass(
+      float[] query, int k, int searchListSize, float overQueryFactor) {
+    // Single volatile read — guaranteed to see a consistent (compressed, searchers) pair.
+    QuantizationState qs = this.quantizationState;
+    VamanaSearcher searcher = qs != null ? qs.searchers().get() : threadLocalSearcher.get();
+    return searcher.searchTwoPass(query, k, searchListSize, overQueryFactor);
+  }
+
+  /** Two-pass search with default searchListSize=max(k,100) and overQueryFactor=2.0. */
+  public SearchResult searchTwoPass(float[] query, int k) {
+    return searchTwoPass(query, k, Math.max(k, 100), 2.0f);
+  }
+
+  /**
+   * Creates a new full-precision searcher instance with its own scratch buffers.
+   *
+   * <p><b>Always returns a full-precision searcher</b>, regardless of whether quantization is
+   * enabled. For quantized two-pass search, call {@link #searchTwoPass} directly instead.
+   */
+  public VamanaSearcher searcher() {
+    return new VamanaSearcher(graph, vectors, sim);
+  }
+
+  /**
    * Returns the underlying graph for testing and inspection.
    *
    * <p><b>Warning:</b> the returned {@link VamanaGraph} is the live graph backing this index.
@@ -74,6 +183,16 @@ public final class VamanaIndex {
   /** Returns the number of vectors in the index. */
   public int size() {
     return graph.size();
+  }
+
+  /** Returns the vector dimension. */
+  public int dimension() {
+    return vectors.dimension();
+  }
+
+  /** Returns the similarity function used by this index. */
+  public SimilarityFunction similarityFunction() {
+    return sim;
   }
 
   /**

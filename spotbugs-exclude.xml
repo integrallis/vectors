@@ -89,5 +89,10 @@
         <Class name="com.integrallis.vectors.vamana.VamanaIndex"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- Vamana: RandomAccessVectorDataset intentionally stores reference for zero-copy bridge -->
+    <Match>
+        <Class name="com.integrallis.vectors.vamana.RandomAccessVectorDataset"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
 
 </FindBugsFilter>
