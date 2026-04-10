@@ -7,8 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * In-memory bidirectional mapping between external string ids and dense int ordinals. Ordinals are
- * assigned sequentially starting from 0.
+ * In-memory {@link IdMapper} backed by a {@link HashMap} and an {@link ArrayList}.
  *
  * <p>Only {@link #put(String)} is used by the add path. Duplicates throw because {@code add} is
  * strict; {@code upsert} is deferred to Step 6.
@@ -17,7 +16,7 @@ import java.util.Objects;
  * instance by holding the writer lock during mutation and publishing a fresh, fully-populated
  * mapper via a volatile {@code Generation} record for readers.
  */
-public final class InMemoryIdMapper {
+public final class InMemoryIdMapper implements IdMapper {
 
   private final Map<String, Integer> idToOrdinal;
   private final List<String> ordinalToId;
@@ -31,6 +30,13 @@ public final class InMemoryIdMapper {
   /**
    * Copy constructor used by the commit pipeline to produce a mutable successor generation without
    * touching the predecessor. The returned mapper is fully independent of {@code other}.
+   *
+   * <p><b>Why this takes the concrete type.</b> The commit-time copy is specific to the in-memory
+   * shape because it needs direct access to the backing {@code HashMap} and {@code ArrayList} for
+   * O(1) bulk copy. The mapped implementation landing in Step 4a is whole-file persistent
+   * (materialized via a static {@code Writer.writeTo(...)}), so the commit path will branch on the
+   * current mapper's type rather than relying on a shared {@code copyOf} contract on the {@link
+   * IdMapper} interface.
    */
   public static InMemoryIdMapper copyOf(InMemoryIdMapper other) {
     Objects.requireNonNull(other, "other must not be null");
@@ -45,6 +51,7 @@ public final class InMemoryIdMapper {
    *
    * @throws IllegalArgumentException if the id has already been registered
    */
+  @Override
   public int put(String id) {
     Objects.requireNonNull(id, "id must not be null");
     if (idToOrdinal.containsKey(id)) {
@@ -57,17 +64,20 @@ public final class InMemoryIdMapper {
   }
 
   /** Returns {@code true} if the external id is known to this mapper. */
+  @Override
   public boolean contains(String id) {
     return idToOrdinal.containsKey(id);
   }
 
   /** Returns the ordinal assigned to the id, or {@code -1} if unknown. */
+  @Override
   public int ordinalOf(String id) {
     Integer ord = idToOrdinal.get(id);
     return ord == null ? -1 : ord;
   }
 
   /** Returns the external id for the given ordinal. */
+  @Override
   public String idOf(int ordinal) {
     if (ordinal < 0 || ordinal >= ordinalToId.size()) {
       throw new IndexOutOfBoundsException("ordinal out of range: " + ordinal);
@@ -76,13 +86,8 @@ public final class InMemoryIdMapper {
   }
 
   /** Number of mappings currently stored. */
+  @Override
   public int size() {
     return ordinalToId.size();
-  }
-
-  /** Clears the mapper. */
-  public void clear() {
-    idToOrdinal.clear();
-    ordinalToId.clear();
   }
 }
