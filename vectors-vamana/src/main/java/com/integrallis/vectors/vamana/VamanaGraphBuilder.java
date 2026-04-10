@@ -108,8 +108,12 @@ public final class VamanaGraphBuilder {
    * non-normalised or non-centred data: the dot-product maximiser of the centroid is not the
    * L2-nearest point to the centroid.
    *
+   * <p><b>Visibility:</b> package-private solely to allow direct unit testing from {@code
+   * VamanaGraphBuilderTest}; not part of the public API and must not be promoted to {@code public}.
+   *
    * @return the index of the medoid
    */
+  // @VisibleForTesting
   int computeMedoid() {
     int n = vectors.size();
     int dim = vectors.dimension();

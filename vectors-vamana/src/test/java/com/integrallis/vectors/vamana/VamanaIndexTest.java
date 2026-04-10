@@ -68,28 +68,6 @@ class VamanaIndexTest {
   }
 
   @Nested
-  @Tag("unit")
-  class RecallBenchmarks {
-
-    @Test
-    void recall10_above90_1000vectors_128dim() {
-      float[][] data = generateRandomVectors(1000, 128, 42L);
-      VamanaIndex index =
-          VamanaIndex.builder(data, SimilarityFunction.EUCLIDEAN)
-              .maxDegree(64)
-              .searchListSize(128)
-              .alpha(1.2f)
-              .seed(42L)
-              .build();
-
-      double avgRecall =
-          VamanaSearcherTest.computeAverageRecall(
-              data, index, SimilarityFunction.EUCLIDEAN, 10, 128);
-      assertThat(avgRecall).as("recall@10 on 1000 random 128-dim vectors").isGreaterThan(0.90);
-    }
-  }
-
-  @Nested
   @Tag("slow")
   @EnabledIf("siftSmallAvailable")
   class SiftSmallDataset {

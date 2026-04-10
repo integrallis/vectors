@@ -159,7 +159,8 @@ class VamanaSearcherTest {
       return Stream.of(
           Arguments.of(SimilarityFunction.EUCLIDEAN),
           Arguments.of(SimilarityFunction.DOT_PRODUCT),
-          Arguments.of(SimilarityFunction.COSINE));
+          Arguments.of(SimilarityFunction.COSINE),
+          Arguments.of(SimilarityFunction.MAXIMUM_INNER_PRODUCT));
     }
 
     @ParameterizedTest
@@ -167,8 +168,11 @@ class VamanaSearcherTest {
     void recall_above85_forAllFunctions(SimilarityFunction sim) {
       float[][] data = generateRandomVectors(200, 32, 42L);
 
-      // For DOT_PRODUCT and COSINE, normalize vectors so scores are well-behaved
-      if (sim == SimilarityFunction.DOT_PRODUCT || sim == SimilarityFunction.COSINE) {
+      // For inner-product-based similarities, normalize vectors so scores are well-behaved.
+      // EUCLIDEAN is scale-invariant in terms of ranking, so no normalization needed.
+      if (sim == SimilarityFunction.DOT_PRODUCT
+          || sim == SimilarityFunction.COSINE
+          || sim == SimilarityFunction.MAXIMUM_INNER_PRODUCT) {
         for (float[] vec : data) {
           float norm = 0;
           for (float v : vec) {

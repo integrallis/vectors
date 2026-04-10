@@ -58,11 +58,17 @@ public final class VamanaGraph {
    * Returns the neighbor list for the given node.
    *
    * @param nodeId the node to query
-   * @return the neighbor array (never null if node was initialized)
+   * @return the neighbor array (never null)
+   * @throws IllegalStateException if this node has not been initialized via {@link #initNode(int)}
    */
   public NeighborArray getNeighbors(int nodeId) {
     Objects.checkIndex(nodeId, size);
-    return neighbors[nodeId];
+    NeighborArray na = neighbors[nodeId];
+    if (na == null) {
+      throw new IllegalStateException(
+          "Node " + nodeId + " has not been initialized; call initNode(" + nodeId + ") first");
+    }
+    return na;
   }
 
   /** Returns the medoid (entry point for search). */

@@ -63,5 +63,31 @@
         <Class name="com.integrallis.vectors.hnsw.RandomAccessVectorDataset"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Vamana: SearchResult record exposes/stores arrays intentionally for zero-copy access -->
+    <Match>
+        <Class name="com.integrallis.vectors.vamana.SearchResult"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <!-- Vamana: InMemoryVectors intentionally stores reference for zero-copy access -->
+    <Match>
+        <Class name="com.integrallis.vectors.vamana.InMemoryVectors"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Vamana: VamanaGraphBuilder uses deterministic Random(seed) and returns internal graph -->
+    <Match>
+        <Class name="com.integrallis.vectors.vamana.VamanaGraphBuilder"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+        </Or>
+    </Match>
+    <!-- Vamana: VamanaIndex.graph() returns internal graph for testing/inspection -->
+    <Match>
+        <Class name="com.integrallis.vectors.vamana.VamanaIndex"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
 
 </FindBugsFilter>
