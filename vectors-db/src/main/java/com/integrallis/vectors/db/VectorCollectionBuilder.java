@@ -98,6 +98,12 @@ public final class VectorCollectionBuilder {
     if (metric == null) {
       throw new IllegalStateException("metric is required, call builder.metric(m)");
     }
+    if (storageRoot != null && !storageRoot.isAbsolute()) {
+      throw new IllegalArgumentException(
+          "storagePath must be absolute when non-null (the collection must not depend on the JVM"
+              + " working directory): "
+              + storageRoot);
+    }
     if (indexType != IndexType.FLAT) {
       throw new UnsupportedOperationException(
           "indexType "

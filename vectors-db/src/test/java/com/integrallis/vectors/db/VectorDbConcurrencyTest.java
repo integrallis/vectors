@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Concurrency acceptance tests for the Step 3 {@link VectorCollection} implementation. Every test
@@ -379,6 +381,94 @@ class VectorDbConcurrencyTest {
               // Sanity: readers actually observed the race window (millions of size() calls).
               assertThat(sizeCalls.get()).isGreaterThan(0);
               assertThat(col.size()).isEqualTo(100 + 2000);
+            }
+          });
+    }
+
+    /**
+     * Persistent-mode variant of {@link #readersNeverSeeSpuriousClosedDuringCommit}. Exercises the
+     * same commit/release race on the disk-backed path where each commit runs the full
+     * mmap-persistence pipeline: write → fsync → rename → CURRENT flip → open a new {@link
+     * java.lang.foreign.Arena} for the new generation → release the previous arena when its
+     * refcount drops to zero. The read path still goes through the {@code acquireReadSnapshot} CAS
+     * retry loop, and readers must never see {@code IllegalStateException("closed")} while the
+     * collection is alive.
+     *
+     * <p>Uses far fewer commits than the in-memory variant (50 vs 2000) because each persistent
+     * commit involves fsync and mmap setup. The race window is still exercised — the refcount
+     * machinery is identical to in-memory mode, and the additional disk latency per commit actually
+     * widens the window the readers race against.
+     */
+    @Test
+    void persistentReadersNeverSeeSpuriousClosedDuringCommit(@TempDir Path tempDir) {
+      assertTimeoutPreemptively(
+          Duration.ofSeconds(10),
+          () -> {
+            try (var col =
+                VectorCollection.builder()
+                    .dimension(DIM)
+                    .metric(SimilarityFunction.EUCLIDEAN)
+                    .storagePath(tempDir.resolve("col"))
+                    .build()) {
+              // Seed the collection so size() calls have real work to do.
+              Random rng = new Random(SEED);
+              col.addAll(randomDocs(100, 0, rng));
+              col.commit();
+
+              int readerThreads = 4;
+              ExecutorService pool = Executors.newFixedThreadPool(readerThreads + 1);
+              List<AtomicReference<Throwable>> errors = new ArrayList<>();
+              AtomicBoolean stop = new AtomicBoolean(false);
+              AtomicInteger sizeCalls = new AtomicInteger();
+              CountDownLatch readersReady = new CountDownLatch(readerThreads);
+
+              for (int t = 0; t < readerThreads; t++) {
+                AtomicReference<Throwable> err = new AtomicReference<>();
+                errors.add(err);
+                pool.submit(
+                    () -> {
+                      try {
+                        readersReady.countDown();
+                        while (!stop.get()) {
+                          // Any IllegalStateException thrown here is the bug — the collection
+                          // has never been closed during this test, so every read-path method
+                          // must succeed even while the writer is swapping mmap-backed
+                          // generations underneath us.
+                          col.size();
+                          sizeCalls.incrementAndGet();
+                        }
+                      } catch (Throwable th) {
+                        err.set(th);
+                      }
+                    });
+              }
+
+              int commits = 50;
+              AtomicReference<Throwable> writerErr = new AtomicReference<>();
+              errors.add(writerErr);
+              pool.submit(
+                  () -> {
+                    try {
+                      readersReady.await();
+                      Random wrng = new Random(SEED + 3);
+                      int nextId = 100;
+                      // Each commit triggers a full mmap generation cutover: new Arena,
+                      // CURRENT-pointer rename, prior Arena close on refcount drop to zero.
+                      for (int c = 0; c < commits; c++) {
+                        col.add(Document.of("r" + nextId, randomVector(wrng)));
+                        nextId++;
+                        col.commit();
+                      }
+                    } catch (Throwable th) {
+                      writerErr.set(th);
+                    } finally {
+                      stop.set(true);
+                    }
+                  });
+
+              shutdownAndCheck(pool, errors);
+              assertThat(sizeCalls.get()).isGreaterThan(0);
+              assertThat(col.size()).isEqualTo(100 + commits);
             }
           });
     }

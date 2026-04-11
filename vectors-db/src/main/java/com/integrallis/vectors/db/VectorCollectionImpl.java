@@ -31,6 +31,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Step 4a {@link VectorCollection} implementation with a volatile-snapshot publication model and
@@ -71,6 +73,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * Steps 5/6).
  */
 final class VectorCollectionImpl implements VectorCollection {
+
+  private static final Logger LOGGER = Logger.getLogger(VectorCollectionImpl.class.getName());
 
   /**
    * Immutable snapshot of the collection's searchable state plus a per-generation refcount.
@@ -143,9 +147,19 @@ final class VectorCollectionImpl implements VectorCollection {
     private void closeResources() {
       try {
         spi.close();
-      } catch (Exception ignored) {
-        // SPI close is a no-op in all current implementations; swallowing here avoids masking a
-        // subsequent arena close failure. Any real resource is owned by the arena.
+      } catch (Exception e) {
+        // SPI close is a no-op in all current (Step 4a) implementations, but graph-backed SPIs
+        // landing in Step 4b may need to release real resources here. Log rather than swallow
+        // so the failure is observable, but don't rethrow — we still need to run the arena
+        // close below to avoid leaking mmap handles.
+        LOGGER.log(
+            Level.WARNING,
+            e,
+            () ->
+                "SPI close failed for generation "
+                    + generationNumber
+                    + "; continuing to"
+                    + " release arena");
       }
       if (arena != null) {
         arena.close();
@@ -201,13 +215,32 @@ final class VectorCollectionImpl implements VectorCollection {
    */
   private volatile Generation generation;
 
+  /**
+   * Next generation number to write. Guarded by {@link #writerLock}. Advances <i>unconditionally
+   * after a successful {@link GenerationDirectory#writeGeneration}</i>, even if the subsequent
+   * {@link #openGeneration} fails — so a retry never collides with the already-durable directory.
+   * In persistent mode this is bootstrapped to {@code recoveredGen.generationNumber + 1}; in
+   * in-memory mode it is unused (and left at 0).
+   */
+  private long nextGenerationNumber;
+
+  /**
+   * Test-only hook. When non-null, {@link #openGeneration} throws this {@link IOException} instead
+   * of opening the generation directory. Used by {@code VectorDbPersistenceTest} to exercise the
+   * "write succeeds then open fails" recovery path (audit A1) without having to corrupt files on
+   * disk. {@code volatile} so test writes are visible to the writer-lock-held commit path.
+   */
+  volatile IOException openGenerationFailureHook;
+
   VectorCollectionImpl(VectorCollectionConfig config) {
     this.config = Objects.requireNonNull(config, "config must not be null");
     if (config.storageRoot() == null) {
       this.generation = bootstrapInMemory();
+      this.nextGenerationNumber = 0L;
     } else {
       try {
         this.generation = bootstrapPersistent(config.storageRoot());
+        this.nextGenerationNumber = this.generation.generationNumber + 1L;
       } catch (IOException e) {
         throw new UncheckedIOException(
             "Failed to open persistent collection at " + config.storageRoot(), e);
@@ -258,6 +291,10 @@ final class VectorCollectionImpl implements VectorCollection {
    * failure anywhere in the open sequence, the arena is closed so the partial state is released.
    */
   private Generation openGeneration(Path genDir, Manifest manifest) throws IOException {
+    IOException injected = openGenerationFailureHook;
+    if (injected != null) {
+      throw injected;
+    }
     Arena arena = Arena.ofShared();
     try {
       MemorySegmentVectors mapped =
@@ -475,7 +512,10 @@ final class VectorCollectionImpl implements VectorCollection {
 
     // 3. Build the manifest, then hand everything to GenerationDirectory.writeGeneration which
     //    runs the full crash-safe write protocol (tmp dir → files → fsync → rename → CURRENT).
-    long newGenNumber = oldGen.generationNumber + 1L;
+    //    nextGenerationNumber is our monotonic counter — it advances unconditionally after a
+    //    successful write (step 3a below) so any subsequent retry after an open-failure lands on
+    //    gen-(N+1) instead of colliding with the already-durable gen-N on disk.
+    long newGenNumber = nextGenerationNumber;
     Manifest manifest =
         Manifest.build(
             config,
@@ -497,8 +537,16 @@ final class VectorCollectionImpl implements VectorCollection {
               new BufferedGenerationSource(vectorsBin, idmapBin, metadataBin),
               manifest);
     } catch (IOException e) {
+      // Write failed — the gen directory was not durably created (GenerationDirectory fsyncs and
+      // renames atomically). nextGenerationNumber is NOT advanced; the next retry can reuse the
+      // same number.
       throw new UncheckedIOException("Failed to write generation " + newGenNumber, e);
     }
+
+    // 3a. Write succeeded — gen-N and CURRENT are on disk. Advance the counter BEFORE attempting
+    //     open so a subsequent open-failure + retry correctly targets gen-(N+1). Crucial for
+    //     recovery from transient open failures (fd exhaustion, OOM during mmap, etc.).
+    nextGenerationNumber = newGenNumber + 1L;
 
     // 4. Open the new generation under a fresh shared arena, then publish it atomically via a
     //    single volatile write. Any in-flight reader captured oldGen before the publish and will
@@ -507,11 +555,17 @@ final class VectorCollectionImpl implements VectorCollection {
     try {
       newGen = openGeneration(wr.generationDir(), wr.manifest());
     } catch (IOException e) {
-      // The gen dir and CURRENT pointer are durable on disk, so recovery on the next open will
-      // find the new generation — but this process cannot. Rethrow; the staging buffer is still
-      // populated so nothing is lost client-side.
+      // The gen dir and CURRENT pointer are durable on disk, and nextGenerationNumber has been
+      // advanced. A subsequent commit() retry will write to gen-(N+1), leaving gen-N as an
+      // unreachable orphan (CURRENT will be overwritten). The staging buffer is NOT cleared so
+      // the caller can still retry; oldGen stays live so concurrent readers keep observing a
+      // consistent (pre-commit) view.
       throw new UncheckedIOException(
-          "Generation " + newGenNumber + " written but cannot be opened", e);
+          "Generation "
+              + newGenNumber
+              + " written but cannot be opened; retry commit() to land"
+              + " a successor generation",
+          e);
     }
 
     this.generation = newGen;

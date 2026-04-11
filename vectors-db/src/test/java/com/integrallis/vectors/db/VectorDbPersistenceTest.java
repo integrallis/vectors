@@ -392,5 +392,125 @@ class VectorDbPersistenceTest {
           .isInstanceOf(UncheckedIOException.class)
           .hasMessageContaining("Failed to open persistent collection");
     }
+
+    @Test
+    void relativeStoragePathRejected() {
+      // A relative path would resolve against the JVM working directory at runtime, which is
+      // fragile across deployments. The builder Javadoc says absolute is required — enforce it.
+      assertThatThrownBy(
+              () ->
+                  VectorCollection.builder()
+                      .dimension(DIM)
+                      .metric(SimilarityFunction.EUCLIDEAN)
+                      .storagePath(Path.of("relative-collection"))
+                      .build())
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("storagePath must be absolute");
+    }
+  }
+
+  /**
+   * Regression tests for audit finding A1 — {@code commitPersistent()} must not get stuck if {@link
+   * com.integrallis.vectors.db.storage.GenerationDirectory#writeGeneration} succeeds but the
+   * subsequent {@code openGeneration} throws (e.g. transient fd exhaustion or OOM during mmap).
+   * Before the fix, the {@code nextGenerationNumber} counter was derived from the still- live
+   * {@code oldGen} so a retry would re-attempt the same number and hit "generation directory
+   * already exists". After the fix, the counter advances unconditionally on write success so
+   * retries land on {@code gen-(N+1)}.
+   *
+   * <p>Failures are injected via the package-private {@code openGenerationFailureHook} field on
+   * {@link VectorCollectionImpl} — the cleanest way to exercise the "write ok, open fail" window
+   * without racing file corruption against a real mmap operation.
+   */
+  @Nested
+  @Tag("unit")
+  class CommitOpenFailureRecovery {
+
+    @Test
+    void retryAfterOpenFailureAdvancesGenerationNumber(@TempDir Path tempDir) throws IOException {
+      Path storageRoot = tempDir.resolve("col");
+      // Verify both: (a) the first commit's disk state survives (orphaned gen-1), and (b) the
+      // retry succeeds and is durable across reopen.
+      try (var col = openPersistent(storageRoot)) {
+        // Inject a failure so the FIRST commit succeeds on disk but fails to open in-process.
+        VectorCollectionImpl impl = (VectorCollectionImpl) col;
+        impl.openGenerationFailureHook = new IOException("injected open failure");
+
+        List<Document> firstBatch = generateDocs(3, SEED);
+        col.addAll(firstBatch);
+        assertThatThrownBy(col::commit)
+            .isInstanceOf(UncheckedIOException.class)
+            .hasMessageContaining("written but cannot be opened")
+            .hasMessageContaining("retry commit()");
+
+        // Staging is still populated; oldGen (the empty bootstrap) is still live.
+        assertThat(col.size()).isZero();
+
+        // Disk should now contain gen-0 (empty bootstrap) AND gen-1 (the failed commit's
+        // durable payload). CURRENT may point at 1 but the in-memory state is at 0.
+        assertThat(Files.isDirectory(storageRoot.resolve("gen-0000000000000000"))).isTrue();
+        assertThat(Files.isDirectory(storageRoot.resolve("gen-0000000000000001"))).isTrue();
+
+        // Clear the hook and retry. The retry must advance to gen-2 instead of colliding with
+        // the already-durable gen-1. If nextGenerationNumber were still derived from oldGen,
+        // writeGeneration would throw "generation directory already exists".
+        impl.openGenerationFailureHook = null;
+        col.commit();
+
+        // After the successful retry, gen-2 exists on disk and the in-memory state is consistent.
+        assertThat(Files.isDirectory(storageRoot.resolve("gen-0000000000000002"))).isTrue();
+        assertThat(col.size()).isEqualTo(3);
+
+        // And the retry's docs are searchable through the facade.
+        SearchResult hits =
+            col.search(SearchRequest.builder(firstBatch.get(0).vector(), 3).build());
+        assertThat(hits.hits()).hasSize(3);
+      }
+
+      // Reopen — recovery picks the newest valid generation (gen-2, which CURRENT points at).
+      try (var reopened = openPersistent(storageRoot)) {
+        assertThat(reopened.size()).isEqualTo(3);
+      }
+    }
+
+    @Test
+    void retryAfterOpenFailureWithPriorCommittedGeneration(@TempDir Path tempDir) {
+      // Variant of the test above with a non-empty prior generation: first successful commit
+      // lands on gen-1, then we inject an open failure on the second commit. Retry must advance
+      // to gen-3 (gen-2 is orphaned) without colliding with the existing gen-1 or gen-2.
+      Path storageRoot = tempDir.resolve("col");
+      try (var col = openPersistent(storageRoot)) {
+        // First commit with unique ids in [0, 2).
+        List<Document> first = generateDocs(2, SEED);
+        col.addAll(first);
+        col.commit();
+        assertThat(col.size()).isEqualTo(2);
+
+        VectorCollectionImpl impl = (VectorCollectionImpl) col;
+        impl.openGenerationFailureHook = new IOException("injected");
+
+        // Second batch with ids that don't collide with the first.
+        Random rng = new Random(SEED + 1);
+        List<Document> second = new ArrayList<>();
+        second.add(docWithMetadata("alt-0", randomVector(rng), 10));
+        second.add(docWithMetadata("alt-1", randomVector(rng), 11));
+        col.addAll(second);
+
+        assertThatThrownBy(col::commit).isInstanceOf(UncheckedIOException.class);
+
+        // Retry with the hook cleared — retry must advance to gen-3.
+        impl.openGenerationFailureHook = null;
+        col.commit();
+
+        assertThat(col.size()).isEqualTo(4);
+        // gen-1 (first commit), gen-2 (failed commit, orphaned), gen-3 (retry) all on disk.
+        assertThat(Files.isDirectory(storageRoot.resolve("gen-0000000000000001"))).isTrue();
+        assertThat(Files.isDirectory(storageRoot.resolve("gen-0000000000000002"))).isTrue();
+        assertThat(Files.isDirectory(storageRoot.resolve("gen-0000000000000003"))).isTrue();
+        // The successor generation contains both original and retry docs.
+        assertThat(col.contains("doc-0")).isTrue();
+        assertThat(col.contains("alt-0")).isTrue();
+      }
+    }
   }
 }
