@@ -22,18 +22,38 @@ public final class Checksums {
 
   private Checksums() {}
 
-  /** Computes the CRC32 of a full file. Reads sequentially in 64 KiB chunks. */
-  public static long ofFile(Path file) throws IOException {
+  /**
+   * Result of a single-pass file hash: the number of bytes read from the file and the CRC32 of
+   * those bytes. Returned together by {@link #ofFile(Path)} so callers that need to check both
+   * against manifest-declared values (e.g. payload integrity verification during crash recovery) do
+   * so from a single sequential read — eliminating the TOCTOU window between a standalone {@code
+   * Files.size} stat call and a subsequent {@code ofFile} read.
+   *
+   * <p>The two fields are consistent by construction: {@code length} is the exact number of bytes
+   * that contributed to {@code crc32}, not a potentially-stale stat result.
+   */
+  public record FileChecksum(long length, long crc32) {}
+
+  /**
+   * Computes the CRC32 of a full file and reports the number of bytes that contributed to it. Reads
+   * sequentially in 64 KiB chunks. The returned {@link FileChecksum#length} is the exact byte count
+   * consumed from the file channel — not a stat call — so callers can validate both length and CRC
+   * against manifest-declared values without a stat/read TOCTOU gap.
+   */
+  public static FileChecksum ofFile(Path file) throws IOException {
     CRC32 crc = new CRC32();
+    long total = 0L;
     try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
       ByteBuffer buf = ByteBuffer.allocateDirect(64 * 1024);
-      while (ch.read(buf) != -1) {
+      int read;
+      while ((read = ch.read(buf)) != -1) {
         buf.flip();
         crc.update(buf);
+        total += read;
         buf.clear();
       }
     }
-    return crc.getValue();
+    return new FileChecksum(total, crc.getValue());
   }
 
   /** Computes the CRC32 of a byte array slice. */

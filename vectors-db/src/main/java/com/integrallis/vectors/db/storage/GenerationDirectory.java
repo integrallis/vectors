@@ -615,29 +615,31 @@ public final class GenerationDirectory {
    *
    * <p>Uses {@link Checksums#ofFile(Path)} which streams through a 64 KiB direct byte buffer rather
    * than slurping the whole file into a heap byte array — a multi-gigabyte {@code vectors.bin} is
-   * verified without allocating a heap byte array of its size.
+   * verified without allocating a heap byte array of its size. Length and CRC come from a single
+   * file-channel read (no standalone {@code Files.size} stat call), so the length is always
+   * consistent with the CRC value: we cannot see a length that matches the manifest while the CRC
+   * was computed over a different set of bytes.
    */
   private static void verifyOneFile(Path file, long expectedLength, long expectedCrc)
       throws IOException {
     if (expectedLength == 0L) {
       return;
     }
-    long actualLength = Files.size(file);
-    if (actualLength != expectedLength) {
+    Checksums.FileChecksum actual = Checksums.ofFile(file);
+    if (actual.length() != expectedLength) {
       throw new IOException(
           "payload length mismatch at "
               + file
               + ": manifest="
               + expectedLength
               + ", actual="
-              + actualLength);
+              + actual.length());
     }
-    long computedCrc = Checksums.ofFile(file);
-    if (computedCrc != expectedCrc) {
+    if (actual.crc32() != expectedCrc) {
       throw new IOException(
           String.format(
               "payload CRC mismatch at %s: manifest=0x%08x, computed=0x%08x",
-              file, expectedCrc, computedCrc));
+              file, expectedCrc, actual.crc32()));
     }
   }
 

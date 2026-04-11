@@ -550,8 +550,10 @@ class VectorDbHnswPersistenceTest {
       assertThat(GenerationDirectory.readCurrent(storageRoot)).isEqualTo(2L);
 
       // Phase 2: corrupt gen-2's graph.bin by zeroing it out. The manifest's graphBinCrc32 no
-      // longer matches, so openGeneration's per-file CRC pass will reject it. The recovery walk
-      // must then fall back to gen-1's graph.
+      // longer matches, so GenerationDirectory.recover()'s tryVerifyPayloadCrcs pass will reject
+      // it (payload CRCs are verified during recovery, not at openGeneration time — see
+      // GenerationDirectory.recover Javadoc for the Step 4b rationale). The recovery walk must
+      // then fall back to gen-1's graph and republish CURRENT.
       Path latestGraph =
           storageRoot.resolve(FileFormat.generationDirName(2L)).resolve(FileFormat.GRAPH_FILE);
       assertThat(latestGraph).exists();
