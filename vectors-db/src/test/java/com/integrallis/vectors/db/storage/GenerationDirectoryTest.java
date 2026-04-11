@@ -92,17 +92,22 @@ class GenerationDirectoryTest {
   }
 
   private static Manifest sampleManifest(long generationNumber) {
+    // Compute the real CRC32 of each payload so the manifest matches what the trivial source
+    // writes. Since Step 4b, recover() verifies per-file CRCs in addition to the manifest
+    // self-CRC; a generation whose manifest-declared CRC doesn't match the on-disk bytes is
+    // treated as corrupt and walks back to an older generation. Tests that want to model
+    // corruption must explicitly mutate the bytes AFTER writing.
     return Manifest.build(
         CONFIG,
         generationNumber,
         /* createdEpochMillis */ 1_700_000_000_000L,
         /* liveCount */ 0L,
         /* vectorsBinLength */ VECTORS_PAYLOAD.length,
-        /* vectorsBinCrc32 */ 0L,
+        /* vectorsBinCrc32 */ Checksums.ofBytes(VECTORS_PAYLOAD),
         /* metadataBinLength */ METADATA_PAYLOAD.length,
-        /* metadataBinCrc32 */ 0L,
+        /* metadataBinCrc32 */ Checksums.ofBytes(METADATA_PAYLOAD),
         /* idmapBinLength */ IDMAP_PAYLOAD.length,
-        /* idmapBinCrc32 */ 0L,
+        /* idmapBinCrc32 */ Checksums.ofBytes(IDMAP_PAYLOAD),
         /* graphBinLength */ 0L,
         /* graphBinCrc32 */ 0L);
   }
@@ -331,6 +336,60 @@ class GenerationDirectoryTest {
       assertThatIOException()
           .isThrownBy(() -> GenerationDirectory.recover(tmp, null, null))
           .withMessageContaining("no valid generation found");
+    }
+
+    @Test
+    void corruptedPayloadInNewestGenFallsBackToPrevious(@TempDir Path tmp) throws IOException {
+      // Step 4b recovery guarantee: recover() verifies every payload file's CRC against the
+      // manifest-stored CRC, not just the manifest self-CRC. A generation whose manifest is
+      // perfectly readable but whose vectors.bin has been silently corrupted (bit rot, partial
+      // truncation, fsck-after-crash) is rejected and the walk-back rolls forward to the newest
+      // gen whose payload bytes also match the manifest CRCs.
+      GenerationDirectory.writeGeneration(tmp, 0L, trivialSource(), sampleManifest(0L));
+      GenerationDirectory.writeGeneration(tmp, 1L, trivialSource(), sampleManifest(1L));
+
+      // Overwrite gen-1's vectors.bin with garbage of the same length. The manifest still
+      // parses (self-CRC intact) but the stored vectors.bin CRC no longer matches the file.
+      Path corruptVectors = tmp.resolve("gen-0000000000000001/vectors.bin");
+      Files.write(corruptVectors, new byte[VECTORS_PAYLOAD.length]);
+
+      RecoveryResult r = GenerationDirectory.recover(tmp, null, null);
+      assertThat(r.generationNumber()).isEqualTo(0L);
+      assertThat(r.rewroteCurrent()).isTrue();
+      assertThat(GenerationDirectory.readCurrent(tmp)).isEqualTo(0L);
+    }
+
+    @Test
+    void currentPointsAtCorruptedPayloadFallsBackToPrevious(@TempDir Path tmp) throws IOException {
+      // Same as above but CURRENT still names the corrupt generation (not deleted upfront).
+      // The happy-path branch inside recover() must fail the per-file CRC check and fall
+      // through to the descending scan rather than returning the corrupt generation.
+      GenerationDirectory.writeGeneration(tmp, 0L, trivialSource(), sampleManifest(0L));
+      GenerationDirectory.writeGeneration(tmp, 1L, trivialSource(), sampleManifest(1L));
+
+      // Corrupt idmap.bin this time to prove it's not just vectors.bin that's checked.
+      Path corruptIdmap = tmp.resolve("gen-0000000000000001/idmap.bin");
+      Files.write(corruptIdmap, new byte[IDMAP_PAYLOAD.length]);
+
+      RecoveryResult r = GenerationDirectory.recover(tmp, null, null);
+      assertThat(r.generationNumber()).isEqualTo(0L);
+      assertThat(r.rewroteCurrent()).isTrue();
+      assertThat(GenerationDirectory.readCurrent(tmp)).isEqualTo(0L);
+    }
+
+    @Test
+    void payloadLengthMismatchFallsBackToPrevious(@TempDir Path tmp) throws IOException {
+      // A payload that has been truncated (not just mutated) also fails the per-file check
+      // via the length comparison inside verifyOneFile, BEFORE computing the CRC.
+      GenerationDirectory.writeGeneration(tmp, 0L, trivialSource(), sampleManifest(0L));
+      GenerationDirectory.writeGeneration(tmp, 1L, trivialSource(), sampleManifest(1L));
+
+      Path truncatedMetadata = tmp.resolve("gen-0000000000000001/metadata.bin");
+      Files.write(truncatedMetadata, new byte[METADATA_PAYLOAD.length - 2]);
+
+      RecoveryResult r = GenerationDirectory.recover(tmp, null, null);
+      assertThat(r.generationNumber()).isEqualTo(0L);
+      assertThat(r.rewroteCurrent()).isTrue();
     }
 
     @Test

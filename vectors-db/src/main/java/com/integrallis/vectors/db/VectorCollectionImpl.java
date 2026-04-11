@@ -343,15 +343,15 @@ final class VectorCollectionImpl implements VectorCollection {
    * {@link Generation} with refcount initialized to 1 (the facade's handle). For {@link
    * IndexType#FLAT} generations that is the three data files ({@code vectors.bin}, {@code
    * idmap.bin}, {@code metadata.bin}). For {@link IndexType#HNSW} generations it additionally reads
-   * the generation's {@code graph.bin}, verifies its CRC32 against {@link
-   * Manifest#graphBinCrc32()}, decodes it via {@link HnswGraphCodec#decode(byte[])}, and wraps
-   * everything in a {@link MappedHnswIndexAdapter}.
+   * the generation's {@code graph.bin}, decodes it via {@link HnswGraphCodec#decode(byte[])}, and
+   * wraps everything in a {@link MappedHnswIndexAdapter}.
    *
-   * <p>Every data file's CRC is re-verified here before the stores are constructed so a file that
-   * silently corrupts after the manifest's self-CRC check (bit rot, partial truncation after an
-   * earlier fsck, user error) fails fast rather than bleeding into search results. The manifest
-   * self-CRC alone only proves the header is intact; the per-file CRCs prove the payload is intact,
-   * and recovery walks backward on any mismatch.
+   * <p>Per-file CRC verification is NOT done here: it is the responsibility of {@link
+   * GenerationDirectory#recover} which reads every payload file through a streaming CRC before
+   * returning a {@link GenerationDirectory.RecoveryResult}. A corrupt payload is caught at recovery
+   * time and triggers a walk-back to the previous generation. On the commit path we just wrote the
+   * files with known CRCs via {@link BufferedGenerationSource} — re-verifying them here would be a
+   * wasteful cold-cache double read of {@code vectors.bin} with no additional guarantee.
    *
    * <p>On failure anywhere in the open sequence, the arena is closed so partial state is released.
    */
@@ -362,26 +362,6 @@ final class VectorCollectionImpl implements VectorCollection {
     }
     Arena arena = Arena.ofShared();
     try {
-      // 1. Per-file CRC verification pass. Done before any MemorySegment mapping so a corrupt
-      //    payload fails fast and the generation can be discarded cleanly. The manifest self-CRC
-      //    was already verified inside Manifest.fromBytes upstream; this pass confirms every
-      //    other file's bytes match the manifest's stored CRCs.
-      verifyFileCrc(
-          genDir.resolve(FileFormat.VECTORS_FILE),
-          manifest.vectorsBinLength(),
-          manifest.vectorsBinCrc32(),
-          "vectors.bin");
-      verifyFileCrc(
-          genDir.resolve(FileFormat.IDMAP_FILE),
-          manifest.idmapBinLength(),
-          manifest.idmapBinCrc32(),
-          "idmap.bin");
-      verifyFileCrc(
-          genDir.resolve(FileFormat.METADATA_FILE),
-          manifest.metadataBinLength(),
-          manifest.metadataBinCrc32(),
-          "metadata.bin");
-
       MemorySegmentVectors mapped =
           MemorySegmentVectors.open(
               genDir.resolve(FileFormat.VECTORS_FILE),
@@ -442,10 +422,12 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   /**
-   * Reads {@code graph.bin} from {@code genDir}, verifies its length and CRC against the manifest,
-   * decodes it into an {@link HnswGraph}, and wraps the mmap'd vectors + graph in a {@link
-   * MappedHnswIndexAdapter}. Throws {@link IOException} on any length mismatch, CRC mismatch, or
-   * decode failure.
+   * Reads {@code graph.bin} from {@code genDir}, decodes it into an {@link HnswGraph}, and wraps
+   * the mmap'd vectors + graph in a {@link MappedHnswIndexAdapter}. The length + CRC of {@code
+   * graph.bin} are already verified by {@link GenerationDirectory#recover} before {@link
+   * #openGeneration} is invoked, so this method only has to cover the decode step plus the "no
+   * graph.bin recorded" guard for defensive programming — an empty HNSW generation is caught by the
+   * {@code graphBinLength() <= 0} branch in {@link #openGeneration} and never reaches here.
    */
   private IndexSpi openHnswAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
       throws IOException {
@@ -455,61 +437,9 @@ final class VectorCollectionImpl implements VectorCollection {
           "HNSW generation " + manifest.generationNumber() + " has no graph.bin recorded");
     }
     byte[] graphBytes = java.nio.file.Files.readAllBytes(graphFile);
-    if ((long) graphBytes.length != manifest.graphBinLength()) {
-      throw new IOException(
-          "graph.bin length mismatch at "
-              + graphFile
-              + ": manifest="
-              + manifest.graphBinLength()
-              + ", actual="
-              + graphBytes.length);
-    }
-    long computedCrc = Checksums.ofBytes(graphBytes);
-    if (computedCrc != manifest.graphBinCrc32()) {
-      throw new IOException(
-          String.format(
-              "graph.bin CRC mismatch at %s: manifest=0x%08x, computed=0x%08x",
-              graphFile, manifest.graphBinCrc32(), computedCrc));
-    }
     HnswGraph graph = HnswGraphCodec.decode(graphBytes);
     MemorySegmentRandomAccessVectors vectors = new MemorySegmentRandomAccessVectors(mapped);
     return new MappedHnswIndexAdapter(graph, vectors, config.metric());
-  }
-
-  /**
-   * Verifies that {@code file} has exactly {@code expectedLength} bytes and that its CRC32 equals
-   * {@code expectedCrc}. Throws {@link IOException} with a descriptive message on any mismatch.
-   * Skipped (no-op) when {@code expectedLength == 0} because an empty file would still have a CRC32
-   * of 0 and we treat the manifest's {@code length == 0} as a sentinel for "no file".
-   *
-   * <p>Uses {@link Checksums#ofFile(Path)} which streams the file through a 64 KiB direct {@link
-   * java.nio.ByteBuffer} rather than slurping the whole file into a heap-allocated {@code byte[]}.
-   * For a multi-gigabyte {@code vectors.bin} this avoids allocating and GC-pressuring a byte array
-   * the size of the entire file just to compute an integrity check at open time.
-   */
-  private static void verifyFileCrc(
-      Path file, long expectedLength, long expectedCrc, String fileLabel) throws IOException {
-    if (expectedLength == 0L) {
-      return;
-    }
-    long actualLength = java.nio.file.Files.size(file);
-    if (actualLength != expectedLength) {
-      throw new IOException(
-          fileLabel
-              + " length mismatch at "
-              + file
-              + ": manifest="
-              + expectedLength
-              + ", actual="
-              + actualLength);
-    }
-    long computedCrc = Checksums.ofFile(file);
-    if (computedCrc != expectedCrc) {
-      throw new IOException(
-          String.format(
-              "%s CRC mismatch at %s: manifest=0x%08x, computed=0x%08x",
-              fileLabel, file, expectedCrc, computedCrc));
-    }
   }
 
   // ---------------------------------------------------------------------------

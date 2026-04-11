@@ -62,11 +62,16 @@ import java.util.Set;
  * <ol>
  *   <li>Deletes every {@code .gen-*.tmp/} tmp directory (partial writes from a crashed commit).
  *   <li>Deletes {@code CURRENT.tmp} if present (partial CURRENT write).
- *   <li>If {@code CURRENT} exists and points at a {@code gen-NNNN/} whose manifest validates, opens
- *       that generation.
- *   <li>If {@code CURRENT} is missing or its target is corrupt, scans for the newest valid {@code
- *       gen-NNNN/} (by generation number, descending) whose manifest validates, and rewrites {@code
- *       CURRENT} to point at it via {@link #writeCurrentAtomic(Path, long)}.
+ *   <li>If {@code CURRENT} exists and points at a {@code gen-NNNN/} whose manifest validates AND
+ *       every payload file ({@code vectors.bin}, {@code idmap.bin}, {@code metadata.bin}, {@code
+ *       graph.bin}) matches the per-file CRC stored in the manifest, opens that generation.
+ *   <li>If {@code CURRENT} is missing, or its target has a corrupt manifest, or its target has any
+ *       corrupt payload file, scans for the newest {@code gen-NNNN/} (by generation number,
+ *       descending) whose manifest AND every payload file validates, and rewrites {@code CURRENT}
+ *       to point at it via {@link #writeCurrentAtomic(Path, long)}. A manifest that parses cleanly
+ *       but references a corrupt {@code vectors.bin} or {@code graph.bin} is treated identically to
+ *       a corrupt manifest — the walk-back lets operators heal bit-rot or a partially-truncated
+ *       write by rolling forward to an intact older generation without manual intervention.
  *   <li>If no valid generation exists at all, initializes an empty {@code gen-0000000000000000/}
  *       from the provided {@link GenerationSource} and publishes it. This is the "fresh open on
  *       empty directory" path.
@@ -415,7 +420,7 @@ public final class GenerationDirectory {
    *     Manifest#generationNumber()} must be {@code 0}.
    * @return a {@link RecoveryResult} describing the live generation
    * @throws IOException on I/O failure, or if the root is empty and no bootstrap source was given,
-   *     or if every candidate {@code gen-NNNN/} has a corrupt manifest
+   *     or if every candidate {@code gen-NNNN/} has a corrupt manifest or a corrupt payload file
    */
   public static RecoveryResult recover(
       Path storageRoot, GenerationSource bootstrapSource, Manifest bootstrapManifest)
@@ -445,24 +450,36 @@ public final class GenerationDirectory {
     // 2. Delete CURRENT.tmp if present — partial rename.
     Files.deleteIfExists(storageRoot.resolve(FileFormat.CURRENT_TMP_FILE));
 
-    // 3. Try the happy path: CURRENT exists and points at a valid generation.
+    // 3. Try the happy path: CURRENT exists and points at a valid generation. "Valid" here means
+    //    BOTH the manifest self-CRC validates AND every payload file's CRC matches the manifest's
+    //    stored per-file CRCs. A manifest that parses cleanly but references a corrupt payload
+    //    (bit-rot, partial truncation, user error after a restore) is treated the same way as a
+    //    corrupt manifest — fall through to the descending scan and walk back to an older
+    //    generation whose payload is intact.
     long currentGen = readCurrent(storageRoot);
     if (currentGen >= 0) {
       Path genDir = storageRoot.resolve(FileFormat.generationDirName(currentGen));
       Manifest manifest = tryReadManifest(genDir);
-      if (manifest != null && manifest.generationNumber() == currentGen) {
+      if (manifest != null
+          && manifest.generationNumber() == currentGen
+          && tryVerifyPayloadCrcs(genDir, manifest)) {
         return new RecoveryResult(currentGen, genDir, manifest, false, false);
       }
     }
 
-    // 4. CURRENT is missing or its target is corrupt. Scan gen-NNNN/ directories in descending
-    //    order and take the newest valid one.
+    // 4. CURRENT is missing or its target is corrupt (either the manifest or a payload file).
+    //    Scan gen-NNNN/ directories in descending order and take the newest one whose manifest
+    //    AND payload files both pass CRC validation. The walk-back here is the whole point of
+    //    generation directories — it lets an operator "repair" corruption by rolling back to an
+    //    intact prior generation without any manual intervention.
     List<Long> candidates = listGenerationDirectories(storageRoot);
     candidates.sort(Comparator.reverseOrder());
     for (long candidate : candidates) {
       Path genDir = storageRoot.resolve(FileFormat.generationDirName(candidate));
       Manifest manifest = tryReadManifest(genDir);
-      if (manifest != null && manifest.generationNumber() == candidate) {
+      if (manifest != null
+          && manifest.generationNumber() == candidate
+          && tryVerifyPayloadCrcs(genDir, manifest)) {
         writeCurrentAtomic(storageRoot, candidate);
         return new RecoveryResult(candidate, genDir, manifest, true, false);
       }
@@ -527,6 +544,82 @@ public final class GenerationDirectory {
       return Manifest.readFrom(manifestFile);
     } catch (IOException e) {
       return null;
+    }
+  }
+
+  /**
+   * Verifies that every payload file referenced by {@code manifest} exists, has the exact length
+   * the manifest records, and has a CRC32 that matches the manifest's stored per-file CRC. Returns
+   * {@code true} on success, {@code false} if any file is missing, wrong length, or has a CRC
+   * mismatch. Never throws — a corrupt payload is a "walk back to the previous generation" signal
+   * for {@link #recover(Path, GenerationSource, Manifest)}, not an abort.
+   *
+   * <p>Files whose manifest-declared length is {@code 0} are treated as "no file" sentinels and
+   * skipped entirely. This matches the commit path which never materializes an empty {@code
+   * graph.bin} for flat-scan generations or for empty HNSW bootstrap generations.
+   *
+   * <p>Called during recovery for both the CURRENT-target happy path and the descending walk-back
+   * scan, so a payload-corrupt generation behaves identically to a manifest-corrupt one: the sweep
+   * continues to the next older candidate. The manifest's self-CRC has already been validated by
+   * {@link #tryReadManifest} before this method is invoked, so we know the stored length/CRC values
+   * are themselves intact.
+   */
+  private static boolean tryVerifyPayloadCrcs(Path genDir, Manifest manifest) {
+    try {
+      verifyOneFile(
+          genDir.resolve(FileFormat.VECTORS_FILE),
+          manifest.vectorsBinLength(),
+          manifest.vectorsBinCrc32());
+      verifyOneFile(
+          genDir.resolve(FileFormat.IDMAP_FILE),
+          manifest.idmapBinLength(),
+          manifest.idmapBinCrc32());
+      verifyOneFile(
+          genDir.resolve(FileFormat.METADATA_FILE),
+          manifest.metadataBinLength(),
+          manifest.metadataBinCrc32());
+      verifyOneFile(
+          genDir.resolve(FileFormat.GRAPH_FILE),
+          manifest.graphBinLength(),
+          manifest.graphBinCrc32());
+      return true;
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
+  /**
+   * Validates that {@code file} has exactly {@code expectedLength} bytes and a CRC32 equal to
+   * {@code expectedCrc}. Throws {@link IOException} with a descriptive message on any mismatch.
+   * Skipped (no-op) when {@code expectedLength == 0} because the caller treats a zero-length
+   * manifest entry as "this file was not materialized" (the empty-HNSW-bootstrap and flat-scan
+   * cases).
+   *
+   * <p>Uses {@link Checksums#ofFile(Path)} which streams through a 64 KiB direct byte buffer rather
+   * than slurping the whole file into a heap byte array — a multi-gigabyte {@code vectors.bin} is
+   * verified without allocating a heap byte array of its size.
+   */
+  private static void verifyOneFile(Path file, long expectedLength, long expectedCrc)
+      throws IOException {
+    if (expectedLength == 0L) {
+      return;
+    }
+    long actualLength = Files.size(file);
+    if (actualLength != expectedLength) {
+      throw new IOException(
+          "payload length mismatch at "
+              + file
+              + ": manifest="
+              + expectedLength
+              + ", actual="
+              + actualLength);
+    }
+    long computedCrc = Checksums.ofFile(file);
+    if (computedCrc != expectedCrc) {
+      throw new IOException(
+          String.format(
+              "payload CRC mismatch at %s: manifest=0x%08x, computed=0x%08x",
+              file, expectedCrc, computedCrc));
     }
   }
 

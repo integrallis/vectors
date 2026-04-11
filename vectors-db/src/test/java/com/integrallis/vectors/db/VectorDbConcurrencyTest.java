@@ -53,11 +53,20 @@ class VectorDbConcurrencyTest {
     return docs;
   }
 
-  /** Joins an executor within the test timeout budget, propagating any worker throwable. */
+  /**
+   * Joins an executor within the test timeout budget, propagating any worker throwable.
+   *
+   * <p>The 10 s deadline here is intentionally set to match the longest outer {@code
+   * assertTimeoutPreemptively} budget used by any test in this class (the persistent-mode reader
+   * race test uses 10 s; every other test uses 5 s). Tests with a 5 s outer budget get killed by
+   * the preemptive timeout first, so the larger deadline here is harmless for them but gives the
+   * persistent-mode test enough headroom for 50 fsync'd commits + reader joins under full-suite
+   * load (GC pauses, scheduler contention).
+   */
   private static void shutdownAndCheck(
       ExecutorService pool, List<AtomicReference<Throwable>> errors) throws InterruptedException {
     pool.shutdown();
-    assertThat(pool.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+    assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
     for (AtomicReference<Throwable> err : errors) {
       Throwable t = err.get();
       if (t != null) {

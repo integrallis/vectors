@@ -1,9 +1,17 @@
 package com.integrallis.vectors.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.db.storage.FileFormat;
+import com.integrallis.vectors.db.storage.GenerationDirectory;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -11,6 +19,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -27,7 +42,16 @@ import org.junit.jupiter.api.io.TempDir;
  *   <li>{@link PersistentHnsw} — persistent HNSW writes a {@code graph.bin} file per generation,
  *       round-trips identically across a close/reopen cycle, handles the empty-collection
  *       bootstrap, preserves metadata, and survives multi-generation commits (Step 4b Phase 5).
- *   <li>Crash recovery and concurrency nested classes are added in Phase 6 of the Step 4b plan.
+ *   <li>{@link SimulatedKill9Hnsw} — corrupting {@code graph.bin} or the manifest of the latest
+ *       HNSW generation forces recovery to fall back to the previous generation, mirroring the FLAT
+ *       {@code VectorDbPersistenceTest.SimulatedKill9} pattern (Step 4b Phase 6).
+ *   <li>{@link CommitOpenFailureRecoveryHnsw} — the A1 regression pattern extended to the HNSW open
+ *       path: a successful write followed by an injected {@code openGenerationFailureHook} must
+ *       leave the collection usable and a retry must advance {@code nextGenerationNumber} instead
+ *       of colliding with the orphaned generation directory (Step 4b Phase 6).
+ *   <li>{@link ConcurrencyHnsw} — concurrent readers never see spurious {@code
+ *       IllegalStateException("closed")} while the writer is swapping mmap-backed HNSW generations
+ *       underneath them (Step 4b Phase 6).
  * </ul>
  */
 class VectorDbHnswPersistenceTest {
@@ -488,6 +512,258 @@ class VectorDbHnswPersistenceTest {
         assertThat(result.hits()).isNotEmpty();
         assertThat(result.hits().get(0).id()).isEqualTo("doc-0");
       }
+    }
+  }
+
+  /**
+   * Crash-recovery tests for persistent HNSW. Each test writes two committed generations, then
+   * damages an on-disk file in the latest generation to simulate a partial write / bit-rot / {@code
+   * kill -9}. Reopen must detect the corruption, walk back to the previous valid generation, and
+   * republish {@code CURRENT}.
+   *
+   * <p>The mechanics mirror {@code VectorDbPersistenceTest.SimulatedKill9} but target both the Step
+   * 4b additions ({@code graph.bin} corruption) and the existing manifest-corruption path so the
+   * persistent HNSW branch of {@code openGeneration} is exercised end-to-end.
+   */
+  @Nested
+  @Tag("unit")
+  class SimulatedKill9Hnsw {
+
+    @Test
+    void corruptGraphBinFallsBackToPriorGeneration(@TempDir Path tempDir) throws IOException {
+      Path storageRoot = tempDir.resolve("col");
+
+      // Phase 1: write two committed HNSW generations so recovery has a valid gen-1 to fall back
+      // to after gen-2 gets damaged. Each batch has disjoint ids.
+      try (var col = openPersistentHnsw(storageRoot)) {
+        col.addAll(generateDocs(30, SEED));
+        col.commit(); // gen-1
+        Random rng = new Random(SEED + 100);
+        List<Document> second = new ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+          second.add(docWithMetadata("alt-" + i, randomVector(rng), i));
+        }
+        col.addAll(second);
+        col.commit(); // gen-2
+        assertThat(col.size()).isEqualTo(60);
+      }
+      assertThat(GenerationDirectory.readCurrent(storageRoot)).isEqualTo(2L);
+
+      // Phase 2: corrupt gen-2's graph.bin by zeroing it out. The manifest's graphBinCrc32 no
+      // longer matches, so openGeneration's per-file CRC pass will reject it. The recovery walk
+      // must then fall back to gen-1's graph.
+      Path latestGraph =
+          storageRoot.resolve(FileFormat.generationDirName(2L)).resolve(FileFormat.GRAPH_FILE);
+      assertThat(latestGraph).exists();
+      long originalSize = Files.size(latestGraph);
+      Files.write(latestGraph, new byte[(int) originalSize]);
+
+      // Phase 3: reopen. recover() must:
+      //   1. Detect the graph.bin CRC mismatch on gen-2.
+      //   2. Walk back to gen-1.
+      //   3. Republish CURRENT.
+      try (var col = openPersistentHnsw(storageRoot)) {
+        // gen-1 held only the first 30 docs.
+        assertThat(col.size()).isEqualTo(30);
+        // And the first-batch docs are still retrievable.
+        assertThat(col.get("doc-0")).isNotNull();
+        assertThat(col.get("doc-29")).isNotNull();
+        // The second batch is gone (its generation was rolled back).
+        assertThat(col.get("alt-0")).isNull();
+      }
+      assertThat(GenerationDirectory.readCurrent(storageRoot)).isEqualTo(1L);
+    }
+
+    @Test
+    void corruptManifestFallsBackToPriorGeneration(@TempDir Path tempDir) throws IOException {
+      // Same pattern as the FLAT test but on an HNSW collection. Proves that the manifest-self-CRC
+      // recovery path in GenerationDirectory.recover is index-type agnostic.
+      Path storageRoot = tempDir.resolve("col");
+
+      try (var col = openPersistentHnsw(storageRoot)) {
+        col.addAll(generateDocs(25, SEED));
+        col.commit(); // gen-1
+        Random rng = new Random(SEED + 200);
+        List<Document> second = new ArrayList<>();
+        for (int i = 0; i < 25; i++) {
+          second.add(docWithMetadata("v2-" + i, randomVector(rng), i));
+        }
+        col.addAll(second);
+        col.commit(); // gen-2
+        assertThat(col.size()).isEqualTo(50);
+      }
+      assertThat(GenerationDirectory.readCurrent(storageRoot)).isEqualTo(2L);
+
+      // Poison gen-2's manifest: truncate below HEADER_SIZE so fromBytes fails immediately.
+      Path latestManifest =
+          storageRoot.resolve(FileFormat.generationDirName(2L)).resolve(FileFormat.MANIFEST_FILE);
+      Files.write(latestManifest, new byte[16]);
+
+      try (var col = openPersistentHnsw(storageRoot)) {
+        assertThat(col.size()).isEqualTo(25);
+        assertThat(col.get("doc-0")).isNotNull();
+        assertThat(col.get("v2-0")).isNull();
+      }
+      assertThat(GenerationDirectory.readCurrent(storageRoot)).isEqualTo(1L);
+    }
+  }
+
+  /**
+   * Regression tests for the Step 4a A1 audit finding, extended to the HNSW open path. A commit
+   * whose {@code writeGeneration} succeeds but whose subsequent {@code openGeneration} throws (for
+   * example because of injected failure or transient OOM during mmap) must leave the collection
+   * usable and a retry must advance to the NEXT generation number instead of re-attempting the
+   * orphaned one.
+   *
+   * <p>Failures are injected via the package-private {@code openGenerationFailureHook} field on
+   * {@link VectorCollectionImpl}, matching the FLAT regression in {@code
+   * VectorDbPersistenceTest.CommitOpenFailureRecovery}.
+   */
+  @Nested
+  @Tag("unit")
+  class CommitOpenFailureRecoveryHnsw {
+
+    @Test
+    void retryAfterOpenFailureAdvancesGenerationNumberHnsw(@TempDir Path tempDir) {
+      Path storageRoot = tempDir.resolve("col");
+      try (var col = openPersistentHnsw(storageRoot)) {
+        // Seed a real gen-1 so the retry exercises the non-bootstrap path.
+        col.addAll(generateDocs(5, SEED));
+        col.commit();
+        assertThat(col.size()).isEqualTo(5);
+
+        VectorCollectionImpl impl = (VectorCollectionImpl) col;
+        impl.openGenerationFailureHook = new IOException("injected open failure");
+
+        // Second batch: the commit's writeGeneration phase succeeds (graph.bin and friends all
+        // land on disk), but openGeneration is short-circuited by the hook and throws. The
+        // caller observes UncheckedIOException and the in-memory generation stays at gen-1.
+        Random rng = new Random(SEED + 1);
+        List<Document> second = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+          second.add(docWithMetadata("alt-" + i, randomVector(rng), i));
+        }
+        col.addAll(second);
+        assertThatThrownBy(col::commit)
+            .isInstanceOf(UncheckedIOException.class)
+            .hasMessageContaining("written but cannot be opened")
+            .hasMessageContaining("retry commit()");
+
+        // gen-1 still live in process; gen-2 exists on disk but is orphaned.
+        assertThat(col.size()).isEqualTo(5);
+        assertThat(Files.isDirectory(storageRoot.resolve("gen-0000000000000001"))).isTrue();
+        assertThat(Files.isDirectory(storageRoot.resolve("gen-0000000000000002"))).isTrue();
+
+        // Clear the hook and retry. The retry must advance to gen-3 because nextGenerationNumber
+        // tracks writeGeneration successes, NOT successful opens. If the counter regressed to
+        // gen-2 instead, writeGeneration would throw "generation directory already exists".
+        impl.openGenerationFailureHook = null;
+        col.commit();
+
+        assertThat(Files.isDirectory(storageRoot.resolve("gen-0000000000000003"))).isTrue();
+        assertThat(col.size()).isEqualTo(10);
+
+        // Staged second-batch docs are now reachable through the facade.
+        assertThat(col.get("alt-0")).isNotNull();
+        assertThat(col.get("alt-4")).isNotNull();
+      }
+
+      // And the retry's generation survives a full reopen cycle.
+      try (var col = openPersistentHnsw(storageRoot)) {
+        assertThat(col.size()).isEqualTo(10);
+      }
+    }
+  }
+
+  /**
+   * Concurrency test for persistent HNSW. Mirrors {@code
+   * VectorDbConcurrencyTest.ReadersNeverBlockedByCommit.persistentReadersNeverSeeSpuriousClosedDuringCommit}
+   * but on an HNSW-backed collection so the refcounted {@link
+   * com.integrallis.vectors.db.storage.MappedHnswIndexAdapter} + per-generation {@link
+   * java.lang.foreign.Arena} flip is exercised under contention. Each commit triggers a full
+   * graph.bin rewrite, an atomic CURRENT pointer flip, a new {@code Arena.ofShared()}, and a
+   * release of the previous generation when the refcount drops to zero. Readers going through
+   * {@code acquireReadSnapshot} must never observe {@code IllegalStateException("closed")} while
+   * the collection is alive.
+   */
+  @Nested
+  @Tag("unit")
+  class ConcurrencyHnsw {
+
+    @Test
+    void concurrentReadersNeverBlockedByHnswCommit(@TempDir Path tempDir) {
+      assertTimeoutPreemptively(
+          Duration.ofSeconds(15),
+          () -> {
+            try (var col = openPersistentHnsw(tempDir.resolve("col"))) {
+              // Seed with 50 docs so readers have real work to do.
+              col.addAll(generateDocs(50, SEED));
+              col.commit();
+
+              int readerThreads = 4;
+              int commits = 20;
+              ExecutorService pool = Executors.newFixedThreadPool(readerThreads + 1);
+              List<AtomicReference<Throwable>> errors = new ArrayList<>();
+              AtomicBoolean stop = new AtomicBoolean(false);
+              AtomicInteger sizeCalls = new AtomicInteger();
+              CountDownLatch readersReady = new CountDownLatch(readerThreads);
+
+              for (int t = 0; t < readerThreads; t++) {
+                AtomicReference<Throwable> err = new AtomicReference<>();
+                errors.add(err);
+                pool.submit(
+                    () -> {
+                      try {
+                        readersReady.countDown();
+                        while (!stop.get()) {
+                          // Any IllegalStateException("closed") thrown here is the bug: the
+                          // collection has not been closed during this test, so every read path
+                          // must succeed even while the writer swaps HNSW generations underneath.
+                          col.size();
+                          sizeCalls.incrementAndGet();
+                        }
+                      } catch (Throwable th) {
+                        err.set(th);
+                      }
+                    });
+              }
+
+              AtomicReference<Throwable> writerErr = new AtomicReference<>();
+              errors.add(writerErr);
+              pool.submit(
+                  () -> {
+                    try {
+                      readersReady.await();
+                      Random wrng = new Random(SEED + 3);
+                      int nextId = 50;
+                      for (int c = 0; c < commits; c++) {
+                        col.add(docWithMetadata("r" + nextId, randomVector(wrng), nextId));
+                        nextId++;
+                        col.commit();
+                      }
+                    } catch (Throwable th) {
+                      writerErr.set(th);
+                    } finally {
+                      stop.set(true);
+                    }
+                  });
+
+              pool.shutdown();
+              assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+              for (AtomicReference<Throwable> err : errors) {
+                Throwable t = err.get();
+                if (t != null) {
+                  if (t instanceof AssertionError ae) {
+                    throw ae;
+                  }
+                  throw new AssertionError("Worker failure", t);
+                }
+              }
+              // Sanity: readers actually executed many size() calls during the race window.
+              assertThat(sizeCalls.get()).isGreaterThan(0);
+              assertThat(col.size()).isEqualTo(50 + commits);
+            }
+          });
     }
   }
 }
