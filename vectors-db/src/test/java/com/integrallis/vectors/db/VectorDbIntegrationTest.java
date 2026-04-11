@@ -102,16 +102,19 @@ class VectorDbIntegrationTest {
     }
 
     @Test
-    void indexTypeVamana_throwsUnsupported_inStep4b() {
-      assertThatExceptionOfType(UnsupportedOperationException.class)
-          .isThrownBy(
-              () ->
-                  VectorCollection.builder()
-                      .dimension(8)
-                      .metric(SimilarityFunction.EUCLIDEAN)
-                      .indexType(IndexType.VAMANA)
-                      .build())
-          .withMessageContaining("VAMANA");
+    void indexTypeVamana_buildsSuccessfully_inStep4c() {
+      // Step 4c unblocked VAMANA in both in-memory and persistent modes. The 5-arg builder here
+      // runs the in-memory path; persistent VAMANA is covered by VectorDbVamanaPersistenceTest.
+      try (var col =
+          VectorCollection.builder()
+              .dimension(8)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.VAMANA)
+              .build()) {
+        assertThat(col.size()).isZero();
+        assertThat(col.config().indexType()).isEqualTo(IndexType.VAMANA);
+        assertThat(col.config().vamanaParams()).isNotNull();
+      }
     }
 
     @Test

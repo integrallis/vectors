@@ -7,6 +7,7 @@ import com.integrallis.vectors.db.index.FlatScanAdapter;
 import com.integrallis.vectors.db.index.HnswIndexAdapter;
 import com.integrallis.vectors.db.index.IndexSpi;
 import com.integrallis.vectors.db.index.MappedFlatScanAdapter;
+import com.integrallis.vectors.db.index.VamanaIndexAdapter;
 import com.integrallis.vectors.db.internal.StagingBuffer;
 import com.integrallis.vectors.db.metadata.InMemoryMetadataStore;
 import com.integrallis.vectors.db.metadata.MetadataStore;
@@ -18,10 +19,13 @@ import com.integrallis.vectors.db.storage.Manifest;
 import com.integrallis.vectors.db.storage.MappedHnswIndexAdapter;
 import com.integrallis.vectors.db.storage.MappedIdMapper;
 import com.integrallis.vectors.db.storage.MappedMetadataStore;
+import com.integrallis.vectors.db.storage.MappedVamanaIndexAdapter;
 import com.integrallis.vectors.db.storage.MemorySegmentRandomAccessVectors;
 import com.integrallis.vectors.db.storage.MemorySegmentVectors;
+import com.integrallis.vectors.db.storage.VamanaGraphCodec;
 import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.storage.memory.AlignmentUtil;
+import com.integrallis.vectors.vamana.VamanaGraph;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.foreign.Arena;
@@ -66,16 +70,18 @@ import java.util.logging.Logger;
  * whose sole guard is the writer lock.
  *
  * <p><b>Dual mode.</b> When {@link VectorCollectionConfig#storageRoot()} is {@code null} the
- * collection runs in the Step 3 in-memory model (fresh {@link FlatScanAdapter} or {@link
- * HnswIndexAdapter} rebuild per commit, selected by {@link VectorCollectionConfig#indexType()}).
- * When non-null, the constructor runs {@link GenerationDirectory#recover} to find or bootstrap a
- * generation, opens its mapped stores through a fresh shared {@link Arena}, and every {@link
- * #commit()} writes a new {@code gen-NNNN/} directory through {@link
- * GenerationDirectory#writeGeneration} before publishing the new snapshot. The persistent open path
- * branches on the manifest's index type: {@link IndexType#FLAT} goes through {@link
- * MappedFlatScanAdapter}, and {@link IndexType#HNSW} decodes the generation's {@code graph.bin} via
- * {@link HnswGraphCodec#decode(byte[])}, wraps the mmap'd vectors in a {@link
- * MemorySegmentRandomAccessVectors}, and constructs a {@link MappedHnswIndexAdapter}.
+ * collection runs in the Step 3 in-memory model (fresh {@link FlatScanAdapter}, {@link
+ * HnswIndexAdapter}, or {@link VamanaIndexAdapter} rebuild per commit, selected by {@link
+ * VectorCollectionConfig#indexType()}). When non-null, the constructor runs {@link
+ * GenerationDirectory#recover} to find or bootstrap a generation, opens its mapped stores through a
+ * fresh shared {@link Arena}, and every {@link #commit()} writes a new {@code gen-NNNN/} directory
+ * through {@link GenerationDirectory#writeGeneration} before publishing the new snapshot. The
+ * persistent open path branches on the manifest's index type: {@link IndexType#FLAT} goes through
+ * {@link MappedFlatScanAdapter}, {@link IndexType#HNSW} decodes the generation's {@code graph.bin}
+ * via {@link HnswGraphCodec#decode(byte[])}, wraps the mmap'd vectors in a {@link
+ * MemorySegmentRandomAccessVectors}, and constructs a {@link MappedHnswIndexAdapter}, and {@link
+ * IndexType#VAMANA} follows the same pattern using {@link VamanaGraphCodec#decode(byte[])} and
+ * {@link MappedVamanaIndexAdapter}.
  *
  * <p><b>Scope.</b> Only {@link Filter.All} (or {@code null}) is executed; any other filter throws
  * {@link UnsupportedOperationException} (deferred to Step 5). {@code upsert}, {@code delete},
@@ -187,7 +193,8 @@ final class VectorCollectionImpl implements VectorCollection {
    *
    * <p>{@code graphBytes} is {@code null} (or zero-length) for flat-scan generations, in which case
    * {@link #writeGraph(Path)} is a no-op and no {@code graph.bin} entry is written. Graph-backed
-   * generations (HNSW) pass the encoded adjacency bytes from {@code HnswGraphCodec.encode(graph)}.
+   * generations (HNSW, Vamana) pass the encoded adjacency bytes from the corresponding codec (e.g.
+   * {@code HnswGraphCodec.encode(graph)} or {@code VamanaGraphCodec.encode(graph)}).
    */
   private static final class BufferedGenerationSource
       implements GenerationDirectory.GenerationSource {
@@ -223,11 +230,13 @@ final class VectorCollectionImpl implements VectorCollection {
     public void writeGraph(Path destination) throws IOException {
       // GenerationDirectory only calls this for graph index types; a null or empty buffer
       // in that context is a programmer error (the manifest's graphBinLength would be 0 while
-      // the caller declared HNSW). Guard defensively so the tmp dir cleanup path still fires.
+      // the caller declared HNSW or VAMANA). Guard defensively so the tmp dir cleanup path
+      // still fires.
       if (graphBytes == null || graphBytes.length == 0) {
         throw new IOException(
             "BufferedGenerationSource.writeGraph invoked with no graph bytes (did the caller"
-                + " forget to pass HnswGraphCodec.encode(graph) through the constructor?)");
+                + " forget to pass HnswGraphCodec.encode / VamanaGraphCodec.encode through the"
+                + " constructor?)");
       }
       MappedIdMapper.Writer.writeBytesAndFsync(destination, graphBytes);
     }
@@ -292,8 +301,9 @@ final class VectorCollectionImpl implements VectorCollection {
   /**
    * Creates a fresh in-memory {@link IndexSpi} that matches {@code config.indexType()}. Only used
    * by the in-memory code paths (bootstrap and {@link #commitInMemory}). For HNSW the adapter is
-   * parameterized from {@code config.hnswParams()} — which is guaranteed non-null by {@link
-   * VectorCollectionConfig}'s compact constructor when {@code indexType == HNSW}.
+   * parameterized from {@code config.hnswParams()} and for VAMANA from {@code
+   * config.vamanaParams()} — both are guaranteed non-null by {@link VectorCollectionConfig}'s
+   * compact constructor when {@code indexType} matches.
    */
   private IndexSpi newInMemoryAdapter() {
     return switch (config.indexType()) {
@@ -302,9 +312,10 @@ final class VectorCollectionImpl implements VectorCollection {
         VectorCollectionConfig.HnswParams p = config.hnswParams();
         yield new HnswIndexAdapter(p.m(), p.efConstruction());
       }
-      case VAMANA ->
-          throw new UnsupportedOperationException(
-              "indexType VAMANA deferred to a later step (Step 4c)");
+      case VAMANA -> {
+        VectorCollectionConfig.VamanaParams p = config.vamanaParams();
+        yield new VamanaIndexAdapter(p.maxDegree(), p.searchListSize(), p.alpha(), p.seed());
+      }
       case IVF_FLAT ->
           throw new UnsupportedOperationException("indexType IVF_FLAT deferred to a later step");
     };
@@ -344,7 +355,9 @@ final class VectorCollectionImpl implements VectorCollection {
    * IndexType#FLAT} generations that is the three data files ({@code vectors.bin}, {@code
    * idmap.bin}, {@code metadata.bin}). For {@link IndexType#HNSW} generations it additionally reads
    * the generation's {@code graph.bin}, decodes it via {@link HnswGraphCodec#decode(byte[])}, and
-   * wraps everything in a {@link MappedHnswIndexAdapter}.
+   * wraps everything in a {@link MappedHnswIndexAdapter}. For {@link IndexType#VAMANA} generations
+   * the same pattern is applied with {@link VamanaGraphCodec#decode(byte[])} and {@link
+   * MappedVamanaIndexAdapter}.
    *
    * <p>Per-file CRC verification is NOT done here: it is the responsibility of {@link
    * GenerationDirectory#recover} which reads every payload file through a streaming CRC before
@@ -372,14 +385,14 @@ final class VectorCollectionImpl implements VectorCollection {
       MetadataStore metadataStore =
           MappedMetadataStore.open(genDir.resolve(FileFormat.METADATA_FILE), arena);
 
-      // 2. Construct the index SPI. Branch on the manifest's index type so both FLAT and HNSW
-      //    are served from the same mmap'd vector store. An empty HNSW generation
+      // 2. Construct the index SPI. Branch on the manifest's index type so FLAT, HNSW, and
+      //    VAMANA are all served from the same mmap'd vector store. An empty graph generation
       //    (graphBinLength==0 — bootstrap or post-delete) has no graph.bin to decode, so we
       //    serve reads from MappedFlatScanAdapter against the (empty) mmap'd vectors. The
       //    flat-scan adapter returns an empty result set on an empty store, which is the
       //    correct behaviour for an empty collection regardless of the declared index type —
       //    and the next commit() with staged data will materialize a real graph.bin and the
-      //    subsequent openGeneration will take the HNSW branch.
+      //    subsequent openGeneration will take the graph branch.
       IndexSpi spi =
           switch (manifest.indexType()) {
             case FLAT -> new MappedFlatScanAdapter(mapped, config.metric());
@@ -388,15 +401,14 @@ final class VectorCollectionImpl implements VectorCollection {
                     ? openHnswAdapter(genDir, manifest, mapped)
                     : new MappedFlatScanAdapter(mapped, config.metric());
             case VAMANA ->
-                throw new IOException(
-                    "Generation "
-                        + manifest.generationNumber()
-                        + " uses indexType VAMANA which is not supported in Step 4b");
+                manifest.graphBinLength() > 0L
+                    ? openVamanaAdapter(genDir, manifest, mapped)
+                    : new MappedFlatScanAdapter(mapped, config.metric());
             case IVF_FLAT ->
                 throw new IOException(
                     "Generation "
                         + manifest.generationNumber()
-                        + " uses indexType IVF_FLAT which is not supported in Step 4b");
+                        + " uses indexType IVF_FLAT which is not supported in Step 4c");
           };
 
       return new Generation(
@@ -440,6 +452,27 @@ final class VectorCollectionImpl implements VectorCollection {
     HnswGraph graph = HnswGraphCodec.decode(graphBytes);
     MemorySegmentRandomAccessVectors vectors = new MemorySegmentRandomAccessVectors(mapped);
     return new MappedHnswIndexAdapter(graph, vectors, config.metric());
+  }
+
+  /**
+   * Reads {@code graph.bin} from {@code genDir}, decodes it into a {@link VamanaGraph}, and wraps
+   * the mmap'd vectors + graph in a {@link MappedVamanaIndexAdapter}. The length + CRC of {@code
+   * graph.bin} are already verified by {@link GenerationDirectory#recover} before {@link
+   * #openGeneration} is invoked, so this method only has to cover the decode step plus the "no
+   * graph.bin recorded" guard for defensive programming — an empty Vamana generation is caught by
+   * the {@code graphBinLength() <= 0} branch in {@link #openGeneration} and never reaches here.
+   */
+  private IndexSpi openVamanaAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
+      throws IOException {
+    Path graphFile = genDir.resolve(FileFormat.GRAPH_FILE);
+    if (manifest.graphBinLength() <= 0L) {
+      throw new IOException(
+          "VAMANA generation " + manifest.generationNumber() + " has no graph.bin recorded");
+    }
+    byte[] graphBytes = java.nio.file.Files.readAllBytes(graphFile);
+    VamanaGraph graph = VamanaGraphCodec.decode(graphBytes);
+    MemorySegmentRandomAccessVectors vectors = new MemorySegmentRandomAccessVectors(mapped);
+    return new MappedVamanaIndexAdapter(graph, vectors, config.metric());
   }
 
   // ---------------------------------------------------------------------------
@@ -629,27 +662,19 @@ final class VectorCollectionImpl implements VectorCollection {
       throw new UncheckedIOException("Failed to serialize commit payload", e);
     }
 
-    // 2a. HNSW-only: materialize the successor float[][] matrix, rebuild the graph from scratch
-    //     via HnswIndexAdapter, and encode the resulting HnswGraph to graph.bin bytes. For FLAT
-    //     this branch is skipped and graphBin stays null (the Manifest records graphBinLength=0
-    //     and GenerationDirectory skips the writeGraph callback entirely).
+    // 2a. Graph-index-only: materialize the successor float[][] matrix, rebuild the graph from
+    //     scratch via the matching in-memory adapter, and encode the resulting graph to
+    //     graph.bin bytes via the appropriate codec. For FLAT this block is skipped and
+    //     graphBin stays null (the Manifest records graphBinLength=0 and GenerationDirectory
+    //     skips the writeGraph callback entirely).
     byte[] graphBin = null;
     long graphBinLength = 0L;
     long graphBinCrc = 0L;
-    if (config.indexType() == IndexType.HNSW) {
+    if (config.indexType() == IndexType.HNSW || config.indexType() == IndexType.VAMANA) {
       float[][] matrix =
           buildSuccessorMatrix(oldGen.mappedVectors, liveCount, staging.documents(), dim);
-      VectorCollectionConfig.HnswParams hp = config.hnswParams();
-      HnswIndexAdapter adapter = new HnswIndexAdapter(hp.m(), hp.efConstruction());
-      adapter.build(matrix, config.metric());
-      HnswGraph graph = adapter.graph();
-      // graph() returns null only when build() was called with zero vectors — commitUnderLock
-      // already short-circuits on empty staging, so newSize >= 1 and graph is non-null here.
-      // The null-guard still fires defensively in case a future caller routes an empty matrix
-      // through this branch; we skip encoding in that case and let the Manifest record a 0/0
-      // graph entry so the open path's "HNSW with no graph.bin" guard trips loudly.
-      if (graph != null) {
-        graphBin = HnswGraphCodec.encode(graph);
+      graphBin = encodeGraphBytes(matrix);
+      if (graphBin != null) {
         graphBinLength = (long) graphBin.length;
         graphBinCrc = Checksums.ofBytes(graphBin);
       }
@@ -763,17 +788,54 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   /**
-   * Materializes the successor {@code float[][]} matrix used exclusively by the persistent-HNSW
-   * commit branch to drive {@link HnswIndexAdapter#build}. The old generation's rows are copied out
-   * of the mmap'd {@link MemorySegmentVectors} via {@link MemorySegment#copy}; staged documents are
-   * cloned so the graph builder never aliases a user-facing {@code Document.vector()} reference.
-   * Defensive copies of both branches keep the builder free to reorder or retain elements without
-   * risking action-at-a-distance on the old mapped segment or on application Documents.
+   * Rebuilds the appropriate graph index from a successor vector matrix and encodes the resulting
+   * graph to its on-disk byte image. Dispatches on {@code config.indexType()}: HNSW routes through
+   * {@link HnswIndexAdapter} + {@link HnswGraphCodec}, VAMANA routes through {@link
+   * VamanaIndexAdapter} + {@link VamanaGraphCodec}. Returns {@code null} if the adapter's {@code
+   * graph()} accessor yields {@code null} (only possible with a zero-vector build, which {@link
+   * #commitUnderLock} already short-circuits before reaching here — the null guard is purely
+   * defensive so a future caller that routes an empty matrix through this path falls back to the
+   * "HNSW/VAMANA with no graph.bin" branch in {@link #openGeneration} instead of writing an empty
+   * graph file).
+   *
+   * <p>Called exclusively by {@link #commitPersistent} under the writer lock.
+   */
+  private byte[] encodeGraphBytes(float[][] matrix) {
+    return switch (config.indexType()) {
+      case HNSW -> {
+        VectorCollectionConfig.HnswParams hp = config.hnswParams();
+        HnswIndexAdapter adapter = new HnswIndexAdapter(hp.m(), hp.efConstruction());
+        adapter.build(matrix, config.metric());
+        HnswGraph graph = adapter.graph();
+        yield graph == null ? null : HnswGraphCodec.encode(graph);
+      }
+      case VAMANA -> {
+        VectorCollectionConfig.VamanaParams vp = config.vamanaParams();
+        VamanaIndexAdapter adapter =
+            new VamanaIndexAdapter(vp.maxDegree(), vp.searchListSize(), vp.alpha(), vp.seed());
+        adapter.build(matrix, config.metric());
+        VamanaGraph graph = adapter.graph();
+        yield graph == null ? null : VamanaGraphCodec.encode(graph);
+      }
+      case FLAT, IVF_FLAT ->
+          throw new IllegalStateException(
+              "encodeGraphBytes called with non-graph indexType " + config.indexType());
+    };
+  }
+
+  /**
+   * Materializes the successor {@code float[][]} matrix used exclusively by the persistent graph
+   * commit branches (HNSW and VAMANA) to drive {@link HnswIndexAdapter#build} / {@link
+   * VamanaIndexAdapter#build}. The old generation's rows are copied out of the mmap'd {@link
+   * MemorySegmentVectors} via {@link MemorySegment#copy}; staged documents are cloned so the graph
+   * builder never aliases a user-facing {@code Document.vector()} reference. Defensive copies of
+   * both branches keep the builder free to reorder or retain elements without risking
+   * action-at-a-distance on the old mapped segment or on application Documents.
    *
    * <p>This is a separate pass from {@link #buildVectorsBin} — the latter produces the on-disk byte
    * image via bulk {@code MemorySegment.copy}, which is cheaper than a float-by-float walk but
    * doesn't yield a {@code float[][]}. The two paths are independent: {@code vectors.bin} is
-   * written verbatim, while the HNSW graph is rebuilt from a fresh in-memory matrix.
+   * written verbatim, while the graph is rebuilt from a fresh in-memory matrix.
    */
   private static float[][] buildSuccessorMatrix(
       MemorySegmentVectors oldMapped, int liveCount, List<Document> staged, int dim) {

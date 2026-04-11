@@ -217,6 +217,34 @@ public final class VamanaIndex {
     return new Builder(vectors, sim);
   }
 
+  /**
+   * Wraps a pre-built {@link VamanaGraph} together with its backing {@link RandomAccessVectors} and
+   * similarity function into a searchable {@link VamanaIndex} WITHOUT running any graph
+   * construction. The caller is responsible for ensuring that {@code graph}, {@code vectors}, and
+   * {@code sim} are mutually consistent (same vector count, same metric used when the graph was
+   * originally built, etc.).
+   *
+   * <p>This factory exists exclusively for the persistence path in {@code vectors-db} Step 4c: a
+   * decoded graph from {@code VamanaGraphCodec.decode(byte[])} is paired with a {@code
+   * MemorySegmentRandomAccessVectors} view of the mmap'd {@code vectors.bin} file, and the
+   * resulting index is wrapped in {@code MappedVamanaIndexAdapter} for read-only search. There is
+   * no "rebuild-on-commit" concern here — the graph is loaded from disk and the index is never
+   * mutated after construction.
+   *
+   * <p>The returned index shares its internal state with the arguments; in particular it does not
+   * copy {@code graph} or {@code vectors}. Do NOT mutate either through any other reference once
+   * this factory returns.
+   *
+   * @throws NullPointerException if any argument is null
+   */
+  public static VamanaIndex ofPrebuilt(
+      VamanaGraph graph, RandomAccessVectors vectors, SimilarityFunction sim) {
+    Objects.requireNonNull(graph, "graph must not be null");
+    Objects.requireNonNull(vectors, "vectors must not be null");
+    Objects.requireNonNull(sim, "sim must not be null");
+    return new VamanaIndex(graph, vectors, sim);
+  }
+
   /** Builder for {@link VamanaIndex}. */
   public static final class Builder {
 

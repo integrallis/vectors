@@ -36,8 +36,22 @@ public final class FileFormat {
   /** Magic for {@code metadata.bin}. Raw bytes spell {@code "VMDB"} (Vector MetaData Bin). */
   public static final int MAGIC_METADATA = 0x42444D56; // 'V' 'M' 'D' 'B' little-endian
 
-  /** Magic for {@code graph.bin}. Raw bytes spell {@code "VGPH"} (Vector GraPH). */
+  /**
+   * Magic for an HNSW {@code graph.bin}. Raw bytes spell {@code "VGPH"} (Vector GraPH). Only valid
+   * when the manifest's {@link Manifest#indexType() indexType} is {@link
+   * com.integrallis.vectors.db.IndexType#HNSW}; see {@link HnswGraphCodec} for the layout.
+   */
   public static final int MAGIC_GRAPH = 0x48504756; // 'V' 'G' 'P' 'H' little-endian
+
+  /**
+   * Magic for a Vamana {@code graph.bin}. Raw bytes spell {@code "VGVM"} (Vector Graph VaManA).
+   * Only valid when the manifest's {@link Manifest#indexType() indexType} is {@link
+   * com.integrallis.vectors.db.IndexType#VAMANA}; see {@link VamanaGraphCodec} for the layout. A
+   * distinct magic from {@link #MAGIC_GRAPH} means a mistakenly-dispatched decoder (e.g. calling
+   * {@code HnswGraphCodec.decode} on a Vamana file) fails at the first 4-byte read rather than
+   * silently producing a wrong-shaped graph.
+   */
+  public static final int MAGIC_GRAPH_VAMANA = 0x4D564756; // 'V' 'G' 'V' 'M' little-endian
 
   // ---------------------------------------------------------------------------
   // Format versions — bumped whenever the on-disk layout changes in a
@@ -58,8 +72,11 @@ public final class FileFormat {
   /** Current metadata format version. */
   public static final int VERSION_METADATA = 1;
 
-  /** Current graph.bin format version. */
+  /** Current HNSW graph.bin format version (see {@link HnswGraphCodec}). */
   public static final int VERSION_GRAPH = 1;
+
+  /** Current Vamana graph.bin format version (see {@link VamanaGraphCodec}). */
+  public static final int VERSION_GRAPH_VAMANA = 1;
 
   // ---------------------------------------------------------------------------
   // Directory protocol constants.
@@ -108,9 +125,12 @@ public final class FileFormat {
   public static final String MANIFEST_FILE = "manifest.bin";
 
   /**
-   * File name of the HNSW graph topology file inside a generation directory. Only present when the
-   * collection's {@code indexType} is {@link com.integrallis.vectors.db.IndexType#HNSW}; FLAT
-   * generations omit the file entirely and the Manifest reports {@code graphBinLength == 0}.
+   * File name of the graph topology file inside a generation directory. Present when the
+   * collection's {@code indexType} is {@link com.integrallis.vectors.db.IndexType#HNSW} or {@link
+   * com.integrallis.vectors.db.IndexType#VAMANA}; FLAT generations omit the file entirely and the
+   * Manifest reports {@code graphBinLength == 0}. HNSW and Vamana share the same filename but use
+   * different file layouts and distinct magic numbers ({@link #MAGIC_GRAPH} vs {@link
+   * #MAGIC_GRAPH_VAMANA}) so a misrouted decoder fails at the first 4-byte read.
    */
   public static final String GRAPH_FILE = "graph.bin";
 

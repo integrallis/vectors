@@ -42,8 +42,8 @@ import java.util.logging.Logger;
  *   <li>Create the in-flight tmp dir {@code .gen-NNNNNNNNNNNNNNNN.tmp/} under the collection root.
  *   <li>Invoke {@link GenerationSource} callbacks to materialize {@code vectors.bin}, {@code
  *       idmap.bin}, and {@code metadata.bin} inside the tmp dir — plus {@code graph.bin} if the
- *       manifest declares a graph index (currently {@link
- *       com.integrallis.vectors.db.IndexType#HNSW}). Each callback is expected to {@link
+ *       manifest declares a graph index ({@link com.integrallis.vectors.db.IndexType#HNSW} or
+ *       {@link com.integrallis.vectors.db.IndexType#VAMANA}). Each callback is expected to {@link
  *       FileChannel#force(boolean) fsync} its own file contents — the tmp dir directory entries are
  *       fsynced by this method.
  *   <li>Write {@code manifest.bin} via {@link Manifest#writeTo(Path)} (which fsyncs the file).
@@ -118,11 +118,18 @@ public final class GenerationDirectory {
   /**
    * Index types that own an on-disk {@code graph.bin} payload. A {@link
    * GenerationSource#writeGraph} callback is only invoked when {@code manifest.indexType()} is one
-   * of these. Adding a new graph-backed index (e.g. persistent Vamana in Step 4c) means extending
-   * this set and teaching the commit path to pass non-empty graph bytes through {@code
-   * BufferedGenerationSource}.
+   * of these, and the recovery pass verifies {@code graph.bin}'s length + CRC against the manifest
+   * for these types (and only these types).
+   *
+   * <p>Both HNSW (Step 4b) and Vamana (Step 4c) share the same {@code graph.bin} slot: the file
+   * byte layouts differ (see {@link HnswGraphCodec} vs {@link VamanaGraphCodec}), but from the
+   * generation-directory perspective they are interchangeable opaque payloads whose length + CRC
+   * are stored in the index-type-agnostic {@code graphBinLength}/{@code graphBinCrc32} manifest
+   * fields. The codec dispatch happens one level up in {@code VectorCollectionImpl.openGeneration},
+   * which inspects {@code manifest.indexType()} and routes the bytes to the correct decoder.
    */
-  private static final Set<IndexType> GRAPH_INDEX_TYPES = EnumSet.of(IndexType.HNSW);
+  private static final Set<IndexType> GRAPH_INDEX_TYPES =
+      EnumSet.of(IndexType.HNSW, IndexType.VAMANA);
 
   private GenerationDirectory() {}
 
@@ -145,14 +152,16 @@ public final class GenerationDirectory {
    * invoked unconditionally in a single call to {@link GenerationDirectory#writeGeneration(Path,
    * long, GenerationSource, Manifest)} in the order {@code vectors → idmap → metadata → graph}. The
    * optional {@code writeGraph} callback is only invoked when the manifest's {@link
-   * Manifest#indexType() indexType} is a graph index (currently {@link
-   * com.integrallis.vectors.db.IndexType#HNSW}); for flat-scan generations it is skipped entirely
+   * Manifest#indexType() indexType} is a graph index ({@link
+   * com.integrallis.vectors.db.IndexType#HNSW} or {@link
+   * com.integrallis.vectors.db.IndexType#VAMANA}); for flat-scan generations it is skipped entirely
    * and no {@code graph.bin} file is written. If any callback throws, the tmp directory is cleaned
    * up before the exception propagates.
    *
    * <p>{@code writeGraph} defaults to a no-op so that existing flat-scan sources compile unchanged
    * after the Step 4b interface extension. A graph-backed source overrides it to emit the encoded
-   * adjacency bytes (typically via {@code HnswGraphCodec.encode}).
+   * adjacency bytes (typically via {@code HnswGraphCodec.encode} or {@code
+   * VamanaGraphCodec.encode}).
    */
   public interface GenerationSource {
     /** Writes {@code vectors.bin} into the tmp dir at the given absolute path. */
@@ -280,17 +289,17 @@ public final class GenerationDirectory {
     try {
       // 1. Write the data files. The GenerationSource callbacks are expected to fsync their own
       //    file contents. If any callback throws, we catch below and clean up. The graph.bin
-      //    callback is only invoked when the manifest declares a graph index (currently HNSW);
+      //    callback is only invoked when the manifest declares a graph index (HNSW or VAMANA);
       //    flat-scan generations leave no graph.bin entry on disk and the manifest's
       //    graphBinLength field carries 0 as the authoritative "no graph" signal.
       source.writeVectors(tmpDir.resolve(FileFormat.VECTORS_FILE));
       source.writeIdmap(tmpDir.resolve(FileFormat.IDMAP_FILE));
       source.writeMetadata(tmpDir.resolve(FileFormat.METADATA_FILE));
       // Skip the graph callback unless the manifest both declares a graph index type AND records
-      // a non-zero graph payload length. An empty HNSW generation (bootstrap or liveCount=0 after
+      // a non-zero graph payload length. An empty graph generation (bootstrap or liveCount=0 after
       // a hypothetical compaction) has nothing to write; we treat graphBinLength==0 as the
-      // authoritative "no graph" signal just like FLAT, so the on-disk shape of an empty HNSW
-      // generation is indistinguishable from a FLAT one.
+      // authoritative "no graph" signal just like FLAT, so the on-disk shape of an empty HNSW or
+      // VAMANA generation is indistinguishable from a FLAT one.
       if (GRAPH_INDEX_TYPES.contains(manifest.indexType()) && manifest.graphBinLength() > 0L) {
         source.writeGraph(tmpDir.resolve(FileFormat.GRAPH_FILE));
       }
@@ -560,7 +569,7 @@ public final class GenerationDirectory {
    *
    * <p>Files whose manifest-declared length is {@code 0} are treated as "no file" sentinels and
    * skipped entirely. This matches the commit path which never materializes an empty {@code
-   * graph.bin} for flat-scan generations or for empty HNSW bootstrap generations.
+   * graph.bin} for flat-scan generations or for empty HNSW/VAMANA bootstrap generations.
    *
    * <p>Called during recovery for both the CURRENT-target happy path and the descending walk-back
    * scan, so a payload-corrupt generation behaves identically to a manifest-corrupt one: the sweep
@@ -608,7 +617,7 @@ public final class GenerationDirectory {
    * Validates that {@code file} has exactly {@code expectedLength} bytes and a CRC32 equal to
    * {@code expectedCrc}. Throws {@link IOException} with a descriptive message on any mismatch.
    * Skipped (no-op) when {@code expectedLength == 0} because the caller treats a zero-length
-   * manifest entry as "this file was not materialized" (the empty-HNSW-bootstrap and flat-scan
+   * manifest entry as "this file was not materialized" (the empty-graph-bootstrap and flat-scan
    * cases). In the zero-length case {@code file} need not exist on disk — the commit path never
    * creates a zero-byte payload file, so this no-op is the contract that keeps {@link
    * #tryVerifyPayloadCrcs} free of per-call "does graph.bin apply here?" branching.

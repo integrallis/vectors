@@ -1,15 +1,22 @@
 package com.integrallis.vectors.db.storage;
 
-import com.integrallis.vectors.hnsw.RandomAccessVectors;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.Objects;
 
 /**
- * Read-only {@link RandomAccessVectors} adapter that copies a vector out of a memory-mapped {@link
- * MemorySegmentVectors} into a per-thread scratch {@code float[]} on every {@link #getVector(int)}
- * call. Used exclusively by the persistent HNSW read path (Step 4b) to bridge the mmap'd {@code
- * vectors.bin} into the {@code vectors-hnsw} search API.
+ * Read-only adapter that copies a vector out of a memory-mapped {@link MemorySegmentVectors} into a
+ * per-thread scratch {@code float[]} on every {@link #getVector(int)} call. Used by both the
+ * persistent HNSW read path (Step 4b) and the persistent Vamana read path (Step 4c) to bridge the
+ * mmap'd {@code vectors.bin} into the graph-index search APIs.
+ *
+ * <p>This class simultaneously implements both {@link
+ * com.integrallis.vectors.hnsw.RandomAccessVectors} and {@link
+ * com.integrallis.vectors.vamana.RandomAccessVectors}. The two interfaces are structurally
+ * identical ({@code size()}, {@code dimension()}, {@code getVector(int)}) but live in separate
+ * packages to keep each graph-index module dependency-light. Implementing both on one class means a
+ * single reader-side bridge is shared by {@link MappedHnswIndexAdapter} and {@link
+ * MappedVamanaIndexAdapter}.
  *
  * <p><b>Shared-buffer invariant (CRITICAL).</b> The array returned by {@link #getVector(int)} is a
  * per-thread scratch buffer. Every call on the same thread overwrites the previous call's result.
@@ -24,9 +31,9 @@ import java.util.Objects;
  * </ul>
  *
  * <p>The only safe usage is "fetch, score/compare immediately against a stable reference, discard".
- * This matches the {@link RandomAccessVectors} contract verbatim ("implementations may return a
+ * This matches both {@code RandomAccessVectors} contracts verbatim ("implementations may return a
  * shared buffer; callers must not retain it across calls") and is the same pattern used by {@code
- * NeighborSelector} and {@code HnswSearcher}'s inner loops.
+ * HnswSearcher}'s and {@code VamanaSearcher}'s inner loops.
  *
  * <p><b>Why per-thread, not per-call.</b> Allocating a fresh {@code float[dimension]} on every
  * {@link #getVector(int)} call would issue a young-gen allocation per scored neighbor — at typical
@@ -34,14 +41,15 @@ import java.util.Objects;
  * the array's lifetime. A {@link ThreadLocal} scratch buffer is zero-allocation after the first
  * query per thread and lets the SIMD scoring loops run without GC pressure.
  *
- * <p><b>Why NOT usable by {@link com.integrallis.vectors.hnsw.HnswGraphBuilder}.</b> The builder's
- * {@code insert()} path captures {@code queryVec = getVector(nodeId)} into a local variable and
- * then calls {@code vectors.getVector(neighborId)} while still reading {@code queryVec}. Under the
- * shared-scratch contract that's a use-after-overwrite bug. Phase 5 of Step 4b audited every {@code
- * getVector(} call site in {@code vectors-hnsw/src/main/java} and confirmed that only the
- * <i>search</i> path ({@code HnswSearcher.beamSearch}, {@code greedyDescend}, {@code rescore})
- * satisfies the single-call-per-iteration contract. {@code MappedHnswIndexAdapter}, the sole user
- * of this class, is constructed from a <i>pre-built</i> graph and rejects {@link
+ * <p><b>Why NOT usable by {@link com.integrallis.vectors.hnsw.HnswGraphBuilder} or {@link
+ * com.integrallis.vectors.vamana.VamanaGraphBuilder}.</b> Both builders have {@code insert}/{@code
+ * link} paths that capture one {@code getVector(x)} result into a local variable and then call
+ * {@code vectors.getVector(y)} while still reading the first result. Under the shared-scratch
+ * contract that's a use-after-overwrite bug. The audit in Step 4b/4c confirmed that only the
+ * <i>search</i> paths ({@code HnswSearcher.beamSearch}, {@code VamanaSearcher.search}, both rescore
+ * methods) satisfy the single-call-per-iteration contract. {@link MappedHnswIndexAdapter} and
+ * {@link MappedVamanaIndexAdapter} — the only users of this class — are constructed from
+ * <i>pre-built</i> graphs and reject {@link
  * com.integrallis.vectors.db.index.IndexSpi#build(float[][],
  * com.integrallis.vectors.core.SimilarityFunction)} with {@link UnsupportedOperationException}, so
  * the unsafe builder path cannot reach this adapter.
@@ -51,7 +59,9 @@ import java.util.Objects;
  * itself thread-safe (shared arena, no mutable state). There is no cross-thread aliasing of the
  * scratch buffer — {@link ThreadLocal#get()} returns a reference unique to the calling thread.
  */
-public final class MemorySegmentRandomAccessVectors implements RandomAccessVectors {
+public final class MemorySegmentRandomAccessVectors
+    implements com.integrallis.vectors.hnsw.RandomAccessVectors,
+        com.integrallis.vectors.vamana.RandomAccessVectors {
 
   private final MemorySegmentVectors mapped;
   private final int dimension;
@@ -60,7 +70,7 @@ public final class MemorySegmentRandomAccessVectors implements RandomAccessVecto
   private final ThreadLocal<float[]> scratch;
 
   /**
-   * Wraps the given {@link MemorySegmentVectors} in a {@link RandomAccessVectors} view. The {@code
+   * Wraps the given {@link MemorySegmentVectors} in a shared-scratch read-only view. The {@code
    * mapped} lifetime is NOT tied to this instance — it is owned by the caller-provided {@link
    * java.lang.foreign.Arena} that was passed to {@link MemorySegmentVectors#open}. Creating a
    * wrapper does NOT allocate any scratch buffer; the first {@link #getVector(int)} call on each

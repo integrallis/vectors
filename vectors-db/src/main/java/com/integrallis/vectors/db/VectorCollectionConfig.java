@@ -17,13 +17,16 @@ import java.util.Objects;
  *     positive. Use {@link Integer#MAX_VALUE} to disable auto-commit entirely (the default).
  * @param storageRoot absolute collection root for persistent mode. When {@code null} the collection
  *     operates as an in-memory-only collection (unchanged Step 3 behaviour for FLAT; Step 4b added
- *     in-memory HNSW support via {@link com.integrallis.vectors.db.index.HnswIndexAdapter}). When
- *     non-null, every {@code commit()} writes a new generation directory under this path via {@link
+ *     in-memory HNSW support via {@link com.integrallis.vectors.db.index.HnswIndexAdapter} and Step
+ *     4c added in-memory VAMANA support via {@link
+ *     com.integrallis.vectors.db.index.VamanaIndexAdapter}). When non-null, every {@code commit()}
+ *     writes a new generation directory under this path via {@link
  *     com.integrallis.vectors.db.storage.GenerationDirectory} and mmaps the result for the next
- *     read snapshot. Step 4b only permits persistent mode with {@link IndexType#FLAT}; persistent
- *     HNSW is deferred to Step 4b Phase 5.
+ *     read snapshot.
  * @param hnswParams HNSW build-time parameters. Must be {@code non-null iff indexType == HNSW}; any
  *     other combination is rejected by the compact constructor. Added in Step 4b.
+ * @param vamanaParams Vamana build-time parameters. Must be {@code non-null iff indexType ==
+ *     VAMANA}; any other combination is rejected by the compact constructor. Added in Step 4c.
  */
 public record VectorCollectionConfig(
     int dimension,
@@ -32,7 +35,8 @@ public record VectorCollectionConfig(
     QuantizerKind quantizerKind,
     int autoCommitThreshold,
     Path storageRoot,
-    HnswParams hnswParams) {
+    HnswParams hnswParams,
+    VamanaParams vamanaParams) {
 
   public VectorCollectionConfig {
     if (dimension <= 0) {
@@ -55,12 +59,46 @@ public record VectorCollectionConfig(
               + (hnswParams == null ? "null" : "set")
               + ")");
     }
+    if ((indexType == IndexType.VAMANA) != (vamanaParams != null)) {
+      throw new IllegalArgumentException(
+          "vamanaParams must be non-null iff indexType == VAMANA (indexType="
+              + indexType
+              + ", vamanaParams="
+              + (vamanaParams == null ? "null" : "set")
+              + ")");
+    }
   }
 
   /**
-   * 6-arg convenience constructor that defaults {@link #hnswParams()} to {@code null}. Suitable for
-   * flat-scan collections. Throws via the compact constructor if the caller asks for {@link
-   * IndexType#HNSW} without supplying {@link HnswParams}.
+   * 7-arg convenience constructor that defaults {@link #vamanaParams()} to {@code null}. Preserves
+   * the Step 4b canonical shape for call sites that predate Step 4c. Throws via the compact
+   * constructor if the caller asks for {@link IndexType#VAMANA} without supplying {@link
+   * VamanaParams}.
+   */
+  public VectorCollectionConfig(
+      int dimension,
+      SimilarityFunction metric,
+      IndexType indexType,
+      QuantizerKind quantizerKind,
+      int autoCommitThreshold,
+      Path storageRoot,
+      HnswParams hnswParams) {
+    this(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        autoCommitThreshold,
+        storageRoot,
+        hnswParams,
+        null);
+  }
+
+  /**
+   * 6-arg convenience constructor that defaults {@link #hnswParams()} and {@link #vamanaParams()}
+   * to {@code null}. Suitable for flat-scan collections. Throws via the compact constructor if the
+   * caller asks for {@link IndexType#HNSW} or {@link IndexType#VAMANA} without supplying the
+   * matching parameter record.
    */
   public VectorCollectionConfig(
       int dimension,
@@ -69,13 +107,13 @@ public record VectorCollectionConfig(
       QuantizerKind quantizerKind,
       int autoCommitThreshold,
       Path storageRoot) {
-    this(dimension, metric, indexType, quantizerKind, autoCommitThreshold, storageRoot, null);
+    this(dimension, metric, indexType, quantizerKind, autoCommitThreshold, storageRoot, null, null);
   }
 
   /**
-   * 5-arg convenience constructor for in-memory, flat-scan collections. Equivalent to the 7-arg
-   * canonical constructor with {@code null} {@code storageRoot} and {@code null} {@code
-   * hnswParams}. Kept for Step 3 test fixtures that pre-date Step 4a/4b.
+   * 5-arg convenience constructor for in-memory, flat-scan collections. Equivalent to the 8-arg
+   * canonical constructor with {@code null} {@code storageRoot}, {@code null} {@code hnswParams},
+   * and {@code null} {@code vamanaParams}. Kept for Step 3 test fixtures that pre-date Step 4a/4b.
    */
   public VectorCollectionConfig(
       int dimension,
@@ -83,7 +121,7 @@ public record VectorCollectionConfig(
       IndexType indexType,
       QuantizerKind quantizerKind,
       int autoCommitThreshold) {
-    this(dimension, metric, indexType, quantizerKind, autoCommitThreshold, null, null);
+    this(dimension, metric, indexType, quantizerKind, autoCommitThreshold, null, null, null);
   }
 
   /**
@@ -104,6 +142,39 @@ public record VectorCollectionConfig(
       if (efConstruction < m) {
         throw new IllegalArgumentException(
             "efConstruction (" + efConstruction + ") must be >= M (" + m + ")");
+      }
+    }
+  }
+
+  /**
+   * Vamana graph-construction parameters captured on {@code VectorCollection.builder().build()}.
+   * Only {@code maxDegree} is persisted on disk (inside {@code graph.bin}'s header); {@code
+   * searchListSize}, {@code alpha}, and {@code seed} are all build-time hints that are NOT
+   * preserved across a close/reopen, so a reopened collection that triggers another commit will use
+   * whichever values the caller sets on the new builder invocation.
+   *
+   * <p>Naming mirrors the Vamana paper: {@code R} = maxDegree, {@code L} = searchListSize, {@code
+   * alpha} is the robust-pruner diversity parameter (must be {@code >= 1.0}). {@code seed} drives
+   * {@code VamanaGraphBuilder}'s random initialization so consecutive commits with the same data
+   * produce byte-identical graphs.
+   *
+   * @param maxDegree Vamana {@code R} — max out-degree after robust pruning (must be positive)
+   * @param searchListSize Vamana {@code L} — beam width during construction (must be {@code >=
+   *     maxDegree})
+   * @param alpha diversity parameter (must be {@code >= 1.0}; the Vamana default is {@code 1.2})
+   * @param seed random seed for deterministic construction
+   */
+  public record VamanaParams(int maxDegree, int searchListSize, float alpha, long seed) {
+    public VamanaParams {
+      if (maxDegree <= 0) {
+        throw new IllegalArgumentException("maxDegree must be positive: " + maxDegree);
+      }
+      if (searchListSize < maxDegree) {
+        throw new IllegalArgumentException(
+            "searchListSize (" + searchListSize + ") must be >= maxDegree (" + maxDegree + ")");
+      }
+      if (alpha < 1.0f) {
+        throw new IllegalArgumentException("alpha must be >= 1.0: " + alpha);
       }
     }
   }
