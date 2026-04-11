@@ -5,6 +5,7 @@ import com.integrallis.vectors.hnsw.NeighborArray;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.BitSet;
 import java.util.Objects;
 
 /**
@@ -155,13 +156,32 @@ public final class HnswGraphCodec {
       buf.putInt(graph.nodeLevel(i));
     }
 
+    // Scratch for duplicate-neighbor detection. A single reusable BitSet per encode call;
+    // cleared before each neighbor list so we catch duplicates *within* a node's adjacency
+    // list at write time rather than leaving them for decode() to reject.
+    BitSet seen = new BitSet(numNodes);
+
     // --- Layer 0 adjacency -------------------------------------------------
     for (int i = 0; i < numNodes; i++) {
       NeighborArray layer0 = graph.getNeighbors(i, 0);
       int degree = layer0.size();
       buf.putInt(degree);
+      seen.clear();
       for (int k = 0; k < degree; k++) {
-        buf.putInt(layer0.node(k));
+        int neighborId = layer0.node(k);
+        if (neighborId < 0 || neighborId >= numNodes) {
+          throw new IllegalStateException(
+              "layer 0 neighbor " + neighborId + " for node " + i + " out of range");
+        }
+        if (neighborId == i) {
+          throw new IllegalStateException("layer 0 self-loop on node " + i);
+        }
+        if (seen.get(neighborId)) {
+          throw new IllegalStateException(
+              "layer 0 duplicate neighbor " + neighborId + " in node " + i);
+        }
+        seen.set(neighborId);
+        buf.putInt(neighborId);
       }
     }
 
@@ -176,8 +196,22 @@ public final class HnswGraphCodec {
         buf.putInt(i);
         int degree = neighbors.size();
         buf.putInt(degree);
+        seen.clear();
         for (int k = 0; k < degree; k++) {
-          buf.putInt(neighbors.node(k));
+          int neighborId = neighbors.node(k);
+          if (neighborId < 0 || neighborId >= numNodes) {
+            throw new IllegalStateException(
+                "layer " + layer + " neighbor " + neighborId + " for node " + i + " out of range");
+          }
+          if (neighborId == i) {
+            throw new IllegalStateException("layer " + layer + " self-loop on node " + i);
+          }
+          if (seen.get(neighborId)) {
+            throw new IllegalStateException(
+                "layer " + layer + " duplicate neighbor " + neighborId + " in node " + i);
+          }
+          seen.set(neighborId);
+          buf.putInt(neighborId);
         }
       }
     }
@@ -266,6 +300,9 @@ public final class HnswGraphCodec {
       throw new IOException("graph.bin maxLevel must be >= 0 when numNodes > 0, got " + maxLevel);
     }
 
+    // Widen buf.remaining() to long via the 4L literal so the arithmetic cannot overflow even at
+    // the theoretical numNodes > 536M ceiling that would wrap a naive 4 * numNodes computation.
+    // The MAX_ENCODED_SIZE guard in encode() keeps numNodes well below that bound in practice.
     if (buf.remaining() < 4L * numNodes) {
       throw new IOException(
           "graph.bin truncated nodeLevels section: need "
@@ -281,6 +318,20 @@ public final class HnswGraphCodec {
             "graph.bin nodeLevels[" + i + "]=" + level + " out of range [0, " + maxLevel + "]");
       }
       nodeLevels[i] = level;
+    }
+
+    // HNSW invariant: the entry node must live at the highest level. A graph where
+    // nodeLevels[entryNode] < maxLevel would decode without error but silently produce wrong
+    // search results (greedy descend would start at a lower layer and miss the top-layer
+    // connections needed to reach the correct neighborhood). Catch it here.
+    if (nodeLevels[entryNode] != maxLevel) {
+      throw new IOException(
+          "graph.bin entryNode "
+              + entryNode
+              + " lives at level "
+              + nodeLevels[entryNode]
+              + " but maxLevel is "
+              + maxLevel);
     }
 
     // Construct the graph and initialize every node at the correct level.

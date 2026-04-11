@@ -277,7 +277,12 @@ public final class GenerationDirectory {
       source.writeVectors(tmpDir.resolve(FileFormat.VECTORS_FILE));
       source.writeIdmap(tmpDir.resolve(FileFormat.IDMAP_FILE));
       source.writeMetadata(tmpDir.resolve(FileFormat.METADATA_FILE));
-      if (GRAPH_INDEX_TYPES.contains(manifest.indexType())) {
+      // Skip the graph callback unless the manifest both declares a graph index type AND records
+      // a non-zero graph payload length. An empty HNSW generation (bootstrap or liveCount=0 after
+      // a hypothetical compaction) has nothing to write; we treat graphBinLength==0 as the
+      // authoritative "no graph" signal just like FLAT, so the on-disk shape of an empty HNSW
+      // generation is indistinguishable from a FLAT one.
+      if (GRAPH_INDEX_TYPES.contains(manifest.indexType()) && manifest.graphBinLength() > 0L) {
         source.writeGraph(tmpDir.resolve(FileFormat.GRAPH_FILE));
       }
 

@@ -158,16 +158,6 @@ public final class VectorCollectionBuilder {
               + quantizerKind
               + " deferred to a later step (Step 4b only supports QuantizerKind.NONE)");
     }
-    // Persistent HNSW is deferred to Step 4b Phase 5 (graph.bin serialization). Fail fast at
-    // build() so the user gets a clear message here — if we let this combination through,
-    // commit() would eventually throw an internal "BufferedGenerationSource.writeGraph invoked
-    // with no graph bytes" IOException wrapped in UncheckedIOException, which is a confusing
-    // programmer-error message for what is really an unsupported feature flag.
-    if (indexType == IndexType.HNSW && storageRoot != null) {
-      throw new UnsupportedOperationException(
-          "Persistent HNSW is deferred to Step 4b Phase 5. Use in-memory mode (omit"
-              + " storagePath) or IndexType.FLAT for persistent collections.");
-    }
     VectorCollectionConfig.HnswParams hnswParams =
         (indexType == IndexType.HNSW)
             ? new VectorCollectionConfig.HnswParams(hnswM, hnswEfConstruction)

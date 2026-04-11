@@ -2,6 +2,7 @@ package com.integrallis.vectors.db.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIOException;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.integrallis.vectors.hnsw.HnswGraph;
@@ -441,6 +442,112 @@ class HnswGraphCodecTest {
       assertThatIOException()
           .isThrownBy(() -> HnswGraphCodec.decode(padded))
           .withMessageContaining("trailing");
+    }
+
+    @Test
+    void rejectsEntryNodeBelowMaxLevel() {
+      // HNSW invariant: the entry node must live at the topmost layer (maxLevel). A graph where
+      // nodeLevels[entryNode] < maxLevel is silently wrong at search time (greedy descent would
+      // start below the top and miss the seed connections), so decode() must refuse it.
+      //
+      // Build a small graph with entryNode=0 at level 2, then poison nodeLevels[0] to 1.
+      HnswGraph graph = new HnswGraph(3, 2);
+      graph.initNode(0, 2);
+      graph.initNode(1, 2);
+      graph.initNode(2, 0);
+      graph.setEntryNode(0, 2);
+      graph.getNeighbors(0, 0).insert(1, 3f);
+      graph.getNeighbors(0, 0).insert(2, 2f);
+      graph.getNeighbors(1, 0).insert(0, 3f);
+      graph.getNeighbors(2, 0).insert(0, 2f);
+      graph.getNeighbors(0, 1).insert(1, 2f);
+      graph.getNeighbors(1, 1).insert(0, 2f);
+      graph.getNeighbors(0, 2).insert(1, 1f);
+      graph.getNeighbors(1, 2).insert(0, 1f);
+
+      byte[] encoded = HnswGraphCodec.encode(graph);
+      ByteBuffer buf = ByteBuffer.wrap(encoded).order(ByteOrder.LITTLE_ENDIAN);
+      // nodeLevels[0] lives at offset HEADER_SIZE = 32. Overwrite with level 1 (< maxLevel=2).
+      buf.putInt(32, 1);
+      assertThatIOException()
+          .isThrownBy(() -> HnswGraphCodec.decode(encoded))
+          .withMessageContaining("entryNode");
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Encode-time validation tests (defense-in-depth against corrupt graph state)
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  @Tag("unit")
+  class EncodeValidation {
+
+    @Test
+    void encodeRejectsSelfLoopAtLayerZero() {
+      // NeighborArray.insert() does not block inserting node i as its own neighbor, so a buggy
+      // or malicious builder could produce a self-loop. encode() must refuse it on the way out
+      // so the corruption never reaches graph.bin.
+      HnswGraph graph = new HnswGraph(3, 2);
+      graph.initNode(0, 0);
+      graph.initNode(1, 0);
+      graph.initNode(2, 0);
+      graph.setEntryNode(0, 0);
+      graph.getNeighbors(0, 0).insert(0, 10f); // self-loop
+      assertThatIllegalStateException()
+          .isThrownBy(() -> HnswGraphCodec.encode(graph))
+          .withMessageContaining("self-loop");
+    }
+
+    @Test
+    void encodeRejectsOutOfRangeNeighborAtLayerZero() {
+      // NeighborArray.insert() does not bounds-check the nodeId against numNodes, so an off-by-one
+      // builder bug could persist a stale ordinal. encode() must catch it before it reaches disk.
+      HnswGraph graph = new HnswGraph(3, 2);
+      graph.initNode(0, 0);
+      graph.initNode(1, 0);
+      graph.initNode(2, 0);
+      graph.setEntryNode(0, 0);
+      graph.getNeighbors(0, 0).insert(99, 10f); // out of range
+      assertThatIllegalStateException()
+          .isThrownBy(() -> HnswGraphCodec.encode(graph))
+          .withMessageContaining("out of range");
+    }
+
+    @Test
+    void encodeRejectsSelfLoopAtUpperLayer() {
+      // The upper-layer path has its own neighbor-validation loop; verify the self-loop guard
+      // fires there too (not just at layer 0).
+      HnswGraph graph = new HnswGraph(3, 2);
+      graph.initNode(0, 1);
+      graph.initNode(1, 1);
+      graph.initNode(2, 0);
+      graph.setEntryNode(0, 1);
+      graph.getNeighbors(0, 0).insert(1, 3f);
+      graph.getNeighbors(0, 0).insert(2, 2f);
+      graph.getNeighbors(1, 0).insert(0, 3f);
+      graph.getNeighbors(2, 0).insert(0, 2f);
+      graph.getNeighbors(0, 1).insert(0, 10f); // self-loop at layer 1
+      assertThatIllegalStateException()
+          .isThrownBy(() -> HnswGraphCodec.encode(graph))
+          .withMessageContaining("self-loop");
+    }
+
+    @Test
+    void encodeRejectsOutOfRangeNeighborAtUpperLayer() {
+      HnswGraph graph = new HnswGraph(3, 2);
+      graph.initNode(0, 1);
+      graph.initNode(1, 1);
+      graph.initNode(2, 0);
+      graph.setEntryNode(0, 1);
+      graph.getNeighbors(0, 0).insert(1, 3f);
+      graph.getNeighbors(0, 0).insert(2, 2f);
+      graph.getNeighbors(1, 0).insert(0, 3f);
+      graph.getNeighbors(2, 0).insert(0, 2f);
+      graph.getNeighbors(0, 1).insert(99, 10f); // out of range at layer 1
+      assertThatIllegalStateException()
+          .isThrownBy(() -> HnswGraphCodec.encode(graph))
+          .withMessageContaining("out of range");
     }
   }
 

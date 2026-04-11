@@ -167,8 +167,8 @@ public final class HnswIndex {
   /**
    * Returns the underlying {@link HnswGraph}. Exposed for persistence paths that need to serialize
    * the graph topology to disk (e.g. {@code com.integrallis.vectors.db.storage.HnswGraphCodec} in
-   * Step 4b). The returned graph aliases the index's internal reference; callers must not mutate
-   * it through {@link HnswGraph#initNode} or {@link HnswGraph#setEntryNode}, which would corrupt
+   * Step 4b). The returned graph aliases the index's internal reference; callers must not mutate it
+   * through {@link HnswGraph#initNode} or {@link HnswGraph#setEntryNode}, which would corrupt
    * in-flight searches.
    */
   public HnswGraph graph() {
@@ -199,6 +199,34 @@ public final class HnswIndex {
   public static Builder builder(
       RandomAccessVectors vectors, SimilarityFunction similarityFunction) {
     return new Builder(vectors, similarityFunction);
+  }
+
+  /**
+   * Wraps a pre-built {@link HnswGraph} together with its backing {@link RandomAccessVectors} and
+   * similarity function into a searchable {@link HnswIndex} WITHOUT running any graph construction.
+   * The caller is responsible for ensuring that {@code graph}, {@code vectors}, and {@code
+   * similarityFunction} are mutually consistent (same vector count, same metric used when the graph
+   * was originally built, etc.).
+   *
+   * <p>This factory exists exclusively for the persistence path in {@code vectors-db} Step 4b: a
+   * decoded graph from {@code HnswGraphCodec.decode(byte[])} is paired with a {@code
+   * MemorySegmentRandomAccessVectors} view of the mmap'd {@code vectors.bin} file, and the
+   * resulting index is wrapped in {@code MappedHnswIndexAdapter} for read-only search. There is no
+   * "rebuild-on-commit" concern here — the graph is loaded from disk and the index is never mutated
+   * after construction.
+   *
+   * <p>The returned index shares its internal state with the arguments; in particular it does not
+   * copy {@code graph} or {@code vectors}. Do NOT mutate either through any other reference once
+   * this factory returns.
+   *
+   * @throws NullPointerException if any argument is null
+   */
+  public static HnswIndex ofPrebuilt(
+      HnswGraph graph, RandomAccessVectors vectors, SimilarityFunction similarityFunction) {
+    java.util.Objects.requireNonNull(graph, "graph must not be null");
+    java.util.Objects.requireNonNull(vectors, "vectors must not be null");
+    java.util.Objects.requireNonNull(similarityFunction, "similarityFunction must not be null");
+    return new HnswIndex(graph, vectors, similarityFunction);
   }
 
   /** Builder for configuring and constructing an HNSW index. */

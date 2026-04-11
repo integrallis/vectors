@@ -13,10 +13,14 @@ import com.integrallis.vectors.db.metadata.MetadataStore;
 import com.integrallis.vectors.db.storage.Checksums;
 import com.integrallis.vectors.db.storage.FileFormat;
 import com.integrallis.vectors.db.storage.GenerationDirectory;
+import com.integrallis.vectors.db.storage.HnswGraphCodec;
 import com.integrallis.vectors.db.storage.Manifest;
+import com.integrallis.vectors.db.storage.MappedHnswIndexAdapter;
 import com.integrallis.vectors.db.storage.MappedIdMapper;
 import com.integrallis.vectors.db.storage.MappedMetadataStore;
+import com.integrallis.vectors.db.storage.MemorySegmentRandomAccessVectors;
 import com.integrallis.vectors.db.storage.MemorySegmentVectors;
+import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.storage.memory.AlignmentUtil;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -62,11 +66,16 @@ import java.util.logging.Logger;
  * whose sole guard is the writer lock.
  *
  * <p><b>Dual mode.</b> When {@link VectorCollectionConfig#storageRoot()} is {@code null} the
- * collection runs in the Step 3 in-memory model (fresh {@link FlatScanAdapter} rebuild per commit).
+ * collection runs in the Step 3 in-memory model (fresh {@link FlatScanAdapter} or {@link
+ * HnswIndexAdapter} rebuild per commit, selected by {@link VectorCollectionConfig#indexType()}).
  * When non-null, the constructor runs {@link GenerationDirectory#recover} to find or bootstrap a
  * generation, opens its mapped stores through a fresh shared {@link Arena}, and every {@link
  * #commit()} writes a new {@code gen-NNNN/} directory through {@link
- * GenerationDirectory#writeGeneration} before publishing the new snapshot.
+ * GenerationDirectory#writeGeneration} before publishing the new snapshot. The persistent open path
+ * branches on the manifest's index type: {@link IndexType#FLAT} goes through {@link
+ * MappedFlatScanAdapter}, and {@link IndexType#HNSW} decodes the generation's {@code graph.bin} via
+ * {@link HnswGraphCodec#decode(byte[])}, wraps the mmap'd vectors in a {@link
+ * MemorySegmentRandomAccessVectors}, and constructs a {@link MappedHnswIndexAdapter}.
  *
  * <p><b>Scope.</b> Only {@link Filter.All} (or {@code null}) is executed; any other filter throws
  * {@link UnsupportedOperationException} (deferred to Step 5). {@code upsert}, {@code delete},
@@ -330,9 +339,21 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   /**
-   * Opens the four on-disk files for a generation under a fresh shared {@link Arena} and returns a
-   * ready-to-use {@link Generation} with refcount initialized to 1 (the facade's handle). On
-   * failure anywhere in the open sequence, the arena is closed so the partial state is released.
+   * Opens a generation directory under a fresh shared {@link Arena} and returns a ready-to-use
+   * {@link Generation} with refcount initialized to 1 (the facade's handle). For {@link
+   * IndexType#FLAT} generations that is the three data files ({@code vectors.bin}, {@code
+   * idmap.bin}, {@code metadata.bin}). For {@link IndexType#HNSW} generations it additionally reads
+   * the generation's {@code graph.bin}, verifies its CRC32 against {@link
+   * Manifest#graphBinCrc32()}, decodes it via {@link HnswGraphCodec#decode(byte[])}, and wraps
+   * everything in a {@link MappedHnswIndexAdapter}.
+   *
+   * <p>Every data file's CRC is re-verified here before the stores are constructed so a file that
+   * silently corrupts after the manifest's self-CRC check (bit rot, partial truncation after an
+   * earlier fsck, user error) fails fast rather than bleeding into search results. The manifest
+   * self-CRC alone only proves the header is intact; the per-file CRCs prove the payload is intact,
+   * and recovery walks backward on any mismatch.
+   *
+   * <p>On failure anywhere in the open sequence, the arena is closed so partial state is released.
    */
   private Generation openGeneration(Path genDir, Manifest manifest) throws IOException {
     IOException injected = openGenerationFailureHook;
@@ -341,6 +362,26 @@ final class VectorCollectionImpl implements VectorCollection {
     }
     Arena arena = Arena.ofShared();
     try {
+      // 1. Per-file CRC verification pass. Done before any MemorySegment mapping so a corrupt
+      //    payload fails fast and the generation can be discarded cleanly. The manifest self-CRC
+      //    was already verified inside Manifest.fromBytes upstream; this pass confirms every
+      //    other file's bytes match the manifest's stored CRCs.
+      verifyFileCrc(
+          genDir.resolve(FileFormat.VECTORS_FILE),
+          manifest.vectorsBinLength(),
+          manifest.vectorsBinCrc32(),
+          "vectors.bin");
+      verifyFileCrc(
+          genDir.resolve(FileFormat.IDMAP_FILE),
+          manifest.idmapBinLength(),
+          manifest.idmapBinCrc32(),
+          "idmap.bin");
+      verifyFileCrc(
+          genDir.resolve(FileFormat.METADATA_FILE),
+          manifest.metadataBinLength(),
+          manifest.metadataBinCrc32(),
+          "metadata.bin");
+
       MemorySegmentVectors mapped =
           MemorySegmentVectors.open(
               genDir.resolve(FileFormat.VECTORS_FILE),
@@ -350,16 +391,34 @@ final class VectorCollectionImpl implements VectorCollection {
       IdMapper idMapper = MappedIdMapper.open(genDir.resolve(FileFormat.IDMAP_FILE), arena);
       MetadataStore metadataStore =
           MappedMetadataStore.open(genDir.resolve(FileFormat.METADATA_FILE), arena);
-      // TODO Step 4b Phase 5: switch on manifest.indexType() — for IndexType.HNSW, read the
-      // graph.bin file from genDir, CRC-verify against manifest.graphBinCrc32(), decode via
-      // HnswGraphCodec.decode(), wrap `mapped` as a RandomAccessVectors, and construct a
-      // MappedHnswIndexAdapter instead of MappedFlatScanAdapter. The Manifest v2 already carries
-      // graphBinLength/graphBinCrc32 and GenerationDirectory already writes graph.bin via the
-      // GRAPH_INDEX_TYPES dispatch, so this is the last remaining piece. VectorCollectionBuilder
-      // currently rejects the (HNSW, persistent) combination up front so no existing generation
-      // can reach this point with manifest.indexType() == HNSW — but that guard will be relaxed
-      // as soon as the HNSW branch below is implemented.
-      IndexSpi spi = new MappedFlatScanAdapter(mapped, config.metric());
+
+      // 2. Construct the index SPI. Branch on the manifest's index type so both FLAT and HNSW
+      //    are served from the same mmap'd vector store. An empty HNSW generation
+      //    (graphBinLength==0 — bootstrap or post-delete) has no graph.bin to decode, so we
+      //    serve reads from MappedFlatScanAdapter against the (empty) mmap'd vectors. The
+      //    flat-scan adapter returns an empty result set on an empty store, which is the
+      //    correct behaviour for an empty collection regardless of the declared index type —
+      //    and the next commit() with staged data will materialize a real graph.bin and the
+      //    subsequent openGeneration will take the HNSW branch.
+      IndexSpi spi =
+          switch (manifest.indexType()) {
+            case FLAT -> new MappedFlatScanAdapter(mapped, config.metric());
+            case HNSW ->
+                manifest.graphBinLength() > 0L
+                    ? openHnswAdapter(genDir, manifest, mapped)
+                    : new MappedFlatScanAdapter(mapped, config.metric());
+            case VAMANA ->
+                throw new IOException(
+                    "Generation "
+                        + manifest.generationNumber()
+                        + " uses indexType VAMANA which is not supported in Step 4b");
+            case IVF_FLAT ->
+                throw new IOException(
+                    "Generation "
+                        + manifest.generationNumber()
+                        + " uses indexType IVF_FLAT which is not supported in Step 4b");
+          };
+
       return new Generation(
           spi,
           idMapper,
@@ -379,6 +438,77 @@ final class VectorCollectionImpl implements VectorCollection {
         throw io;
       }
       throw new IOException("Failed to open generation at " + genDir, e);
+    }
+  }
+
+  /**
+   * Reads {@code graph.bin} from {@code genDir}, verifies its length and CRC against the manifest,
+   * decodes it into an {@link HnswGraph}, and wraps the mmap'd vectors + graph in a {@link
+   * MappedHnswIndexAdapter}. Throws {@link IOException} on any length mismatch, CRC mismatch, or
+   * decode failure.
+   */
+  private IndexSpi openHnswAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
+      throws IOException {
+    Path graphFile = genDir.resolve(FileFormat.GRAPH_FILE);
+    if (manifest.graphBinLength() <= 0L) {
+      throw new IOException(
+          "HNSW generation " + manifest.generationNumber() + " has no graph.bin recorded");
+    }
+    byte[] graphBytes = java.nio.file.Files.readAllBytes(graphFile);
+    if ((long) graphBytes.length != manifest.graphBinLength()) {
+      throw new IOException(
+          "graph.bin length mismatch at "
+              + graphFile
+              + ": manifest="
+              + manifest.graphBinLength()
+              + ", actual="
+              + graphBytes.length);
+    }
+    long computedCrc = Checksums.ofBytes(graphBytes);
+    if (computedCrc != manifest.graphBinCrc32()) {
+      throw new IOException(
+          String.format(
+              "graph.bin CRC mismatch at %s: manifest=0x%08x, computed=0x%08x",
+              graphFile, manifest.graphBinCrc32(), computedCrc));
+    }
+    HnswGraph graph = HnswGraphCodec.decode(graphBytes);
+    MemorySegmentRandomAccessVectors vectors = new MemorySegmentRandomAccessVectors(mapped);
+    return new MappedHnswIndexAdapter(graph, vectors, config.metric());
+  }
+
+  /**
+   * Verifies that {@code file} has exactly {@code expectedLength} bytes and that its CRC32 equals
+   * {@code expectedCrc}. Throws {@link IOException} with a descriptive message on any mismatch.
+   * Skipped (no-op) when {@code expectedLength == 0} because an empty file would still have a CRC32
+   * of 0 and we treat the manifest's {@code length == 0} as a sentinel for "no file".
+   *
+   * <p>Uses {@link Checksums#ofFile(Path)} which streams the file through a 64 KiB direct {@link
+   * java.nio.ByteBuffer} rather than slurping the whole file into a heap-allocated {@code byte[]}.
+   * For a multi-gigabyte {@code vectors.bin} this avoids allocating and GC-pressuring a byte array
+   * the size of the entire file just to compute an integrity check at open time.
+   */
+  private static void verifyFileCrc(
+      Path file, long expectedLength, long expectedCrc, String fileLabel) throws IOException {
+    if (expectedLength == 0L) {
+      return;
+    }
+    long actualLength = java.nio.file.Files.size(file);
+    if (actualLength != expectedLength) {
+      throw new IOException(
+          fileLabel
+              + " length mismatch at "
+              + file
+              + ": manifest="
+              + expectedLength
+              + ", actual="
+              + actualLength);
+    }
+    long computedCrc = Checksums.ofFile(file);
+    if (computedCrc != expectedCrc) {
+      throw new IOException(
+          String.format(
+              "%s CRC mismatch at %s: manifest=0x%08x, computed=0x%08x",
+              fileLabel, file, expectedCrc, computedCrc));
     }
   }
 
@@ -569,6 +699,32 @@ final class VectorCollectionImpl implements VectorCollection {
       throw new UncheckedIOException("Failed to serialize commit payload", e);
     }
 
+    // 2a. HNSW-only: materialize the successor float[][] matrix, rebuild the graph from scratch
+    //     via HnswIndexAdapter, and encode the resulting HnswGraph to graph.bin bytes. For FLAT
+    //     this branch is skipped and graphBin stays null (the Manifest records graphBinLength=0
+    //     and GenerationDirectory skips the writeGraph callback entirely).
+    byte[] graphBin = null;
+    long graphBinLength = 0L;
+    long graphBinCrc = 0L;
+    if (config.indexType() == IndexType.HNSW) {
+      float[][] matrix =
+          buildSuccessorMatrix(oldGen.mappedVectors, liveCount, staging.documents(), dim);
+      VectorCollectionConfig.HnswParams hp = config.hnswParams();
+      HnswIndexAdapter adapter = new HnswIndexAdapter(hp.m(), hp.efConstruction());
+      adapter.build(matrix, config.metric());
+      HnswGraph graph = adapter.graph();
+      // graph() returns null only when build() was called with zero vectors — commitUnderLock
+      // already short-circuits on empty staging, so newSize >= 1 and graph is non-null here.
+      // The null-guard still fires defensively in case a future caller routes an empty matrix
+      // through this branch; we skip encoding in that case and let the Manifest record a 0/0
+      // graph entry so the open path's "HNSW with no graph.bin" guard trips loudly.
+      if (graph != null) {
+        graphBin = HnswGraphCodec.encode(graph);
+        graphBinLength = (long) graphBin.length;
+        graphBinCrc = Checksums.ofBytes(graphBin);
+      }
+    }
+
     // 3. Build the manifest, then hand everything to GenerationDirectory.writeGeneration which
     //    runs the full crash-safe write protocol (tmp dir → files → fsync → rename → CURRENT).
     //    nextGenerationNumber is our monotonic counter — it advances unconditionally after a
@@ -586,8 +742,8 @@ final class VectorCollectionImpl implements VectorCollection {
             Checksums.ofBytes(metadataBin),
             (long) idmapBin.length,
             Checksums.ofBytes(idmapBin),
-            0L,
-            0L);
+            graphBinLength,
+            graphBinCrc);
 
     GenerationDirectory.WriteResult wr;
     try {
@@ -595,7 +751,7 @@ final class VectorCollectionImpl implements VectorCollection {
           GenerationDirectory.writeGeneration(
               config.storageRoot(),
               newGenNumber,
-              new BufferedGenerationSource(vectorsBin, idmapBin, metadataBin, null),
+              new BufferedGenerationSource(vectorsBin, idmapBin, metadataBin, graphBin),
               manifest);
     } catch (IOException e) {
       // Write failed — the gen directory was not durably created (GenerationDirectory fsyncs and
@@ -674,6 +830,34 @@ final class VectorCollectionImpl implements VectorCollection {
       buf.position(buf.position() + (stride - rawVecBytes));
     }
     return out;
+  }
+
+  /**
+   * Materializes the successor {@code float[][]} matrix used exclusively by the persistent-HNSW
+   * commit branch to drive {@link HnswIndexAdapter#build}. The old generation's rows are copied out
+   * of the mmap'd {@link MemorySegmentVectors} via {@link MemorySegment#copy}; staged documents are
+   * cloned so the graph builder never aliases a user-facing {@code Document.vector()} reference.
+   * Defensive copies of both branches keep the builder free to reorder or retain elements without
+   * risking action-at-a-distance on the old mapped segment or on application Documents.
+   *
+   * <p>This is a separate pass from {@link #buildVectorsBin} — the latter produces the on-disk byte
+   * image via bulk {@code MemorySegment.copy}, which is cheaper than a float-by-float walk but
+   * doesn't yield a {@code float[][]}. The two paths are independent: {@code vectors.bin} is
+   * written verbatim, while the HNSW graph is rebuilt from a fresh in-memory matrix.
+   */
+  private static float[][] buildSuccessorMatrix(
+      MemorySegmentVectors oldMapped, int liveCount, List<Document> staged, int dim) {
+    int newSize = liveCount + staged.size();
+    float[][] matrix = new float[newSize][];
+    for (int i = 0; i < liveCount; i++) {
+      float[] v = new float[dim];
+      MemorySegment.copy(oldMapped.vectorSlice(i), ValueLayout.JAVA_FLOAT, 0L, v, 0, dim);
+      matrix[i] = v;
+    }
+    for (int i = 0; i < staged.size(); i++) {
+      matrix[liveCount + i] = staged.get(i).vector().clone();
+    }
+    return matrix;
   }
 
   // ---------------------------------------------------------------------------

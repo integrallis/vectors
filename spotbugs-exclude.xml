@@ -58,6 +58,12 @@
         <Class name="com.integrallis.vectors.hnsw.HnswGraphBuilder"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- HNSW: HnswIndex.graph() returns the internal graph reference for the persistence
+         path (HnswGraphCodec.encode). Callers must not mutate it, enforced by javadoc. -->
+    <Match>
+        <Class name="com.integrallis.vectors.hnsw.HnswIndex"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
     <!-- HNSW: RandomAccessVectorDataset intentionally stores reference for zero-copy bridge -->
     <Match>
         <Class name="com.integrallis.vectors.hnsw.RandomAccessVectorDataset"/>
