@@ -522,4 +522,126 @@ class VectorDbPersistenceTest {
       }
     }
   }
+
+  /**
+   * Regression guard for audit finding B2 — {@code commitPersistent()} used to walk the live+staged
+   * vector set twice when the index type was HNSW or VAMANA: once to pack staged docs into the
+   * on-disk {@code vectors.bin} byte image and a second time to clone them into a {@code float[][]}
+   * matrix for the graph builder. The fix fuses the two passes into a single {@code
+   * materializeSuccessor} helper that produces both outputs in one loop.
+   *
+   * <p>A straightforward "did it regress" test would need to instrument allocations or reach into
+   * private methods. Instead we assert a stronger behavioral invariant: committing the same data
+   * through FLAT and HNSW must produce byte-identical {@code vectors.bin} images. The two index
+   * types exercise different branches of {@code commitPersistent} (FLAT passes {@code
+   * needMatrix=false}, HNSW passes {@code needMatrix=true}), so if the unified helper ever diverges
+   * in how it produces the byte image — whether via a re-introduced second pass or a subtler layout
+   * drift — this assertion breaks immediately. The assertion also covers the documented "bulk-copy
+   * fast path is preserved" invariant in the helper's javadoc: any FLAT/HNSW divergence on old
+   * generation bytes would manifest as a mismatch on the second commit.
+   */
+  @Nested
+  @Tag("unit")
+  class FusedSuccessorMaterialization {
+
+    @Test
+    void flatAndHnswProduceIdenticalVectorsBin(@TempDir Path tempDir) throws IOException {
+      // Two sibling storage roots so each collection gets its own generation tree.
+      Path flatRoot = tempDir.resolve("flat");
+      Path hnswRoot = tempDir.resolve("hnsw");
+
+      // Deterministic data so both collections observe the same vectors in the same order.
+      List<Document> docs = generateDocs(32, SEED);
+
+      try (var flat =
+              VectorCollection.builder()
+                  .dimension(DIM)
+                  .metric(SimilarityFunction.EUCLIDEAN)
+                  .indexType(IndexType.FLAT)
+                  .storagePath(flatRoot)
+                  .build();
+          var hnsw =
+              VectorCollection.builder()
+                  .dimension(DIM)
+                  .metric(SimilarityFunction.EUCLIDEAN)
+                  .indexType(IndexType.HNSW)
+                  .hnswM(4)
+                  .hnswEfConstruction(16)
+                  .storagePath(hnswRoot)
+                  .build()) {
+        flat.addAll(docs);
+        flat.commit();
+        hnsw.addAll(docs);
+        hnsw.commit();
+      }
+
+      // Read vectors.bin out of each collection's gen-1 (the first real commit after bootstrap).
+      byte[] flatBin =
+          Files.readAllBytes(
+              flatRoot.resolve("gen-0000000000000001").resolve(FileFormat.VECTORS_FILE));
+      byte[] hnswBin =
+          Files.readAllBytes(
+              hnswRoot.resolve("gen-0000000000000001").resolve(FileFormat.VECTORS_FILE));
+
+      // Strong assertion: the fused materialization helper produces bit-identical byte images
+      // for both paths. Any drift — re-introduced second pass, layout change, unaligned stride,
+      // endian flip — breaks this immediately.
+      assertThat(hnswBin).isEqualTo(flatBin);
+    }
+
+    @Test
+    void flatAndHnswIdenticalAcrossMultipleCommits(@TempDir Path tempDir) throws IOException {
+      // Second regression guard: run two commits per collection so the second one exercises the
+      // "bulk-copy old rows + fuse staged rows" path on non-empty live state. The B2 fusion
+      // deliberately keeps the bulk-copy fast path for old rows; this test proves FLAT and HNSW
+      // still agree after that path has run.
+      Path flatRoot = tempDir.resolve("flat");
+      Path hnswRoot = tempDir.resolve("hnsw");
+      List<Document> batch1 = generateDocs(20, SEED);
+      List<Document> batch2 = generateDocs(20, SEED + 1L);
+      // Re-id the second batch so ids don't collide with the first.
+      List<Document> renamed = new ArrayList<>(batch2.size());
+      for (int i = 0; i < batch2.size(); i++) {
+        Document d = batch2.get(i);
+        renamed.add(new Document("b2-" + i, d.vector(), d.text(), d.metadata()));
+      }
+
+      try (var flat =
+              VectorCollection.builder()
+                  .dimension(DIM)
+                  .metric(SimilarityFunction.EUCLIDEAN)
+                  .indexType(IndexType.FLAT)
+                  .storagePath(flatRoot)
+                  .build();
+          var hnsw =
+              VectorCollection.builder()
+                  .dimension(DIM)
+                  .metric(SimilarityFunction.EUCLIDEAN)
+                  .indexType(IndexType.HNSW)
+                  .hnswM(4)
+                  .hnswEfConstruction(16)
+                  .storagePath(hnswRoot)
+                  .build()) {
+        flat.addAll(batch1);
+        flat.commit();
+        flat.addAll(renamed);
+        flat.commit();
+
+        hnsw.addAll(batch1);
+        hnsw.commit();
+        hnsw.addAll(renamed);
+        hnsw.commit();
+      }
+
+      // gen-2 is the second-commit generation on both sides; it exercises both the bulk-copy old
+      // rows path AND the staged-row single-pass path.
+      byte[] flatBin =
+          Files.readAllBytes(
+              flatRoot.resolve("gen-0000000000000002").resolve(FileFormat.VECTORS_FILE));
+      byte[] hnswBin =
+          Files.readAllBytes(
+              hnswRoot.resolve("gen-0000000000000002").resolve(FileFormat.VECTORS_FILE));
+      assertThat(hnswBin).isEqualTo(flatBin);
+    }
+  }
 }

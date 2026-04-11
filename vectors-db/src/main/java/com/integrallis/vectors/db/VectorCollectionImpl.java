@@ -651,8 +651,15 @@ final class VectorCollectionImpl implements VectorCollection {
     }
 
     // 2. Build the three data-file byte images in memory so we can CRC them before constructing
-    //    the manifest (the manifest embeds the CRCs).
-    byte[] vectorsBin = buildVectorsBin(oldGen.mappedVectors, liveCount, staging.documents(), dim);
+    //    the manifest (the manifest embeds the CRCs). For graph indexes (HNSW / VAMANA) the
+    //    same helper also materializes a float[][] matrix in the SAME pass — previously this
+    //    was a second pass over the live+staged vector set, doubling the per-staged-vector work
+    //    (once to write to vectors.bin, once to clone into the matrix). Audit B2 fuses the two.
+    boolean needMatrix =
+        config.indexType() == IndexType.HNSW || config.indexType() == IndexType.VAMANA;
+    Materialized materialized =
+        materializeSuccessor(oldGen.mappedVectors, liveCount, staging.documents(), dim, needMatrix);
+    byte[] vectorsBin = materialized.vectorsBin();
     byte[] idmapBin;
     byte[] metadataBin;
     try {
@@ -662,18 +669,15 @@ final class VectorCollectionImpl implements VectorCollection {
       throw new UncheckedIOException("Failed to serialize commit payload", e);
     }
 
-    // 2a. Graph-index-only: materialize the successor float[][] matrix, rebuild the graph from
-    //     scratch via the matching in-memory adapter, and encode the resulting graph to
-    //     graph.bin bytes via the appropriate codec. For FLAT this block is skipped and
-    //     graphBin stays null (the Manifest records graphBinLength=0 and GenerationDirectory
-    //     skips the writeGraph callback entirely).
+    // 2a. Graph-index-only: encode the successor matrix (already materialized above in the
+    //     same pass that produced vectors.bin) into graph.bin bytes via the appropriate codec.
+    //     For FLAT this block is skipped and graphBin stays null (the Manifest records
+    //     graphBinLength=0 and GenerationDirectory skips the writeGraph callback entirely).
     byte[] graphBin = null;
     long graphBinLength = 0L;
     long graphBinCrc = 0L;
-    if (config.indexType() == IndexType.HNSW || config.indexType() == IndexType.VAMANA) {
-      float[][] matrix =
-          buildSuccessorMatrix(oldGen.mappedVectors, liveCount, staging.documents(), dim);
-      graphBin = encodeGraphBytes(matrix);
+    if (needMatrix) {
+      graphBin = encodeGraphBytes(materialized.matrix());
       if (graphBin != null) {
         graphBinLength = (long) graphBin.length;
         graphBinCrc = Checksums.ofBytes(graphBin);
@@ -746,45 +750,94 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   /**
-   * Builds the {@code vectors.bin} byte image for the successor generation. The old generation's
-   * bytes are bulk-copied out of the existing mmap'd segment (same stride, same dim) so there is no
-   * float-by-float reconstruction; staged vectors are packed afterward as little-endian float32
-   * with 64-byte alignment padding between entries, matching {@link MemorySegmentVectors} and
-   * {@link com.integrallis.vectors.storage.store.VectorStoreWriter}.
+   * Carrier record returned by {@link #materializeSuccessor}. The {@code matrix} field is {@code
+   * null} on FLAT commits (no graph builder to feed) and non-null on HNSW / VAMANA commits. Two
+   * fields so the graph-index commit branch can reuse the same row clones it already had to produce
+   * for {@code vectors.bin}, instead of re-walking the staged list.
    */
-  private static byte[] buildVectorsBin(
-      MemorySegmentVectors oldMapped, int liveCount, List<Document> staged, int dim) {
+  private record Materialized(byte[] vectorsBin, float[][] matrix) {}
+
+  /**
+   * Single-pass materialization of the successor vector set for {@link #commitPersistent}. Walks
+   * the staged documents exactly once, writing each vector into the on-disk {@code vectors.bin}
+   * byte image and — if {@code needMatrix} is true — also stashing a defensive clone in a {@code
+   * float[][]} matrix that the graph-builder branch will reuse to drive {@link
+   * HnswIndexAdapter#build} / {@link VamanaIndexAdapter#build}. Replaces the legacy two-pass
+   * pattern (Audit B2) where {@code buildVectorsBin} and {@code buildSuccessorMatrix} each iterated
+   * the staged list independently.
+   *
+   * <p><b>Old generation rows.</b> The old generation's bytes are bulk-copied out of the mmap'd
+   * segment via a single {@link MemorySegment#copy} call (same stride, same dim — no float-by-
+   * float reconstruction on the bulk path). When {@code needMatrix} is true, a second per-row loop
+   * then extracts those same rows into fresh {@code float[]} instances for the matrix. We
+   * deliberately keep the bulk-copy fast path for the byte image rather than deriving the bytes
+   * from the matrix: the bulk copy is a single syscall vs N per-row syscalls, and it preserves
+   * bit-identity between FLAT and graph commits (the regression test in {@code
+   * VectorDbPersistenceTest#flatAndHnswProduceIdenticalVectorsBin} guards this).
+   *
+   * <p><b>Staged rows.</b> Staged documents are walked once. For each staged doc: the raw floats
+   * are packed into {@code vectors.bin} (little-endian, 64-byte stride alignment), and — if {@code
+   * needMatrix} — a defensive clone is placed in the matrix. Cloning is required because the graph
+   * builder may reorder or retain elements, and the {@code Document.vector()} reference is owned by
+   * application code.
+   *
+   * <p>For the very first persistent commit the bootstrap generation has {@code liveCount == 0} so
+   * both the bulk-copy and the per-row extraction are zero-length no-ops.
+   */
+  private static Materialized materializeSuccessor(
+      MemorySegmentVectors oldMapped,
+      int liveCount,
+      List<Document> staged,
+      int dim,
+      boolean needMatrix) {
     long strideL = AlignmentUtil.alignUp((long) dim * Float.BYTES, AlignmentUtil.VECTOR_ALIGNMENT);
     if (strideL > Integer.MAX_VALUE) {
       throw new IllegalStateException("vector stride exceeds 2 GiB: " + strideL);
     }
     int stride = (int) strideL;
-    long totalL = strideL * (long) (liveCount + staged.size());
+    int newSize = liveCount + staged.size();
+    long totalL = strideL * (long) newSize;
     if (totalL > Integer.MAX_VALUE) {
       throw new IllegalStateException("vectors.bin exceeds 2 GiB: " + totalL);
     }
     byte[] out = new byte[(int) totalL];
+    float[][] matrix = needMatrix ? new float[newSize][] : null;
 
-    // Bulk copy the old generation byte-for-byte. For the very first persistent commit the
-    // bootstrap generation has liveCount == 0 so this is a zero-length copy (no-op).
+    // Bulk-copy the old generation byte-for-byte. Zero-length no-op on bootstrap.
     if (liveCount > 0 && oldMapped != null) {
       long oldBytes = strideL * liveCount;
       MemorySegment.copy(oldMapped.segment(), ValueLayout.JAVA_BYTE, 0L, out, 0, (int) oldBytes);
+      // When the caller needs a float[][] matrix, extract the old rows into fresh rows
+      // alongside the bulk copy. This double-walk on old rows is unavoidable (bytes vs floats
+      // are different in-memory shapes) but costs only N per-row copies, dwarfed by the graph
+      // build itself. The staged rows — previously the duplicated hot path — are now single-
+      // walked below.
+      if (needMatrix) {
+        for (int i = 0; i < liveCount; i++) {
+          float[] v = new float[dim];
+          MemorySegment.copy(oldMapped.vectorSlice(i), ValueLayout.JAVA_FLOAT, 0L, v, 0, dim);
+          matrix[i] = v;
+        }
+      }
     }
 
-    // Pack staged vectors starting at the first free stride slot. Alignment padding is already
-    // zero from the array initializer.
+    // Single pass over staged: pack floats into vectors.bin AND (optionally) clone into matrix.
+    // Alignment padding between entries is already zero from the byte[] initializer.
     int rawVecBytes = dim * Float.BYTES;
     ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
     buf.position(stride * liveCount);
-    for (Document d : staged) {
-      float[] v = d.vector();
+    for (int s = 0; s < staged.size(); s++) {
+      float[] v = staged.get(s).vector();
+      if (needMatrix) {
+        // Defensive clone so the graph builder never aliases a user-owned Document.vector().
+        matrix[liveCount + s] = v.clone();
+      }
       for (int j = 0; j < dim; j++) {
         buf.putFloat(v[j]);
       }
       buf.position(buf.position() + (stride - rawVecBytes));
     }
-    return out;
+    return new Materialized(out, matrix);
   }
 
   /**
@@ -821,35 +874,6 @@ final class VectorCollectionImpl implements VectorCollection {
           throw new IllegalStateException(
               "encodeGraphBytes called with non-graph indexType " + config.indexType());
     };
-  }
-
-  /**
-   * Materializes the successor {@code float[][]} matrix used exclusively by the persistent graph
-   * commit branches (HNSW and VAMANA) to drive {@link HnswIndexAdapter#build} / {@link
-   * VamanaIndexAdapter#build}. The old generation's rows are copied out of the mmap'd {@link
-   * MemorySegmentVectors} via {@link MemorySegment#copy}; staged documents are cloned so the graph
-   * builder never aliases a user-facing {@code Document.vector()} reference. Defensive copies of
-   * both branches keep the builder free to reorder or retain elements without risking
-   * action-at-a-distance on the old mapped segment or on application Documents.
-   *
-   * <p>This is a separate pass from {@link #buildVectorsBin} — the latter produces the on-disk byte
-   * image via bulk {@code MemorySegment.copy}, which is cheaper than a float-by-float walk but
-   * doesn't yield a {@code float[][]}. The two paths are independent: {@code vectors.bin} is
-   * written verbatim, while the graph is rebuilt from a fresh in-memory matrix.
-   */
-  private static float[][] buildSuccessorMatrix(
-      MemorySegmentVectors oldMapped, int liveCount, List<Document> staged, int dim) {
-    int newSize = liveCount + staged.size();
-    float[][] matrix = new float[newSize][];
-    for (int i = 0; i < liveCount; i++) {
-      float[] v = new float[dim];
-      MemorySegment.copy(oldMapped.vectorSlice(i), ValueLayout.JAVA_FLOAT, 0L, v, 0, dim);
-      matrix[i] = v;
-    }
-    for (int i = 0; i < staged.size(); i++) {
-      matrix[liveCount + i] = staged.get(i).vector().clone();
-    }
-    return matrix;
   }
 
   // ---------------------------------------------------------------------------
