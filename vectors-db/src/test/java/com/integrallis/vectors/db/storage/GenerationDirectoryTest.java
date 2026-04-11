@@ -32,6 +32,13 @@ class GenerationDirectoryTest {
   // of the three data files and fsyncs them. GenerationDirectory does not
   // validate file contents (the per-file mappers do), so this is sufficient
   // to exercise the directory-write protocol end-to-end.
+  //
+  // The three PAYLOAD constants below are opaque 8-byte blobs, NOT real
+  // vectors.bin / idmap.bin / metadata.bin wire formats. Production code
+  // would reject them on open (the mapped stores parse fixed headers that
+  // are longer than 8 bytes). These tests never call openGeneration on a
+  // collection built from this source — they only exercise the write
+  // protocol + CRC walk-back machinery in GenerationDirectory.recover.
   // ---------------------------------------------------------------------------
 
   private static final byte[] VECTORS_PAYLOAD = new byte[] {1, 2, 3, 4, 5, 6, 7, 8};

@@ -21,6 +21,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Orchestrates the on-disk write protocol for a single {@code vectors-db} collection: writing a new
@@ -110,6 +112,8 @@ import java.util.Set;
  * com.integrallis.vectors.storage.store.VectorStoreWriter} for the writer helpers.
  */
 public final class GenerationDirectory {
+
+  private static final Logger LOGGER = Logger.getLogger(GenerationDirectory.class.getName());
 
   /**
    * Index types that own an on-disk {@code graph.bin} payload. A {@link
@@ -563,6 +567,11 @@ public final class GenerationDirectory {
    * continues to the next older candidate. The manifest's self-CRC has already been validated by
    * {@link #tryReadManifest} before this method is invoked, so we know the stored length/CRC values
    * are themselves intact.
+   *
+   * <p>On mismatch the specific file path, expected length/CRC and computed length/CRC are logged
+   * at {@link Level#WARNING} so operators investigating bit-rot events have a forensic trail.
+   * Without this log, recovery would walk back to the previous generation with no evidence of why
+   * the newer one was rejected.
    */
   private static boolean tryVerifyPayloadCrcs(Path genDir, Manifest manifest) {
     try {
@@ -584,6 +593,13 @@ public final class GenerationDirectory {
           manifest.graphBinCrc32());
       return true;
     } catch (IOException e) {
+      LOGGER.log(
+          Level.WARNING,
+          e,
+          () ->
+              "payload verification failed in "
+                  + genDir
+                  + "; walking back to the previous generation");
       return false;
     }
   }
@@ -593,7 +609,9 @@ public final class GenerationDirectory {
    * {@code expectedCrc}. Throws {@link IOException} with a descriptive message on any mismatch.
    * Skipped (no-op) when {@code expectedLength == 0} because the caller treats a zero-length
    * manifest entry as "this file was not materialized" (the empty-HNSW-bootstrap and flat-scan
-   * cases).
+   * cases). In the zero-length case {@code file} need not exist on disk — the commit path never
+   * creates a zero-byte payload file, so this no-op is the contract that keeps {@link
+   * #tryVerifyPayloadCrcs} free of per-call "does graph.bin apply here?" branching.
    *
    * <p>Uses {@link Checksums#ofFile(Path)} which streams through a 64 KiB direct byte buffer rather
    * than slurping the whole file into a heap byte array — a multi-gigabyte {@code vectors.bin} is
