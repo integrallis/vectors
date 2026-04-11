@@ -134,6 +134,14 @@
         <Class name="com.integrallis.vectors.db.internal.StagingBuffer"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- vectors-db: MemorySegmentVectors.segment() intentionally exposes the whole-file
+         MemorySegment for tight inner-loop scoring in MappedFlatScanAdapter. The segment is
+         read-only and its lifetime is owned by a caller-provided Arena, so callers cannot
+         corrupt state through it. Defensively copying would defeat the zero-copy design. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.storage.MemorySegmentVectors"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
     <!-- vectors-bench: FvecsLoader returns raw float[][], int[][], byte[][] arrays
          for zero-copy benchmark setup. Defensive copies would defeat the purpose. -->
     <Match>

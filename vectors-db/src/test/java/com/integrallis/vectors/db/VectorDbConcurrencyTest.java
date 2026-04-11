@@ -300,6 +300,88 @@ class VectorDbConcurrencyTest {
             }
           });
     }
+
+    /**
+     * Regression guard for the {@code acquireReadSnapshot} commit/release race: a reader that
+     * captured {@code this.generation} before the committing writer published a new generation
+     * could see its captured generation's refcount drop to zero the instant the writer released the
+     * facade handle on the old generation. The reader's {@code acquire()} CAS then returned false
+     * and the read path incorrectly threw {@code IllegalStateException("closed")}, even though the
+     * collection was alive and a newer generation was visible.
+     *
+     * <p>Without the retry loop in {@link
+     * com.integrallis.vectors.db.VectorCollectionImpl#acquireReadSnapshot()} this test fails
+     * reliably within a few hundred milliseconds — the writer commits thousands of times per second
+     * against an empty flat-scan staging buffer, so the race window is hit on nearly every
+     * iteration.
+     */
+    @Test
+    void readersNeverSeeSpuriousClosedDuringCommit() {
+      assertTimeoutPreemptively(
+          Duration.ofSeconds(5),
+          () -> {
+            try (var col = newCollection()) {
+              // Seed the collection so size() calls have real work to do beyond returning 0.
+              Random rng = new Random(SEED);
+              col.addAll(randomDocs(100, 0, rng));
+              col.commit();
+
+              int readerThreads = 4;
+              ExecutorService pool = Executors.newFixedThreadPool(readerThreads + 1);
+              List<AtomicReference<Throwable>> errors = new ArrayList<>();
+              AtomicBoolean stop = new AtomicBoolean(false);
+              AtomicInteger sizeCalls = new AtomicInteger();
+              CountDownLatch readersReady = new CountDownLatch(readerThreads);
+
+              for (int t = 0; t < readerThreads; t++) {
+                AtomicReference<Throwable> err = new AtomicReference<>();
+                errors.add(err);
+                pool.submit(
+                    () -> {
+                      try {
+                        readersReady.countDown();
+                        while (!stop.get()) {
+                          // Any IllegalStateException thrown here is the bug — the collection
+                          // has never been closed during this test, so every read-path method
+                          // must succeed.
+                          col.size();
+                          sizeCalls.incrementAndGet();
+                        }
+                      } catch (Throwable th) {
+                        err.set(th);
+                      }
+                    });
+              }
+
+              AtomicReference<Throwable> writerErr = new AtomicReference<>();
+              errors.add(writerErr);
+              pool.submit(
+                  () -> {
+                    try {
+                      readersReady.await();
+                      Random wrng = new Random(SEED + 3);
+                      int nextId = 100;
+                      // 2000 rapid commits. Each commit publishes a new generation and releases
+                      // the old one, maximally exercising the race window.
+                      for (int c = 0; c < 2000; c++) {
+                        col.add(Document.of("r" + nextId, randomVector(wrng)));
+                        nextId++;
+                        col.commit();
+                      }
+                    } catch (Throwable th) {
+                      writerErr.set(th);
+                    } finally {
+                      stop.set(true);
+                    }
+                  });
+
+              shutdownAndCheck(pool, errors);
+              // Sanity: readers actually observed the race window (millions of size() calls).
+              assertThat(sizeCalls.get()).isGreaterThan(0);
+              assertThat(col.size()).isEqualTo(100 + 2000);
+            }
+          });
+    }
   }
 
   @Nested

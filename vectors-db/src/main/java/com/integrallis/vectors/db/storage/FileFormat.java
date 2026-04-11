@@ -1,5 +1,6 @@
 package com.integrallis.vectors.db.storage;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -97,6 +98,14 @@ public final class FileFormat {
   public static final String MANIFEST_FILE = "manifest.bin";
 
   /**
+   * Fixed header size in bytes used by both {@link
+   * com.integrallis.vectors.db.storage.MappedIdMapper} and {@link
+   * com.integrallis.vectors.db.storage.MappedMetadataStore}. The layout is identical in both
+   * stores: {@code magic (4) + version (4) + count (4) + heap byte length (4) = 16}.
+   */
+  public static final int STORE_HEADER_SIZE = 16;
+
+  /**
    * Formats a generation number as {@code gen-NNNNNNNNNNNNNNNN} (16-digit zero-padded). The padding
    * makes lexicographic sort order equal to numeric sort order, so {@link java.nio.file.Files#list}
    * + sort returns generations in commit order.
@@ -130,6 +139,32 @@ public final class FileFormat {
     if (digits.length() != GENERATION_DIGITS) {
       return -1L;
     }
+    try {
+      long n = Long.parseLong(digits);
+      return n < 0 ? -1L : n;
+    } catch (NumberFormatException e) {
+      return -1L;
+    }
+  }
+
+  /**
+   * Parses an in-flight tmp directory name {@code .gen-NNNNNNNNNNNNNNNN.tmp} back into its
+   * generation number. Returns {@code -1} if the name doesn't match the exact expected pattern,
+   * including digit count — this is the "is this name something we own?" check used by the recovery
+   * sweep so a coincidentally-named user file (e.g. {@code .gen-.tmp}) is not deleted.
+   */
+  public static long parseGenerationTmpDirName(String name) {
+    if (name == null
+        || !name.startsWith(GENERATION_TMP_DIR_PREFIX)
+        || !name.endsWith(GENERATION_TMP_DIR_SUFFIX)) {
+      return -1L;
+    }
+    int digitsStart = GENERATION_TMP_DIR_PREFIX.length();
+    int digitsEnd = name.length() - GENERATION_TMP_DIR_SUFFIX.length();
+    if (digitsEnd - digitsStart != GENERATION_DIGITS) {
+      return -1L;
+    }
+    String digits = name.substring(digitsStart, digitsEnd);
     try {
       long n = Long.parseLong(digits);
       return n < 0 ? -1L : n;
@@ -175,6 +210,26 @@ public final class FileFormat {
       bytesWritten++;
     }
     out.put((byte) (value & 0x7F));
+    return bytesWritten + 1;
+  }
+
+  /**
+   * Writes an unsigned varint directly into a growing {@link ByteArrayOutputStream}. This overload
+   * exists so that per-document encoders (e.g. {@code MappedMetadataStore.Writer.encodeDocument})
+   * can share a single varint implementation with the {@link ByteBuffer}-based path instead of
+   * duplicating it inside the store writer. Returns the number of bytes written.
+   */
+  public static int writeVarInt(ByteArrayOutputStream out, int value) {
+    if (value < 0) {
+      throw new IllegalArgumentException("varint value must be non-negative: " + value);
+    }
+    int bytesWritten = 0;
+    while ((value & ~0x7F) != 0) {
+      out.write((value & 0x7F) | 0x80);
+      value >>>= 7;
+      bytesWritten++;
+    }
+    out.write(value & 0x7F);
     return bytesWritten + 1;
   }
 

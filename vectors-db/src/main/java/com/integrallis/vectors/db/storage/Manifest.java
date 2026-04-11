@@ -274,7 +274,16 @@ public record Manifest(
         idmapBinCrc32);
   }
 
-  /** Writes this manifest to {@code file} and fsyncs before returning. */
+  /**
+   * Writes this manifest to {@code file} and fsyncs before returning. The file is opened with
+   * {@link StandardOpenOption#CREATE_NEW}, so this is a one-shot write: reinvoking it on an
+   * existing path is a programmer error, not an overwrite.
+   *
+   * @throws java.nio.file.FileAlreadyExistsException if {@code file} already exists — the
+   *     generation-write pipeline MUST target a fresh path inside an in-flight {@code
+   *     .gen-NNNNNNNNNNNNNNNN.tmp} directory that was created earlier in the same commit
+   * @throws IOException if the target cannot be created or the fsync fails
+   */
   public void writeTo(Path file) throws IOException {
     byte[] encoded = toBytes();
     try (FileChannel ch =

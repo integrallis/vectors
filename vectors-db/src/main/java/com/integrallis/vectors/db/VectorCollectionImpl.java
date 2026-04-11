@@ -1,54 +1,193 @@
 package com.integrallis.vectors.db;
 
 import com.integrallis.vectors.db.filter.Filter;
+import com.integrallis.vectors.db.id.IdMapper;
 import com.integrallis.vectors.db.id.InMemoryIdMapper;
 import com.integrallis.vectors.db.index.FlatScanAdapter;
 import com.integrallis.vectors.db.index.IndexSpi;
+import com.integrallis.vectors.db.index.MappedFlatScanAdapter;
 import com.integrallis.vectors.db.internal.StagingBuffer;
 import com.integrallis.vectors.db.metadata.InMemoryMetadataStore;
+import com.integrallis.vectors.db.metadata.MetadataStore;
+import com.integrallis.vectors.db.storage.Checksums;
+import com.integrallis.vectors.db.storage.FileFormat;
+import com.integrallis.vectors.db.storage.GenerationDirectory;
+import com.integrallis.vectors.db.storage.Manifest;
+import com.integrallis.vectors.db.storage.MappedIdMapper;
+import com.integrallis.vectors.db.storage.MappedMetadataStore;
+import com.integrallis.vectors.db.storage.MemorySegmentVectors;
+import com.integrallis.vectors.storage.memory.AlignmentUtil;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Step 3 in-memory {@link VectorCollection} implementation with a volatile-snapshot publication
- * model.
+ * Step 4a {@link VectorCollection} implementation with a volatile-snapshot publication model and
+ * dual in-memory / mmap-backed persistence.
  *
- * <p><b>Concurrency model.</b> All live state is packed into an immutable {@link Generation} record
- * that is republished atomically via a single volatile write whenever {@link #commit()} runs.
- * Readers ({@link #search}, {@link #get}, {@link #contains}, {@link #size}, {@link #physicalSize})
- * start every call with exactly one volatile read of {@link #generation} and then operate only on
- * that snapshot — no lock is ever acquired on the read path, so commits never block readers and
- * readers never block each other.
+ * <p><b>Concurrency model.</b> All live state is packed into an immutable {@link Generation} (plain
+ * class, not record, so it can carry an {@link AtomicInteger} refcount). On every read path the
+ * caller:
+ *
+ * <ol>
+ *   <li>does a single volatile read of {@link #generation}
+ *   <li>acquires a refcount on that snapshot ({@link Generation#acquire()})
+ *   <li>uses the snapshot for the entire call
+ *   <li>releases the refcount in a {@code finally} block
+ * </ol>
+ *
+ * This guarantees that even when {@link #commit()} or {@link #close()} retires a generation, any
+ * in-flight reader that already acquired a refcount on it finishes normally against unmutated
+ * state. Once the facade's handle <i>and</i> every in-flight reader release, the refcount drops to
+ * zero and {@link Generation#closeResources()} fires exactly once — closing the SPI and (in
+ * persistent mode) unmapping the shared {@link Arena} that owns {@code vectors.bin}, {@code
+ * idmap.bin}, and {@code metadata.bin} atomically.
  *
  * <p>Writers ({@link #add}, {@link #addAll}, {@link #commit}) serialize through a private {@link
- * ReentrantLock} that does not participate in the read path. Newly-staged documents live in a
- * {@link StagingBuffer} that is itself unsynchronized; the writer lock is its sole guard. On
- * commit, the pipeline builds a fully-populated successor generation (copied id mapper + metadata
- * store, freshly-built SPI) and swaps the volatile pointer in one volatile write. In-flight reads
- * that captured the pre-commit snapshot finish against it normally because none of its state is
- * mutated after publication.
+ * ReentrantLock} that does not participate in the read path. Staging is a {@link StagingBuffer}
+ * whose sole guard is the writer lock.
  *
- * <p><b>Step 3 scope.</b> Only {@link com.integrallis.vectors.db.filter.Filter.All} (or {@code
- * null}) is executed; any other filter throws {@link UnsupportedOperationException}. {@code
- * upsert}, {@code delete}, {@code deleteWhere}, and {@code compact} throw {@link
- * UnsupportedOperationException} — they land in later steps.
+ * <p><b>Dual mode.</b> When {@link VectorCollectionConfig#storageRoot()} is {@code null} the
+ * collection runs in the Step 3 in-memory model (fresh {@link FlatScanAdapter} rebuild per commit).
+ * When non-null, the constructor runs {@link GenerationDirectory#recover} to find or bootstrap a
+ * generation, opens its mapped stores through a fresh shared {@link Arena}, and every {@link
+ * #commit()} writes a new {@code gen-NNNN/} directory through {@link
+ * GenerationDirectory#writeGeneration} before publishing the new snapshot.
+ *
+ * <p><b>Scope.</b> Only {@link Filter.All} (or {@code null}) is executed; any other filter throws
+ * {@link UnsupportedOperationException} (deferred to Step 5). {@code upsert}, {@code delete},
+ * {@code deleteWhere}, and {@code compact} throw {@link UnsupportedOperationException} (deferred to
+ * Steps 5/6).
  */
 final class VectorCollectionImpl implements VectorCollection {
 
   /**
-   * Immutable snapshot of the collection's searchable state. Published via a single volatile write
-   * from {@link #commit}. Readers capture one volatile reference and use it for the full call —
-   * every field inside is independently consistent because the Generation is never mutated after
-   * publication.
+   * Immutable snapshot of the collection's searchable state plus a per-generation refcount.
+   * Published via a single volatile write from {@link #commit}. Readers capture one volatile
+   * reference, acquire a refcount on it, and use it for the full call. The refcount starts at 1
+   * (the facade's handle); every reader bumps it; every release decrements it; the transition to
+   * zero triggers {@link #closeResources()} exactly once.
    */
-  private record Generation(
-      IndexSpi spi,
-      InMemoryIdMapper idMapper,
-      InMemoryMetadataStore metadataStore,
-      int liveCount) {}
+  private static final class Generation {
+    final IndexSpi spi;
+    final IdMapper idMapper;
+    final MetadataStore metadataStore;
+    final int liveCount;
+    final long generationNumber;
+
+    /** Shared arena owning all mmap'd files for this generation; {@code null} in in-memory mode. */
+    final Arena arena;
+
+    /** Absolute path to the {@code gen-NNNN/} directory; {@code null} in in-memory mode. */
+    final Path directory;
+
+    /** Zero-copy view of {@code vectors.bin}; {@code null} in in-memory mode. */
+    final MemorySegmentVectors mappedVectors;
+
+    private final AtomicInteger refs = new AtomicInteger(1);
+
+    Generation(
+        IndexSpi spi,
+        IdMapper idMapper,
+        MetadataStore metadataStore,
+        int liveCount,
+        long generationNumber,
+        Arena arena,
+        Path directory,
+        MemorySegmentVectors mappedVectors) {
+      this.spi = spi;
+      this.idMapper = idMapper;
+      this.metadataStore = metadataStore;
+      this.liveCount = liveCount;
+      this.generationNumber = generationNumber;
+      this.arena = arena;
+      this.directory = directory;
+      this.mappedVectors = mappedVectors;
+    }
+
+    /**
+     * Attempts to increment the refcount. Returns {@code false} if this generation has already been
+     * retired (refcount dropped to zero).
+     */
+    boolean acquire() {
+      while (true) {
+        int c = refs.get();
+        if (c <= 0) {
+          return false;
+        }
+        if (refs.compareAndSet(c, c + 1)) {
+          return true;
+        }
+      }
+    }
+
+    /** Decrements the refcount. Releases resources exactly once when it reaches zero. */
+    void release() {
+      int c = refs.decrementAndGet();
+      if (c == 0) {
+        closeResources();
+      }
+    }
+
+    private void closeResources() {
+      try {
+        spi.close();
+      } catch (Exception ignored) {
+        // SPI close is a no-op in all current implementations; swallowing here avoids masking a
+        // subsequent arena close failure. Any real resource is owned by the arena.
+      }
+      if (arena != null) {
+        arena.close();
+      }
+    }
+  }
+
+  /**
+   * {@link GenerationDirectory.GenerationSource} backed by three pre-built byte images. The commit
+   * pipeline computes CRC32s before constructing the {@link Manifest}, which requires having the
+   * bytes in memory rather than streaming them to disk directly — so this source just replays each
+   * byte array into the {@code gen-NNNN.tmp/} directory via {@link
+   * MappedIdMapper.Writer#writeBytesAndFsync(Path, byte[])} (the same helper is used for all three
+   * files since it's just "write + fsync").
+   */
+  private static final class BufferedGenerationSource
+      implements GenerationDirectory.GenerationSource {
+    private final byte[] vectorsBytes;
+    private final byte[] idmapBytes;
+    private final byte[] metadataBytes;
+
+    BufferedGenerationSource(byte[] vectorsBytes, byte[] idmapBytes, byte[] metadataBytes) {
+      this.vectorsBytes = vectorsBytes;
+      this.idmapBytes = idmapBytes;
+      this.metadataBytes = metadataBytes;
+    }
+
+    @Override
+    public void writeVectors(Path destination) throws IOException {
+      MappedIdMapper.Writer.writeBytesAndFsync(destination, vectorsBytes);
+    }
+
+    @Override
+    public void writeIdmap(Path destination) throws IOException {
+      MappedIdMapper.Writer.writeBytesAndFsync(destination, idmapBytes);
+    }
+
+    @Override
+    public void writeMetadata(Path destination) throws IOException {
+      MappedMetadataStore.Writer.writeBytesAndFsync(destination, metadataBytes);
+    }
+  }
 
   private final VectorCollectionConfig config;
   private final ReentrantLock writerLock = new ReentrantLock();
@@ -57,32 +196,112 @@ final class VectorCollectionImpl implements VectorCollection {
   private final StagingBuffer staging = new StagingBuffer();
 
   /**
-   * Current searchable generation. Published via volatile write from {@link #commit}; read from
-   * every read path with a single volatile load. Never mutated after publication.
+   * Current searchable generation; {@code null} once the collection is closed. Published via
+   * volatile write from {@link #commit} and {@link #close}.
    */
   private volatile Generation generation;
 
-  /**
-   * Set to {@code true} by {@link #close()} under {@link #writerLock}. Read from every read path
-   * (without lock) to fast-fail late callers. An in-flight reader that captured the pre-close
-   * generation may complete normally.
-   */
-  private volatile boolean closed;
-
   VectorCollectionImpl(VectorCollectionConfig config) {
     this.config = Objects.requireNonNull(config, "config must not be null");
+    if (config.storageRoot() == null) {
+      this.generation = bootstrapInMemory();
+    } else {
+      try {
+        this.generation = bootstrapPersistent(config.storageRoot());
+      } catch (IOException e) {
+        throw new UncheckedIOException(
+            "Failed to open persistent collection at " + config.storageRoot(), e);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bootstrap (constructor helpers)
+  // ---------------------------------------------------------------------------
+
+  private Generation bootstrapInMemory() {
     IndexSpi emptySpi = new FlatScanAdapter();
     emptySpi.build(new float[0][], config.metric());
-    this.generation =
-        new Generation(emptySpi, new InMemoryIdMapper(), new InMemoryMetadataStore(), 0);
+    return new Generation(
+        emptySpi, new InMemoryIdMapper(), new InMemoryMetadataStore(), 0, 0L, null, null, null);
   }
+
+  private Generation bootstrapPersistent(Path storageRoot) throws IOException {
+    // Build the bootstrap payload once. The recovery sweep only materializes these bytes when the
+    // root is empty; if an existing valid generation is present, recover() opens that instead and
+    // the bootstrap arguments are effectively unused.
+    byte[] emptyIdmap = MappedIdMapper.Writer.toBytes(List.of());
+    byte[] emptyMetadata = MappedMetadataStore.Writer.toBytes(List.of());
+    byte[] emptyVectors = new byte[0];
+    Manifest bootstrap =
+        Manifest.build(
+            config,
+            0L,
+            0L,
+            (long) emptyVectors.length,
+            Checksums.ofBytes(emptyVectors),
+            (long) emptyMetadata.length,
+            Checksums.ofBytes(emptyMetadata),
+            (long) emptyIdmap.length,
+            Checksums.ofBytes(emptyIdmap));
+    GenerationDirectory.GenerationSource bootstrapSource =
+        new BufferedGenerationSource(emptyVectors, emptyIdmap, emptyMetadata);
+
+    GenerationDirectory.RecoveryResult rr =
+        GenerationDirectory.recover(storageRoot, bootstrapSource, bootstrap);
+    return openGeneration(rr.generationDir(), rr.manifest());
+  }
+
+  /**
+   * Opens the four on-disk files for a generation under a fresh shared {@link Arena} and returns a
+   * ready-to-use {@link Generation} with refcount initialized to 1 (the facade's handle). On
+   * failure anywhere in the open sequence, the arena is closed so the partial state is released.
+   */
+  private Generation openGeneration(Path genDir, Manifest manifest) throws IOException {
+    Arena arena = Arena.ofShared();
+    try {
+      MemorySegmentVectors mapped =
+          MemorySegmentVectors.open(
+              genDir.resolve(FileFormat.VECTORS_FILE),
+              Math.toIntExact(manifest.liveCount()),
+              manifest.dimension(),
+              arena);
+      IdMapper idMapper = MappedIdMapper.open(genDir.resolve(FileFormat.IDMAP_FILE), arena);
+      MetadataStore metadataStore =
+          MappedMetadataStore.open(genDir.resolve(FileFormat.METADATA_FILE), arena);
+      IndexSpi spi = new MappedFlatScanAdapter(mapped, config.metric());
+      return new Generation(
+          spi,
+          idMapper,
+          metadataStore,
+          Math.toIntExact(manifest.liveCount()),
+          manifest.generationNumber(),
+          arena,
+          genDir,
+          mapped);
+    } catch (Exception e) {
+      try {
+        arena.close();
+      } catch (Exception suppressed) {
+        e.addSuppressed(suppressed);
+      }
+      if (e instanceof IOException io) {
+        throw io;
+      }
+      throw new IOException("Failed to open generation at " + genDir, e);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Write API
+  // ---------------------------------------------------------------------------
 
   @Override
   public void add(Document doc) {
     validateForInsert(doc);
     writerLock.lock();
     try {
-      ensureOpen();
+      ensureOpenUnderLock();
       stageUnderLock(doc);
       maybeAutoCommit();
     } finally {
@@ -96,14 +315,14 @@ final class VectorCollectionImpl implements VectorCollection {
     if (docs.isEmpty()) {
       return;
     }
-    // Validate every doc OUTSIDE the lock — dimension / null checks don't need the writer lock,
-    // and rejecting early on dimension errors avoids partial batch state.
+    // Validate outside the lock so dimension/null errors don't hold the writer lock and don't
+    // leave the staging buffer in a partially-populated state.
     for (Document d : docs) {
       validateForInsert(d);
     }
     writerLock.lock();
     try {
-      ensureOpen();
+      ensureOpenUnderLock();
       for (Document d : docs) {
         stageUnderLock(d);
       }
@@ -113,7 +332,6 @@ final class VectorCollectionImpl implements VectorCollection {
     }
   }
 
-  /** Lock-free validation: null check, vector present, dimension matches. */
   private void validateForInsert(Document doc) {
     Objects.requireNonNull(doc, "doc must not be null");
     if (doc.vector() == null) {
@@ -129,23 +347,18 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   /**
-   * Must be called under {@link #writerLock}. Rejects duplicate ids (against both the live
-   * generation and the staging buffer) in O(1) and appends to staging.
+   * Must be called under {@link #writerLock}. Rejects duplicate ids (against the live generation
+   * and the staging buffer) in O(1) and appends to staging.
    */
   private void stageUnderLock(Document doc) {
     String id = doc.id();
-    // Read live generation without a volatile barrier — we're single-writer under writerLock.
-    if (generation.idMapper().contains(id) || staging.contains(id)) {
+    // Plain read — we hold the writer lock so nobody else is mutating this.generation.
+    if (generation.idMapper.contains(id) || staging.contains(id)) {
       throw new IllegalArgumentException("Duplicate id: " + id);
     }
-    // append returns false only on staging-local dup, which we already checked.
     staging.append(doc);
   }
 
-  /**
-   * Must be called under {@link #writerLock}. If the staging buffer has crossed {@code
-   * autoCommitThreshold}, runs an inline commit without releasing the lock.
-   */
   private void maybeAutoCommit() {
     if (staging.size() >= config.autoCommitThreshold()) {
       commitUnderLock();
@@ -156,7 +369,7 @@ final class VectorCollectionImpl implements VectorCollection {
   public void commit() {
     writerLock.lock();
     try {
-      ensureOpen();
+      ensureOpenUnderLock();
       commitUnderLock();
     } finally {
       writerLock.unlock();
@@ -164,74 +377,193 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   /**
-   * Must be called under {@link #writerLock}. Builds a fully-populated successor {@link Generation}
-   * off the write path and publishes it via a single volatile write. Readers continue to see the
-   * old generation until the volatile store, then immediately see the new one; readers that
-   * captured the old snapshot before the store finish against it normally.
+   * Must be called under {@link #writerLock}. Branches on whether the collection is in-memory or
+   * persistent and delegates to the appropriate commit body. Both branches publish via a single
+   * volatile write on {@link #generation} and then release the old generation's facade handle.
    */
   private void commitUnderLock() {
     if (staging.isEmpty()) {
       return;
     }
-
-    // 1. Read the current generation. Volatile semantics are not required here because we hold
-    //    writerLock (sole mutator) — but the read is still safe either way.
     Generation oldGen = this.generation;
-    int liveCount = oldGen.liveCount();
+    if (config.storageRoot() == null) {
+      commitInMemory(oldGen);
+    } else {
+      commitPersistent(oldGen);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // In-memory commit (Step 3 semantics preserved)
+  // ---------------------------------------------------------------------------
+
+  private void commitInMemory(Generation oldGen) {
+    int liveCount = oldGen.liveCount;
     int stagedCount = staging.size();
     int newSize = liveCount + stagedCount;
 
-    // 2. Copy the id mapper and metadata store so the successor is fully independent of oldGen.
-    InMemoryIdMapper newMapper = InMemoryIdMapper.copyOf(oldGen.idMapper());
-    InMemoryMetadataStore newMeta = InMemoryMetadataStore.copyOf(oldGen.metadataStore());
+    InMemoryIdMapper newMapper = InMemoryIdMapper.copyOf((InMemoryIdMapper) oldGen.idMapper);
+    InMemoryMetadataStore newMeta =
+        InMemoryMetadataStore.copyOf((InMemoryMetadataStore) oldGen.metadataStore);
 
-    // 3. Reconstruct the full dense vector matrix. Reuse the existing float[] references from the
-    //    old metadata store for the live prefix (immutable-by-convention per Document Javadoc),
-    //    then append staged vectors in order.
     float[][] next = new float[newSize][];
     for (int i = 0; i < liveCount; i++) {
-      Document stored = oldGen.metadataStore().get(i);
+      Document stored = oldGen.metadataStore.get(i);
       if (stored == null) {
         throw new IllegalStateException(
             "Missing document in metadata store for ordinal " + i + " during commit");
       }
       next[i] = stored.vector();
     }
-
     List<Document> stagedDocs = staging.documents();
     for (int i = 0; i < stagedCount; i++) {
       Document doc = stagedDocs.get(i);
       int ordinal = newMapper.put(doc.id());
-      int expectedOrdinal = liveCount + i;
-      if (ordinal != expectedOrdinal) {
+      int expected = liveCount + i;
+      if (ordinal != expected) {
         throw new IllegalStateException(
-            "Ordinal mismatch: expected " + expectedOrdinal + " but got " + ordinal);
+            "Ordinal mismatch: expected " + expected + " but got " + ordinal);
       }
       newMeta.put(ordinal, doc);
       next[ordinal] = doc.vector();
     }
 
-    // 4. Build a fresh SPI from scratch. We do this WITHOUT touching oldGen — readers are still
-    //    hitting it through the volatile pointer.
     IndexSpi newSpi = new FlatScanAdapter();
     newSpi.build(next, config.metric());
 
-    // 5. Publish the new generation atomically via a single volatile write. Every subsequent
-    //    volatile read of `generation` sees the new record; any in-flight reader finishes its
-    //    search against the (still-live, unmutated) old record.
-    this.generation = new Generation(newSpi, newMapper, newMeta, newSize);
+    Generation newGen = new Generation(newSpi, newMapper, newMeta, newSize, 0L, null, null, null);
+    this.generation = newGen;
     staging.clear();
-
-    // 6. Close the old SPI. Flat scan is a no-op close; this is the hook for Step 4's mmap-backed
-    //    backends where reader ref-counting will move around. Closing after publication is safe
-    //    for flat scan because the old `float[][]` is no longer referenced from the facade — only
-    //    from in-flight search stacks, which have their own loop-local scope.
-    try {
-      oldGen.spi().close();
-    } catch (Exception e) {
-      throw new RuntimeException("Failed to close previous index SPI", e);
-    }
+    // Drop the facade's handle on the old generation. Any in-flight reader still holding a
+    // refcount on it finishes normally; closeResources() fires on the last release.
+    oldGen.release();
   }
+
+  // ---------------------------------------------------------------------------
+  // Persistent commit (Step 4a)
+  // ---------------------------------------------------------------------------
+
+  private void commitPersistent(Generation oldGen) {
+    int liveCount = oldGen.liveCount;
+    int stagedCount = staging.size();
+    int newSize = liveCount + stagedCount;
+    int dim = config.dimension();
+
+    // 1. Build the ordered (id, document) lists for the successor generation.
+    List<String> newIds = new ArrayList<>(newSize);
+    List<Document> newDocs = new ArrayList<>(newSize);
+    for (int i = 0; i < liveCount; i++) {
+      newIds.add(oldGen.idMapper.idOf(i));
+      newDocs.add(oldGen.metadataStore.get(i));
+    }
+    for (Document d : staging.documents()) {
+      newIds.add(d.id());
+      newDocs.add(d);
+    }
+
+    // 2. Build the three data-file byte images in memory so we can CRC them before constructing
+    //    the manifest (the manifest embeds the CRCs).
+    byte[] vectorsBin = buildVectorsBin(oldGen.mappedVectors, liveCount, staging.documents(), dim);
+    byte[] idmapBin;
+    byte[] metadataBin;
+    try {
+      idmapBin = MappedIdMapper.Writer.toBytes(newIds);
+      metadataBin = MappedMetadataStore.Writer.toBytes(newDocs);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to serialize commit payload", e);
+    }
+
+    // 3. Build the manifest, then hand everything to GenerationDirectory.writeGeneration which
+    //    runs the full crash-safe write protocol (tmp dir → files → fsync → rename → CURRENT).
+    long newGenNumber = oldGen.generationNumber + 1L;
+    Manifest manifest =
+        Manifest.build(
+            config,
+            newGenNumber,
+            (long) newSize,
+            (long) vectorsBin.length,
+            Checksums.ofBytes(vectorsBin),
+            (long) metadataBin.length,
+            Checksums.ofBytes(metadataBin),
+            (long) idmapBin.length,
+            Checksums.ofBytes(idmapBin));
+
+    GenerationDirectory.WriteResult wr;
+    try {
+      wr =
+          GenerationDirectory.writeGeneration(
+              config.storageRoot(),
+              newGenNumber,
+              new BufferedGenerationSource(vectorsBin, idmapBin, metadataBin),
+              manifest);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to write generation " + newGenNumber, e);
+    }
+
+    // 4. Open the new generation under a fresh shared arena, then publish it atomically via a
+    //    single volatile write. Any in-flight reader captured oldGen before the publish and will
+    //    finish against it; subsequent reads observe newGen.
+    Generation newGen;
+    try {
+      newGen = openGeneration(wr.generationDir(), wr.manifest());
+    } catch (IOException e) {
+      // The gen dir and CURRENT pointer are durable on disk, so recovery on the next open will
+      // find the new generation — but this process cannot. Rethrow; the staging buffer is still
+      // populated so nothing is lost client-side.
+      throw new UncheckedIOException(
+          "Generation " + newGenNumber + " written but cannot be opened", e);
+    }
+
+    this.generation = newGen;
+    staging.clear();
+    oldGen.release();
+  }
+
+  /**
+   * Builds the {@code vectors.bin} byte image for the successor generation. The old generation's
+   * bytes are bulk-copied out of the existing mmap'd segment (same stride, same dim) so there is no
+   * float-by-float reconstruction; staged vectors are packed afterward as little-endian float32
+   * with 64-byte alignment padding between entries, matching {@link MemorySegmentVectors} and
+   * {@link com.integrallis.vectors.storage.store.VectorStoreWriter}.
+   */
+  private static byte[] buildVectorsBin(
+      MemorySegmentVectors oldMapped, int liveCount, List<Document> staged, int dim) {
+    long strideL = AlignmentUtil.alignUp((long) dim * Float.BYTES, AlignmentUtil.VECTOR_ALIGNMENT);
+    if (strideL > Integer.MAX_VALUE) {
+      throw new IllegalStateException("vector stride exceeds 2 GiB: " + strideL);
+    }
+    int stride = (int) strideL;
+    long totalL = strideL * (long) (liveCount + staged.size());
+    if (totalL > Integer.MAX_VALUE) {
+      throw new IllegalStateException("vectors.bin exceeds 2 GiB: " + totalL);
+    }
+    byte[] out = new byte[(int) totalL];
+
+    // Bulk copy the old generation byte-for-byte. For the very first persistent commit the
+    // bootstrap generation has liveCount == 0 so this is a zero-length copy (no-op).
+    if (liveCount > 0 && oldMapped != null) {
+      long oldBytes = strideL * liveCount;
+      MemorySegment.copy(oldMapped.segment(), ValueLayout.JAVA_BYTE, 0L, out, 0, (int) oldBytes);
+    }
+
+    // Pack staged vectors starting at the first free stride slot. Alignment padding is already
+    // zero from the array initializer.
+    int rawVecBytes = dim * Float.BYTES;
+    ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
+    buf.position(stride * liveCount);
+    for (Document d : staged) {
+      float[] v = d.vector();
+      for (int j = 0; j < dim; j++) {
+        buf.putFloat(v[j]);
+      }
+      buf.position(buf.position() + (stride - rawVecBytes));
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Read API
+  // ---------------------------------------------------------------------------
 
   @Override
   public SearchResult search(SearchRequest request) {
@@ -248,70 +580,93 @@ final class VectorCollectionImpl implements VectorCollection {
       throw new UnsupportedOperationException("filter execution deferred to Step 5");
     }
 
-    // Single volatile read captures the snapshot for the whole call. No lock is taken.
-    Generation gen = this.generation;
-    ensureOpen();
+    Generation gen = acquireReadSnapshot();
+    try {
+      long start = System.nanoTime();
+      IndexSpi.SearchOutcome outcome =
+          gen.spi.search(
+              request.query(), request.k(), request.searchListSize(), request.overQueryFactor());
 
-    long start = System.nanoTime();
-    IndexSpi.SearchOutcome outcome =
-        gen.spi()
-            .search(
-                request.query(), request.k(), request.searchListSize(), request.overQueryFactor());
+      int[] ordinals = outcome.ordinals();
+      float[] scores = outcome.scores();
 
-    int[] ordinals = outcome.ordinals();
-    float[] scores = outcome.scores();
-
-    List<SearchResult.Hit> hits = new ArrayList<>(ordinals.length);
-    for (int i = 0; i < ordinals.length; i++) {
-      float score = scores[i];
-      if (score < request.minScore()) {
-        continue;
+      List<SearchResult.Hit> hits = new ArrayList<>(ordinals.length);
+      for (int i = 0; i < ordinals.length; i++) {
+        float score = scores[i];
+        if (score < request.minScore()) {
+          continue;
+        }
+        Document stored = gen.metadataStore.get(ordinals[i]);
+        if (stored == null) {
+          continue;
+        }
+        float[] vector = null;
+        if (request.includeVector()) {
+          vector = stored.vector();
+          // In persistent mode the mapped metadata store returns Documents with vector == null.
+          // Hydrate from the mmap'd vectors segment on demand so the caller gets the full row.
+          if (vector == null && gen.mappedVectors != null) {
+            vector = new float[config.dimension()];
+            MemorySegment.copy(
+                gen.mappedVectors.vectorSlice(ordinals[i]),
+                ValueLayout.JAVA_FLOAT,
+                0L,
+                vector,
+                0,
+                config.dimension());
+          }
+        }
+        Document projected =
+            new Document(
+                stored.id(),
+                vector,
+                request.includeText() ? stored.text() : null,
+                request.includeMetadata() ? stored.metadata() : null);
+        hits.add(new SearchResult.Hit(stored.id(), score, projected));
       }
-      Document stored = gen.metadataStore().get(ordinals[i]);
-      if (stored == null) {
-        continue;
-      }
-      Document projected =
-          new Document(
-              stored.id(),
-              request.includeVector() ? stored.vector() : null,
-              request.includeText() ? stored.text() : null,
-              request.includeMetadata() ? stored.metadata() : null);
-      hits.add(new SearchResult.Hit(stored.id(), score, projected));
+      long elapsed = System.nanoTime() - start;
+      return new SearchResult(hits, elapsed);
+    } finally {
+      gen.release();
     }
-    long elapsed = System.nanoTime() - start;
-    return new SearchResult(hits, elapsed);
   }
 
   @Override
   public Document get(String id) {
     Objects.requireNonNull(id, "id must not be null");
-    Generation gen = this.generation;
-    ensureOpen();
-    int ord = gen.idMapper().ordinalOf(id);
-    return ord < 0 ? null : gen.metadataStore().get(ord);
+    Generation gen = acquireReadSnapshot();
+    try {
+      int ord = gen.idMapper.ordinalOf(id);
+      return ord < 0 ? null : gen.metadataStore.get(ord);
+    } finally {
+      gen.release();
+    }
   }
 
   @Override
   public boolean contains(String id) {
     Objects.requireNonNull(id, "id must not be null");
-    Generation gen = this.generation;
-    ensureOpen();
-    return gen.idMapper().contains(id);
+    Generation gen = acquireReadSnapshot();
+    try {
+      return gen.idMapper.contains(id);
+    } finally {
+      gen.release();
+    }
   }
 
   @Override
   public int size() {
-    Generation gen = this.generation;
-    ensureOpen();
-    return gen.liveCount();
+    Generation gen = acquireReadSnapshot();
+    try {
+      return gen.liveCount;
+    } finally {
+      gen.release();
+    }
   }
 
   @Override
   public int physicalSize() {
-    Generation gen = this.generation;
-    ensureOpen();
-    return gen.liveCount();
+    return size();
   }
 
   @Override
@@ -320,29 +675,70 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   @Override
+  public void flush() {
+    // No-op in both modes. The persistent commit pipeline already fsyncs every data file and the
+    // manifest before returning, and the mmap'd files are read-only once opened — there is
+    // nothing dirty to flush between commits. In-memory mode has nothing to persist.
+  }
+
+  @Override
   public void close() {
     writerLock.lock();
     try {
-      if (closed) {
+      Generation gen = this.generation;
+      if (gen == null) {
         return;
       }
-      closed = true;
+      this.generation = null;
       staging.clear();
-      Generation oldGen = this.generation;
-      if (oldGen != null) {
-        try {
-          oldGen.spi().close();
-        } catch (Exception e) {
-          throw new RuntimeException("Failed to close index SPI", e);
-        }
-      }
+      // Drop the facade's handle. Any in-flight reader still holding a refcount finishes against
+      // the captured snapshot; closeResources() fires on the last release.
+      gen.release();
     } finally {
       writerLock.unlock();
     }
   }
 
-  private void ensureOpen() {
-    if (closed) {
+  /**
+   * Captures the current generation via a volatile read and acquires a refcount on it. The caller
+   * MUST release the snapshot in a {@code finally} block.
+   *
+   * <p>Retries if the captured generation was retired between the volatile read and the refcount
+   * CAS. This window exists because the commit path publishes the new generation via a volatile
+   * write and THEN releases the old generation's facade handle — a reader that reads {@code
+   * this.generation} just before the volatile publish can observe a still-alive old generation,
+   * only to have that generation's refcount drop to zero moments later when the committing writer
+   * decrements the facade handle. In that case the reader's {@code acquire()} CAS sees {@code refs
+   * == 0} and must re-read {@link #generation}, which is now guaranteed to point at the new
+   * generation (or {@code null} if the collection was actually closed). Without this retry the
+   * reader would spuriously observe {@code IllegalStateException("closed")} during a concurrent
+   * commit, which manifests as the {@code MonotonicObservedSize} flake.
+   *
+   * @throws IllegalStateException if the collection has actually been closed (generation is null)
+   */
+  private Generation acquireReadSnapshot() {
+    while (true) {
+      Generation gen = this.generation;
+      if (gen == null) {
+        throw new IllegalStateException("VectorCollection is closed");
+      }
+      if (gen.acquire()) {
+        return gen;
+      }
+      // The generation was retired between the volatile read and the CAS — a newer generation has
+      // been published (or close() is racing). Retry the volatile read; on the next pass we either
+      // acquire the successor or observe the null and throw.
+    }
+  }
+
+  /**
+   * Must be called under {@link #writerLock}. Fast-path "closed" check for write operations; no
+   * refcount bump because writers never read from the generation past this point — they either
+   * mutate {@link #staging} (visible only through a subsequent commit) or rebuild the generation
+   * wholesale.
+   */
+  private void ensureOpenUnderLock() {
+    if (this.generation == null) {
       throw new IllegalStateException("VectorCollection is closed");
     }
   }
