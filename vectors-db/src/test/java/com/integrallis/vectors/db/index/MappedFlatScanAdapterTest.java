@@ -230,20 +230,20 @@ class MappedFlatScanAdapterTest {
   @Nested
   class ThousandVectorAgreement {
 
-    private void runEuclidean(@TempDir Path tmp, int dim, int n, int k, long seed)
+    private void runMetric(
+        @TempDir Path tmp, SimilarityFunction metric, int dim, int n, int k, long seed)
         throws IOException {
       float[][] vectors = randomVectors(n, dim, seed);
       float[] query = randomQuery(dim, seed + 1);
       Path file = writeVectorsBin(tmp, "vectors.bin", vectors, dim);
 
       FlatScanAdapter reference = new FlatScanAdapter();
-      reference.build(vectors, SimilarityFunction.EUCLIDEAN);
+      reference.build(vectors, metric);
       IndexSpi.SearchOutcome expected = reference.search(query, k, 0, 1f);
 
       try (Arena arena = Arena.ofConfined()) {
         MemorySegmentVectors store = MemorySegmentVectors.open(file, n, dim, arena);
-        MappedFlatScanAdapter adapter =
-            new MappedFlatScanAdapter(store, SimilarityFunction.EUCLIDEAN);
+        MappedFlatScanAdapter adapter = new MappedFlatScanAdapter(store, metric);
         IndexSpi.SearchOutcome actual = adapter.search(query, k, 0, 1f);
         assertAgreement(expected, actual, k);
       }
@@ -251,35 +251,56 @@ class MappedFlatScanAdapterTest {
 
     @Test
     void oneThousandVectorsDim128(@TempDir Path tmp) throws IOException {
-      runEuclidean(tmp, 128, 1000, 20, 100L);
+      runMetric(tmp, SimilarityFunction.EUCLIDEAN, 128, 1000, 20, 100L);
     }
 
     @Test
     void oneThousandVectorsDim64(@TempDir Path tmp) throws IOException {
-      runEuclidean(tmp, 64, 1000, 20, 101L);
+      runMetric(tmp, SimilarityFunction.EUCLIDEAN, 64, 1000, 20, 101L);
     }
 
     @Test
     void oneThousandVectorsDim16(@TempDir Path tmp) throws IOException {
-      runEuclidean(tmp, 16, 1000, 20, 102L);
+      runMetric(tmp, SimilarityFunction.EUCLIDEAN, 16, 1000, 20, 102L);
     }
 
     @Test
     void oneThousandVectorsPaddedDim100(@TempDir Path tmp) throws IOException {
       // Padded-stride path (stride=448 bytes raw, 400 bytes data).
-      runEuclidean(tmp, 100, 1000, 20, 103L);
+      runMetric(tmp, SimilarityFunction.EUCLIDEAN, 100, 1000, 20, 103L);
     }
 
     @Test
     void oneThousandVectorsVeryPaddedDim7(@TempDir Path tmp) throws IOException {
       // Heavily-padded path (stride=64 bytes raw, 28 bytes data).
-      runEuclidean(tmp, 7, 1000, 20, 104L);
+      runMetric(tmp, SimilarityFunction.EUCLIDEAN, 7, 1000, 20, 104L);
     }
 
     @Test
     void topOneAt1000Vectors(@TempDir Path tmp) throws IOException {
       // Edge case: k=1 over 1000 vectors still produces the same nearest neighbor.
-      runEuclidean(tmp, 128, 1000, 1, 105L);
+      runMetric(tmp, SimilarityFunction.EUCLIDEAN, 128, 1000, 1, 105L);
+    }
+
+    @Test
+    void oneThousandVectorsDotProductDim128(@TempDir Path tmp) throws IOException {
+      // DOT_PRODUCT at scale — most common production metric. Exercises the
+      // dotProduct(MemorySegment) kernel against FlatScanAdapter's array path.
+      runMetric(tmp, SimilarityFunction.DOT_PRODUCT, 128, 1000, 20, 106L);
+    }
+
+    @Test
+    void oneThousandVectorsCosineDim128(@TempDir Path tmp) throws IOException {
+      // COSINE at scale — exercises the cosine(MemorySegment) kernel (2× unrolled)
+      // and the norm computation paths on both sides.
+      runMetric(tmp, SimilarityFunction.COSINE, 128, 1000, 20, 107L);
+    }
+
+    @Test
+    void oneThousandVectorsMaximumInnerProductDim128(@TempDir Path tmp) throws IOException {
+      // MAXIMUM_INNER_PRODUCT at scale — same dot product kernel but with the
+      // MIP scoring wrapper applied on both sides.
+      runMetric(tmp, SimilarityFunction.MAXIMUM_INNER_PRODUCT, 128, 1000, 20, 108L);
     }
   }
 
