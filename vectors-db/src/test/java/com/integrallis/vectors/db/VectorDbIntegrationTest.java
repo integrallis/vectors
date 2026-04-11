@@ -86,16 +86,32 @@ class VectorDbIntegrationTest {
     }
 
     @Test
-    void indexTypeHnsw_throwsUnsupported_inStep2() {
+    void indexTypeHnsw_buildsSuccessfully_inStep4b() {
+      // Step 4b unblocked HNSW in both in-memory and persistent modes. The 5-arg builder here
+      // runs the in-memory path; persistent HNSW is covered by VectorDbHnswPersistenceTest.
+      try (var col =
+          VectorCollection.builder()
+              .dimension(8)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.HNSW)
+              .build()) {
+        assertThat(col.size()).isZero();
+        assertThat(col.config().indexType()).isEqualTo(IndexType.HNSW);
+        assertThat(col.config().hnswParams()).isNotNull();
+      }
+    }
+
+    @Test
+    void indexTypeVamana_throwsUnsupported_inStep4b() {
       assertThatExceptionOfType(UnsupportedOperationException.class)
           .isThrownBy(
               () ->
                   VectorCollection.builder()
                       .dimension(8)
                       .metric(SimilarityFunction.EUCLIDEAN)
-                      .indexType(IndexType.HNSW)
+                      .indexType(IndexType.VAMANA)
                       .build())
-          .withMessageContaining("HNSW");
+          .withMessageContaining("VAMANA");
     }
 
     @Test
@@ -241,6 +257,36 @@ class VectorDbIntegrationTest {
         assertThat(returned.get("tags")).isInstanceOf(MetadataValue.Tags.class);
         assertThat(((MetadataValue.Tags) returned.get("tags")).values())
             .containsExactly("a", "b", "c");
+      }
+    }
+
+    /**
+     * Regression for Step 4a audit finding C3 — {@code commitInMemory} used to share the caller's
+     * {@code float[]} with the FlatScanAdapter, which meant a later mutation to the array (held
+     * through the original Document) would silently corrupt the index. The fix defensively clones
+     * each vector into the successor matrix on commit so the index is insulated from external
+     * mutation.
+     */
+    @Test
+    void mutatingOriginalFloatArrayAfterCommitDoesNotCorruptIndex() {
+      float[] userOwnedVector = new float[] {1f, 2f, 3f, 4f};
+      try (var col = newCollection(4, SimilarityFunction.EUCLIDEAN)) {
+        col.add(new Document("id", userOwnedVector, null, Map.of()));
+        col.commit();
+
+        // Mutate the user-owned array after the commit. Prior to the C3 fix this would corrupt
+        // the FlatScanAdapter's vector matrix and the search would return a different score.
+        userOwnedVector[0] = 999f;
+        userOwnedVector[1] = 999f;
+        userOwnedVector[2] = 999f;
+        userOwnedVector[3] = 999f;
+
+        var result = col.search(SearchRequest.builder(new float[] {1f, 2f, 3f, 4f}, 1).build());
+        assertThat(result.hits()).hasSize(1);
+        // EUCLIDEAN similarity = 1 / (1 + L2^2). For an exact match L2^2=0 → score=1.0. If the
+        // adapter saw the mutated vector instead, the distance would be enormous and the score
+        // would be far from 1.0.
+        assertThat(result.hits().get(0).score()).isEqualTo(1f);
       }
     }
   }

@@ -18,14 +18,15 @@ import java.util.Objects;
  * offset so a reader can decide whether the generation is intact by reading exactly {@link
  * #HEADER_SIZE} bytes and validating the self-CRC — no heap allocation, no schema parsing.
  *
- * <p>Layout (little-endian throughout):
+ * <p>Layout (little-endian throughout, version 2 — added {@code graph.bin} length + CRC slots in
+ * Step 4b for persistent HNSW support):
  *
  * <pre>
  * Offset  Size  Field                       Notes
  * ------  ----  --------------------------  --------------------------------
  *   0      4    magic                       FileFormat.MAGIC_MANIFEST
- *   4      4    format version              FileFormat.VERSION_MANIFEST
- *   8      4    header length               bytes from offset 0 to end of header
+ *   4      4    format version              FileFormat.VERSION_MANIFEST (= 2)
+ *   8      4    header length               bytes from offset 0 to end of header (= 124)
  *  12      4    flags                        reserved, must be 0
  *  16      4    dimension                   vector dimension
  *  20      4    metric ordinal              SimilarityFunction.ordinal()
@@ -40,9 +41,11 @@ import java.util.Objects;
  *  80      8    metadata.bin CRC32          uint32 zero-extended (see note)
  *  88      8    idmap.bin length            int64
  *  96      8    idmap.bin CRC32             uint32 zero-extended (see note)
- * 104      4    self CRC32                  CRC32 over bytes [0, 104)
+ * 104      8    graph.bin length            int64 (0 if no graph file written)
+ * 112      8    graph.bin CRC32             uint32 zero-extended, 0 if no graph file
+ * 120      4    self CRC32                  CRC32 over bytes [0, 120)
  * ------  ----  --------------------------
- * 108      -    (future extension area — version bump required to grow)
+ * 124      -    (future extension area — version bump required to grow)
  * </pre>
  *
  * <p><b>CRC width asymmetry.</b> The per-file CRCs each occupy 8 bytes on disk even though the
@@ -71,13 +74,15 @@ public record Manifest(
     long metadataBinLength,
     long metadataBinCrc32,
     long idmapBinLength,
-    long idmapBinCrc32) {
+    long idmapBinCrc32,
+    long graphBinLength,
+    long graphBinCrc32) {
 
   /** Total fixed header size on disk, including the self CRC. */
-  public static final int HEADER_SIZE = 108;
+  public static final int HEADER_SIZE = 124;
 
   /** Offset in bytes at which the self-CRC32 word lives. */
-  public static final int SELF_CRC_OFFSET = 104;
+  public static final int SELF_CRC_OFFSET = 120;
 
   public Manifest {
     if (dimension <= 0) {
@@ -95,7 +100,7 @@ public record Manifest(
     if (liveCount < 0) {
       throw new IllegalArgumentException("liveCount must be >= 0: " + liveCount);
     }
-    if (vectorsBinLength < 0 || metadataBinLength < 0 || idmapBinLength < 0) {
+    if (vectorsBinLength < 0 || metadataBinLength < 0 || idmapBinLength < 0 || graphBinLength < 0) {
       throw new IllegalArgumentException("file lengths must be >= 0");
     }
   }
@@ -104,8 +109,8 @@ public record Manifest(
    * Builds a manifest record from the current config plus per-file sizes and CRCs, stamping the
    * creation time from the system clock.
    *
-   * <p>Prefer {@link #build(VectorCollectionConfig, long, long, long, long, long, long, long, long,
-   * long)} from tests that need a deterministic {@code createdEpochMillis}.
+   * <p>Prefer the clock-injectable overload from tests that need a deterministic {@code
+   * createdEpochMillis}.
    */
   public static Manifest build(
       VectorCollectionConfig config,
@@ -116,7 +121,9 @@ public record Manifest(
       long metadataBinLength,
       long metadataBinCrc32,
       long idmapBinLength,
-      long idmapBinCrc32) {
+      long idmapBinCrc32,
+      long graphBinLength,
+      long graphBinCrc32) {
     return build(
         config,
         generationNumber,
@@ -127,13 +134,15 @@ public record Manifest(
         metadataBinLength,
         metadataBinCrc32,
         idmapBinLength,
-        idmapBinCrc32);
+        idmapBinCrc32,
+        graphBinLength,
+        graphBinCrc32);
   }
 
   /**
-   * Clock-injectable variant of {@link #build(VectorCollectionConfig, long, long, long, long, long,
-   * long, long, long)}. Callers that need reproducible manifests (tests, deterministic fixtures)
-   * pass {@code createdEpochMillis} explicitly; production callers use the system-clock overload.
+   * Clock-injectable variant. Callers that need reproducible manifests (tests, deterministic
+   * fixtures) pass {@code createdEpochMillis} explicitly; production callers use the system-clock
+   * overload.
    */
   public static Manifest build(
       VectorCollectionConfig config,
@@ -145,7 +154,9 @@ public record Manifest(
       long metadataBinLength,
       long metadataBinCrc32,
       long idmapBinLength,
-      long idmapBinCrc32) {
+      long idmapBinCrc32,
+      long graphBinLength,
+      long graphBinCrc32) {
     return new Manifest(
         config.dimension(),
         config.metric(),
@@ -159,7 +170,9 @@ public record Manifest(
         metadataBinLength,
         metadataBinCrc32,
         idmapBinLength,
-        idmapBinCrc32);
+        idmapBinCrc32,
+        graphBinLength,
+        graphBinCrc32);
   }
 
   /**
@@ -186,6 +199,8 @@ public record Manifest(
     buf.putLong(metadataBinCrc32);
     buf.putLong(idmapBinLength);
     buf.putLong(idmapBinCrc32);
+    buf.putLong(graphBinLength);
+    buf.putLong(graphBinCrc32);
     // Self-CRC over bytes [0, SELF_CRC_OFFSET).
     long selfCrc = Checksums.ofBytes(out, 0, SELF_CRC_OFFSET);
     buf.putInt((int) selfCrc);
@@ -226,7 +241,7 @@ public record Manifest(
     }
     int flags = buf.getInt();
     if (flags != 0) {
-      throw new IOException("Manifest flags must be 0 in version 1, got " + flags);
+      throw new IOException("Manifest flags must be 0 in version 2, got " + flags);
     }
 
     int dimension = buf.getInt();
@@ -242,6 +257,8 @@ public record Manifest(
     long metadataBinCrc32 = buf.getLong();
     long idmapBinLength = buf.getLong();
     long idmapBinCrc32 = buf.getLong();
+    long graphBinLength = buf.getLong();
+    long graphBinCrc32 = buf.getLong();
     int selfCrc = buf.getInt();
 
     long expectedSelfCrc = Checksums.ofBytes(bytes, 0, SELF_CRC_OFFSET);
@@ -271,7 +288,9 @@ public record Manifest(
         metadataBinLength,
         metadataBinCrc32,
         idmapBinLength,
-        idmapBinCrc32);
+        idmapBinCrc32,
+        graphBinLength,
+        graphBinCrc32);
   }
 
   /**

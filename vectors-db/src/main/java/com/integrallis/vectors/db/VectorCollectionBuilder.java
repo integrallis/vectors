@@ -9,11 +9,18 @@ import java.nio.file.Path;
  * <p>Required settings: {@link #dimension(int)} and {@link #metric(SimilarityFunction)}. {@link
  * #build()} throws {@link IllegalStateException} if either is unset.
  *
- * <p>Step 4a supports {@link IndexType#FLAT} with {@link QuantizerKind#NONE} in either in-memory
- * mode (no {@link #storagePath(Path)}) or persistent mmap-backed mode (absolute {@code
- * storagePath}).
+ * <p>Step 4b supports {@link IndexType#FLAT} and {@link IndexType#HNSW} with {@link
+ * QuantizerKind#NONE} in either in-memory mode (no {@link #storagePath(Path)}) or persistent
+ * mmap-backed mode (absolute {@code storagePath}). {@link IndexType#VAMANA} is deferred to Step 4c
+ * and non-{@link QuantizerKind#NONE} quantizers are deferred to Step 4d.
  */
 public final class VectorCollectionBuilder {
+
+  /** HNSW {@code M} parameter default. Matches the HnswIndex.Builder default. */
+  public static final int DEFAULT_HNSW_M = 16;
+
+  /** HNSW {@code efConstruction} parameter default. Matches the HnswIndex.Builder default. */
+  public static final int DEFAULT_HNSW_EF_CONSTRUCTION = 200;
 
   private Integer dimension;
   private SimilarityFunction metric;
@@ -21,6 +28,8 @@ public final class VectorCollectionBuilder {
   private QuantizerKind quantizerKind = QuantizerKind.NONE;
   private int autoCommitThreshold = Integer.MAX_VALUE;
   private Path storageRoot;
+  private int hnswM = DEFAULT_HNSW_M;
+  private int hnswEfConstruction = DEFAULT_HNSW_EF_CONSTRUCTION;
 
   VectorCollectionBuilder() {}
 
@@ -42,7 +51,10 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
-  /** Selects the index backend. Step 4a only supports {@link IndexType#FLAT}. */
+  /**
+   * Selects the index backend. Step 4b supports {@link IndexType#FLAT} and {@link IndexType#HNSW};
+   * {@link IndexType#VAMANA} is deferred to Step 4c.
+   */
   public VectorCollectionBuilder indexType(IndexType indexType) {
     if (indexType == null) {
       throw new IllegalArgumentException("indexType must not be null");
@@ -51,12 +63,44 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
-  /** Selects the quantizer. Step 4a only supports {@link QuantizerKind#NONE}. */
+  /** Selects the quantizer. Step 4b only supports {@link QuantizerKind#NONE}. */
   public VectorCollectionBuilder quantizer(QuantizerKind quantizerKind) {
     if (quantizerKind == null) {
       throw new IllegalArgumentException("quantizerKind must not be null");
     }
     this.quantizerKind = quantizerKind;
+    return this;
+  }
+
+  /**
+   * Sets the HNSW {@code M} parameter (max connections per upper layer). Ignored unless {@link
+   * #indexType(IndexType)} is {@link IndexType#HNSW}. Must be positive. Default: {@value
+   * #DEFAULT_HNSW_M}.
+   */
+  public VectorCollectionBuilder hnswM(int m) {
+    if (m <= 0) {
+      throw new IllegalArgumentException("M must be positive: " + m);
+    }
+    this.hnswM = m;
+    return this;
+  }
+
+  /**
+   * Sets the HNSW {@code efConstruction} parameter (beam width during graph construction). Ignored
+   * unless {@link #indexType(IndexType)} is {@link IndexType#HNSW}. Must be {@code >= hnswM(...)}.
+   * Default: {@value #DEFAULT_HNSW_EF_CONSTRUCTION}.
+   *
+   * <p><b>Persistence note.</b> {@code efConstruction} is NOT stored on disk — only the structural
+   * parameters captured in {@code graph.bin} (specifically {@code M}) survive a close/reopen cycle.
+   * A reopened collection that triggers a fresh commit will use whichever {@code efConstruction}
+   * the caller sets on the next {@code VectorCollection.builder()} invocation, or the default if
+   * unset.
+   */
+  public VectorCollectionBuilder hnswEfConstruction(int efConstruction) {
+    if (efConstruction <= 0) {
+      throw new IllegalArgumentException("efConstruction must be positive: " + efConstruction);
+    }
+    this.hnswEfConstruction = efConstruction;
     return this;
   }
 
@@ -90,7 +134,7 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
-  /** Builds the collection. Applies Step 4a restrictions on backend and quantizer. */
+  /** Builds the collection. Applies Step 4b restrictions on backend and quantizer. */
   public VectorCollection build() {
     if (dimension == null) {
       throw new IllegalStateException("dimension is required, call builder.dimension(d)");
@@ -104,21 +148,39 @@ public final class VectorCollectionBuilder {
               + " working directory): "
               + storageRoot);
     }
-    if (indexType != IndexType.FLAT) {
+    if (indexType == IndexType.VAMANA) {
       throw new UnsupportedOperationException(
-          "indexType "
-              + indexType
-              + " deferred to a later step (Step 4a only supports IndexType.FLAT)");
+          "indexType VAMANA deferred to a later step (Step 4c)");
     }
     if (quantizerKind != QuantizerKind.NONE) {
       throw new UnsupportedOperationException(
           "quantizerKind "
               + quantizerKind
-              + " deferred to a later step (Step 4a only supports QuantizerKind.NONE)");
+              + " deferred to a later step (Step 4b only supports QuantizerKind.NONE)");
     }
+    // Persistent HNSW is deferred to Step 4b Phase 5 (graph.bin serialization). Fail fast at
+    // build() so the user gets a clear message here — if we let this combination through,
+    // commit() would eventually throw an internal "BufferedGenerationSource.writeGraph invoked
+    // with no graph bytes" IOException wrapped in UncheckedIOException, which is a confusing
+    // programmer-error message for what is really an unsupported feature flag.
+    if (indexType == IndexType.HNSW && storageRoot != null) {
+      throw new UnsupportedOperationException(
+          "Persistent HNSW is deferred to Step 4b Phase 5. Use in-memory mode (omit"
+              + " storagePath) or IndexType.FLAT for persistent collections.");
+    }
+    VectorCollectionConfig.HnswParams hnswParams =
+        (indexType == IndexType.HNSW)
+            ? new VectorCollectionConfig.HnswParams(hnswM, hnswEfConstruction)
+            : null;
     var config =
         new VectorCollectionConfig(
-            dimension, metric, indexType, quantizerKind, autoCommitThreshold, storageRoot);
+            dimension,
+            metric,
+            indexType,
+            quantizerKind,
+            autoCommitThreshold,
+            storageRoot,
+            hnswParams);
     return new VectorCollectionImpl(config);
   }
 }

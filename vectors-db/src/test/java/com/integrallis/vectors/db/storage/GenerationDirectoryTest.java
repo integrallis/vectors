@@ -102,7 +102,9 @@ class GenerationDirectoryTest {
         /* metadataBinLength */ METADATA_PAYLOAD.length,
         /* metadataBinCrc32 */ 0L,
         /* idmapBinLength */ IDMAP_PAYLOAD.length,
-        /* idmapBinCrc32 */ 0L);
+        /* idmapBinCrc32 */ 0L,
+        /* graphBinLength */ 0L,
+        /* graphBinCrc32 */ 0L);
   }
 
   private static Manifest emptyManifest(long generationNumber) {
@@ -116,7 +118,9 @@ class GenerationDirectoryTest {
         /* metadataBinLength */ 0L,
         /* metadataBinCrc32 */ 0L,
         /* idmapBinLength */ 0L,
-        /* idmapBinCrc32 */ 0L);
+        /* idmapBinCrc32 */ 0L,
+        /* graphBinLength */ 0L,
+        /* graphBinCrc32 */ 0L);
   }
 
   // ---------------------------------------------------------------------------

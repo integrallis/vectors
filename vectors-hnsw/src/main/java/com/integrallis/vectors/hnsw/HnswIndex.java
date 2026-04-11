@@ -164,6 +164,17 @@ public final class HnswIndex {
     return new HnswSearcher(graph, vectors, similarityFunction);
   }
 
+  /**
+   * Returns the underlying {@link HnswGraph}. Exposed for persistence paths that need to serialize
+   * the graph topology to disk (e.g. {@code com.integrallis.vectors.db.storage.HnswGraphCodec} in
+   * Step 4b). The returned graph aliases the index's internal reference; callers must not mutate
+   * it through {@link HnswGraph#initNode} or {@link HnswGraph#setEntryNode}, which would corrupt
+   * in-flight searches.
+   */
+  public HnswGraph graph() {
+    return graph;
+  }
+
   /** Returns the number of vectors in the index. */
   public int size() {
     return graph.size();

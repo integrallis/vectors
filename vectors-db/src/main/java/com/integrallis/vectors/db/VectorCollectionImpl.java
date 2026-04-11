@@ -4,6 +4,7 @@ import com.integrallis.vectors.db.filter.Filter;
 import com.integrallis.vectors.db.id.IdMapper;
 import com.integrallis.vectors.db.id.InMemoryIdMapper;
 import com.integrallis.vectors.db.index.FlatScanAdapter;
+import com.integrallis.vectors.db.index.HnswIndexAdapter;
 import com.integrallis.vectors.db.index.IndexSpi;
 import com.integrallis.vectors.db.index.MappedFlatScanAdapter;
 import com.integrallis.vectors.db.internal.StagingBuffer;
@@ -168,23 +169,30 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   /**
-   * {@link GenerationDirectory.GenerationSource} backed by three pre-built byte images. The commit
-   * pipeline computes CRC32s before constructing the {@link Manifest}, which requires having the
-   * bytes in memory rather than streaming them to disk directly — so this source just replays each
-   * byte array into the {@code gen-NNNN.tmp/} directory via {@link
-   * MappedIdMapper.Writer#writeBytesAndFsync(Path, byte[])} (the same helper is used for all three
-   * files since it's just "write + fsync").
+   * {@link GenerationDirectory.GenerationSource} backed by pre-built byte images for each of the
+   * generation's data files. The commit pipeline computes CRC32s before constructing the {@link
+   * Manifest}, which requires having the bytes in memory rather than streaming them to disk
+   * directly — so this source just replays each byte array into the {@code gen-NNNN.tmp/} directory
+   * via {@link MappedIdMapper.Writer#writeBytesAndFsync(Path, byte[])} (the same helper is used for
+   * every file since it's just "write + fsync").
+   *
+   * <p>{@code graphBytes} is {@code null} (or zero-length) for flat-scan generations, in which case
+   * {@link #writeGraph(Path)} is a no-op and no {@code graph.bin} entry is written. Graph-backed
+   * generations (HNSW) pass the encoded adjacency bytes from {@code HnswGraphCodec.encode(graph)}.
    */
   private static final class BufferedGenerationSource
       implements GenerationDirectory.GenerationSource {
     private final byte[] vectorsBytes;
     private final byte[] idmapBytes;
     private final byte[] metadataBytes;
+    private final byte[] graphBytes; // null or empty ⇒ no graph.bin
 
-    BufferedGenerationSource(byte[] vectorsBytes, byte[] idmapBytes, byte[] metadataBytes) {
+    BufferedGenerationSource(
+        byte[] vectorsBytes, byte[] idmapBytes, byte[] metadataBytes, byte[] graphBytes) {
       this.vectorsBytes = vectorsBytes;
       this.idmapBytes = idmapBytes;
       this.metadataBytes = metadataBytes;
+      this.graphBytes = graphBytes;
     }
 
     @Override
@@ -200,6 +208,19 @@ final class VectorCollectionImpl implements VectorCollection {
     @Override
     public void writeMetadata(Path destination) throws IOException {
       MappedMetadataStore.Writer.writeBytesAndFsync(destination, metadataBytes);
+    }
+
+    @Override
+    public void writeGraph(Path destination) throws IOException {
+      // GenerationDirectory only calls this for graph index types; a null or empty buffer
+      // in that context is a programmer error (the manifest's graphBinLength would be 0 while
+      // the caller declared HNSW). Guard defensively so the tmp dir cleanup path still fires.
+      if (graphBytes == null || graphBytes.length == 0) {
+        throw new IOException(
+            "BufferedGenerationSource.writeGraph invoked with no graph bytes (did the caller"
+                + " forget to pass HnswGraphCodec.encode(graph) through the constructor?)");
+      }
+      MappedIdMapper.Writer.writeBytesAndFsync(destination, graphBytes);
     }
   }
 
@@ -253,10 +274,31 @@ final class VectorCollectionImpl implements VectorCollection {
   // ---------------------------------------------------------------------------
 
   private Generation bootstrapInMemory() {
-    IndexSpi emptySpi = new FlatScanAdapter();
+    IndexSpi emptySpi = newInMemoryAdapter();
     emptySpi.build(new float[0][], config.metric());
     return new Generation(
         emptySpi, new InMemoryIdMapper(), new InMemoryMetadataStore(), 0, 0L, null, null, null);
+  }
+
+  /**
+   * Creates a fresh in-memory {@link IndexSpi} that matches {@code config.indexType()}. Only used
+   * by the in-memory code paths (bootstrap and {@link #commitInMemory}). For HNSW the adapter is
+   * parameterized from {@code config.hnswParams()} — which is guaranteed non-null by {@link
+   * VectorCollectionConfig}'s compact constructor when {@code indexType == HNSW}.
+   */
+  private IndexSpi newInMemoryAdapter() {
+    return switch (config.indexType()) {
+      case FLAT -> new FlatScanAdapter();
+      case HNSW -> {
+        VectorCollectionConfig.HnswParams p = config.hnswParams();
+        yield new HnswIndexAdapter(p.m(), p.efConstruction());
+      }
+      case VAMANA ->
+          throw new UnsupportedOperationException(
+              "indexType VAMANA deferred to a later step (Step 4c)");
+      case IVF_FLAT ->
+          throw new UnsupportedOperationException("indexType IVF_FLAT deferred to a later step");
+    };
   }
 
   private Generation bootstrapPersistent(Path storageRoot) throws IOException {
@@ -276,9 +318,11 @@ final class VectorCollectionImpl implements VectorCollection {
             (long) emptyMetadata.length,
             Checksums.ofBytes(emptyMetadata),
             (long) emptyIdmap.length,
-            Checksums.ofBytes(emptyIdmap));
+            Checksums.ofBytes(emptyIdmap),
+            0L,
+            0L);
     GenerationDirectory.GenerationSource bootstrapSource =
-        new BufferedGenerationSource(emptyVectors, emptyIdmap, emptyMetadata);
+        new BufferedGenerationSource(emptyVectors, emptyIdmap, emptyMetadata, null);
 
     GenerationDirectory.RecoveryResult rr =
         GenerationDirectory.recover(storageRoot, bootstrapSource, bootstrap);
@@ -306,6 +350,15 @@ final class VectorCollectionImpl implements VectorCollection {
       IdMapper idMapper = MappedIdMapper.open(genDir.resolve(FileFormat.IDMAP_FILE), arena);
       MetadataStore metadataStore =
           MappedMetadataStore.open(genDir.resolve(FileFormat.METADATA_FILE), arena);
+      // TODO Step 4b Phase 5: switch on manifest.indexType() — for IndexType.HNSW, read the
+      // graph.bin file from genDir, CRC-verify against manifest.graphBinCrc32(), decode via
+      // HnswGraphCodec.decode(), wrap `mapped` as a RandomAccessVectors, and construct a
+      // MappedHnswIndexAdapter instead of MappedFlatScanAdapter. The Manifest v2 already carries
+      // graphBinLength/graphBinCrc32 and GenerationDirectory already writes graph.bin via the
+      // GRAPH_INDEX_TYPES dispatch, so this is the last remaining piece. VectorCollectionBuilder
+      // currently rejects the (HNSW, persistent) combination up front so no existing generation
+      // can reach this point with manifest.indexType() == HNSW — but that guard will be relaxed
+      // as soon as the HNSW branch below is implemented.
       IndexSpi spi = new MappedFlatScanAdapter(mapped, config.metric());
       return new Generation(
           spi,
@@ -443,6 +496,12 @@ final class VectorCollectionImpl implements VectorCollection {
     InMemoryMetadataStore newMeta =
         InMemoryMetadataStore.copyOf((InMemoryMetadataStore) oldGen.metadataStore);
 
+    // Build the successor vector matrix with DEFENSIVE COPIES of every row. The metadata store
+    // retains references to each Document's original vector array (for get(String) hydration),
+    // so sharing those arrays with the FlatScanAdapter would let one subsystem silently observe
+    // mutations made through the other — even if no current code mutates, the pre-existing Step
+    // 3 design would silently corrupt both if a future caller held onto a Document.vector() and
+    // mutated it in place. Cloning on commit cuts the alias.
     float[][] next = new float[newSize][];
     for (int i = 0; i < liveCount; i++) {
       Document stored = oldGen.metadataStore.get(i);
@@ -450,7 +509,7 @@ final class VectorCollectionImpl implements VectorCollection {
         throw new IllegalStateException(
             "Missing document in metadata store for ordinal " + i + " during commit");
       }
-      next[i] = stored.vector();
+      next[i] = stored.vector().clone();
     }
     List<Document> stagedDocs = staging.documents();
     for (int i = 0; i < stagedCount; i++) {
@@ -462,10 +521,10 @@ final class VectorCollectionImpl implements VectorCollection {
             "Ordinal mismatch: expected " + expected + " but got " + ordinal);
       }
       newMeta.put(ordinal, doc);
-      next[ordinal] = doc.vector();
+      next[ordinal] = doc.vector().clone();
     }
 
-    IndexSpi newSpi = new FlatScanAdapter();
+    IndexSpi newSpi = newInMemoryAdapter();
     newSpi.build(next, config.metric());
 
     Generation newGen = new Generation(newSpi, newMapper, newMeta, newSize, 0L, null, null, null);
@@ -526,7 +585,9 @@ final class VectorCollectionImpl implements VectorCollection {
             (long) metadataBin.length,
             Checksums.ofBytes(metadataBin),
             (long) idmapBin.length,
-            Checksums.ofBytes(idmapBin));
+            Checksums.ofBytes(idmapBin),
+            0L,
+            0L);
 
     GenerationDirectory.WriteResult wr;
     try {
@@ -534,7 +595,7 @@ final class VectorCollectionImpl implements VectorCollection {
           GenerationDirectory.writeGeneration(
               config.storageRoot(),
               newGenNumber,
-              new BufferedGenerationSource(vectorsBin, idmapBin, metadataBin),
+              new BufferedGenerationSource(vectorsBin, idmapBin, metadataBin, null),
               manifest);
     } catch (IOException e) {
       // Write failed — the gen directory was not durably created (GenerationDirectory fsyncs and

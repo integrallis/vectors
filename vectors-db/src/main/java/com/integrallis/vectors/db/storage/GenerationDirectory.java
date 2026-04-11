@@ -1,5 +1,6 @@
 package com.integrallis.vectors.db.storage;
 
+import com.integrallis.vectors.db.IndexType;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -16,8 +17,10 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Orchestrates the on-disk write protocol for a single {@code vectors-db} collection: writing a new
@@ -36,11 +39,13 @@ import java.util.Objects;
  * <ol>
  *   <li>Create the in-flight tmp dir {@code .gen-NNNNNNNNNNNNNNNN.tmp/} under the collection root.
  *   <li>Invoke {@link GenerationSource} callbacks to materialize {@code vectors.bin}, {@code
- *       idmap.bin}, and {@code metadata.bin} inside the tmp dir. Each callback is expected to
- *       {@link FileChannel#force(boolean) fsync} its own file contents — the tmp dir directory
- *       entries are fsynced by this method.
+ *       idmap.bin}, and {@code metadata.bin} inside the tmp dir — plus {@code graph.bin} if the
+ *       manifest declares a graph index (currently {@link
+ *       com.integrallis.vectors.db.IndexType#HNSW}). Each callback is expected to {@link
+ *       FileChannel#force(boolean) fsync} its own file contents — the tmp dir directory entries are
+ *       fsynced by this method.
  *   <li>Write {@code manifest.bin} via {@link Manifest#writeTo(Path)} (which fsyncs the file).
- *   <li>Fsync the tmp dir so all four directory entries are durable.
+ *   <li>Fsync the tmp dir so every directory entry is durable.
  *   <li>Atomic rename {@code .gen-NNNN.tmp/ → gen-NNNN/}.
  *   <li>Fsync the collection root so the rename itself is durable.
  *   <li>Atomically publish {@code CURRENT} via {@link #writeCurrentAtomic(Path, long)} (write
@@ -101,6 +106,15 @@ import java.util.Objects;
  */
 public final class GenerationDirectory {
 
+  /**
+   * Index types that own an on-disk {@code graph.bin} payload. A {@link
+   * GenerationSource#writeGraph} callback is only invoked when {@code manifest.indexType()} is one
+   * of these. Adding a new graph-backed index (e.g. persistent Vamana in Step 4c) means extending
+   * this set and teaching the commit path to pass non-empty graph bytes through {@code
+   * BufferedGenerationSource}.
+   */
+  private static final Set<IndexType> GRAPH_INDEX_TYPES = EnumSet.of(IndexType.HNSW);
+
   private GenerationDirectory() {}
 
   // ---------------------------------------------------------------------------
@@ -111,17 +125,25 @@ public final class GenerationDirectory {
   // ---------------------------------------------------------------------------
 
   /**
-   * Strategy callback for writing a generation's three data files into an in-flight tmp dir. Each
+   * Strategy callback for writing a generation's data files into an in-flight tmp dir. Each
    * callback receives an absolute {@link Path} to the target file inside the tmp directory and is
    * responsible for writing the file contents and fsyncing the file data (for example via {@link
    * FileChannel#force(boolean) FileChannel.force(true)} or by closing a {@code VectorStoreWriter}
    * whose {@code ChannelOutput.flush()} calls {@link FileChannel#force(boolean) force(false)}). The
    * containing directory's own entries are fsynced later by {@link GenerationDirectory}.
    *
-   * <p>All three methods are invoked in a single call to {@link
-   * GenerationDirectory#writeGeneration(Path, long, GenerationSource, Manifest)}, in the order
-   * {@code vectors → idmap → metadata}. If any throws, the tmp directory is cleaned up before the
-   * exception propagates.
+   * <p>The three core methods ({@code writeVectors}, {@code writeIdmap}, {@code writeMetadata}) are
+   * invoked unconditionally in a single call to {@link GenerationDirectory#writeGeneration(Path,
+   * long, GenerationSource, Manifest)} in the order {@code vectors → idmap → metadata → graph}. The
+   * optional {@code writeGraph} callback is only invoked when the manifest's {@link
+   * Manifest#indexType() indexType} is a graph index (currently {@link
+   * com.integrallis.vectors.db.IndexType#HNSW}); for flat-scan generations it is skipped entirely
+   * and no {@code graph.bin} file is written. If any callback throws, the tmp directory is cleaned
+   * up before the exception propagates.
+   *
+   * <p>{@code writeGraph} defaults to a no-op so that existing flat-scan sources compile unchanged
+   * after the Step 4b interface extension. A graph-backed source overrides it to emit the encoded
+   * adjacency bytes (typically via {@code HnswGraphCodec.encode}).
    */
   public interface GenerationSource {
     /** Writes {@code vectors.bin} into the tmp dir at the given absolute path. */
@@ -132,6 +154,17 @@ public final class GenerationDirectory {
 
     /** Writes {@code metadata.bin} into the tmp dir at the given absolute path. */
     void writeMetadata(Path destination) throws IOException;
+
+    /**
+     * Writes {@code graph.bin} into the tmp dir at the given absolute path. Invoked by {@link
+     * GenerationDirectory#writeGeneration(Path, long, GenerationSource, Manifest)} iff the manifest
+     * declares a graph index type. The default implementation is a no-op so flat-scan sources need
+     * no override; graph-backed sources override to emit the encoded adjacency bytes.
+     */
+    default void writeGraph(Path destination) throws IOException {
+      // Default: no graph file. Flat-scan sources keep this default;
+      // graph sources override to emit graph.bin bytes.
+    }
   }
 
   /**
@@ -236,16 +269,22 @@ public final class GenerationDirectory {
 
     Files.createDirectory(tmpDir);
     try {
-      // 1. Write the three data files. The GenerationSource callbacks are expected to fsync
-      //    their own file contents. If any callback throws, we catch below and clean up.
+      // 1. Write the data files. The GenerationSource callbacks are expected to fsync their own
+      //    file contents. If any callback throws, we catch below and clean up. The graph.bin
+      //    callback is only invoked when the manifest declares a graph index (currently HNSW);
+      //    flat-scan generations leave no graph.bin entry on disk and the manifest's
+      //    graphBinLength field carries 0 as the authoritative "no graph" signal.
       source.writeVectors(tmpDir.resolve(FileFormat.VECTORS_FILE));
       source.writeIdmap(tmpDir.resolve(FileFormat.IDMAP_FILE));
       source.writeMetadata(tmpDir.resolve(FileFormat.METADATA_FILE));
+      if (GRAPH_INDEX_TYPES.contains(manifest.indexType())) {
+        source.writeGraph(tmpDir.resolve(FileFormat.GRAPH_FILE));
+      }
 
       // 2. Write manifest.bin (fsyncs itself via Manifest.writeTo).
       manifest.writeTo(tmpDir.resolve(FileFormat.MANIFEST_FILE));
 
-      // 3. Fsync the tmp dir so the four directory entries are durable before the rename.
+      // 3. Fsync the tmp dir so the directory entries are durable before the rename.
       fsyncDirectory(tmpDir);
     } catch (Exception e) {
       // Best-effort cleanup of the partially-populated tmp dir. Suppress secondary failures so

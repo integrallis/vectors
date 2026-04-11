@@ -36,20 +36,30 @@ public final class FileFormat {
   /** Magic for {@code metadata.bin}. Raw bytes spell {@code "VMDB"} (Vector MetaData Bin). */
   public static final int MAGIC_METADATA = 0x42444D56; // 'V' 'M' 'D' 'B' little-endian
 
+  /** Magic for {@code graph.bin}. Raw bytes spell {@code "VGPH"} (Vector GraPH). */
+  public static final int MAGIC_GRAPH = 0x48504756; // 'V' 'G' 'P' 'H' little-endian
+
   // ---------------------------------------------------------------------------
   // Format versions — bumped whenever the on-disk layout changes in a
   // backward-incompatible way. Readers refuse files whose version they don't
   // recognize rather than silently interpreting garbage.
   // ---------------------------------------------------------------------------
 
-  /** Current manifest format version. */
-  public static final int VERSION_MANIFEST = 1;
+  /**
+   * Current manifest format version. Bumped to 2 in Step 4b: the header grew by 16 bytes to store
+   * {@code graphBinLength} + {@code graphBinCrc32} for the new {@code graph.bin} file. Readers
+   * refuse v1 files; there is no on-disk compat shim because {@code vectors-db} is unreleased.
+   */
+  public static final int VERSION_MANIFEST = 2;
 
   /** Current idmap format version. */
   public static final int VERSION_IDMAP = 1;
 
   /** Current metadata format version. */
   public static final int VERSION_METADATA = 1;
+
+  /** Current graph.bin format version. */
+  public static final int VERSION_GRAPH = 1;
 
   // ---------------------------------------------------------------------------
   // Directory protocol constants.
@@ -96,6 +106,13 @@ public final class FileFormat {
 
   /** File name of the manifest file inside every generation directory. */
   public static final String MANIFEST_FILE = "manifest.bin";
+
+  /**
+   * File name of the HNSW graph topology file inside a generation directory. Only present when the
+   * collection's {@code indexType} is {@link com.integrallis.vectors.db.IndexType#HNSW}; FLAT
+   * generations omit the file entirely and the Manifest reports {@code graphBinLength == 0}.
+   */
+  public static final String GRAPH_FILE = "graph.bin";
 
   /**
    * Fixed header size in bytes used by both {@link

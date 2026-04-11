@@ -96,8 +96,14 @@ public final class HnswGraph {
   /**
    * Initializes a node at the given level, allocating neighbor arrays for layer 0 through the given
    * level. Expands upper layer storage as needed.
+   *
+   * <p>This method is public so that persistent-snapshot deserialization paths (e.g. {@code
+   * com.integrallis.vectors.db.storage.HnswGraphCodec}) can reconstruct a graph from bytes. The
+   * normal build path — {@link HnswGraphBuilder} — calls this during Algorithm 1 insertion.
+   * External callers that bypass the builder are responsible for populating the resulting neighbor
+   * arrays in descending score order and calling {@link #setEntryNode(int, int)} exactly once.
    */
-  void initNode(int nodeId, int level) {
+  public void initNode(int nodeId, int level) {
     nodeLevels[nodeId] = level;
     // +1 capacity for temporary overflow during backlink insertion before diversity pruning
     layer0[nodeId] = new NeighborArray(maxConnections0 + 1);
@@ -118,8 +124,11 @@ public final class HnswGraph {
    * Updates the entry node. {@code maxLevel} is only raised, never lowered: the entry node is
    * always the node with the highest level seen so far, and {@code maxLevel} represents the global
    * peak of the graph.
+   *
+   * <p>This method is public so that persistent-snapshot deserialization paths (e.g. {@code
+   * com.integrallis.vectors.db.storage.HnswGraphCodec}) can reconstruct a graph from bytes.
    */
-  void setEntryNode(int nodeId, int level) {
+  public void setEntryNode(int nodeId, int level) {
     this.entryNode = nodeId;
     this.maxLevel = Math.max(this.maxLevel, level);
   }
