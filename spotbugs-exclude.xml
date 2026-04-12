@@ -100,6 +100,33 @@
         <Class name="com.integrallis.vectors.vamana.RandomAccessVectorDataset"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Quantization module: serialization accessors and public constructors intentionally
+         expose/store internal array references for zero-copy codec round-trip. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.quantization.RandomRotation"/>
+            <Class name="com.integrallis.vectors.quantization.GivensRotation"/>
+            <Class name="com.integrallis.vectors.quantization.QuaternionRotation"/>
+            <Class name="com.integrallis.vectors.quantization.ProductQuantizer"/>
+            <Class name="com.integrallis.vectors.quantization.BinaryQuantizer"/>
+            <Class name="com.integrallis.vectors.quantization.RaBitQuantizer"/>
+            <Class name="com.integrallis.vectors.quantization.NVQuantizer"/>
+        </Or>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.quantization.ScalarQuantizedVectors"/>
+            <Class name="com.integrallis.vectors.quantization.PQVectors"/>
+            <Class name="com.integrallis.vectors.quantization.BinaryQuantizedVectors"/>
+            <Class name="com.integrallis.vectors.quantization.RaBitQuantizedVectors"/>
+            <Class name="com.integrallis.vectors.quantization.NVQuantizedVectors"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+            <Bug pattern="EI_EXPOSE_REP"/>
+        </Or>
+    </Match>
     <!-- vectors-db: public records intentionally expose internal array references -->
     <Match>
         <Class name="com.integrallis.vectors.db.Document"/>
@@ -170,6 +197,15 @@
     <Match>
         <Class name="com.integrallis.vectors.bench.RecallUtil"/>
         <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <!-- vectors-db: VectorCollectionImpl.openGeneration intentionally catches Exception
+         (not just IOException) so that arena.close() fires even on unchecked exceptions
+         like ArithmeticException from Math.toIntExact. The broad catch is a resource-safety
+         net, not a control-flow mechanism. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.VectorCollectionImpl"/>
+        <Method name="openGeneration"/>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
     </Match>
 
 </FindBugsFilter>

@@ -43,9 +43,10 @@ import java.util.logging.Logger;
  *   <li>Invoke {@link GenerationSource} callbacks to materialize {@code vectors.bin}, {@code
  *       idmap.bin}, and {@code metadata.bin} inside the tmp dir — plus {@code graph.bin} if the
  *       manifest declares a graph index ({@link com.integrallis.vectors.db.IndexType#HNSW} or
- *       {@link com.integrallis.vectors.db.IndexType#VAMANA}). Each callback is expected to {@link
- *       FileChannel#force(boolean) fsync} its own file contents — the tmp dir directory entries are
- *       fsynced by this method.
+ *       {@link com.integrallis.vectors.db.IndexType#VAMANA}), and {@code quantized.bin} if the
+ *       manifest's {@link Manifest#quantizedBinLength()} is positive. Each callback is expected to
+ *       {@link FileChannel#force(boolean) fsync} its own file contents — the tmp dir directory
+ *       entries are fsynced by this method.
  *   <li>Write {@code manifest.bin} via {@link Manifest#writeTo(Path)} (which fsyncs the file).
  *   <li>Fsync the tmp dir so every directory entry is durable.
  *   <li>Atomic rename {@code .gen-NNNN.tmp/ → gen-NNNN/}.
@@ -66,7 +67,8 @@ import java.util.logging.Logger;
  *   <li>Deletes {@code CURRENT.tmp} if present (partial CURRENT write).
  *   <li>If {@code CURRENT} exists and points at a {@code gen-NNNN/} whose manifest validates AND
  *       every payload file ({@code vectors.bin}, {@code idmap.bin}, {@code metadata.bin}, {@code
- *       graph.bin}) matches the per-file CRC stored in the manifest, opens that generation.
+ *       graph.bin}, {@code quantized.bin}) matches the per-file CRC stored in the manifest, opens
+ *       that generation.
  *   <li>If {@code CURRENT} is missing, or its target has a corrupt manifest, or its target has any
  *       corrupt payload file, scans for the newest {@code gen-NNNN/} (by generation number,
  *       descending) whose manifest AND every payload file validates, and rewrites {@code CURRENT}
@@ -150,18 +152,22 @@ public final class GenerationDirectory {
    *
    * <p>The three core methods ({@code writeVectors}, {@code writeIdmap}, {@code writeMetadata}) are
    * invoked unconditionally in a single call to {@link GenerationDirectory#writeGeneration(Path,
-   * long, GenerationSource, Manifest)} in the order {@code vectors → idmap → metadata → graph}. The
-   * optional {@code writeGraph} callback is only invoked when the manifest's {@link
+   * long, GenerationSource, Manifest)} in the order {@code vectors → idmap → metadata → graph →
+   * quantized}. The optional {@code writeGraph} callback is only invoked when the manifest's {@link
    * Manifest#indexType() indexType} is a graph index ({@link
    * com.integrallis.vectors.db.IndexType#HNSW} or {@link
    * com.integrallis.vectors.db.IndexType#VAMANA}); for flat-scan generations it is skipped entirely
-   * and no {@code graph.bin} file is written. If any callback throws, the tmp directory is cleaned
-   * up before the exception propagates.
+   * and no {@code graph.bin} file is written. The optional {@code writeQuantized} callback is only
+   * invoked when the manifest's {@link Manifest#quantizedBinLength()} is positive; non-quantized
+   * generations skip it and no {@code quantized.bin} file is written. If any callback throws, the
+   * tmp directory is cleaned up before the exception propagates.
    *
-   * <p>{@code writeGraph} defaults to a no-op so that existing flat-scan sources compile unchanged
-   * after the Step 4b interface extension. A graph-backed source overrides it to emit the encoded
-   * adjacency bytes (typically via {@code HnswGraphCodec.encode} or {@code
-   * VamanaGraphCodec.encode}).
+   * <p>{@code writeGraph} and {@code writeQuantized} default to no-ops so that existing flat-scan
+   * sources and non-quantized sources compile unchanged after the Step 4b/4d interface extensions.
+   * A graph-backed source overrides {@code writeGraph} to emit the encoded adjacency bytes
+   * (typically via {@code HnswGraphCodec.encode} or {@code VamanaGraphCodec.encode}); a
+   * quantization-enabled source overrides {@code writeQuantized} to emit the encoded compressed
+   * vectors (via {@code QuantizedVectorsCodec.encode}).
    */
   public interface GenerationSource {
     /** Writes {@code vectors.bin} into the tmp dir at the given absolute path. */
@@ -182,6 +188,18 @@ public final class GenerationDirectory {
     default void writeGraph(Path destination) throws IOException {
       // Default: no graph file. Flat-scan sources keep this default;
       // graph sources override to emit graph.bin bytes.
+    }
+
+    /**
+     * Writes {@code quantized.bin} into the tmp dir at the given absolute path. Invoked by {@link
+     * GenerationDirectory#writeGeneration(Path, long, GenerationSource, Manifest)} iff the
+     * manifest's {@link Manifest#quantizedBinLength()} is positive. The default implementation is a
+     * no-op so non-quantized sources need no override; quantization-enabled sources override to
+     * emit the encoded compressed vectors (typically via {@link QuantizedVectorsCodec#encode}).
+     */
+    default void writeQuantized(Path destination) throws IOException {
+      // Default: no quantized file. Non-quantized sources keep this default;
+      // quantized sources override to emit quantized.bin bytes.
     }
   }
 
@@ -302,6 +320,12 @@ public final class GenerationDirectory {
       // VAMANA generation is indistinguishable from a FLAT one.
       if (GRAPH_INDEX_TYPES.contains(manifest.indexType()) && manifest.graphBinLength() > 0L) {
         source.writeGraph(tmpDir.resolve(FileFormat.GRAPH_FILE));
+      }
+      // Quantized compressed vectors — only when the manifest records a non-zero quantized payload.
+      // Non-quantized generations (quantizedBinLength == 0) skip this entirely, matching the
+      // pattern used for graph.bin above.
+      if (manifest.quantizedBinLength() > 0L) {
+        source.writeQuantized(tmpDir.resolve(FileFormat.QUANTIZED_FILE));
       }
 
       // 2. Write manifest.bin (fsyncs itself via Manifest.writeTo).
@@ -600,6 +624,10 @@ public final class GenerationDirectory {
           genDir.resolve(FileFormat.GRAPH_FILE),
           manifest.graphBinLength(),
           manifest.graphBinCrc32());
+      verifyOneFile(
+          genDir.resolve(FileFormat.QUANTIZED_FILE),
+          manifest.quantizedBinLength(),
+          manifest.quantizedBinCrc32());
       return true;
     } catch (IOException e) {
       LOGGER.log(

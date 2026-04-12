@@ -23,7 +23,16 @@ public final class NVQuantizedVectors implements CompressedVectors {
   private final float[][] subvectorMetadata; // [size][numSubvectors * 4]
   private final int dimension;
 
-  NVQuantizedVectors(
+  /**
+   * Constructs a {@code NVQuantizedVectors} from pre-encoded quantized data. Public for
+   * cross-module construction by deserialization codecs.
+   *
+   * @param quantizer the NVQ quantizer that produced these vectors
+   * @param quantizedBytes per-vector quantized uint8 bytes
+   * @param subvectorMetadata per-vector per-subvector metadata (alpha, x0, min, max)
+   * @param dimension the original vector dimension
+   */
+  public NVQuantizedVectors(
       NVQuantizer quantizer, byte[][] quantizedBytes, float[][] subvectorMetadata, int dimension) {
     this.quantizer = quantizer;
     this.quantizedBytes = quantizedBytes;

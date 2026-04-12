@@ -9,10 +9,11 @@ import java.nio.file.Path;
  * <p>Required settings: {@link #dimension(int)} and {@link #metric(SimilarityFunction)}. {@link
  * #build()} throws {@link IllegalStateException} if either is unset.
  *
- * <p>Step 4c supports {@link IndexType#FLAT}, {@link IndexType#HNSW}, and {@link IndexType#VAMANA}
- * with {@link QuantizerKind#NONE} in either in-memory mode (no {@link #storagePath(Path)}) or
- * persistent mmap-backed mode (absolute {@code storagePath}). Non-{@link QuantizerKind#NONE}
- * quantizers are deferred to Step 4d.
+ * <p>Step 4d supports {@link IndexType#FLAT}, {@link IndexType#HNSW}, and {@link IndexType#VAMANA}
+ * with all {@link QuantizerKind} values in either in-memory mode (no {@link #storagePath(Path)}) or
+ * persistent mmap-backed mode (absolute {@code storagePath}). {@link IndexType#FLAT} combined with
+ * a non-{@link QuantizerKind#NONE} quantizer throws {@link UnsupportedOperationException} because
+ * quantization for flat-scan requires further design discussion.
  */
 public final class VectorCollectionBuilder {
 
@@ -33,6 +34,12 @@ public final class VectorCollectionBuilder {
   /** Vamana {@code alpha} parameter default. Matches the VamanaIndex.Builder default. */
   public static final float DEFAULT_VAMANA_ALPHA = 1.2f;
 
+  /** Default PQ number of clusters per subspace. */
+  public static final int DEFAULT_PQ_CLUSTERS = 256;
+
+  /** Default RaBitQ random seed. */
+  public static final long DEFAULT_RABIT_SEED = 42L;
+
   private Integer dimension;
   private SimilarityFunction metric;
   private IndexType indexType = IndexType.FLAT;
@@ -45,6 +52,14 @@ public final class VectorCollectionBuilder {
   private int vamanaSearchListSize = DEFAULT_VAMANA_L;
   private float vamanaAlpha = DEFAULT_VAMANA_ALPHA;
   private Long vamanaSeed; // lazily filled with System.nanoTime() at build() time if unset
+
+  // Quantizer-specific params (all nullable — null means "use defaults")
+  private Integer pqSubspaces;
+  private Integer pqClusters;
+  private Boolean pqCenter;
+  private Boolean bqBbq;
+  private Long rabitSeed;
+  private Integer nvqSubvectors;
 
   VectorCollectionBuilder() {}
 
@@ -67,7 +82,7 @@ public final class VectorCollectionBuilder {
   }
 
   /**
-   * Selects the index backend. Step 4c supports {@link IndexType#FLAT}, {@link IndexType#HNSW}, and
+   * Selects the index backend. Step 4d supports {@link IndexType#FLAT}, {@link IndexType#HNSW}, and
    * {@link IndexType#VAMANA}.
    */
   public VectorCollectionBuilder indexType(IndexType indexType) {
@@ -78,7 +93,7 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
-  /** Selects the quantizer. Step 4c only supports {@link QuantizerKind#NONE}. */
+  /** Selects the quantizer. Step 4d supports all {@link QuantizerKind} values. */
   public VectorCollectionBuilder quantizer(QuantizerKind quantizerKind) {
     if (quantizerKind == null) {
       throw new IllegalArgumentException("quantizerKind must not be null");
@@ -178,6 +193,79 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
+  // ---------------------------------------------------------------------------
+  // Quantizer-specific parameter setters
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Sets the PQ number of subspaces (M). Only used when {@link #quantizer(QuantizerKind)} is {@link
+   * QuantizerKind#PQ}. Must be positive and must evenly divide the vector dimension. Default:
+   * {@code max(1, dimension / 8)}.
+   */
+  public VectorCollectionBuilder pqSubspaces(int numSubspaces) {
+    if (numSubspaces <= 0) {
+      throw new IllegalArgumentException("numSubspaces must be positive: " + numSubspaces);
+    }
+    this.pqSubspaces = numSubspaces;
+    return this;
+  }
+
+  /**
+   * Sets the PQ number of clusters per subspace (Ks). Only used when {@link
+   * #quantizer(QuantizerKind)} is {@link QuantizerKind#PQ}. Must be in [2, 256]. Default: {@value
+   * #DEFAULT_PQ_CLUSTERS}.
+   */
+  public VectorCollectionBuilder pqClusters(int numClusters) {
+    if (numClusters < 2 || numClusters > 256) {
+      throw new IllegalArgumentException("numClusters must be in [2, 256]: " + numClusters);
+    }
+    this.pqClusters = numClusters;
+    return this;
+  }
+
+  /**
+   * Sets whether PQ subtracts a global centroid before quantization. Only used when {@link
+   * #quantizer(QuantizerKind)} is {@link QuantizerKind#PQ}. Default: true.
+   */
+  public VectorCollectionBuilder pqCenter(boolean center) {
+    this.pqCenter = center;
+    return this;
+  }
+
+  /**
+   * Sets the BQ mode. Only used when {@link #quantizer(QuantizerKind)} is {@link QuantizerKind#BQ}.
+   * Pass {@code true} for BBQ (Better Binary Quantization — computes a centroid and per-vector
+   * corrections for asymmetric distance estimation), or {@code false} for plain sign-bit mode.
+   * Default: true (BBQ is strictly more accurate).
+   */
+  public VectorCollectionBuilder bqMode(boolean bbq) {
+    this.bqBbq = bbq;
+    return this;
+  }
+
+  /**
+   * Sets the random seed for RaBitQ's rotation matrix. Only used when {@link
+   * #quantizer(QuantizerKind)} is {@link QuantizerKind#RABITQ}. Default: {@value
+   * #DEFAULT_RABIT_SEED}.
+   */
+  public VectorCollectionBuilder rabitSeed(long seed) {
+    this.rabitSeed = seed;
+    return this;
+  }
+
+  /**
+   * Sets the NVQ number of subvectors (M). Only used when {@link #quantizer(QuantizerKind)} is
+   * {@link QuantizerKind#NVQ}. Must be positive and must evenly divide the vector dimension.
+   * Default: {@code max(1, dimension / 4)}.
+   */
+  public VectorCollectionBuilder nvqSubvectors(int numSubvectors) {
+    if (numSubvectors <= 0) {
+      throw new IllegalArgumentException("numSubvectors must be positive: " + numSubvectors);
+    }
+    this.nvqSubvectors = numSubvectors;
+    return this;
+  }
+
   /**
    * Sets the staging buffer size at which {@code add}/{@code addAll} auto-commit before returning.
    * Must be positive. Pass {@link Integer#MAX_VALUE} to disable auto-commit (the default), which
@@ -208,7 +296,7 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
-  /** Builds the collection. Applies Step 4c restrictions on backend and quantizer. */
+  /** Builds the collection. Applies Step 4d restrictions on backend and quantizer. */
   public VectorCollection build() {
     if (dimension == null) {
       throw new IllegalStateException("dimension is required, call builder.dimension(d)");
@@ -222,12 +310,16 @@ public final class VectorCollectionBuilder {
               + " working directory): "
               + storageRoot);
     }
-    if (quantizerKind != QuantizerKind.NONE) {
+    // FLAT + quantization is blocked — quantization makes sense for graph traversal (coarse
+    // pruning then full-precision rescore), not brute-force scan. A future step may unblock this
+    // for the compressed-storage use case.
+    if (indexType == IndexType.FLAT && quantizerKind != QuantizerKind.NONE) {
       throw new UnsupportedOperationException(
-          "quantizerKind "
+          "FLAT index with quantizerKind "
               + quantizerKind
-              + " deferred to a later step (Step 4c only supports QuantizerKind.NONE)");
+              + " is not supported — quantization requires a graph index (HNSW or VAMANA)");
     }
+
     VectorCollectionConfig.HnswParams hnswParams =
         (indexType == IndexType.HNSW)
             ? new VectorCollectionConfig.HnswParams(hnswM, hnswEfConstruction)
@@ -240,6 +332,7 @@ public final class VectorCollectionBuilder {
                 vamanaAlpha,
                 vamanaSeed != null ? vamanaSeed : System.nanoTime())
             : null;
+    QuantizerParams quantizerParams = buildQuantizerParams();
     var config =
         new VectorCollectionConfig(
             dimension,
@@ -249,7 +342,31 @@ public final class VectorCollectionBuilder {
             autoCommitThreshold,
             storageRoot,
             hnswParams,
-            vamanaParams);
+            vamanaParams,
+            quantizerParams);
     return new VectorCollectionImpl(config);
+  }
+
+  /**
+   * Builds the {@link QuantizerParams} record appropriate for the current {@link #quantizerKind},
+   * applying defaults for any unset parameters. Returns {@code null} for {@link
+   * QuantizerKind#NONE}.
+   */
+  private QuantizerParams buildQuantizerParams() {
+    return switch (quantizerKind) {
+      case NONE -> null;
+      case SQ8, SQ4 -> new QuantizerParams.ScalarParams();
+      case PQ ->
+          new QuantizerParams.PqParams(
+              pqSubspaces != null ? pqSubspaces : Math.max(1, dimension / 8),
+              pqClusters != null ? pqClusters : DEFAULT_PQ_CLUSTERS,
+              pqCenter != null ? pqCenter : true);
+      case BQ -> new QuantizerParams.BqParams(bqBbq != null ? bqBbq : true);
+      case RABITQ ->
+          new QuantizerParams.RaBitParams(rabitSeed != null ? rabitSeed : DEFAULT_RABIT_SEED);
+      case NVQ ->
+          new QuantizerParams.NvqParams(
+              nvqSubvectors != null ? nvqSubvectors : Math.max(1, dimension / 4));
+    };
   }
 }

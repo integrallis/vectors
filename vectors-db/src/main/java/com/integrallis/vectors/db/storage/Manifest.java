@@ -18,15 +18,15 @@ import java.util.Objects;
  * offset so a reader can decide whether the generation is intact by reading exactly {@link
  * #HEADER_SIZE} bytes and validating the self-CRC — no heap allocation, no schema parsing.
  *
- * <p>Layout (little-endian throughout, version 2 — added {@code graph.bin} length + CRC slots in
- * Step 4b for persistent HNSW support):
+ * <p>Layout (little-endian throughout, version 3 — added {@code quantized.bin} length + CRC slots
+ * in Step 4d for persistent quantization support):
  *
  * <pre>
  * Offset  Size  Field                       Notes
  * ------  ----  --------------------------  --------------------------------
  *   0      4    magic                       FileFormat.MAGIC_MANIFEST
- *   4      4    format version              FileFormat.VERSION_MANIFEST (= 2)
- *   8      4    header length               bytes from offset 0 to end of header (= 124)
+ *   4      4    format version              FileFormat.VERSION_MANIFEST (= 3)
+ *   8      4    header length               bytes from offset 0 to end of header (= 140)
  *  12      4    flags                        reserved, must be 0
  *  16      4    dimension                   vector dimension
  *  20      4    metric ordinal              SimilarityFunction.ordinal()
@@ -43,9 +43,11 @@ import java.util.Objects;
  *  96      8    idmap.bin CRC32             uint32 zero-extended (see note)
  * 104      8    graph.bin length            int64 (0 if no graph file written)
  * 112      8    graph.bin CRC32             uint32 zero-extended, 0 if no graph file
- * 120      4    self CRC32                  CRC32 over bytes [0, 120)
+ * 120      8    quantized.bin length        int64 (0 if no quantized file written)
+ * 128      8    quantized.bin CRC32         uint32 zero-extended, 0 if no quantized file
+ * 136      4    self CRC32                  CRC32 over bytes [0, 136)
  * ------  ----  --------------------------
- * 124      -    (future extension area — version bump required to grow)
+ * 140      -    (future extension area — version bump required to grow)
  * </pre>
  *
  * <p><b>CRC width asymmetry.</b> The per-file CRCs each occupy 8 bytes on disk even though the
@@ -76,13 +78,15 @@ public record Manifest(
     long idmapBinLength,
     long idmapBinCrc32,
     long graphBinLength,
-    long graphBinCrc32) {
+    long graphBinCrc32,
+    long quantizedBinLength,
+    long quantizedBinCrc32) {
 
   /** Total fixed header size on disk, including the self CRC. */
-  public static final int HEADER_SIZE = 124;
+  public static final int HEADER_SIZE = 140;
 
   /** Offset in bytes at which the self-CRC32 word lives. */
-  public static final int SELF_CRC_OFFSET = 120;
+  public static final int SELF_CRC_OFFSET = 136;
 
   public Manifest {
     if (dimension <= 0) {
@@ -100,7 +104,11 @@ public record Manifest(
     if (liveCount < 0) {
       throw new IllegalArgumentException("liveCount must be >= 0: " + liveCount);
     }
-    if (vectorsBinLength < 0 || metadataBinLength < 0 || idmapBinLength < 0 || graphBinLength < 0) {
+    if (vectorsBinLength < 0
+        || metadataBinLength < 0
+        || idmapBinLength < 0
+        || graphBinLength < 0
+        || quantizedBinLength < 0) {
       throw new IllegalArgumentException("file lengths must be >= 0");
     }
   }
@@ -123,7 +131,9 @@ public record Manifest(
       long idmapBinLength,
       long idmapBinCrc32,
       long graphBinLength,
-      long graphBinCrc32) {
+      long graphBinCrc32,
+      long quantizedBinLength,
+      long quantizedBinCrc32) {
     return build(
         config,
         generationNumber,
@@ -136,7 +146,9 @@ public record Manifest(
         idmapBinLength,
         idmapBinCrc32,
         graphBinLength,
-        graphBinCrc32);
+        graphBinCrc32,
+        quantizedBinLength,
+        quantizedBinCrc32);
   }
 
   /**
@@ -156,7 +168,9 @@ public record Manifest(
       long idmapBinLength,
       long idmapBinCrc32,
       long graphBinLength,
-      long graphBinCrc32) {
+      long graphBinCrc32,
+      long quantizedBinLength,
+      long quantizedBinCrc32) {
     return new Manifest(
         config.dimension(),
         config.metric(),
@@ -172,7 +186,9 @@ public record Manifest(
         idmapBinLength,
         idmapBinCrc32,
         graphBinLength,
-        graphBinCrc32);
+        graphBinCrc32,
+        quantizedBinLength,
+        quantizedBinCrc32);
   }
 
   /**
@@ -201,6 +217,8 @@ public record Manifest(
     buf.putLong(idmapBinCrc32);
     buf.putLong(graphBinLength);
     buf.putLong(graphBinCrc32);
+    buf.putLong(quantizedBinLength);
+    buf.putLong(quantizedBinCrc32);
     // Self-CRC over bytes [0, SELF_CRC_OFFSET).
     long selfCrc = Checksums.ofBytes(out, 0, SELF_CRC_OFFSET);
     buf.putInt((int) selfCrc);
@@ -241,7 +259,7 @@ public record Manifest(
     }
     int flags = buf.getInt();
     if (flags != 0) {
-      throw new IOException("Manifest flags must be 0 in version 2, got " + flags);
+      throw new IOException("Manifest flags must be 0 in version 3, got " + flags);
     }
 
     int dimension = buf.getInt();
@@ -259,6 +277,8 @@ public record Manifest(
     long idmapBinCrc32 = buf.getLong();
     long graphBinLength = buf.getLong();
     long graphBinCrc32 = buf.getLong();
+    long quantizedBinLength = buf.getLong();
+    long quantizedBinCrc32 = buf.getLong();
     int selfCrc = buf.getInt();
 
     long expectedSelfCrc = Checksums.ofBytes(bytes, 0, SELF_CRC_OFFSET);
@@ -290,7 +310,9 @@ public record Manifest(
         idmapBinLength,
         idmapBinCrc32,
         graphBinLength,
-        graphBinCrc32);
+        graphBinCrc32,
+        quantizedBinLength,
+        quantizedBinCrc32);
   }
 
   /**

@@ -4,6 +4,7 @@ import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.hnsw.HnswIndex;
 import com.integrallis.vectors.hnsw.SearchResult;
+import com.integrallis.vectors.quantization.CompressedVectors;
 import java.util.Objects;
 
 /**
@@ -97,10 +98,16 @@ public final class HnswIndexAdapter implements IndexSpi {
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
     // efSearch must be >= k (HnswSearcher contract). searchListSize is the caller-supplied beam
-    // width hint — we honor it but clamp to the floor of k. overQueryFactor is ignored on the
-    // single-pass full-precision path; the two-pass path is reserved for when quantization lands.
+    // width hint — we honor it but clamp to the floor of k.
     int efSearch = Math.max(searchListSize, k);
-    SearchResult result = index.search(query, k, efSearch);
+    SearchResult result;
+    if (overQueryFactor > 1.0f && index.isQuantizationEnabled()) {
+      // Two-pass: coarse quantized pass + full-precision rescore.
+      result = index.searchTwoPass(query, k, efSearch, overQueryFactor);
+    } else {
+      // Single-pass full-precision search.
+      result = index.search(query, k, efSearch);
+    }
     // Defensive clone — SearchResult arrays are documented as "must not be mutated", but the
     // SearchOutcome contract does not constrain its ordinals/scores, and downstream callers
     // (post-filter, rescore) may mutate them in-place.
@@ -115,6 +122,22 @@ public final class HnswIndexAdapter implements IndexSpi {
   @Override
   public void close() {
     // No resources to release — the underlying HnswIndex holds only on-heap state.
+  }
+
+  /**
+   * Attaches compressed vectors for two-pass quantized search. When active, {@link #search} with
+   * {@code overQueryFactor > 1.0f} delegates to {@link HnswIndex#searchTwoPass}, which runs a
+   * coarse quantized first pass followed by a full-precision rescore on the top candidates.
+   *
+   * @param compressed the compressed vectors produced by a quantizer's {@code encodeAll}
+   * @throws IllegalStateException if this adapter has not been built yet
+   */
+  public void enableQuantization(CompressedVectors compressed) {
+    Objects.requireNonNull(compressed, "compressed must not be null");
+    if (index == null) {
+      throw new IllegalStateException("Cannot enable quantization on an unbuilt or empty adapter");
+    }
+    index.enableQuantization(compressed);
   }
 
   /**

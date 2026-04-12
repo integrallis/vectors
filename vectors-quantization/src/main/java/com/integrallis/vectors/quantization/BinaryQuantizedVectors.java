@@ -26,7 +26,16 @@ public final class BinaryQuantizedVectors implements CompressedVectors {
   private final float[][] corrections; // null for SIGN_BIT; [size][3] for BBQ
   private final int dimension;
 
-  BinaryQuantizedVectors(
+  /**
+   * Constructs a {@code BinaryQuantizedVectors} from pre-encoded binary codes. Public for
+   * cross-module construction by deserialization codecs.
+   *
+   * @param quantizer the binary quantizer that produced these codes
+   * @param codes per-vector binary codes as packed longs
+   * @param corrections per-vector corrections (null for SIGN_BIT, [size][3] for BBQ)
+   * @param dimension the original vector dimension
+   */
+  public BinaryQuantizedVectors(
       BinaryQuantizer quantizer, long[][] codes, float[][] corrections, int dimension) {
     this.quantizer = quantizer;
     this.codes = codes;

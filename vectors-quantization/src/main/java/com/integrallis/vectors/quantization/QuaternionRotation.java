@@ -147,6 +147,39 @@ public final class QuaternionRotation implements Rotation {
     return result;
   }
 
+  /**
+   * Reconstructs a {@code QuaternionRotation} from previously serialized quaternion pairs. Used by
+   * deserialization codecs to restore a trained rotation without re-generating random quaternions.
+   *
+   * @param dimension the vector dimension (must be >= 4)
+   * @param qL left quaternions, shape [numBlocks][4] where numBlocks = dimension/4
+   * @param qR right quaternions, shape [numBlocks][4]
+   * @return a reconstructed quaternion rotation
+   * @throws IllegalArgumentException if dimension < 4 or array shapes don't match
+   */
+  public static QuaternionRotation fromQuaternions(int dimension, float[][] qL, float[][] qR) {
+    if (dimension < 4) {
+      throw new IllegalArgumentException(
+          "QuaternionRotation requires dimension >= 4, got " + dimension);
+    }
+    int expectedBlocks = dimension / 4;
+    if (qL.length != expectedBlocks || qR.length != expectedBlocks) {
+      throw new IllegalArgumentException(
+          "qL/qR arrays must have length " + expectedBlocks + " (dimension/4)");
+    }
+    return new QuaternionRotation(qL, qR, dimension);
+  }
+
+  /** Returns the left quaternions for each 4D block, shape [numBlocks][4]. */
+  public float[][] qL() {
+    return qL;
+  }
+
+  /** Returns the right quaternions for each 4D block, shape [numBlocks][4]. */
+  public float[][] qR() {
+    return qR;
+  }
+
   @Override
   public int dimension() {
     return dimension;

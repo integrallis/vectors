@@ -40,7 +40,9 @@ class ManifestTest {
         /* idmapBinLength */ 45_000L,
         /* idmapBinCrc32 */ 0x87654321L,
         /* graphBinLength */ 131_072L,
-        /* graphBinCrc32 */ 0xCAFEBABEL);
+        /* graphBinCrc32 */ 0xCAFEBABEL,
+        /* quantizedBinLength */ 0L,
+        /* quantizedBinCrc32 */ 0L);
   }
 
   @Nested
@@ -85,6 +87,8 @@ class ManifestTest {
       assertThat(decoded.idmapBinCrc32()).isEqualTo(0x87654321L);
       assertThat(decoded.graphBinLength()).isEqualTo(131_072L);
       assertThat(decoded.graphBinCrc32()).isEqualTo(0xCAFEBABEL);
+      assertThat(decoded.quantizedBinLength()).isEqualTo(0L);
+      assertThat(decoded.quantizedBinCrc32()).isEqualTo(0L);
       // createdEpochMillis is populated at build() time; just assert non-zero.
       assertThat(decoded.createdEpochMillis()).isPositive();
     }
@@ -106,7 +110,7 @@ class ManifestTest {
         VectorCollectionConfig config =
             new VectorCollectionConfig(
                 64, metric, IndexType.FLAT, QuantizerKind.NONE, Integer.MAX_VALUE);
-        Manifest m = Manifest.build(config, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
+        Manifest m = Manifest.build(config, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
         assertThat(Manifest.fromBytes(m.toBytes()).metric()).isEqualTo(metric);
       }
     }
@@ -117,7 +121,8 @@ class ManifestTest {
           new VectorCollectionConfig(
               32, SimilarityFunction.COSINE, IndexType.FLAT, QuantizerKind.NONE, Integer.MAX_VALUE);
       long fixedClock = 1_700_000_000_000L;
-      Manifest m = Manifest.build(config, 7L, fixedClock, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
+      Manifest m =
+          Manifest.build(config, 7L, fixedClock, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
       assertThat(m.createdEpochMillis()).isEqualTo(fixedClock);
       Manifest decoded = Manifest.fromBytes(m.toBytes());
       assertThat(decoded.createdEpochMillis()).isEqualTo(fixedClock);
@@ -236,6 +241,8 @@ class ManifestTest {
                       0L,
                       0L,
                       0L,
+                      0L,
+                      0L,
                       0L));
     }
 
@@ -250,6 +257,8 @@ class ManifestTest {
                       IndexType.FLAT,
                       QuantizerKind.NONE,
                       -1L,
+                      0L,
+                      0L,
                       0L,
                       0L,
                       0L,
@@ -282,6 +291,8 @@ class ManifestTest {
                       0L,
                       0L,
                       0L,
+                      0L,
+                      0L,
                       0L));
     }
 
@@ -305,6 +316,8 @@ class ManifestTest {
                       0L,
                       0L,
                       0L,
+                      0L,
+                      0L,
                       0L));
     }
 
@@ -318,6 +331,33 @@ class ManifestTest {
                       SimilarityFunction.DOT_PRODUCT,
                       IndexType.FLAT,
                       QuantizerKind.NONE,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      -1L,
+                      0L,
+                      0L,
+                      0L));
+    }
+
+    @Test
+    void negativeQuantizedBinLengthRejected() {
+      assertThatIllegalArgumentException()
+          .isThrownBy(
+              () ->
+                  new Manifest(
+                      64,
+                      SimilarityFunction.DOT_PRODUCT,
+                      IndexType.FLAT,
+                      QuantizerKind.NONE,
+                      0L,
+                      0L,
                       0L,
                       0L,
                       0L,

@@ -6,6 +6,7 @@ import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.hnsw.HnswIndex;
 import com.integrallis.vectors.hnsw.RandomAccessVectors;
 import com.integrallis.vectors.hnsw.SearchResult;
+import com.integrallis.vectors.quantization.CompressedVectors;
 import java.util.Objects;
 
 /**
@@ -102,15 +103,27 @@ public final class MappedHnswIndexAdapter implements IndexSpi {
       throw new IllegalArgumentException(
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
-    // Honour the caller-supplied beam width hint but clamp to the floor of k, matching
-    // HnswIndexAdapter. overQueryFactor is only consulted by the two-pass path, which this
-    // Step 4b adapter does not expose (no quantization attached).
     int efSearch = Math.max(searchListSize, k);
-    SearchResult result = index.search(query, k, efSearch);
-    // Defensive clone: SearchResult's arrays are documented as "must not be mutated", but the
-    // SearchOutcome contract does not constrain downstream callers (filters, rescore) from
-    // mutating in place.
+    SearchResult result;
+    if (overQueryFactor > 1.0f && index.isQuantizationEnabled()) {
+      result = index.searchTwoPass(query, k, efSearch, overQueryFactor);
+    } else {
+      result = index.search(query, k, efSearch);
+    }
     return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+  }
+
+  /**
+   * Attaches compressed vectors for quantized two-pass search. Once enabled, {@link
+   * #search(float[], int, int, float)} will delegate to {@link HnswIndex#searchTwoPass} when {@code
+   * overQueryFactor > 1.0f}.
+   *
+   * @param compressed the compressed vectors — must match the index's size and dimension
+   * @throws NullPointerException if compressed is null
+   */
+  public void enableQuantization(CompressedVectors compressed) {
+    Objects.requireNonNull(compressed, "compressed must not be null");
+    index.enableQuantization(compressed);
   }
 
   @Override

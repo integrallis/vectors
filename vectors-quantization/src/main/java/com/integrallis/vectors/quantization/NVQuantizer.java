@@ -54,6 +54,21 @@ public final class NVQuantizer implements Quantizer<NVQuantizedVectors> {
   // --- Factory methods ---
 
   /**
+   * Reconstructs a trained {@code NVQuantizer} from previously serialized state. Used by
+   * deserialization codecs to restore a quantizer without re-computing the centroid.
+   *
+   * @param dimension the original vector dimension
+   * @param numSubvectors number of subvectors (M)
+   * @param subvectorSizes dimensions per subvector
+   * @param globalMean the global mean (centroid)
+   * @return a reconstructed NVQ quantizer
+   */
+  public static NVQuantizer fromState(
+      int dimension, int numSubvectors, int[] subvectorSizes, float[] globalMean) {
+    return new NVQuantizer(dimension, numSubvectors, subvectorSizes, globalMean);
+  }
+
+  /**
    * Trains an NVQ quantizer on the given dataset.
    *
    * <p>Training computes the global mean (centroid) and determines the subvector partition. The
@@ -216,17 +231,17 @@ public final class NVQuantizer implements Quantizer<NVQuantizedVectors> {
   // --- Accessors ---
 
   /** Returns the number of subvectors. */
-  int numSubvectors() {
+  public int numSubvectors() {
     return numSubvectors;
   }
 
   /** Returns the dimensions per subvector. */
-  int[] subvectorSizes() {
+  public int[] subvectorSizes() {
     return subvectorSizes;
   }
 
   /** Returns the global mean (centroid). */
-  float[] globalMean() {
+  public float[] globalMean() {
     return globalMean;
   }
 

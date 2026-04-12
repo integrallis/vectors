@@ -41,7 +41,16 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
   private final float[][] corrections; // [size][5]: sqrX, x0, factorPpc, factorIp, errorFactor
   private final int dimension;
 
-  RaBitQuantizedVectors(
+  /**
+   * Constructs a {@code RaBitQuantizedVectors} from pre-encoded binary codes. Public for
+   * cross-module construction by deserialization codecs.
+   *
+   * @param quantizer the RaBitQ quantizer that produced these codes
+   * @param codes per-vector binary codes as packed longs
+   * @param corrections per-vector corrections [sqrX, x0, factorPpc, factorIp, errorFactor]
+   * @param dimension the original vector dimension
+   */
+  public RaBitQuantizedVectors(
       RaBitQuantizer quantizer, long[][] codes, float[][] corrections, int dimension) {
     this.quantizer = quantizer;
     this.codes = codes;

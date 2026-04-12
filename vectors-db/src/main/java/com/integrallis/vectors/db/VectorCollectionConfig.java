@@ -27,6 +27,9 @@ import java.util.Objects;
  *     other combination is rejected by the compact constructor. Added in Step 4b.
  * @param vamanaParams Vamana build-time parameters. Must be {@code non-null iff indexType ==
  *     VAMANA}; any other combination is rejected by the compact constructor. Added in Step 4c.
+ * @param quantizerParams build-time quantizer parameters. Must be {@code null} when {@code
+ *     quantizerKind == NONE}. When non-NONE, may be {@code null} to use defaults. When non-null,
+ *     the record type must match the quantizer kind. Added in Step 4d.
  */
 public record VectorCollectionConfig(
     int dimension,
@@ -36,7 +39,8 @@ public record VectorCollectionConfig(
     int autoCommitThreshold,
     Path storageRoot,
     HnswParams hnswParams,
-    VamanaParams vamanaParams) {
+    VamanaParams vamanaParams,
+    QuantizerParams quantizerParams) {
 
   public VectorCollectionConfig {
     if (dimension <= 0) {
@@ -67,13 +71,42 @@ public record VectorCollectionConfig(
               + (vamanaParams == null ? "null" : "set")
               + ")");
     }
+    // quantizerParams must be null when quantizerKind is NONE.
+    if (quantizerKind == QuantizerKind.NONE && quantizerParams != null) {
+      throw new IllegalArgumentException("quantizerParams must be null when quantizerKind is NONE");
+    }
   }
 
   /**
-   * 7-arg convenience constructor that defaults {@link #vamanaParams()} to {@code null}. Preserves
-   * the Step 4b canonical shape for call sites that predate Step 4c. Throws via the compact
-   * constructor if the caller asks for {@link IndexType#VAMANA} without supplying {@link
-   * VamanaParams}.
+   * 8-arg convenience constructor that defaults {@link #quantizerParams()} to {@code null}.
+   * Preserves the Step 4c canonical shape for call sites that predate Step 4d.
+   */
+  public VectorCollectionConfig(
+      int dimension,
+      SimilarityFunction metric,
+      IndexType indexType,
+      QuantizerKind quantizerKind,
+      int autoCommitThreshold,
+      Path storageRoot,
+      HnswParams hnswParams,
+      VamanaParams vamanaParams) {
+    this(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        autoCommitThreshold,
+        storageRoot,
+        hnswParams,
+        vamanaParams,
+        null);
+  }
+
+  /**
+   * 7-arg convenience constructor that defaults {@link #vamanaParams()} and {@link
+   * #quantizerParams()} to {@code null}. Preserves the Step 4b canonical shape for call sites that
+   * predate Step 4c. Throws via the compact constructor if the caller asks for {@link
+   * IndexType#VAMANA} without supplying {@link VamanaParams}.
    */
   public VectorCollectionConfig(
       int dimension,
@@ -91,14 +124,15 @@ public record VectorCollectionConfig(
         autoCommitThreshold,
         storageRoot,
         hnswParams,
+        null,
         null);
   }
 
   /**
-   * 6-arg convenience constructor that defaults {@link #hnswParams()} and {@link #vamanaParams()}
-   * to {@code null}. Suitable for flat-scan collections. Throws via the compact constructor if the
-   * caller asks for {@link IndexType#HNSW} or {@link IndexType#VAMANA} without supplying the
-   * matching parameter record.
+   * 6-arg convenience constructor that defaults {@link #hnswParams()}, {@link #vamanaParams()}, and
+   * {@link #quantizerParams()} to {@code null}. Suitable for flat-scan collections. Throws via the
+   * compact constructor if the caller asks for {@link IndexType#HNSW} or {@link IndexType#VAMANA}
+   * without supplying the matching parameter record.
    */
   public VectorCollectionConfig(
       int dimension,
@@ -107,13 +141,23 @@ public record VectorCollectionConfig(
       QuantizerKind quantizerKind,
       int autoCommitThreshold,
       Path storageRoot) {
-    this(dimension, metric, indexType, quantizerKind, autoCommitThreshold, storageRoot, null, null);
+    this(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        autoCommitThreshold,
+        storageRoot,
+        null,
+        null,
+        null);
   }
 
   /**
-   * 5-arg convenience constructor for in-memory, flat-scan collections. Equivalent to the 8-arg
+   * 5-arg convenience constructor for in-memory, flat-scan collections. Equivalent to the 9-arg
    * canonical constructor with {@code null} {@code storageRoot}, {@code null} {@code hnswParams},
-   * and {@code null} {@code vamanaParams}. Kept for Step 3 test fixtures that pre-date Step 4a/4b.
+   * {@code null} {@code vamanaParams}, and {@code null} {@code quantizerParams}. Kept for Step 3
+   * test fixtures that pre-date Step 4a/4b.
    */
   public VectorCollectionConfig(
       int dimension,
@@ -121,7 +165,7 @@ public record VectorCollectionConfig(
       IndexType indexType,
       QuantizerKind quantizerKind,
       int autoCommitThreshold) {
-    this(dimension, metric, indexType, quantizerKind, autoCommitThreshold, null, null, null);
+    this(dimension, metric, indexType, quantizerKind, autoCommitThreshold, null, null, null, null);
   }
 
   /**

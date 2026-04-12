@@ -36,7 +36,15 @@ public final class PQVectors implements CompressedVectors {
    */
   private final float[][] centroidNormSq;
 
-  PQVectors(ProductQuantizer quantizer, byte[][] codes, int dimension) {
+  /**
+   * Constructs a {@code PQVectors} from pre-encoded PQ codes. Public for cross-module construction
+   * by deserialization codecs.
+   *
+   * @param quantizer the product quantizer that produced these codes
+   * @param codes per-vector PQ codes (M bytes per vector)
+   * @param dimension the original vector dimension
+   */
+  public PQVectors(ProductQuantizer quantizer, byte[][] codes, int dimension) {
     this.quantizer = quantizer;
     this.codes = codes;
     this.dimension = dimension;

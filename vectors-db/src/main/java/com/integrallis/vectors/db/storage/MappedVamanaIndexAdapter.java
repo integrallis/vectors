@@ -2,6 +2,7 @@ package com.integrallis.vectors.db.storage;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.index.IndexSpi;
+import com.integrallis.vectors.quantization.CompressedVectors;
 import com.integrallis.vectors.vamana.RandomAccessVectors;
 import com.integrallis.vectors.vamana.SearchResult;
 import com.integrallis.vectors.vamana.VamanaGraph;
@@ -104,15 +105,27 @@ public final class MappedVamanaIndexAdapter implements IndexSpi {
       throw new IllegalArgumentException(
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
-    // Honour the caller-supplied beam width hint but clamp to the floor of k, matching
-    // VamanaIndexAdapter. overQueryFactor is only consulted by the two-pass path, which this
-    // Step 4c adapter does not expose (no quantization attached).
     int searchL = Math.max(searchListSize, k);
-    SearchResult result = index.search(query, k, searchL);
-    // Defensive clone: SearchResult's arrays are documented as "must not be mutated", but the
-    // SearchOutcome contract does not constrain downstream callers (filters, rescore) from
-    // mutating in place.
+    SearchResult result;
+    if (overQueryFactor > 1.0f && index.isQuantizationEnabled()) {
+      result = index.searchTwoPass(query, k, searchL, overQueryFactor);
+    } else {
+      result = index.search(query, k, searchL);
+    }
     return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+  }
+
+  /**
+   * Attaches compressed vectors for quantized two-pass search. Once enabled, {@link
+   * #search(float[], int, int, float)} will delegate to {@link VamanaIndex#searchTwoPass} when
+   * {@code overQueryFactor > 1.0f}.
+   *
+   * @param compressed the compressed vectors — must match the index's size and dimension
+   * @throws NullPointerException if compressed is null
+   */
+  public void enableQuantization(CompressedVectors compressed) {
+    Objects.requireNonNull(compressed, "compressed must not be null");
+    index.enableQuantization(compressed);
   }
 
   @Override

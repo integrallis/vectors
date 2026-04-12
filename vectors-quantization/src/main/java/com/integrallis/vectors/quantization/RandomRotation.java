@@ -139,6 +139,42 @@ public final class RandomRotation implements Rotation {
     return result;
   }
 
+  /**
+   * Reconstructs a {@code RandomRotation} from a previously serialized matrix and its transpose.
+   * Used by deserialization codecs to restore a trained rotation without re-running QR
+   * decomposition.
+   *
+   * <p>The caller must provide both Q and Q<sup>T</sup> (not recomputed) to guarantee bit-identical
+   * round-trip serialization — recomputing Q<sup>T</sup> from Q would accumulate float rounding
+   * errors at d=64+.
+   *
+   * @param dimension the matrix dimension
+   * @param q the D×D orthogonal matrix (row-major)
+   * @param qt the D×D transpose of q (row-major)
+   * @return a reconstructed rotation
+   * @throws IllegalArgumentException if dimension < 1 or matrix shapes don't match
+   */
+  public static RandomRotation fromMatrix(int dimension, float[][] q, float[][] qt) {
+    if (dimension < 1) {
+      throw new IllegalArgumentException(
+          "RandomRotation requires dimension >= 1, got " + dimension);
+    }
+    if (q.length != dimension || qt.length != dimension) {
+      throw new IllegalArgumentException("Matrix row count must match dimension " + dimension);
+    }
+    return new RandomRotation(q, qt, dimension);
+  }
+
+  /** Returns the D×D orthogonal rotation matrix (row-major). */
+  public float[][] matrix() {
+    return matrix;
+  }
+
+  /** Returns the D×D transpose of the rotation matrix (row-major). */
+  public float[][] matrixT() {
+    return matrixT;
+  }
+
   @Override
   public int dimension() {
     return dimension;

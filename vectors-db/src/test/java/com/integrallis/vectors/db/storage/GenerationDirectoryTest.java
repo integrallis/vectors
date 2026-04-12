@@ -116,7 +116,9 @@ class GenerationDirectoryTest {
         /* idmapBinLength */ IDMAP_PAYLOAD.length,
         /* idmapBinCrc32 */ Checksums.ofBytes(IDMAP_PAYLOAD),
         /* graphBinLength */ 0L,
-        /* graphBinCrc32 */ 0L);
+        /* graphBinCrc32 */ 0L,
+        /* quantizedBinLength */ 0L,
+        /* quantizedBinCrc32 */ 0L);
   }
 
   private static Manifest emptyManifest(long generationNumber) {
@@ -132,7 +134,9 @@ class GenerationDirectoryTest {
         /* idmapBinLength */ 0L,
         /* idmapBinCrc32 */ 0L,
         /* graphBinLength */ 0L,
-        /* graphBinCrc32 */ 0L);
+        /* graphBinCrc32 */ 0L,
+        /* quantizedBinLength */ 0L,
+        /* quantizedBinCrc32 */ 0L);
   }
 
   // ---------------------------------------------------------------------------

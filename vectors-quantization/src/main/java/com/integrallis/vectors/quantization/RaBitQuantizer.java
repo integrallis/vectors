@@ -69,6 +69,21 @@ public final class RaBitQuantizer implements Quantizer<RaBitQuantizedVectors> {
   // --- Factory methods ---
 
   /**
+   * Reconstructs a trained {@code RaBitQuantizer} from previously serialized state. Used by
+   * deserialization codecs to restore a quantizer without re-computing the centroid or rotation.
+   *
+   * @param dimension the original vector dimension
+   * @param paddedDimension the padded dimension (multiple of 64)
+   * @param centroid the dataset centroid (un-padded, length == dimension)
+   * @param rotation the rotation strategy (must have dimension == paddedDimension)
+   * @return a reconstructed RaBitQ quantizer
+   */
+  public static RaBitQuantizer fromState(
+      int dimension, int paddedDimension, float[] centroid, Rotation rotation) {
+    return new RaBitQuantizer(dimension, paddedDimension, centroid, rotation);
+  }
+
+  /**
    * Trains a RaBitQ quantizer on the given dataset with default seed (42L).
    *
    * @param dataset the training data
@@ -274,22 +289,22 @@ public final class RaBitQuantizer implements Quantizer<RaBitQuantizedVectors> {
   // --- Accessors ---
 
   /** Returns the padded dimension (rounded up to the next multiple of 64). */
-  int paddedDimension() {
+  public int paddedDimension() {
     return paddedDimension;
   }
 
   /** Returns the dataset centroid (mean vector). */
-  float[] centroid() {
+  public float[] centroid() {
     return centroid;
   }
 
   /** Returns the precomputed padded centroid (zero-padded to paddedDimension). */
-  float[] paddedCentroid() {
+  public float[] paddedCentroid() {
     return paddedCentroid;
   }
 
   /** Returns the rotation strategy. */
-  Rotation rotation() {
+  public Rotation rotation() {
     return rotation;
   }
 

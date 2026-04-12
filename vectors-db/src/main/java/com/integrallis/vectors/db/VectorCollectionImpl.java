@@ -22,8 +22,20 @@ import com.integrallis.vectors.db.storage.MappedMetadataStore;
 import com.integrallis.vectors.db.storage.MappedVamanaIndexAdapter;
 import com.integrallis.vectors.db.storage.MemorySegmentRandomAccessVectors;
 import com.integrallis.vectors.db.storage.MemorySegmentVectors;
+import com.integrallis.vectors.db.storage.QuantizedVectorsCodec;
 import com.integrallis.vectors.db.storage.VamanaGraphCodec;
 import com.integrallis.vectors.hnsw.HnswGraph;
+import com.integrallis.vectors.quantization.ArrayVectorDataset;
+import com.integrallis.vectors.quantization.BinaryMode;
+import com.integrallis.vectors.quantization.BinaryQuantizer;
+import com.integrallis.vectors.quantization.CompressedVectors;
+import com.integrallis.vectors.quantization.NVQuantizer;
+import com.integrallis.vectors.quantization.ProductQuantizer;
+import com.integrallis.vectors.quantization.Quantizer;
+import com.integrallis.vectors.quantization.RaBitQuantizer;
+import com.integrallis.vectors.quantization.ScalarBits;
+import com.integrallis.vectors.quantization.ScalarQuantizer;
+import com.integrallis.vectors.quantization.VectorDataset;
 import com.integrallis.vectors.storage.memory.AlignmentUtil;
 import com.integrallis.vectors.vamana.VamanaGraph;
 import java.io.IOException;
@@ -195,6 +207,11 @@ final class VectorCollectionImpl implements VectorCollection {
    * {@link #writeGraph(Path)} is a no-op and no {@code graph.bin} entry is written. Graph-backed
    * generations (HNSW, Vamana) pass the encoded adjacency bytes from the corresponding codec (e.g.
    * {@code HnswGraphCodec.encode(graph)} or {@code VamanaGraphCodec.encode(graph)}).
+   *
+   * <p>{@code quantizedBytes} is {@code null} (or zero-length) for non-quantized generations, in
+   * which case {@link #writeQuantized(Path)} is a no-op and no {@code quantized.bin} entry is
+   * written. Quantization-enabled generations pass the encoded compressed vectors from {@link
+   * com.integrallis.vectors.db.storage.QuantizedVectorsCodec#encode}.
    */
   private static final class BufferedGenerationSource
       implements GenerationDirectory.GenerationSource {
@@ -202,13 +219,19 @@ final class VectorCollectionImpl implements VectorCollection {
     private final byte[] idmapBytes;
     private final byte[] metadataBytes;
     private final byte[] graphBytes; // null or empty ⇒ no graph.bin
+    private final byte[] quantizedBytes; // null or empty ⇒ no quantized.bin
 
     BufferedGenerationSource(
-        byte[] vectorsBytes, byte[] idmapBytes, byte[] metadataBytes, byte[] graphBytes) {
+        byte[] vectorsBytes,
+        byte[] idmapBytes,
+        byte[] metadataBytes,
+        byte[] graphBytes,
+        byte[] quantizedBytes) {
       this.vectorsBytes = vectorsBytes;
       this.idmapBytes = idmapBytes;
       this.metadataBytes = metadataBytes;
       this.graphBytes = graphBytes;
+      this.quantizedBytes = quantizedBytes;
     }
 
     @Override
@@ -239,6 +262,18 @@ final class VectorCollectionImpl implements VectorCollection {
                 + " constructor?)");
       }
       MappedIdMapper.Writer.writeBytesAndFsync(destination, graphBytes);
+    }
+
+    @Override
+    public void writeQuantized(Path destination) throws IOException {
+      // GenerationDirectory only calls this when manifest.quantizedBinLength() > 0; a null or
+      // empty buffer in that context is a programmer error. Guard defensively.
+      if (quantizedBytes == null || quantizedBytes.length == 0) {
+        throw new IOException(
+            "BufferedGenerationSource.writeQuantized invoked with no quantized bytes (did the"
+                + " caller forget to pass QuantizedVectorsCodec.encode through the constructor?)");
+      }
+      MappedIdMapper.Writer.writeBytesAndFsync(destination, quantizedBytes);
     }
   }
 
@@ -340,9 +375,11 @@ final class VectorCollectionImpl implements VectorCollection {
             (long) emptyIdmap.length,
             Checksums.ofBytes(emptyIdmap),
             0L,
+            0L,
+            0L,
             0L);
     GenerationDirectory.GenerationSource bootstrapSource =
-        new BufferedGenerationSource(emptyVectors, emptyIdmap, emptyMetadata, null);
+        new BufferedGenerationSource(emptyVectors, emptyIdmap, emptyMetadata, null, null);
 
     GenerationDirectory.RecoveryResult rr =
         GenerationDirectory.recover(storageRoot, bootstrapSource, bootstrap);
@@ -410,6 +447,26 @@ final class VectorCollectionImpl implements VectorCollection {
                         + manifest.generationNumber()
                         + " uses indexType IVF_FLAT which is not supported in Step 4c");
           };
+
+      // 3. If the generation includes quantized.bin, deserialize and attach to the SPI.
+      //    This must happen AFTER the SPI is constructed (which creates the underlying
+      //    HnswIndex/VamanaIndex via ofPrebuilt) so enableQuantization can wire up the
+      //    quantized scoring path.
+      if (manifest.quantizedBinLength() > 0L) {
+        byte[] quantizedBytes =
+            java.nio.file.Files.readAllBytes(genDir.resolve(FileFormat.QUANTIZED_FILE));
+        try {
+          CompressedVectors compressed = QuantizedVectorsCodec.decode(quantizedBytes);
+          if (spi instanceof MappedHnswIndexAdapter ha) {
+            ha.enableQuantization(compressed);
+          } else if (spi instanceof MappedVamanaIndexAdapter va) {
+            va.enableQuantization(compressed);
+          }
+        } catch (IOException qe) {
+          throw new IOException(
+              "Failed to decode quantized.bin for generation " + manifest.generationNumber(), qe);
+        }
+      }
 
       return new Generation(
           spi,
@@ -620,6 +677,17 @@ final class VectorCollectionImpl implements VectorCollection {
     IndexSpi newSpi = newInMemoryAdapter();
     newSpi.build(next, config.metric());
 
+    // Train quantizer and attach compressed vectors for two-pass search.
+    if (config.quantizerKind() != QuantizerKind.NONE && newSize > 0) {
+      VectorDataset dataset = new ArrayVectorDataset(next);
+      TrainedQuantization tq = trainQuantizer(dataset, config);
+      if (newSpi instanceof HnswIndexAdapter ha) {
+        ha.enableQuantization(tq.compressed());
+      } else if (newSpi instanceof VamanaIndexAdapter va) {
+        va.enableQuantization(tq.compressed());
+      }
+    }
+
     Generation newGen = new Generation(newSpi, newMapper, newMeta, newSize, 0L, null, null, null);
     this.generation = newGen;
     staging.clear();
@@ -684,6 +752,23 @@ final class VectorCollectionImpl implements VectorCollection {
       }
     }
 
+    // 2b. Quantization: train the quantizer on the successor matrix, encode all vectors into
+    //     compressed form, then serialize to quantized.bin bytes. For NONE this block is skipped.
+    //     The matrix is guaranteed non-null here because FLAT + non-NONE is blocked in the builder.
+    byte[] quantizedBin = null;
+    long quantizedBinLength = 0L;
+    long quantizedBinCrc = 0L;
+    TrainedQuantization trainedQ = null;
+    if (config.quantizerKind() != QuantizerKind.NONE && newSize > 0) {
+      VectorDataset dataset = new ArrayVectorDataset(materialized.matrix());
+      trainedQ = trainQuantizer(dataset, config);
+      quantizedBin =
+          QuantizedVectorsCodec.encode(
+              trainedQ.compressed(), trainedQ.quantizer(), config.quantizerKind());
+      quantizedBinLength = (long) quantizedBin.length;
+      quantizedBinCrc = Checksums.ofBytes(quantizedBin);
+    }
+
     // 3. Build the manifest, then hand everything to GenerationDirectory.writeGeneration which
     //    runs the full crash-safe write protocol (tmp dir → files → fsync → rename → CURRENT).
     //    nextGenerationNumber is our monotonic counter — it advances unconditionally after a
@@ -702,7 +787,9 @@ final class VectorCollectionImpl implements VectorCollection {
             (long) idmapBin.length,
             Checksums.ofBytes(idmapBin),
             graphBinLength,
-            graphBinCrc);
+            graphBinCrc,
+            quantizedBinLength,
+            quantizedBinCrc);
 
     GenerationDirectory.WriteResult wr;
     try {
@@ -710,7 +797,8 @@ final class VectorCollectionImpl implements VectorCollection {
           GenerationDirectory.writeGeneration(
               config.storageRoot(),
               newGenNumber,
-              new BufferedGenerationSource(vectorsBin, idmapBin, metadataBin, graphBin),
+              new BufferedGenerationSource(
+                  vectorsBin, idmapBin, metadataBin, graphBin, quantizedBin),
               manifest);
     } catch (IOException e) {
       // Write failed — the gen directory was not durably created (GenerationDirectory fsyncs and
@@ -881,6 +969,67 @@ final class VectorCollectionImpl implements VectorCollection {
           throw new IllegalStateException(
               "encodeGraphBytes called with non-graph indexType " + config.indexType());
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Quantization training
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Carrier for a trained quantizer and its compressed output. The quantizer is needed by the
+   * persistent commit path to serialize to {@code quantized.bin} via {@link
+   * QuantizedVectorsCodec#encode}; the compressed vectors are needed by both the in-memory path
+   * (attach to the adapter via {@code enableQuantization}) and the persistent path (serialize +
+   * attach after reopen).
+   */
+  private record TrainedQuantization(Quantizer<?> quantizer, CompressedVectors compressed) {}
+
+  /**
+   * Trains the appropriate quantizer from the config's {@link QuantizerKind} and {@link
+   * QuantizerParams}, then encodes all vectors into a {@link CompressedVectors}. Called under the
+   * writer lock from both {@link #commitInMemory} and {@link #commitPersistent}.
+   */
+  @SuppressWarnings("unchecked")
+  private static TrainedQuantization trainQuantizer(
+      VectorDataset dataset, VectorCollectionConfig config) {
+    QuantizerParams params = config.quantizerParams();
+    Quantizer<?> quantizer =
+        switch (config.quantizerKind()) {
+          case NONE -> throw new IllegalStateException("trainQuantizer called with NONE");
+          case SQ8 -> ScalarQuantizer.train(dataset, ScalarBits.INT8);
+          case SQ4 -> ScalarQuantizer.train(dataset, ScalarBits.INT4);
+          case PQ -> {
+            QuantizerParams.PqParams pq =
+                params instanceof QuantizerParams.PqParams p
+                    ? p
+                    : new QuantizerParams.PqParams(
+                        Math.max(1, config.dimension() / 8),
+                        VectorCollectionBuilder.DEFAULT_PQ_CLUSTERS,
+                        true);
+            yield ProductQuantizer.train(dataset, pq.numSubspaces(), pq.numClusters(), pq.center());
+          }
+          case BQ -> {
+            boolean bbq = params instanceof QuantizerParams.BqParams b ? b.bbq() : true;
+            yield BinaryQuantizer.train(dataset, bbq ? BinaryMode.BBQ : BinaryMode.SIGN_BIT);
+          }
+          case RABITQ -> {
+            long seed =
+                params instanceof QuantizerParams.RaBitParams r
+                    ? r.seed()
+                    : VectorCollectionBuilder.DEFAULT_RABIT_SEED;
+            yield RaBitQuantizer.train(dataset, seed);
+          }
+          case NVQ -> {
+            int numSv =
+                params instanceof QuantizerParams.NvqParams n
+                    ? n.numSubvectors()
+                    : Math.max(1, config.dimension() / 4);
+            yield NVQuantizer.train(dataset, numSv);
+          }
+        };
+    @SuppressWarnings("rawtypes")
+    CompressedVectors compressed = ((Quantizer) quantizer).encodeAll(dataset);
+    return new TrainedQuantization(quantizer, compressed);
   }
 
   // ---------------------------------------------------------------------------

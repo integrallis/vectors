@@ -62,6 +62,29 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
   // --- Factory methods ---
 
   /**
+   * Reconstructs a trained {@code ProductQuantizer} from previously serialized state. Used by
+   * deserialization codecs to restore a quantizer without re-running k-means++ training.
+   *
+   * @param dimension the original vector dimension
+   * @param numSubspaces number of sub-vector partitions (M)
+   * @param numClusters centroids per subspace (Ks)
+   * @param subspaceSizesAndOffsets per-subspace [size, offset] pairs
+   * @param codebooks per-subspace codebook arrays (flat float arrays of size Ks * subDim)
+   * @param globalCentroid the global centroid, or null if centering was not enabled
+   * @return a reconstructed product quantizer
+   */
+  public static ProductQuantizer fromState(
+      int dimension,
+      int numSubspaces,
+      int numClusters,
+      int[][] subspaceSizesAndOffsets,
+      float[][] codebooks,
+      float[] globalCentroid) {
+    return new ProductQuantizer(
+        dimension, numSubspaces, numClusters, subspaceSizesAndOffsets, codebooks, globalCentroid);
+  }
+
+  /**
    * Trains a PQ with default 256 clusters and global centering enabled.
    *
    * @param dataset the training data
@@ -212,17 +235,27 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
    * Returns the codebook for subspace m. The codebook is a flat array of size {@code numClusters *
    * subDim}, where entry c starts at index {@code c * subDim}.
    */
-  float[] codebook(int m) {
+  public float[] codebook(int m) {
     return codebooks[m];
   }
 
+  /** Returns all codebooks as a 2D array, one per subspace. */
+  public float[][] codebooks() {
+    return codebooks;
+  }
+
   /** Returns the subspace size and offset as [size, offset]. */
-  int[] subspaceSizeAndOffset(int m) {
+  public int[] subspaceSizeAndOffset(int m) {
     return subspaceSizesAndOffsets[m];
   }
 
+  /** Returns all subspace sizes and offsets as a 2D array. */
+  public int[][] subspaceSizesAndOffsets() {
+    return subspaceSizesAndOffsets;
+  }
+
   /** Returns the global centroid, or null if centering is not enabled. */
-  float[] globalCentroid() {
+  public float[] globalCentroid() {
     return globalCentroid;
   }
 

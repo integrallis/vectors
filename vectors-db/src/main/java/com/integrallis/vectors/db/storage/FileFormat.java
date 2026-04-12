@@ -53,6 +53,14 @@ public final class FileFormat {
    */
   public static final int MAGIC_GRAPH_VAMANA = 0x4D564756; // 'V' 'G' 'V' 'M' little-endian
 
+  /**
+   * Magic for {@code quantized.bin}. Raw bytes spell {@code "VQTZ"} (Vector QuanTiZed). Only
+   * present when the collection's {@link com.integrallis.vectors.db.QuantizerKind quantizerKind} is
+   * not {@link com.integrallis.vectors.db.QuantizerKind#NONE}; see {@link QuantizedVectorsCodec}
+   * for the layout.
+   */
+  public static final int MAGIC_QUANTIZED = 0x5A545156; // 'V' 'Q' 'T' 'Z' little-endian
+
   // ---------------------------------------------------------------------------
   // Format versions — bumped whenever the on-disk layout changes in a
   // backward-incompatible way. Readers refuse files whose version they don't
@@ -60,11 +68,12 @@ public final class FileFormat {
   // ---------------------------------------------------------------------------
 
   /**
-   * Current manifest format version. Bumped to 2 in Step 4b: the header grew by 16 bytes to store
-   * {@code graphBinLength} + {@code graphBinCrc32} for the new {@code graph.bin} file. Readers
-   * refuse v1 files; there is no on-disk compat shim because {@code vectors-db} is unreleased.
+   * Current manifest format version. Bumped to 3 in Step 4d: the header grew by 16 bytes to store
+   * {@code quantizedBinLength} + {@code quantizedBinCrc32} for the new {@code quantized.bin} file.
+   * Readers refuse v1/v2 files; there is no on-disk compat shim because {@code vectors-db} is
+   * unreleased.
    */
-  public static final int VERSION_MANIFEST = 2;
+  public static final int VERSION_MANIFEST = 3;
 
   /** Current idmap format version. */
   public static final int VERSION_IDMAP = 1;
@@ -77,6 +86,9 @@ public final class FileFormat {
 
   /** Current Vamana graph.bin format version (see {@link VamanaGraphCodec}). */
   public static final int VERSION_GRAPH_VAMANA = 1;
+
+  /** Current quantized.bin format version (see {@link QuantizedVectorsCodec}). */
+  public static final int VERSION_QUANTIZED = 1;
 
   // ---------------------------------------------------------------------------
   // Directory protocol constants.
@@ -133,6 +145,14 @@ public final class FileFormat {
    * #MAGIC_GRAPH_VAMANA}) so a misrouted decoder fails at the first 4-byte read.
    */
   public static final String GRAPH_FILE = "graph.bin";
+
+  /**
+   * File name of the quantized compressed vectors file inside a generation directory. Present when
+   * the collection's {@link com.integrallis.vectors.db.QuantizerKind quantizerKind} is not {@link
+   * com.integrallis.vectors.db.QuantizerKind#NONE}; non-quantized generations omit the file
+   * entirely and the Manifest reports {@code quantizedBinLength == 0}.
+   */
+  public static final String QUANTIZED_FILE = "quantized.bin";
 
   /**
    * Fixed header size in bytes used by both {@link

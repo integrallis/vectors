@@ -111,6 +111,39 @@ public final class GivensRotation implements Rotation {
     return result;
   }
 
+  /**
+   * Reconstructs a {@code GivensRotation} from previously serialized cos/sin arrays. Used by
+   * deserialization codecs to restore a trained rotation without re-generating random angles.
+   *
+   * @param dimension the vector dimension (must be >= 2)
+   * @param cos cosine values for each 2D pair (length must be dimension/2)
+   * @param sin sine values for each 2D pair (length must be dimension/2)
+   * @return a reconstructed Givens rotation
+   * @throws IllegalArgumentException if dimension < 2 or array lengths don't match
+   */
+  public static GivensRotation fromCosSin(int dimension, float[] cos, float[] sin) {
+    if (dimension < 2) {
+      throw new IllegalArgumentException(
+          "GivensRotation requires dimension >= 2, got " + dimension);
+    }
+    int expectedPairs = dimension / 2;
+    if (cos.length != expectedPairs || sin.length != expectedPairs) {
+      throw new IllegalArgumentException(
+          "cos/sin arrays must have length " + expectedPairs + " (dimension/2)");
+    }
+    return new GivensRotation(cos, sin, dimension);
+  }
+
+  /** Returns the cosine values for each 2D pair. */
+  public float[] cos() {
+    return cos;
+  }
+
+  /** Returns the sine values for each 2D pair. */
+  public float[] sin() {
+    return sin;
+  }
+
   @Override
   public int dimension() {
     return dimension;

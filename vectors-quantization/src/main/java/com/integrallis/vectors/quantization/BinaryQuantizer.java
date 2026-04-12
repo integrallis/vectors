@@ -42,6 +42,19 @@ public final class BinaryQuantizer implements Quantizer<BinaryQuantizedVectors> 
   // --- Factory methods ---
 
   /**
+   * Reconstructs a trained {@code BinaryQuantizer} from previously serialized state. Used by
+   * deserialization codecs to restore a quantizer without re-computing the centroid.
+   *
+   * @param dimension the original vector dimension
+   * @param mode SIGN_BIT or BBQ
+   * @param centroid the dataset centroid (null for SIGN_BIT, non-null for BBQ)
+   * @return a reconstructed binary quantizer
+   */
+  public static BinaryQuantizer fromState(int dimension, BinaryMode mode, float[] centroid) {
+    return new BinaryQuantizer(dimension, mode, centroid);
+  }
+
+  /**
    * Trains a SIGN_BIT binary quantizer (no centroid, no training needed).
    *
    * @param dataset the source data (used only for dimension)
@@ -140,7 +153,7 @@ public final class BinaryQuantizer implements Quantizer<BinaryQuantizedVectors> 
   }
 
   /** Returns the centroid (dataset mean), or null if mode is SIGN_BIT. */
-  float[] centroid() {
+  public float[] centroid() {
     return centroid;
   }
 

@@ -29,7 +29,16 @@ public final class ScalarQuantizedVectors implements CompressedVectors {
   private final float[] corrections;
   private final int dimension;
 
-  ScalarQuantizedVectors(
+  /**
+   * Constructs a {@code ScalarQuantizedVectors} from pre-encoded data. Public for cross-module
+   * construction by deserialization codecs.
+   *
+   * @param quantizer the scalar quantizer that produced these vectors
+   * @param quantizedVectors per-vector quantized byte arrays
+   * @param corrections per-vector correction factors
+   * @param dimension the original vector dimension
+   */
+  public ScalarQuantizedVectors(
       ScalarQuantizer quantizer, byte[][] quantizedVectors, float[] corrections, int dimension) {
     this.quantizer = quantizer;
     this.quantizedVectors = quantizedVectors;

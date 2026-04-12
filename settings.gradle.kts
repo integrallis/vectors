@@ -7,6 +7,8 @@ include("vectors-hnsw")
 include("vectors-vamana")
 include("vectors-ivf")
 include("vectors-db")
+include("vectors-spring-ai")
+include("vectors-langchain4j")
 include("vectors-bench")
 include("docs")
 
