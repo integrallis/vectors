@@ -539,6 +539,22 @@ class VectorDbPersistenceTest {
    * drift — this assertion breaks immediately. The assertion also covers the documented "bulk-copy
    * fast path is preserved" invariant in the helper's javadoc: any FLAT/HNSW divergence on old
    * generation bytes would manifest as a mismatch on the second commit.
+   *
+   * <p><b>Why tiny HNSW parameters ({@code M=4, efConstruction=16})?</b> These tests assert
+   * byte-identity on {@code vectors.bin}, which is the raw vector byte image. HNSW build parameters
+   * like {@code M} and {@code efConstruction} drive the graph construction and are only ever
+   * encoded into {@code graph.bin} — they have zero effect on the shape or contents of {@code
+   * vectors.bin}. We pick the smallest valid settings to minimize graph-build time during the test;
+   * any other valid combination would produce the same {@code vectors.bin} bytes.
+   *
+   * <p><b>Why {@code @Tag("unit")} despite touching {@code @TempDir}?</b> Matches the existing
+   * convention of every other {@code @Nested} class in this file ({@link RoundTrip}, {@link
+   * MultiGeneration}, {@link SimulatedKill9}, {@link FlushSemantics}, {@link
+   * StorageRootValidation}, {@link CommitOpenFailureRecovery}) — all of which are persistence tests
+   * that write real files under a temp directory and all of which carry {@code @Tag("unit")}. The
+   * project convention in this file is "unit = fast, regardless of filesystem touch"; breaking
+   * consistency for one nested class would be worse than matching it. The tests run in well under
+   * 100ms each so the {@code unitTest} task stays fast.
    */
   @Nested
   @Tag("unit")

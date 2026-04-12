@@ -825,9 +825,16 @@ final class VectorCollectionImpl implements VectorCollection {
     // Alignment padding between entries is already zero from the byte[] initializer.
     int rawVecBytes = dim * Float.BYTES;
     ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
+    // stride * liveCount is provably safe from int overflow: the totalL guard above already
+    // rejected stride * newSize > Integer.MAX_VALUE, and liveCount <= newSize, so this product
+    // is bounded by the same guard without needing a (long) widening.
     buf.position(stride * liveCount);
     for (int s = 0; s < staged.size(); s++) {
       float[] v = staged.get(s).vector();
+      // B1 clarification: the clone below goes to the matrix ONLY. The putFloat loop that
+      // follows reads from the ORIGINAL v — matrix and vectors.bin are both populated from the
+      // same source reference, so HNSW and FLAT commits produce byte-identical vectors.bin
+      // images regardless of whether the matrix is also being materialized.
       if (needMatrix) {
         // Defensive clone so the graph builder never aliases a user-owned Document.vector().
         matrix[liveCount + s] = v.clone();
