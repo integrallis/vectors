@@ -24,6 +24,7 @@ import com.integrallis.vectors.db.storage.MappedVamanaIndexAdapter;
 import com.integrallis.vectors.db.storage.MemorySegmentRandomAccessVectors;
 import com.integrallis.vectors.db.storage.MemorySegmentVectors;
 import com.integrallis.vectors.db.storage.QuantizedVectorsCodec;
+import com.integrallis.vectors.db.storage.TombstoneCodec;
 import com.integrallis.vectors.db.storage.VamanaGraphCodec;
 import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.quantization.ArrayVectorDataset;
@@ -48,6 +49,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -57,8 +59,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Step 4a {@link VectorCollection} implementation with a volatile-snapshot publication model and
- * dual in-memory / mmap-backed persistence.
+ * Step 6 {@link VectorCollection} implementation with tombstone-based deletion, upsert, compact,
+ * and a volatile-snapshot publication model with dual in-memory / mmap-backed persistence.
  *
  * <p><b>Concurrency model.</b> All live state is packed into an immutable {@link Generation} (plain
  * class, not record, so it can carry an {@link AtomicInteger} refcount). On every read path the
@@ -71,34 +73,13 @@ import java.util.logging.Logger;
  *   <li>releases the refcount in a {@code finally} block
  * </ol>
  *
- * This guarantees that even when {@link #commit()} or {@link #close()} retires a generation, any
- * in-flight reader that already acquired a refcount on it finishes normally against unmutated
- * state. Once the facade's handle <i>and</i> every in-flight reader release, the refcount drops to
- * zero and {@link Generation#closeResources()} fires exactly once — closing the SPI and (in
- * persistent mode) unmapping the shared {@link Arena} that owns {@code vectors.bin}, {@code
- * idmap.bin}, and {@code metadata.bin} atomically.
- *
- * <p>Writers ({@link #add}, {@link #addAll}, {@link #commit}) serialize through a private {@link
- * ReentrantLock} that does not participate in the read path. Staging is a {@link StagingBuffer}
- * whose sole guard is the writer lock.
- *
- * <p><b>Dual mode.</b> When {@link VectorCollectionConfig#storageRoot()} is {@code null} the
- * collection runs in the Step 3 in-memory model (fresh {@link FlatScanAdapter}, {@link
- * HnswIndexAdapter}, or {@link VamanaIndexAdapter} rebuild per commit, selected by {@link
- * VectorCollectionConfig#indexType()}). When non-null, the constructor runs {@link
- * GenerationDirectory#recover} to find or bootstrap a generation, opens its mapped stores through a
- * fresh shared {@link Arena}, and every {@link #commit()} writes a new {@code gen-NNNN/} directory
- * through {@link GenerationDirectory#writeGeneration} before publishing the new snapshot. The
- * persistent open path branches on the manifest's index type: {@link IndexType#FLAT} goes through
- * {@link MappedFlatScanAdapter}, {@link IndexType#HNSW} decodes the generation's {@code graph.bin}
- * via {@link HnswGraphCodec#decode(byte[])}, wraps the mmap'd vectors in a {@link
- * MemorySegmentRandomAccessVectors}, and constructs a {@link MappedHnswIndexAdapter}, and {@link
- * IndexType#VAMANA} follows the same pattern using {@link VamanaGraphCodec#decode(byte[])} and
- * {@link MappedVamanaIndexAdapter}.
- *
- * <p><b>Scope.</b> All {@link Filter} variants are evaluated via post-filtering (Step 5). {@code
- * upsert}, {@code delete}, {@code deleteWhere}, and {@code compact} throw {@link
- * UnsupportedOperationException} (deferred to Step 6).
+ * <p><b>Tombstone semantics.</b> Deletes flip a bit in the generation's tombstone {@link BitSet} —
+ * no ordinal reuse, no ANN graph modification, no quantized code modification. Tombstoned ordinals
+ * retain their original vectors in the ANN index so that graph traversal never operates on
+ * undefined zero-vectors (which would produce NaN cosine-similarity scores and corrupt
+ * priority-queue ordering). Search results skip tombstoned ordinals via a post-visit tombstone
+ * check — not by replacing their vector content. {@link #compact()} is the explicit escape hatch —
+ * rebuilds from scratch with dense ordinals.
  */
 final class VectorCollectionImpl implements VectorCollection {
 
@@ -107,15 +88,14 @@ final class VectorCollectionImpl implements VectorCollection {
   /**
    * Immutable snapshot of the collection's searchable state plus a per-generation refcount.
    * Published via a single volatile write from {@link #commit}. Readers capture one volatile
-   * reference, acquire a refcount on it, and use it for the full call. The refcount starts at 1
-   * (the facade's handle); every reader bumps it; every release decrements it; the transition to
-   * zero triggers {@link #closeResources()} exactly once.
+   * reference, acquire a refcount on it, and use it for the full call.
    */
   private static final class Generation {
     final IndexSpi spi;
     final IdMapper idMapper;
     final MetadataStore metadataStore;
-    final int liveCount;
+    final int physicalCount;
+    final BitSet tombstones;
     final long generationNumber;
 
     /** Shared arena owning all mmap'd files for this generation; {@code null} in in-memory mode. */
@@ -133,7 +113,8 @@ final class VectorCollectionImpl implements VectorCollection {
         IndexSpi spi,
         IdMapper idMapper,
         MetadataStore metadataStore,
-        int liveCount,
+        int physicalCount,
+        BitSet tombstones,
         long generationNumber,
         Arena arena,
         Path directory,
@@ -141,17 +122,18 @@ final class VectorCollectionImpl implements VectorCollection {
       this.spi = spi;
       this.idMapper = idMapper;
       this.metadataStore = metadataStore;
-      this.liveCount = liveCount;
+      this.physicalCount = physicalCount;
+      this.tombstones = tombstones;
       this.generationNumber = generationNumber;
       this.arena = arena;
       this.directory = directory;
       this.mappedVectors = mappedVectors;
     }
 
-    /**
-     * Attempts to increment the refcount. Returns {@code false} if this generation has already been
-     * retired (refcount dropped to zero).
-     */
+    int liveCount() {
+      return physicalCount - tombstones.cardinality();
+    }
+
     boolean acquire() {
       while (true) {
         int c = refs.get();
@@ -164,7 +146,6 @@ final class VectorCollectionImpl implements VectorCollection {
       }
     }
 
-    /** Decrements the refcount. Releases resources exactly once when it reaches zero. */
     void release() {
       int c = refs.decrementAndGet();
       if (c == 0) {
@@ -176,10 +157,6 @@ final class VectorCollectionImpl implements VectorCollection {
       try {
         spi.close();
       } catch (Exception e) {
-        // SPI close is a no-op in all current (Step 4a) implementations, but graph-backed SPIs
-        // landing in Step 4b may need to release real resources here. Log rather than swallow
-        // so the failure is observable, but don't rethrow — we still need to run the arena
-        // close below to avoid leaking mmap handles.
         LOGGER.log(
             Level.WARNING,
             e,
@@ -197,41 +174,30 @@ final class VectorCollectionImpl implements VectorCollection {
 
   /**
    * {@link GenerationDirectory.GenerationSource} backed by pre-built byte images for each of the
-   * generation's data files. The commit pipeline computes CRC32s before constructing the {@link
-   * Manifest}, which requires having the bytes in memory rather than streaming them to disk
-   * directly — so this source just replays each byte array into the {@code gen-NNNN.tmp/} directory
-   * via {@link MappedIdMapper.Writer#writeBytesAndFsync(Path, byte[])} (the same helper is used for
-   * every file since it's just "write + fsync").
-   *
-   * <p>{@code graphBytes} is {@code null} (or zero-length) for flat-scan generations, in which case
-   * {@link #writeGraph(Path)} is a no-op and no {@code graph.bin} entry is written. Graph-backed
-   * generations (HNSW, Vamana) pass the encoded adjacency bytes from the corresponding codec (e.g.
-   * {@code HnswGraphCodec.encode(graph)} or {@code VamanaGraphCodec.encode(graph)}).
-   *
-   * <p>{@code quantizedBytes} is {@code null} (or zero-length) for non-quantized generations, in
-   * which case {@link #writeQuantized(Path)} is a no-op and no {@code quantized.bin} entry is
-   * written. Quantization-enabled generations pass the encoded compressed vectors from {@link
-   * com.integrallis.vectors.db.storage.QuantizedVectorsCodec#encode}.
+   * generation's data files.
    */
   private static final class BufferedGenerationSource
       implements GenerationDirectory.GenerationSource {
     private final byte[] vectorsBytes;
     private final byte[] idmapBytes;
     private final byte[] metadataBytes;
-    private final byte[] graphBytes; // null or empty ⇒ no graph.bin
-    private final byte[] quantizedBytes; // null or empty ⇒ no quantized.bin
+    private final byte[] graphBytes;
+    private final byte[] quantizedBytes;
+    private final byte[] tombstonesBytes;
 
     BufferedGenerationSource(
         byte[] vectorsBytes,
         byte[] idmapBytes,
         byte[] metadataBytes,
         byte[] graphBytes,
-        byte[] quantizedBytes) {
+        byte[] quantizedBytes,
+        byte[] tombstonesBytes) {
       this.vectorsBytes = vectorsBytes;
       this.idmapBytes = idmapBytes;
       this.metadataBytes = metadataBytes;
       this.graphBytes = graphBytes;
       this.quantizedBytes = quantizedBytes;
+      this.tombstonesBytes = tombstonesBytes;
     }
 
     @Override
@@ -251,10 +217,6 @@ final class VectorCollectionImpl implements VectorCollection {
 
     @Override
     public void writeGraph(Path destination) throws IOException {
-      // GenerationDirectory only calls this for graph index types; a null or empty buffer
-      // in that context is a programmer error (the manifest's graphBinLength would be 0 while
-      // the caller declared HNSW or VAMANA). Guard defensively so the tmp dir cleanup path
-      // still fires.
       if (graphBytes == null || graphBytes.length == 0) {
         throw new IOException(
             "BufferedGenerationSource.writeGraph invoked with no graph bytes (did the caller"
@@ -266,14 +228,21 @@ final class VectorCollectionImpl implements VectorCollection {
 
     @Override
     public void writeQuantized(Path destination) throws IOException {
-      // GenerationDirectory only calls this when manifest.quantizedBinLength() > 0; a null or
-      // empty buffer in that context is a programmer error. Guard defensively.
       if (quantizedBytes == null || quantizedBytes.length == 0) {
         throw new IOException(
             "BufferedGenerationSource.writeQuantized invoked with no quantized bytes (did the"
                 + " caller forget to pass QuantizedVectorsCodec.encode through the constructor?)");
       }
       MappedIdMapper.Writer.writeBytesAndFsync(destination, quantizedBytes);
+    }
+
+    @Override
+    public void writeTombstones(Path destination) throws IOException {
+      if (tombstonesBytes == null || tombstonesBytes.length == 0) {
+        throw new IOException(
+            "BufferedGenerationSource.writeTombstones invoked with no tombstones bytes");
+      }
+      MappedIdMapper.Writer.writeBytesAndFsync(destination, tombstonesBytes);
     }
   }
 
@@ -290,19 +259,14 @@ final class VectorCollectionImpl implements VectorCollection {
   private volatile Generation generation;
 
   /**
-   * Next generation number to write. Guarded by {@link #writerLock}. Advances <i>unconditionally
-   * after a successful {@link GenerationDirectory#writeGeneration}</i>, even if the subsequent
-   * {@link #openGeneration} fails — so a retry never collides with the already-durable directory.
-   * In persistent mode this is bootstrapped to {@code recoveredGen.generationNumber + 1}; in
-   * in-memory mode it is unused (and left at 0).
+   * Next generation number to write. Guarded by {@link #writerLock}. Advances unconditionally after
+   * a successful write.
    */
   private long nextGenerationNumber;
 
   /**
    * Test-only hook. When non-null, {@link #openGeneration} throws this {@link IOException} instead
-   * of opening the generation directory. Used by {@code VectorDbPersistenceTest} to exercise the
-   * "write succeeds then open fails" recovery path (audit A1) without having to corrupt files on
-   * disk. {@code volatile} so test writes are visible to the writer-lock-held commit path.
+   * of opening the generation directory.
    */
   volatile IOException openGenerationFailureHook;
 
@@ -330,16 +294,17 @@ final class VectorCollectionImpl implements VectorCollection {
     IndexSpi emptySpi = newInMemoryAdapter();
     emptySpi.build(new float[0][], config.metric());
     return new Generation(
-        emptySpi, new InMemoryIdMapper(), new InMemoryMetadataStore(), 0, 0L, null, null, null);
+        emptySpi,
+        new InMemoryIdMapper(),
+        new InMemoryMetadataStore(),
+        0,
+        new BitSet(),
+        0L,
+        null,
+        null,
+        null);
   }
 
-  /**
-   * Creates a fresh in-memory {@link IndexSpi} that matches {@code config.indexType()}. Only used
-   * by the in-memory code paths (bootstrap and {@link #commitInMemory}). For HNSW the adapter is
-   * parameterized from {@code config.hnswParams()} and for VAMANA from {@code
-   * config.vamanaParams()} — both are guaranteed non-null by {@link VectorCollectionConfig}'s
-   * compact constructor when {@code indexType} matches.
-   */
   private IndexSpi newInMemoryAdapter() {
     return switch (config.indexType()) {
       case FLAT -> new FlatScanAdapter();
@@ -357,9 +322,6 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   private Generation bootstrapPersistent(Path storageRoot) throws IOException {
-    // Build the bootstrap payload once. The recovery sweep only materializes these bytes when the
-    // root is empty; if an existing valid generation is present, recover() opens that instead and
-    // the bootstrap arguments are effectively unused.
     byte[] emptyIdmap = MappedIdMapper.Writer.toBytes(List.of());
     byte[] emptyMetadata = MappedMetadataStore.Writer.toBytes(List.of());
     byte[] emptyVectors = new byte[0];
@@ -379,32 +341,13 @@ final class VectorCollectionImpl implements VectorCollection {
             0L,
             0L);
     GenerationDirectory.GenerationSource bootstrapSource =
-        new BufferedGenerationSource(emptyVectors, emptyIdmap, emptyMetadata, null, null);
+        new BufferedGenerationSource(emptyVectors, emptyIdmap, emptyMetadata, null, null, null);
 
     GenerationDirectory.RecoveryResult rr =
         GenerationDirectory.recover(storageRoot, bootstrapSource, bootstrap);
     return openGeneration(rr.generationDir(), rr.manifest());
   }
 
-  /**
-   * Opens a generation directory under a fresh shared {@link Arena} and returns a ready-to-use
-   * {@link Generation} with refcount initialized to 1 (the facade's handle). For {@link
-   * IndexType#FLAT} generations that is the three data files ({@code vectors.bin}, {@code
-   * idmap.bin}, {@code metadata.bin}). For {@link IndexType#HNSW} generations it additionally reads
-   * the generation's {@code graph.bin}, decodes it via {@link HnswGraphCodec#decode(byte[])}, and
-   * wraps everything in a {@link MappedHnswIndexAdapter}. For {@link IndexType#VAMANA} generations
-   * the same pattern is applied with {@link VamanaGraphCodec#decode(byte[])} and {@link
-   * MappedVamanaIndexAdapter}.
-   *
-   * <p>Per-file CRC verification is NOT done here: it is the responsibility of {@link
-   * GenerationDirectory#recover} which reads every payload file through a streaming CRC before
-   * returning a {@link GenerationDirectory.RecoveryResult}. A corrupt payload is caught at recovery
-   * time and triggers a walk-back to the previous generation. On the commit path we just wrote the
-   * files with known CRCs via {@link BufferedGenerationSource} — re-verifying them here would be a
-   * wasteful cold-cache double read of {@code vectors.bin} with no additional guarantee.
-   *
-   * <p>On failure anywhere in the open sequence, the arena is closed so partial state is released.
-   */
   private Generation openGeneration(Path genDir, Manifest manifest) throws IOException {
     IOException injected = openGenerationFailureHook;
     if (injected != null) {
@@ -412,24 +355,27 @@ final class VectorCollectionImpl implements VectorCollection {
     }
     Arena arena = Arena.ofShared();
     try {
+      // physicalCount = liveCount + tombstoneCount (liveCount in the manifest is the count of
+      // non-tombstoned vectors)
+      int physicalCount = Math.toIntExact(manifest.liveCount() + manifest.tombstoneCount());
+
       MemorySegmentVectors mapped =
           MemorySegmentVectors.open(
-              genDir.resolve(FileFormat.VECTORS_FILE),
-              Math.toIntExact(manifest.liveCount()),
-              manifest.dimension(),
-              arena);
+              genDir.resolve(FileFormat.VECTORS_FILE), physicalCount, manifest.dimension(), arena);
       IdMapper idMapper = MappedIdMapper.open(genDir.resolve(FileFormat.IDMAP_FILE), arena);
       MetadataStore metadataStore =
           MappedMetadataStore.open(genDir.resolve(FileFormat.METADATA_FILE), arena);
 
-      // 2. Construct the index SPI. Branch on the manifest's index type so FLAT, HNSW, and
-      //    VAMANA are all served from the same mmap'd vector store. An empty graph generation
-      //    (graphBinLength==0 — bootstrap or post-delete) has no graph.bin to decode, so we
-      //    serve reads from MappedFlatScanAdapter against the (empty) mmap'd vectors. The
-      //    flat-scan adapter returns an empty result set on an empty store, which is the
-      //    correct behaviour for an empty collection regardless of the declared index type —
-      //    and the next commit() with staged data will materialize a real graph.bin and the
-      //    subsequent openGeneration will take the graph branch.
+      // Load tombstones if present.
+      BitSet tombstones;
+      if (manifest.tombstonesBinLength() > 0L) {
+        byte[] tombstonesBytes =
+            java.nio.file.Files.readAllBytes(genDir.resolve(FileFormat.TOMBSTONES_FILE));
+        tombstones = TombstoneCodec.decode(tombstonesBytes);
+      } else {
+        tombstones = new BitSet();
+      }
+
       IndexSpi spi =
           switch (manifest.indexType()) {
             case FLAT -> new MappedFlatScanAdapter(mapped, config.metric());
@@ -445,13 +391,9 @@ final class VectorCollectionImpl implements VectorCollection {
                 throw new IOException(
                     "Generation "
                         + manifest.generationNumber()
-                        + " uses indexType IVF_FLAT which is not supported in Step 4c");
+                        + " uses indexType IVF_FLAT which is not supported");
           };
 
-      // 3. If the generation includes quantized.bin, deserialize and attach to the SPI.
-      //    This must happen AFTER the SPI is constructed (which creates the underlying
-      //    HnswIndex/VamanaIndex via ofPrebuilt) so enableQuantization can wire up the
-      //    quantized scoring path.
       if (manifest.quantizedBinLength() > 0L) {
         byte[] quantizedBytes =
             java.nio.file.Files.readAllBytes(genDir.resolve(FileFormat.QUANTIZED_FILE));
@@ -472,7 +414,8 @@ final class VectorCollectionImpl implements VectorCollection {
           spi,
           idMapper,
           metadataStore,
-          Math.toIntExact(manifest.liveCount()),
+          physicalCount,
+          tombstones,
           manifest.generationNumber(),
           arena,
           genDir,
@@ -490,14 +433,6 @@ final class VectorCollectionImpl implements VectorCollection {
     }
   }
 
-  /**
-   * Reads {@code graph.bin} from {@code genDir}, decodes it into an {@link HnswGraph}, and wraps
-   * the mmap'd vectors + graph in a {@link MappedHnswIndexAdapter}. The length + CRC of {@code
-   * graph.bin} are already verified by {@link GenerationDirectory#recover} before {@link
-   * #openGeneration} is invoked, so this method only has to cover the decode step plus the "no
-   * graph.bin recorded" guard for defensive programming — an empty HNSW generation is caught by the
-   * {@code graphBinLength() <= 0} branch in {@link #openGeneration} and never reaches here.
-   */
   private IndexSpi openHnswAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
       throws IOException {
     Path graphFile = genDir.resolve(FileFormat.GRAPH_FILE);
@@ -511,14 +446,6 @@ final class VectorCollectionImpl implements VectorCollection {
     return new MappedHnswIndexAdapter(graph, vectors, config.metric());
   }
 
-  /**
-   * Reads {@code graph.bin} from {@code genDir}, decodes it into a {@link VamanaGraph}, and wraps
-   * the mmap'd vectors + graph in a {@link MappedVamanaIndexAdapter}. The length + CRC of {@code
-   * graph.bin} are already verified by {@link GenerationDirectory#recover} before {@link
-   * #openGeneration} is invoked, so this method only has to cover the decode step plus the "no
-   * graph.bin recorded" guard for defensive programming — an empty Vamana generation is caught by
-   * the {@code graphBinLength() <= 0} branch in {@link #openGeneration} and never reaches here.
-   */
   private IndexSpi openVamanaAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
       throws IOException {
     Path graphFile = genDir.resolve(FileFormat.GRAPH_FILE);
@@ -555,8 +482,6 @@ final class VectorCollectionImpl implements VectorCollection {
     if (docs.isEmpty()) {
       return;
     }
-    // Validate outside the lock so dimension/null errors don't hold the writer lock and don't
-    // leave the staging buffer in a partially-populated state.
     for (Document d : docs) {
       validateForInsert(d);
     }
@@ -586,14 +511,13 @@ final class VectorCollectionImpl implements VectorCollection {
     }
   }
 
-  /**
-   * Must be called under {@link #writerLock}. Rejects duplicate ids (against the live generation
-   * and the staging buffer) in O(1) and appends to staging.
-   */
   private void stageUnderLock(Document doc) {
     String id = doc.id();
-    // Plain read — we hold the writer lock so nobody else is mutating this.generation.
-    if (generation.idMapper.contains(id) || staging.contains(id)) {
+    Generation gen = this.generation;
+    // Check id is not in live generation (and not tombstoned) and not in staging
+    int liveOrd = gen.idMapper.contains(id) ? gen.idMapper.ordinalOf(id) : -1;
+    boolean liveAndNotTombstoned = liveOrd >= 0 && !gen.tombstones.get(liveOrd);
+    if (liveAndNotTombstoned || staging.contains(id)) {
       throw new IllegalArgumentException("Duplicate id: " + id);
     }
     staging.append(doc);
@@ -604,6 +528,114 @@ final class VectorCollectionImpl implements VectorCollection {
       commitUnderLock();
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Delete / Upsert
+  // ---------------------------------------------------------------------------
+
+  @Override
+  public boolean delete(String id) {
+    Objects.requireNonNull(id, "id must not be null");
+    writerLock.lock();
+    try {
+      ensureOpenUnderLock();
+      return deleteUnderLock(id);
+    } finally {
+      writerLock.unlock();
+    }
+  }
+
+  private boolean deleteUnderLock(String id) {
+    // Case 1: id is in staging buffer (not-yet-committed add) — remove from staging.
+    if (staging.contains(id)) {
+      staging.removeDocument(id);
+      return true;
+    }
+    // Case 2: id is in live generation AND not tombstoned AND not already pending tombstone.
+    Generation gen = this.generation;
+    int ord = gen.idMapper.ordinalOf(id);
+    if (ord >= 0 && !gen.tombstones.get(ord) && !staging.isTombstoned(id)) {
+      staging.stageDelete(id);
+      return true;
+    }
+    // Case 3: unknown or already deleted.
+    return false;
+  }
+
+  @Override
+  public int deleteWhere(Filter filter) {
+    Objects.requireNonNull(filter, "filter must not be null");
+    writerLock.lock();
+    try {
+      ensureOpenUnderLock();
+      int count = 0;
+      Generation gen = this.generation;
+
+      // Walk live generation ordinals, skip tombstoned and already-pending.
+      for (int i = 0; i < gen.physicalCount; i++) {
+        if (gen.tombstones.get(i)) {
+          continue;
+        }
+        String id = gen.idMapper.idOf(i);
+        if (staging.isTombstoned(id)) {
+          continue;
+        }
+        Document doc = gen.metadataStore.get(i);
+        if (doc != null && FilterExecutor.matches(filter, doc.metadata())) {
+          staging.stageDelete(id);
+          count++;
+        }
+      }
+
+      // Also walk staged (not-yet-committed) documents and remove matches.
+      List<String> stagedToRemove = new ArrayList<>();
+      for (Document doc : staging.documents()) {
+        if (FilterExecutor.matches(filter, doc.metadata())) {
+          stagedToRemove.add(doc.id());
+        }
+      }
+      for (String id : stagedToRemove) {
+        staging.removeDocument(id);
+        count++;
+      }
+
+      return count;
+    } finally {
+      writerLock.unlock();
+    }
+  }
+
+  @Override
+  public void upsert(Document doc) {
+    validateForInsert(doc);
+    writerLock.lock();
+    try {
+      ensureOpenUnderLock();
+      String id = doc.id();
+
+      // If id in staging buffer: remove old staged version.
+      if (staging.contains(id)) {
+        staging.removeDocument(id);
+      } else {
+        // If id in live generation and not tombstoned: stage tombstone for old ordinal.
+        Generation gen = this.generation;
+        int ord = gen.idMapper.ordinalOf(id);
+        if (ord >= 0 && !gen.tombstones.get(ord) && !staging.isTombstoned(id)) {
+          staging.stageDelete(id);
+        }
+      }
+
+      // Stage new document (gets a new ordinal at the end).
+      staging.append(doc);
+      maybeAutoCommit();
+    } finally {
+      writerLock.unlock();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Commit
+  // ---------------------------------------------------------------------------
 
   @Override
   public void commit() {
@@ -616,13 +648,8 @@ final class VectorCollectionImpl implements VectorCollection {
     }
   }
 
-  /**
-   * Must be called under {@link #writerLock}. Branches on whether the collection is in-memory or
-   * persistent and delegates to the appropriate commit body. Both branches publish via a single
-   * volatile write on {@link #generation} and then release the old generation's facade handle.
-   */
   private void commitUnderLock() {
-    if (staging.isEmpty()) {
+    if (!staging.hasWork()) {
       return;
     }
     Generation oldGen = this.generation;
@@ -634,26 +661,35 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   // ---------------------------------------------------------------------------
-  // In-memory commit (Step 3 semantics preserved)
+  // In-memory commit
   // ---------------------------------------------------------------------------
 
   private void commitInMemory(Generation oldGen) {
-    int liveCount = oldGen.liveCount;
+    int oldPhysicalCount = oldGen.physicalCount;
     int stagedCount = staging.size();
-    int newSize = liveCount + stagedCount;
+    int newPhysicalCount = oldPhysicalCount + stagedCount;
+
+    // Copy the old generation's tombstones and apply pending ones.
+    BitSet newTombstones = (BitSet) oldGen.tombstones.clone();
+    for (String id : staging.pendingTombstones()) {
+      int ord = oldGen.idMapper.ordinalOf(id);
+      if (ord >= 0) {
+        newTombstones.set(ord);
+      }
+    }
 
     InMemoryIdMapper newMapper = InMemoryIdMapper.copyOf((InMemoryIdMapper) oldGen.idMapper);
     InMemoryMetadataStore newMeta =
         InMemoryMetadataStore.copyOf((InMemoryMetadataStore) oldGen.metadataStore);
 
-    // Build the successor vector matrix with DEFENSIVE COPIES of every row. The metadata store
-    // retains references to each Document's original vector array (for get(String) hydration),
-    // so sharing those arrays with the FlatScanAdapter would let one subsystem silently observe
-    // mutations made through the other — even if no current code mutates, the pre-existing Step
-    // 3 design would silently corrupt both if a future caller held onto a Document.vector() and
-    // mutated it in place. Cloning on commit cuts the alias.
-    float[][] next = new float[newSize][];
-    for (int i = 0; i < liveCount; i++) {
+    // Build the successor vector matrix. All ordinals — including tombstoned ones — retain their
+    // original vectors so graph traversal never operates on zero-vector placeholders, which would
+    // produce NaN cosine-similarity scores and corrupt the HNSW/Vamana priority-queue ordering.
+    // Tombstoned ordinals are excluded from search results by the tombstone check in search(),
+    // not by zeroing out their vector content. This makes in-memory mode consistent with the
+    // persistent path, which bulk-copies vectors.bin byte-for-byte (tombstoned bytes included).
+    float[][] next = new float[newPhysicalCount][];
+    for (int i = 0; i < oldPhysicalCount; i++) {
       Document stored = oldGen.metadataStore.get(i);
       if (stored == null) {
         throw new IllegalStateException(
@@ -664,8 +700,10 @@ final class VectorCollectionImpl implements VectorCollection {
     List<Document> stagedDocs = staging.documents();
     for (int i = 0; i < stagedCount; i++) {
       Document doc = stagedDocs.get(i);
-      int ordinal = newMapper.put(doc.id());
-      int expected = liveCount + i;
+      // Use putOrReplace because an upserted doc may have the same id as a tombstoned ordinal
+      // in the predecessor generation (the old forward mapping must be overwritten).
+      int ordinal = newMapper.putOrReplace(doc.id());
+      int expected = oldPhysicalCount + i;
       if (ordinal != expected) {
         throw new IllegalStateException(
             "Ordinal mismatch: expected " + expected + " but got " + ordinal);
@@ -677,39 +715,54 @@ final class VectorCollectionImpl implements VectorCollection {
     IndexSpi newSpi = newInMemoryAdapter();
     newSpi.build(next, config.metric());
 
-    // Train quantizer and attach compressed vectors for two-pass search.
-    if (config.quantizerKind() != QuantizerKind.NONE && newSize > 0) {
-      VectorDataset dataset = new ArrayVectorDataset(next);
-      TrainedQuantization tq = trainQuantizer(dataset, config);
-      if (newSpi instanceof HnswIndexAdapter ha) {
-        ha.enableQuantization(tq.compressed());
-      } else if (newSpi instanceof VamanaIndexAdapter va) {
-        va.enableQuantization(tq.compressed());
+    // Train quantizer if configured.
+    if (config.quantizerKind() != QuantizerKind.NONE
+        && liveCountFrom(newPhysicalCount, newTombstones) > 0) {
+      // Build a dataset of only live vectors for quantizer training.
+      float[][] liveVectors = extractLiveVectors(next, newTombstones);
+      if (liveVectors.length > 0) {
+        VectorDataset dataset = new ArrayVectorDataset(liveVectors);
+        TrainedQuantization tq = trainQuantizer(dataset, config);
+        if (newSpi instanceof HnswIndexAdapter ha) {
+          ha.enableQuantization(tq.compressed());
+        } else if (newSpi instanceof VamanaIndexAdapter va) {
+          va.enableQuantization(tq.compressed());
+        }
       }
     }
 
-    Generation newGen = new Generation(newSpi, newMapper, newMeta, newSize, 0L, null, null, null);
+    Generation newGen =
+        new Generation(
+            newSpi, newMapper, newMeta, newPhysicalCount, newTombstones, 0L, null, null, null);
     this.generation = newGen;
     staging.clear();
-    // Drop the facade's handle on the old generation. Any in-flight reader still holding a
-    // refcount on it finishes normally; closeResources() fires on the last release.
     oldGen.release();
   }
 
   // ---------------------------------------------------------------------------
-  // Persistent commit (Step 4a)
+  // Persistent commit
   // ---------------------------------------------------------------------------
 
   private void commitPersistent(Generation oldGen) {
-    int liveCount = oldGen.liveCount;
+    int oldPhysicalCount = oldGen.physicalCount;
     int stagedCount = staging.size();
-    int newSize = liveCount + stagedCount;
+    int newPhysicalCount = oldPhysicalCount + stagedCount;
     int dim = config.dimension();
 
+    // Apply tombstones.
+    BitSet newTombstones = (BitSet) oldGen.tombstones.clone();
+    for (String id : staging.pendingTombstones()) {
+      int ord = oldGen.idMapper.ordinalOf(id);
+      if (ord >= 0) {
+        newTombstones.set(ord);
+      }
+    }
+
     // 1. Build the ordered (id, document) lists for the successor generation.
-    List<String> newIds = new ArrayList<>(newSize);
-    List<Document> newDocs = new ArrayList<>(newSize);
-    for (int i = 0; i < liveCount; i++) {
+    //    ALL ordinals 0..physicalCount-1 are included (including tombstoned).
+    List<String> newIds = new ArrayList<>(newPhysicalCount);
+    List<Document> newDocs = new ArrayList<>(newPhysicalCount);
+    for (int i = 0; i < oldPhysicalCount; i++) {
       newIds.add(oldGen.idMapper.idOf(i));
       newDocs.add(oldGen.metadataStore.get(i));
     }
@@ -718,15 +771,12 @@ final class VectorCollectionImpl implements VectorCollection {
       newDocs.add(d);
     }
 
-    // 2. Build the three data-file byte images in memory so we can CRC them before constructing
-    //    the manifest (the manifest embeds the CRCs). For graph indexes (HNSW / VAMANA) the
-    //    same helper also materializes a float[][] matrix in the SAME pass — previously this
-    //    was a second pass over the live+staged vector set, doubling the per-staged-vector work
-    //    (once to write to vectors.bin, once to clone into the matrix). Audit B2 fuses the two.
+    // 2. Build the data-file byte images.
     boolean needMatrix =
         config.indexType() == IndexType.HNSW || config.indexType() == IndexType.VAMANA;
     Materialized materialized =
-        materializeSuccessor(oldGen.mappedVectors, liveCount, staging.documents(), dim, needMatrix);
+        materializeSuccessor(
+            oldGen.mappedVectors, oldPhysicalCount, staging.documents(), dim, needMatrix);
     byte[] vectorsBin = materialized.vectorsBin();
     byte[] idmapBin;
     byte[] metadataBin;
@@ -737,10 +787,7 @@ final class VectorCollectionImpl implements VectorCollection {
       throw new UncheckedIOException("Failed to serialize commit payload", e);
     }
 
-    // 2a. Graph-index-only: encode the successor matrix (already materialized above in the
-    //     same pass that produced vectors.bin) into graph.bin bytes via the appropriate codec.
-    //     For FLAT this block is skipped and graphBin stays null (the Manifest records
-    //     graphBinLength=0 and GenerationDirectory skips the writeGraph callback entirely).
+    // 2a. Graph bytes.
     byte[] graphBin = null;
     long graphBinLength = 0L;
     long graphBinCrc = 0L;
@@ -752,34 +799,39 @@ final class VectorCollectionImpl implements VectorCollection {
       }
     }
 
-    // 2b. Quantization: train the quantizer on the successor matrix, encode all vectors into
-    //     compressed form, then serialize to quantized.bin bytes. For NONE this block is skipped.
-    //     The matrix is guaranteed non-null here because FLAT + non-NONE is blocked in the builder.
+    // 2b. Quantization.
     byte[] quantizedBin = null;
     long quantizedBinLength = 0L;
     long quantizedBinCrc = 0L;
-    TrainedQuantization trainedQ = null;
-    if (config.quantizerKind() != QuantizerKind.NONE && newSize > 0) {
-      VectorDataset dataset = new ArrayVectorDataset(materialized.matrix());
-      trainedQ = trainQuantizer(dataset, config);
-      quantizedBin =
-          QuantizedVectorsCodec.encode(
-              trainedQ.compressed(), trainedQ.quantizer(), config.quantizerKind());
-      quantizedBinLength = (long) quantizedBin.length;
-      quantizedBinCrc = Checksums.ofBytes(quantizedBin);
+    int liveCount = liveCountFrom(newPhysicalCount, newTombstones);
+    if (config.quantizerKind() != QuantizerKind.NONE
+        && liveCount > 0
+        && materialized.matrix() != null) {
+      float[][] liveVectors = extractLiveVectors(materialized.matrix(), newTombstones);
+      if (liveVectors.length > 0) {
+        VectorDataset dataset = new ArrayVectorDataset(liveVectors);
+        TrainedQuantization trainedQ = trainQuantizer(dataset, config);
+        quantizedBin =
+            QuantizedVectorsCodec.encode(
+                trainedQ.compressed(), trainedQ.quantizer(), config.quantizerKind());
+        quantizedBinLength = (long) quantizedBin.length;
+        quantizedBinCrc = Checksums.ofBytes(quantizedBin);
+      }
     }
 
-    // 3. Build the manifest, then hand everything to GenerationDirectory.writeGeneration which
-    //    runs the full crash-safe write protocol (tmp dir → files → fsync → rename → CURRENT).
-    //    nextGenerationNumber is our monotonic counter — it advances unconditionally after a
-    //    successful write (step 3a below) so any subsequent retry after an open-failure lands on
-    //    gen-(N+1) instead of colliding with the already-durable gen-N on disk.
+    // 2c. Tombstones.
+    byte[] tombstonesBin = TombstoneCodec.encode(newTombstones, newPhysicalCount);
+    long tombstonesBinLength = (long) tombstonesBin.length;
+    long tombstonesBinCrc = tombstonesBin.length > 0 ? Checksums.ofBytes(tombstonesBin) : 0L;
+    int tombstoneCount = newTombstones.cardinality();
+
+    // 3. Build the manifest.
     long newGenNumber = nextGenerationNumber;
     Manifest manifest =
-        Manifest.build(
+        Manifest.buildWithTombstones(
             config,
             newGenNumber,
-            (long) newSize,
+            (long) liveCount,
             (long) vectorsBin.length,
             Checksums.ofBytes(vectorsBin),
             (long) metadataBin.length,
@@ -789,7 +841,10 @@ final class VectorCollectionImpl implements VectorCollection {
             graphBinLength,
             graphBinCrc,
             quantizedBinLength,
-            quantizedBinCrc);
+            quantizedBinCrc,
+            (long) tombstoneCount,
+            tombstonesBinLength,
+            tombstonesBinCrc);
 
     GenerationDirectory.WriteResult wr;
     try {
@@ -798,32 +853,18 @@ final class VectorCollectionImpl implements VectorCollection {
               config.storageRoot(),
               newGenNumber,
               new BufferedGenerationSource(
-                  vectorsBin, idmapBin, metadataBin, graphBin, quantizedBin),
+                  vectorsBin, idmapBin, metadataBin, graphBin, quantizedBin, tombstonesBin),
               manifest);
     } catch (IOException e) {
-      // Write failed — the gen directory was not durably created (GenerationDirectory fsyncs and
-      // renames atomically). nextGenerationNumber is NOT advanced; the next retry can reuse the
-      // same number.
       throw new UncheckedIOException("Failed to write generation " + newGenNumber, e);
     }
 
-    // 3a. Write succeeded — gen-N and CURRENT are on disk. Advance the counter BEFORE attempting
-    //     open so a subsequent open-failure + retry correctly targets gen-(N+1). Crucial for
-    //     recovery from transient open failures (fd exhaustion, OOM during mmap, etc.).
     nextGenerationNumber = newGenNumber + 1L;
 
-    // 4. Open the new generation under a fresh shared arena, then publish it atomically via a
-    //    single volatile write. Any in-flight reader captured oldGen before the publish and will
-    //    finish against it; subsequent reads observe newGen.
     Generation newGen;
     try {
       newGen = openGeneration(wr.generationDir(), wr.manifest());
     } catch (IOException e) {
-      // The gen dir and CURRENT pointer are durable on disk, and nextGenerationNumber has been
-      // advanced. A subsequent commit() retry will write to gen-(N+1), leaving gen-N as an
-      // unreachable orphan (CURRENT will be overwritten). The staging buffer is NOT cleared so
-      // the caller can still retry; oldGen stays live so concurrent readers keep observing a
-      // consistent (pre-commit) view.
       throw new UncheckedIOException(
           "Generation "
               + newGenNumber
@@ -837,44 +878,228 @@ final class VectorCollectionImpl implements VectorCollection {
     oldGen.release();
   }
 
-  /**
-   * Carrier record returned by {@link #materializeSuccessor}. The {@code matrix} field is {@code
-   * null} on FLAT commits (no graph builder to feed) and non-null on HNSW / VAMANA commits. Two
-   * fields so the graph-index commit branch can reuse the same row clones it already had to produce
-   * for {@code vectors.bin}, instead of re-walking the staged list.
-   */
+  // ---------------------------------------------------------------------------
+  // Compact
+  // ---------------------------------------------------------------------------
+
+  @Override
+  public void compact() {
+    writerLock.lock();
+    try {
+      ensureOpenUnderLock();
+      // Commit any pending work first.
+      if (staging.hasWork()) {
+        commitUnderLock();
+      }
+      Generation gen = this.generation;
+      if (gen.tombstones.isEmpty()) {
+        return; // no-op if no tombstones
+      }
+      if (config.storageRoot() == null) {
+        compactInMemory(gen);
+      } else {
+        compactPersistent(gen);
+      }
+    } finally {
+      writerLock.unlock();
+    }
+  }
+
+  private void compactInMemory(Generation oldGen) {
+    int liveCount = oldGen.liveCount();
+    InMemoryIdMapper newMapper = new InMemoryIdMapper();
+    InMemoryMetadataStore newMeta = new InMemoryMetadataStore();
+    float[][] next = new float[liveCount][];
+
+    int slot = 0;
+    for (int i = 0; i < oldGen.physicalCount; i++) {
+      if (oldGen.tombstones.get(i)) {
+        continue;
+      }
+      String id = oldGen.idMapper.idOf(i);
+      Document doc = oldGen.metadataStore.get(i);
+      if (doc == null) {
+        continue;
+      }
+      int ordinal = newMapper.put(id);
+      newMeta.put(ordinal, doc);
+      next[slot] = doc.vector() != null ? doc.vector().clone() : new float[config.dimension()];
+      slot++;
+    }
+
+    IndexSpi newSpi = newInMemoryAdapter();
+    newSpi.build(next, config.metric());
+
+    // Retrain quantizer on compacted data.
+    if (config.quantizerKind() != QuantizerKind.NONE && liveCount > 0) {
+      VectorDataset dataset = new ArrayVectorDataset(next);
+      TrainedQuantization tq = trainQuantizer(dataset, config);
+      if (newSpi instanceof HnswIndexAdapter ha) {
+        ha.enableQuantization(tq.compressed());
+      } else if (newSpi instanceof VamanaIndexAdapter va) {
+        va.enableQuantization(tq.compressed());
+      }
+    }
+
+    Generation newGen =
+        new Generation(newSpi, newMapper, newMeta, liveCount, new BitSet(), 0L, null, null, null);
+    this.generation = newGen;
+    oldGen.release();
+  }
+
+  private void compactPersistent(Generation oldGen) {
+    // Gather only live documents into dense ordinal order.
+    int liveCount = oldGen.liveCount();
+    List<String> newIds = new ArrayList<>(liveCount);
+    List<Document> newDocs = new ArrayList<>(liveCount);
+    float[][] matrix = new float[liveCount][];
+
+    int slot = 0;
+    for (int i = 0; i < oldGen.physicalCount; i++) {
+      if (oldGen.tombstones.get(i)) {
+        continue;
+      }
+      String id = oldGen.idMapper.idOf(i);
+      Document doc = oldGen.metadataStore.get(i);
+      newIds.add(id);
+      newDocs.add(doc);
+      // Hydrate vector from mmap if needed.
+      if (doc != null && doc.vector() != null) {
+        matrix[slot] = doc.vector().clone();
+      } else if (oldGen.mappedVectors != null) {
+        float[] v = new float[config.dimension()];
+        MemorySegment.copy(
+            oldGen.mappedVectors.vectorSlice(i),
+            ValueLayout.JAVA_FLOAT,
+            0L,
+            v,
+            0,
+            config.dimension());
+        matrix[slot] = v;
+      } else {
+        matrix[slot] = new float[config.dimension()];
+      }
+      slot++;
+    }
+
+    int dim = config.dimension();
+
+    // Build vectors.bin from the compacted matrix.
+    byte[] vectorsBin = buildVectorsBinFromMatrix(matrix, dim);
+    byte[] idmapBin;
+    byte[] metadataBin;
+    try {
+      idmapBin = MappedIdMapper.Writer.toBytes(newIds);
+      metadataBin = MappedMetadataStore.Writer.toBytes(newDocs);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to serialize compact payload", e);
+    }
+
+    // Graph.
+    byte[] graphBin = null;
+    long graphBinLength = 0L;
+    long graphBinCrc = 0L;
+    boolean needGraph =
+        config.indexType() == IndexType.HNSW || config.indexType() == IndexType.VAMANA;
+    if (needGraph && liveCount > 0) {
+      graphBin = encodeGraphBytes(matrix);
+      if (graphBin != null) {
+        graphBinLength = (long) graphBin.length;
+        graphBinCrc = Checksums.ofBytes(graphBin);
+      }
+    }
+
+    // Quantization.
+    byte[] quantizedBin = null;
+    long quantizedBinLength = 0L;
+    long quantizedBinCrc = 0L;
+    TrainedQuantization trainedQ = null;
+    if (config.quantizerKind() != QuantizerKind.NONE && liveCount > 0) {
+      VectorDataset dataset = new ArrayVectorDataset(matrix);
+      trainedQ = trainQuantizer(dataset, config);
+      quantizedBin =
+          QuantizedVectorsCodec.encode(
+              trainedQ.compressed(), trainedQ.quantizer(), config.quantizerKind());
+      quantizedBinLength = (long) quantizedBin.length;
+      quantizedBinCrc = Checksums.ofBytes(quantizedBin);
+    }
+
+    // No tombstones after compact.
+    long newGenNumber = nextGenerationNumber;
+    Manifest manifest =
+        Manifest.buildWithTombstones(
+            config,
+            newGenNumber,
+            (long) liveCount,
+            (long) vectorsBin.length,
+            Checksums.ofBytes(vectorsBin),
+            (long) metadataBin.length,
+            Checksums.ofBytes(metadataBin),
+            (long) idmapBin.length,
+            Checksums.ofBytes(idmapBin),
+            graphBinLength,
+            graphBinCrc,
+            quantizedBinLength,
+            quantizedBinCrc,
+            0L,
+            0L,
+            0L);
+
+    GenerationDirectory.WriteResult wr;
+    try {
+      wr =
+          GenerationDirectory.writeGeneration(
+              config.storageRoot(),
+              newGenNumber,
+              new BufferedGenerationSource(
+                  vectorsBin, idmapBin, metadataBin, graphBin, quantizedBin, null),
+              manifest);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to write compacted generation " + newGenNumber, e);
+    }
+
+    nextGenerationNumber = newGenNumber + 1L;
+
+    Generation newGen;
+    try {
+      newGen = openGeneration(wr.generationDir(), wr.manifest());
+    } catch (IOException e) {
+      throw new UncheckedIOException("Compacted generation cannot be opened", e);
+    }
+
+    this.generation = newGen;
+    oldGen.release();
+  }
+
+  /** Builds a vectors.bin byte image from a float[][] matrix. */
+  private static byte[] buildVectorsBinFromMatrix(float[][] matrix, int dim) {
+    long strideL = AlignmentUtil.alignUp((long) dim * Float.BYTES, AlignmentUtil.VECTOR_ALIGNMENT);
+    int stride = (int) strideL;
+    long totalL = strideL * (long) matrix.length;
+    if (totalL > Integer.MAX_VALUE) {
+      throw new IllegalStateException("vectors.bin exceeds 2 GiB: " + totalL);
+    }
+    byte[] out = new byte[(int) totalL];
+    int rawVecBytes = dim * Float.BYTES;
+    ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
+    for (float[] v : matrix) {
+      for (int j = 0; j < dim; j++) {
+        buf.putFloat(v[j]);
+      }
+      buf.position(buf.position() + (stride - rawVecBytes));
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Materialization helpers
+  // ---------------------------------------------------------------------------
+
   private record Materialized(byte[] vectorsBin, float[][] matrix) {}
 
-  /**
-   * Single-pass materialization of the successor vector set for {@link #commitPersistent}. Walks
-   * the staged documents exactly once, writing each vector into the on-disk {@code vectors.bin}
-   * byte image and — if {@code needMatrix} is true — also stashing a defensive clone in a {@code
-   * float[][]} matrix that the graph-builder branch will reuse to drive {@link
-   * HnswIndexAdapter#build} / {@link VamanaIndexAdapter#build}. Replaces the legacy two-pass
-   * pattern (Audit B2) where {@code buildVectorsBin} and {@code buildSuccessorMatrix} each iterated
-   * the staged list independently.
-   *
-   * <p><b>Old generation rows.</b> The old generation's bytes are bulk-copied out of the mmap'd
-   * segment via a single {@link MemorySegment#copy} call (same stride, same dim — no float-by-
-   * float reconstruction on the bulk path). When {@code needMatrix} is true, a second per-row loop
-   * then extracts those same rows into fresh {@code float[]} instances for the matrix. We
-   * deliberately keep the bulk-copy fast path for the byte image rather than deriving the bytes
-   * from the matrix: the bulk copy is a single syscall vs N per-row syscalls, and it preserves
-   * bit-identity between FLAT and graph commits (the regression test in {@code
-   * VectorDbPersistenceTest#flatAndHnswProduceIdenticalVectorsBin} guards this).
-   *
-   * <p><b>Staged rows.</b> Staged documents are walked once. For each staged doc: the raw floats
-   * are packed into {@code vectors.bin} (little-endian, 64-byte stride alignment), and — if {@code
-   * needMatrix} — a defensive clone is placed in the matrix. Cloning is required because the graph
-   * builder may reorder or retain elements, and the {@code Document.vector()} reference is owned by
-   * application code.
-   *
-   * <p>For the very first persistent commit the bootstrap generation has {@code liveCount == 0} so
-   * both the bulk-copy and the per-row extraction are zero-length no-ops.
-   */
   private static Materialized materializeSuccessor(
       MemorySegmentVectors oldMapped,
-      int liveCount,
+      int physicalCount,
       List<Document> staged,
       int dim,
       boolean needMatrix) {
@@ -883,7 +1108,7 @@ final class VectorCollectionImpl implements VectorCollection {
       throw new IllegalStateException("vector stride exceeds 2 GiB: " + strideL);
     }
     int stride = (int) strideL;
-    int newSize = liveCount + staged.size();
+    int newSize = physicalCount + staged.size();
     long totalL = strideL * (long) newSize;
     if (totalL > Integer.MAX_VALUE) {
       throw new IllegalStateException("vectors.bin exceeds 2 GiB: " + totalL);
@@ -891,17 +1116,12 @@ final class VectorCollectionImpl implements VectorCollection {
     byte[] out = new byte[(int) totalL];
     float[][] matrix = needMatrix ? new float[newSize][] : null;
 
-    // Bulk-copy the old generation byte-for-byte. Zero-length no-op on bootstrap.
-    if (liveCount > 0 && oldMapped != null) {
-      long oldBytes = strideL * liveCount;
+    // Bulk-copy the old generation byte-for-byte.
+    if (physicalCount > 0 && oldMapped != null) {
+      long oldBytes = strideL * physicalCount;
       MemorySegment.copy(oldMapped.segment(), ValueLayout.JAVA_BYTE, 0L, out, 0, (int) oldBytes);
-      // When the caller needs a float[][] matrix, extract the old rows into fresh rows
-      // alongside the bulk copy. This double-walk on old rows is unavoidable (bytes vs floats
-      // are different in-memory shapes) but costs only N per-row copies, dwarfed by the graph
-      // build itself. The staged rows — previously the duplicated hot path — are now single-
-      // walked below.
       if (needMatrix) {
-        for (int i = 0; i < liveCount; i++) {
+        for (int i = 0; i < physicalCount; i++) {
           float[] v = new float[dim];
           MemorySegment.copy(oldMapped.vectorSlice(i), ValueLayout.JAVA_FLOAT, 0L, v, 0, dim);
           matrix[i] = v;
@@ -909,23 +1129,13 @@ final class VectorCollectionImpl implements VectorCollection {
       }
     }
 
-    // Single pass over staged: pack floats into vectors.bin AND (optionally) clone into matrix.
-    // Alignment padding between entries is already zero from the byte[] initializer.
     int rawVecBytes = dim * Float.BYTES;
     ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
-    // stride * liveCount is provably safe from int overflow: the totalL guard above already
-    // rejected stride * newSize > Integer.MAX_VALUE, and liveCount <= newSize, so this product
-    // is bounded by the same guard without needing a (long) widening.
-    buf.position(stride * liveCount);
+    buf.position(stride * physicalCount);
     for (int s = 0; s < staged.size(); s++) {
       float[] v = staged.get(s).vector();
-      // B1 clarification: the clone below goes to the matrix ONLY. The putFloat loop that
-      // follows reads from the ORIGINAL v — matrix and vectors.bin are both populated from the
-      // same source reference, so HNSW and FLAT commits produce byte-identical vectors.bin
-      // images regardless of whether the matrix is also being materialized.
       if (needMatrix) {
-        // Defensive clone so the graph builder never aliases a user-owned Document.vector().
-        matrix[liveCount + s] = v.clone();
+        matrix[physicalCount + s] = v.clone();
       }
       for (int j = 0; j < dim; j++) {
         buf.putFloat(v[j]);
@@ -935,19 +1145,6 @@ final class VectorCollectionImpl implements VectorCollection {
     return new Materialized(out, matrix);
   }
 
-  /**
-   * Rebuilds the appropriate graph index from a successor vector matrix and encodes the resulting
-   * graph to its on-disk byte image. Dispatches on {@code config.indexType()}: HNSW routes through
-   * {@link HnswIndexAdapter} + {@link HnswGraphCodec}, VAMANA routes through {@link
-   * VamanaIndexAdapter} + {@link VamanaGraphCodec}. Returns {@code null} if the adapter's {@code
-   * graph()} accessor yields {@code null} (only possible with a zero-vector build, which {@link
-   * #commitUnderLock} already short-circuits before reaching here — the null guard is purely
-   * defensive so a future caller that routes an empty matrix through this path falls back to the
-   * "HNSW/VAMANA with no graph.bin" branch in {@link #openGeneration} instead of writing an empty
-   * graph file).
-   *
-   * <p>Called exclusively by {@link #commitPersistent} under the writer lock.
-   */
   private byte[] encodeGraphBytes(float[][] matrix) {
     return switch (config.indexType()) {
       case HNSW -> {
@@ -975,20 +1172,8 @@ final class VectorCollectionImpl implements VectorCollection {
   // Quantization training
   // ---------------------------------------------------------------------------
 
-  /**
-   * Carrier for a trained quantizer and its compressed output. The quantizer is needed by the
-   * persistent commit path to serialize to {@code quantized.bin} via {@link
-   * QuantizedVectorsCodec#encode}; the compressed vectors are needed by both the in-memory path
-   * (attach to the adapter via {@code enableQuantization}) and the persistent path (serialize +
-   * attach after reopen).
-   */
   private record TrainedQuantization(Quantizer<?> quantizer, CompressedVectors compressed) {}
 
-  /**
-   * Trains the appropriate quantizer from the config's {@link QuantizerKind} and {@link
-   * QuantizerParams}, then encodes all vectors into a {@link CompressedVectors}. Called under the
-   * writer lock from both {@link #commitInMemory} and {@link #commitPersistent}.
-   */
   @SuppressWarnings("unchecked")
   private static TrainedQuantization trainQuantizer(
       VectorDataset dataset, VectorCollectionConfig config) {
@@ -1033,6 +1218,30 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   // ---------------------------------------------------------------------------
+  // Tombstone helpers
+  // ---------------------------------------------------------------------------
+
+  private static int liveCountFrom(int physicalCount, BitSet tombstones) {
+    return physicalCount - tombstones.cardinality();
+  }
+
+  /**
+   * Extracts only the live (non-tombstoned) vectors from a matrix. Used for quantizer training
+   * which should not see zero-placeholder vectors.
+   */
+  private static float[][] extractLiveVectors(float[][] matrix, BitSet tombstones) {
+    int liveCount = matrix.length - tombstones.cardinality();
+    float[][] live = new float[liveCount][];
+    int slot = 0;
+    for (int i = 0; i < matrix.length; i++) {
+      if (!tombstones.get(i)) {
+        live[slot++] = matrix[i];
+      }
+    }
+    return live;
+  }
+
+  // ---------------------------------------------------------------------------
   // Read API
   // ---------------------------------------------------------------------------
 
@@ -1053,19 +1262,13 @@ final class VectorCollectionImpl implements VectorCollection {
     try {
       long start = System.nanoTime();
 
-      // When a filter is active, request more candidates from the SPI so that
-      // post-filtering still yields k results in most cases. filterExpansion is
-      // independent of overQueryFactor (which controls the SPI's two-pass quantization
-      // rescore budget) to avoid compounding multipliers.
       int candidateK = request.k();
       int candidateSearchListSize = request.searchListSize();
       if (hasFilter) {
         candidateK =
             Math.min(
                 Math.max((int) Math.ceil(request.k() * request.filterExpansion()), request.k()),
-                Math.max(gen.liveCount, request.k()));
-        // Scale the beam width alongside candidateK so graph indexes actually explore
-        // enough nodes to produce the expanded candidate pool.
+                Math.max(gen.liveCount(), request.k()));
         candidateSearchListSize = Math.max(candidateK, request.searchListSize());
       }
 
@@ -1078,6 +1281,10 @@ final class VectorCollectionImpl implements VectorCollection {
 
       List<SearchResult.Hit> hits = new ArrayList<>(Math.min(ordinals.length, request.k()));
       for (int i = 0; i < ordinals.length && hits.size() < request.k(); i++) {
+        // Tombstone check — cheapest skip, before everything else.
+        if (gen.tombstones.get(ordinals[i])) {
+          continue;
+        }
         float score = scores[i];
         if (score < request.minScore()) {
           continue;
@@ -1086,15 +1293,12 @@ final class VectorCollectionImpl implements VectorCollection {
         if (stored == null) {
           continue;
         }
-        // Post-filter: skip documents whose metadata does not satisfy the filter.
         if (hasFilter && !FilterExecutor.matches(filter, stored.metadata())) {
           continue;
         }
         float[] vector = null;
         if (request.includeVector()) {
           vector = stored.vector();
-          // In persistent mode the mapped metadata store returns Documents with vector == null.
-          // Hydrate from the mmap'd vectors segment on demand so the caller gets the full row.
           if (vector == null && gen.mappedVectors != null) {
             vector = new float[config.dimension()];
             MemorySegment.copy(
@@ -1115,7 +1319,7 @@ final class VectorCollectionImpl implements VectorCollection {
         hits.add(new SearchResult.Hit(stored.id(), score, projected));
       }
 
-      if (hasFilter && hits.size() < request.k() && gen.liveCount >= request.k()) {
+      if (hasFilter && hits.size() < request.k() && gen.liveCount() >= request.k()) {
         LOGGER.log(
             Level.FINE,
             "Filtered search returned {0} of {1} requested results "
@@ -1136,7 +1340,10 @@ final class VectorCollectionImpl implements VectorCollection {
     Generation gen = acquireReadSnapshot();
     try {
       int ord = gen.idMapper.ordinalOf(id);
-      return ord < 0 ? null : gen.metadataStore.get(ord);
+      if (ord < 0 || gen.tombstones.get(ord)) {
+        return null;
+      }
+      return gen.metadataStore.get(ord);
     } finally {
       gen.release();
     }
@@ -1147,7 +1354,8 @@ final class VectorCollectionImpl implements VectorCollection {
     Objects.requireNonNull(id, "id must not be null");
     Generation gen = acquireReadSnapshot();
     try {
-      return gen.idMapper.contains(id);
+      int ord = gen.idMapper.ordinalOf(id);
+      return ord >= 0 && !gen.tombstones.get(ord);
     } finally {
       gen.release();
     }
@@ -1157,7 +1365,7 @@ final class VectorCollectionImpl implements VectorCollection {
   public int size() {
     Generation gen = acquireReadSnapshot();
     try {
-      return gen.liveCount;
+      return gen.liveCount();
     } finally {
       gen.release();
     }
@@ -1165,7 +1373,12 @@ final class VectorCollectionImpl implements VectorCollection {
 
   @Override
   public int physicalSize() {
-    return size();
+    Generation gen = acquireReadSnapshot();
+    try {
+      return gen.physicalCount;
+    } finally {
+      gen.release();
+    }
   }
 
   @Override
@@ -1175,9 +1388,7 @@ final class VectorCollectionImpl implements VectorCollection {
 
   @Override
   public void flush() {
-    // No-op in both modes. The persistent commit pipeline already fsyncs every data file and the
-    // manifest before returning, and the mmap'd files are read-only once opened — there is
-    // nothing dirty to flush between commits. In-memory mode has nothing to persist.
+    // No-op in both modes.
   }
 
   @Override
@@ -1190,31 +1401,12 @@ final class VectorCollectionImpl implements VectorCollection {
       }
       this.generation = null;
       staging.clear();
-      // Drop the facade's handle. Any in-flight reader still holding a refcount finishes against
-      // the captured snapshot; closeResources() fires on the last release.
       gen.release();
     } finally {
       writerLock.unlock();
     }
   }
 
-  /**
-   * Captures the current generation via a volatile read and acquires a refcount on it. The caller
-   * MUST release the snapshot in a {@code finally} block.
-   *
-   * <p>Retries if the captured generation was retired between the volatile read and the refcount
-   * CAS. This window exists because the commit path publishes the new generation via a volatile
-   * write and THEN releases the old generation's facade handle — a reader that reads {@code
-   * this.generation} just before the volatile publish can observe a still-alive old generation,
-   * only to have that generation's refcount drop to zero moments later when the committing writer
-   * decrements the facade handle. In that case the reader's {@code acquire()} CAS sees {@code refs
-   * == 0} and must re-read {@link #generation}, which is now guaranteed to point at the new
-   * generation (or {@code null} if the collection was actually closed). Without this retry the
-   * reader would spuriously observe {@code IllegalStateException("closed")} during a concurrent
-   * commit, which manifests as the {@code MonotonicObservedSize} flake.
-   *
-   * @throws IllegalStateException if the collection has actually been closed (generation is null)
-   */
   private Generation acquireReadSnapshot() {
     while (true) {
       Generation gen = this.generation;
@@ -1224,18 +1416,9 @@ final class VectorCollectionImpl implements VectorCollection {
       if (gen.acquire()) {
         return gen;
       }
-      // The generation was retired between the volatile read and the CAS — a newer generation has
-      // been published (or close() is racing). Retry the volatile read; on the next pass we either
-      // acquire the successor or observe the null and throw.
     }
   }
 
-  /**
-   * Must be called under {@link #writerLock}. Fast-path "closed" check for write operations; no
-   * refcount bump because writers never read from the generation past this point — they either
-   * mutate {@link #staging} (visible only through a subsequent commit) or rebuild the generation
-   * wholesale.
-   */
   private void ensureOpenUnderLock() {
     if (this.generation == null) {
       throw new IllegalStateException("VectorCollection is closed");

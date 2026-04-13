@@ -63,6 +63,23 @@ public final class InMemoryIdMapper implements IdMapper {
     return ordinal;
   }
 
+  /**
+   * Registers an external id at a new ordinal, replacing any existing forward mapping. The old
+   * ordinal's reverse entry ({@code ordinalToId[oldOrd]}) is <em>not</em> removed — the caller is
+   * expected to have tombstoned it so that it's never consulted via the forward path. Returns the
+   * newly assigned ordinal.
+   *
+   * <p>Used by the commit pipeline when an upserted document has the same id as a tombstoned
+   * ordinal in the predecessor generation.
+   */
+  public int putOrReplace(String id) {
+    Objects.requireNonNull(id, "id must not be null");
+    int ordinal = ordinalToId.size();
+    ordinalToId.add(id);
+    idToOrdinal.put(id, ordinal); // overwrites old mapping if present
+    return ordinal;
+  }
+
   /** Returns {@code true} if the external id is known to this mapper. */
   @Override
   public boolean contains(String id) {

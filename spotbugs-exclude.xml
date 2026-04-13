@@ -159,14 +159,6 @@
         <Class name="com.integrallis.vectors.db.index.FlatScanAdapter"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
-    <!-- vectors-db: StagingBuffer deliberately hands out its internal document list to the
-         VectorCollectionImpl commit pipeline. Safety comes from the enclosing writer lock;
-         exposing the list avoids an unnecessary copy of up to autoCommitThreshold documents
-         on every commit. -->
-    <Match>
-        <Class name="com.integrallis.vectors.db.internal.StagingBuffer"/>
-        <Bug pattern="EI_EXPOSE_REP"/>
-    </Match>
     <!-- vectors-db: MemorySegmentVectors.segment() intentionally exposes the whole-file
          MemorySegment for tight inner-loop scoring in MappedFlatScanAdapter. The segment is
          read-only and its lifetime is owned by a caller-provided Arena, so callers cannot

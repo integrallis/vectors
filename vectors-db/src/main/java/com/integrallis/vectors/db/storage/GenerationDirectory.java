@@ -201,6 +201,18 @@ public final class GenerationDirectory {
       // Default: no quantized file. Non-quantized sources keep this default;
       // quantized sources override to emit quantized.bin bytes.
     }
+
+    /**
+     * Writes {@code tombstones.bin} into the tmp dir at the given absolute path. Invoked by {@link
+     * GenerationDirectory#writeGeneration(Path, long, GenerationSource, Manifest)} iff the
+     * manifest's {@link Manifest#tombstonesBinLength()} is positive. The default implementation is
+     * a no-op so tombstone-free sources need no override; tombstone-containing sources override to
+     * emit the encoded tombstone bitset (via {@link TombstoneCodec#encode}).
+     */
+    default void writeTombstones(Path destination) throws IOException {
+      // Default: no tombstones file. Clean generations keep this default;
+      // tombstoned generations override to emit tombstones.bin bytes.
+    }
   }
 
   /**
@@ -326,6 +338,11 @@ public final class GenerationDirectory {
       // pattern used for graph.bin above.
       if (manifest.quantizedBinLength() > 0L) {
         source.writeQuantized(tmpDir.resolve(FileFormat.QUANTIZED_FILE));
+      }
+      // Tombstones — only when the manifest records a non-zero tombstone payload.
+      // Tombstone-free generations (tombstonesBinLength == 0) skip this entirely.
+      if (manifest.tombstonesBinLength() > 0L) {
+        source.writeTombstones(tmpDir.resolve(FileFormat.TOMBSTONES_FILE));
       }
 
       // 2. Write manifest.bin (fsyncs itself via Manifest.writeTo).
@@ -628,6 +645,10 @@ public final class GenerationDirectory {
           genDir.resolve(FileFormat.QUANTIZED_FILE),
           manifest.quantizedBinLength(),
           manifest.quantizedBinCrc32());
+      verifyOneFile(
+          genDir.resolve(FileFormat.TOMBSTONES_FILE),
+          manifest.tombstonesBinLength(),
+          manifest.tombstonesBinCrc32());
       return true;
     } catch (IOException e) {
       LOGGER.log(

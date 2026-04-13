@@ -6,9 +6,9 @@ import java.util.Collection;
 /**
  * Public facade for an embedded vector database collection.
  *
- * <p>Step 3 subset: in-memory only, flat-scan reference backend, no persistence, no filter
- * execution beyond {@link com.integrallis.vectors.db.filter.Filter.All}. {@code upsert}, {@code
- * delete}, {@code deleteWhere}, and {@code compact} throw {@link UnsupportedOperationException}.
+ * <p>Supports FLAT, HNSW, and VAMANA backends in both in-memory and mmap-persistent modes. Deletion
+ * uses tombstone semantics: {@code delete}/{@code deleteWhere} stage tombstones that take effect on
+ * the next {@code commit}. {@code compact()} rebuilds with dense ordinals, reclaiming space.
  *
  * <p>Lifecycle:
  *
@@ -45,31 +45,30 @@ public interface VectorCollection extends AutoCloseable {
   void addAll(Collection<Document> docs);
 
   /**
-   * Upserts a document (insert or replace). Deferred to Step 6.
+   * Upserts a document (insert or replace). If a document with the same id already exists in the
+   * live generation or the staging buffer, it is replaced. If the id is unknown, the document is
+   * staged as a new add.
    *
-   * @throws UnsupportedOperationException always
+   * @throws IllegalArgumentException if the vector dimension doesn't match the collection config
    */
-  default void upsert(Document doc) {
-    throw new UnsupportedOperationException("upsert deferred to Step 6");
-  }
+  void upsert(Document doc);
 
   /**
-   * Deletes a document by id. Deferred to Step 6.
+   * Stages a tombstone for the document with the given id. The document is excluded from search,
+   * get, and contains after the next commit. If the id refers to a staged (not-yet-committed) add,
+   * the staged document is removed immediately.
    *
-   * @throws UnsupportedOperationException always
+   * @return {@code true} if the document was found (in live generation or staging) and marked for
+   *     deletion; {@code false} if the id is unknown or already deleted
    */
-  default void delete(String id) {
-    throw new UnsupportedOperationException("delete deferred to Step 6");
-  }
+  boolean delete(String id);
 
   /**
-   * Deletes documents matching a filter. Deferred to Step 6.
+   * Stages tombstones for all documents whose metadata matches the given filter.
    *
-   * @throws UnsupportedOperationException always
+   * @return the number of documents matched and marked for deletion
    */
-  default void deleteWhere(Filter filter) {
-    throw new UnsupportedOperationException("deleteWhere deferred to Step 6");
-  }
+  int deleteWhere(Filter filter);
 
   /**
    * Atomically installs a new generation containing the currently-live documents plus any staged
@@ -84,13 +83,11 @@ public interface VectorCollection extends AutoCloseable {
   }
 
   /**
-   * Compacts tombstoned documents out of the current generation. Deferred to Step 6.
-   *
-   * @throws UnsupportedOperationException always
+   * Compacts tombstoned documents out of the current generation, rebuilding with dense ordinals.
+   * After compact, {@link #physicalSize()} equals {@link #size()}. If there are no tombstones this
+   * is a no-op. Any pending staged work is committed first.
    */
-  default void compact() {
-    throw new UnsupportedOperationException("compact deferred to Step 6");
-  }
+  void compact();
 
   /** Searches the currently-committed generation. */
   SearchResult search(SearchRequest request);
@@ -105,8 +102,9 @@ public interface VectorCollection extends AutoCloseable {
   int size();
 
   /**
-   * Number of vectors physically stored across live and staged buffers (including tombstones in
-   * later steps). Equal to {@link #size()} in Step 3.
+   * Number of vectors physically allocated in the current committed generation, including ordinals
+   * that have been tombstoned by {@link #delete}/{@link #deleteWhere} but not yet reclaimed by
+   * {@link #compact()}. After {@code compact()} completes, equals {@link #size()}.
    */
   int physicalSize();
 

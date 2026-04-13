@@ -144,10 +144,10 @@ public final class MappedIdMapper implements IdMapper {
       MemorySegment.copy(seg, ValueLayout.JAVA_BYTE, absOff + varintBytes, idBytes, 0, idLen);
       String id = new String(idBytes, StandardCharsets.UTF_8);
       ordinalToId[i] = id;
-      Integer prev = idToOrdinal.put(id, i);
-      if (prev != null) {
-        throw new IOException("idmap duplicate id at ordinals " + prev + " and " + i + ": " + id);
-      }
+      // Allow duplicate ids (upsert: old ordinal is tombstoned, new ordinal is live).
+      // The last ordinal wins in the forward mapping — this is correct because the tombstoned
+      // ordinal is always earlier and the caller skips tombstoned ordinals on all read paths.
+      idToOrdinal.put(id, i);
     }
 
     return new MappedIdMapper(count, ordinalToId, idToOrdinal);

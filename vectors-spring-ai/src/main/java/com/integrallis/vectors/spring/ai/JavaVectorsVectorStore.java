@@ -86,9 +86,15 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
 
   @Override
   public void doDelete(List<String> idList) {
-    throw new UnsupportedOperationException(
-        "Document deletion is not yet supported by java-vectors. "
-            + "This will be available in a future release.");
+    if (idList == null || idList.isEmpty()) {
+      return;
+    }
+    for (String id : idList) {
+      collection.delete(id);
+    }
+    if (commitAfterAdd) {
+      collection.commit();
+    }
   }
 
   @Override

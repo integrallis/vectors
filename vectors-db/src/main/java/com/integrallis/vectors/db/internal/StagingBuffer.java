@@ -2,68 +2,121 @@ package com.integrallis.vectors.db.internal;
 
 import com.integrallis.vectors.db.Document;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * Mutable per-collection staging buffer that accumulates {@link Document}s written since the last
- * commit. A shadow {@code Set<String>} provides O(1) duplicate-id detection alongside the ordered
- * {@code List<Document>} used to materialize a committed generation.
+ * Mutable per-collection staging buffer that accumulates {@link Document}s and tombstone intents
+ * written since the last commit. A {@link LinkedHashMap} serves as the primary store, providing
+ * O(1) lookup ({@link #contains}), O(1) removal ({@link #removeDocument}), and preserving insertion
+ * order for the commit pipeline's ordinal-assignment loop.
  *
  * <p><b>Thread safety.</b> {@code StagingBuffer} is <i>not</i> thread-safe on its own. The facade
  * ({@code VectorCollectionImpl}) guards all mutation through a single {@code ReentrantLock} (writer
  * lock). This type deliberately inherits safety from the enclosing lock so that reads of the
  * published {@code Generation} record can stay lock-free.
  *
- * <p>Step 3 holds only newly-added documents. Pending tombstones and upserts will live here in Step
- * 6.
+ * <p>Holds both newly-added documents and pending tombstone ids. Tombstones are ids that should be
+ * marked as deleted in the next committed generation. The {@link #hasWork()} method returns {@code
+ * true} when either documents or tombstones are pending, ensuring tombstone-only commits produce a
+ * new generation.
  */
 public final class StagingBuffer {
 
-  private final List<Document> documents = new ArrayList<>();
-  private final Set<String> ids = new HashSet<>();
+  /**
+   * Primary document store. {@link LinkedHashMap} preserves insertion order (needed by the commit
+   * pipeline's sequential ordinal assignment) while providing O(1) {@link #contains} and O(1)
+   * {@link #removeDocument} — replacing the previous {@code ArrayList} + shadow {@code
+   * LinkedHashSet} pair whose {@code removeIf} scan was O(n).
+   */
+  private final LinkedHashMap<String, Document> documentsMap = new LinkedHashMap<>();
+
+  private final Set<String> pendingTombstones = new LinkedHashSet<>();
 
   /**
    * Appends a document if its id is not already staged. Returns {@code true} on success, {@code
-   * false} if the id was already present in the staging set.
+   * false} if the id was already present in the staging map.
    */
   public boolean append(Document doc) {
     Objects.requireNonNull(doc, "doc must not be null");
-    if (!ids.add(doc.id())) {
+    if (documentsMap.containsKey(doc.id())) {
       return false;
     }
-    documents.add(doc);
+    documentsMap.put(doc.id(), doc);
     return true;
   }
 
-  /** Returns {@code true} if {@code id} is currently staged. */
+  /** Returns {@code true} if {@code id} is currently staged as an add. */
   public boolean contains(String id) {
-    return ids.contains(id);
+    return documentsMap.containsKey(id);
   }
 
-  /** Number of documents staged since the last commit. */
+  /** Number of documents staged for add since the last commit. */
   public int size() {
-    return documents.size();
+    return documentsMap.size();
   }
 
-  /** Returns {@code true} if no documents are staged. */
+  /** Returns {@code true} if no documents are staged for add. */
   public boolean isEmpty() {
-    return documents.isEmpty();
+    return documentsMap.isEmpty();
   }
 
   /**
-   * Returns the live document list. The caller must hold the enclosing writer lock and must not
-   * mutate the returned list outside this type's own methods.
+   * Returns {@code true} if there is any pending work — either staged documents or pending
+   * tombstones. Used by the commit path to decide whether a new generation must be produced.
    */
-  public List<Document> documents() {
-    return documents;
+  public boolean hasWork() {
+    return !documentsMap.isEmpty() || !pendingTombstones.isEmpty();
   }
 
-  /** Drops all staged documents and their shadow ids. */
+  /**
+   * Returns a snapshot {@link List} of the staged documents in insertion order. The list is a fresh
+   * copy: mutations to it do not affect the buffer's internal state, and subsequent calls to {@link
+   * #append}/{@link #removeDocument}/{@link #clear} do not affect previously returned snapshots.
+   * Callers may use indexed access ({@code list.get(i)}) safely.
+   *
+   * <p>The caller must hold the enclosing writer lock before calling this method.
+   */
+  public List<Document> documents() {
+    return new ArrayList<>(documentsMap.values());
+  }
+
+  /**
+   * Records a tombstone intent for the given id. Returns {@code true} if the id was newly added to
+   * the pending tombstones set, {@code false} if it was already pending.
+   */
+  public boolean stageDelete(String id) {
+    Objects.requireNonNull(id, "id must not be null");
+    return pendingTombstones.add(id);
+  }
+
+  /** Returns {@code true} if the given id is pending deletion. */
+  public boolean isTombstoned(String id) {
+    return pendingTombstones.contains(id);
+  }
+
+  /** Returns an unmodifiable view of the pending tombstone ids. */
+  public Set<String> pendingTombstones() {
+    return Collections.unmodifiableSet(pendingTombstones);
+  }
+
+  /**
+   * Removes a staged document by id in O(1). Used by {@code delete()} to undo a staged add (delete
+   * before commit) and by {@code upsert()} to replace a staged document. Returns {@code true} if
+   * the document was found and removed, {@code false} if the id was not staged.
+   */
+  public boolean removeDocument(String id) {
+    Objects.requireNonNull(id, "id must not be null");
+    return documentsMap.remove(id) != null;
+  }
+
+  /** Drops all staged documents and pending tombstones. */
   public void clear() {
-    documents.clear();
-    ids.clear();
+    documentsMap.clear();
+    pendingTombstones.clear();
   }
 }

@@ -18,15 +18,14 @@ import java.util.Objects;
  * offset so a reader can decide whether the generation is intact by reading exactly {@link
  * #HEADER_SIZE} bytes and validating the self-CRC — no heap allocation, no schema parsing.
  *
- * <p>Layout (little-endian throughout, version 3 — added {@code quantized.bin} length + CRC slots
- * in Step 4d for persistent quantization support):
+ * <p>Layout (little-endian throughout, version 4 — added tombstone fields in Step 6):
  *
  * <pre>
  * Offset  Size  Field                       Notes
  * ------  ----  --------------------------  --------------------------------
  *   0      4    magic                       FileFormat.MAGIC_MANIFEST
- *   4      4    format version              FileFormat.VERSION_MANIFEST (= 3)
- *   8      4    header length               bytes from offset 0 to end of header (= 140)
+ *   4      4    format version              FileFormat.VERSION_MANIFEST (= 4)
+ *   8      4    header length               bytes from offset 0 to end of header (= 164)
  *  12      4    flags                        reserved, must be 0
  *  16      4    dimension                   vector dimension
  *  20      4    metric ordinal              SimilarityFunction.ordinal()
@@ -36,26 +35,27 @@ import java.util.Objects;
  *  40      8    created epoch millis        int64
  *  48      8    live count                  int64
  *  56      8    vectors.bin length          int64
- *  64      8    vectors.bin CRC32           uint32 zero-extended (see note)
+ *  64      8    vectors.bin CRC32           uint32 zero-extended
  *  72      8    metadata.bin length         int64
- *  80      8    metadata.bin CRC32          uint32 zero-extended (see note)
+ *  80      8    metadata.bin CRC32          uint32 zero-extended
  *  88      8    idmap.bin length            int64
- *  96      8    idmap.bin CRC32             uint32 zero-extended (see note)
+ *  96      8    idmap.bin CRC32             uint32 zero-extended
  * 104      8    graph.bin length            int64 (0 if no graph file written)
  * 112      8    graph.bin CRC32             uint32 zero-extended, 0 if no graph file
  * 120      8    quantized.bin length        int64 (0 if no quantized file written)
  * 128      8    quantized.bin CRC32         uint32 zero-extended, 0 if no quantized file
- * 136      4    self CRC32                  CRC32 over bytes [0, 136)
+ * 136      8    tombstone count             int64 (0 if no tombstones)
+ * 144      8    tombstones.bin length       int64 (0 if no tombstones file written)
+ * 152      8    tombstones.bin CRC32        uint32 zero-extended, 0 if no tombstones file
+ * 160      4    self CRC32                  CRC32 over bytes [0, 160)
  * ------  ----  --------------------------
- * 140      -    (future extension area — version bump required to grow)
+ * 164      -    (future extension area — version bump required to grow)
  * </pre>
  *
  * <p><b>CRC width asymmetry.</b> The per-file CRCs each occupy 8 bytes on disk even though the
  * current {@link java.util.zip.CRC32} is only 32 bits wide; the upper 32 bits are stored as zero.
  * This leaves room to upgrade the per-file hash to a 64-bit function (xxHash3, CRC64) without
- * changing the header layout or requiring a version bump — only the self-CRC would need to grow on
- * that transition. The self-CRC stays 4 bytes because it covers the fixed-size header and the cost
- * of strengthening it would have to be paid before the rest of the header could be validated.
+ * changing the header layout or requiring a version bump.
  *
  * <p>Every CRC is {@link java.util.zip.CRC32} (IEEE polynomial). The self-CRC covers every byte
  * before itself, so a corrupted manifest fails validation before any downstream file is opened.
@@ -80,13 +80,16 @@ public record Manifest(
     long graphBinLength,
     long graphBinCrc32,
     long quantizedBinLength,
-    long quantizedBinCrc32) {
+    long quantizedBinCrc32,
+    long tombstoneCount,
+    long tombstonesBinLength,
+    long tombstonesBinCrc32) {
 
   /** Total fixed header size on disk, including the self CRC. */
-  public static final int HEADER_SIZE = 140;
+  public static final int HEADER_SIZE = 164;
 
   /** Offset in bytes at which the self-CRC32 word lives. */
-  public static final int SELF_CRC_OFFSET = 136;
+  public static final int SELF_CRC_OFFSET = 160;
 
   public Manifest {
     if (dimension <= 0) {
@@ -108,8 +111,12 @@ public record Manifest(
         || metadataBinLength < 0
         || idmapBinLength < 0
         || graphBinLength < 0
-        || quantizedBinLength < 0) {
+        || quantizedBinLength < 0
+        || tombstonesBinLength < 0) {
       throw new IllegalArgumentException("file lengths must be >= 0");
+    }
+    if (tombstoneCount < 0) {
+      throw new IllegalArgumentException("tombstoneCount must be >= 0: " + tombstoneCount);
     }
   }
 
@@ -148,13 +155,15 @@ public record Manifest(
         graphBinLength,
         graphBinCrc32,
         quantizedBinLength,
-        quantizedBinCrc32);
+        quantizedBinCrc32,
+        0L,
+        0L,
+        0L);
   }
 
   /**
-   * Clock-injectable variant. Callers that need reproducible manifests (tests, deterministic
-   * fixtures) pass {@code createdEpochMillis} explicitly; production callers use the system-clock
-   * overload.
+   * Clock-injectable variant without tombstone fields. Backwards-compatible with existing call
+   * sites that don't need tombstone support.
    */
   public static Manifest build(
       VectorCollectionConfig config,
@@ -171,6 +180,49 @@ public record Manifest(
       long graphBinCrc32,
       long quantizedBinLength,
       long quantizedBinCrc32) {
+    return build(
+        config,
+        generationNumber,
+        createdEpochMillis,
+        liveCount,
+        vectorsBinLength,
+        vectorsBinCrc32,
+        metadataBinLength,
+        metadataBinCrc32,
+        idmapBinLength,
+        idmapBinCrc32,
+        graphBinLength,
+        graphBinCrc32,
+        quantizedBinLength,
+        quantizedBinCrc32,
+        0L,
+        0L,
+        0L);
+  }
+
+  /**
+   * Full clock-injectable variant with tombstone fields. Callers that need reproducible manifests
+   * (tests, deterministic fixtures) pass {@code createdEpochMillis} explicitly; production callers
+   * use the system-clock overload.
+   */
+  public static Manifest build(
+      VectorCollectionConfig config,
+      long generationNumber,
+      long createdEpochMillis,
+      long liveCount,
+      long vectorsBinLength,
+      long vectorsBinCrc32,
+      long metadataBinLength,
+      long metadataBinCrc32,
+      long idmapBinLength,
+      long idmapBinCrc32,
+      long graphBinLength,
+      long graphBinCrc32,
+      long quantizedBinLength,
+      long quantizedBinCrc32,
+      long tombstoneCount,
+      long tombstonesBinLength,
+      long tombstonesBinCrc32) {
     return new Manifest(
         config.dimension(),
         config.metric(),
@@ -188,7 +240,51 @@ public record Manifest(
         graphBinLength,
         graphBinCrc32,
         quantizedBinLength,
-        quantizedBinCrc32);
+        quantizedBinCrc32,
+        tombstoneCount,
+        tombstonesBinLength,
+        tombstonesBinCrc32);
+  }
+
+  /**
+   * System-clock overload with tombstone fields. Production callers use this when tombstones are
+   * present.
+   */
+  public static Manifest buildWithTombstones(
+      VectorCollectionConfig config,
+      long generationNumber,
+      long liveCount,
+      long vectorsBinLength,
+      long vectorsBinCrc32,
+      long metadataBinLength,
+      long metadataBinCrc32,
+      long idmapBinLength,
+      long idmapBinCrc32,
+      long graphBinLength,
+      long graphBinCrc32,
+      long quantizedBinLength,
+      long quantizedBinCrc32,
+      long tombstoneCount,
+      long tombstonesBinLength,
+      long tombstonesBinCrc32) {
+    return build(
+        config,
+        generationNumber,
+        System.currentTimeMillis(),
+        liveCount,
+        vectorsBinLength,
+        vectorsBinCrc32,
+        metadataBinLength,
+        metadataBinCrc32,
+        idmapBinLength,
+        idmapBinCrc32,
+        graphBinLength,
+        graphBinCrc32,
+        quantizedBinLength,
+        quantizedBinCrc32,
+        tombstoneCount,
+        tombstonesBinLength,
+        tombstonesBinCrc32);
   }
 
   /**
@@ -219,6 +315,9 @@ public record Manifest(
     buf.putLong(graphBinCrc32);
     buf.putLong(quantizedBinLength);
     buf.putLong(quantizedBinCrc32);
+    buf.putLong(tombstoneCount);
+    buf.putLong(tombstonesBinLength);
+    buf.putLong(tombstonesBinCrc32);
     // Self-CRC over bytes [0, SELF_CRC_OFFSET).
     long selfCrc = Checksums.ofBytes(out, 0, SELF_CRC_OFFSET);
     buf.putInt((int) selfCrc);
@@ -259,7 +358,7 @@ public record Manifest(
     }
     int flags = buf.getInt();
     if (flags != 0) {
-      throw new IOException("Manifest flags must be 0 in version 3, got " + flags);
+      throw new IOException("Manifest flags must be 0 in version 4, got " + flags);
     }
 
     int dimension = buf.getInt();
@@ -279,6 +378,9 @@ public record Manifest(
     long graphBinCrc32 = buf.getLong();
     long quantizedBinLength = buf.getLong();
     long quantizedBinCrc32 = buf.getLong();
+    long tombstoneCount = buf.getLong();
+    long tombstonesBinLength = buf.getLong();
+    long tombstonesBinCrc32 = buf.getLong();
     int selfCrc = buf.getInt();
 
     long expectedSelfCrc = Checksums.ofBytes(bytes, 0, SELF_CRC_OFFSET);
@@ -312,18 +414,16 @@ public record Manifest(
         graphBinLength,
         graphBinCrc32,
         quantizedBinLength,
-        quantizedBinCrc32);
+        quantizedBinCrc32,
+        tombstoneCount,
+        tombstonesBinLength,
+        tombstonesBinCrc32);
   }
 
   /**
    * Writes this manifest to {@code file} and fsyncs before returning. The file is opened with
    * {@link StandardOpenOption#CREATE_NEW}, so this is a one-shot write: reinvoking it on an
    * existing path is a programmer error, not an overwrite.
-   *
-   * @throws java.nio.file.FileAlreadyExistsException if {@code file} already exists — the
-   *     generation-write pipeline MUST target a fresh path inside an in-flight {@code
-   *     .gen-NNNNNNNNNNNNNNNN.tmp} directory that was created earlier in the same commit
-   * @throws IOException if the target cannot be created or the fsync fails
    */
   public void writeTo(Path file) throws IOException {
     byte[] encoded = toBytes();

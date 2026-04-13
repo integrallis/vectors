@@ -45,6 +45,33 @@ class ManifestTest {
         /* quantizedBinCrc32 */ 0L);
   }
 
+  private static Manifest sampleWithTombstones() {
+    VectorCollectionConfig config =
+        new VectorCollectionConfig(
+            128,
+            SimilarityFunction.DOT_PRODUCT,
+            IndexType.FLAT,
+            QuantizerKind.NONE,
+            Integer.MAX_VALUE);
+    return Manifest.buildWithTombstones(
+        config,
+        42L,
+        10_000L,
+        5_120_000L,
+        0xDEADBEEFL,
+        250_000L,
+        0x12345678L,
+        45_000L,
+        0x87654321L,
+        131_072L,
+        0xCAFEBABEL,
+        0L,
+        0L,
+        5L,
+        128L,
+        0xABCDEF01L);
+  }
+
   @Nested
   class Encoding {
 
@@ -89,8 +116,22 @@ class ManifestTest {
       assertThat(decoded.graphBinCrc32()).isEqualTo(0xCAFEBABEL);
       assertThat(decoded.quantizedBinLength()).isEqualTo(0L);
       assertThat(decoded.quantizedBinCrc32()).isEqualTo(0L);
-      // createdEpochMillis is populated at build() time; just assert non-zero.
+      assertThat(decoded.tombstoneCount()).isEqualTo(0L);
+      assertThat(decoded.tombstonesBinLength()).isEqualTo(0L);
+      assertThat(decoded.tombstonesBinCrc32()).isEqualTo(0L);
       assertThat(decoded.createdEpochMillis()).isPositive();
+    }
+
+    @Test
+    void tombstoneFieldsSurviveRoundTrip() throws IOException {
+      Manifest original = sampleWithTombstones();
+      byte[] encoded = original.toBytes();
+      Manifest decoded = Manifest.fromBytes(encoded);
+      assertThat(decoded.tombstoneCount()).isEqualTo(5L);
+      assertThat(decoded.tombstonesBinLength()).isEqualTo(128L);
+      assertThat(decoded.tombstonesBinCrc32()).isEqualTo(0xABCDEF01L);
+      // liveCount is the non-tombstoned count.
+      assertThat(decoded.liveCount()).isEqualTo(10_000L);
     }
 
     @Test
@@ -141,7 +182,6 @@ class ManifestTest {
     @Test
     void wrongMagicRejected() {
       byte[] encoded = sample().toBytes();
-      // Corrupt byte 0 of the magic.
       encoded[0] ^= (byte) 0xFF;
       assertThatIOException()
           .isThrownBy(() -> Manifest.fromBytes(encoded))
@@ -151,10 +191,8 @@ class ManifestTest {
     @Test
     void wrongVersionRejected() {
       byte[] encoded = sample().toBytes();
-      // Corrupt the version word (offset 4-7).
       ByteBuffer buf = ByteBuffer.wrap(encoded).order(ByteOrder.LITTLE_ENDIAN);
       buf.putInt(4, 999);
-      // Re-compute the self-CRC so the version error is what trips, not the CRC.
       long selfCrc = Checksums.ofBytes(encoded, 0, Manifest.SELF_CRC_OFFSET);
       buf.putInt(Manifest.SELF_CRC_OFFSET, (int) selfCrc);
       assertThatIOException()
@@ -189,7 +227,6 @@ class ManifestTest {
     @Test
     void corruptPayloadTripsSelfCrc() {
       byte[] encoded = sample().toBytes();
-      // Flip a byte in the dimension field (offset 16) without recomputing the CRC.
       encoded[16] ^= (byte) 0x01;
       assertThatIOException()
           .isThrownBy(() -> Manifest.fromBytes(encoded))
@@ -243,6 +280,9 @@ class ManifestTest {
                       0L,
                       0L,
                       0L,
+                      0L,
+                      0L,
+                      0L,
                       0L));
     }
 
@@ -257,6 +297,9 @@ class ManifestTest {
                       IndexType.FLAT,
                       QuantizerKind.NONE,
                       -1L,
+                      0L,
+                      0L,
+                      0L,
                       0L,
                       0L,
                       0L,
@@ -293,6 +336,9 @@ class ManifestTest {
                       0L,
                       0L,
                       0L,
+                      0L,
+                      0L,
+                      0L,
                       0L));
     }
 
@@ -309,6 +355,9 @@ class ManifestTest {
                       0L,
                       0L,
                       -1L,
+                      0L,
+                      0L,
+                      0L,
                       0L,
                       0L,
                       0L,
@@ -343,6 +392,9 @@ class ManifestTest {
                       -1L,
                       0L,
                       0L,
+                      0L,
+                      0L,
+                      0L,
                       0L));
     }
 
@@ -356,6 +408,65 @@ class ManifestTest {
                       SimilarityFunction.DOT_PRODUCT,
                       IndexType.FLAT,
                       QuantizerKind.NONE,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      -1L,
+                      0L,
+                      0L,
+                      0L,
+                      0L));
+    }
+
+    @Test
+    void negativeTombstoneCountRejected() {
+      assertThatIllegalArgumentException()
+          .isThrownBy(
+              () ->
+                  new Manifest(
+                      64,
+                      SimilarityFunction.DOT_PRODUCT,
+                      IndexType.FLAT,
+                      QuantizerKind.NONE,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      -1L,
+                      0L,
+                      0L));
+    }
+
+    @Test
+    void negativeTombstonesBinLengthRejected() {
+      assertThatIllegalArgumentException()
+          .isThrownBy(
+              () ->
+                  new Manifest(
+                      64,
+                      SimilarityFunction.DOT_PRODUCT,
+                      IndexType.FLAT,
+                      QuantizerKind.NONE,
+                      0L,
+                      0L,
+                      0L,
                       0L,
                       0L,
                       0L,

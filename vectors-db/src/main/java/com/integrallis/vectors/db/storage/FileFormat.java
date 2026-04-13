@@ -68,12 +68,12 @@ public final class FileFormat {
   // ---------------------------------------------------------------------------
 
   /**
-   * Current manifest format version. Bumped to 3 in Step 4d: the header grew by 16 bytes to store
-   * {@code quantizedBinLength} + {@code quantizedBinCrc32} for the new {@code quantized.bin} file.
-   * Readers refuse v1/v2 files; there is no on-disk compat shim because {@code vectors-db} is
-   * unreleased.
+   * Current manifest format version. Bumped to 4 in Step 6: the header grew by 24 bytes to store
+   * {@code tombstoneCount} + {@code tombstonesBinLength} + {@code tombstonesBinCrc32} for
+   * tombstone-based deletion. Readers refuse v1/v2/v3 files; there is no on-disk compat shim
+   * because {@code vectors-db} is unreleased.
    */
-  public static final int VERSION_MANIFEST = 3;
+  public static final int VERSION_MANIFEST = 4;
 
   /** Current idmap format version. */
   public static final int VERSION_IDMAP = 1;
@@ -89,6 +89,16 @@ public final class FileFormat {
 
   /** Current quantized.bin format version (see {@link QuantizedVectorsCodec}). */
   public static final int VERSION_QUANTIZED = 1;
+
+  /**
+   * Magic for {@code tombstones.bin}. Raw bytes spell {@code "VTBS"} (Vector TombStoneS). Only
+   * present when the generation has at least one tombstoned ordinal; non-tombstoned generations
+   * omit the file entirely and the Manifest reports {@code tombstonesBinLength == 0}.
+   */
+  public static final int MAGIC_TOMBSTONES = 0x53425456; // 'V' 'T' 'B' 'S' little-endian
+
+  /** Current tombstones.bin format version. */
+  public static final int VERSION_TOMBSTONES = 1;
 
   // ---------------------------------------------------------------------------
   // Directory protocol constants.
@@ -153,6 +163,13 @@ public final class FileFormat {
    * entirely and the Manifest reports {@code quantizedBinLength == 0}.
    */
   public static final String QUANTIZED_FILE = "quantized.bin";
+
+  /**
+   * File name of the tombstones file inside a generation directory. Present when the generation has
+   * at least one tombstoned ordinal; non-tombstoned generations omit the file entirely and the
+   * Manifest reports {@code tombstonesBinLength == 0}.
+   */
+  public static final String TOMBSTONES_FILE = "tombstones.bin";
 
   /**
    * Fixed header size in bytes used by both {@link

@@ -204,11 +204,42 @@ class JavaVectorsVectorStoreTest {
   class DeleteBehavior {
 
     @Test
-    void deleteThrowsUoe() {
+    void deleteRemovesDocFromSearch() {
       createStore(IndexType.FLAT, true);
 
-      assertThatThrownBy(() -> store.delete(List.of("some-id")))
-          .isInstanceOf(UnsupportedOperationException.class);
+      store.add(
+          List.of(
+              new Document("d1", "alpha text", Map.of()),
+              new Document("d2", "beta text", Map.of())));
+
+      // Both docs should be searchable.
+      List<Document> before =
+          store.similaritySearch(SearchRequest.builder().query("alpha text").topK(10).build());
+      assertThat(before).hasSize(2);
+
+      // Delete one doc.
+      store.delete(List.of("d1"));
+
+      // Only d2 should remain.
+      List<Document> after =
+          store.similaritySearch(SearchRequest.builder().query("alpha text").topK(10).build());
+      assertThat(after).hasSize(1);
+      assertThat(after.getFirst().getId()).isEqualTo("d2");
+    }
+
+    @Test
+    void deleteOfUnknownIdIsNoOp() {
+      createStore(IndexType.FLAT, true);
+
+      store.add(List.of(new Document("d1", "some text", Map.of())));
+
+      // Delete a non-existent id — should not throw.
+      store.delete(List.of("nonexistent"));
+
+      // Original doc should still be searchable.
+      List<Document> results =
+          store.similaritySearch(SearchRequest.builder().query("some text").topK(1).build());
+      assertThat(results).hasSize(1);
     }
   }
 
