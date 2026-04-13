@@ -63,12 +63,12 @@ public interface VectorCollection extends AutoCloseable {
   }
 
   /**
-   * Deletes documents matching a filter. Deferred to Step 5.
+   * Deletes documents matching a filter. Deferred to Step 6.
    *
    * @throws UnsupportedOperationException always
    */
   default void deleteWhere(Filter filter) {
-    throw new UnsupportedOperationException("deleteWhere deferred to Step 5");
+    throw new UnsupportedOperationException("deleteWhere deferred to Step 6");
   }
 
   /**

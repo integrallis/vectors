@@ -8,9 +8,8 @@ import java.util.Objects;
  * the wall-clock search time in nanoseconds.
  *
  * <p>{@code searchTimeNanos} measures the <b>end-to-end</b> search latency observed by the caller:
- * SPI traversal <i>plus</i> metadata hydration and result projection. It does <b>not</b> include
- * acquisition of the collection's read lock (usually negligible) or filter execution, which is
- * deferred to Step 5.
+ * SPI traversal, post-filter execution, metadata hydration, and result projection. It does
+ * <b>not</b> include acquisition of the collection's read lock (usually negligible).
  *
  * @param hits ranked hits, descending by score
  * @param searchTimeNanos end-to-end elapsed time for the search in nanoseconds

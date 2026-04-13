@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.filter.Filters;
@@ -343,6 +342,7 @@ class VectorDbIntegrationTest {
       assertThat(req.k()).isEqualTo(7);
       assertThat(req.searchListSize()).isEqualTo(Math.max(7, 100));
       assertThat(req.overQueryFactor()).isEqualTo(4.0f);
+      assertThat(req.filterExpansion()).isEqualTo(4.0f);
       assertThat(req.minScore()).isEqualTo(-Float.MAX_VALUE);
       assertThat(req.filter()).isNull();
       assertThat(req.includeVector()).isTrue();
@@ -476,7 +476,7 @@ class VectorDbIntegrationTest {
 
   @Nested
   @Tag("unit")
-  class FilterStubs {
+  class FilterExecution {
 
     @Test
     void nullFilter_succeeds() {
@@ -514,18 +514,41 @@ class VectorDbIntegrationTest {
     }
 
     @Test
-    void nonTrivialFilter_throwsUnsupported() {
+    void nonTrivialFilter_returnsMatchingDocumentsOnly() {
+      try (var col = newCollection(4, SimilarityFunction.EUCLIDEAN)) {
+        col.add(
+            new Document(
+                "a", new float[] {1f, 2f, 3f, 4f}, null, Map.of("color", MetadataValue.of("red"))));
+        col.add(
+            new Document(
+                "b",
+                new float[] {1f, 2f, 3f, 5f},
+                null,
+                Map.of("color", MetadataValue.of("blue"))));
+        col.commit();
+
+        var req =
+            SearchRequest.builder(new float[] {1f, 2f, 3f, 4f}, 10)
+                .filter(Filters.eq("color", "red"))
+                .build();
+        var result = col.search(req);
+        assertThat(result.hits()).hasSize(1);
+        assertThat(result.hits().getFirst().id()).isEqualTo("a");
+      }
+    }
+
+    @Test
+    void filterOnMissingField_returnsEmpty() {
       try (var col = newCollection(4, SimilarityFunction.EUCLIDEAN)) {
         col.add(Document.of("a", new float[] {1f, 2f, 3f, 4f}));
         col.commit();
 
         var req =
             SearchRequest.builder(new float[] {1f, 2f, 3f, 4f}, 1)
-                .filter(Filters.eq("foo", "bar"))
+                .filter(Filters.eq("nonexistent", "value"))
                 .build();
-        assertThatThrownBy(() -> col.search(req))
-            .isInstanceOf(UnsupportedOperationException.class)
-            .hasMessageContaining("Step 5");
+        var result = col.search(req);
+        assertThat(result.hits()).isEmpty();
       }
     }
   }

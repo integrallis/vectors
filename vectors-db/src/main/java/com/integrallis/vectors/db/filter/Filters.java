@@ -3,9 +3,9 @@ package com.integrallis.vectors.db.filter;
 import java.util.List;
 
 /**
- * Static factory for {@link Filter} nodes. Mirrors the design doc's §6.5 convenience API. Step 2
- * only needs {@link #all()} to be functional for post-filtering; the remaining factories construct
- * the corresponding records so Step 5 can implement execution without changing any call sites.
+ * Static factory for {@link Filter} nodes. All filter types are evaluated by {@link
+ * FilterExecutor#matches(Filter, java.util.Map)} during post-filter search in the {@link
+ * com.integrallis.vectors.db.VectorCollection} facade.
  */
 public final class Filters {
 

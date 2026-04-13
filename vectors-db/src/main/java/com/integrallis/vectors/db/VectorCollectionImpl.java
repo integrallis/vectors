@@ -1,6 +1,7 @@
 package com.integrallis.vectors.db;
 
 import com.integrallis.vectors.db.filter.Filter;
+import com.integrallis.vectors.db.filter.FilterExecutor;
 import com.integrallis.vectors.db.id.IdMapper;
 import com.integrallis.vectors.db.id.InMemoryIdMapper;
 import com.integrallis.vectors.db.index.FlatScanAdapter;
@@ -95,10 +96,9 @@ import java.util.logging.Logger;
  * IndexType#VAMANA} follows the same pattern using {@link VamanaGraphCodec#decode(byte[])} and
  * {@link MappedVamanaIndexAdapter}.
  *
- * <p><b>Scope.</b> Only {@link Filter.All} (or {@code null}) is executed; any other filter throws
- * {@link UnsupportedOperationException} (deferred to Step 5). {@code upsert}, {@code delete},
- * {@code deleteWhere}, and {@code compact} throw {@link UnsupportedOperationException} (deferred to
- * Steps 5/6).
+ * <p><b>Scope.</b> All {@link Filter} variants are evaluated via post-filtering (Step 5). {@code
+ * upsert}, {@code delete}, {@code deleteWhere}, and {@code compact} throw {@link
+ * UnsupportedOperationException} (deferred to Step 6).
  */
 final class VectorCollectionImpl implements VectorCollection {
 
@@ -1047,28 +1047,47 @@ final class VectorCollectionImpl implements VectorCollection {
               + config.dimension());
     }
     Filter filter = request.filter();
-    if (filter != null && !(filter instanceof Filter.All)) {
-      throw new UnsupportedOperationException("filter execution deferred to Step 5");
-    }
+    boolean hasFilter = filter != null && !(filter instanceof Filter.All);
 
     Generation gen = acquireReadSnapshot();
     try {
       long start = System.nanoTime();
+
+      // When a filter is active, request more candidates from the SPI so that
+      // post-filtering still yields k results in most cases. filterExpansion is
+      // independent of overQueryFactor (which controls the SPI's two-pass quantization
+      // rescore budget) to avoid compounding multipliers.
+      int candidateK = request.k();
+      int candidateSearchListSize = request.searchListSize();
+      if (hasFilter) {
+        candidateK =
+            Math.min(
+                Math.max((int) Math.ceil(request.k() * request.filterExpansion()), request.k()),
+                Math.max(gen.liveCount, request.k()));
+        // Scale the beam width alongside candidateK so graph indexes actually explore
+        // enough nodes to produce the expanded candidate pool.
+        candidateSearchListSize = Math.max(candidateK, request.searchListSize());
+      }
+
       IndexSpi.SearchOutcome outcome =
           gen.spi.search(
-              request.query(), request.k(), request.searchListSize(), request.overQueryFactor());
+              request.query(), candidateK, candidateSearchListSize, request.overQueryFactor());
 
       int[] ordinals = outcome.ordinals();
       float[] scores = outcome.scores();
 
-      List<SearchResult.Hit> hits = new ArrayList<>(ordinals.length);
-      for (int i = 0; i < ordinals.length; i++) {
+      List<SearchResult.Hit> hits = new ArrayList<>(Math.min(ordinals.length, request.k()));
+      for (int i = 0; i < ordinals.length && hits.size() < request.k(); i++) {
         float score = scores[i];
         if (score < request.minScore()) {
           continue;
         }
         Document stored = gen.metadataStore.get(ordinals[i]);
         if (stored == null) {
+          continue;
+        }
+        // Post-filter: skip documents whose metadata does not satisfy the filter.
+        if (hasFilter && !FilterExecutor.matches(filter, stored.metadata())) {
           continue;
         }
         float[] vector = null;
@@ -1095,6 +1114,15 @@ final class VectorCollectionImpl implements VectorCollection {
                 request.includeMetadata() ? stored.metadata() : null);
         hits.add(new SearchResult.Hit(stored.id(), score, projected));
       }
+
+      if (hasFilter && hits.size() < request.k() && gen.liveCount >= request.k()) {
+        LOGGER.log(
+            Level.FINE,
+            "Filtered search returned {0} of {1} requested results "
+                + "(filter was too selective for the candidate pool of {2})",
+            new Object[] {hits.size(), request.k(), ordinals.length});
+      }
+
       long elapsed = System.nanoTime() - start;
       return new SearchResult(hits, elapsed);
     } finally {

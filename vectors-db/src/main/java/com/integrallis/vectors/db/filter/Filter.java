@@ -4,13 +4,13 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Predicate AST for metadata filtering. Sealed to enable exhaustive pattern matching in the filter
- * executor.
+ * Predicate AST for metadata filtering. Sealed to enable exhaustive pattern matching in {@link
+ * FilterExecutor}.
  *
- * <p>Step 2 only wires {@link All} as a functional pass-through; all other leaf and composite nodes
- * construct correctly and are pattern-matched exhaustively, but any non-{@code All} value seen by
- * the flat-scan post-filter throws {@link UnsupportedOperationException} until Step 5 lands the
- * executor.
+ * <p>The sealed hierarchy allows the compiler to enforce exhaustive pattern matching over all
+ * filter types. {@link FilterExecutor#matches(Filter, java.util.Map)} evaluates a filter against a
+ * document's metadata; the {@link com.integrallis.vectors.db.VectorCollection} facade applies this
+ * as a post-filter on ANN search candidates.
  */
 public sealed interface Filter
     permits Filter.All,

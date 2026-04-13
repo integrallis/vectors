@@ -11,22 +11,32 @@ import java.util.Objects;
  * <ul>
  *   <li>{@code searchListSize} = {@code max(k, 100)}
  *   <li>{@code overQueryFactor} = 4.0f
+ *   <li>{@code filterExpansion} = 4.0f
  *   <li>{@code minScore} = {@code -Float.MAX_VALUE} (no minimum)
  *   <li>{@code filter} = null (no filter; semantically equivalent to {@link
  *       com.integrallis.vectors.db.filter.Filters#all()})
  *   <li>{@code includeVector} = {@code includeText} = {@code includeMetadata} = true
  * </ul>
  *
- * <p>{@code overQueryFactor} is expressed as a {@code float} so non-integer factors like {@code
- * 1.5f} or {@code 2.5f} are supported. Brute-force backends (e.g., {@link
- * com.integrallis.vectors.db.index.FlatScanAdapter}) ignore both {@code overQueryFactor} and {@code
- * searchListSize}.
+ * <p><b>Two independent multipliers.</b> {@code overQueryFactor} controls how many extra candidates
+ * the SPI's two-pass quantized search path retrieves for rescoring (it is passed through to the
+ * graph index and has no effect on brute-force backends). {@code filterExpansion} controls how many
+ * extra candidates the facade requests from the SPI when a metadata filter is active, so that
+ * post-filtering still yields {@code k} results in most cases. The two do not compound: the SPI
+ * always receives the original {@code k}, and the facade requests {@code k * filterExpansion}
+ * candidates from the SPI only when a non-trivial filter is present.
+ *
+ * <p>{@code overQueryFactor} and {@code filterExpansion} are both expressed as {@code float} so
+ * non-integer factors like {@code 1.5f} or {@code 2.5f} are supported. Brute-force backends (e.g.,
+ * {@link com.integrallis.vectors.db.index.FlatScanAdapter}) ignore both {@code overQueryFactor} and
+ * {@code searchListSize}.
  */
 public record SearchRequest(
     float[] query,
     int k,
     int searchListSize,
     float overQueryFactor,
+    float filterExpansion,
     float minScore,
     Filter filter,
     boolean includeVector,
@@ -52,6 +62,7 @@ public record SearchRequest(
     private final int k;
     private Integer searchListSize;
     private Float overQueryFactor;
+    private Float filterExpansion;
     private Float minScore;
     private Filter filter;
     private boolean includeVector = true;
@@ -72,9 +83,25 @@ public record SearchRequest(
       return this;
     }
 
-    /** Sets the over-query multiplier. Non-integer values such as {@code 1.5f} are allowed. */
+    /**
+     * Sets the over-query multiplier for the SPI's two-pass quantized search path. This controls
+     * how many coarse-pass candidates are rescored at full precision. Has no effect on the
+     * post-filter candidate pool; use {@link #filterExpansion(float)} for that. Non-integer values
+     * such as {@code 1.5f} are allowed.
+     */
     public Builder overQueryFactor(float overQueryFactor) {
       this.overQueryFactor = overQueryFactor;
+      return this;
+    }
+
+    /**
+     * Sets the candidate pool multiplier for post-filter expansion. When a non-trivial metadata
+     * filter is active, the facade requests {@code k * filterExpansion} candidates from the SPI so
+     * that post-filtering still yields {@code k} results. Default: {@code 4.0f}. Independent of
+     * {@link #overQueryFactor(float)}, which controls quantization rescoring.
+     */
+    public Builder filterExpansion(float filterExpansion) {
+      this.filterExpansion = filterExpansion;
       return this;
     }
 
@@ -102,7 +129,14 @@ public record SearchRequest(
       return this;
     }
 
-    /** Include the metadata map in each returned Hit's Document. */
+    /**
+     * Include the metadata map in each returned Hit's Document. Default: {@code true}.
+     *
+     * <p>When {@code false}, the metadata map in the returned documents will be {@code null}. Note
+     * that metadata filters (via {@link #filter(Filter)}) still evaluate correctly against the
+     * stored metadata regardless of this setting — this flag only affects what is projected into
+     * the response.
+     */
     public Builder includeMetadata(boolean includeMetadata) {
       this.includeMetadata = includeMetadata;
       return this;
@@ -112,9 +146,10 @@ public record SearchRequest(
     public SearchRequest build() {
       int l = searchListSize != null ? searchListSize : Math.max(k, 100);
       float oqf = overQueryFactor != null ? overQueryFactor : 4.0f;
+      float fe = filterExpansion != null ? filterExpansion : 4.0f;
       float ms = minScore != null ? minScore : -Float.MAX_VALUE;
       return new SearchRequest(
-          query, k, l, oqf, ms, filter, includeVector, includeText, includeMetadata);
+          query, k, l, oqf, fe, ms, filter, includeVector, includeText, includeMetadata);
     }
   }
 }
