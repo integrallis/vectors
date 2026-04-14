@@ -190,6 +190,69 @@
         <Class name="com.integrallis.vectors.bench.RecallUtil"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- vectors-core cluster package: KMeans reuses rng across k-means++ seeding and
+         Lloyd iterations; SpotBugs misidentifies each call site as an independent use.
+         CentroidIndex and BuoyIndex intentionally store/return centroid arrays by reference
+         (zero-copy) — copying a K×D matrix on every route() call would defeat the purpose. -->
+    <Match>
+        <Class name="com.integrallis.vectors.core.cluster.KMeans"/>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+    <Match>
+        <Class name="com.integrallis.vectors.core.cluster.CentroidIndex"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+            <Bug pattern="EI_EXPOSE_REP"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-db: VectorEvent records store/expose float[] vector by reference for
+         zero-copy WAL encoding. Defensive copy would double allocation on every mutation. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.db.event.VectorEvent$Add"/>
+            <Class name="com.integrallis.vectors.db.event.VectorEvent$Upsert"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-storage: LocalFileStorageBackend resolves keys relative to a non-root root
+         directory, so Path.getParent() and Path.getFileName() are never null for any path
+         produced by root.resolve(key). SpotBugs cannot verify this from the return types alone. -->
+    <Match>
+        <Class name="com.integrallis.vectors.storage.backend.LocalFileStorageBackend"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+
+    <!-- vectors-ivf: BuoyIndex, ClusterPartition, IvfIndex, IvfSearchRequest, and
+         IvfSearchResult store/return array and List references intentionally (zero-copy
+         routing and search). Defensive copies at K=1024, D=128 would add 512 KB to every
+         route() call and defeat the <10 µs latency target. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.ivf.BuoyIndex"/>
+            <Class name="com.integrallis.vectors.ivf.ClusterPartition"/>
+            <Class name="com.integrallis.vectors.ivf.IvfIndex"/>
+            <Class name="com.integrallis.vectors.ivf.IvfSearchRequest"/>
+            <Class name="com.integrallis.vectors.ivf.IvfSearchResult"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-db: SegmentExporter.export iterates over directory entries; Path.getFileName()
+         is never null for paths returned by Files.list() (they always have at least one element).
+         SpotBugs cannot prove this from the return type alone, so it flags a false positive. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.transfer.SegmentExporter"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+
     <!-- vectors-db: VectorCollectionImpl.openGeneration intentionally catches Exception
          (not just IOException) so that arena.close() fires even on unchecked exceptions
          like ArithmeticException from Math.toIntExact. The broad catch is a resource-safety

@@ -128,6 +128,29 @@ public final class VectorUtil {
     return IMPL.sum(vector);
   }
 
+  // --- Batch distance operations (used by CentroidIndex for centroid scoring) ---
+
+  /**
+   * Fills {@code out[i]} with the dot product of {@code query} and {@code matrix[i]} for all rows
+   * {@code i} in {@code [0, matrix.length)}. {@code out.length} must be &ge; {@code matrix.length}.
+   */
+  public static void batchDotProduct(float[] query, float[][] matrix, float[] out) {
+    for (int i = 0; i < matrix.length; i++) {
+      out[i] = IMPL.dotProduct(query, 0, matrix[i], 0, query.length);
+    }
+  }
+
+  /**
+   * Fills {@code out[i]} with the squared L2 distance from {@code query} to {@code matrix[i]} for
+   * all rows {@code i} in {@code [0, matrix.length)}. {@code out.length} must be &ge; {@code
+   * matrix.length}.
+   */
+  public static void batchSquaredL2(float[] query, float[][] matrix, float[] out) {
+    for (int i = 0; i < matrix.length; i++) {
+      out[i] = IMPL.squareDistance(query, 0, matrix[i], 0, query.length);
+    }
+  }
+
   // --- Normalization ---
 
   /**
