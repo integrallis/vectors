@@ -45,44 +45,137 @@ A new `vectors-ivf` module provides the IVF routing layer. Distribution is a lay
 
 ## 3. Architecture Overview
 
-The distributed architecture has four layers, each buildable and testable independently:
+The architecture has three interlocking conceptual layers — the core of the design — each
+buildable and testable independently. All three are implemented in `vectors-ivf`; the
+`vectors-distributed` module adds the multi-node execution shell on top.
+
+### 3.1 The Three Layers
+
+**Layer 1 — Global Buoy Index** (always-hot, JVM heap)
+
+A flat array of K centroids that partitions the entire vector space into Voronoi cells.
+Routes every query to the top-nprobe clusters via a single SIMD batch dot-product.
+At K=1024 and D=128, the full index — centroids + spill map + cluster metadata — is
+**~524 KB**, fitting entirely in L2 cache. SOAR spilling handles Voronoi boundary cases
+with only 5–20% memory overhead.
+
+> **The T0 global-replication advantage**: Because 1-bit RaBitQ codes (T0) are tiny —
+> 16 MB for 1M 128-dim vectors, 1.6 GB for 1B — they are replicated to **every node**.
+> The first-pass scoring that eliminates ≥90% of candidates is therefore always local.
+> Only T1 rescore and T2 exact-score ever cross the network. This is why distributed
+> search latency stays below 20 ms even at 100M+ vectors — the expensive computation
+> never leaves the node that holds the data.
+
+**Layer 2 — Hierarchical Sub-Cluster Tree** (JVM heap, per-cluster sub-buoys)
+
+Large clusters are recursively subdivided by `ClusterSplitter` using the Quake cost model:
 
 ```
-Layer 3: vectors-distributed   DistributedVectorCollection, ShardRouter,
-                               ScatterGatherExecutor, GossipMembership,
-                               S3WriteAheadLog, EventLog
-
-Layer 2: vectors-ivf           BuoyIndex (centroid routing), IvfIndex,
-                               ClusterPartition, SoarSpillMap,
-                               TieredCluster (hyper doors, multi-pass cascade)
-
-Layer 1: vectors-db            VectorCollection (unchanged public API),
-         vectors-storage       StorageBackend interface (new),
-         vectors-core          KMeans, CentroidIndex, batch SIMD distance (new)
-
-Layer 0: vectors-core          SIMD kernels (unchanged)
-         vectors-quantization  Quantizers (unchanged, consumed by tiers)
+C_i = A_i × λ(s_i)
 ```
 
-The query path in distributed mode:
+where `A_i` is the cluster's measured access frequency and `λ(s_i)` is the profiled median
+scan latency for its size. A cluster splits when `C_i > C_left + C_right + τ` (τ = 250 ns
+default); merges when `C_i + C_j < C_merged + τ`. Splitting uses balanced 2-means; a
+three-phase estimate→verify→commit/rollback cycle prevents premature splits.
+
+The resulting `SubBuoyTree` is a recursive tree of sub-buoys. At an average branching
+factor of 4 and depth 2, a 1K-cluster root produces ~16K leaf sub-clusters — under 8 MB
+at 128 dims — still fitting in heap. The tree refines the Layer 1 routing from cluster
+granularity down to leaf sub-cluster granularity before dispatching to storage.
+
+**Layer 3 — Per-Cluster Tiered Storage** (the novel contribution)
+
+Within each leaf cluster, vectors exist in four tiers by quantization fidelity:
+
+| Tier | Name | Representation | Storage | Typical latency |
+|------|------|----------------|---------|-----------------|
+| T0 | Hot | 1-bit RaBitQ | JVM heap | < 1 µs |
+| T1 | Warm | SQ8 (8-bit scalar) | Off-heap MemorySegment | ~ 1 µs |
+| T2 | Cool | float32, mmap'd | Local NVMe SSD | 10–100 µs |
+| T3 | Cold | float32, archived | Object storage (S3/GCS) | 50–200 ms |
+
+Cross-tier links — **hyper doors** — are O(1) index arithmetic over the shared ordinal
+space: `t1_address = sq8Segment.asSlice(ordinal * D)`. No hash lookup, no pointer chasing.
+
+**Quantization IS the tier.** java-vectors' existing quantizers (RaBitQ, SQ8, float32)
+provide exactly the three fidelity levels. The cascade already exists in the two-pass
+search in `vectors-hnsw` and `vectors-vamana`; `TieredCluster` generalises it to four
+tiers driven by access frequency.
+
+The tier materialisation policy (`TierPolicy`) is access-frequency-driven:
+
+```
+T0: ALL clusters   (always materialised — tiny, 16 MB / 1M vecs)
+T1: clusters with A_i > θ₁   (default 0.01)  — demand-loaded off-heap
+T2: clusters with A_i > θ₂   (default 0.05)  — mmap'd from SSD
+T3: ALL clusters   (always on S3 — source of truth)
+```
+
+Research shows ~15% of IVF clusters are accessed in a full day (CatapultDB, 2026). Only
+that 15% needs T1 and T2 materialised; the other 85% are served from T0 for routing and
+T3 for rare full-resolution queries.
+
+### 3.2 Physical Layout
+
+```
+                         Query
+                           |
+                           v
+                +-----------------------+
+                |   Global Buoy Index   |  JVM Heap, ~524 KB @ K=1024 D=128
+                |   K buoy vectors      |  < 1 µs routing, SIMD batch distance
+                |   SOAR spill map      |  replicated to EVERY node
+                |   cluster sizes/radii |
+                +-----------+-----------+
+                            |
+                   route to top-nprobe clusters (Layer 1)
+                            |
+            +---------------+---------------+
+            |               |               |
+            v               v               v
+    +-------+-------+ +----+----+ +--------+--------+
+    |  Cluster A    | | Cluster B| |  Cluster C      |
+    |               | |         | |                  |
+    |  Sub-buoys    | | Sub-buoys| | Sub-buoys       | <- SubBuoyTree (heap)
+    |  (recursive)  | | (recurs.)| | (recursive)     |    refine to leaf
+    |               | |         | |                  |
+    | T0|T1|T2| T3  | | T0|T1|  | | T0|   | T3  |  | <- TieredCluster (Layer 3)
+    | Hp|Oh|mm| S3  | | Hp|Oh|  | | Hp|   | S3  |  |    HyperDoor links tiers
+    +-------+-------+ +----+----+ +--------+--------+
+            |               |               |
+            +-------+-------+-------+-------+
+                    |               |
+            +-------+-------+ +-----+-------+
+            | Local SSD/mmap| | Object Store|   T2: mmap, T3: S3/GCS
+            | (T2 clusters) | | (T3 always) |
+            +---------------+ +-------------+
+```
+
+### 3.3 Distributed Query Path
 
 ```
 Client query
   |
   v
-ShardRouter.route(query, nprobe)       -- BuoyIndex: K=1024 SIMD centroids, <5 µs
+BuoyIndex.route(query, nprobe, gamma)      -- Layer 1: < 1 µs SIMD, any node
+  |  [top-nprobe cluster ids + SOAR spills]
+  v
+SubBuoyTree.refineToLeaves(clusterIds, q)  -- Layer 2: sub-cluster routing, heap
+  |  [leaf sub-cluster ids, grouped by owner node]
+  v
+ScatterGatherExecutor (virtual threads)    -- one vthread per owning node
+  |-- Node A: TieredCluster.search()      -- Layer 3: T0→T1→T2 cascade, < 2 ms
+  |            T0 scoring always local (globally replicated 1-bit codes)
+  |            T1/T2 local if cluster is hot; T3 fetch from S3 if cold
+  |-- Node B: TieredCluster.search()
+  |-- Node C: TieredCluster.search()
   |
   v
-ScatterGatherExecutor (virtual threads)
-  |-- Node A: localSearch(clusterId=5,  query, k) -- HNSW within cluster, <2 ms
-  |-- Node B: localSearch(clusterId=12, query, k) -- HNSW within cluster, <2 ms
-  |-- Node C: localSearch(clusterId=47, query, k) -- HNSW within cluster, <2 ms
+TopKMerger.merge(results, k)               -- heap merge, O(nodes × k × log k)
   |
   v
-TopKMerger.merge(results, k)           -- heap merge, O(n_shards * k * log k)
-  |
-  v
-Client: top-k results
+Client: top-k results with exact float32 scores
 ```
 
 ---
@@ -92,14 +185,14 @@ Client: top-k results
 | Module | Change type | What changes |
 |--------|-------------|--------------|
 | `vectors-core` | Additions | `KMeans`, `CentroidIndex`, batch SIMD distance methods in `VectorUtil` |
-| `vectors-storage` | Additions | `StorageBackend` interface, `LocalStorageBackend`, `WriteAheadLog` |
-| `vectors-db` | Additions | `VectorEvent` sealed hierarchy, `EventLog`, `SegmentExporter/Importer` |
-| `vectors-quantization` | No change | Consumed as-is by `TieredCluster` |
-| `vectors-hnsw` | No change | `HnswGraph.merge()` deferred to Phase 4 |
+| `vectors-storage` | Additions | `StorageBackend` interface, `HeapStorageBackend`, `LocalFileStorageBackend`, `SegmentedWriteAheadLog` |
+| `vectors-db` | Additions | `VectorEvent` sealed hierarchy, `VectorEventCodec`, `SegmentExporter/Importer`; `IndexType.IVF_HNSW` enum value |
+| `vectors-quantization` | No change | Consumed as-is by `TieredCluster` tiers |
+| `vectors-hnsw` | No change | Used within clusters via `IvfHnswIndex` |
 | `vectors-vamana` | No change | Used within clusters |
-| `vectors-ivf` | **New module** | `BuoyIndex`, `IvfIndex`, `ClusterPartition`, `SoarSpillMap`, `TieredCluster` |
-| `vectors-distributed` | **New module** | `DistributedVectorCollection`, `ShardRouter`, `ScatterGatherExecutor`, gossip, WAL |
-| `vectors-bench` | Additions | IVF + distributed benchmark classes |
+| `vectors-ivf` | **New module** | `BuoyIndex` (Layer 1), `SubBuoyTree` + `ClusterSplitter` (Layer 2), `HyperDoor`, `TieredCluster`, `TierPolicy`, `ClusterPartition`, `IvfIndex`, `IvfHnswIndex` (Layer 3) |
+| `vectors-distributed` | **New module** | `DistributedVectorCollection`, `ShardRouter`, `ScatterGatherExecutor`, `GossipMembership`, `S3StorageBackend`, `WriteAheadLog` |
+| `vectors-bench` | Additions | `BuoyIndexBenchmark`, `IvfIndexBenchmark`, `ScatterGatherBenchmark`, `TieredClusterBenchmark` |
 
 ---
 
@@ -409,137 +502,402 @@ Acceptance tests:
 
 ### 8.1 Purpose
 
-The IVF layer sits between `vectors-core` (distance kernels, k-means) and
-`vectors-distributed` (multi-node routing). It implements:
-- The `BuoyIndex` (global centroid routing index)
-- `ClusterPartition` (per-centroid vector posting list)
-- `IvfIndex` (flat IVF: route + brute-force within cluster)
-- `IvfHnswIndex` (route + HNSW within cluster, Phase 2)
-- `TieredCluster` (per-cluster hot/warm/cold tiers, Phase 2)
-- SOAR spill map construction
+`vectors-ivf` implements all three buoy layers. It is the heart of the distributed design.
 
 Dependencies: `vectors-core`, `vectors-storage`, `vectors-quantization`
 
-### 8.2 `BuoyIndex`
+| Layer | Types |
+|-------|-------|
+| Layer 1 — Global routing | `BuoyIndex`, `CentroidIndex` (from vectors-core) |
+| Layer 2 — Hierarchical splitting | `ClusterSplitter`, `SubBuoyTree` |
+| Layer 3 — Per-cluster tiered storage | `HyperDoor`, `TieredCluster`, `TierPolicy`, `ClusterPartition` |
+| Index API | `IvfIndex` (flat), `IvfHnswIndex` (graph within cluster) |
+
+### 8.2 `BuoyIndex` — Layer 1 Global Routing
 
 Package: `com.integrallis.vectors.ivf`
 
 ```java
 /**
- * The global centroid routing index. Wraps a CentroidIndex with an optional
- * SOAR spill map and cluster metadata (sizes, radii for boundary detection).
- * Always resident in JVM heap. Immutable once built; rebuilt on retrain.
+ * The global centroid routing index. Always resident in JVM heap. Immutable once
+ * built; rebuilt when cluster topology changes (splits/merges/retrain).
+ *
+ * Memory footprint at K=1024, D=128:
+ *   buoys[]:         1024 * 128 * 4 =  512 KB
+ *   spillTargets[]:  1024 * 4       =    4 KB
+ *   clusterSizes[]:  1024 * 4       =    4 KB
+ *   clusterRadii[]:  1024 * 4       =    4 KB
+ *   Total:                          = ~524 KB  (fits in L2 cache)
  */
 public final class BuoyIndex {
     /**
-     * Build a BuoyIndex by training k-means over a representative sample of dataset.
-     * Constructs the spill map by finding the second-nearest centroid for each
-     * training point, per the SOAR construction algorithm.
-     *
-     * @param dataset    training sample, shape [n][dim]; n >= 256*k recommended
-     * @param k          number of buoys (centroids)
-     * @param metric     similarity function
-     * @param buildSoar  whether to compute SOAR spill targets (recommended: true)
-     * @param seed       RNG seed
+     * Train K buoys via k-means++ over a representative sample (n >= 256*K rows).
+     * Uses real dataset vectors nearest to mathematical centroids (SPANN approach)
+     * to avoid quantization artifacts.
+     * When buildSoar=true, constructs the spill map via second-nearest-centroid
+     * assignment for each training point (SOAR, ICML 2024).
      */
     public static BuoyIndex train(float[][] dataset, int k, SimilarityFunction metric,
                                    boolean buildSoar, long seed);
 
-    /** Route query to the nprobe nearest clusters, with optional SOAR expansion. */
+    /**
+     * Route query to the nprobe nearest clusters, with SOAR boundary expansion.
+     * Any cluster whose buoy distance is within (1+gamma)*nearestDist also has
+     * its spillTarget added (deduplicated). gamma=0.0 disables SOAR expansion.
+     */
     public int[] route(float[] query, int nprobe, float gamma);
 
     public int k();
     public SimilarityFunction metric();
     public float[][] buoyVectors();
+    public int[] spillTargets();       // SOAR spill map: cluster -> spill cluster
+    public int[] clusterSizes();       // for ClusterSplitter cost model
+    public float[] clusterRadii();     // max distance to centroid, for boundary detection
 
-    /** Encode to bytes for persistence/gossip. */
+    /** Encode to bytes for gossip propagation and persistence. */
     public byte[] encode();
     public static BuoyIndex decode(byte[] bytes);
 }
 ```
 
-**Test class**: `BuoyIndexTest` (new, `@Tag("unit")`)
-
-Acceptance tests:
-- `trainProducesKBuoys` — buoyVectors().length == k
+**Test class**: `BuoyIndexTest` (`@Tag("unit")`)
+- `trainProducesKBuoys` — `buoyVectors().length == k`
+- `memoryFootprintWithinBound` — encoded size ≤ 524 KB at K=1024, D=128
 - `routeReturnsNprobeClusterIds`
-- `soarSpillMapReducesBoundaryMisses` — synthetic boundary query, spill-augmented routing
-  retrieves the true nearest neighbor that plain nprobe routing misses
-- `encodeDecodeRoundTrip` — encode then decode, all fields bit-identical
-- `routeIsIdempotent` — same query twice → same result (no mutating state)
+- `routeResultsSortedByAscendingDistance`
+- `soarExpansionAddsBoundarySpillTarget` — synthetic boundary query retrieves true NN
+  that plain nprobe routing misses
+- `noSpillWhenFarFromBoundary` — `gamma=0.0` returns exactly nprobe ids
+- `encodeDecodeRoundTrip` — all fields bit-identical after encode/decode
+- `routeIsIdempotent`
 
-**Benchmark class**: `BuoyIndexBenchmark` (`vectors-bench`)
+**Benchmark class**: `BuoyIndexBenchmark` (`vectors-bench`, throughput mode)
 
 | Benchmark | K | D | nprobe | Target |
 |-----------|---|---|--------|--------|
 | `route_K1024_D128_nprobe32` | 1024 | 128 | 32 | < 10 µs/call |
 | `route_K1024_D128_nprobe64_soar` | 1024 | 128 | 64 | < 20 µs/call |
+| `route_K16384_D768_nprobe64` | 16384 | 768 | 64 | < 200 µs/call |
 
-### 8.3 `ClusterPartition`
+### 8.3 `ClusterPartition` — posting list for one cluster
 
 ```java
 /**
- * A single IVF cluster: the centroid + an ordered posting list of document ordinals
- * within that cluster. Immutable. Backed by an int[] ordinals array.
+ * Immutable posting list for a single cluster. Ordinals are in the global
+ * VectorCollection ordinal space, not cluster-local.
  */
 public record ClusterPartition(
     int clusterId,
     float[] centroid,
-    int[] ordinals,          // global ordinals into the parent VectorCollection
-    int size                 // ordinals.length
+    int[] ordinals,     // global ordinals into the parent VectorCollection
+    int size            // == ordinals.length
 ) {
     public boolean isEmpty() { return size == 0; }
 }
 ```
 
-### 8.4 `IvfIndex` — flat IVF (Phase 1 target)
+### 8.4 `ClusterSplitter` — Layer 2 Adaptive Splitting
+
+Implements the Quake cost model to decide when to split or merge clusters. Splitting
+produces sub-clusters whose `ClusterPartition`s become children in the `SubBuoyTree`.
 
 ```java
 /**
- * IVF-flat index: route query to nprobe clusters via BuoyIndex, then brute-force
- * scan each cluster's vectors. The simplest correct IVF implementation.
+ * Cost-model-driven cluster splitter based on Quake (OSDI 2025).
+ *
+ * Cost model:   C_i = A_i * lambda(s_i)
+ *   A_i         = access frequency: fraction of recent queries hitting cluster i
+ *   lambda(s_i) = measured median scan latency (ns) for cluster size s_i
+ *
+ * Split condition:  C_i > C_left + C_right + tau
+ * Merge condition:  C_i + C_j < C_merged + tau
+ *   tau = minimum improvement threshold in nanoseconds (default 250 ns)
  */
-public final class IvfIndex implements Closeable {
-    public static IvfIndex build(VectorCollection collection, IvfBuildParams params);
+public final class ClusterSplitter {
+
+    public record ClusterCost(
+        int clusterId, double accessFrequency, double scanLatencyNs, double cost) {}
 
     /**
-     * Search: route → brute-force per cluster → merge top-k.
-     * Total candidates = nprobe * cluster_size; brute-force within each.
+     * Estimate whether splitting partition is beneficial. Does not commit.
+     * Uses balanced 2-means to propose left/right sub-clusters.
      */
-    public SearchResult search(IvfSearchRequest request);
+    public SplitProposal propose(ClusterPartition partition, double tau);
 
+    record SplitProposal(
+        ClusterPartition left, ClusterPartition right,
+        float[] subBuoy,          // centroid for the new sub-buoy node
+        double estimatedImprovement,
+        boolean beneficial        // true when improvement > tau
+    ) {}
+
+    /**
+     * Three-phase split: estimate → verify with actual queries → commit or rollback.
+     * Verify phase probes the candidate split with a sample of recent queries and
+     * measures actual latency improvement. Rolls back if improvement < tau.
+     * Returns the two new partitions on commit; singleton list with original on rollback.
+     */
+    public List<ClusterPartition> splitOrRollback(
+        ClusterPartition partition, List<float[]> recentQueries, double tau);
+
+    /**
+     * Merge two clusters when C_i + C_j < C_merged + tau.
+     * Returns the merged partition, or empty if merge is not beneficial.
+     */
+    public Optional<ClusterPartition> mergeIfBeneficial(
+        ClusterPartition a, ClusterPartition b, double tau);
+
+    /** Record a query hit for a cluster. Used to update the sliding-window A_i estimate. */
+    public void recordAccess(int clusterId);
+
+    /** Current access frequency estimate for a cluster (EMA over windowSize queries). */
+    public double accessFrequency(int clusterId, int windowSize);
+
+    /** Empirically profile scan latency for a given cluster size. */
+    public long profileScanLatencyNs(int clusterSize, int warmupRuns, int measureRuns);
+}
+```
+
+**Test class**: `ClusterSplitterTest` (`@Tag("unit")`)
+- `splitReducesCostForLargeHighAccessCluster`
+- `splitRollbackWhenActualImprovementBelowTau` — verify phase fails → original returned
+- `mergeReducesCostForSmallColdClusters`
+- `noSplitProposedWhenCostImprovementBelowTau` — small, cold cluster → `beneficial=false`
+- `accessFrequencyUpdatesViaMovingAverage` — three accesses over window → frequency > 0
+
+### 8.5 `SubBuoyTree` — Layer 2 Hierarchical Cluster Tree
+
+```java
+/**
+ * Recursive tree of sub-buoys produced by ClusterSplitter. The root is the global
+ * BuoyIndex (K clusters). Each cluster may be subdivided into sub-clusters, each
+ * with its own sub-buoy, forming a tree of depth up to MAX_DEPTH (default 3).
+ *
+ * Memory: at branching factor 4, depth 2, K=1024 → ~16K sub-buoys → ~8 MB at D=128.
+ * Always resident in JVM heap. Thread-safe for concurrent reads; writes lock the tree.
+ *
+ * Gossip note: the full tree is encoded to ~8 MB and gossip'd among nodes.
+ * Only the diff (new/removed nodes) is gossiped after each split/merge.
+ */
+public final class SubBuoyTree {
+    public BuoyIndex globalBuoyIndex();
+    public int leafCount();
+    public int depth();              // current max depth
+
+    /**
+     * Refine an initial set of cluster ids (from BuoyIndex.route) to leaf
+     * sub-cluster ids by descending the sub-buoy tree. Returns at most maxLeaves
+     * leaf ids, still sorted by ascending distance to query.
+     */
+    public int[] refineToLeaves(int[] clusterIds, float[] query, int maxLeaves);
+
+    /** Register a split. Adds left/right as children of clusterId; removes clusterId leaf. */
+    public void split(int clusterId, ClusterPartition left, ClusterPartition right,
+                      float[] subBuoy);
+
+    /** Register a merge. Removes clusterIdA and clusterIdB; adds merged as a new leaf. */
+    public void merge(int clusterIdA, int clusterIdB, ClusterPartition merged);
+
+    /** Encode the full tree (global buoy index + all sub-buoy nodes) for gossip/persistence. */
+    public byte[] encode();
+    public static SubBuoyTree decode(byte[] bytes);
+}
+```
+
+**Test class**: `SubBuoyTreeTest` (`@Tag("unit")`)
+- `flatTreeRoutesIdenticallyToBuoyIndex` — no splits, `refineToLeaves` == `BuoyIndex.route`
+- `splitThenRefine_routesToCorrectSubCluster`
+- `mergeThenRefine_treatedAsSingleLeaf`
+- `depthLimitEnforced` — split attempt beyond MAX_DEPTH throws `IllegalStateException`
+- `encodeDecodeRoundTrip` — all sub-buoy nodes and global index bit-identical after decode
+- `concurrentReadsDuringWrite` — reads return consistent snapshot; no ConcurrentModificationException
+
+### 8.6 `HyperDoor` — cross-tier link record
+
+```java
+/**
+ * Cross-tier link for a single cluster ordinal. All tiers share the same ordinal
+ * space. Physical tier offsets are computed by O(1) arithmetic — no hash lookup,
+ * no pointer chasing:
+ *   T0: bitSet.get(t0BitOffset)
+ *   T1: sq8Segment.asSlice(t1ByteOffset, D)
+ *   T2: vectorsMmap.asSlice(t2FileOffset, D * Float.BYTES)
+ *   T3: s3Backend.get(objectKey, t3ObjectOffset, D * Float.BYTES)
+ *
+ * In practice, since ordinals are contiguous within each tier, the HyperDoor
+ * degenerates to stride arithmetic: t1ByteOffset = ordinal * D, etc.
+ * The record is kept explicit for documentation and for non-contiguous layouts
+ * (after compaction gaps or partial tier materialisation).
+ *
+ * Fields with value -1 indicate the tier is not locally materialised.
+ * T0 (t0BitOffset) and T3 (t3ObjectOffset) are always >= 0.
+ */
+public record HyperDoor(
+    int  clusterOrdinal,     // position within this cluster's ordinal space
+    long t0BitOffset,        // bit offset in the 1-bit RaBitQ bitset (always present)
+    int  t1ByteOffset,       // byte offset in the SQ8 MemorySegment (-1 = not materialised)
+    long t2FileOffset,       // byte offset in the mmap'd vectors.bin (-1 = not loaded)
+    long t3ObjectOffset      // byte offset in the S3 object key (always present)
+) {
+    public boolean hasT1() { return t1ByteOffset  >= 0; }
+    public boolean hasT2() { return t2FileOffset  >= 0; }
+}
+```
+
+**Test class**: `HyperDoorTest` (`@Tag("unit")`)
+- `strideArithmetic_T0T1T2T3_offsetsConsistentWithOrdinal`
+- `missingT1ReportedCorrectly` — `t1ByteOffset=-1` → `hasT1()==false`
+- `missingT2ReportedCorrectly`
+
+### 8.7 `TieredCluster` — Layer 3 per-cluster four-tier cascade
+
+```java
+/**
+ * Per-cluster tiered storage with four quantization tiers linked by HyperDoor
+ * ordinal arithmetic. The search cascade falls back gracefully:
+ *   T0 always available (1-bit, heap)
+ *   T0 → T1 if T1 materialised, else T0 → T2
+ *   T0 → T1 → T2 if T2 mmap'd, else T1 → T3 (S3 on-demand fetch)
+ *
+ * Data reduction example (50K-vector cluster, D=128):
+ *   Brute-force:   50K * 128 * 4 =  25.6 MB
+ *   T0 pass:       50K * 128 / 8 =   800 KB  → retain top-1000
+ *   T1 pass:       1K  * 128     =   128 KB  → retain top-100
+ *   T2 pass:       100 * 128 * 4 =    51 KB  → return top-k
+ *   Total read:                  =  ~980 KB  (26x reduction)
+ */
+public final class TieredCluster {
+    public int clusterId();
+    public int size();
+    public boolean hasT1();          // SQ8 codes loaded in off-heap MemorySegment
+    public boolean hasT2();          // float32 vectors mmap'd from SSD
+
+    /**
+     * Multi-pass cascade search. Tier selection is automatic based on materialisation.
+     * Falls back gracefully when higher tiers are not present.
+     */
+    public SearchResult search(float[] query, int k, CascadeParams params);
+
+    /** Demand-materialise T1 (SQ8 codes) into off-heap MemorySegment. */
+    public void materializeT1(SQ8ClusterSource source);
+
+    /** Memory-map T2 (float32) from a local cluster vectors.bin file. */
+    public void materializeT2(Path clusterVectorsFile);
+
+    /** Fetch T2 from T3 (S3) when not locally available; writes to localPath then mmaps. */
+    public void fetchFromT3(StorageBackend s3, String objectKey, Path localPath)
+        throws IOException;
+
+    /** Evict T1 off-heap segment. T0 and T2 are unaffected. */
+    public void evictT1();
+
+    /** Unmap T2 mmap'd segment. T0, T1, and T3 are unaffected. */
+    public void evictT2();
+
+    /** Record a query hit; used by TierPolicy and ClusterSplitter. */
+    public void recordAccess();
+
+    /** Exponential moving average access frequency over the last windowSize queries. */
+    public double accessFrequency(int windowSize);
+
+    /** Median scan latency sampled over recent search() calls (nanoseconds). */
+    public long medianScanLatencyNs();
+
+    record CascadeParams(
+        int   t0Candidates,  // survivors from T0 (default: max(100, k*10))
+        int   t1Candidates,  // survivors from T1 (default: max(10,  k*2))
+        float gamma          // SOAR boundary tolerance passed through from routing
+    ) {}
+}
+```
+
+**Test class**: `TieredClusterTest` (`@Tag("unit")`)
+- `t0OnlySearch_returnsApproxResults` — only T0 materialised, recall@10 ≥ 0.70
+- `t0T2Search_returnsHighRecall` — T0 + T2, recall@10 ≥ 0.95 (Phase 1 gate)
+- `t0T1T2Cascade_returnsHighRecall` — full cascade, recall@10 ≥ 0.98 (Phase 2 gate)
+- `cascadeDataReadBelow1MB_50KCluster` — measure bytes read ≤ 980 KB for 50K cluster
+- `fetchFromT3ThenSearch` — mocked S3 backend, T2 fetched and mmap'd, search succeeds
+- `evictT1ThenSearch_fallsBackToT0T2` — after eviction, search still returns results
+- `accessFrequencyUpdatesCorrectly` — 10 accesses, window=100 → frequency ≈ 0.10
+- `hyperDoorOffsetArithmetic_correctForAllTiers`
+
+**Benchmark class**: `TieredClusterBenchmark` (`vectors-bench`)
+
+| Benchmark | N/cluster | Cascade | Target |
+|-----------|-----------|---------|--------|
+| `t0Only_N50K_D128` | 50K | T0 | < 500 µs |
+| `t0T2_N50K_D128` | 50K | T0→T2 | < 2 ms p99 |
+| `t0T1T2_N50K_D128` | 50K | T0→T1→T2 | < 2 ms p99 |
+| `dataReadBytes_N50K_vs_bruteForce` | 50K | T0→T1→T2 | ≤ 1 MB (vs 25.6 MB BF) |
+
+### 8.8 `TierPolicy` — access-frequency-driven materialisation
+
+```java
+/**
+ * Drives automatic T1/T2 materialisation and eviction based on cluster
+ * access frequency measured by TieredCluster.accessFrequency().
+ *
+ * Formal model (FaTRQ, 2026):
+ *   T1 materialised when: A_i > theta_1   (default 0.01)
+ *   T2 materialised when: A_i > theta_2   (default 0.05)
+ *   T0 and T3 always present.
+ *
+ * Working set insight: ~15% of clusters are accessed in a full day (CatapultDB).
+ * Configuring theta_2 = 0.05 materialises T2 for the hottest ~15% of clusters
+ * and keeps T1 for the next ~10%, total warm set = ~25%.
+ */
+public final class TierPolicy {
+    public static TierPolicy auto();   // theta_1=0.01, theta_2=0.05
+
+    public enum Decision { MATERIALISE, EVICT, NO_CHANGE }
+
+    public Decision evaluateT1(TieredCluster cluster, int windowSize);
+    public Decision evaluateT2(TieredCluster cluster, int windowSize);
+
+    /** Apply policy to all clusters in a collection. Call periodically (e.g., every 60 s). */
+    public void applyAll(Collection<TieredCluster> clusters, int windowSize,
+                         StorageBackend s3, Path localSsdRoot) throws IOException;
+
+    public static Builder builder();
+    public static final class Builder {
+        public Builder t1Threshold(double theta1);
+        public Builder t2Threshold(double theta2);
+        public Builder windowSize(int queries);
+        public TierPolicy build();
+    }
+}
+```
+
+**Test class**: `TierPolicyTest` (`@Tag("unit")`)
+- `hotCluster_materialisesBothT1AndT2` — A_i=0.10 > theta_2 → both materialise
+- `warmCluster_materialisesT1Only` — A_i=0.03 > theta_1 but < theta_2 → T1 only
+- `coldCluster_evictsBoth` — A_i=0.001 < theta_1 → evict T1 and T2
+- `applyAll_materialisesCorrectFraction` — 100 clusters, 15 hot → 15 with T2
+
+### 8.9 `IvfIndex` — flat IVF (Phase 1 search target)
+
+```java
+public final class IvfIndex implements Closeable {
+    public static IvfIndex build(VectorCollection collection, IvfBuildParams params);
+    public SearchResult search(IvfSearchRequest request);
     public BuoyIndex buoyIndex();
-    public int clusterCount();
+    public SubBuoyTree subBuoyTree();
     public ClusterPartition partition(int clusterId);
+    public int clusterCount();
 }
 
 public record IvfBuildParams(
-    int k,           // number of clusters (ceil(sqrt(n)) recommended)
-    int maxIter,     // k-means iterations
-    float gamma,     // SOAR boundary expansion (0.0 = disabled)
-    boolean buildSoar,
-    long seed
-) {}
+    int k, int maxIter, float gamma, boolean buildSoar, long seed) {}
 
 public record IvfSearchRequest(
-    float[] query,
-    int k,             // top-k results
-    int nprobe,        // clusters to probe
-    float gamma,       // SOAR expansion at search time (0.0 = disabled)
-    float minScore     // score threshold (default -Float.MAX_VALUE)
-) {}
+    float[] query, int k, int nprobe, float gamma, float minScore) {}
 ```
 
-**Integration test class**: `IvfIndexIntegrationTest` (new, `@Tag("unit")`)
-
-Acceptance tests — these are the Phase 1 gate:
-- `buildAndSearchFlat_10K_K64` — build on 10K 128-d vectors, search 100 queries,
-  recall@10 ≥ 0.90 with nprobe=8 (vs. brute-force ground truth)
+**Integration test class**: `IvfIndexIntegrationTest` (`@Tag("unit")`)
+- `buildAndSearchFlat_10K_K64` — recall@10 ≥ 0.90, nprobe=8
 - `buildAndSearchFlat_100K_K316_nprobe32` — recall@10 ≥ 0.95 (`@Tag("slow")`)
-- `searchReturnsAtMostKResults`
-- `searchWithEmptyCollectionReturnsEmpty`
-- `nprobeEqualsKGivesBruteForceRecall` — nprobe=k → recall@10 ≥ 0.999
-- `soarExpansionImprovesRecallAtBoundary` — gamma=0.2 recall ≥ plain nprobe recall
+- `nprobeEqualsKGivesBruteForceRecall` — recall@10 ≥ 0.999
+- `soarExpansionImprovesRecallAtBoundary` — gamma=0.2 recall ≥ gamma=0.0 recall
 
 **Benchmark class**: `IvfIndexBenchmark` (`vectors-bench`, `@Tag("slow")`)
 
@@ -549,36 +907,34 @@ Acceptance tests — these are the Phase 1 gate:
 | `search_N1M_K1024_D128_nprobe64` | 1M | 1024 | 128 | 64 | < 8 ms p99 |
 | `search_N100M_K10000_D128_nprobe64` | 100M | 10000 | 128 | 64 | < 20 ms p99 |
 
-### 8.5 `TieredCluster` — per-cluster multi-pass cascade (Phase 2)
+### 8.10 `IvfHnswIndex` — graph within clusters (Phase 2)
 
-Encapsulates the hot/warm/cool tier model within a single cluster. The cascade:
-
-1. **T0 (1-bit RaBitQ heap)**: Score ALL ordinals → retain top-`t0Candidates`
-2. **T1 (SQ8 off-heap)**: Rescore survivors → retain top-`t1Candidates`
-3. **T2 (float32 mmap)**: Exact rescore → return top-k
+Same routing (BuoyIndex + SubBuoyTree) as `IvfIndex`, but replaces the brute-force scan
+within each cluster with an HNSW graph. The tiered cascade in `TieredCluster` drives graph
+traversal using T0 scores for neighbor selection, T1 for beam rescoring, T2 for final exact
+scores. Adds `IndexType.IVF_HNSW` to the `IndexType` enum in `vectors-db`.
 
 ```java
-public final class TieredCluster {
-    int clusterId();
-    int size();
+// In vectors-db, vectors-db's IndexType enum gets:
+// IVF_HNSW   -- IVF routing + per-cluster HNSW + four-tier TieredCluster
 
-    /**
-     * Multi-pass cascade search. Returns top-k scored results.
-     * Tiers not yet materialised fall back to the next coarser tier.
-     */
-    SearchResult search(float[] query, int k, CascadeParams params);
-
-    /** Demand-materialise T1 (SQ8) codes from the provided source. */
-    void materializeT1(SQ8ClusterSource source);
-
-    /** Demand-materialise T2 (float32) via mmap of the cluster's vectors.bin. */
-    void materializeT2(Path clusterVectorsFile);
-
-    /** Evict T1 to free off-heap memory. T0 and T2 are unaffected. */
-    void evictT1();
-
-    record CascadeParams(int t0Candidates, int t1Candidates) {}
-}
+// User-facing builder API (from tiered-buoy-architecture.md §8.3):
+VectorCollection collection = VectorCollection.builder()
+    .dimension(128)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.IVF_HNSW)
+    .quantizer(QuantizerKind.RABITQ)               // T0: 1-bit first pass
+    .hnswParams(HnswParams.builder()
+        .m(16).efConstruction(100).build())         // per-cluster HNSW
+    .ivfParams(IvfParams.builder()
+        .buoyCount(1024)
+        .nprobe(32)
+        .gamma(0.2f)                               // SOAR boundary tolerance
+        .build())
+    .tierPolicy(TierPolicy.builder()
+        .t1Threshold(0.01).t2Threshold(0.05)
+        .windowSize(10_000).build())
+    .build();
 ```
 
 ---
@@ -753,21 +1109,44 @@ Acceptance tests — Phase 3 gate:
 ## 10. Test-First Development Sequence
 
 The following sequence is strict: no implementation code for step N+1 before all
-tests for step N pass.
+tests for step N pass. Each step that introduces a new concept gates the work that
+depends on it.
 
 ```
-Step P1  VectorUtilBatchTest          (vectors-core)   must pass before K-means code
-Step P2  KMeansTest                   (vectors-core)   must pass before CentroidIndex
-Step P3  CentroidIndexTest            (vectors-core)   must pass before BuoyIndex
-Step P4  StorageBackendContractTest   (vectors-storage) must pass before WAL
-Step P5  WriteAheadLogTest            (vectors-storage) must pass before VectorEvent
-Step P6  VectorEventCodecTest         (vectors-db)     must pass before SegmentTransfer
-Step P7  SegmentTransferTest          (vectors-db)     must pass before IvfIndex
-Step P8  BuoyIndexTest                (vectors-ivf)    must pass before IvfIndex
-Step P9  IvfIndexIntegrationTest      (vectors-ivf)    PHASE 1 GATE
-Step P10 TieredClusterTest            (vectors-ivf)    must pass before ScatterGather
-Step P11 ScatterGatherExecutorTest    (vectors-distributed) PHASE 2/3 GATE
-Step P12 DistributedVectorCollectionTest (vectors-distributed) PHASE 3 GATE
+──── Phase 1: IVF Foundation ────────────────────────────────────────────────────
+Step P1   VectorUtilBatchTest           (vectors-core)        must pass before KMeans
+Step P2   KMeansTest                    (vectors-core)        must pass before CentroidIndex
+Step P3   CentroidIndexTest             (vectors-core)        must pass before BuoyIndex
+Step P4   StorageBackendContractTest    (vectors-storage)     must pass before WAL
+Step P5   WriteAheadLogTest             (vectors-storage)     must pass before VectorEvent
+Step P6   VectorEventCodecTest          (vectors-db)          must pass before SegmentTransfer
+Step P7   SegmentTransferTest           (vectors-db)          must pass before IvfIndex
+Step P8   BuoyIndexTest                 (vectors-ivf)         must pass before HyperDoor
+Step P9   HyperDoorTest                 (vectors-ivf)         must pass before TieredCluster
+Step P10  IvfIndexIntegrationTest       (vectors-ivf)         ★ PHASE 1 GATE
+          Gate: recall@10 ≥ 0.95 (N=100K, K=316, nprobe=32)
+          Gate: IvfIndexBenchmark.search_N1M_K1024_D128_nprobe32 < 5 ms p99
+
+──── Phase 2a: Adaptive Cluster Splitting ───────────────────────────────────────
+Step P11  ClusterSplitterTest           (vectors-ivf)         must pass before SubBuoyTree
+          Gate: splitReducesCost, splitRollbackOnVerifyFail, accessFrequencyEMA
+Step P12  SubBuoyTreeTest               (vectors-ivf)         ★ PHASE 2a GATE
+          Gate: concurrentReadsDuringWrite, encodeDecodeRoundTrip
+          Gate: flatTree routes identically to BuoyIndex (no regression)
+
+──── Phase 2b: Tiered Cascade ───────────────────────────────────────────────────
+Step P13  TieredClusterTest             (vectors-ivf)         must pass before TierPolicy
+          Gate: t0T2Search recall@10 ≥ 0.95; cascadeDataRead ≤ 980 KB (50K cluster)
+Step P14  TierPolicyTest                (vectors-ivf)         ★ PHASE 2b GATE
+          Gate: applyAll materialises correct hot fraction (15% at θ₂=0.05)
+          Gate: TieredClusterBenchmark.t0T1T2_N50K_D128 < 2 ms p99
+
+──── Phase 3: Distributed Execution ─────────────────────────────────────────────
+Step P15  ScatterGatherExecutorTest     (vectors-distributed) must pass before DistVC
+          Gate: scatterGather_10nodes_FLAT < 10 ms p99
+Step P16  DistributedVectorCollectionTest (vectors-distributed) ★ PHASE 3 GATE
+          Gate: addSearchConsistency, deletePropagatesToSearchResults
+          Gate: scatterGatherRecall_3nodes_1M_total recall@10 ≥ 0.90
 ```
 
 ---
@@ -776,52 +1155,138 @@ Step P12 DistributedVectorCollectionTest (vectors-distributed) PHASE 3 GATE
 
 ### Phase 1 — IVF Foundation (vectors-core + vectors-storage + vectors-ivf)
 
-**Goal**: Single-node IVF-flat search with SOAR spilling passes recall gate.
-**Gate**: `IvfIndexIntegrationTest` all pass; `IvfIndexBenchmark.search_N1M_K1024_D128_nprobe32` < 5 ms p99.
+**Goal**: Single-node IVF-flat search with SOAR boundary spilling, on a flat (non-adaptive) buoy index.
+
+**Entry criteria**: All of P1–P9 pass (batch SIMD, KMeans, CentroidIndex, StorageBackend, WAL, VectorEvent/Codec, SegmentTransfer, BuoyIndex, HyperDoor).
+
+**Exit gate (P10)**: `IvfIndexIntegrationTest` all pass; `IvfIndexBenchmark.search_N1M_K1024_D128_nprobe32` < 5 ms p99; `BuoyIndexBenchmark.route_K1024_D128_nprobe32` < 10 µs.
 
 | Component | Module | New files |
 |-----------|--------|-----------|
-| `batchDotProduct` / `batchSquaredL2` | vectors-core | VectorUtil additions |
-| `KMeans` | vectors-core | `cluster/KMeans.java` |
-| `CentroidIndex` | vectors-core | `cluster/CentroidIndex.java` |
-| `StorageBackend` + backends | vectors-storage | `backend/*.java` |
-| `SegmentedWriteAheadLog` | vectors-storage | `wal/*.java` |
-| `BuoyIndex` | vectors-ivf | module scaffold + `BuoyIndex.java` |
-| `ClusterPartition`, `IvfIndex` | vectors-ivf | `IvfIndex.java` |
+| `batchDotProduct` / `batchSquaredL2` | `vectors-core` | `VectorUtil` additions |
+| `KMeans` (k-means++ seeding, virtual-thread averaging) | `vectors-core` | `cluster/KMeans.java` |
+| `CentroidIndex` (multi-probe + SOAR spill) | `vectors-core` | `cluster/CentroidIndex.java` |
+| `StorageBackend` + `HeapStorageBackend` + `LocalFileStorageBackend` | `vectors-storage` | `backend/*.java` |
+| `SegmentedWriteAheadLog` (CRC'd, rolling segments) | `vectors-storage` | `wal/*.java` |
+| `VectorEvent` sealed hierarchy + `VectorEventCodec` | `vectors-db` | `event/*.java` |
+| `SegmentExporter` / `SegmentImporter` | `vectors-db` | `transfer/*.java` |
+| `BuoyIndex` (wraps CentroidIndex, adds SOAR spill map + metadata) | `vectors-ivf` | module scaffold + `BuoyIndex.java` |
+| `HyperDoor` (cross-tier O(1) ordinal link record) | `vectors-ivf` | `HyperDoor.java` |
+| `ClusterPartition`, `IvfIndex` (flat IVF) | `vectors-ivf` | `ClusterPartition.java`, `IvfIndex.java` |
 
-### Phase 2 — Tiered Clusters + Event Sourcing (vectors-db + vectors-ivf)
+### Phase 2a — Adaptive Cluster Splitting (vectors-ivf)
 
-**Goal**: Multi-pass cascade within clusters; VectorEvent / SegmentTransfer primitives in vectors-db.
-**Gate**: `TieredClusterTest`; `SegmentTransferTest`; cascade recall@10 ≥ 0.98 at 4× compression vs float32.
+**Goal**: The flat buoy index becomes a hierarchical `SubBuoyTree` that splits and merges
+clusters at runtime using the Quake cost model. Recall improves for skewed workloads without
+retraining the global index.
+
+**Entry criteria**: Phase 1 exit gate passes; P10 (IvfIndexIntegrationTest) all green.
+
+**Exit gate (P12)**: `ClusterSplitterTest` all pass; `SubBuoyTreeTest` all pass including
+`concurrentReadsDuringWrite`; `SubBuoyTree.flatTree` routes identically to `BuoyIndex`
+(no regression on IvfIndexIntegrationTest).
 
 | Component | Module | New files |
 |-----------|--------|-----------|
-| `VectorEvent` + `VectorEventCodec` | vectors-db | `event/*.java` |
-| `SegmentExporter` / `SegmentImporter` | vectors-db | `transfer/*.java` |
-| `TieredCluster` (T0 + T1 + T2) | vectors-ivf | `TieredCluster.java` |
-| `IvfHnswIndex` | vectors-ivf | `IvfHnswIndex.java` |
+| `ClusterSplitter` (Quake cost model, 3-phase split, merge) | `vectors-ivf` | `cluster/ClusterSplitter.java` |
+| `SubBuoyTree` (recursive tree, gossip-serialisable) | `vectors-ivf` | `cluster/SubBuoyTree.java` |
+
+### Phase 2b — Tiered Cascade (vectors-ivf)
+
+**Goal**: Per-cluster four-tier cascade (T0=1-bit/heap, T1=SQ8/off-heap, T2=float32/mmap,
+T3=float32/S3) driven by `TierPolicy`. I/O reads shrink ≥26× vs brute-force for a 50K-vector
+cluster. Recall@10 ≥ 0.98 with the full T0→T1→T2 cascade.
+
+**Entry criteria**: Phase 2a exit gate passes.
+
+**Exit gate (P14)**: `TieredClusterTest` all pass; `TierPolicyTest.applyAll` correct;
+`TieredClusterBenchmark.t0T1T2_N50K_D128` < 2 ms p99; `cascadeDataReadBelow1MB_50KCluster`
+≤ 980 KB.
+
+| Component | Module | New files |
+|-----------|--------|-----------|
+| `TieredCluster` (T0+T1+T2+T3 cascade, HyperDoor arithmetic, recordAccess) | `vectors-ivf` | `tier/TieredCluster.java` |
+| `TierPolicy` (θ₁/θ₂ access-frequency materialisation + eviction) | `vectors-ivf` | `tier/TierPolicy.java` |
+| `IvfHnswIndex` (graph per cluster, `IndexType.IVF_HNSW`) | `vectors-ivf` | `IvfHnswIndex.java` |
 
 ### Phase 3 — In-Process Distributed Execution (vectors-distributed)
 
-**Goal**: Multi-node in-process cluster with gossip membership; all `DistributedVectorCollectionTest` pass.
-**Gate**: `ScatterGatherBenchmark.scatterGather_10nodes_FLAT` < 10 ms p99.
+**Goal**: Multi-node in-process cluster using `InProcessNodeDirectory`; all `DistributedVectorCollectionTest`
+pass. No real network or S3 required. Production wiring (gRPC, real S3) is Phase 4.
+
+**Entry criteria**: Phase 2b exit gate passes.
+
+**Exit gate (P16)**: `ScatterGatherBenchmark.scatterGather_10nodes_FLAT` < 10 ms p99;
+`DistributedVectorCollectionTest.scatterGatherRecall_3nodes_1M_total` recall@10 ≥ 0.90.
 
 | Component | Module | New files |
 |-----------|--------|-----------|
-| `NodeId`, `ShardOwnership`, `ShardRouter` | vectors-distributed | module scaffold |
-| `ScatterGatherExecutor` + `InProcessNodeDirectory` | vectors-distributed | `ScatterGatherExecutor.java` |
-| `StaticClusterMembership` + `GossipMembership` | vectors-distributed | `membership/*.java` |
-| `DistributedVectorCollection` | vectors-distributed | `DistributedVectorCollection.java` |
-| `S3StorageBackend` (optional, compile-only AWS SDK) | vectors-distributed | `backend/S3StorageBackend.java` |
+| `NodeId`, `ShardOwnership` (consistent hash), `ShardRouter` | `vectors-distributed` | module scaffold |
+| `ScatterGatherExecutor` (virtual threads) + `InProcessNodeDirectory` | `vectors-distributed` | `ScatterGatherExecutor.java` |
+| `StaticClusterMembership` + `GossipMembership` | `vectors-distributed` | `membership/*.java` |
+| `DistributedVectorCollection` (implements `VectorCollection`) | `vectors-distributed` | `DistributedVectorCollection.java` |
+| `S3StorageBackend` (optional, compile-only AWS SDK v2) | `vectors-distributed` | `backend/S3StorageBackend.java` |
 
 ### Phase 4 — Network Transport (Future)
 
 gRPC service definitions, TLS, node discovery via DNS-SRV or Kubernetes endpoints.
-Not scheduled — deferred until Phase 3 is stable and a real deployment target exists.
+Deferred until Phase 3 is stable and a concrete deployment target is identified.
 
 ---
 
-## 12. Open Questions
+## 12. Cost Analysis — 100M Vector Cluster
+
+Working set model for a 100M-vector, 128-dimension deployment on a 3-node cluster.
+
+### Memory and Storage Breakdown
+
+| Tier | Representation | Total size | Materialised fraction | RAM per node |
+|------|----------------|------------|----------------------|--------------|
+| T0 | 1-bit RaBitQ | 1.6 GB | 100% (all nodes) | ~533 MB/node |
+| T1 | SQ8 off-heap | 12.8 GB | 15% hot clusters | ~640 MB/node |
+| T2 | float32 mmap | 51.2 GB | 5% hottest clusters | ~853 MB/node (OS page cache) |
+| T3 | float32 S3 | 51.2 GB | always (source of truth) | — (object store) |
+
+**Total RAM per node** (T0 global + T1+T2 working set, 3-node cluster): ~2 GB active + ~3 GB page cache headroom. A single node with 16 GB heap serves 100M vectors comfortably.
+
+### Search Latency Budget (single-node path)
+
+```
+BuoyIndex.route (Layer 1)     <    1 µs   SIMD dot, 524 KB in L2 cache
+SubBuoyTree.refineToLeaves    <    5 µs   heap traversal, depth ≤ 3
+TieredCluster.search T0 pass  <  800 µs   1-bit, 50K ordinals × 128 dims
+TieredCluster.search T1 pass  <  128 µs   SQ8, 1K survivors × 128 dims
+TieredCluster.search T2 pass  <   51 µs   float32, 100 survivors × 512 bytes
+                               ─────────
+Total (nprobe=32, hot cluster) < 2 ms p99  single-node
+Scatter-gather overhead       < 5 ms add   10-node cluster, virtual threads
+Total distributed p99         < 7 ms       well within 10 ms target
+```
+
+### S3 Cost (at AWS us-east-1 pricing, April 2026)
+
+| Item | Calculation | Monthly cost |
+|------|-------------|--------------|
+| T3 storage (51.2 GB, 3× replication) | 153.6 GB × $0.023/GB | $3.53 |
+| S3 GET (cold cluster fetch, 1000/day) | 30K × $0.0004/1K | $0.01 |
+| S3 PUT (WAL flush, 100/day) | 3K × $0.005/1K | $0.02 |
+| **Total S3** | | **~$3.56/month** |
+
+At 1 billion vectors (D=128): T3 = 512 GB raw → ~$35/month S3. T0 (1-bit) = 16 GB,
+fits on every node's heap. Cluster RAM requirements scale linearly with the hot fraction only.
+
+### I/O Read Reduction vs Brute-Force
+
+```
+Brute-force (float32, 1M vectors, D=128): 512 MB per query
+IVF-flat nprobe=32 (32 clusters × ~1K vecs): 16 MB per query — 32× reduction
+TieredCluster T0→T1→T2 (50K cluster):        ~980 KB per cluster — 26× vs brute-force
+Combined (IVF + cascade):                     <1 MB per query — 512× vs brute-force
+```
+
+---
+
+## 13. Open Questions
 
 1. **Retrain trigger**: When should the `BuoyIndex` be retrained? Options: (a) after N inserts,
    (b) when cluster imbalance ratio exceeds threshold, (c) manual. The SOAR paper uses a
