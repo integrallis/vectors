@@ -350,9 +350,10 @@ Implementations (Phase 1):
 - `LocalFileStorageBackend` — wraps the existing file layout (file path = key)
 - `S3StorageBackend` — lives in `vectors-distributed` (Phase 3, requires AWS SDK)
 
-**Test class**: `StorageBackendContractTest` (new, `@ParameterizedTest` over both impls)
+**Test class**: `StorageBackendContractTest` (new, `@ParameterizedTest` over `HeapStorageBackend`
+and `LocalFileStorageBackend`, `@Tag("unit")`)
 
-Acceptance tests (same body for all implementations):
+Acceptance tests (same body for all in-JVM implementations):
 - `putAndGetRoundTrip`
 - `getMissingKeyReturnsNull`
 - `listReturnsKeysUnderPrefix`
@@ -360,6 +361,14 @@ Acceptance tests (same body for all implementations):
 - `conditionalPut_succeedsWhenKeyAbsent` — expectedEtag=null
 - `conditionalPut_failsOnStaleEtag` — returns succeeded=false, data unchanged
 - `conditionalPut_succeedsWithCurrentEtag` — sequential chain of CAS succeeds
+
+**Test class**: `S3StorageBackendTest` (new, `@Tag("integration")` — requires Docker)
+
+Uses a static `LocalStackContainer` (Section 10 pattern). Runs the same contract tests
+against `S3StorageBackend` pointing at LocalStack, plus:
+- `rangedGetObject` — partial byte-range fetch matching `HyperDoor.t3ObjectOffset`
+- `concurrentPuts_noDataloss` — 10 threads × 100 PutObject, all keys readable after
+- `conditionalPut_acrossContainerRestart` — simulates crash + replay; stale ETag rejected
 
 ### 6.2 `WriteAheadLog` — sequence-numbered durable journal
 
@@ -811,15 +820,28 @@ public final class TieredCluster {
 }
 ```
 
-**Test class**: `TieredClusterTest` (`@Tag("unit")`)
+**Test class**: `TieredClusterTest` (`@Tag("unit")`) — in-JVM, no Docker
+
 - `t0OnlySearch_returnsApproxResults` — only T0 materialised, recall@10 ≥ 0.70
 - `t0T2Search_returnsHighRecall` — T0 + T2, recall@10 ≥ 0.95 (Phase 1 gate)
 - `t0T1T2Cascade_returnsHighRecall` — full cascade, recall@10 ≥ 0.98 (Phase 2 gate)
 - `cascadeDataReadBelow1MB_50KCluster` — measure bytes read ≤ 980 KB for 50K cluster
-- `fetchFromT3ThenSearch` — mocked S3 backend, T2 fetched and mmap'd, search succeeds
+- `fetchFromT3ThenSearch` — **mocked** `StorageBackend` (no Docker), T2 fetched and mmap'd
 - `evictT1ThenSearch_fallsBackToT0T2` — after eviction, search still returns results
 - `accessFrequencyUpdatesCorrectly` — 10 accesses, window=100 → frequency ≈ 0.10
 - `hyperDoorOffsetArithmetic_correctForAllTiers`
+
+**Test class**: `TieredClusterFetchT3Test` (`@Tag("integration")`) — requires Docker
+
+Uses a static `LocalStackContainer`. Validates `fetchFromT3` against a **real S3 API**
+(not a mock), covering multipart objects, network interruption retry, and mmap correctness
+after download:
+- `fetchFromT3_singlePartObject_searchSucceeds` — cluster < 5 MB, single PutObject
+- `fetchFromT3_largeCluster_multipartObject_searchSucceeds` — cluster > 8 MB, multipart
+- `fetchFromT3_writesLocalFileBeforeMmap` — verifies file exists at `localPath` after fetch
+- `fetchFromT3_retryOnTransientS3Error` — LocalStack container paused briefly mid-download,
+  retry succeeds and result is correct
+- `fetchFromT3ThenEvictT2_coldRefetch` — evict T2, re-fetch from T3, search still correct
 
 **Benchmark class**: `TieredClusterBenchmark` (`vectors-bench`)
 
@@ -1092,10 +1114,10 @@ public final class DistributedVectorCollection implements VectorCollection {
 }
 ```
 
-**Integration test class**: `DistributedVectorCollectionTest` (new, `@Tag("unit")`,
-uses `InProcessNodeDirectory` + `HeapStorageBackend`)
+**Test class**: `DistributedVectorCollectionTest` (new, `@Tag("unit")`,
+uses `InProcessNodeDirectory` + `HeapStorageBackend` — **no Docker**)
 
-Acceptance tests — Phase 3 gate:
+Acceptance tests — Phase 3 gate (fast, always run):
 - `addSearchConsistency_3nodes` — add 100 docs, `commit()`, search finds them
 - `deletePropagatesToSearchResults` — delete 10 docs, commit, they don't appear in search
 - `scatterGatherRecall_3nodes_1M_total` — 3 nodes × 333K docs, recall@10 ≥ 0.90
@@ -1104,9 +1126,156 @@ Acceptance tests — Phase 3 gate:
   result is non-empty and warning is logged
 - `buoyIndexGossipConverges` — BuoyIndex update propagates to all nodes within 500 ms
 
+**Test class**: `DistributedVectorCollectionIT` (new, `@Tag("integration")` — requires Docker)
+
+Uses a static `LocalStackContainer` for S3 WAL + T3 tier. Validates the full durable path:
+- `walAppend_persistsToS3_survivesColdStart` — write 50 docs, stop and restart
+  `DistributedVectorCollection` with a fresh JVM state; replay from S3 WAL restores all docs
+- `coldClusterFetch_searchAfterT2Eviction` — evict T2 for a cluster; next search triggers
+  `fetchFromT3`, result matches pre-eviction result
+- `s3BackedBuoyIndexGossip_usesRealS3` — updated BuoyIndex is written to S3; second node
+  fetches and applies it; routing on second node matches first node's routing
+- `concurrentWalWriters_noEntriesLost` — 4 threads writing simultaneously; after S3 WAL
+  replay all writes are visible
+- `conditionalPut_preventsDoubleCommit` — two nodes attempt to commit same generation to S3;
+  only one succeeds (CAS semantics); losing node retries with incremented generation
+
 ---
 
-## 10. Test-First Development Sequence
+## 10. Integration Test Infrastructure
+
+### 10.1 Why TestContainers + LocalStack
+
+The pure in-JVM simulation (`InProcessNodeDirectory`, `HeapStorageBackend`) is the right
+tool for unit and slow tests: it is fast, deterministic, and needs no Docker daemon.
+However, T3 (cold storage) is an S3-compatible object store. The correctness of
+`S3StorageBackend`, `TieredCluster.fetchFromT3`, and the distributed WAL cannot be validated
+without exercising a real S3 API surface.
+
+**TestContainers** manages ephemeral Docker container lifecycles from within JUnit 5 tests.
+**LocalStack** provides a fully S3-compatible API in a single container, with no AWS
+credentials, no network egress, and no billing.
+
+Tests that require a container are tagged **`@Tag("integration")`**. They are excluded from
+the default `test` task (and from `unitTest`, `slowTest`) and are invoked separately:
+
+```bash
+./gradlew integrationTest          # all modules with integration tests
+./gradlew :vectors-storage:integrationTest  # single module
+```
+
+### 10.2 LocalStack Image
+
+Starting March 2026, `localstack/localstack:latest` requires an auth token for Docker Hub
+pulls. Always pin a specific release to avoid CI breakage:
+
+```java
+static final DockerImageName LOCALSTACK_IMAGE =
+    DockerImageName.parse("localstack/localstack:3.8.1");
+```
+
+If your organisation has a LocalStack account, use the auth token via the env var
+`LOCALSTACK_AUTH_TOKEN` and the latest image. The free Community tier is fully sufficient
+for S3 — no paid features are required.
+
+### 10.3 Gradle `integrationTest` Task
+
+Already registered in the root `build.gradle.kts` `configure(libraryProjects)` block for
+every module:
+
+```kotlin
+tasks.register<Test>("integrationTest") {
+    description = "Run integration tests that require Docker (TestContainers + LocalStack)"
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath    = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform { includeTags("integration") }
+    maxParallelForks = 1   // containers are shared; avoid bucket-creation races
+}
+```
+
+The default `test` task excludes `"integration"` tags, so `./gradlew build` never
+requires Docker.
+
+### 10.4 Shared Container Pattern
+
+Start the container once per test class (static `@Container` field) to avoid paying the
+~4–5 s LocalStack startup cost per test:
+
+```java
+@Tag("integration")
+@Testcontainers
+class S3StorageBackendTest {
+
+    @Container
+    static final LocalStackContainer LOCALSTACK =
+        new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8.1"))
+            .withServices(LocalStackContainer.Service.S3);
+
+    static S3Client s3;
+
+    @BeforeAll
+    static void buildClient() {
+        s3 = S3Client.builder()
+            .endpointOverride(LOCALSTACK.getEndpointOverride(Service.S3))
+            .credentialsProvider(StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(LOCALSTACK.getAccessKey(), LOCALSTACK.getSecretKey())))
+            .region(Region.of(LOCALSTACK.getRegion()))
+            .build();
+    }
+
+    @BeforeEach  void createBucket() { s3.createBucket(r -> r.bucket("test-vectors")); }
+    @AfterEach   void deleteBucket() { /* drain and delete "test-vectors" */ }
+}
+```
+
+For `TieredClusterFetchT3Test` and `DistributedVectorCollectionIT`, the same pattern
+applies — a single static `LOCALSTACK` container handles both WAL writes and T3 fetches
+within the same test class.
+
+### 10.5 Which Tests Use Containers
+
+| Test class | Module | Container service | Tag | What it validates |
+|------------|--------|-------------------|-----|-------------------|
+| `S3StorageBackendTest` | `vectors-storage` | LocalStack S3 | `@Tag("integration")` | `S3StorageBackend`: PutObject, GetObject, ranged GetObject, presigned URL |
+| `TieredClusterFetchT3Test` | `vectors-ivf` | LocalStack S3 | `@Tag("integration")` | `TieredCluster.fetchFromT3()`: cold-cluster S3 download + mmap + search |
+| `DistributedVectorCollectionIT` | `vectors-distributed` | LocalStack S3 | `@Tag("integration")` | End-to-end: WAL append → S3 → node replay → scatter-gather search |
+
+All other test classes (`BuoyIndexTest`, `ClusterSplitterTest`, `SubBuoyTreeTest`,
+`TieredClusterTest`, `ScatterGatherExecutorTest`, `DistributedVectorCollectionTest`)
+use in-JVM simulation only and remain `@Tag("unit")` or untagged.
+
+The two `DistributedVectorCollection` test classes are complementary:
+- `DistributedVectorCollectionTest` (`@Tag("unit")`) — fast, in-process, no Docker; covers
+  correctness of routing logic, deletion propagation, recall
+- `DistributedVectorCollectionIT` (`@Tag("integration")`) — requires Docker; covers WAL
+  durability, T3 fetch on cold start, S3 compare-and-swap coordination
+
+### 10.6 Module Build Dependencies for Container Tests
+
+The `vectors-storage/build.gradle.kts` already declares the required test dependencies.
+The new `vectors-ivf` and `vectors-distributed` modules must declare the same:
+
+```kotlin
+// In vectors-ivf/build.gradle.kts and vectors-distributed/build.gradle.kts:
+val testcontainersVersion = "1.21.4"
+val awsSdkVersion = "2.29.52"
+
+dependencies {
+    // ... existing module deps ...
+    testImplementation("org.testcontainers:testcontainers:$testcontainersVersion")
+    testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
+    testImplementation("org.testcontainers:localstack:$testcontainersVersion")
+    testImplementation("software.amazon.awssdk:s3:$awsSdkVersion")
+}
+```
+
+`vectors-distributed` additionally needs `software.amazon.awssdk:s3` at `implementation`
+scope (not just test) for the production `S3StorageBackend`.
+
+---
+
+## 11. Test-First Development Sequence
 
 The following sequence is strict: no implementation code for step N+1 before all
 tests for step N pass. Each step that introduces a new concept gates the work that
@@ -1144,14 +1313,19 @@ Step P14  TierPolicyTest                (vectors-ivf)         ★ PHASE 2b GATE
 ──── Phase 3: Distributed Execution ─────────────────────────────────────────────
 Step P15  ScatterGatherExecutorTest     (vectors-distributed) must pass before DistVC
           Gate: scatterGather_10nodes_FLAT < 10 ms p99
-Step P16  DistributedVectorCollectionTest (vectors-distributed) ★ PHASE 3 GATE
+Step P16  DistributedVectorCollectionTest (vectors-distributed) ★ PHASE 3 GATE (@Tag("unit"))
           Gate: addSearchConsistency, deletePropagatesToSearchResults
           Gate: scatterGatherRecall_3nodes_1M_total recall@10 ≥ 0.90
+Step P17  DistributedVectorCollectionIT  (vectors-distributed) ★ PHASE 3 DURABILITY GATE (@Tag("integration"))
+          Gate: walAppend_persistsToS3_survivesColdStart
+          Gate: conditionalPut_preventsDoubleCommit
+          Gate: coldClusterFetch_searchAfterT2Eviction
+          (Runs in CI only when Docker is available; blocks release not default build)
 ```
 
 ---
 
-## 11. Phased Implementation Roadmap
+## 12. Phased Implementation Roadmap
 
 ### Phase 1 — IVF Foundation (vectors-core + vectors-storage + vectors-ivf)
 
@@ -1234,7 +1408,7 @@ Deferred until Phase 3 is stable and a concrete deployment target is identified.
 
 ---
 
-## 12. Cost Analysis — 100M Vector Cluster
+## 13. Cost Analysis — 100M Vector Cluster
 
 Working set model for a 100M-vector, 128-dimension deployment on a 3-node cluster.
 
@@ -1286,7 +1460,7 @@ Combined (IVF + cascade):                     <1 MB per query — 512× vs brute
 
 ---
 
-## 13. Open Questions
+## 14. Open Questions
 
 1. **Retrain trigger**: When should the `BuoyIndex` be retrained? Options: (a) after N inserts,
    (b) when cluster imbalance ratio exceeds threshold, (c) manual. The SOAR paper uses a

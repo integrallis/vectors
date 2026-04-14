@@ -60,13 +60,6 @@ configure(libraryProjects) {
         maxParallelForks = Runtime.getRuntime().availableProcessors()
     }
 
-    // Default 'test' task: exclude slow and benchmark; include everything else.
-    tasks.named<Test>("test") {
-        useJUnitPlatform {
-            excludeTags("slow", "benchmark")
-        }
-    }
-
     // Custom test tasks — must wire testClassesDirs and classpath so Gradle finds compiled tests
     tasks.register<Test>("unitTest") {
         description = "Run only unit tests"
@@ -91,6 +84,34 @@ configure(libraryProjects) {
         }
         testLogging {
             events("passed", "skipped", "failed")
+        }
+    }
+
+    // Integration tests: require a Docker daemon (TestContainers + LocalStack).
+    // Run with: ./gradlew integrationTest
+    // Excluded from the default 'test' task to avoid breaking CI without Docker.
+    tasks.register<Test>("integrationTest") {
+        description = "Run integration tests that require Docker (TestContainers + LocalStack)"
+        group = "verification"
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
+        useJUnitPlatform {
+            includeTags("integration")
+        }
+        testLogging {
+            events("passed", "skipped", "failed")
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        }
+        // Prevent parallel forks inside an integration test run: containers are shared
+        // at the class level (@Container static field) but parallel class execution can
+        // race on bucket creation / deletion. Sequential execution per module is safer.
+        maxParallelForks = 1
+    }
+
+    // Default 'test' task must NOT run integration tests.
+    tasks.named<Test>("test") {
+        useJUnitPlatform {
+            excludeTags("slow", "benchmark", "integration")
         }
     }
 
