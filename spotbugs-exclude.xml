@@ -227,6 +227,14 @@
         <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
     </Match>
 
+    <!-- vectors-ivf: TieredCluster holds a reference to the global vector array for zero-copy
+         access during scan and T1 materialisation. Copying the entire N×D matrix into each
+         TieredCluster would multiply memory consumption by K (number of clusters). -->
+    <Match>
+        <Class name="com.integrallis.vectors.ivf.TieredCluster"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
     <!-- vectors-ivf: BuoyIndex, ClusterPartition, IvfIndex, IvfSearchRequest, and
          IvfSearchResult store/return array and List references intentionally (zero-copy
          routing and search). Defensive copies at K=1024, D=128 would add 512 KB to every
