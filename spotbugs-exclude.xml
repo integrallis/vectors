@@ -261,6 +261,16 @@
         <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
     </Match>
 
+    <!-- vectors-bench: JMH @State setUp() methods use Random seeded once per trial; SpotBugs
+         misidentifies calls across multiple loops/methods as "used only once". -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.bench.DistanceKernelBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.QuantizerKernelBenchmark"/>
+        </Or>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+
     <!-- vectors-db: VectorCollectionImpl.openGeneration intentionally catches Exception
          (not just IOException) so that arena.close() fires even on unchecked exceptions
          like ArithmeticException from Math.toIntExact. The broad catch is a resource-safety
