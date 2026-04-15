@@ -267,6 +267,8 @@
         <Or>
             <Class name="com.integrallis.vectors.bench.DistanceKernelBenchmark"/>
             <Class name="com.integrallis.vectors.bench.QuantizerKernelBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.IndexBuildBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.AnnSearchBenchmark"/>
         </Or>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
