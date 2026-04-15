@@ -131,7 +131,7 @@ public final class GenerationDirectory {
    * which inspects {@code manifest.indexType()} and routes the bytes to the correct decoder.
    */
   private static final Set<IndexType> GRAPH_INDEX_TYPES =
-      EnumSet.of(IndexType.HNSW, IndexType.VAMANA);
+      EnumSet.of(IndexType.HNSW, IndexType.VAMANA, IndexType.IVF_FLAT);
 
   private GenerationDirectory() {}
 

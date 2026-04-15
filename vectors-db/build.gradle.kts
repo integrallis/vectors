@@ -6,4 +6,5 @@ dependencies {
     api(project(":vectors-quantization"))
     implementation(project(":vectors-hnsw"))
     implementation(project(":vectors-vamana"))
+    implementation(project(":vectors-ivf"))
 }

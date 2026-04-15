@@ -3,6 +3,7 @@ package com.integrallis.vectors.ivf;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
 import java.io.Closeable;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -106,16 +107,90 @@ public final class IvfIndex implements Closeable {
     return new IvfSearchResult(List.of(arr), clusterIds.length);
   }
 
+  /** Returns the total number of indexed vectors. */
+  public int size() {
+    return vectors.length;
+  }
+
+  /** Returns the number of clusters (K). */
+  public int k() {
+    return partitions.length;
+  }
+
   public BuoyIndex buoyIndex() {
     return buoyIndex;
   }
 
+  /**
+   * @deprecated Use {@link #k()}
+   */
+  @Deprecated
   public int clusterCount() {
     return partitions.length;
   }
 
   public ClusterPartition partition(int clusterId) {
     return partitions[clusterId];
+  }
+
+  /**
+   * Constructs an {@link IvfIndex} from pre-trained components — used by codec deserialisers to
+   * avoid re-running KMeans on load.
+   */
+  public static IvfIndex fromPrebuilt(
+      BuoyIndex buoyIndex,
+      ClusterPartition[] partitions,
+      float[][] vectors,
+      SimilarityFunction metric) {
+    return new IvfIndex(buoyIndex, partitions, vectors, null, metric);
+  }
+
+  /**
+   * Serialises this index to a compact byte array.
+   *
+   * <p>Format: {@code [buoyLen:4][buoyBytes][k:4] k×([ordCount:4][ordinals:4*n])}
+   */
+  public byte[] encode() {
+    byte[] buoyBytes = buoyIndex.encode();
+    int k = partitions.length;
+
+    int totalOrds = 0;
+    for (ClusterPartition p : partitions) totalOrds += p.size();
+    int capacity = 4 + buoyBytes.length + 4 + k * 4 + totalOrds * 4;
+
+    ByteBuffer buf = ByteBuffer.allocate(capacity);
+    buf.putInt(buoyBytes.length);
+    buf.put(buoyBytes);
+    buf.putInt(k);
+    for (ClusterPartition p : partitions) {
+      buf.putInt(p.size());
+      for (int ord : p.ordinals()) buf.putInt(ord);
+    }
+    return buf.array();
+  }
+
+  /**
+   * Deserialises a previously {@link #encode encoded} index, wiring it to {@code vectors} and
+   * {@code metric} without re-running KMeans.
+   */
+  public static IvfIndex decode(byte[] bytes, float[][] vectors, SimilarityFunction metric) {
+    ByteBuffer buf = ByteBuffer.wrap(bytes);
+
+    int buoyLen = buf.getInt();
+    byte[] buoyBytes = new byte[buoyLen];
+    buf.get(buoyBytes);
+    BuoyIndex buoyIndex = BuoyIndex.decode(buoyBytes);
+
+    int k = buf.getInt();
+    float[][] centroids = buoyIndex.buoyVectors();
+    ClusterPartition[] partitions = new ClusterPartition[k];
+    for (int c = 0; c < k; c++) {
+      int size = buf.getInt();
+      int[] ordinals = new int[size];
+      for (int i = 0; i < size; i++) ordinals[i] = buf.getInt();
+      partitions[c] = new ClusterPartition(c, centroids[c], ordinals, size);
+    }
+    return new IvfIndex(buoyIndex, partitions, vectors, null, metric);
   }
 
   @Override

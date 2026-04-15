@@ -7,6 +7,7 @@ import com.integrallis.vectors.db.id.InMemoryIdMapper;
 import com.integrallis.vectors.db.index.FlatScanAdapter;
 import com.integrallis.vectors.db.index.HnswIndexAdapter;
 import com.integrallis.vectors.db.index.IndexSpi;
+import com.integrallis.vectors.db.index.IvfFlatAdapter;
 import com.integrallis.vectors.db.index.MappedFlatScanAdapter;
 import com.integrallis.vectors.db.index.VamanaIndexAdapter;
 import com.integrallis.vectors.db.internal.StagingBuffer;
@@ -19,6 +20,7 @@ import com.integrallis.vectors.db.storage.HnswGraphCodec;
 import com.integrallis.vectors.db.storage.Manifest;
 import com.integrallis.vectors.db.storage.MappedHnswIndexAdapter;
 import com.integrallis.vectors.db.storage.MappedIdMapper;
+import com.integrallis.vectors.db.storage.MappedIvfFlatAdapter;
 import com.integrallis.vectors.db.storage.MappedMetadataStore;
 import com.integrallis.vectors.db.storage.MappedVamanaIndexAdapter;
 import com.integrallis.vectors.db.storage.MemorySegmentRandomAccessVectors;
@@ -27,6 +29,8 @@ import com.integrallis.vectors.db.storage.QuantizedVectorsCodec;
 import com.integrallis.vectors.db.storage.TombstoneCodec;
 import com.integrallis.vectors.db.storage.VamanaGraphCodec;
 import com.integrallis.vectors.hnsw.HnswGraph;
+import com.integrallis.vectors.ivf.IvfBuildParams;
+import com.integrallis.vectors.ivf.IvfIndex;
 import com.integrallis.vectors.quantization.ArrayVectorDataset;
 import com.integrallis.vectors.quantization.BinaryMode;
 import com.integrallis.vectors.quantization.BinaryQuantizer;
@@ -316,8 +320,10 @@ final class VectorCollectionImpl implements VectorCollection {
         VectorCollectionConfig.VamanaParams p = config.vamanaParams();
         yield new VamanaIndexAdapter(p.maxDegree(), p.searchListSize(), p.alpha(), p.seed());
       }
-      case IVF_FLAT ->
-          throw new UnsupportedOperationException("indexType IVF_FLAT deferred to a later step");
+      case IVF_FLAT -> {
+        VectorCollectionConfig.IvfParams p = config.ivfParams();
+        yield new IvfFlatAdapter(p.k(), p.nprobe(), p.maxIter(), p.gamma(), p.soar(), p.seed());
+      }
     };
   }
 
@@ -388,10 +394,9 @@ final class VectorCollectionImpl implements VectorCollection {
                     ? openVamanaAdapter(genDir, manifest, mapped)
                     : new MappedFlatScanAdapter(mapped, config.metric());
             case IVF_FLAT ->
-                throw new IOException(
-                    "Generation "
-                        + manifest.generationNumber()
-                        + " uses indexType IVF_FLAT which is not supported");
+                manifest.graphBinLength() > 0L
+                    ? openIvfFlatAdapter(genDir, manifest, mapped)
+                    : new MappedFlatScanAdapter(mapped, config.metric());
           };
 
       if (manifest.quantizedBinLength() > 0L) {
@@ -457,6 +462,26 @@ final class VectorCollectionImpl implements VectorCollection {
     VamanaGraph graph = VamanaGraphCodec.decode(graphBytes);
     MemorySegmentRandomAccessVectors vectors = new MemorySegmentRandomAccessVectors(mapped);
     return new MappedVamanaIndexAdapter(graph, vectors, config.metric());
+  }
+
+  private IndexSpi openIvfFlatAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
+      throws IOException {
+    if (manifest.graphBinLength() <= 0L) {
+      throw new IOException(
+          "IVF_FLAT generation " + manifest.generationNumber() + " has no graph.bin recorded");
+    }
+    byte[] ivfBytes = java.nio.file.Files.readAllBytes(genDir.resolve(FileFormat.GRAPH_FILE));
+    // Hydrate the full vector matrix from the mmap'd vectors.bin so IvfIndex can score them.
+    int n = (int) (manifest.liveCount() + manifest.tombstoneCount());
+    int dim = config.dimension();
+    float[][] matrix = new float[n][dim];
+    for (int i = 0; i < n; i++) {
+      java.lang.foreign.MemorySegment.copy(
+          mapped.vectorSlice(i), java.lang.foreign.ValueLayout.JAVA_FLOAT, 0L, matrix[i], 0, dim);
+    }
+    IvfIndex ivfIndex = IvfIndex.decode(ivfBytes, matrix, config.metric());
+    VectorCollectionConfig.IvfParams p = config.ivfParams();
+    return new MappedIvfFlatAdapter(ivfIndex, p.nprobe(), p.gamma(), dim);
   }
 
   // ---------------------------------------------------------------------------
@@ -773,7 +798,9 @@ final class VectorCollectionImpl implements VectorCollection {
 
     // 2. Build the data-file byte images.
     boolean needMatrix =
-        config.indexType() == IndexType.HNSW || config.indexType() == IndexType.VAMANA;
+        config.indexType() == IndexType.HNSW
+            || config.indexType() == IndexType.VAMANA
+            || config.indexType() == IndexType.IVF_FLAT;
     Materialized materialized =
         materializeSuccessor(
             oldGen.mappedVectors, oldPhysicalCount, staging.documents(), dim, needMatrix);
@@ -1000,7 +1027,9 @@ final class VectorCollectionImpl implements VectorCollection {
     long graphBinLength = 0L;
     long graphBinCrc = 0L;
     boolean needGraph =
-        config.indexType() == IndexType.HNSW || config.indexType() == IndexType.VAMANA;
+        config.indexType() == IndexType.HNSW
+            || config.indexType() == IndexType.VAMANA
+            || config.indexType() == IndexType.IVF_FLAT;
     if (needGraph && liveCount > 0) {
       graphBin = encodeGraphBytes(matrix);
       if (graphBin != null) {
@@ -1162,7 +1191,17 @@ final class VectorCollectionImpl implements VectorCollection {
         VamanaGraph graph = adapter.graph();
         yield graph == null ? null : VamanaGraphCodec.encode(graph);
       }
-      case FLAT, IVF_FLAT ->
+      case IVF_FLAT -> {
+        if (matrix == null || matrix.length == 0) {
+          yield null;
+        }
+        VectorCollectionConfig.IvfParams p = config.ivfParams();
+        int effectiveK = Math.min(p.k(), matrix.length);
+        IvfBuildParams bp = new IvfBuildParams(effectiveK, p.maxIter(), 0f, p.soar(), p.seed());
+        IvfIndex idx = IvfIndex.build(matrix, null, config.metric(), bp);
+        yield idx.encode();
+      }
+      case FLAT ->
           throw new IllegalStateException(
               "encodeGraphBytes called with non-graph indexType " + config.indexType());
     };

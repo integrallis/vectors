@@ -40,6 +40,18 @@ public final class VectorCollectionBuilder {
   /** Default RaBitQ random seed. */
   public static final long DEFAULT_RABIT_SEED = 42L;
 
+  /** Default IVF number of clusters (K). */
+  public static final int DEFAULT_IVF_K = 16;
+
+  /** Default IVF probe count. */
+  public static final int DEFAULT_IVF_NPROBE = 4;
+
+  /** Default IVF KMeans max iterations. */
+  public static final int DEFAULT_IVF_MAX_ITER = 30;
+
+  /** Default IVF KMeans seed. */
+  public static final long DEFAULT_IVF_SEED = 42L;
+
   private Integer dimension;
   private SimilarityFunction metric;
   private IndexType indexType = IndexType.FLAT;
@@ -52,6 +64,14 @@ public final class VectorCollectionBuilder {
   private int vamanaSearchListSize = DEFAULT_VAMANA_L;
   private float vamanaAlpha = DEFAULT_VAMANA_ALPHA;
   private Long vamanaSeed; // lazily filled with System.nanoTime() at build() time if unset
+
+  // IVF-specific params
+  private int ivfK = DEFAULT_IVF_K;
+  private int ivfNprobe = DEFAULT_IVF_NPROBE;
+  private int ivfMaxIter = DEFAULT_IVF_MAX_ITER;
+  private float ivfGamma = 0f;
+  private boolean ivfSoar = false;
+  private long ivfSeed = DEFAULT_IVF_SEED;
 
   // Quantizer-specific params (all nullable — null means "use defaults")
   private Integer pqSubspaces;
@@ -194,6 +214,72 @@ public final class VectorCollectionBuilder {
   }
 
   // ---------------------------------------------------------------------------
+  // IVF-specific parameter setters
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Sets the IVF number of clusters (K). Ignored unless {@link #indexType(IndexType)} is {@link
+   * IndexType#IVF_FLAT}. Must be positive. Default: {@value #DEFAULT_IVF_K}.
+   */
+  public VectorCollectionBuilder ivfK(int k) {
+    if (k <= 0) throw new IllegalArgumentException("IVF k must be positive: " + k);
+    this.ivfK = k;
+    return this;
+  }
+
+  /**
+   * Sets the IVF probe count — the number of clusters searched per query. Ignored unless {@link
+   * #indexType(IndexType)} is {@link IndexType#IVF_FLAT}. Must be in [1, k]. Default: {@value
+   * #DEFAULT_IVF_NPROBE}.
+   */
+  public VectorCollectionBuilder ivfNprobe(int nprobe) {
+    if (nprobe <= 0) throw new IllegalArgumentException("IVF nprobe must be positive: " + nprobe);
+    this.ivfNprobe = nprobe;
+    return this;
+  }
+
+  /**
+   * Sets the maximum KMeans iterations for IVF cluster training. Ignored unless {@link
+   * #indexType(IndexType)} is {@link IndexType#IVF_FLAT}. Must be positive. Default: {@value
+   * #DEFAULT_IVF_MAX_ITER}.
+   */
+  public VectorCollectionBuilder ivfMaxIter(int maxIter) {
+    if (maxIter <= 0)
+      throw new IllegalArgumentException("IVF maxIter must be positive: " + maxIter);
+    this.ivfMaxIter = maxIter;
+    return this;
+  }
+
+  /**
+   * Sets the IVF SOAR spill ratio gamma in [0, 1]. Ignored unless {@link #indexType(IndexType)} is
+   * {@link IndexType#IVF_FLAT}. Default: 0 (no spill).
+   */
+  public VectorCollectionBuilder ivfGamma(float gamma) {
+    if (gamma < 0f || gamma > 1f)
+      throw new IllegalArgumentException("IVF gamma must be in [0, 1]: " + gamma);
+    this.ivfGamma = gamma;
+    return this;
+  }
+
+  /**
+   * Enables SOAR-style cluster spill during IVF search. Ignored unless {@link
+   * #indexType(IndexType)} is {@link IndexType#IVF_FLAT}. Default: false.
+   */
+  public VectorCollectionBuilder ivfSoar(boolean soar) {
+    this.ivfSoar = soar;
+    return this;
+  }
+
+  /**
+   * Sets the RNG seed for IVF KMeans++ initialisation. Ignored unless {@link #indexType(IndexType)}
+   * is {@link IndexType#IVF_FLAT}. Default: {@value #DEFAULT_IVF_SEED}.
+   */
+  public VectorCollectionBuilder ivfSeed(long seed) {
+    this.ivfSeed = seed;
+    return this;
+  }
+
+  // ---------------------------------------------------------------------------
   // Quantizer-specific parameter setters
   // ---------------------------------------------------------------------------
 
@@ -332,6 +418,11 @@ public final class VectorCollectionBuilder {
                 vamanaAlpha,
                 vamanaSeed != null ? vamanaSeed : System.nanoTime())
             : null;
+    VectorCollectionConfig.IvfParams ivfParams =
+        (indexType == IndexType.IVF_FLAT)
+            ? new VectorCollectionConfig.IvfParams(
+                ivfK, Math.min(ivfNprobe, ivfK), ivfMaxIter, ivfGamma, ivfSoar, ivfSeed)
+            : null;
     QuantizerParams quantizerParams = buildQuantizerParams();
     var config =
         new VectorCollectionConfig(
@@ -343,7 +434,8 @@ public final class VectorCollectionBuilder {
             storageRoot,
             hnswParams,
             vamanaParams,
-            quantizerParams);
+            quantizerParams,
+            ivfParams);
     return new VectorCollectionImpl(config);
   }
 

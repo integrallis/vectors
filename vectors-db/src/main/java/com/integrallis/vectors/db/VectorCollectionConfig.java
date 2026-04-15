@@ -40,7 +40,8 @@ public record VectorCollectionConfig(
     Path storageRoot,
     HnswParams hnswParams,
     VamanaParams vamanaParams,
-    QuantizerParams quantizerParams) {
+    QuantizerParams quantizerParams,
+    IvfParams ivfParams) {
 
   public VectorCollectionConfig {
     if (dimension <= 0) {
@@ -75,6 +76,14 @@ public record VectorCollectionConfig(
     if (quantizerKind == QuantizerKind.NONE && quantizerParams != null) {
       throw new IllegalArgumentException("quantizerParams must be null when quantizerKind is NONE");
     }
+    if ((indexType == IndexType.IVF_FLAT) != (ivfParams != null)) {
+      throw new IllegalArgumentException(
+          "ivfParams must be non-null iff indexType == IVF_FLAT (indexType="
+              + indexType
+              + ", ivfParams="
+              + (ivfParams == null ? "null" : "set")
+              + ")");
+    }
   }
 
   /**
@@ -99,6 +108,7 @@ public record VectorCollectionConfig(
         storageRoot,
         hnswParams,
         vamanaParams,
+        null,
         null);
   }
 
@@ -125,6 +135,7 @@ public record VectorCollectionConfig(
         storageRoot,
         hnswParams,
         null,
+        null,
         null);
   }
 
@@ -150,14 +161,15 @@ public record VectorCollectionConfig(
         storageRoot,
         null,
         null,
+        null,
         null);
   }
 
   /**
-   * 5-arg convenience constructor for in-memory, flat-scan collections. Equivalent to the 9-arg
+   * 5-arg convenience constructor for in-memory, flat-scan collections. Equivalent to the 10-arg
    * canonical constructor with {@code null} {@code storageRoot}, {@code null} {@code hnswParams},
-   * {@code null} {@code vamanaParams}, and {@code null} {@code quantizerParams}. Kept for Step 3
-   * test fixtures that pre-date Step 4a/4b.
+   * {@code null} {@code vamanaParams}, {@code null} {@code quantizerParams} and {@code null} {@code
+   * ivfParams}. Kept for test fixtures that pre-date the IVF_FLAT support.
    */
   public VectorCollectionConfig(
       int dimension,
@@ -165,7 +177,17 @@ public record VectorCollectionConfig(
       IndexType indexType,
       QuantizerKind quantizerKind,
       int autoCommitThreshold) {
-    this(dimension, metric, indexType, quantizerKind, autoCommitThreshold, null, null, null, null);
+    this(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        autoCommitThreshold,
+        null,
+        null,
+        null,
+        null,
+        null);
   }
 
   /**
@@ -220,6 +242,32 @@ public record VectorCollectionConfig(
       if (alpha < 1.0f) {
         throw new IllegalArgumentException("alpha must be >= 1.0: " + alpha);
       }
+    }
+  }
+
+  /**
+   * IVF_FLAT build and search parameters.
+   *
+   * @param k number of clusters (must be positive)
+   * @param nprobe number of clusters to probe during search (must be in [1, k])
+   * @param maxIter maximum K-Means iterations (must be positive)
+   * @param gamma SOAR spill ratio in [0, 1] (0 = no spill)
+   * @param soar enable SOAR-style cluster spill during search
+   * @param seed RNG seed for K-Means++ initialisation
+   */
+  public record IvfParams(int k, int nprobe, int maxIter, float gamma, boolean soar, long seed) {
+    public IvfParams {
+      if (k <= 0) throw new IllegalArgumentException("k must be positive: " + k);
+      if (nprobe <= 0 || nprobe > k)
+        throw new IllegalArgumentException("nprobe must be in [1, k]: " + nprobe);
+      if (maxIter <= 0) throw new IllegalArgumentException("maxIter must be positive: " + maxIter);
+      if (gamma < 0f || gamma > 1f)
+        throw new IllegalArgumentException("gamma must be in [0, 1]: " + gamma);
+    }
+
+    /** Default: nprobe = max(1, k/4), maxIter = 30, no SOAR, seed = 42. */
+    public static IvfParams defaults(int k) {
+      return new IvfParams(k, Math.max(1, k / 4), 30, 0f, false, 42L);
     }
   }
 }
