@@ -94,6 +94,65 @@ public final class TieredCluster {
     this.t1Data = null;
   }
 
+  // ─── HyperDoor ────────────────────────────────────────────────────────────
+
+  /**
+   * Returns a {@link HyperDoor} reflecting this cluster's current tier state.
+   *
+   * <ul>
+   *   <li>{@code clusterOrdinal} = cluster id from the partition.
+   *   <li>{@code t0BitOffset} = 0 (T0 is managed at the {@link BuoyIndex} level).
+   *   <li>{@code t1ByteOffset} = 0 if T1 is materialised, -1 otherwise.
+   *   <li>{@code t2FileOffset} = -1 (T2 mmap not tracked in this implementation).
+   *   <li>{@code t3ObjectOffset} = 0 (T3 always persisted under the cluster's T3 key).
+   * </ul>
+   */
+  public HyperDoor hyperDoor() {
+    return new HyperDoor(
+        partition.clusterId(),
+        0L, // T0: managed by BuoyIndex
+        hasT1() ? 0 : -1, // T1: heap-resident flag
+        -1L, // T2: mmap not tracked
+        0L // T3: always available in backend
+        );
+  }
+
+  // ─── tier eviction ────────────────────────────────────────────────────────
+
+  /**
+   * Demotes this cluster's in-memory representation to {@code target} tier, persisting data to
+   * {@code backend} as required and releasing in-heap resources that are no longer needed.
+   *
+   * <ul>
+   *   <li>{@link TierPolicy.Tier#T3}: persist float32 vectors under the T3 key; evict T1.
+   *   <li>{@link TierPolicy.Tier#T2}: persist float32 vectors under the T2 key; evict T1.
+   *   <li>{@link TierPolicy.Tier#T1}: materialise T1 (SQ8) if not already present.
+   *   <li>{@link TierPolicy.Tier#T0}: no-op (T0 is managed by the owning {@link BuoyIndex}).
+   * </ul>
+   *
+   * @param target desired storage tier after eviction
+   * @param backend the {@link StorageBackend} used for T2/T3 persistence
+   * @throws IOException if persistence to the backend fails
+   */
+  public void evictToTier(TierPolicy.Tier target, StorageBackend backend) throws IOException {
+    switch (target) {
+      case T3 -> {
+        storeT3(backend);
+        evictT1();
+      }
+      case T2 -> {
+        storeT2(backend);
+        evictT1();
+      }
+      case T1 -> {
+        if (!hasT1()) materializeT1();
+      }
+      case T0 -> {
+        // T0 is managed by BuoyIndex; no action required here.
+      }
+    }
+  }
+
   // ─── T3 storage ───────────────────────────────────────────────────────────
 
   /**
@@ -135,6 +194,19 @@ public final class TieredCluster {
 
   private String t3Key() {
     return "cluster-" + partition.clusterId();
+  }
+
+  private String t2Key() {
+    return "cluster-T2-" + partition.clusterId();
+  }
+
+  /**
+   * Serialises this cluster's vectors to the given {@link StorageBackend} under the T2 key {@code
+   * "cluster-T2-<clusterId>"}, representing a warm (local SSD / mmap) snapshot.
+   */
+  private void storeT2(StorageBackend backend) throws IOException {
+    float[][] vecs = extractClusterVectors();
+    backend.put(t2Key(), serializeVectors(vecs));
   }
 
   private float[][] extractClusterVectors() {

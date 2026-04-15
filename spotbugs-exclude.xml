@@ -219,6 +219,14 @@
         </Or>
     </Match>
 
+    <!-- vectors-storage: S3StorageBackend stores the caller-provided S3Client by reference.
+         S3Client is an SDK interface and cannot be defensively copied; the constructor contract
+         documents that the client is owned by this backend instance and closed on close(). -->
+    <Match>
+        <Class name="com.integrallis.vectors.storage.backend.S3StorageBackend"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
     <!-- vectors-storage: LocalFileStorageBackend resolves keys relative to a non-root root
          directory, so Path.getParent() and Path.getFileName() are never null for any path
          produced by root.resolve(key). SpotBugs cannot verify this from the return types alone. -->
