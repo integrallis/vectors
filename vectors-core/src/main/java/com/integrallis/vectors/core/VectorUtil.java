@@ -133,22 +133,24 @@ public final class VectorUtil {
   /**
    * Fills {@code out[i]} with the dot product of {@code query} and {@code matrix[i]} for all rows
    * {@code i} in {@code [0, matrix.length)}. {@code out.length} must be &ge; {@code matrix.length}.
+   *
+   * <p>Delegates to {@link VectorUtilSupport#matVecDot}, which SIMD implementations override with a
+   * fused 4-row kernel that loads each query SIMD chunk once and applies it to 4 rows
+   * simultaneously, reducing query memory traffic by 4×.
    */
   public static void batchDotProduct(float[] query, float[][] matrix, float[] out) {
-    for (int i = 0; i < matrix.length; i++) {
-      out[i] = IMPL.dotProduct(query, 0, matrix[i], 0, query.length);
-    }
+    IMPL.matVecDot(query, matrix, out, matrix.length);
   }
 
   /**
    * Fills {@code out[i]} with the squared L2 distance from {@code query} to {@code matrix[i]} for
    * all rows {@code i} in {@code [0, matrix.length)}. {@code out.length} must be &ge; {@code
    * matrix.length}.
+   *
+   * <p>Delegates to {@link VectorUtilSupport#matVecSquaredL2} with a fused 4-row SIMD kernel.
    */
   public static void batchSquaredL2(float[] query, float[][] matrix, float[] out) {
-    for (int i = 0; i < matrix.length; i++) {
-      out[i] = IMPL.squareDistance(query, 0, matrix[i], 0, query.length);
-    }
+    IMPL.matVecSquaredL2(query, matrix, out, matrix.length);
   }
 
   // --- Normalization ---

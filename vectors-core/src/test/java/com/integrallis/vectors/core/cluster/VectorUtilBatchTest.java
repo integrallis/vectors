@@ -88,4 +88,71 @@ class VectorUtilBatchTest {
 
     assertThat(out).isEmpty();
   }
+
+  // --- GEMV edge-case tests (validate 4-row fused kernel corners) ---
+
+  /** K=1, K=2, K=3 — all tail rows (not a full group of 4). */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints = {1, 2, 3})
+  void matVecDot_tailOnly_matchesScalar(int rows) {
+    float[] q = randomVector(DIM, 10L + rows);
+    float[][] m = randomMatrix(rows, DIM, 20L + rows);
+    float[] out = new float[rows];
+    VectorUtil.batchDotProduct(q, m, out);
+    for (int i = 0; i < rows; i++) {
+      assertThat(out[i]).isCloseTo(VectorUtil.dotProduct(q, m[i]), within(1e-4f));
+    }
+  }
+
+  /** K=5, K=6, K=7 — partial second group (1-3 tail rows after one full group of 4). */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints = {5, 6, 7})
+  void matVecDot_partialSecondGroup_matchesScalar(int rows) {
+    float[] q = randomVector(DIM, 30L + rows);
+    float[][] m = randomMatrix(rows, DIM, 40L + rows);
+    float[] out = new float[rows];
+    VectorUtil.batchDotProduct(q, m, out);
+    for (int i = 0; i < rows; i++) {
+      assertThat(out[i]).isCloseTo(VectorUtil.dotProduct(q, m[i]), within(1e-4f));
+    }
+  }
+
+  /** K=1024 (large) — stress test full groups + zero tail. */
+  @Test
+  void matVecDot_largeK_noTail() {
+    int k = 1024;
+    float[] q = randomVector(DIM, 99L);
+    float[][] m = randomMatrix(k, DIM, 100L);
+    float[] out = new float[k];
+    VectorUtil.batchDotProduct(q, m, out);
+    for (int i = 0; i < k; i++) {
+      assertThat(out[i]).isCloseTo(VectorUtil.dotProduct(q, m[i]), within(1e-4f));
+    }
+  }
+
+  /** Odd dimension (dim not a multiple of 4 or SIMD width) — scalar tail in inner loop. */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints = {1, 3, 5, 17, 33, 129, 257})
+  void matVecDot_oddDimension_matchesScalar(int dim) {
+    float[] q = randomVector(dim, 50L);
+    float[][] m = randomMatrix(K, dim, 51L);
+    float[] out = new float[K];
+    VectorUtil.batchDotProduct(q, m, out);
+    for (int i = 0; i < K; i++) {
+      assertThat(out[i]).isCloseTo(VectorUtil.dotProduct(q, m[i]), within(1e-3f));
+    }
+  }
+
+  /** matVecSquaredL2 tail + full-group correctness at various row counts. */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints = {1, 3, 4, 5, 7, 8, 32})
+  void matVecSquaredL2_variousRowCounts_matchesScalar(int rows) {
+    float[] q = randomVector(DIM, 60L + rows);
+    float[][] m = randomMatrix(rows, DIM, 70L + rows);
+    float[] out = new float[rows];
+    VectorUtil.batchSquaredL2(q, m, out);
+    for (int i = 0; i < rows; i++) {
+      assertThat(out[i]).isCloseTo(VectorUtil.squareDistance(q, m[i]), within(1e-3f));
+    }
+  }
 }

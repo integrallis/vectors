@@ -82,4 +82,43 @@ public interface VectorUtilSupport {
    * @return the normalized vector (same array reference)
    */
   float[] l2normalize(float[] v, boolean throwOnZero);
+
+  // --- Fused batch matrix-vector kernels (GEMV) ---
+
+  /**
+   * Fused matrix-vector dot product: fills {@code out[i] = dot(query, matrix[i])} for {@code i in
+   * [0, numRows)}.
+   *
+   * <p>The default implementation is a simple loop. SIMD subclasses override this to load each
+   * query SIMD chunk <em>once</em> and apply it to 4 matrix rows simultaneously, cutting query
+   * memory traffic by 4× compared to calling {@link #dotProduct} per row.
+   *
+   * @param query the query vector (length = {@code matrix[0].length})
+   * @param matrix the matrix rows (each row must have the same length as {@code query})
+   * @param out the output array (must have length &ge; {@code numRows})
+   * @param numRows the number of rows to process (must be &le; {@code matrix.length})
+   */
+  default void matVecDot(float[] query, float[][] matrix, float[] out, int numRows) {
+    for (int i = 0; i < numRows; i++) {
+      out[i] = dotProduct(query, 0, matrix[i], 0, query.length);
+    }
+  }
+
+  /**
+   * Fused matrix-vector squared L2 distance: fills {@code out[i] = squaredL2(query, matrix[i])} for
+   * {@code i in [0, numRows)}.
+   *
+   * <p>The default implementation is a simple loop. SIMD subclasses override this with 4-row
+   * unrolled accumulation.
+   *
+   * @param query the query vector
+   * @param matrix the matrix rows
+   * @param out the output array (must have length &ge; {@code numRows})
+   * @param numRows the number of rows to process
+   */
+  default void matVecSquaredL2(float[] query, float[][] matrix, float[] out, int numRows) {
+    for (int i = 0; i < numRows; i++) {
+      out[i] = squareDistance(query, 0, matrix[i], 0, query.length);
+    }
+  }
 }

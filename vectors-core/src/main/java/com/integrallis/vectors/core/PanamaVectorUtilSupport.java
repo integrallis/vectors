@@ -731,4 +731,122 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       FloatVector.fromArray(FLOAT_SPECIES, v, i).mul(invNormVector).intoArray(v, i);
     }
   }
+
+  // --- Fused batch matrix-vector kernels (GEMV) ---
+
+  /**
+   * SIMD 4-row-unrolled fused GEMV for dot product.
+   *
+   * <p>For each group of 4 rows the inner dimension loop loads one SIMD chunk of {@code query}
+   * <em>once</em> and multiplies it with the corresponding chunk of all 4 rows simultaneously. This
+   * cuts query memory traffic by 4× vs calling {@link #dotProduct} per row and saturates 4 FMA
+   * execution ports with independent chains.
+   *
+   * <p>Rows that do not form a full group of 4 fall back to {@link #dotProduct}.
+   */
+  @Override
+  public void matVecDot(float[] query, float[][] matrix, float[] out, int numRows) {
+    int dim = query.length;
+    int rowGroup = numRows & ~3;
+    int limit = FLOAT_SPECIES.loopBound(dim);
+
+    for (int r = 0; r < rowGroup; r += 4) {
+      float[] r0 = matrix[r], r1 = matrix[r + 1], r2 = matrix[r + 2], r3 = matrix[r + 3];
+      FloatVector acc0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc3 = FloatVector.zero(FLOAT_SPECIES);
+
+      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+        FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i);
+        acc0 = fma(qv, FloatVector.fromArray(FLOAT_SPECIES, r0, i), acc0);
+        acc1 = fma(qv, FloatVector.fromArray(FLOAT_SPECIES, r1, i), acc1);
+        acc2 = fma(qv, FloatVector.fromArray(FLOAT_SPECIES, r2, i), acc2);
+        acc3 = fma(qv, FloatVector.fromArray(FLOAT_SPECIES, r3, i), acc3);
+      }
+
+      float s0 = acc0.reduceLanes(VectorOperators.ADD);
+      float s1 = acc1.reduceLanes(VectorOperators.ADD);
+      float s2 = acc2.reduceLanes(VectorOperators.ADD);
+      float s3 = acc3.reduceLanes(VectorOperators.ADD);
+
+      // Scalar tail (remaining elements after SIMD loop bound)
+      for (int i = limit; i < dim; i++) {
+        float q = query[i];
+        s0 = MathUtil.fma(q, r0[i], s0);
+        s1 = MathUtil.fma(q, r1[i], s1);
+        s2 = MathUtil.fma(q, r2[i], s2);
+        s3 = MathUtil.fma(q, r3[i], s3);
+      }
+
+      out[r] = s0;
+      out[r + 1] = s1;
+      out[r + 2] = s2;
+      out[r + 3] = s3;
+    }
+
+    // Tail rows (0–3 remaining)
+    for (int r = rowGroup; r < numRows; r++) {
+      out[r] = dotProduct(query, 0, matrix[r], 0, dim);
+    }
+  }
+
+  /**
+   * SIMD 4-row-unrolled fused GEMV for squared L2 distance.
+   *
+   * <p>Same strategy as {@link #matVecDot}: loads each query SIMD chunk once and accumulates
+   * squared differences for 4 rows simultaneously.
+   */
+  @Override
+  public void matVecSquaredL2(float[] query, float[][] matrix, float[] out, int numRows) {
+    int dim = query.length;
+    int rowGroup = numRows & ~3;
+    int limit = FLOAT_SPECIES.loopBound(dim);
+
+    for (int r = 0; r < rowGroup; r += 4) {
+      float[] r0 = matrix[r], r1 = matrix[r + 1], r2 = matrix[r + 2], r3 = matrix[r + 3];
+      FloatVector acc0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc3 = FloatVector.zero(FLOAT_SPECIES);
+
+      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+        FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i);
+        FloatVector d0 = qv.sub(FloatVector.fromArray(FLOAT_SPECIES, r0, i));
+        FloatVector d1 = qv.sub(FloatVector.fromArray(FLOAT_SPECIES, r1, i));
+        FloatVector d2 = qv.sub(FloatVector.fromArray(FLOAT_SPECIES, r2, i));
+        FloatVector d3 = qv.sub(FloatVector.fromArray(FLOAT_SPECIES, r3, i));
+        acc0 = fma(d0, d0, acc0);
+        acc1 = fma(d1, d1, acc1);
+        acc2 = fma(d2, d2, acc2);
+        acc3 = fma(d3, d3, acc3);
+      }
+
+      float s0 = acc0.reduceLanes(VectorOperators.ADD);
+      float s1 = acc1.reduceLanes(VectorOperators.ADD);
+      float s2 = acc2.reduceLanes(VectorOperators.ADD);
+      float s3 = acc3.reduceLanes(VectorOperators.ADD);
+
+      for (int i = limit; i < dim; i++) {
+        float q = query[i];
+        float e0 = q - r0[i];
+        s0 = MathUtil.fma(e0, e0, s0);
+        float e1 = q - r1[i];
+        s1 = MathUtil.fma(e1, e1, s1);
+        float e2 = q - r2[i];
+        s2 = MathUtil.fma(e2, e2, s2);
+        float e3 = q - r3[i];
+        s3 = MathUtil.fma(e3, e3, s3);
+      }
+
+      out[r] = s0;
+      out[r + 1] = s1;
+      out[r + 2] = s2;
+      out[r + 3] = s3;
+    }
+
+    for (int r = rowGroup; r < numRows; r++) {
+      out[r] = squareDistance(query, 0, matrix[r], 0, dim);
+    }
+  }
 }

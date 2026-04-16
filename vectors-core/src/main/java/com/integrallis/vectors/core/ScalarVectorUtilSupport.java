@@ -250,4 +250,139 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
     scale(v, invNorm);
     return v;
   }
+
+  // --- Fused batch matrix-vector kernels (GEMV) ---
+
+  /**
+   * Scalar 4-row-unrolled GEMV for dot product.
+   *
+   * <p>Processes 4 rows at a time in the outer loop. In the inner dimension loop each iteration
+   * accumulates one element into each of the 4 per-row accumulators simultaneously, giving 4
+   * independent FMA chains for ILP even in the scalar JIT tier.
+   */
+  @Override
+  public void matVecDot(float[] query, float[][] matrix, float[] out, int numRows) {
+    int dim = query.length;
+    int rowGroup = numRows & ~3; // round down to multiple of 4
+
+    // Main: groups of 4 rows
+    for (int r = 0; r < rowGroup; r += 4) {
+      float[] r0 = matrix[r], r1 = matrix[r + 1], r2 = matrix[r + 2], r3 = matrix[r + 3];
+      float a0 = 0f, a1 = 0f, a2 = 0f, a3 = 0f;
+      int i = 0;
+      int bound = dim & ~3;
+      for (; i < bound; i += 4) {
+        float q0 = query[i], q1 = query[i + 1], q2 = query[i + 2], q3 = query[i + 3];
+        a0 =
+            MathUtil.fma(
+                q0,
+                r0[i],
+                MathUtil.fma(
+                    q1, r0[i + 1], MathUtil.fma(q2, r0[i + 2], MathUtil.fma(q3, r0[i + 3], a0))));
+        a1 =
+            MathUtil.fma(
+                q0,
+                r1[i],
+                MathUtil.fma(
+                    q1, r1[i + 1], MathUtil.fma(q2, r1[i + 2], MathUtil.fma(q3, r1[i + 3], a1))));
+        a2 =
+            MathUtil.fma(
+                q0,
+                r2[i],
+                MathUtil.fma(
+                    q1, r2[i + 1], MathUtil.fma(q2, r2[i + 2], MathUtil.fma(q3, r2[i + 3], a2))));
+        a3 =
+            MathUtil.fma(
+                q0,
+                r3[i],
+                MathUtil.fma(
+                    q1, r3[i + 1], MathUtil.fma(q2, r3[i + 2], MathUtil.fma(q3, r3[i + 3], a3))));
+      }
+      for (; i < dim; i++) {
+        float q = query[i];
+        a0 = MathUtil.fma(q, r0[i], a0);
+        a1 = MathUtil.fma(q, r1[i], a1);
+        a2 = MathUtil.fma(q, r2[i], a2);
+        a3 = MathUtil.fma(q, r3[i], a3);
+      }
+      out[r] = a0;
+      out[r + 1] = a1;
+      out[r + 2] = a2;
+      out[r + 3] = a3;
+    }
+
+    // Tail: remaining 1-3 rows
+    for (int r = rowGroup; r < numRows; r++) {
+      out[r] = dotProduct(query, 0, matrix[r], 0, dim);
+    }
+  }
+
+  /** Scalar 4-row-unrolled GEMV for squared L2 distance. */
+  @Override
+  public void matVecSquaredL2(float[] query, float[][] matrix, float[] out, int numRows) {
+    int dim = query.length;
+    int rowGroup = numRows & ~3;
+
+    for (int r = 0; r < rowGroup; r += 4) {
+      float[] r0 = matrix[r], r1 = matrix[r + 1], r2 = matrix[r + 2], r3 = matrix[r + 3];
+      float a0 = 0f, a1 = 0f, a2 = 0f, a3 = 0f;
+      int i = 0;
+      int bound = dim & ~3;
+      for (; i < bound; i += 4) {
+        float q0 = query[i], q1 = query[i + 1], q2 = query[i + 2], q3 = query[i + 3];
+        float d0, d1, d2, d3;
+        d0 = q0 - r0[i];
+        a0 = MathUtil.fma(d0, d0, a0);
+        d0 = q0 - r1[i];
+        a1 = MathUtil.fma(d0, d0, a1);
+        d0 = q0 - r2[i];
+        a2 = MathUtil.fma(d0, d0, a2);
+        d0 = q0 - r3[i];
+        a3 = MathUtil.fma(d0, d0, a3);
+        d1 = q1 - r0[i + 1];
+        a0 = MathUtil.fma(d1, d1, a0);
+        d1 = q1 - r1[i + 1];
+        a1 = MathUtil.fma(d1, d1, a1);
+        d1 = q1 - r2[i + 1];
+        a2 = MathUtil.fma(d1, d1, a2);
+        d1 = q1 - r3[i + 1];
+        a3 = MathUtil.fma(d1, d1, a3);
+        d2 = q2 - r0[i + 2];
+        a0 = MathUtil.fma(d2, d2, a0);
+        d2 = q2 - r1[i + 2];
+        a1 = MathUtil.fma(d2, d2, a1);
+        d2 = q2 - r2[i + 2];
+        a2 = MathUtil.fma(d2, d2, a2);
+        d2 = q2 - r3[i + 2];
+        a3 = MathUtil.fma(d2, d2, a3);
+        d3 = q3 - r0[i + 3];
+        a0 = MathUtil.fma(d3, d3, a0);
+        d3 = q3 - r1[i + 3];
+        a1 = MathUtil.fma(d3, d3, a1);
+        d3 = q3 - r2[i + 3];
+        a2 = MathUtil.fma(d3, d3, a2);
+        d3 = q3 - r3[i + 3];
+        a3 = MathUtil.fma(d3, d3, a3);
+      }
+      for (; i < dim; i++) {
+        float q = query[i];
+        float d0 = q - r0[i];
+        a0 = MathUtil.fma(d0, d0, a0);
+        float d1 = q - r1[i];
+        a1 = MathUtil.fma(d1, d1, a1);
+        float d2 = q - r2[i];
+        a2 = MathUtil.fma(d2, d2, a2);
+        float d3 = q - r3[i];
+        a3 = MathUtil.fma(d3, d3, a3);
+      }
+      out[r] = a0;
+      out[r + 1] = a1;
+      out[r + 2] = a2;
+      out[r + 3] = a3;
+    }
+
+    for (int r = rowGroup; r < numRows; r++) {
+      out[r] = squareDistance(query, 0, matrix[r], 0, dim);
+    }
+  }
 }
