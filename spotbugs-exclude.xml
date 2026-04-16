@@ -281,6 +281,25 @@
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
 
+    <!-- vectors-distributed: LocalSearchRequest stores float[]/int[] by reference for zero-copy
+         query routing — defensive copy at scatter-gather call rates would add significant GC
+         pressure. The query vector is owned by the caller and must not be mutated after passing. -->
+    <Match>
+        <Class name="com.integrallis.vectors.distributed.LocalSearchRequest"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-distributed: DistributedVectorCollection$Builder stores a VectorCollection
+         reference. VectorCollection is an interface and cannot be cloned; the lifecycle is
+         owned by the caller and documented in the builder's javadoc. -->
+    <Match>
+        <Class name="com.integrallis.vectors.distributed.DistributedVectorCollection$Builder"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
     <!-- vectors-db: VectorCollectionImpl.openGeneration intentionally catches Exception
          (not just IOException) so that arena.close() fires even on unchecked exceptions
          like ArithmeticException from Math.toIntExact. The broad catch is a resource-safety
