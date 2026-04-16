@@ -10,8 +10,10 @@ import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -181,6 +183,87 @@ class DistributedVectorCollectionTest {
     // Partial: results from local + peer1 (peer2 failed)
     assertThat(result.hits()).isNotEmpty();
     assertThat(result.hits().size()).isLessThanOrEqualTo(K);
+  }
+
+  /**
+   * 3 FLAT nodes × 3K docs each (9K total). Brute-force ground truth computed on the combined
+   * corpus; recall@10 from scatter-gather must be ≥ 0.80 for a random query.
+   *
+   * <p>Deliberately smaller than the design's 1M-doc case to keep CI fast — the slow {@link
+   * org.junit.jupiter.api.Tag} prevents this from running in the default test task.
+   */
+  @Test
+  @Tag("slow")
+  void scatterGatherRecall_3nodes() {
+    int n = 3_000; // docs per node
+    int totalNodes = 3;
+    int kRecall = 10;
+    Random rng = new Random(999L);
+
+    // Build corpus across 3 separate collections
+    List<VectorCollection> nodeCollections = new ArrayList<>();
+    List<float[]> allVectors = new ArrayList<>();
+    List<String> allIds = new ArrayList<>();
+
+    for (int nodeIdx = 0; nodeIdx < totalNodes; nodeIdx++) {
+      VectorCollection col = emptyCollection();
+      for (int i = 0; i < n; i++) {
+        float[] v = randomUnit(rng);
+        String id = "n" + nodeIdx + "-" + i;
+        col.add(Document.of(id, v));
+        allVectors.add(v);
+        allIds.add(id);
+      }
+      col.commit();
+      nodeCollections.add(col);
+    }
+
+    // Build brute-force reference collection on the merged corpus
+    VectorCollection bruteForce = emptyCollection();
+    for (int i = 0; i < allVectors.size(); i++) {
+      bruteForce.add(Document.of(allIds.get(i), allVectors.get(i)));
+    }
+    bruteForce.commit();
+
+    // Wire 3 nodes into a distributed collection
+    InProcessNodeDirectory.Builder dirBuilder = InProcessNodeDirectory.builder();
+    List<NodeId> nodeIds = new ArrayList<>();
+    for (int nodeIdx = 0; nodeIdx < totalNodes; nodeIdx++) {
+      NodeId nid = new NodeId("recall-n" + nodeIdx);
+      nodeIds.add(nid);
+      dirBuilder.register(nid, nodeCollections.get(nodeIdx));
+    }
+    InProcessNodeDirectory dir = dirBuilder.build();
+
+    DistributedVectorCollection dvCol =
+        DistributedVectorCollection.builder()
+            .localCollection(nodeCollections.get(0))
+            .localNodeId(nodeIds.get(0))
+            .directory(dir)
+            .allNodes(nodeIds)
+            .timeout(TIMEOUT)
+            .build();
+
+    // Run 20 random queries and measure recall@10
+    int hitCount = 0;
+    int queryCount = 20;
+    for (int q = 0; q < queryCount; q++) {
+      float[] query = randomUnit(rng);
+      SearchResult sgResult = dvCol.search(SearchRequest.builder(query, kRecall).build());
+      SearchResult bfResult = bruteForce.search(SearchRequest.builder(query, kRecall).build());
+
+      Set<String> bfIds = new HashSet<>();
+      for (SearchResult.Hit h : bfResult.hits()) bfIds.add(h.id());
+      for (SearchResult.Hit h : sgResult.hits()) {
+        if (bfIds.contains(h.id())) hitCount++;
+      }
+    }
+
+    double recall = (double) hitCount / (queryCount * kRecall);
+    assertThat(recall).as("recall@10 across 3 nodes").isGreaterThanOrEqualTo(0.80);
+
+    bruteForce.close();
+    nodeCollections.forEach(VectorCollection::close);
   }
 
   /** Degenerate 1-node cluster behaves identically to a plain VectorCollection search. */

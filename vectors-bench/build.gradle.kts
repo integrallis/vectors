@@ -12,6 +12,7 @@ dependencies {
     implementation(project(":vectors-vamana"))
     implementation(project(":vectors-ivf"))
     implementation(project(":vectors-db"))
+    implementation(project(":vectors-distributed"))
 
     // HDF5 reader for ANN-Benchmarks datasets (MIT, pure Java, no native code)
     implementation("io.jhdf:jhdf:0.9.4")

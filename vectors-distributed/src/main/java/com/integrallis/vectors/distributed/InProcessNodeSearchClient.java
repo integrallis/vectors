@@ -8,15 +8,19 @@ import java.util.Objects;
 /**
  * In-process {@link NodeSearchClient} backed by a real {@link VectorCollection}.
  *
- * <p>Used in tests to simulate a distributed cluster without networking. Each instance wraps one
- * local {@link VectorCollection}; the {@link LocalSearchRequest}'s {@code clusterIds} field is
- * ignored — the full collection is searched (appropriate for FLAT / HNSW nodes in tests).
+ * <p>Simulates a distributed cluster node within a single JVM — no network required. Each instance
+ * wraps one local {@link VectorCollection}; the {@link LocalSearchRequest}'s {@code clusterIds}
+ * field is informational and ignored (appropriate for FLAT / HNSW nodes). This is the primary
+ * integration vehicle for unit tests and JMH benchmarks.
  */
-final class InProcessNodeSearchClient implements NodeSearchClient {
+public final class InProcessNodeSearchClient implements NodeSearchClient {
 
   private final VectorCollection collection;
 
-  InProcessNodeSearchClient(VectorCollection collection) {
+  /**
+   * @param collection the backing collection for this simulated node (must not be null)
+   */
+  public InProcessNodeSearchClient(VectorCollection collection) {
     this.collection = Objects.requireNonNull(collection, "collection must not be null");
   }
 
