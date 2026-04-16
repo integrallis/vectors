@@ -14,6 +14,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -296,5 +299,97 @@ class DistributedVectorCollectionTest {
     for (int i = 0; i < dvResult.hits().size(); i++) {
       assertThat(dvResult.hits().get(i).id()).isEqualTo(direct.hits().get(i).id());
     }
+  }
+
+  /**
+   * BuoyIndex gossip convergence gate (design section 9.4).
+   *
+   * <p>Three nodes share a {@link GossipClusterMembership}. Each registers a listener. One node
+   * announces a new BuoyIndex version hash; all three listeners must receive a {@link
+   * ClusterMembership.MembershipEvent.BuoyIndexUpdated} event with the correct hash within 500 ms.
+   *
+   * <p>In this in-process simulation, propagation is synchronous (the call to {@code
+   * announceVersion} fans out inline), so convergence is instantaneous. The 500 ms deadline is
+   * enforced via {@link CountDownLatch} to demonstrate the contract and remain valid when replaced
+   * by an async implementation.
+   */
+  @Test
+  void buoyIndexGossipConverges() throws InterruptedException {
+    NodeId n1 = new NodeId("gossip-n1");
+    NodeId n2 = new NodeId("gossip-n2");
+    NodeId n3 = new NodeId("gossip-n3");
+
+    GossipClusterMembership gossip = new GossipClusterMembership(Set.of(n1, n2, n3));
+
+    // Track events received by each of the three "nodes"
+    List<String> receivedHashes = new CopyOnWriteArrayList<>();
+    int totalListeners = 3;
+    CountDownLatch latch = new CountDownLatch(totalListeners);
+
+    for (int i = 0; i < totalListeners; i++) {
+      gossip.registerChangeListener(
+          event -> {
+            if (event instanceof ClusterMembership.MembershipEvent.BuoyIndexUpdated bu) {
+              receivedHashes.add(bu.newVersionHash());
+              latch.countDown();
+            }
+          });
+    }
+
+    // One node announces a new BuoyIndex version (simulates completing a k-means training pass)
+    String newHash = "sha256-buoy-v2-abc123";
+    gossip.announceVersion(newHash);
+
+    // All 3 listeners must have received the event within 500 ms
+    boolean converged = latch.await(500, TimeUnit.MILLISECONDS);
+    assertThat(converged).as("All nodes must receive BuoyIndexUpdated within 500 ms").isTrue();
+    assertThat(receivedHashes).hasSize(totalListeners).containsOnly(newHash);
+    assertThat(gossip.currentVersionHash()).isEqualTo(newHash);
+  }
+
+  /**
+   * Announcing the same BuoyIndex version twice must not produce duplicate events (idempotency).
+   */
+  @Test
+  void buoyIndexGossip_idempotentAnnouncement() {
+    NodeId n1 = new NodeId("idem-n1");
+    NodeId n2 = new NodeId("idem-n2");
+    GossipClusterMembership gossip = new GossipClusterMembership(Set.of(n1, n2));
+
+    List<String> receivedHashes = new CopyOnWriteArrayList<>();
+    gossip.registerChangeListener(
+        event -> {
+          if (event instanceof ClusterMembership.MembershipEvent.BuoyIndexUpdated bu) {
+            receivedHashes.add(bu.newVersionHash());
+          }
+        });
+
+    gossip.announceVersion("v1");
+    gossip.announceVersion("v1"); // duplicate — must not fire a second event
+    gossip.announceVersion("v2"); // new version — must fire
+
+    assertThat(receivedHashes).containsExactly("v1", "v2");
+  }
+
+  /** Node join and leave events are propagated to all registered listeners. */
+  @Test
+  void gossipMembership_joinAndLeaveEvents() {
+    NodeId n1 = new NodeId("jl-n1");
+    NodeId n2 = new NodeId("jl-n2");
+    GossipClusterMembership gossip = new GossipClusterMembership(Set.of(n1, n2));
+
+    List<ClusterMembership.MembershipEvent> received = new CopyOnWriteArrayList<>();
+    gossip.registerChangeListener(received::add);
+
+    NodeId n3 = new NodeId("jl-n3");
+    gossip.join(n3);
+    assertThat(gossip.liveNodes()).contains(n1, n2, n3);
+
+    gossip.leave(n2);
+    assertThat(gossip.liveNodes()).contains(n1, n3).doesNotContain(n2);
+
+    assertThat(received).hasSize(2);
+    assertThat(received.get(0)).isInstanceOf(ClusterMembership.MembershipEvent.NodeJoined.class);
+    assertThat(received.get(1)).isInstanceOf(ClusterMembership.MembershipEvent.NodeLeft.class);
   }
 }
