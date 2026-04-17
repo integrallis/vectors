@@ -552,4 +552,109 @@ class VectorDbIntegrationTest {
       }
     }
   }
+
+  @Nested
+  @Tag("unit")
+  class BatchSearch {
+
+    @Test
+    void searchBatch_nullRequests_throws() {
+      try (var col = newCollection(4, SimilarityFunction.EUCLIDEAN)) {
+        assertThatIllegalArgumentException().isThrownBy(() -> col.searchBatch(null));
+      }
+    }
+
+    @Test
+    void searchBatch_emptyRequests_throws() {
+      try (var col = newCollection(4, SimilarityFunction.EUCLIDEAN)) {
+        assertThatIllegalArgumentException().isThrownBy(() -> col.searchBatch(List.of()));
+      }
+    }
+
+    @Test
+    void searchBatch_singleRequest_matchesSingleSearch() {
+      try (var col = newCollection(4, SimilarityFunction.EUCLIDEAN)) {
+        col.add(Document.of("x", new float[] {1f, 0f, 0f, 0f}));
+        col.commit();
+        var req = SearchRequest.builder(new float[] {1f, 0f, 0f, 0f}, 1).build();
+        var single = col.search(req);
+        var batch = col.searchBatch(List.of(req));
+        assertThat(batch).hasSize(1);
+        assertThat(batch.get(0).hits().get(0).id()).isEqualTo(single.hits().get(0).id());
+      }
+    }
+
+    @Test
+    void searchBatch_multipleRequests_resultsInOrder() {
+      int dim = 32;
+      float[][] data = randomVectors(100, dim, 1L);
+      try (var col =
+          VectorCollection.builder()
+              .dimension(dim)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.FLAT)
+              .build()) {
+        col.addAll(asDocuments(data));
+        col.commit();
+
+        // Build 8 independent queries; verify each batch result matches individual search
+        List<SearchRequest> requests = new ArrayList<>();
+        List<SearchResult> expected = new ArrayList<>();
+        float[][] queries = randomVectors(8, dim, 99L);
+        for (float[] q : queries) {
+          var req = SearchRequest.builder(q, 5).build();
+          requests.add(req);
+          expected.add(col.search(req));
+        }
+
+        List<SearchResult> batch = col.searchBatch(requests);
+        assertThat(batch).hasSize(requests.size());
+        for (int i = 0; i < requests.size(); i++) {
+          var batchHitIds = batch.get(i).hits().stream().map(SearchResult.Hit::id).toList();
+          var expectedHitIds = expected.get(i).hits().stream().map(SearchResult.Hit::id).toList();
+          assertThat(batchHitIds)
+              .as("batch result[%d] should match individual search", i)
+              .containsExactlyElementsOf(expectedHitIds);
+        }
+      }
+    }
+
+    @Test
+    void searchBatch_resultsListIsImmutable() {
+      try (var col = newCollection(4, SimilarityFunction.EUCLIDEAN)) {
+        col.add(Document.of("a", new float[] {1f, 0f, 0f, 0f}));
+        col.commit();
+        var req = SearchRequest.builder(new float[] {1f, 0f, 0f, 0f}, 1).build();
+        var results = col.searchBatch(List.of(req));
+        assertThatExceptionOfType(UnsupportedOperationException.class)
+            .isThrownBy(() -> results.add(null));
+      }
+    }
+
+    @Test
+    void searchBatch_concurrencyStressTest_noResultCorruption() {
+      int dim = 32;
+      float[][] data = randomVectors(200, dim, 7L);
+      try (var col =
+          VectorCollection.builder()
+              .dimension(dim)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.FLAT)
+              .build()) {
+        col.addAll(asDocuments(data));
+        col.commit();
+
+        // Fire 32 queries as a single batch; all should return k=10 hits
+        List<SearchRequest> requests = new ArrayList<>();
+        for (float[] q : randomVectors(32, dim, 77L)) {
+          requests.add(SearchRequest.builder(q, 10).build());
+        }
+        var results = col.searchBatch(requests);
+        assertThat(results).hasSize(32);
+        for (var r : results) {
+          assertThat(r.hits()).hasSize(10);
+        }
+      }
+    }
+  }
 }
