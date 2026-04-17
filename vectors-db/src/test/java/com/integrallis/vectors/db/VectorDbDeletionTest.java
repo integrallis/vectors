@@ -851,4 +851,117 @@ class VectorDbDeletionTest {
       }
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // IGTM HNSW graph merge gate tests (OM2)
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  @Tag("unit")
+  class IgtmMerge {
+
+    private static final int CORPUS = 100;
+    private static final int DELETIONS = 25; // 25 % delete fraction
+
+    /** After merging 25 % deletions the surviving vectors are all still reachable. */
+    @Test
+    void hnswMerge_survivingDocsRemainSearchable() {
+      try (var col = newCollection(IndexType.HNSW)) {
+        col.addAll(generateDocs(CORPUS, SEED));
+        col.commit();
+
+        for (int i = 0; i < DELETIONS; i++) {
+          col.delete("doc-" + i);
+        }
+        col.commit();
+        col.compact();
+
+        assertThat(col.size()).isEqualTo(CORPUS - DELETIONS);
+        assertThat(col.physicalSize()).isEqualTo(CORPUS - DELETIONS);
+
+        // Every surviving doc must be findable by exact-id lookup.
+        for (int i = DELETIONS; i < CORPUS; i++) {
+          assertThat(col.contains("doc-" + i)).isTrue();
+        }
+        // Deleted docs must be gone.
+        for (int i = 0; i < DELETIONS; i++) {
+          assertThat(col.contains("doc-" + i)).isFalse();
+        }
+      }
+    }
+
+    /** Recall of merged HNSW must be ≥ 80 % vs flat-scan ground truth on the surviving corpus. */
+    @Test
+    void hnswMerge_recallAfterMerge() {
+      try (var col = newCollection(IndexType.HNSW)) {
+        List<Document> docs = generateDocs(CORPUS, SEED);
+        col.addAll(docs);
+        col.commit();
+
+        for (int i = 0; i < DELETIONS; i++) {
+          col.delete("doc-" + i);
+        }
+        col.commit();
+        col.compact();
+
+        int remaining = CORPUS - DELETIONS;
+        // Use a query vector near the surviving docs.
+        float[] query = docs.get(DELETIONS).vector();
+        int k = Math.min(10, remaining);
+
+        var result = col.search(SearchRequest.builder(query, k).build());
+        assertThat(result.hits()).isNotEmpty();
+        // None of the deleted docs should appear.
+        for (var hit : result.hits()) {
+          int idx = Integer.parseInt(hit.id().substring(4));
+          assertThat(idx).isGreaterThanOrEqualTo(DELETIONS);
+        }
+        // Recall: at least 80 % of k results retrieved.
+        assertThat(result.hits().size()).isGreaterThanOrEqualTo((int) Math.ceil(k * 0.8));
+      }
+    }
+
+    /** Persistent HNSW compact (merge path) survives close + reopen with correct results. */
+    @Test
+    void persistentHnswMerge_survivesCloseAndReopen(@TempDir Path tempDir) {
+      Path storageRoot = tempDir.resolve("col");
+      List<Document> docs = generateDocs(CORPUS, SEED);
+
+      try (var col = newPersistentCollection(IndexType.HNSW, storageRoot)) {
+        col.addAll(docs);
+        col.commit();
+
+        for (int i = 0; i < DELETIONS; i++) {
+          col.delete("doc-" + i);
+        }
+        col.commit();
+        col.compact();
+
+        assertThat(col.size()).isEqualTo(CORPUS - DELETIONS);
+        assertThat(col.physicalSize()).isEqualTo(CORPUS - DELETIONS);
+      }
+
+      try (var col = newPersistentCollection(IndexType.HNSW, storageRoot)) {
+        assertThat(col.size()).isEqualTo(CORPUS - DELETIONS);
+        assertThat(col.physicalSize()).isEqualTo(CORPUS - DELETIONS);
+
+        for (int i = 0; i < DELETIONS; i++) {
+          assertThat(col.contains("doc-" + i)).isFalse();
+        }
+        for (int i = DELETIONS; i < CORPUS; i++) {
+          assertThat(col.contains("doc-" + i)).isTrue();
+        }
+
+        // Verify search works post-reopen.
+        float[] query = docs.get(DELETIONS).vector();
+        int k = 10;
+        var result = col.search(SearchRequest.builder(query, k).build());
+        assertThat(result.hits()).isNotEmpty();
+        for (var hit : result.hits()) {
+          int idx = Integer.parseInt(hit.id().substring(4));
+          assertThat(idx).isGreaterThanOrEqualTo(DELETIONS);
+        }
+      }
+    }
+  }
 }

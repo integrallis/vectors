@@ -29,6 +29,7 @@ import com.integrallis.vectors.db.storage.QuantizedVectorsCodec;
 import com.integrallis.vectors.db.storage.TombstoneCodec;
 import com.integrallis.vectors.db.storage.VamanaGraphCodec;
 import com.integrallis.vectors.hnsw.HnswGraph;
+import com.integrallis.vectors.hnsw.HnswGraphMerger;
 import com.integrallis.vectors.ivf.IvfBuildParams;
 import com.integrallis.vectors.ivf.IvfIndex;
 import com.integrallis.vectors.quantization.ArrayVectorDataset;
@@ -53,6 +54,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.List;
@@ -938,6 +940,10 @@ final class VectorCollectionImpl implements VectorCollection {
     InMemoryMetadataStore newMeta = new InMemoryMetadataStore();
     float[][] next = new float[liveCount][];
 
+    // Build oldToNew mapping alongside the live-document gather loop so we can
+    // pass it to HnswGraphMerger without a second pass.
+    int[] oldToNew = new int[oldGen.physicalCount];
+    Arrays.fill(oldToNew, -1);
     int slot = 0;
     for (int i = 0; i < oldGen.physicalCount; i++) {
       if (oldGen.tombstones.get(i)) {
@@ -948,6 +954,7 @@ final class VectorCollectionImpl implements VectorCollection {
       if (doc == null) {
         continue;
       }
+      oldToNew[i] = slot;
       int ordinal = newMapper.put(id);
       newMeta.put(ordinal, doc);
       next[slot] = doc.vector() != null ? doc.vector().clone() : new float[config.dimension()];
@@ -955,7 +962,19 @@ final class VectorCollectionImpl implements VectorCollection {
     }
 
     IndexSpi newSpi = newInMemoryAdapter();
-    newSpi.build(next, config.metric());
+
+    // IGTM: for HNSW, merge the existing graph instead of rebuilding from scratch.
+    // The merger remaps surviving edges and repairs under-connected nodes via beam search —
+    // O(N'·M·d + R·ef·M) vs O(N'·log N'·M·d) for a full rebuild.
+    if (config.indexType() == IndexType.HNSW
+        && liveCount > 0
+        && newSpi instanceof HnswIndexAdapter ha
+        && oldGen.spi instanceof HnswIndexAdapter oldHa
+        && oldHa.graph() != null) {
+      ha.mergeFrom(oldHa.graph(), next, oldToNew, config.metric());
+    } else {
+      newSpi.build(next, config.metric());
+    }
 
     // Retrain quantizer on compacted data.
     if (config.quantizerKind() != QuantizerKind.NONE && liveCount > 0) {
@@ -976,10 +995,13 @@ final class VectorCollectionImpl implements VectorCollection {
 
   private void compactPersistent(Generation oldGen) {
     // Gather only live documents into dense ordinal order.
+    // Build oldToNew in the same loop for the IGTM HNSW merge path.
     int liveCount = oldGen.liveCount();
     List<String> newIds = new ArrayList<>(liveCount);
     List<Document> newDocs = new ArrayList<>(liveCount);
     float[][] matrix = new float[liveCount][];
+    int[] oldToNew = new int[oldGen.physicalCount];
+    Arrays.fill(oldToNew, -1);
 
     int slot = 0;
     for (int i = 0; i < oldGen.physicalCount; i++) {
@@ -990,6 +1012,7 @@ final class VectorCollectionImpl implements VectorCollection {
       Document doc = oldGen.metadataStore.get(i);
       newIds.add(id);
       newDocs.add(doc);
+      oldToNew[i] = slot;
       // Hydrate vector from mmap if needed.
       if (doc != null && doc.vector() != null) {
         matrix[slot] = doc.vector().clone();
@@ -1031,7 +1054,22 @@ final class VectorCollectionImpl implements VectorCollection {
             || config.indexType() == IndexType.VAMANA
             || config.indexType() == IndexType.IVF_FLAT;
     if (needGraph && liveCount > 0) {
-      graphBin = encodeGraphBytes(matrix);
+      // IGTM: for HNSW, merge the existing graph instead of rebuilding from scratch.
+      if (config.indexType() == IndexType.HNSW
+          && oldGen.spi instanceof MappedHnswIndexAdapter mapped) {
+        HnswGraph oldGraph = mapped.graph();
+        if (oldGraph != null) {
+          VectorCollectionConfig.HnswParams hp = config.hnswParams();
+          HnswGraph merged =
+              HnswGraphMerger.merge(
+                  oldGraph, matrix, oldToNew, config.metric(), hp.m(), hp.efConstruction());
+          graphBin = merged != null ? HnswGraphCodec.encode(merged) : null;
+        } else {
+          graphBin = encodeGraphBytes(matrix);
+        }
+      } else {
+        graphBin = encodeGraphBytes(matrix);
+      }
       if (graphBin != null) {
         graphBinLength = (long) graphBin.length;
         graphBinCrc = Checksums.ofBytes(graphBin);

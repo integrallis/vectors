@@ -107,6 +107,26 @@ public final class NeighborArray {
   }
 
   /**
+   * Truncates this array to at most {@code n} entries, discarding the lowest-scoring tail. Because
+   * entries are maintained in descending score order the first {@code n} entries are always the
+   * best-scoring ones.
+   *
+   * <p>Used by {@link HnswGraphMerger} to trim the overflow slot ({@code capacity = 2*M+1}) back to
+   * the official layer-0 maximum ({@code 2*M}) before the graph is handed to serialization.
+   *
+   * @param n the maximum number of entries to retain (must be ≥ 0)
+   * @throws IllegalArgumentException if {@code n} is negative
+   */
+  public void trim(int n) {
+    if (n < 0) {
+      throw new IllegalArgumentException("n must be non-negative: " + n);
+    }
+    if (size > n) {
+      size = n;
+    }
+  }
+
+  /**
    * Copies all entries from {@code other} into this array, replacing existing content.
    *
    * @throws IllegalArgumentException if {@code other.size()} exceeds this array's capacity

@@ -2,7 +2,9 @@ package com.integrallis.vectors.db.index;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.hnsw.HnswGraph;
+import com.integrallis.vectors.hnsw.HnswGraphMerger;
 import com.integrallis.vectors.hnsw.HnswIndex;
+import com.integrallis.vectors.hnsw.InMemoryVectors;
 import com.integrallis.vectors.hnsw.SearchResult;
 import com.integrallis.vectors.quantization.CompressedVectors;
 import java.util.Objects;
@@ -148,6 +150,42 @@ public final class HnswIndexAdapter implements IndexSpi {
    */
   public HnswGraph graph() {
     return index == null ? null : index.graph();
+  }
+
+  /**
+   * Merges the old HNSW graph into a new index by remapping surviving nodes and repairing
+   * under-connected ones, without full reconstruction (IGTM compact path).
+   *
+   * <p>This is the incremental alternative to {@link #build(float[][], SimilarityFunction)} used by
+   * {@code VectorCollectionImpl.compactInMemory} when a pre-existing graph is available. The cost
+   * is O(N' · M · d) for edge remapping plus O(R · ef · M) for repair, where R is the number of
+   * under-connected nodes after deletion. Both are substantially cheaper than O(N' · log N' · M ·
+   * d) for a full rebuild when the deletion fraction is small.
+   *
+   * @param old the pre-compaction HNSW graph
+   * @param newVectors dense array of surviving vectors indexed by new ordinal
+   * @param oldToNew mapping: {@code oldToNew[oldOrdinal]} = new ordinal, or {@code -1} if deleted
+   * @param metric similarity function (must match the one used to build {@code old})
+   */
+  public void mergeFrom(
+      HnswGraph old, float[][] newVectors, int[] oldToNew, SimilarityFunction metric) {
+    Objects.requireNonNull(old, "old must not be null");
+    Objects.requireNonNull(newVectors, "newVectors must not be null");
+    Objects.requireNonNull(oldToNew, "oldToNew must not be null");
+    Objects.requireNonNull(metric, "metric must not be null");
+    this.size = newVectors.length;
+    this.dimension = newVectors.length == 0 ? 0 : newVectors[0].length;
+    if (newVectors.length == 0) {
+      this.index = null;
+      return;
+    }
+    HnswGraph merged =
+        HnswGraphMerger.merge(old, newVectors, oldToNew, metric, maxConnections, efConstruction);
+    if (merged == null) {
+      this.index = null;
+      return;
+    }
+    this.index = HnswIndex.ofPrebuilt(merged, new InMemoryVectors(newVectors), metric);
   }
 
   /** Returns the HNSW {@code M} parameter this adapter was configured with. */

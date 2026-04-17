@@ -132,6 +132,16 @@ public final class MappedHnswIndexAdapter implements IndexSpi {
   }
 
   /**
+   * Returns the underlying {@link HnswGraph}. Used by the compaction pipeline in {@code
+   * VectorCollectionImpl.compactPersistent} to extract the pre-built graph for incremental merge
+   * via {@link com.integrallis.vectors.hnsw.HnswGraphMerger}. Callers must not mutate the returned
+   * graph via {@link HnswGraph#initNode} or {@link HnswGraph#setEntryNode}.
+   */
+  public HnswGraph graph() {
+    return index.graph();
+  }
+
+  /**
    * No-op. The underlying {@link MemorySegmentVectors}'s lifetime is tied to its per-generation
    * {@link java.lang.foreign.Arena}; {@code VectorCollectionImpl} closes that arena exactly once
    * per retired generation. The {@link HnswGraph} and {@link HnswIndex} are purely on-heap and need
