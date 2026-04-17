@@ -172,4 +172,79 @@ class VectorDbIvfFlatTest {
       assertThat(hits.get(0).id()).isEqualTo("needle");
     }
   }
+
+  // -----------------------------------------------------------------------
+  // DP4: Two-pass over-query expansion
+  // -----------------------------------------------------------------------
+
+  @Test
+  void twoPassSearch_overQueryFactor_improvesRecall() {
+    // 300 random vectors; brute-force ground truth for k=5
+    int n = 300;
+    float[][] data = randomVecs(n, DIM, 42L);
+    float[] query = randomVecs(1, DIM, 77L)[0];
+    int k = 5;
+
+    int[] gt = bruteForceTopK(query, data, k);
+    Set<Integer> gtSet = new HashSet<>();
+    for (int idx : gt) gtSet.add(idx);
+
+    try (var col = buildIvf(10, 2, null)) {
+      for (int i = 0; i < n; i++) col.add(Document.of(String.valueOf(i), data[i]));
+      col.commit();
+
+      // Single-pass (overQueryFactor = 1): baseline recall
+      var single = col.search(SearchRequest.builder(query, k).overQueryFactor(1.0f).build()).hits();
+      long singleRecall =
+          single.stream().filter(h -> gtSet.contains(Integer.parseInt(h.id()))).count();
+
+      // Two-pass (overQueryFactor = 4): probe 4× more clusters, retrieve 4× more candidates
+      var twoPass =
+          col.search(SearchRequest.builder(query, k).overQueryFactor(4.0f).build()).hits();
+      long twoPassRecall =
+          twoPass.stream().filter(h -> gtSet.contains(Integer.parseInt(h.id()))).count();
+
+      // Two-pass must return exactly k results and must not degrade recall vs single-pass
+      assertThat(twoPass).hasSize(k);
+      assertThat(twoPassRecall).isGreaterThanOrEqualTo(singleRecall);
+    }
+  }
+
+  @Test
+  void twoPassSearch_explicitFactor_matchesDefault() {
+    // Explicitly setting overQueryFactor(4.0f) must be identical to the implicit default of 4.0f.
+    int n = 100;
+    float[][] data = randomVecs(n, DIM, 10L);
+    float[] query = randomVecs(1, DIM, 20L)[0];
+
+    try (var col = buildIvf(5, 2, null)) {
+      for (int i = 0; i < n; i++) col.add(Document.of(String.valueOf(i), data[i]));
+      col.commit();
+
+      var defaultReq = SearchRequest.builder(query, 5).build(); // default overQueryFactor = 4.0f
+      var explicit4Req = SearchRequest.builder(query, 5).overQueryFactor(4.0f).build();
+
+      var defaultHits = col.search(defaultReq).hits().stream().map(SearchResult.Hit::id).toList();
+      var explicit4Hits =
+          col.search(explicit4Req).hits().stream().map(SearchResult.Hit::id).toList();
+
+      assertThat(explicit4Hits).containsExactlyElementsOf(defaultHits);
+    }
+  }
+
+  @Test
+  void twoPassSearch_highFactor_returnsExactlyK() {
+    // overQueryFactor=10 should still return exactly k hits, not more.
+    int n = 200;
+    float[][] data = randomVecs(n, DIM, 30L);
+    float[] query = randomVecs(1, DIM, 50L)[0];
+
+    try (var col = buildIvf(8, 2, null)) {
+      for (int i = 0; i < n; i++) col.add(Document.of(String.valueOf(i), data[i]));
+      col.commit();
+
+      var result = col.search(SearchRequest.builder(query, 5).overQueryFactor(10.0f).build());
+      assertThat(result.hits()).hasSize(5);
+    }
+  }
 }

@@ -70,6 +70,19 @@ public final class IvfFlatAdapter implements IndexSpi {
     this.index = IvfIndex.build(vectors, null, metric, params);
   }
 
+  /**
+   * Searches the IVF index, optionally with an over-query expansion pass.
+   *
+   * <p>When {@code overQueryFactor > 1.0}, the adapter probes {@code ⌈nprobe × overQueryFactor⌉}
+   * clusters and requests {@code ⌈k × overQueryFactor⌉} candidates — the "coarse" pass. The results
+   * are already scored exactly (IVF_FLAT uses brute-force scoring within each cluster), so the
+   * "rescore" step simply trims the over-fetched candidate list back to {@code k}. This mirrors the
+   * {@link com.integrallis.vectors.db.index.HnswIndexAdapter} two-pass contract and gives callers
+   * the same recall-vs-latency tradeoff knob across all index types.
+   *
+   * <p>When {@code overQueryFactor <= 1.0} (the default), the search is identical to the
+   * single-pass path: probe {@code nprobe} clusters, return at most {@code k} hits.
+   */
   @Override
   public SearchOutcome search(float[] query, int k, int searchListSize, float overQueryFactor) {
     Objects.requireNonNull(query, "query must not be null");
@@ -81,10 +94,22 @@ public final class IvfFlatAdapter implements IndexSpi {
       throw new IllegalArgumentException(
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
-    int effectiveNprobe = Math.min(nprobe, index.k());
-    IvfSearchRequest req = new IvfSearchRequest(query, k, effectiveNprobe, gamma, -Float.MAX_VALUE);
+
+    // Two-pass expansion: when overQueryFactor > 1, probe more clusters and retrieve more
+    // candidates, then trim to k. Mirrors HnswIndexAdapter / VamanaIndexAdapter contract.
+    boolean twoPass = overQueryFactor > 1.0f;
+    int probeCount =
+        twoPass
+            ? Math.min((int) Math.ceil(nprobe * overQueryFactor), index.k())
+            : Math.min(nprobe, index.k());
+    int candidateK = twoPass ? (int) Math.ceil(k * overQueryFactor) : k;
+
+    IvfSearchRequest req =
+        new IvfSearchRequest(query, candidateK, probeCount, gamma, -Float.MAX_VALUE);
     IvfSearchResult result = index.search(req);
-    int sz = result.hits().size();
+
+    // Trim to at most k (hits are sorted by score descending by IvfIndex)
+    int sz = Math.min(result.hits().size(), k);
     int[] ordinals = new int[sz];
     float[] scores = new float[sz];
     for (int i = 0; i < sz; i++) {
