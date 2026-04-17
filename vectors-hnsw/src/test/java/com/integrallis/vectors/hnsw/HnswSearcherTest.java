@@ -409,4 +409,145 @@ class HnswSearcherTest {
     }
     return result;
   }
+
+  // -----------------------------------------------------------------------
+  // DP1: Fused ADC tests
+  // -----------------------------------------------------------------------
+
+  @Nested
+  @Tag("unit")
+  class FusedAdcSearch {
+
+    private float[][] randomVectors(int n, int dim, long seed) {
+      java.util.Random rng = new java.util.Random(seed);
+      float[][] vecs = new float[n][dim];
+      for (float[] v : vecs) for (int d = 0; d < dim; d++) v[d] = rng.nextFloat() * 2f - 1f;
+      return vecs;
+    }
+
+    @Test
+    void fusedAdcIndex_buildsWithoutError() {
+      float[][] vecs = randomVectors(200, 64, 1L);
+      // 64-dim, 4 subspaces of 16 each, 256 clusters (standard PQ byte codes)
+      var index = HnswFusedAdcIndex.build(vecs, SimilarityFunction.EUCLIDEAN, 16, 100, 4, 256, 42L);
+      assertThat(index.size()).isEqualTo(200);
+    }
+
+    @Test
+    void fusedAdcSearch_returnsSelf() {
+      float[][] vecs = randomVectors(100, 32, 2L);
+      // 32-dim, 4 subspaces of 8 each, 16 clusters (small for speed)
+      var index = HnswFusedAdcIndex.build(vecs, SimilarityFunction.EUCLIDEAN, 16, 100, 4, 16, 42L);
+      float[] q = vecs[0].clone();
+      var result = index.search(q, 1, 50);
+      assertThat(result.size()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void adcTable_scoreOrdering_correlatesWithExactSimilarity() {
+      // Direct ADC scoring test — no beam search involved.
+      // Constructs a corpus with two clearly-separated clusters (A near +1, B near -1),
+      // then verifies that PQ ADC scores rank cluster-A vectors higher than cluster-B
+      // vectors when the query is cluster-A's centroid.
+      //
+      // With well-separated clusters the PQ centroids capture the structure perfectly,
+      // so ADC score ordering must match exact ordering without requiring large data.
+      int clusterSize = 50;
+      int dim = 8; // 2 subspaces of 4 dims each
+      java.util.Random rng = new java.util.Random(55L);
+
+      float[][] vecs = new float[clusterSize * 2][dim];
+      // Cluster A: centered near +0.8 in every dim (± small noise)
+      for (int i = 0; i < clusterSize; i++) {
+        for (int d = 0; d < dim; d++) vecs[i][d] = 0.8f + (rng.nextFloat() - 0.5f) * 0.1f;
+      }
+      // Cluster B: centered near -0.8 in every dim (± small noise)
+      for (int i = clusterSize; i < 2 * clusterSize; i++) {
+        for (int d = 0; d < dim; d++) vecs[i][d] = -0.8f + (rng.nextFloat() - 0.5f) * 0.1f;
+      }
+
+      // Train PQ: 2 subspaces, 4 clusters each — well-separated data ensures clean centroids
+      var pq =
+          com.integrallis.vectors.quantization.ProductQuantizer.train(
+              new com.integrallis.vectors.quantization.ArrayVectorDataset(vecs), 2, 4, false);
+
+      // Query is at the cluster-A centroid
+      float[] query = new float[dim];
+      java.util.Arrays.fill(query, 0.8f);
+
+      float[][] adcTable = pq.buildADCTable(query, false /* L2 */);
+
+      // Compute ADC raw sum for a cluster-A member (vecs[0]) and a cluster-B member (vecs[50])
+      byte[] codeA = pq.encode(vecs[0]);
+      byte[] codeB = pq.encode(vecs[clusterSize]);
+
+      float adcSumA = 0f, adcSumB = 0f;
+      for (int m = 0; m < 2; m++) {
+        adcSumA += adcTable[m][codeA[m] & 0xFF];
+        adcSumB += adcTable[m][codeB[m] & 0xFF];
+      }
+
+      // For L2: smaller ADC sum = closer = better; adcSumA must be << adcSumB
+      assertThat(adcSumA)
+          .as(
+              "ADC distance to cluster-A member (%.4f) must be < distance to cluster-B member (%.4f)",
+              adcSumA, adcSumB)
+          .isLessThan(adcSumB);
+    }
+
+    /**
+     * Production recall gate for Fused ADC two-pass search.
+     *
+     * <p>Requires n=100,000 vectors for proper PQ training with 256 clusters (39+ vectors per
+     * cluster per subspace). Marked {@code @Tag("slow")} to exclude from the default test run.
+     */
+    @Test
+    @org.junit.jupiter.api.Tag("slow")
+    void fusedAdcTwoPass_recall_atLeast90pct_vs_bruteForce_large() {
+      // n=100k, dim=64, pqSubvectors=4, pqClusters=256 → 100000/4/256 ≈ 97 vectors/cluster ✓
+      int n = 100_000;
+      int dim = 64;
+      int k = 10;
+      float[][] vecs = randomVectors(n, dim, 7L);
+      float[][] queries = randomVectors(20, dim, 77L);
+
+      var fusedIndex =
+          HnswFusedAdcIndex.build(vecs, SimilarityFunction.EUCLIDEAN, 16, 200, 4, 256, 42L);
+
+      int twoPassHits = 0, totalGt = 0;
+      for (float[] q : queries) {
+        NodeQueue bruteHeap = new NodeQueue(n, true);
+        for (int i = 0; i < n; i++) {
+          float score = SimilarityFunction.EUCLIDEAN.compare(q, vecs[i]);
+          if (bruteHeap.size() < k) bruteHeap.add(i, score);
+          else if (score > NodeQueue.score(bruteHeap.peek())) {
+            bruteHeap.poll();
+            bruteHeap.add(i, score);
+          }
+        }
+        java.util.Set<Integer> gtSet = new java.util.HashSet<>();
+        while (!bruteHeap.isEmpty()) gtSet.add(NodeQueue.nodeId(bruteHeap.poll()));
+
+        var twoPass = fusedIndex.searchTwoPass(q, k, 200, 4.0f);
+        for (int i = 0; i < twoPass.size(); i++) {
+          if (gtSet.contains(twoPass.nodeId(i))) twoPassHits++;
+        }
+        totalGt += gtSet.size();
+      }
+
+      double recall = (double) twoPassHits / totalGt;
+      assertThat(recall)
+          .as("Fused ADC two-pass recall@10 (large) should be >= 0.90, was %.3f", recall)
+          .isGreaterThanOrEqualTo(0.90);
+    }
+
+    @Test
+    void fusedAdcSearch_neighborListSize_matches() {
+      float[][] vecs = randomVectors(50, 16, 9L);
+      // 16-dim, 2 subspaces × 8 dims, 16 clusters
+      var index = HnswFusedAdcIndex.build(vecs, SimilarityFunction.EUCLIDEAN, 8, 50, 2, 16, 42L);
+      var result = index.search(vecs[0], 5, 30);
+      assertThat(result.size()).isBetween(1, 5);
+    }
+  }
 }

@@ -266,11 +266,15 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
    * where {@code table[m][k]} is the partial distance/similarity between query sub-vector m and
    * centroid k.
    *
+   * <p>This method is public so that external callers (e.g., fused ADC graph scorers in {@code
+   * vectors-hnsw}) can build the table once per query and score many encoded vectors via O(M) table
+   * lookups instead of O(dim) float operations.
+   *
    * @param query the query vector (full precision, before centering)
    * @param useDotProduct true to fill with dot products, false for squared L2 distances
    * @return lookup table of size [numSubspaces][numClusters]
    */
-  float[][] buildADCTable(float[] query, boolean useDotProduct) {
+  public float[][] buildADCTable(float[] query, boolean useDotProduct) {
     float[] q = query;
     if (globalCentroid != null) {
       q = Arrays.copyOf(query, query.length);
