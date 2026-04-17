@@ -580,4 +580,137 @@ class ProductQuantizerTest {
     }
     return count;
   }
+
+  // ---------------------------------------------------------------------------
+  // OPQ tests
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  @Tag("unit")
+  class OptimizedPQTests {
+
+    @Test
+    void opq_train_buildsWithoutError() {
+      float[][] vecs = generateVectors(200, 16, 42L);
+      // n=200, M=2, Ks=8, 3 iterations: 200/2/8=12.5 vectors/cluster (above minimum)
+      var opq = OptimizedProductQuantizer.train(new ArrayVectorDataset(vecs), 2, 8, 3, 42L);
+      assertThat(opq.dimension()).isEqualTo(16);
+      assertThat(opq.productQuantizer().numSubspaces()).isEqualTo(2);
+      assertThat(opq.productQuantizer().numClusters()).isEqualTo(8);
+    }
+
+    @Test
+    void opq_rotation_isOrthogonal() {
+      // Verify Rᵀ R ≈ I (orthogonality of the learned rotation)
+      float[][] vecs = generateVectors(200, 8, 42L);
+      var opq = OptimizedProductQuantizer.train(new ArrayVectorDataset(vecs), 2, 4, 3, 42L);
+      float[][] R = opq.rotation();
+      int d = R.length;
+
+      // Compute Rᵀ·R and check it is close to the identity matrix
+      for (int i = 0; i < d; i++) {
+        for (int j = 0; j < d; j++) {
+          float dot = 0f;
+          for (int k = 0; k < d; k++) dot += R[k][i] * R[k][j]; // Rᵀ[i,k] * R[k,j]
+          float expected = (i == j) ? 1f : 0f;
+          assertThat(dot)
+              .as("(RᵀR)[%d][%d] should be %.0f (orthogonality)", i, j, expected)
+              .isCloseTo(expected, within(1e-5f));
+        }
+      }
+    }
+
+    @Test
+    void opq_encode_decode_roundtrip_approximates_original() {
+      // decode(encode(x)) should approximate x (within PQ quantization error)
+      float[][] vecs = generateVectors(200, 16, 42L);
+      var opq = OptimizedProductQuantizer.train(new ArrayVectorDataset(vecs), 2, 8, 3, 42L);
+
+      float totalMse = 0f;
+      for (float[] v : vecs) {
+        float[] recon = opq.decode(opq.encode(v));
+        float mse = 0f;
+        for (int i = 0; i < v.length; i++) {
+          float d = v[i] - recon[i];
+          mse += d * d;
+        }
+        totalMse += mse / v.length;
+      }
+      float avgMse = totalMse / vecs.length;
+      // The reconstruction error should be finite and below a reasonable bound
+      assertThat(avgMse).as("OPQ avg MSE per vector").isFinite().isLessThan(10.0f);
+    }
+
+    @Test
+    void opq_reducesReconstructionMse_vs_standardPq() {
+      // OPQ should produce lower MSE than standard PQ on the same data
+      // (OPQ rotation distributes energy evenly across subspaces)
+      float[][] vecs = generateVectors(500, 16, 42L);
+      var dataset = new ArrayVectorDataset(vecs);
+
+      // Standard PQ
+      var pq = ProductQuantizer.train(dataset, 2, 8, false);
+      float pqMse = computeMse(pq, vecs);
+
+      // OPQ with 5 iterations
+      var opq = OptimizedProductQuantizer.train(dataset, 2, 8, 5, 42L);
+      float opqMse = computeMse(opq, vecs);
+
+      assertThat(opqMse)
+          .as("OPQ MSE (%.4f) should be <= standard PQ MSE (%.4f)", opqMse, pqMse)
+          .isLessThanOrEqualTo(pqMse * 1.05f); // allow 5% tolerance for randomness
+    }
+
+    @Test
+    void polarDecomposition_producesOrthogonalMatrix() {
+      // Verify the polar decomposition helper produces an orthogonal output
+      float[][] M = {
+        {1f, 0.5f, 0.2f},
+        {0.3f, 2f, 0.1f},
+        {0.4f, 0.1f, 1.5f}
+      };
+      float[][] P = OptimizedProductQuantizer.polarDecomposition(M);
+      int d = P.length;
+      // Check Pᵀ·P ≈ I
+      for (int i = 0; i < d; i++) {
+        for (int j = 0; j < d; j++) {
+          float dot = 0f;
+          for (int k = 0; k < d; k++) dot += P[k][i] * P[k][j];
+          assertThat(dot)
+              .as("polar(M): (PᵀP)[%d][%d]", i, j)
+              .isCloseTo(i == j ? 1f : 0f, within(1e-5f));
+        }
+      }
+    }
+
+    @Test
+    void matrixInvert_producesIdentityProduct() {
+      float[][] A = {
+        {4f, 7f},
+        {2f, 6f}
+      };
+      float[][] Ainv = OptimizedProductQuantizer.invert(A);
+      // A·A⁻¹ should be identity
+      int d = A.length;
+      for (int i = 0; i < d; i++) {
+        for (int j = 0; j < d; j++) {
+          float dot = 0f;
+          for (int k = 0; k < d; k++) dot += A[i][k] * Ainv[k][j];
+          assertThat(dot).isCloseTo(i == j ? 1f : 0f, within(1e-5f));
+        }
+      }
+    }
+
+    private float computeMse(Quantizer<?> q, float[][] vecs) {
+      float total = 0f;
+      for (float[] v : vecs) {
+        float[] recon = q.decode(q.encode(v));
+        for (int i = 0; i < v.length; i++) {
+          float d = v[i] - recon[i];
+          total += d * d;
+        }
+      }
+      return total / (vecs.length * vecs[0].length);
+    }
+  }
 }
