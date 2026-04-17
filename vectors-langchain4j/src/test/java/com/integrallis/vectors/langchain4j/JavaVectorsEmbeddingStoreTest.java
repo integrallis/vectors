@@ -1,7 +1,6 @@
 package com.integrallis.vectors.langchain4j;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.IndexType;
@@ -308,30 +307,96 @@ class JavaVectorsEmbeddingStoreTest {
   class RemoveOperations {
 
     @Test
-    void removeThrowsUoe() {
+    void remove_deletesDocument_notFoundInSearch() {
       createStore(IndexType.FLAT);
-      assertThatThrownBy(() -> store.remove("some-id"))
-          .isInstanceOf(UnsupportedOperationException.class);
+      Embedding emb = Embedding.from(vec(1, 0, 0, 0));
+      store.add("to-delete", emb);
+
+      store.remove("to-delete");
+
+      EmbeddingSearchResult<TextSegment> result =
+          store.search(EmbeddingSearchRequest.builder().queryEmbedding(emb).maxResults(10).build());
+      assertThat(result.matches()).isEmpty();
+      assertThat(collection.size()).isEqualTo(0);
     }
 
     @Test
-    void removeAllByIdsThrowsUoe() {
+    void remove_unknownId_noException() {
       createStore(IndexType.FLAT);
-      assertThatThrownBy(() -> store.removeAll(List.of("id1", "id2")))
-          .isInstanceOf(UnsupportedOperationException.class);
+      store.add(Embedding.from(vec(1, 0, 0, 0)));
+
+      // Should not throw for unknown id
+      store.remove("nonexistent-id");
+
+      assertThat(collection.size()).isEqualTo(1);
     }
 
     @Test
-    void removeAllThrowsUoe() {
+    void removeAll_byIds_deletesMultiple() {
       createStore(IndexType.FLAT);
-      assertThatThrownBy(() -> store.removeAll()).isInstanceOf(UnsupportedOperationException.class);
+      store.add("id-a", Embedding.from(vec(1, 0, 0, 0)));
+      store.add("id-b", Embedding.from(vec(0, 1, 0, 0)));
+      store.add("id-c", Embedding.from(vec(0, 0, 1, 0)));
+
+      store.removeAll(List.of("id-a", "id-c"));
+
+      assertThat(collection.size()).isEqualTo(1);
+      assertThat(collection.contains("id-b")).isTrue();
+      assertThat(collection.contains("id-a")).isFalse();
+      assertThat(collection.contains("id-c")).isFalse();
     }
 
     @Test
-    void removeAllByFilterThrowsUoe() {
+    void removeAll_byFilter_deletesMatching() {
       createStore(IndexType.FLAT);
-      assertThatThrownBy(() -> store.removeAll(new IsEqualTo("k", "v")))
-          .isInstanceOf(UnsupportedOperationException.class);
+      store.add(
+          Embedding.from(vec(1, 0, 0, 0)),
+          TextSegment.from("keep", Metadata.from(Map.of("status", "active"))));
+      store.add(
+          Embedding.from(vec(0, 1, 0, 0)),
+          TextSegment.from("remove1", Metadata.from(Map.of("status", "archived"))));
+      store.add(
+          Embedding.from(vec(0, 0, 1, 0)),
+          TextSegment.from("remove2", Metadata.from(Map.of("status", "archived"))));
+
+      store.removeAll(new IsEqualTo("status", "archived"));
+
+      assertThat(collection.size()).isEqualTo(1);
+
+      EmbeddingSearchResult<TextSegment> result =
+          store.search(
+              EmbeddingSearchRequest.builder()
+                  .queryEmbedding(Embedding.from(vec(1, 0, 0, 0)))
+                  .maxResults(10)
+                  .build());
+      assertThat(result.matches()).hasSize(1);
+      assertThat(result.matches().getFirst().embedded().text()).isEqualTo("keep");
+    }
+
+    @Test
+    void removeAll_clearsEverything() {
+      createStore(IndexType.FLAT);
+      store.add(Embedding.from(vec(1, 0, 0, 0)));
+      store.add(Embedding.from(vec(0, 1, 0, 0)));
+      store.add(Embedding.from(vec(0, 0, 1, 0)));
+
+      store.removeAll();
+
+      assertThat(collection.size()).isEqualTo(0);
+    }
+
+    @Test
+    void remove_withCommitAfterAddFalse_requiresExplicitCommit() {
+      createStore(IndexType.FLAT, false);
+      store.add("doc-1", Embedding.from(vec(1, 0, 0, 0)));
+      store.commit();
+
+      store.remove("doc-1");
+      // Without commitAfterAdd, deletion is staged but not yet committed
+      assertThat(collection.size()).isEqualTo(1);
+
+      store.commit();
+      assertThat(collection.size()).isEqualTo(0);
     }
   }
 

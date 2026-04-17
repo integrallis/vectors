@@ -22,7 +22,7 @@ public final class HeapStorageBackend implements StorageBackend {
   private final ConcurrentHashMap<String, String> etags = new ConcurrentHashMap<>();
 
   @Override
-  public void put(String key, byte[] value) {
+  public synchronized void put(String key, byte[] value) {
     store.put(key, Arrays.copyOf(value, value.length));
     etags.put(key, computeEtag(value));
   }
@@ -43,7 +43,7 @@ public final class HeapStorageBackend implements StorageBackend {
   }
 
   @Override
-  public void delete(String key) {
+  public synchronized void delete(String key) {
     store.remove(key);
     etags.remove(key);
   }

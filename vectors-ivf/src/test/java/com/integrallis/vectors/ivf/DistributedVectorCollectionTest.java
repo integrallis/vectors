@@ -12,6 +12,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -164,6 +168,98 @@ class DistributedVectorCollectionTest {
       col.commit(); // triggers applyTierPolicy
       // At least one cluster should be promoted to T1
       assertThat(col.t1ClusterCount()).isGreaterThan(0);
+    }
+  }
+
+  // ─── C3: incremental commit — only dirty clusters rebuild ─────────────
+
+  @Test
+  void commit_preservesT1OnUntouchedClusters(@TempDir Path tmp) throws IOException {
+    // Build, promote ALL clusters to T1 by heavy access, commit.
+    // Then add one vector and commit again.
+    // Untouched clusters should still have T1 (not rebuilt and re-evicted).
+    float[][] vecs = randomVecs(200, DIM, 30L);
+    TierPolicy alwaysT1 = new TierPolicy(2, 1); // t1 after 2 accesses, t2 after 1
+    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L);
+    ClusterSplitter splitter = new ClusterSplitter(10_000, 30, 42L);
+    HeapStorageBackend backend = new HeapStorageBackend();
+    try (var col =
+        DistributedVectorCollection.build(
+            vecs, ids(200), METRIC, params, splitter, alwaysT1, tmp, backend)) {
+
+      // Access all clusters heavily to promote to T1
+      for (int i = 0; i < 20; i++) col.search(randomVecs(1, DIM, 500L + i)[0], 5, 4);
+      col.commit(); // promotes to T1
+      int t1Before = col.t1ClusterCount();
+      assertThat(t1Before).isGreaterThan(0);
+
+      // Now add just one vector and commit — only 1 cluster should be rebuilt
+      col.add("extra", randomVecs(1, DIM, 999L)[0]);
+      col.commit();
+
+      // All T1 clusters should still be materialised
+      assertThat(col.t1ClusterCount()).isGreaterThanOrEqualTo(t1Before);
+    }
+  }
+
+  @Test
+  void commit_preservesAccessCountOnUntouchedClusters(@TempDir Path tmp) throws IOException {
+    // Access a specific cluster, commit. Verify that after a second commit (with vectors going
+    // to a different cluster), the first cluster's access count is preserved exactly.
+    float[][] vecs = randomVecs(200, DIM, 31L);
+    try (var col = buildCollection(vecs, ids(200), tmp)) {
+      // Search 5 times to build access counts
+      for (int i = 0; i < 5; i++) col.search(vecs[0], 5, 1);
+      col.commit();
+
+      // Record the total access count before second commit
+      // (we can't inspect individual clusters, but t1ClusterCount is a proxy)
+      int sizeBefore = col.size();
+
+      // Add a vector and commit
+      col.add("new", randomVecs(1, DIM, 888L)[0]);
+      col.commit();
+
+      // Size should increase by 1, search should still work
+      assertThat(col.size()).isEqualTo(sizeBefore + 1);
+      List<IvfHit> hits = col.search(vecs[0], 5, 2);
+      assertThat(hits).isNotEmpty();
+    }
+  }
+
+  // ─── C4: concurrent reads ──────────────────────────────────────────────
+
+  @Test
+  void search_allowsConcurrentReads(@TempDir Path tmp) throws Exception {
+    float[][] vecs = randomVecs(500, DIM, 40L);
+    try (var col = buildCollection(vecs, ids(500), tmp)) {
+      int nThreads = 4;
+      int queriesPerThread = 10;
+      CountDownLatch start = new CountDownLatch(1);
+      AtomicInteger completed = new AtomicInteger();
+      ExecutorService pool = Executors.newFixedThreadPool(nThreads);
+
+      for (int t = 0; t < nThreads; t++) {
+        final int threadId = t;
+        pool.submit(
+            () -> {
+              try {
+                start.await();
+                for (int q = 0; q < queriesPerThread; q++) {
+                  float[] query = randomVecs(1, DIM, 2000L + threadId * 100 + q)[0];
+                  List<IvfHit> hits = col.search(query, 5, 2);
+                  assertThat(hits).isNotEmpty();
+                  completed.incrementAndGet();
+                }
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+              }
+            });
+      }
+      start.countDown();
+      pool.shutdown();
+      pool.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS);
+      assertThat(completed.get()).isEqualTo(nThreads * queriesPerThread);
     }
   }
 

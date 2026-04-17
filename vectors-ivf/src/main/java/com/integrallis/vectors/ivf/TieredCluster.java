@@ -8,8 +8,9 @@ import com.integrallis.vectors.quantization.ScalarQuantizer;
 import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -39,7 +40,7 @@ public final class TieredCluster {
   private final ClusterPartition partition;
   private final float[][] globalVectors;
   private final SimilarityFunction metric;
-  private final AtomicInteger accessCount = new AtomicInteger(0);
+  private final AtomicInteger accessCount;
 
   /** T1: SQ8-encoded representation; null when not materialised. */
   private volatile CompressedVectors t1Data;
@@ -54,9 +55,27 @@ public final class TieredCluster {
    */
   public TieredCluster(
       ClusterPartition partition, float[][] globalVectors, SimilarityFunction metric) {
+    this(partition, globalVectors, metric, 0);
+  }
+
+  /**
+   * Constructs a {@code TieredCluster} with a pre-set access count (used when rebuilding a dirty
+   * cluster during commit to preserve tier-policy state).
+   *
+   * @param partition the logical cluster (ordinals + centroid)
+   * @param globalVectors full-precision dataset
+   * @param metric distance metric used for scoring
+   * @param initialAccessCount access count carried over from the previous generation
+   */
+  public TieredCluster(
+      ClusterPartition partition,
+      float[][] globalVectors,
+      SimilarityFunction metric,
+      int initialAccessCount) {
     this.partition = partition;
     this.globalVectors = globalVectors;
     this.metric = metric;
+    this.accessCount = new AtomicInteger(initialAccessCount);
   }
 
   // ─── access tracking ──────────────────────────────────────────────────────
@@ -218,26 +237,41 @@ public final class TieredCluster {
 
   private List<IvfHit> scanExact(float[] query, int k, float minScore) {
     int[] ordinals = partition.ordinals();
-    List<IvfHit> hits = new ArrayList<>(Math.min(k, ordinals.length));
+    PriorityQueue<IvfHit> heap =
+        new PriorityQueue<>(k + 1, (a, b) -> Float.compare(a.score(), b.score()));
     for (int global : ordinals) {
       float s = score(query, globalVectors[global]);
-      if (s >= minScore) hits.add(new IvfHit(global, null, s));
+      if (s < minScore) continue;
+      if (heap.size() < k) {
+        heap.offer(new IvfHit(global, null, s));
+      } else if (s > heap.peek().score()) {
+        heap.poll();
+        heap.offer(new IvfHit(global, null, s));
+      }
     }
-    // IvfHit.compareTo is descending (higher score first) — natural order gives top-k first
-    hits.sort(null);
-    return hits.size() <= k ? hits : new ArrayList<>(hits.subList(0, k));
+    IvfHit[] arr = heap.toArray(new IvfHit[0]);
+    Arrays.sort(arr); // IvfHit.compareTo is descending by score
+    return List.of(arr);
   }
 
   private List<IvfHit> scanWithT1(float[] query, int k, float minScore) {
     int[] ordinals = partition.ordinals();
     var scoreFunction = t1Data.scoreFunctionFor(query, metric);
-    List<IvfHit> hits = new ArrayList<>(Math.min(k, ordinals.length));
+    PriorityQueue<IvfHit> heap =
+        new PriorityQueue<>(k + 1, (a, b) -> Float.compare(a.score(), b.score()));
     for (int local = 0; local < ordinals.length; local++) {
       float s = scoreFunction.score(local);
-      if (s >= minScore) hits.add(new IvfHit(ordinals[local], null, s));
+      if (s < minScore) continue;
+      if (heap.size() < k) {
+        heap.offer(new IvfHit(ordinals[local], null, s));
+      } else if (s > heap.peek().score()) {
+        heap.poll();
+        heap.offer(new IvfHit(ordinals[local], null, s));
+      }
     }
-    hits.sort(null);
-    return hits.size() <= k ? hits : new ArrayList<>(hits.subList(0, k));
+    IvfHit[] arr = heap.toArray(new IvfHit[0]);
+    Arrays.sort(arr); // IvfHit.compareTo is descending by score
+    return List.of(arr);
   }
 
   private float score(float[] a, float[] b) {

@@ -14,6 +14,15 @@ package com.integrallis.vectors.ivf;
  */
 public record ClusterPartition(int clusterId, float[] centroid, int[] ordinals, int size) {
 
+  /** Validates that size matches ordinals.length. */
+  public ClusterPartition {
+    if (ordinals == null) throw new IllegalArgumentException("ordinals must not be null");
+    if (size != ordinals.length) {
+      throw new IllegalArgumentException(
+          "size (" + size + ") must equal ordinals.length (" + ordinals.length + ")");
+    }
+  }
+
   /** Returns {@code true} when no vectors are assigned to this cluster. */
   public boolean isEmpty() {
     return size == 0;

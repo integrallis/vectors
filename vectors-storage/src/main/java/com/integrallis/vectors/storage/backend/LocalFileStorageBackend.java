@@ -70,8 +70,7 @@ public final class LocalFileStorageBackend implements StorageBackend {
       return new ConditionalPutResult(false, null);
     }
     String newEtag = computeEtag(value);
-    put(key, value); // atomic move
-    writeEtag(key, newEtag);
+    put(key, value); // atomic move — also writes etag sidecar
     return new ConditionalPutResult(true, newEtag);
   }
 

@@ -59,7 +59,7 @@ public final class BuoyIndex {
     int[] sizes = new int[k];
     for (int a : assignments) sizes[a]++;
 
-    float[] radii = computeRadii(dataset, centroids, assignments, metric);
+    float[] radii = computeRadii(dataset, centroids, assignments);
     int[] spill = buildSoar ? computeSpillTargets(dataset, centroids, metric) : allMinus1(k);
 
     return new BuoyIndex(centroids, spill, sizes, radii, metric);
@@ -81,20 +81,26 @@ public final class BuoyIndex {
     return metric;
   }
 
+  /** Returns a defensive copy of the buoy (centroid) vectors. */
   public float[][] buoyVectors() {
-    return buoyVectors;
+    float[][] copy = new float[buoyVectors.length][];
+    for (int i = 0; i < buoyVectors.length; i++) copy[i] = buoyVectors[i].clone();
+    return copy;
   }
 
+  /** Returns a defensive copy of the SOAR spill targets. */
   public int[] spillTargets() {
-    return spillTargets;
+    return spillTargets.clone();
   }
 
+  /** Returns a defensive copy of cluster sizes. */
   public int[] clusterSizes() {
-    return clusterSizes;
+    return clusterSizes.clone();
   }
 
+  /** Returns a defensive copy of cluster radii. */
   public float[] clusterRadii() {
-    return clusterRadii;
+    return clusterRadii.clone();
   }
 
   /** Encodes this index to bytes for persistence or gossip propagation. */
@@ -139,8 +145,12 @@ public final class BuoyIndex {
 
   // --- internals ---
 
-  private static float[] computeRadii(
-      float[][] dataset, float[][] centroids, int[] assignments, SimilarityFunction metric) {
+  /**
+   * Computes the maximum Euclidean distance from each centroid to any vector assigned to it. Always
+   * uses Euclidean distance regardless of the similarity function — radii measure geometric cluster
+   * extent for metadata and split decisions, not for routing.
+   */
+  private static float[] computeRadii(float[][] dataset, float[][] centroids, int[] assignments) {
     int k = centroids.length;
     float[] radii = new float[k];
     for (int i = 0; i < dataset.length; i++) {
@@ -150,18 +160,36 @@ public final class BuoyIndex {
     return radii;
   }
 
+  /**
+   * Computes SOAR spill targets using frequency-based selection: for each cluster, the spill target
+   * is the second-nearest centroid most frequently observed across all training vectors assigned to
+   * that cluster.
+   */
   private static int[] computeSpillTargets(
       float[][] dataset, float[][] centroids, SimilarityFunction metric) {
     int k = centroids.length;
     CentroidIndex ci = new CentroidIndex(centroids, metric);
-    int[] spill = allMinus1(k);
-    boolean[] set = new boolean[k];
+    // freq[i][j] = number of vectors in cluster i whose second-nearest centroid is j
+    int[][] freq = new int[k][k];
     for (float[] v : dataset) {
       int[] top2 = ci.route(v, Math.min(2, k));
-      if (top2.length >= 2 && !set[top2[0]]) {
-        spill[top2[0]] = top2[1];
-        set[top2[0]] = true;
+      if (top2.length >= 2) {
+        freq[top2[0]][top2[1]]++;
       }
+    }
+    // For each cluster, pick the second-nearest centroid with the highest frequency
+    int[] spill = allMinus1(k);
+    for (int i = 0; i < k; i++) {
+      int bestTarget = -1;
+      int bestCount = 0;
+      for (int j = 0; j < k; j++) {
+        if (j == i) continue;
+        if (freq[i][j] > bestCount) {
+          bestCount = freq[i][j];
+          bestTarget = j;
+        }
+      }
+      spill[i] = bestTarget;
     }
     return spill;
   }

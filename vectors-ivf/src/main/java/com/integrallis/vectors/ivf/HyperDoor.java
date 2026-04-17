@@ -35,6 +35,7 @@ public record HyperDoor(
 
   /** Constructs a fully-materialised HyperDoor where all tiers are available. */
   public static HyperDoor full(int ordinal, int dim) {
+    validateArgs(ordinal, dim);
     return new HyperDoor(
         ordinal,
         (long) ordinal * dim, // T0: bit offset  (1 bit per dim — simplification: 1 bit per vec)
@@ -46,8 +47,14 @@ public record HyperDoor(
 
   /** Constructs a HyperDoor with only T0 and T3 available (T1 and T2 not materialised). */
   public static HyperDoor t0AndT3Only(int ordinal, int dim) {
+    validateArgs(ordinal, dim);
     return new HyperDoor(
         ordinal, (long) ordinal * dim, -1, -1L, (long) ordinal * dim * Float.BYTES);
+  }
+
+  private static void validateArgs(int ordinal, int dim) {
+    if (ordinal < 0) throw new IllegalArgumentException("ordinal must be >= 0, got " + ordinal);
+    if (dim < 1) throw new IllegalArgumentException("dim must be >= 1, got " + dim);
   }
 
   /** Returns {@code true} if the SQ8 (T1) tier is locally materialised. */

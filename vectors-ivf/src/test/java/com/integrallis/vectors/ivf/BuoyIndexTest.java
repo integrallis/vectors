@@ -127,6 +127,91 @@ class BuoyIndexTest {
     assertThat(idx.metric()).isEqualTo(SimilarityFunction.DOT_PRODUCT);
   }
 
+  // ─── C2: spill targets must be frequency-based ────────────────────────────
+
+  @Test
+  void spillTargets_deterministic_sameDataSameResult() {
+    // Training the same data twice must produce the same spill targets
+    BuoyIndex a =
+        BuoyIndex.train(randomVecs(N, DIM, 42L), K, SimilarityFunction.EUCLIDEAN, true, 42L);
+    BuoyIndex b =
+        BuoyIndex.train(randomVecs(N, DIM, 42L), K, SimilarityFunction.EUCLIDEAN, true, 42L);
+    assertThat(a.spillTargets()).isEqualTo(b.spillTargets());
+  }
+
+  @Test
+  void spillTargets_reflectMostFrequentSecondNearest() {
+    // Create well-separated 2D clusters at (0,0), (10,0), (20,0) with K=3.
+    // Cluster 0 vectors near (0,0) → second-nearest is cluster 1 (at 10) not cluster 2 (at 20).
+    // Cluster 1 vectors near (10,0) → second-nearest is cluster 0 or 2 depending on exact position.
+    // Cluster 2 vectors near (20,0) → second-nearest is cluster 1 (at 10) not cluster 0 (at 20).
+    int clusterK = 3;
+    int dim = 2;
+    int perCluster = 200;
+    float[][] data = new float[clusterK * perCluster][dim];
+    Random rng = new Random(42L);
+    for (int c = 0; c < clusterK; c++) {
+      for (int i = 0; i < perCluster; i++) {
+        data[c * perCluster + i][0] = c * 10f + (rng.nextFloat() - 0.5f);
+        data[c * perCluster + i][1] = (rng.nextFloat() - 0.5f);
+      }
+    }
+
+    BuoyIndex idx = BuoyIndex.train(data, clusterK, SimilarityFunction.EUCLIDEAN, true, 42L);
+
+    // Find which buoy index corresponds to cluster at x≈0, x≈10, x≈20
+    int idxAt0 = -1, idxAt10 = -1, idxAt20 = -1;
+    for (int i = 0; i < clusterK; i++) {
+      float x = idx.buoyVectors()[i][0];
+      if (x < 5f) idxAt0 = i;
+      else if (x < 15f) idxAt10 = i;
+      else idxAt20 = i;
+    }
+
+    // Cluster near x=0 should spill to the middle cluster (x=10), not the far one (x=20)
+    assertThat(idx.spillTargets()[idxAt0]).isEqualTo(idxAt10);
+    // Cluster near x=20 should spill to the middle cluster (x=10), not the far one (x=0)
+    assertThat(idx.spillTargets()[idxAt20]).isEqualTo(idxAt10);
+  }
+
+  // ─── M2: defensive copies — mutation cannot corrupt index ────────────────
+
+  @Test
+  void buoyVectors_returnedArrayCannotCorruptIndex() {
+    BuoyIndex idx =
+        BuoyIndex.train(randomVecs(N, DIM, 20L), K, SimilarityFunction.EUCLIDEAN, true, 42L);
+    float[] originalFirst = idx.buoyVectors()[0].clone();
+    idx.buoyVectors()[0][0] = Float.NaN; // mutate returned array
+    assertThat(idx.buoyVectors()[0][0]).isEqualTo(originalFirst[0]);
+  }
+
+  @Test
+  void spillTargets_returnedArrayCannotCorruptIndex() {
+    BuoyIndex idx =
+        BuoyIndex.train(randomVecs(N, DIM, 21L), K, SimilarityFunction.EUCLIDEAN, true, 42L);
+    int originalFirst = idx.spillTargets()[0];
+    idx.spillTargets()[0] = 9999;
+    assertThat(idx.spillTargets()[0]).isEqualTo(originalFirst);
+  }
+
+  @Test
+  void clusterSizes_returnedArrayCannotCorruptIndex() {
+    BuoyIndex idx =
+        BuoyIndex.train(randomVecs(N, DIM, 22L), K, SimilarityFunction.EUCLIDEAN, false, 42L);
+    int originalFirst = idx.clusterSizes()[0];
+    idx.clusterSizes()[0] = -1;
+    assertThat(idx.clusterSizes()[0]).isEqualTo(originalFirst);
+  }
+
+  @Test
+  void clusterRadii_returnedArrayCannotCorruptIndex() {
+    BuoyIndex idx =
+        BuoyIndex.train(randomVecs(N, DIM, 23L), K, SimilarityFunction.EUCLIDEAN, true, 42L);
+    float originalFirst = idx.clusterRadii()[0];
+    idx.clusterRadii()[0] = Float.NaN;
+    assertThat(idx.clusterRadii()[0]).isEqualTo(originalFirst);
+  }
+
   @Test
   void memoryFootprintWithinBound_K1024_D128() {
     // At K=1024, D=128: buoys[]=512KB + spill[]=4KB + sizes[]=4KB + radii[]=4KB ≈ 524KB

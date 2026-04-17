@@ -125,30 +125,28 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
 
   @Override
   public void remove(String id) {
-    throw new UnsupportedOperationException(
-        "Document removal is not yet supported by java-vectors. "
-            + "This will be available in a future release.");
+    collection.delete(id);
+    commitIfNeeded();
   }
 
   @Override
   public void removeAll(Collection<String> ids) {
-    throw new UnsupportedOperationException(
-        "Document removal is not yet supported by java-vectors. "
-            + "This will be available in a future release.");
+    for (String id : ids) {
+      collection.delete(id);
+    }
+    commitIfNeeded();
   }
 
   @Override
   public void removeAll(dev.langchain4j.store.embedding.filter.Filter filter) {
-    throw new UnsupportedOperationException(
-        "Document removal is not yet supported by java-vectors. "
-            + "This will be available in a future release.");
+    collection.deleteWhere(FilterConverter.convert(filter));
+    commitIfNeeded();
   }
 
   @Override
   public void removeAll() {
-    throw new UnsupportedOperationException(
-        "Document removal is not yet supported by java-vectors. "
-            + "This will be available in a future release.");
+    collection.deleteWhere(new com.integrallis.vectors.db.filter.Filter.All());
+    commitIfNeeded();
   }
 
   @Override

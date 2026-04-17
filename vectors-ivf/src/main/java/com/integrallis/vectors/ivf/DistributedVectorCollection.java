@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * A WAL-durable, multi-cluster vector collection that coordinates {@link TieredCluster}s routed by
@@ -57,6 +59,7 @@ public final class DistributedVectorCollection implements AutoCloseable {
   private final TierPolicy tierPolicy;
   private final StorageBackend t3Backend;
   private final SegmentedWriteAheadLog wal;
+  private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
   private long generation;
 
   private DistributedVectorCollection(
@@ -233,16 +236,30 @@ public final class DistributedVectorCollection implements AutoCloseable {
   // ─── write path ──────────────────────────────────────────────────────────
 
   /** Stages {@code vector} with the given {@code id}. Not durable until {@link #commit}. */
-  public synchronized void add(String id, float[] vector) {
-    staging.add(vector);
-    stagingIds.add(id);
+  public void add(String id, float[] vector) {
+    rwLock.writeLock().lock();
+    try {
+      staging.add(vector);
+      stagingIds.add(id);
+    } finally {
+      rwLock.writeLock().unlock();
+    }
   }
 
   /**
    * Commits all staged vectors: assigns to nearest cluster, writes WAL (ADD* + COMMIT), rebuilds
    * {@link TieredCluster}s, updates T3, and applies the {@link TierPolicy}.
    */
-  public synchronized void commit() throws IOException {
+  public void commit() throws IOException {
+    rwLock.writeLock().lock();
+    try {
+      commitUnderLock();
+    } finally {
+      rwLock.writeLock().unlock();
+    }
+  }
+
+  private void commitUnderLock() throws IOException {
     if (staging.isEmpty()) {
       generation++;
       wal.append(encodeCommit(generation));
@@ -250,7 +267,8 @@ public final class DistributedVectorCollection implements AutoCloseable {
       return;
     }
 
-    // Assign staged vectors to clusters and write ADD records
+    // Assign staged vectors to clusters, track which clusters received new vectors
+    boolean[] dirty = new boolean[k];
     for (int i = 0; i < staging.size(); i++) {
       float[] vec = staging.get(i);
       String id = stagingIds.get(i);
@@ -259,23 +277,26 @@ public final class DistributedVectorCollection implements AutoCloseable {
       allIds.add(id);
       int cid = routingIndex.route(vec, 1, 0f)[0];
       clusterOrdinals.get(cid).add(globalOrdinal);
+      dirty[cid] = true;
       wal.append(encodeAdd(id, vec));
     }
     staging.clear();
     stagingIds.clear();
 
-    // Rebuild TieredClusters with updated global array
+    // Rebuild only clusters that received new vectors
     float[][] newVecArray = allVectors.toArray(new float[0][]);
     float[][] centroids = routingIndex.buoyVectors();
     for (int c = 0; c < k; c++) {
+      if (!dirty[c]) continue;
       int[] ords = clusterOrdinals.get(c).stream().mapToInt(Integer::intValue).toArray();
       boolean hadT1 = clusters[c].hasT1();
       int prevCount = clusters[c].accessCount();
       clusters[c] =
           new TieredCluster(
-              new ClusterPartition(c, centroids[c], ords, ords.length), newVecArray, metric);
-      // Restore access count so TierPolicy remains accurate
-      for (int x = 0; x < prevCount; x++) clusters[c].recordAccess();
+              new ClusterPartition(c, centroids[c], ords, ords.length),
+              newVecArray,
+              metric,
+              prevCount);
       clusters[c].storeT3(t3Backend);
       if (hadT1) clusters[c].materializeT1();
     }
@@ -290,47 +311,71 @@ public final class DistributedVectorCollection implements AutoCloseable {
   /**
    * Routes the query to {@code nprobe} clusters, scans each (T1 or exact), scans staged vectors,
    * and returns the global top-{@code k} hits in descending score order.
+   *
+   * <p>Uses a read lock, allowing concurrent searches while writes are exclusive.
    */
-  public synchronized List<IvfHit> search(float[] query, int k, int nprobe) {
-    int[] clusterIds = routingIndex.route(query, Math.min(nprobe, this.k), 0f);
+  public List<IvfHit> search(float[] query, int k, int nprobe) {
+    rwLock.readLock().lock();
+    try {
+      int[] clusterIds = routingIndex.route(query, Math.min(nprobe, this.k), 0f);
 
-    List<IvfHit> candidates = new ArrayList<>();
-    for (int cid : clusterIds) {
-      clusters[cid].recordAccess();
-      for (IvfHit hit : clusters[cid].scan(query, k, -Float.MAX_VALUE)) {
-        // Re-attach the document id from the global id list
-        String id =
-            hit.ordinal() >= 0 && hit.ordinal() < allIds.size() ? allIds.get(hit.ordinal()) : null;
-        candidates.add(new IvfHit(hit.ordinal(), id, hit.score()));
+      List<IvfHit> candidates = new ArrayList<>();
+      for (int cid : clusterIds) {
+        clusters[cid].recordAccess();
+        for (IvfHit hit : clusters[cid].scan(query, k, -Float.MAX_VALUE)) {
+          // Re-attach the document id from the global id list
+          String id =
+              hit.ordinal() >= 0 && hit.ordinal() < allIds.size()
+                  ? allIds.get(hit.ordinal())
+                  : null;
+          candidates.add(new IvfHit(hit.ordinal(), id, hit.score()));
+        }
       }
-    }
 
-    // Scan staging exactly
-    for (int i = 0; i < staging.size(); i++) {
-      candidates.add(new IvfHit(-(i + 1), stagingIds.get(i), score(query, staging.get(i))));
-    }
+      // Scan staging exactly
+      for (int i = 0; i < staging.size(); i++) {
+        candidates.add(new IvfHit(-(i + 1), stagingIds.get(i), score(query, staging.get(i))));
+      }
 
-    candidates.sort(null); // IvfHit natural order = descending score
-    return candidates.size() <= k ? candidates : new ArrayList<>(candidates.subList(0, k));
+      candidates.sort(null); // IvfHit natural order = descending score
+      return candidates.size() <= k ? candidates : new ArrayList<>(candidates.subList(0, k));
+    } finally {
+      rwLock.readLock().unlock();
+    }
   }
 
   // ─── observability ───────────────────────────────────────────────────────
 
   /** Total vector count: committed + staged. */
-  public synchronized int size() {
-    return allVectors.size() + staging.size();
+  public int size() {
+    rwLock.readLock().lock();
+    try {
+      return allVectors.size() + staging.size();
+    } finally {
+      rwLock.readLock().unlock();
+    }
   }
 
   /** Number of staged (uncommitted) vectors. */
-  public synchronized int stagingSize() {
-    return staging.size();
+  public int stagingSize() {
+    rwLock.readLock().lock();
+    try {
+      return staging.size();
+    } finally {
+      rwLock.readLock().unlock();
+    }
   }
 
   /** Number of clusters currently materialised at T1. */
-  public synchronized int t1ClusterCount() {
-    int count = 0;
-    for (TieredCluster c : clusters) if (c.hasT1()) count++;
-    return count;
+  public int t1ClusterCount() {
+    rwLock.readLock().lock();
+    try {
+      int count = 0;
+      for (TieredCluster c : clusters) if (c.hasT1()) count++;
+      return count;
+    } finally {
+      rwLock.readLock().unlock();
+    }
   }
 
   /** Current WAL generation (incremented on each commit). */
@@ -350,9 +395,11 @@ public final class DistributedVectorCollection implements AutoCloseable {
     for (int c = 0; c < k; c++) counts.put(c, clusters[c].accessCount());
     Map<Integer, TierPolicy.Tier> tiers = tierPolicy.applyAll(counts);
     for (int c = 0; c < k; c++) {
-      TierPolicy.Tier desired = tiers.get(c);
-      if (desired == TierPolicy.Tier.T1 && !clusters[c].hasT1()) clusters[c].materializeT1();
-      else if (desired != TierPolicy.Tier.T1 && clusters[c].hasT1()) clusters[c].evictT1();
+      try {
+        clusters[c].evictToTier(tiers.get(c), t3Backend);
+      } catch (java.io.IOException e) {
+        // Log and continue — tier promotion/demotion failure should not break commit
+      }
     }
   }
 

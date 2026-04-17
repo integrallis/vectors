@@ -1,6 +1,7 @@
 package com.integrallis.vectors.ivf;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -68,5 +69,23 @@ class HyperDoorTest {
   void clusterOrdinalPreserved() {
     HyperDoor door = HyperDoor.full(42, 128);
     assertThat(door.clusterOrdinal()).isEqualTo(42);
+  }
+
+  // ─── M5: validation ──────────────────────────────────────────────────────
+
+  @Test
+  void full_negativeOrdinal_throws() {
+    assertThatThrownBy(() -> HyperDoor.full(-1, 128)).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void full_negativeDim_throws() {
+    assertThatThrownBy(() -> HyperDoor.full(0, -1)).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void t0AndT3Only_negativeOrdinal_throws() {
+    assertThatThrownBy(() -> HyperDoor.t0AndT3Only(-1, 128))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 }

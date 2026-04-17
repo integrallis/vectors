@@ -155,4 +155,52 @@ class TieredClusterTest {
       assertThat(hit.ordinal()).isBetween(0, 29);
     }
   }
+
+  // ─── C1: bounded allocation ─────────────────────────────────────────────
+
+  @Test
+  void scanExact_largeCluster_returnsExactlyK() {
+    // 5000-vector cluster requesting k=5 — must not allocate a 5000-element list internally
+    int n = 5000;
+    float[][] vecs = randomVecs(n, DIM, 50L);
+    TieredCluster tc = new TieredCluster(makePartition(0, n), vecs, METRIC);
+    float[] query = randomVecs(1, DIM, 51L)[0];
+
+    List<IvfHit> hits = tc.scan(query, 5, -Float.MAX_VALUE);
+    assertThat(hits).hasSize(5);
+    // Verify descending order
+    for (int i = 0; i < hits.size() - 1; i++) {
+      assertThat(hits.get(i).score()).isGreaterThanOrEqualTo(hits.get(i + 1).score());
+    }
+  }
+
+  @Test
+  void scanExact_returnsTopKByScore_notArbitraryK() {
+    // Place a known "needle" vector close to the query; verify it always appears in top-k
+    float[][] vecs = randomVecs(200, DIM, 60L);
+    float[] query = randomVecs(1, DIM, 61L)[0];
+    // Make ordinal 42 a copy of the query (distance = 0, best possible hit)
+    System.arraycopy(query, 0, vecs[42], 0, DIM);
+
+    TieredCluster tc = new TieredCluster(makePartition(0, 200), vecs, METRIC);
+    List<IvfHit> hits = tc.scan(query, 5, -Float.MAX_VALUE);
+
+    assertThat(hits.get(0).ordinal()).isEqualTo(42);
+    assertThat(hits.get(0).score()).isCloseTo(0f, org.assertj.core.data.Offset.offset(1e-4f));
+  }
+
+  @Test
+  void scanWithT1_largeCluster_returnsExactlyK() {
+    int n = 5000;
+    float[][] vecs = randomVecs(n, DIM, 70L);
+    TieredCluster tc = new TieredCluster(makePartition(0, n), vecs, METRIC);
+    tc.materializeT1();
+    float[] query = randomVecs(1, DIM, 71L)[0];
+
+    List<IvfHit> hits = tc.scan(query, 5, -Float.MAX_VALUE);
+    assertThat(hits).hasSize(5);
+    for (int i = 0; i < hits.size() - 1; i++) {
+      assertThat(hits.get(i).score()).isGreaterThanOrEqualTo(hits.get(i + 1).score());
+    }
+  }
 }

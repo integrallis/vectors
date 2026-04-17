@@ -121,14 +121,6 @@ public final class IvfIndex implements Closeable {
     return buoyIndex;
   }
 
-  /**
-   * @deprecated Use {@link #k()}
-   */
-  @Deprecated
-  public int clusterCount() {
-    return partitions.length;
-  }
-
   public ClusterPartition partition(int clusterId) {
     return partitions[clusterId];
   }

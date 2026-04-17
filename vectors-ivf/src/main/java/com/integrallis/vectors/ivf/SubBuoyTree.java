@@ -2,7 +2,6 @@ package com.integrallis.vectors.ivf;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
-import com.integrallis.vectors.core.cluster.CentroidIndex;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -33,8 +32,8 @@ import java.util.PriorityQueue;
  */
 public final class SubBuoyTree {
 
-  /** Represents a cluster that has been bisected; holds a centroid router plus two children. */
-  private record SplitNode(CentroidIndex subIndex, ClusterPartition left, ClusterPartition right) {}
+  /** Represents a cluster that has been bisected into two child partitions. */
+  private record SplitNode(ClusterPartition left, ClusterPartition right) {}
 
   private final BuoyIndex rootBuoy;
   private final ClusterPartition[] leafPartitions; // null entry = this cluster was split
@@ -93,9 +92,7 @@ public final class SubBuoyTree {
         Optional<ClusterPartition[]> split = splitter.split(partition, vectors, metric, (long) c);
         if (split.isPresent()) {
           ClusterPartition[] children = split.get();
-          float[][] childCentroids = {children[0].centroid(), children[1].centroid()};
-          CentroidIndex subIdx = new CentroidIndex(childCentroids, metric);
-          splitNodes[c] = new SplitNode(subIdx, children[0], children[1]);
+          splitNodes[c] = new SplitNode(children[0], children[1]);
         } else {
           leafPartitions[c] = partition;
         }

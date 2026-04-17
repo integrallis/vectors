@@ -11,6 +11,13 @@ package com.integrallis.vectors.ivf;
  */
 public record IvfBuildParams(int k, int maxIter, float gamma, boolean buildSoar, long seed) {
 
+  /** Validates parameters at construction time. */
+  public IvfBuildParams {
+    if (k < 1) throw new IllegalArgumentException("k must be >= 1, got " + k);
+    if (maxIter < 1) throw new IllegalArgumentException("maxIter must be >= 1, got " + maxIter);
+    if (gamma < 0f) throw new IllegalArgumentException("gamma must be >= 0, got " + gamma);
+  }
+
   /** Convenience factory: sensible defaults for a dataset of size {@code n}. */
   public static IvfBuildParams defaults(int n) {
     int k = Math.max(1, (int) Math.ceil(Math.sqrt(n)));
