@@ -348,6 +348,105 @@ class HnswGraphBuilderTest {
     }
   }
 
+  @Nested
+  @Tag("unit")
+  class ConcurrentBuild {
+
+    @Test
+    void concurrentBuild_mainComponentAtLeast95pct() {
+      // Concurrent HNSW cannot guarantee 100% connectivity for small n (same limitation
+      // as hnswlib / JVector): early nodes inserted simultaneously all see only the entry
+      // node and may form a thin star rather than a fully-woven mesh.  95% is a realistic
+      // lower bound for n=200, M=8, 4 threads.
+      float[][] vectors = randomVectors(200, 16, 42L);
+      var graph =
+          ConcurrentHnswGraphBuilder.create(
+                  8, 100, new InMemoryVectors(vectors), SimilarityFunction.EUCLIDEAN, 42L)
+              .build(4);
+
+      BitSet visited = new BitSet(200);
+      bfs(graph, graph.entryNode(), 0, visited);
+      int reachable = visited.cardinality();
+      assertThat(reachable)
+          .as(
+              "Main connected component should contain >= 95%% of nodes (%d/200 reachable)",
+              reachable)
+          .isGreaterThanOrEqualTo(190);
+    }
+
+    @Test
+    void concurrentBuild_noIsolatedNodes() {
+      float[][] vectors = randomVectors(200, 16, 42L);
+      var graph =
+          ConcurrentHnswGraphBuilder.create(
+                  8, 100, new InMemoryVectors(vectors), SimilarityFunction.EUCLIDEAN, 42L)
+              .build(4);
+
+      for (int i = 0; i < 200; i++) {
+        assertThat(graph.getNeighbors(i, 0).size())
+            .as("Node %d should have at least 1 neighbor", i)
+            .isGreaterThan(0);
+      }
+    }
+
+    @Test
+    void concurrentBuild_neighborCountsWithinLimits() {
+      float[][] vectors = randomVectors(200, 16, 42L);
+      var graph =
+          ConcurrentHnswGraphBuilder.create(
+                  8, 100, new InMemoryVectors(vectors), SimilarityFunction.EUCLIDEAN, 42L)
+              .build(4);
+
+      for (int i = 0; i < 200; i++) {
+        assertThat(graph.getNeighbors(i, 0).size())
+            .as("Node %d layer-0 neighbor count", i)
+            .isLessThanOrEqualTo(graph.maxConnections0());
+      }
+    }
+
+    @Test
+    void concurrentBuild_achievesGoodRecall() {
+      // Recall gate: concurrent HNSW recall@5 vs brute-force >= 0.80 with n=500
+      int n = 500;
+      int dim = 32;
+      int k = 5;
+      float[][] vecs = randomVectors(n, dim, 7L);
+      float[][] queries = randomVectors(10, dim, 77L);
+
+      var graph =
+          ConcurrentHnswGraphBuilder.create(
+                  16, 200, new InMemoryVectors(vecs), SimilarityFunction.EUCLIDEAN, 42L)
+              .build(4);
+      var searcher =
+          new HnswSearcher(graph, new InMemoryVectors(vecs), SimilarityFunction.EUCLIDEAN);
+
+      int hits = 0, total = 0;
+      for (float[] q : queries) {
+        // Brute-force top-k
+        var bruteHeap = new NodeQueue(n, true);
+        for (int i = 0; i < n; i++) {
+          float s = SimilarityFunction.EUCLIDEAN.compare(q, vecs[i]);
+          if (bruteHeap.size() < k) bruteHeap.add(i, s);
+          else if (s > NodeQueue.score(bruteHeap.peek())) {
+            bruteHeap.poll();
+            bruteHeap.add(i, s);
+          }
+        }
+        java.util.Set<Integer> gt = new java.util.HashSet<>();
+        while (!bruteHeap.isEmpty()) gt.add(NodeQueue.nodeId(bruteHeap.poll()));
+
+        var result = searcher.search(q, k, 200);
+        for (int i = 0; i < result.size(); i++) if (gt.contains(result.nodeId(i))) hits++;
+        total += gt.size();
+      }
+
+      double recall = (double) hits / total;
+      assertThat(recall)
+          .as("Concurrent HNSW recall@5 vs brute-force should be >= 0.80, was %.3f", recall)
+          .isGreaterThanOrEqualTo(0.80);
+    }
+  }
+
   // --- Helpers ---
 
   static float[][] randomVectors(int count, int dimension, long seed) {

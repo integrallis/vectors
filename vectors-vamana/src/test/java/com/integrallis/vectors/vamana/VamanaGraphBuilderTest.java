@@ -194,6 +194,83 @@ class VamanaGraphBuilderTest {
     }
   }
 
+  @Nested
+  @Tag("unit")
+  class ConcurrentBuild {
+
+    @Test
+    void concurrentBuild_graphIsConnected() {
+      float[][] data = generateRandomVectors(200, 16, 42L);
+      var vectors = new InMemoryVectors(data);
+      VamanaGraph graph =
+          ConcurrentVamanaGraphBuilder.create(
+                  16, 50, 1.2f, vectors, SimilarityFunction.EUCLIDEAN, 42L)
+              .build(4);
+
+      BitSet reached = bfsFrom(graph, graph.medoid());
+      assertThat(reached.cardinality())
+          .as("All nodes reachable from medoid in concurrent graph")
+          .isEqualTo(200);
+    }
+
+    @Test
+    void concurrentBuild_neighborCountsWithinR() {
+      float[][] data = generateRandomVectors(200, 16, 42L);
+      var vectors = new InMemoryVectors(data);
+      int R = 16;
+      VamanaGraph graph =
+          ConcurrentVamanaGraphBuilder.create(
+                  R, 50, 1.2f, vectors, SimilarityFunction.EUCLIDEAN, 42L)
+              .build(4);
+
+      for (int i = 0; i < graph.size(); i++) {
+        assertThat(graph.getNeighbors(i).size())
+            .as("Node %d neighbor count", i)
+            .isLessThanOrEqualTo(R);
+      }
+    }
+
+    @Test
+    void concurrentBuild_achievesGoodRecall() {
+      // Recall gate: concurrent Vamana recall@5 vs brute-force >= 0.75 with n=500
+      int n = 500;
+      int dim = 32;
+      int k = 5;
+      float[][] data = generateRandomVectors(n, dim, 7L);
+      var vectors = new InMemoryVectors(data);
+      VamanaGraph graph =
+          ConcurrentVamanaGraphBuilder.create(
+                  16, 50, 1.2f, vectors, SimilarityFunction.EUCLIDEAN, 42L)
+              .build(4);
+      var searcher = new VamanaSearcher(graph, vectors, SimilarityFunction.EUCLIDEAN);
+
+      int hits = 0, total = 0;
+      for (float[] q : generateRandomVectors(10, dim, 77L)) {
+        // Brute-force top-k
+        var bruteHeap = new NodeQueue(n, true);
+        for (int i = 0; i < n; i++) {
+          float s = SimilarityFunction.EUCLIDEAN.compare(q, data[i]);
+          if (bruteHeap.size() < k) bruteHeap.add(i, s);
+          else if (s > NodeQueue.score(bruteHeap.peek())) {
+            bruteHeap.poll();
+            bruteHeap.add(i, s);
+          }
+        }
+        java.util.Set<Integer> gt = new java.util.HashSet<>();
+        while (!bruteHeap.isEmpty()) gt.add(NodeQueue.nodeId(bruteHeap.poll()));
+
+        SearchResult result = searcher.search(q, k, 100);
+        for (int i = 0; i < result.size(); i++) if (gt.contains(result.nodeId(i))) hits++;
+        total += gt.size();
+      }
+
+      double recall = (double) hits / total;
+      assertThat(recall)
+          .as("Concurrent Vamana recall@5 vs brute-force should be >= 0.75, was %.3f", recall)
+          .isGreaterThanOrEqualTo(0.75);
+    }
+  }
+
   // --- Helpers ---
 
   /** Canonical random-vector generator shared by all Vamana test classes (package-private). */
