@@ -3,6 +3,7 @@ package com.integrallis.vectors.hnsw;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.quantization.CompressedVectors;
 import com.integrallis.vectors.quantization.ScoreFunction;
+import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
 
 /**
@@ -58,6 +59,16 @@ public final class HnswIndex {
     this.similarityFunction = similarityFunction;
     this.threadLocalSearcher =
         ThreadLocal.withInitial(() -> new HnswSearcher(graph, vectors, similarityFunction));
+  }
+
+  /**
+   * Returns the raw vector source backing this index.
+   *
+   * <p>Used by {@link com.integrallis.vectors.db.index.SsdHnswIndexAdapter} to construct an {@link
+   * AsyncVectorPrefetcher} against the same source without copying vectors.
+   */
+  public RandomAccessVectors vectorSource() {
+    return vectors;
   }
 
   /**
@@ -177,6 +188,36 @@ public final class HnswIndex {
   /** Pre-filtered search with default efSearch = max(k, 100). Thread-safe. */
   public SearchResult searchFiltered(float[] query, int k, IntPredicate predicate) {
     return threadLocalSearcher.get().searchFiltered(query, k, predicate);
+  }
+
+  /**
+   * SSD-aware search with asynchronous prefetching.
+   *
+   * <p>Before scoring each candidate's neighbor array, the {@code prefetcher} is asked to issue
+   * async touch-reads for all neighbor ordinals. For mmap-backed vector stores this causes the OS
+   * to load the relevant pages into the page cache concurrently with scoring the <em>current</em>
+   * candidate, hiding I/O latency.
+   *
+   * <p>Thread safety: The prefetch hook is set and cleared within this call on the calling thread's
+   * own {@link HnswSearcher} instance (retrieved from the {@link ThreadLocal}), so no cross-thread
+   * sharing occurs.
+   *
+   * @param query the query vector
+   * @param k number of results to return
+   * @param efSearch beam width (must be >= k)
+   * @param prefetcher the async prefetcher to use; must be open and not {@code null}
+   * @return search results sorted by score descending
+   */
+  public SearchResult searchWithPrefetch(
+      float[] query, int k, int efSearch, AsyncVectorPrefetcher prefetcher) {
+    HnswSearcher searcher = threadLocalSearcher.get();
+    IntConsumer hook = prefetcher::prefetch;
+    searcher.setPrefetchHook(hook);
+    try {
+      return searcher.search(query, k, efSearch);
+    } finally {
+      searcher.setPrefetchHook(null); // always reset — even on exception
+    }
   }
 
   /**

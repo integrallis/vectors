@@ -2,6 +2,7 @@ package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.util.BitSet;
+import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
 
 /**
@@ -30,6 +31,30 @@ public final class HnswSearcher {
   // Scratch arrays for beamSearch() result reversal: pre-sized to graph capacity.
   private final int[] tmpNodes;
   private final float[] tmpScores;
+
+  /**
+   * Optional SSD prefetch hook — called for each neighbor id before the scoring loop in {@link
+   * #beamSearch} to submit async touch-reads. {@code null} means no prefetching (default). Set via
+   * {@link #setPrefetchHook(IntConsumer)}.
+   */
+  private IntConsumer prefetchHook;
+
+  /**
+   * Sets (or clears) the SSD prefetch hook.
+   *
+   * <p>When non-null, the hook is called for every neighbor id in every candidate's neighbor list
+   * <em>before</em> the neighbor scoring pass. This allows an {@link AsyncVectorPrefetcher} to
+   * submit background touch-reads that bring mmap pages into the OS page cache before the main
+   * thread needs them.
+   *
+   * <p>Thread safety: this method is only called by the thread that owns this {@code HnswSearcher}
+   * (which is the thread that retrieved it from {@link HnswIndex#searcher()}).
+   *
+   * @param hook the prefetch consumer, or {@code null} to disable prefetching
+   */
+  void setPrefetchHook(IntConsumer hook) {
+    this.prefetchHook = hook;
+  }
 
   HnswSearcher(
       HnswGraph graph,
@@ -254,6 +279,15 @@ public final class HnswSearcher {
 
       NeighborArray neighbors = graph.getNeighbors(candidateId, layer);
       if (neighbors == null) continue;
+
+      // SSD prefetch pass: issue async touch-reads for all neighbors before scoring.
+      // For mmap-backed vector stores this causes the OS to page-in the relevant 4 KiB pages
+      // concurrently with any remaining scoring work on the current candidate's neighbors.
+      if (prefetchHook != null) {
+        for (int i = 0; i < neighbors.size(); i++) {
+          prefetchHook.accept(neighbors.node(i));
+        }
+      }
 
       for (int i = 0; i < neighbors.size(); i++) {
         int neighborId = neighbors.node(i);

@@ -478,4 +478,129 @@ class HnswGraphBuilderTest {
       }
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // SSD prefetch gate tests (DP5)
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  @Tag("unit")
+  class SsdPrefetchTests {
+
+    private static final int N = 1_000;
+    private static final int DIM = 32;
+
+    private static float[][] randomVecs(int n, int dim, long seed) {
+      Random rng = new Random(seed);
+      float[][] v = new float[n][dim];
+      for (float[] row : v) for (int d = 0; d < dim; d++) row[d] = rng.nextFloat();
+      return v;
+    }
+
+    private static int[] bruteTopK(float[] q, float[][] data, int k) {
+      int n = data.length;
+      Integer[] idx = new Integer[n];
+      float[] dists = new float[n];
+      for (int i = 0; i < n; i++) {
+        idx[i] = i;
+        float s = 0f;
+        for (int d = 0; d < q.length; d++) {
+          float diff = q[d] - data[i][d];
+          s += diff * diff;
+        }
+        dists[i] = s;
+      }
+      java.util.Arrays.sort(idx, (a, b) -> Float.compare(dists[a], dists[b]));
+      int[] result = new int[k];
+      for (int i = 0; i < k; i++) result[i] = idx[i];
+      return result;
+    }
+
+    private static HnswIndex buildIndex(float[][] data, int m, int ef, long seed) {
+      return HnswIndex.builder(data, SimilarityFunction.EUCLIDEAN)
+          .maxConnections(m)
+          .efConstruction(ef)
+          .seed(seed)
+          .build();
+    }
+
+    @Test
+    void searchWithPrefetch_producesIdenticalResultsToNormalSearch() {
+      float[][] data = randomVecs(N, DIM, 1L);
+      HnswIndex idx = buildIndex(data, 16, 200, 42L);
+      float[] query = randomVecs(1, DIM, 99L)[0];
+      int k = 10, ef = 50;
+
+      SearchResult baseline = idx.search(query, k, ef);
+
+      try (AsyncVectorPrefetcher prefetcher = new AsyncVectorPrefetcher(idx.vectorSource(), 2)) {
+        SearchResult withPrefetch = idx.searchWithPrefetch(query, k, ef, prefetcher);
+        assertThat(withPrefetch.nodeIds()).containsExactly(baseline.nodeIds());
+      }
+    }
+
+    @Test
+    void asyncVectorPrefetcher_submittedCount_incrementsPerPrefetchCall() {
+      float[][] data = randomVecs(100, DIM, 2L);
+      HnswIndex idx = buildIndex(data, 8, 100, 42L);
+
+      try (AsyncVectorPrefetcher prefetcher = new AsyncVectorPrefetcher(idx.vectorSource(), 2)) {
+        assertThat(prefetcher.submittedCount()).isEqualTo(0);
+        prefetcher.prefetch(0);
+        prefetcher.prefetch(1);
+        prefetcher.prefetch(2);
+        assertThat(prefetcher.submittedCount()).isEqualTo(3);
+      }
+    }
+
+    @Test
+    void asyncVectorPrefetcher_outOfRangeOrdinal_isIgnoredSilently() {
+      float[][] data = randomVecs(10, DIM, 3L);
+      HnswIndex idx = buildIndex(data, 4, 50, 42L);
+
+      try (AsyncVectorPrefetcher prefetcher = new AsyncVectorPrefetcher(idx.vectorSource(), 1)) {
+        assertThatNoException()
+            .isThrownBy(
+                () -> {
+                  prefetcher.prefetch(-1);
+                  prefetcher.prefetch(10_000);
+                });
+        // Only valid ordinals counted
+        assertThat(prefetcher.submittedCount()).isEqualTo(0);
+      }
+    }
+
+    @Test
+    void searchWithPrefetch_recall_atLeast90Pct_vs_bruteForce() {
+      float[][] data = randomVecs(N, DIM, 4L);
+      HnswIndex idx = buildIndex(data, 16, 200, 42L);
+      int k = 10, ef = 50, queries = 30;
+      double totalRecall = 0;
+
+      try (AsyncVectorPrefetcher prefetcher = new AsyncVectorPrefetcher(idx.vectorSource(), 2)) {
+        for (int q = 0; q < queries; q++) {
+          float[] query = randomVecs(1, DIM, 500L + q)[0];
+          int[] gt = bruteTopK(query, data, k);
+          SearchResult r = idx.searchWithPrefetch(query, k, ef, prefetcher);
+          int[] found = r.nodeIds();
+          int hits = 0;
+          for (int f : found)
+            for (int g : gt)
+              if (f == g) {
+                hits++;
+                break;
+              }
+          totalRecall += (double) hits / k;
+        }
+      }
+      assertThat(totalRecall / queries).isGreaterThanOrEqualTo(0.90);
+    }
+
+    @Test
+    void ssdHnswConfig_defaults_valid() {
+      SsdHnswConfig cfg = SsdHnswConfig.defaults();
+      assertThat(cfg.ioThreads()).isGreaterThanOrEqualTo(1);
+      assertThat(cfg.prefetchWindowSize()).isGreaterThanOrEqualTo(1);
+    }
+  }
 }
