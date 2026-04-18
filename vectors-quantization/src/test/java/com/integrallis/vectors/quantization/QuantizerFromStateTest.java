@@ -202,7 +202,8 @@ class QuantizerFromStateTest {
       // RaBitQ scores involve dot-product accumulators over padded dimensions; floating-point
       // accumulation order can differ by a small epsilon between two identical-state quantizers.
       for (int i = 0; i < NUM_VECTORS; i++) {
-        assertThat(sfRest.score(i)).isCloseTo(sfOrig.score(i), org.assertj.core.data.Offset.offset(1e-5f));
+        assertThat(sfRest.score(i))
+            .isCloseTo(sfOrig.score(i), org.assertj.core.data.Offset.offset(1e-5f));
       }
     }
   }

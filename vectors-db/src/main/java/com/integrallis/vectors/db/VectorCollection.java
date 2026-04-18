@@ -151,6 +151,18 @@ public interface VectorCollection extends AutoCloseable {
   /** Returns {@code true} if the id is present in the live generation. */
   boolean contains(String id);
 
+  /**
+   * Returns an immutable snapshot of all live (non-deleted) documents in the currently-committed
+   * generation, with vectors fully populated (hydrated from mmap if needed for persistent
+   * collections).
+   *
+   * <p>Useful for bulk export via {@link com.integrallis.vectors.db.arrow.ArrowIpcExporter} and
+   * other serialization paths that need to iterate the full corpus.
+   *
+   * @return unmodifiable list of live documents; never {@code null}
+   */
+  List<Document> documents();
+
   /** Number of documents in the currently-committed generation. */
   int size();
 

@@ -117,6 +117,17 @@ public final class DistributedVectorCollection implements VectorCollection {
     return localCollection.contains(id);
   }
 
+  /**
+   * Returns live documents from the <em>local</em> shard only.
+   *
+   * <p>For a full corpus export across all shards, call {@code documents()} on each node's {@link
+   * VectorCollection} individually and merge the results.
+   */
+  @Override
+  public List<Document> documents() {
+    return localCollection.documents();
+  }
+
   /** Aggregates sizes across all nodes in the directory. */
   @Override
   public int size() {

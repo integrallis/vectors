@@ -41,6 +41,7 @@ configure(libraryProjects) {
             "-Xlint:all",
             "-Xlint:-processing",
             "-Xlint:-incubating",
+            "-Xlint:-classfile",   // suppress classfile annotation warnings from third-party JARs
             "-Werror",
             "--add-modules", "jdk.incubator.vector"
         ))

@@ -57,6 +57,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1467,6 +1468,35 @@ final class VectorCollectionImpl implements VectorCollection {
     try {
       int ord = gen.idMapper.ordinalOf(id);
       return ord >= 0 && !gen.tombstones.get(ord);
+    } finally {
+      gen.release();
+    }
+  }
+
+  @Override
+  public List<Document> documents() {
+    Generation gen = acquireReadSnapshot();
+    try {
+      List<Document> result = new ArrayList<>(gen.liveCount());
+      for (int i = 0; i < gen.physicalCount; i++) {
+        if (gen.tombstones.get(i)) continue;
+        Document doc = gen.metadataStore.get(i);
+        if (doc == null) continue;
+        // Hydrate vector from mmap if not embedded in the document (persistent generations).
+        if (doc.vector() == null && gen.mappedVectors != null) {
+          float[] v = new float[config.dimension()];
+          MemorySegment.copy(
+              gen.mappedVectors.vectorSlice(i),
+              ValueLayout.JAVA_FLOAT,
+              0L,
+              v,
+              0,
+              config.dimension());
+          doc = new Document(doc.id(), v, doc.text(), doc.metadata());
+        }
+        result.add(doc);
+      }
+      return Collections.unmodifiableList(result);
     } finally {
       gen.release();
     }
