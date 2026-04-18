@@ -5,7 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.filter.Filters;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -547,6 +550,96 @@ class VectorDbFilteredSearchTest {
                     .build());
         assertThat(result.hits()).hasSize(1);
         assertThat(result.hits().getFirst().id()).isEqualTo("d3");
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // ACORN pre-filter gate tests (OM3)
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  @Tag("unit")
+  class AcornPreFilter {
+
+    private static final int CORPUS = 100;
+    private static final int DIM_L = 8;
+    private static final long SEED = 42L;
+
+    private List<Document> buildGroupedDocs() {
+      Random rng = new Random(SEED);
+      List<Document> docs = new ArrayList<>(CORPUS);
+      for (int i = 0; i < CORPUS; i++) {
+        float[] v = new float[DIM_L];
+        for (int d = 0; d < DIM_L; d++) v[d] = (float) rng.nextGaussian();
+        String group = i < CORPUS / 2 ? "A" : "B";
+        docs.add(new Document("doc-" + i, v, null, Map.of("group", MetadataValue.of(group))));
+      }
+      return docs;
+    }
+
+    private VectorCollection buildHnsw(List<Document> docs) {
+      var col =
+          VectorCollection.builder()
+              .dimension(DIM_L)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.HNSW)
+              .build();
+      col.addAll(docs);
+      col.commit();
+      return col;
+    }
+
+    /** Pre-filter must never return a group-B doc when filtering for group=A. */
+    @Test
+    void preFilter_returnsOnlyMatchingDocs() {
+      List<Document> docs = buildGroupedDocs();
+      try (var col = buildHnsw(docs)) {
+        float[] query = new float[DIM_L];
+        var result =
+            col.search(SearchRequest.builder(query, 10).filter(Filters.eq("group", "A")).build());
+        assertThat(result.hits()).isNotEmpty();
+        for (var hit : result.hits()) {
+          assertThat(Integer.parseInt(hit.id().substring(4))).isLessThan(50);
+        }
+      }
+    }
+
+    /** Recall: top-10 from a 50 %-selective filter must return ≥ 8 results. */
+    @Test
+    void preFilter_recallIsAdequate() {
+      List<Document> docs = buildGroupedDocs();
+      try (var col = buildHnsw(docs)) {
+        float[] query = docs.get(0).vector();
+        var result =
+            col.search(SearchRequest.builder(query, 10).filter(Filters.eq("group", "A")).build());
+        assertThat(result.hits().size()).isGreaterThanOrEqualTo(8);
+        for (var hit : result.hits()) {
+          assertThat(Integer.parseInt(hit.id().substring(4))).isLessThan(50);
+        }
+      }
+    }
+
+    /** Persistent HNSW (MappedHnswIndexAdapter) also uses the ACORN path. */
+    @Test
+    void persistentHnsw_preFilterWorks(@TempDir Path tempDir) {
+      List<Document> docs = buildGroupedDocs();
+      try (var col =
+          VectorCollection.builder()
+              .dimension(DIM_L)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.HNSW)
+              .storagePath(tempDir.resolve("acorn"))
+              .build()) {
+        col.addAll(docs);
+        col.commit();
+        float[] query = docs.get(0).vector();
+        var result =
+            col.search(SearchRequest.builder(query, 10).filter(Filters.eq("group", "A")).build());
+        assertThat(result.hits().size()).isGreaterThanOrEqualTo(8);
+        for (var hit : result.hits()) {
+          assertThat(Integer.parseInt(hit.id().substring(4))).isLessThan(50);
+        }
       }
     }
   }

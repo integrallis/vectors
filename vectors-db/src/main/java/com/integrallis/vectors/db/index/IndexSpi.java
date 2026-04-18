@@ -1,6 +1,7 @@
 package com.integrallis.vectors.db.index;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import java.util.function.IntPredicate;
 
 /**
  * Internal index SPI. Implementations wrap a concrete backend (flat scan, HNSW, Vamana, IVF) and
@@ -39,6 +40,28 @@ public interface IndexSpi extends AutoCloseable {
    * @return the top-k ordinals and scores (descending)
    */
   SearchOutcome search(float[] query, int k, int searchListSize, float overQueryFactor);
+
+  /**
+   * ACORN-style pre-filtered search using an ordinal-level predicate.
+   *
+   * <p>Default implementation ignores the predicate and delegates to {@link #search}; the caller is
+   * responsible for applying post-filter. Graph-based implementations ({@code HnswIndexAdapter},
+   * {@code MappedHnswIndexAdapter}) override this to route through {@link
+   * com.integrallis.vectors.hnsw.HnswIndex#searchFiltered}, enabling navigation through
+   * non-matching nodes while only collecting matching results.
+   *
+   * @param query the query vector
+   * @param k number of final results requested
+   * @param searchListSize coarse-pass beam width
+   * @param overQueryFactor multiplier for coarse-pass k
+   * @param predicate ordinal-level filter; {@code true} means the ordinal is eligible for results
+   * @return the top-k results that pass the predicate (descending score)
+   */
+  default SearchOutcome searchWithPredicate(
+      float[] query, int k, int searchListSize, float overQueryFactor, IntPredicate predicate) {
+    // Default: fall back to standard search; post-filter is applied by the caller.
+    return search(query, k, searchListSize, overQueryFactor);
+  }
 
   /** Returns the number of vectors currently in the index. */
   int size();

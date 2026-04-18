@@ -8,6 +8,7 @@ import com.integrallis.vectors.hnsw.RandomAccessVectors;
 import com.integrallis.vectors.hnsw.SearchResult;
 import com.integrallis.vectors.quantization.CompressedVectors;
 import java.util.Objects;
+import java.util.function.IntPredicate;
 
 /**
  * Read-only {@link IndexSpi} that serves HNSW search from a <b>pre-built</b> {@link HnswGraph}
@@ -124,6 +125,26 @@ public final class MappedHnswIndexAdapter implements IndexSpi {
   public void enableQuantization(CompressedVectors compressed) {
     Objects.requireNonNull(compressed, "compressed must not be null");
     index.enableQuantization(compressed);
+  }
+
+  /**
+   * ACORN-style pre-filtered search: delegates to {@link HnswIndex#searchFiltered} so the beam
+   * search navigates non-matching nodes but only collects matching results.
+   */
+  @Override
+  public SearchOutcome searchWithPredicate(
+      float[] query, int k, int searchListSize, float overQueryFactor, IntPredicate predicate) {
+    Objects.requireNonNull(query, "query must not be null");
+    Objects.requireNonNull(predicate, "predicate must not be null");
+    if (k <= 0) throw new IllegalArgumentException("k must be positive: " + k);
+    if (index.size() == 0) return new SearchOutcome(new int[0], new float[0]);
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Query dimension " + query.length + " does not match index dimension " + dimension);
+    }
+    int efSearch = Math.max(searchListSize, k);
+    SearchResult result = index.searchFiltered(query, k, efSearch, predicate);
+    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
   }
 
   @Override

@@ -8,6 +8,7 @@ import com.integrallis.vectors.hnsw.InMemoryVectors;
 import com.integrallis.vectors.hnsw.SearchResult;
 import com.integrallis.vectors.quantization.CompressedVectors;
 import java.util.Objects;
+import java.util.function.IntPredicate;
 
 /**
  * {@link IndexSpi} backed by an on-heap {@link HnswIndex}. Used by {@link
@@ -113,6 +114,26 @@ public final class HnswIndexAdapter implements IndexSpi {
     // Defensive clone — SearchResult arrays are documented as "must not be mutated", but the
     // SearchOutcome contract does not constrain its ordinals/scores, and downstream callers
     // (post-filter, rescore) may mutate them in-place.
+    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+  }
+
+  /**
+   * ACORN-style pre-filtered search: delegates to {@link HnswIndex#searchFiltered} so the beam
+   * search navigates non-matching nodes but only collects matching results.
+   */
+  @Override
+  public SearchOutcome searchWithPredicate(
+      float[] query, int k, int searchListSize, float overQueryFactor, IntPredicate predicate) {
+    Objects.requireNonNull(query, "query must not be null");
+    Objects.requireNonNull(predicate, "predicate must not be null");
+    if (k <= 0) throw new IllegalArgumentException("k must be positive: " + k);
+    if (size == 0 || index == null) return new SearchOutcome(new int[0], new float[0]);
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Query dimension " + query.length + " does not match index dimension " + dimension);
+    }
+    int efSearch = Math.max(searchListSize, k);
+    SearchResult result = index.searchFiltered(query, k, efSearch, predicate);
     return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
   }
 

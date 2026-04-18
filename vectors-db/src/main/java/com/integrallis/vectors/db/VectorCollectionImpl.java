@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.IntPredicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -1339,38 +1340,71 @@ final class VectorCollectionImpl implements VectorCollection {
     try {
       long start = System.nanoTime();
 
+      // ACORN pre-filter: HNSW SPI implementations navigate non-matching nodes for routing
+      // but only collect matching ones in the result set — avoids recall collapse on selective
+      // filters without expanding the candidate pool.
+      boolean supportsPreFilter =
+          gen.spi instanceof HnswIndexAdapter || gen.spi instanceof MappedHnswIndexAdapter;
+      boolean preFilterActive = hasFilter && supportsPreFilter;
+
       int candidateK = request.k();
       int candidateSearchListSize = request.searchListSize();
-      if (hasFilter) {
-        candidateK =
-            Math.min(
-                Math.max((int) Math.ceil(request.k() * request.filterExpansion()), request.k()),
-                Math.max(gen.liveCount(), request.k()));
-        candidateSearchListSize = Math.max(candidateK, request.searchListSize());
-      }
+      IndexSpi.SearchOutcome outcome;
 
-      IndexSpi.SearchOutcome outcome =
-          gen.spi.search(
-              request.query(), candidateK, candidateSearchListSize, request.overQueryFactor());
+      if (preFilterActive) {
+        // Build an ordinal-level predicate combining tombstone + metadata filter.
+        final Generation snapshot = gen;
+        final Filter f = filter;
+        IntPredicate pred =
+            ordinal -> {
+              if (snapshot.tombstones.get(ordinal)) return false;
+              Document doc = snapshot.metadataStore.get(ordinal);
+              if (doc == null) return false;
+              return FilterExecutor.matches(f, doc.metadata());
+            };
+        // No candidate expansion needed — the predicate enforces filter during traversal.
+        outcome =
+            gen.spi.searchWithPredicate(
+                request.query(),
+                candidateK,
+                candidateSearchListSize,
+                request.overQueryFactor(),
+                pred);
+      } else {
+        // Post-filter path: expand the candidate pool so the filter has enough to choose from.
+        if (hasFilter) {
+          candidateK =
+              Math.min(
+                  Math.max((int) Math.ceil(request.k() * request.filterExpansion()), request.k()),
+                  Math.max(gen.liveCount(), request.k()));
+          candidateSearchListSize = Math.max(candidateK, request.searchListSize());
+        }
+        outcome =
+            gen.spi.search(
+                request.query(), candidateK, candidateSearchListSize, request.overQueryFactor());
+      }
 
       int[] ordinals = outcome.ordinals();
       float[] scores = outcome.scores();
 
       List<SearchResult.Hit> hits = new ArrayList<>(Math.min(ordinals.length, request.k()));
       for (int i = 0; i < ordinals.length && hits.size() < request.k(); i++) {
-        // Tombstone check — cheapest skip, before everything else.
-        if (gen.tombstones.get(ordinals[i])) {
-          continue;
+        int ordinal = ordinals[i];
+        // Tombstone + metadata filter: skip when ACORN predicate already handled them.
+        if (!preFilterActive) {
+          if (gen.tombstones.get(ordinal)) {
+            continue;
+          }
         }
         float score = scores[i];
         if (score < request.minScore()) {
           continue;
         }
-        Document stored = gen.metadataStore.get(ordinals[i]);
+        Document stored = gen.metadataStore.get(ordinal);
         if (stored == null) {
           continue;
         }
-        if (hasFilter && !FilterExecutor.matches(filter, stored.metadata())) {
+        if (!preFilterActive && hasFilter && !FilterExecutor.matches(filter, stored.metadata())) {
           continue;
         }
         float[] vector = null;
@@ -1379,7 +1413,7 @@ final class VectorCollectionImpl implements VectorCollection {
           if (vector == null && gen.mappedVectors != null) {
             vector = new float[config.dimension()];
             MemorySegment.copy(
-                gen.mappedVectors.vectorSlice(ordinals[i]),
+                gen.mappedVectors.vectorSlice(ordinal),
                 ValueLayout.JAVA_FLOAT,
                 0L,
                 vector,

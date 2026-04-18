@@ -2,6 +2,7 @@ package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.util.BitSet;
+import java.util.function.IntPredicate;
 
 /**
  * Hierarchical search over an HNSW graph. Performs greedy descent through upper layers followed by
@@ -121,6 +122,54 @@ public final class HnswSearcher {
   }
 
   /**
+   * ACORN-style pre-filtered search: navigates the full graph but accumulates only nodes that pass
+   * {@code predicate} into the result set.
+   *
+   * <p>Non-matching nodes are still explored for <em>navigation</em> — they help reach matching
+   * nodes that would otherwise be disconnected under the filter. This is the key insight from the
+   * ACORN paper (Nori et al., 2023): graph edges are treated as routing infrastructure, not as
+   * membership assertions.
+   *
+   * <p>The beam width {@code efSearch} governs the size of the matching result set, not the total
+   * number of nodes visited. For highly selective filters, more non-matching nodes will be
+   * traversed before {@code efSearch} matching results are gathered.
+   *
+   * @param query the query vector
+   * @param k number of matching results to return
+   * @param efSearch beam width (number of matching candidates to accumulate; must be ≥ k)
+   * @param predicate ordinal-level filter — {@code true} means the node is eligible for results
+   * @return the top-k matching results sorted by score descending
+   */
+  public SearchResult searchFiltered(float[] query, int k, int efSearch, IntPredicate predicate) {
+    if (efSearch < k) {
+      throw new IllegalArgumentException("efSearch (" + efSearch + ") must be >= k (" + k + ")");
+    }
+    if (graph.size() == 0) {
+      throw new IllegalStateException("Cannot search an empty graph");
+    }
+
+    NodeScorer scorer = scorerFactory.scorer(query);
+
+    // Phase 1: Greedy descent (no filter — any node can serve as routing).
+    int ep = graph.entryNode();
+    int currentBest = ep;
+    for (int layer = graph.maxLevel(); layer >= 1; layer--) {
+      currentBest = greedyDescend(currentBest, layer, scorer);
+    }
+
+    // Phase 2: Predicate-aware beam search at layer 0.
+    NeighborArray beamResults =
+        beamSearchFiltered(new int[] {currentBest}, efSearch, 0, scorer, predicate);
+
+    return extractTopK(beamResults, k);
+  }
+
+  /** Pre-filtered search with default efSearch = max(k, 100). */
+  public SearchResult searchFiltered(float[] query, int k, IntPredicate predicate) {
+    return searchFiltered(query, k, Math.max(k, 100), predicate);
+  }
+
+  /**
    * Rescores candidate node IDs with full-precision vectors and returns the top-k.
    *
    * <p>Reuses the pre-allocated {@code rescoreHeap} scratch buffer — no heap allocation per call.
@@ -229,6 +278,94 @@ public final class HnswSearcher {
 
     // Convert results min-heap to sorted NeighborArray (descending).
     // Reuse pre-allocated tmpNodes/tmpScores scratch fields — no allocation per search.
+    int resultSize = results.size();
+    var resultArray = new NeighborArray(resultSize == 0 ? 1 : resultSize);
+    for (int i = resultSize - 1; i >= 0; i--) {
+      long entry = results.poll();
+      tmpNodes[i] = NodeQueue.nodeId(entry);
+      tmpScores[i] = NodeQueue.score(entry);
+    }
+    for (int i = 0; i < resultSize; i++) {
+      resultArray.insert(tmpNodes[i], tmpScores[i]);
+    }
+
+    return resultArray;
+  }
+
+  /**
+   * Predicate-aware beam search at a given layer (ACORN navigation pattern).
+   *
+   * <p>All unvisited neighbours are added to the exploration {@code candidates} heap regardless of
+   * the predicate — this is the "routing through non-matching nodes" property that distinguishes
+   * ACORN from simple post-filtering. Only nodes that pass {@code predicate} are admitted to the
+   * {@code results} min-heap.
+   *
+   * <p>Early termination: once the {@code results} heap contains {@code ef} matching entries, we
+   * stop as soon as the best remaining candidate cannot beat the worst matching result — identical
+   * to the unfiltered {@link #beamSearch} condition. This may under-explore for very selective
+   * filters, but provides the same asymptotic guarantee as the standard algorithm.
+   */
+  NeighborArray beamSearchFiltered(
+      int[] entryPoints, int ef, int layer, NodeScorer scorer, IntPredicate predicate) {
+    visited.clear();
+    candidates.clear();
+    results.clear();
+
+    // Seed with entry points.
+    for (int ep : entryPoints) {
+      if (!visited.get(ep)) {
+        visited.set(ep);
+        float score = scorer.score(ep);
+        candidates.add(ep, score);
+        // Only matching entry points go into results.
+        if (predicate.test(ep)) {
+          results.add(ep, score);
+        }
+      }
+    }
+
+    while (!candidates.isEmpty()) {
+      long topCandidate = candidates.poll();
+      float candidateScore = NodeQueue.score(topCandidate);
+      int candidateId = NodeQueue.nodeId(topCandidate);
+
+      // Early termination — same condition as unfiltered beamSearch.
+      if (results.size() >= ef) {
+        float worstResult = NodeQueue.score(results.peek());
+        if (candidateScore < worstResult) {
+          break;
+        }
+      }
+
+      NeighborArray neighbors = graph.getNeighbors(candidateId, layer);
+      if (neighbors == null) continue;
+
+      for (int i = 0; i < neighbors.size(); i++) {
+        int neighborId = neighbors.node(i);
+        if (visited.get(neighborId)) continue;
+        visited.set(neighborId);
+
+        float score = scorer.score(neighborId);
+
+        // Navigation: always add to candidates so non-matching nodes can route us to matching ones.
+        candidates.add(neighborId, score);
+
+        // Results: only admit predicate-passing nodes.
+        if (predicate.test(neighborId)) {
+          if (results.size() < ef) {
+            results.add(neighborId, score);
+          } else {
+            float worstResult = NodeQueue.score(results.peek());
+            if (score > worstResult) {
+              results.poll();
+              results.add(neighborId, score);
+            }
+          }
+        }
+      }
+    }
+
+    // Convert results min-heap to sorted NeighborArray (descending).
     int resultSize = results.size();
     var resultArray = new NeighborArray(resultSize == 0 ? 1 : resultSize);
     for (int i = resultSize - 1; i >= 0; i--) {

@@ -3,6 +3,7 @@ package com.integrallis.vectors.hnsw;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.quantization.CompressedVectors;
 import com.integrallis.vectors.quantization.ScoreFunction;
+import java.util.function.IntPredicate;
 
 /**
  * Top-level HNSW index providing build and search functionality via a builder pattern.
@@ -152,6 +153,30 @@ public final class HnswIndex {
   /** Two-pass search with default efSearch=max(k,100) and overQueryFactor=2.0. Thread-safe. */
   public SearchResult searchTwoPass(float[] query, int k) {
     return searchTwoPass(query, k, Math.max(k, 100), 2.0f);
+  }
+
+  /**
+   * ACORN-style pre-filtered search: traverses the full graph for navigation but accumulates only
+   * nodes that pass {@code predicate} into the result set. Thread-safe: each calling thread uses
+   * its own scratch buffers.
+   *
+   * <p>Non-matching nodes are still explored as routing hops — they can bridge graph regions that
+   * would otherwise be unreachable from matching nodes alone. This avoids the recall collapse that
+   * naive post-filtering produces on highly selective filters.
+   *
+   * @param query the query vector
+   * @param k number of matching results to return
+   * @param efSearch beam width for matching results (must be ≥ k)
+   * @param predicate ordinal-level filter — {@code true} means the node is eligible for results
+   * @return the top-k matching results sorted by score descending
+   */
+  public SearchResult searchFiltered(float[] query, int k, int efSearch, IntPredicate predicate) {
+    return threadLocalSearcher.get().searchFiltered(query, k, efSearch, predicate);
+  }
+
+  /** Pre-filtered search with default efSearch = max(k, 100). Thread-safe. */
+  public SearchResult searchFiltered(float[] query, int k, IntPredicate predicate) {
+    return threadLocalSearcher.get().searchFiltered(query, k, predicate);
   }
 
   /**
