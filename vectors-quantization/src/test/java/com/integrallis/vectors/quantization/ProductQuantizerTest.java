@@ -713,4 +713,134 @@ class ProductQuantizerTest {
       return total / (vecs.length * vecs[0].length);
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // QuantizationPipeline gate tests (OM6)
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  @Tag("unit")
+  class PipelineTests {
+
+    private static final int DIM = 64;
+    private static final int N = 300;
+
+    private static VectorDataset corpus() {
+      return new ArrayVectorDataset(generateVectors(N, DIM, 7L));
+    }
+
+    @Test
+    void scalarInt8_presetTrainsAndEncodesDecodes() {
+      var pipeline = QuantizationPipeline.scalarInt8().train(corpus());
+      assertThat(pipeline.type()).isEqualTo(QuantizerType.SCALAR_INT8);
+      assertThat(pipeline.dimension()).isEqualTo(DIM);
+      assertThat(pipeline.compressionRatio()).isGreaterThan(1f);
+
+      float[] v = generateVectors(1, DIM, 99L)[0];
+      byte[] code = pipeline.encode(v);
+      float[] recon = pipeline.decode(code);
+      assertThat(recon).hasSize(DIM);
+    }
+
+    @Test
+    void scalarInt4_presetTrainsAndEncodesDecodes() {
+      var pipeline = QuantizationPipeline.scalarInt4().train(corpus());
+      assertThat(pipeline.type()).isEqualTo(QuantizerType.SCALAR_INT4);
+      assertThat(pipeline.compressionRatio()).isGreaterThan(1f);
+
+      float[] v = generateVectors(1, DIM, 100L)[0];
+      byte[] code = pipeline.encode(v);
+      assertThat(code.length).isLessThan(v.length * Float.BYTES);
+    }
+
+    @Test
+    void product_presetTrainsCompressAndScore() {
+      var pipeline = QuantizationPipeline.product(4).train(corpus());
+      assertThat(pipeline.type()).isEqualTo(QuantizerType.PRODUCT);
+      assertThat(pipeline.dimension()).isEqualTo(DIM);
+
+      VectorDataset ds = corpus();
+      CompressedVectors cv = pipeline.compress(ds);
+      assertThat(cv.size()).isEqualTo(N);
+
+      float[] query = generateVectors(1, DIM, 55L)[0];
+      ScoreFunction scorer = pipeline.scorerFor(query, cv);
+      // Every ordinal must produce a finite non-negative score.
+      for (int i = 0; i < N; i++) {
+        float score = scorer.score(i);
+        assertThat(score).isFinite().isGreaterThanOrEqualTo(0f);
+      }
+    }
+
+    @Test
+    void opq_presetTrainsAndReducesMse() {
+      VectorDataset ds = corpus();
+      var opq = QuantizationPipeline.opq(4).train(ds);
+      assertThat(opq.type()).isEqualTo(QuantizerType.OPTIMIZED_PRODUCT);
+      assertThat(opq.dimension()).isEqualTo(DIM);
+
+      float[] v = generateVectors(1, DIM, 77L)[0];
+      byte[] code = opq.encode(v);
+      float[] recon = opq.decode(code);
+      assertThat(recon).hasSize(DIM);
+    }
+
+    @Test
+    void binarySign_presetTrainsAndCompresses() {
+      var pipeline = QuantizationPipeline.binarySign().train(corpus());
+      assertThat(pipeline.type()).isEqualTo(QuantizerType.BINARY_SIGN);
+      assertThat(pipeline.compressionRatio()).isGreaterThan(1f);
+    }
+
+    @Test
+    void binaryBbq_presetTrainsAndCompresses() {
+      var pipeline = QuantizationPipeline.binaryBbq().train(corpus());
+      assertThat(pipeline.type()).isEqualTo(QuantizerType.BINARY_BBQ);
+      assertThat(pipeline.compressionRatio()).isGreaterThan(1f);
+    }
+
+    @Test
+    void rabit_presetTrainsAndCompresses() {
+      var pipeline = QuantizationPipeline.rabit().train(corpus());
+      assertThat(pipeline.type()).isEqualTo(QuantizerType.RABIT);
+      assertThat(pipeline.compressionRatio()).isGreaterThan(1f);
+    }
+
+    @Test
+    void turbo_presetTrainsAndCompresses() {
+      var pipeline = QuantizationPipeline.turbo(4).train(corpus());
+      assertThat(pipeline.type()).isEqualTo(QuantizerType.TURBO);
+      assertThat(pipeline.compressionRatio()).isGreaterThan(1f);
+    }
+
+    @Test
+    void nvq_presetTrainsAndCompresses() {
+      var pipeline = QuantizationPipeline.nvq().train(corpus());
+      assertThat(pipeline.type()).isEqualTo(QuantizerType.NVQ);
+      assertThat(pipeline.compressionRatio()).isGreaterThan(1f);
+    }
+
+    @Test
+    void builder_fullControl_similarityAndIterations() {
+      var pipeline =
+          QuantizationPipeline.builder()
+              .quantizerType(QuantizerType.OPTIMIZED_PRODUCT)
+              .subspaces(4)
+              .clusters(64)
+              .iterations(3)
+              .seed(123L)
+              .similarity(SimilarityFunction.DOT_PRODUCT)
+              .train(corpus());
+
+      assertThat(pipeline.type()).isEqualTo(QuantizerType.OPTIMIZED_PRODUCT);
+      assertThat(pipeline.similarity()).isEqualTo(SimilarityFunction.DOT_PRODUCT);
+      assertThat(pipeline.dimension()).isEqualTo(DIM);
+    }
+
+    @Test
+    void quantizer_accessor_returnsUnderlyingQuantizer() {
+      var pipeline = QuantizationPipeline.scalarInt8().train(corpus());
+      assertThat(pipeline.quantizer()).isInstanceOf(ScalarQuantizer.class);
+    }
+  }
 }
