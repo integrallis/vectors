@@ -66,7 +66,7 @@ public final class IvfFlatAdapter implements IndexSpi {
       return;
     }
     int effectiveK = Math.min(k, vectors.length);
-    IvfBuildParams params = new IvfBuildParams(effectiveK, maxIter, 0f, soar, seed);
+    IvfBuildParams params = new IvfBuildParams(effectiveK, maxIter, 0f, soar, seed, 0);
     this.index = IvfIndex.build(vectors, null, metric, params);
   }
 

@@ -55,7 +55,7 @@ class SubBuoyTreeTest {
   @Test
   void buildProducesRootWithKClusters() {
     float[][] vecs = randomVecs(500, DIM, 1L);
-    IvfBuildParams params = new IvfBuildParams(8, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(8, 30, 0f, false, 42L, 0);
     // minSplitSize = 1000 → no splits
     ClusterSplitter splitter = new ClusterSplitter(1000, 30, 42L);
     SubBuoyTree tree = SubBuoyTree.build(vecs, null, METRIC, params, splitter);
@@ -65,7 +65,7 @@ class SubBuoyTreeTest {
   @Test
   void leafCountEqualsKWhenNoSplits() {
     float[][] vecs = randomVecs(400, DIM, 2L);
-    IvfBuildParams params = new IvfBuildParams(8, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(8, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(1000, 30, 42L);
     SubBuoyTree tree = SubBuoyTree.build(vecs, null, METRIC, params, splitter);
     assertThat(tree.leafCount()).isEqualTo(8);
@@ -74,7 +74,7 @@ class SubBuoyTreeTest {
   @Test
   void depthIsOneWhenNoSplits() {
     float[][] vecs = randomVecs(400, DIM, 3L);
-    IvfBuildParams params = new IvfBuildParams(8, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(8, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(1000, 30, 42L);
     SubBuoyTree tree = SubBuoyTree.build(vecs, null, METRIC, params, splitter);
     assertThat(tree.depth()).isEqualTo(1);
@@ -84,7 +84,7 @@ class SubBuoyTreeTest {
   void buildSplitsLargeCluster() {
     // 1000 vecs, k=4 clusters → ~250 per cluster; minSplitSize=50 → all should split
     float[][] vecs = randomVecs(1000, DIM, 4L);
-    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(50, 30, 42L);
     SubBuoyTree tree = SubBuoyTree.build(vecs, null, METRIC, params, splitter);
     // At least some clusters were split → leafCount > rootClusterCount
@@ -94,7 +94,7 @@ class SubBuoyTreeTest {
   @Test
   void depthIsGreaterThanOneWhenSplitsOccur() {
     float[][] vecs = randomVecs(1000, DIM, 5L);
-    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(50, 30, 42L);
     SubBuoyTree tree = SubBuoyTree.build(vecs, null, METRIC, params, splitter);
     assertThat(tree.depth()).isGreaterThan(1);
@@ -105,7 +105,7 @@ class SubBuoyTreeTest {
   @Test
   void searchReturnsAtMostKResults() {
     float[][] vecs = randomVecs(500, DIM, 6L);
-    IvfBuildParams params = new IvfBuildParams(8, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(8, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(1000, 30, 42L);
     SubBuoyTree tree = SubBuoyTree.build(vecs, null, METRIC, params, splitter);
 
@@ -119,7 +119,7 @@ class SubBuoyTreeTest {
     // k=4, nprobe=3 (75%) → high recall, no splits needed
     int n = 2000, k = 10, nprobe = 3;
     float[][] data = randomVecs(n, DIM, 7L);
-    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(1000, 30, 42L);
     SubBuoyTree tree = SubBuoyTree.build(data, null, METRIC, params, splitter);
 
@@ -141,7 +141,7 @@ class SubBuoyTreeTest {
     // Splits should not hurt recall: both children are scanned on probe
     int n = 2000, k = 10, nprobe = 3;
     float[][] data = randomVecs(n, DIM, 8L);
-    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(50, 30, 42L); // forces splits
 
     SubBuoyTree splitTree = SubBuoyTree.build(data, null, METRIC, params, splitter);

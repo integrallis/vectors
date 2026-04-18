@@ -61,11 +61,18 @@ public final class IvfIndex implements Closeable {
     for (int c = 0; c < k; c++) lists.add(new ArrayList<>());
     for (int i = 0; i < n; i++) lists.get(assignments[i]).add(i);
 
-    ClusterPartition[] partitions = new ClusterPartition[k];
     float[][] buoys = buoy.buoyVectors();
+    ClusterPartition[] partitions = new ClusterPartition[k];
+    int harmonyDims = params.harmonyKeyDims();
     for (int c = 0; c < k; c++) {
       int[] ordinals = lists.get(c).stream().mapToInt(Integer::intValue).toArray();
-      partitions[c] = new ClusterPartition(c, buoys[c], ordinals, ordinals.length);
+      int[] keyDims = null;
+      if (harmonyDims > 0 && ordinals.length > 0) {
+        float[][] subVectors = new float[ordinals.length][];
+        for (int i = 0; i < ordinals.length; i++) subVectors[i] = vectors[ordinals[i]];
+        keyDims = DimensionAnalysis.topVarianceDimensions(subVectors, harmonyDims);
+      }
+      partitions[c] = new ClusterPartition(c, buoys[c], ordinals, ordinals.length, keyDims);
     }
 
     return new IvfIndex(buoy, partitions, vectors, ids, metric);
@@ -87,9 +94,21 @@ public final class IvfIndex implements Closeable {
     PriorityQueue<IvfHit> heap =
         new PriorityQueue<>(k + 1, (a, b) -> Float.compare(a.score(), b.score()));
 
+    boolean harmonyEuclidean = metric == SimilarityFunction.EUCLIDEAN;
     for (int cid : clusterIds) {
       ClusterPartition partition = partitions[cid];
+      boolean prune = harmonyEuclidean && partition.hasKeyDimensions();
+      int[] keyDims = prune ? partition.keyDimensions() : null;
       for (int ordinal : partition.ordinals()) {
+        // HARMONY partial-distance lower bound: skip if partial L2 already exceeds worst result.
+        // Valid only for EUCLIDEAN (partial sum ≤ full sum for any dimension subset).
+        if (prune && heap.size() >= k) {
+          float partialSq =
+              DimensionAnalysis.partialSquaredDistance(query, vectors[ordinal], keyDims);
+          // score = -fullSqDist; worstScore = heap.peek().score() (negative).
+          // Prune when fullSqDist >= -worstScore, i.e. partialSqDist >= -worstScore.
+          if (partialSq >= -heap.peek().score()) continue;
+        }
         float score = score(query, vectors[ordinal]);
         if (score < request.minScore()) continue;
         if (heap.size() < k) {
@@ -180,7 +199,7 @@ public final class IvfIndex implements Closeable {
       int size = buf.getInt();
       int[] ordinals = new int[size];
       for (int i = 0; i < size; i++) ordinals[i] = buf.getInt();
-      partitions[c] = new ClusterPartition(c, centroids[c], ordinals, size);
+      partitions[c] = ClusterPartition.of(c, centroids[c], ordinals);
     }
     return new IvfIndex(buoyIndex, partitions, vectors, null, metric);
   }

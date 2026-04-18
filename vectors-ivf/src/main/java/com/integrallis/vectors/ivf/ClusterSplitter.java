@@ -117,8 +117,8 @@ public final class ClusterSplitter {
     int parentId = partition.clusterId();
     return Optional.of(
         new ClusterPartition[] {
-          new ClusterPartition(parentId * 2 + 1, centroids[0], leftOrdinals, sizeLeft),
-          new ClusterPartition(parentId * 2 + 2, centroids[1], rightOrdinals, sizeRight)
+          ClusterPartition.of(parentId * 2 + 1, centroids[0], leftOrdinals),
+          ClusterPartition.of(parentId * 2 + 2, centroids[1], rightOrdinals)
         });
   }
 

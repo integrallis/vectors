@@ -86,7 +86,7 @@ public final class SubBuoyTree {
     // Step 3: for each cluster, either keep as leaf or split
     for (int c = 0; c < k; c++) {
       int[] ordinals = lists.get(c).stream().mapToInt(Integer::intValue).toArray();
-      ClusterPartition partition = new ClusterPartition(c, buoys[c], ordinals, ordinals.length);
+      ClusterPartition partition = ClusterPartition.of(c, buoys[c], ordinals);
 
       if (splitter.shouldSplit(partition)) {
         Optional<ClusterPartition[]> split = splitter.split(partition, vectors, metric, (long) c);

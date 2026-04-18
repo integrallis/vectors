@@ -123,9 +123,7 @@ public final class DistributedVectorCollection implements AutoCloseable {
     TieredCluster[] clusters = new TieredCluster[k];
     for (int c = 0; c < k; c++) {
       int[] ords = clusterOrdinals.get(c).stream().mapToInt(Integer::intValue).toArray();
-      clusters[c] =
-          new TieredCluster(
-              new ClusterPartition(c, centroids[c], ords, ords.length), vectors, metric);
+      clusters[c] = new TieredCluster(ClusterPartition.of(c, centroids[c], ords), vectors, metric);
       clusters[c].storeT3(t3Backend);
     }
 
@@ -214,9 +212,7 @@ public final class DistributedVectorCollection implements AutoCloseable {
     TieredCluster[] clusters = new TieredCluster[k];
     for (int c = 0; c < k; c++) {
       int[] ords = clusterOrdinals.get(c).stream().mapToInt(Integer::intValue).toArray();
-      clusters[c] =
-          new TieredCluster(
-              new ClusterPartition(c, centroids[c], ords, ords.length), vecArray, metric);
+      clusters[c] = new TieredCluster(ClusterPartition.of(c, centroids[c], ords), vecArray, metric);
     }
 
     return new DistributedVectorCollection(
@@ -293,10 +289,7 @@ public final class DistributedVectorCollection implements AutoCloseable {
       int prevCount = clusters[c].accessCount();
       clusters[c] =
           new TieredCluster(
-              new ClusterPartition(c, centroids[c], ords, ords.length),
-              newVecArray,
-              metric,
-              prevCount);
+              ClusterPartition.of(c, centroids[c], ords), newVecArray, metric, prevCount);
       clusters[c].storeT3(t3Backend);
       if (hadT1) clusters[c].materializeT1();
     }

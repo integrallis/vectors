@@ -71,7 +71,7 @@ public class IvfSearchBenchmark {
     query = corpus[rng.nextInt(n)].clone();
 
     int k = (int) Math.max(4, Math.ceil(Math.sqrt(n)));
-    IvfBuildParams params = new IvfBuildParams(k, 50, 0.2f, true, 42L);
+    IvfBuildParams params = new IvfBuildParams(k, 50, 0.2f, true, 42L, 0);
     index =
         IvfIndex.build(
             corpus, null, com.integrallis.vectors.core.SimilarityFunction.EUCLIDEAN, params);

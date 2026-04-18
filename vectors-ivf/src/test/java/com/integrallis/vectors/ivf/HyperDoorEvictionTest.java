@@ -39,7 +39,7 @@ class HyperDoorEvictionTest {
   private ClusterPartition makePartition(int clusterId, int size) {
     int[] ordinals = new int[size];
     for (int i = 0; i < size; i++) ordinals[i] = i;
-    return new ClusterPartition(clusterId, new float[DIM], ordinals, size);
+    return ClusterPartition.of(clusterId, new float[DIM], ordinals);
   }
 
   // ─── evictToTier ─────────────────────────────────────────────────────────

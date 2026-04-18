@@ -46,7 +46,7 @@ class DistributedVectorCollectionIT {
 
   private DistributedVectorCollection build(
       float[][] vecs, String[] docIds, Path walDir, StorageBackend t3) throws IOException {
-    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(10_000, 30, 42L);
     TierPolicy policy = new TierPolicy(5, 2);
     return DistributedVectorCollection.build(

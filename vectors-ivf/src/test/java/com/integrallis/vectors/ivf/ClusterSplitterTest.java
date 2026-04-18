@@ -29,7 +29,7 @@ class ClusterSplitterTest {
     int[] ordinals = new int[size];
     for (int i = 0; i < size; i++) ordinals[i] = i;
     float[] centroid = new float[DIM];
-    return new ClusterPartition(0, centroid, ordinals, size);
+    return ClusterPartition.of(0, centroid, ordinals);
   }
 
   // ─── cost model ──────────────────────────────────────────────────────────

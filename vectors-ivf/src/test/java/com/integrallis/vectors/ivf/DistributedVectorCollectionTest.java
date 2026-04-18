@@ -59,7 +59,7 @@ class DistributedVectorCollectionTest {
 
   private DistributedVectorCollection buildCollection(float[][] vecs, String[] docIds, Path walDir)
       throws IOException {
-    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(10_000, 30, 42L); // no splits
     TierPolicy policy = new TierPolicy(5, 2);
     return DistributedVectorCollection.build(
@@ -180,7 +180,7 @@ class DistributedVectorCollectionTest {
     // Untouched clusters should still have T1 (not rebuilt and re-evicted).
     float[][] vecs = randomVecs(200, DIM, 30L);
     TierPolicy alwaysT1 = new TierPolicy(2, 1); // t1 after 2 accesses, t2 after 1
-    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(4, 30, 0f, false, 42L, 0);
     ClusterSplitter splitter = new ClusterSplitter(10_000, 30, 42L);
     HeapStorageBackend backend = new HeapStorageBackend();
     try (var col =

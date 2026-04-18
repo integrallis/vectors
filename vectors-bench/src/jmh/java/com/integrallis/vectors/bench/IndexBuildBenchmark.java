@@ -114,7 +114,7 @@ public class IndexBuildBenchmark {
    */
   @Benchmark
   public IvfIndex buildIvfFlat() {
-    IvfBuildParams params = new IvfBuildParams(ivfK, 30, 0f, false, 42L);
+    IvfBuildParams params = new IvfBuildParams(ivfK, 30, 0f, false, 42L, 0);
     return IvfIndex.build(corpus, null, SimilarityFunction.EUCLIDEAN, params);
   }
 

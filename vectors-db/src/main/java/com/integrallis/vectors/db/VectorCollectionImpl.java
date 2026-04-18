@@ -1237,7 +1237,7 @@ final class VectorCollectionImpl implements VectorCollection {
         }
         VectorCollectionConfig.IvfParams p = config.ivfParams();
         int effectiveK = Math.min(p.k(), matrix.length);
-        IvfBuildParams bp = new IvfBuildParams(effectiveK, p.maxIter(), 0f, p.soar(), p.seed());
+        IvfBuildParams bp = new IvfBuildParams(effectiveK, p.maxIter(), 0f, p.soar(), p.seed(), 0);
         IvfIndex idx = IvfIndex.build(matrix, null, config.metric(), bp);
         yield idx.encode();
       }
