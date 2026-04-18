@@ -1,6 +1,7 @@
 package com.integrallis.vectors.db;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.db.cache.QvCache;
 import java.nio.file.Path;
 
 /**
@@ -72,6 +73,9 @@ public final class VectorCollectionBuilder {
   private float ivfGamma = 0f;
   private boolean ivfSoar = false;
   private long ivfSeed = DEFAULT_IVF_SEED;
+
+  // QvCache — 0 means disabled
+  private int cacheSize = 0;
 
   // Quantizer-specific params (all nullable — null means "use defaults")
   private Integer pqSubspaces;
@@ -382,6 +386,22 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
+  /**
+   * Enables the {@link QvCache} query-result cache with the given LRU capacity.
+   *
+   * <p>Cached results are keyed by a scalar int8 quantization of the query vector combined with
+   * {@code k} and a hash of the filter predicate. The cache is automatically invalidated after
+   * every {@link VectorCollection#commit()}.
+   *
+   * @param maxEntries maximum number of cached query results; {@code 0} (the default) disables the
+   *     cache entirely
+   */
+  public VectorCollectionBuilder cacheSize(int maxEntries) {
+    if (maxEntries < 0) throw new IllegalArgumentException("cacheSize must be >= 0: " + maxEntries);
+    this.cacheSize = maxEntries;
+    return this;
+  }
+
   /** Builds the collection. Applies Step 4d restrictions on backend and quantizer. */
   public VectorCollection build() {
     if (dimension == null) {
@@ -436,7 +456,8 @@ public final class VectorCollectionBuilder {
             vamanaParams,
             quantizerParams,
             ivfParams);
-    return new VectorCollectionImpl(config);
+    QvCache cache = cacheSize > 0 ? new QvCache(cacheSize) : QvCache.DISABLED;
+    return new VectorCollectionImpl(config, cache);
   }
 
   /**

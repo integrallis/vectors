@@ -1,5 +1,6 @@
 package com.integrallis.vectors.db;
 
+import com.integrallis.vectors.db.cache.QvCache;
 import com.integrallis.vectors.db.filter.Filter;
 import com.integrallis.vectors.db.filter.FilterExecutor;
 import com.integrallis.vectors.db.id.IdMapper;
@@ -278,8 +279,21 @@ final class VectorCollectionImpl implements VectorCollection {
    */
   volatile IOException openGenerationFailureHook;
 
+  /** QVCache — never null; {@link QvCache#DISABLED} when caching is off. */
+  private final QvCache queryCache;
+
+  /** Returns the active query cache (test / monitoring access). */
+  public QvCache queryCache() {
+    return queryCache;
+  }
+
   VectorCollectionImpl(VectorCollectionConfig config) {
+    this(config, QvCache.DISABLED);
+  }
+
+  VectorCollectionImpl(VectorCollectionConfig config, QvCache cache) {
     this.config = Objects.requireNonNull(config, "config must not be null");
+    this.queryCache = Objects.requireNonNull(cache, "cache must not be null");
     if (config.storageRoot() == null) {
       this.generation = bootstrapInMemory();
       this.nextGenerationNumber = 0L;
@@ -672,6 +686,8 @@ final class VectorCollectionImpl implements VectorCollection {
     try {
       ensureOpenUnderLock();
       commitUnderLock();
+      // Invalidate cached query results so subsequent searches reflect the new generation.
+      queryCache.invalidateAll();
     } finally {
       writerLock.unlock();
     }
@@ -1337,6 +1353,14 @@ final class VectorCollectionImpl implements VectorCollection {
     Filter filter = request.filter();
     boolean hasFilter = filter != null && !(filter instanceof Filter.All);
 
+    // QvCache: only cache results that do not embed vectors (ids + scores + text + metadata are
+    // stable across snapshots; vectors require mmap reads that callers may store separately).
+    boolean cacheEligible = !request.includeVector();
+    if (cacheEligible) {
+      var cached = queryCache.get(request.query(), request.k(), filter);
+      if (cached.isPresent()) return cached.get();
+    }
+
     Generation gen = acquireReadSnapshot();
     try {
       long start = System.nanoTime();
@@ -1440,7 +1464,11 @@ final class VectorCollectionImpl implements VectorCollection {
       }
 
       long elapsed = System.nanoTime() - start;
-      return new SearchResult(hits, elapsed);
+      SearchResult result = new SearchResult(hits, elapsed);
+      if (cacheEligible) {
+        queryCache.put(request.query(), request.k(), filter, result);
+      }
+      return result;
     } finally {
       gen.release();
     }
