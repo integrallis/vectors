@@ -192,5 +192,95 @@ class VectorDbQvCacheTest {
       float[] v2 = {-1f, 0f, 0f, 0f};
       assertThat(Arrays.equals(QvCache.quantize(v1), QvCache.quantize(v2))).isFalse();
     }
+
+    /**
+     * Proportional vectors produce identical cache keys because max-abs normalization discards
+     * magnitude. This is correct for COSINE (direction-invariant) and preserves ranking for
+     * DOT_PRODUCT/MAXIMUM_INNER_PRODUCT (scaling by positive alpha preserves order). For EUCLIDEAN,
+     * rankings can theoretically differ (L2 is not scale-invariant), but this is accepted as a rare
+     * edge case in practical embedding search.
+     */
+    @Test
+    void quantize_proportionalVectors_produceSameKey() {
+      float[] v1 = {1f, 1f, 1f, 1f};
+      float[] v2 = {9f, 9f, 9f, 9f};
+      assertThat(Arrays.equals(QvCache.quantize(v1), QvCache.quantize(v2)))
+          .as("Proportional vectors should map to the same cache key")
+          .isTrue();
+    }
+  }
+
+  @Nested
+  @Tag("unit")
+  class QvCacheDotProductTests {
+
+    private static VectorCollection newDotProductCollection(int cacheSize) {
+      return VectorCollection.builder()
+          .dimension(DIM)
+          .metric(SimilarityFunction.DOT_PRODUCT)
+          .indexType(IndexType.FLAT)
+          .cacheSize(cacheSize)
+          .build();
+    }
+
+    @Test
+    void dotProduct_cacheHit_returnsSameResultObject() {
+      try (VectorCollection col = newDotProductCollection(256)) {
+        populate(col, 20);
+        float[] q = {1f, 0f, 0f, 0f};
+        SearchRequest req = SearchRequest.builder(q, 5).includeVector(false).build();
+
+        SearchResult r1 = col.search(req);
+        SearchResult r2 = col.search(req);
+
+        assertThat(r2).isSameAs(r1);
+      }
+    }
+
+    @Test
+    void dotProduct_cacheMiss_afterDifferentDirection() {
+      try (VectorCollection col = newDotProductCollection(256)) {
+        populate(col, 20);
+
+        SearchResult r1 =
+            col.search(
+                SearchRequest.builder(new float[] {1f, 0f, 0f, 0f}, 5)
+                    .includeVector(false)
+                    .build());
+        SearchResult r2 =
+            col.search(
+                SearchRequest.builder(new float[] {0f, 0f, 0f, 1f}, 5)
+                    .includeVector(false)
+                    .build());
+
+        assertThat(r2).isNotSameAs(r1);
+      }
+    }
+
+    /**
+     * For DOT_PRODUCT, proportional queries produce the same ranking because dot(alpha*q, v) =
+     * alpha * dot(q, v) for all v, and alpha > 0 preserves order. Therefore the cache key collision
+     * (same int8 quantization) is semantically correct — the top-k results are identical.
+     */
+    @Test
+    void dotProduct_proportionalQueries_sameRanking() {
+      try (VectorCollection col = newDotProductCollection(256)) {
+        populate(col, 20);
+        // Two proportional queries: same direction, different magnitude
+        float[] q1 = {1f, 2f, 3f, 4f};
+        float[] q2 = {2f, 4f, 6f, 8f};
+
+        SearchResult r1 = col.search(SearchRequest.builder(q1, 5).includeVector(false).build());
+        SearchResult r2 = col.search(SearchRequest.builder(q2, 5).includeVector(false).build());
+
+        // Should be the same cached object (identical cache key)
+        assertThat(r2).isSameAs(r1);
+
+        // Verify they contain the same documents (same ranking)
+        assertThat(r1.hits()).isNotEmpty();
+        assertThat(r2.hits().stream().map(SearchResult.Hit::id).toList())
+            .isEqualTo(r1.hits().stream().map(SearchResult.Hit::id).toList());
+      }
+    }
   }
 }

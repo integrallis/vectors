@@ -104,15 +104,29 @@ public final class OptimizedProductQuantizer implements Quantizer<PQVectors> {
     float[][] R = randomOrthogonal(d, rng);
 
     ProductQuantizer pq = null;
+    double prevMse = Double.MAX_VALUE;
 
     for (int iter = 0; iter < numIterations; iter++) {
       // Step 1: rotate training sample, train PQ on rotated data
       float[][] Z = applyRotation(X, R);
       pq = ProductQuantizer.train(new ArrayVectorDataset(Z), numSubspaces, numClusters, false);
 
-      // Step 2: compute PQ reconstructions Ẑ for each sampled vector
+      // Step 2: compute PQ reconstructions Ẑ and track reconstruction MSE
       float[][] Zhat = new float[ns][d];
-      for (int i = 0; i < ns; i++) Zhat[i] = pq.decode(pq.encode(Z[i]));
+      double mseAcc = 0.0;
+      for (int i = 0; i < ns; i++) {
+        Zhat[i] = pq.decode(pq.encode(Z[i]));
+        for (int j = 0; j < d; j++) {
+          double delta = Z[i][j] - Zhat[i][j];
+          mseAcc += delta * delta;
+        }
+      }
+      double mse = mseAcc / ns;
+
+      // Early termination: if MSE didn't improve, further Procrustes iterations are wasteful.
+      // The current R already produced a valid PQ; no need to update R further.
+      if (mse >= prevMse) break;
+      prevMse = mse;
 
       // Step 3: solve Procrustes — R = argmin‖R·X − Ẑ‖ s.t. Rᵀ R = I
       //   Optimal R = V Uᵀ from SVD(Ẑᵀ · X) = U Σ Vᵀ

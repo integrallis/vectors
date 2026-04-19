@@ -64,8 +64,8 @@ public final class HnswIndex {
   /**
    * Returns the raw vector source backing this index.
    *
-   * <p>Used by {@link com.integrallis.vectors.db.index.SsdHnswIndexAdapter} to construct an {@link
-   * AsyncVectorPrefetcher} against the same source without copying vectors.
+   * <p>Useful for constructing an {@link AsyncVectorPrefetcher} against the same source without
+   * copying vectors, or for direct vector access in custom scoring pipelines.
    */
   public RandomAccessVectors vectorSource() {
     return vectors;

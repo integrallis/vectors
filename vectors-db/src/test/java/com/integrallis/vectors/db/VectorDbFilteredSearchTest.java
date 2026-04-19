@@ -642,5 +642,80 @@ class VectorDbFilteredSearchTest {
         }
       }
     }
+
+    /**
+     * Routing property test: with a 10% selective filter, matching nodes are sparse in the graph.
+     * Most matching nodes have NO direct edge to another matching node, so the search MUST route
+     * through non-matching nodes to discover them. A naive post-filter (unfiltered search then
+     * discard) would miss most matches on selective filters.
+     *
+     * <p>This test uses 500 vectors with only every 10th vector (50 total) in the "target" group.
+     * We query for k=5 and verify that the search finds all 5 matching results, proving that
+     * non-matching nodes successfully served as routing infrastructure.
+     */
+    @Test
+    void preFilter_routingThroughNonMatchingNodes_highSelectivity() {
+      int n = 500;
+      int dim = 8;
+      Random rng = new Random(SEED);
+      List<Document> docs = new ArrayList<>(n);
+      for (int i = 0; i < n; i++) {
+        float[] v = new float[dim];
+        for (int d = 0; d < dim; d++) v[d] = (float) rng.nextGaussian();
+        // Only every 10th vector is in the "target" group — 10% selectivity
+        String group = (i % 10 == 0) ? "target" : "filler";
+        docs.add(new Document("doc-" + i, v, null, Map.of("group", MetadataValue.of(group))));
+      }
+
+      try (var col =
+          VectorCollection.builder()
+              .dimension(dim)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.HNSW)
+              .build()) {
+        col.addAll(docs);
+        col.commit();
+
+        // Query with a target vector — should find matching neighbors by routing through fillers
+        float[] query = docs.get(0).vector(); // doc-0 is a target
+        var result =
+            col.search(
+                SearchRequest.builder(query, 5).filter(Filters.eq("group", "target")).build());
+
+        // Must find exactly 5 results, all from the target group
+        assertThat(result.hits()).hasSize(5);
+        for (var hit : result.hits()) {
+          int docIdx = Integer.parseInt(hit.id().substring(4));
+          assertThat(docIdx % 10)
+              .as("Doc %d should be a target (ordinal %% 10 == 0)", docIdx)
+              .isEqualTo(0);
+        }
+
+        // Verify these are actually the closest target vectors via brute force
+        float[] q = query;
+        List<Integer> targetIndices = new java.util.ArrayList<>();
+        for (int i = 0; i < n; i++) {
+          if (i % 10 == 0) targetIndices.add(i);
+        }
+        targetIndices.sort(
+            (a, b) -> {
+              float da = SimilarityFunction.EUCLIDEAN.compare(q, docs.get(a).vector());
+              float db = SimilarityFunction.EUCLIDEAN.compare(q, docs.get(b).vector());
+              return Float.compare(db, da); // descending (higher = better for EUCLIDEAN sim)
+            });
+        java.util.Set<String> bruteTop5 = new java.util.HashSet<>();
+        for (int i = 0; i < 5; i++) bruteTop5.add("doc-" + targetIndices.get(i));
+
+        java.util.Set<String> acornTop5 = new java.util.HashSet<>();
+        for (var hit : result.hits()) acornTop5.add(hit.id());
+
+        // ACORN should find at least 4 of the 5 brute-force nearest targets
+        int overlap = 0;
+        for (String id : acornTop5) if (bruteTop5.contains(id)) overlap++;
+        assertThat(overlap)
+            .as("ACORN recall@5 among 10%%-selective targets vs brute force")
+            .isGreaterThanOrEqualTo(4);
+      }
+    }
   }
 }

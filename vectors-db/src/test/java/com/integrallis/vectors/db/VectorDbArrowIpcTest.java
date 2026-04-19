@@ -154,5 +154,98 @@ class VectorDbArrowIpcTest {
       List<Document> restored = importFromBytes(bos.toByteArray());
       assertThat(restored).hasSize(n);
     }
+
+    @Test
+    void roundTrip_preservesQuotesAndBackslashes() throws Exception {
+      Map<String, MetadataValue> meta =
+          Map.of("desc", MetadataValue.of("He said \"hello\\world\""));
+
+      try (VectorCollection col = newCollection()) {
+        col.add(new Document("esc", new float[] {1f, 0f, 0f, 0f}, null, meta));
+        col.commit();
+
+        List<Document> restored = importFromBytes(exportToBytes(col));
+        assertThat(restored).hasSize(1);
+        assertThat(((MetadataValue.Str) restored.get(0).metadata().get("desc")).value())
+            .isEqualTo("He said \"hello\\world\"");
+      }
+    }
+
+    @Test
+    void roundTrip_preservesNewlinesTabsCarriageReturns() throws Exception {
+      String text = "line1\nline2\rline3\tend";
+      Map<String, MetadataValue> meta = Map.of("content", MetadataValue.of(text));
+
+      try (VectorCollection col = newCollection()) {
+        col.add(new Document("ws", new float[] {0f, 1f, 0f, 0f}, null, meta));
+        col.commit();
+
+        List<Document> restored = importFromBytes(exportToBytes(col));
+        assertThat(((MetadataValue.Str) restored.get(0).metadata().get("content")).value())
+            .isEqualTo(text);
+      }
+    }
+
+    @Test
+    void roundTrip_preservesBackspaceAndFormFeed() throws Exception {
+      String text = "before\bafter\fend";
+      Map<String, MetadataValue> meta = Map.of("ctrl", MetadataValue.of(text));
+
+      try (VectorCollection col = newCollection()) {
+        col.add(new Document("bf", new float[] {0f, 0f, 1f, 0f}, null, meta));
+        col.commit();
+
+        List<Document> restored = importFromBytes(exportToBytes(col));
+        assertThat(((MetadataValue.Str) restored.get(0).metadata().get("ctrl")).value())
+            .isEqualTo(text);
+      }
+    }
+
+    @Test
+    void roundTrip_preservesControlCharacters() throws Exception {
+      // U+0001 (SOH), U+001F (US) — must be escaped as \u0001 and \u001f
+      String text = "start\u0001middle\u001Fend";
+      Map<String, MetadataValue> meta = Map.of("ctrl", MetadataValue.of(text));
+
+      try (VectorCollection col = newCollection()) {
+        col.add(new Document("ctrl", new float[] {0f, 0f, 0f, 1f}, null, meta));
+        col.commit();
+
+        List<Document> restored = importFromBytes(exportToBytes(col));
+        assertThat(((MetadataValue.Str) restored.get(0).metadata().get("ctrl")).value())
+            .isEqualTo(text);
+      }
+    }
+
+    @Test
+    void roundTrip_preservesNullCharacter() throws Exception {
+      // U+0000 (NUL) — the most important control char to handle
+      String text = "null\u0000byte";
+      Map<String, MetadataValue> meta = Map.of("nul", MetadataValue.of(text));
+
+      try (VectorCollection col = newCollection()) {
+        col.add(new Document("nul", new float[] {1f, 1f, 0f, 0f}, null, meta));
+        col.commit();
+
+        List<Document> restored = importFromBytes(exportToBytes(col));
+        assertThat(((MetadataValue.Str) restored.get(0).metadata().get("nul")).value())
+            .isEqualTo(text);
+      }
+    }
+
+    @Test
+    void roundTrip_preservesTagsWithSpecialCharacters() throws Exception {
+      Map<String, MetadataValue> meta =
+          Map.of("tags", MetadataValue.tags("say \"hi\"", "back\\slash", "new\nline"));
+
+      try (VectorCollection col = newCollection()) {
+        col.add(new Document("tags", new float[] {1f, 1f, 1f, 0f}, null, meta));
+        col.commit();
+
+        List<Document> restored = importFromBytes(exportToBytes(col));
+        assertThat(((MetadataValue.Tags) restored.get(0).metadata().get("tags")).values())
+            .containsExactly("say \"hi\"", "back\\slash", "new\nline");
+      }
+    }
   }
 }

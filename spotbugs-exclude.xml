@@ -77,11 +77,6 @@
             <Bug pattern="EI_EXPOSE_REP2"/>
         </Or>
     </Match>
-    <!-- HNSW: FusedAdcHnswSearcher stores float[][] corpus by reference for scoring -->
-    <Match>
-        <Class name="com.integrallis.vectors.hnsw.FusedAdcHnswSearcher"/>
-        <Bug pattern="EI_EXPOSE_REP2"/>
-    </Match>
     <!-- HNSW: ConcurrentHnswGraphBuilder lock release paths — locks are released in finally
          blocks within the concurrent insert/snapshot methods; SpotBugs cannot track the
          lock-per-node scheme through the concurrent algorithm. -->

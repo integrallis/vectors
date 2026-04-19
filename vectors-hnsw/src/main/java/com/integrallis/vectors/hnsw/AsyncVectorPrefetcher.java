@@ -40,7 +40,7 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
    * Creates a prefetcher backed by the given vector source.
    *
    * @param vectors the vector source to prefetch from; must support concurrent reads
-   * @param ioThreads number of daemon I/O threads; see {@link SsdHnswConfig#ioThreads()}
+   * @param ioThreads number of daemon I/O threads (typically 2–4 for SSD-backed stores)
    */
   public AsyncVectorPrefetcher(RandomAccessVectors vectors, int ioThreads) {
     this.vectors = vectors;

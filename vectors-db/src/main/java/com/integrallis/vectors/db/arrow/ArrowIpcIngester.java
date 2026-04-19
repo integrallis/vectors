@@ -242,13 +242,22 @@ public final class ArrowIpcIngester {
       if (c == '"') break;
       if (c == '\\' && pos < json.length()) {
         char esc = json.charAt(pos++);
-        sb.append(
-            switch (esc) {
-              case 'n' -> '\n';
-              case 'r' -> '\r';
-              case 't' -> '\t';
-              default -> esc;
-            });
+        switch (esc) {
+          case 'n' -> sb.append('\n');
+          case 'r' -> sb.append('\r');
+          case 't' -> sb.append('\t');
+          case 'b' -> sb.append('\b');
+          case 'f' -> sb.append('\f');
+          case 'u' -> {
+            // JSON unicode escape (backslash-u followed by 4 hex digits)
+            if (pos + 4 <= json.length()) {
+              int codePoint = Integer.parseInt(json.substring(pos, pos + 4), 16);
+              sb.append((char) codePoint);
+              pos += 4;
+            }
+          }
+          default -> sb.append(esc); // handles \" \\ and unknown sequences
+        }
       } else {
         sb.append(c);
       }

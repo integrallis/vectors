@@ -656,9 +656,13 @@ class ProductQuantizerTest {
       var opq = OptimizedProductQuantizer.train(dataset, 2, 8, 5, 42L);
       float opqMse = computeMse(opq, vecs);
 
+      // On random isotropic data, OPQ rotation doesn't improve over standard PQ because
+      // there is no inter-dimension correlation to exploit. OPQ may be slightly worse (~1-2%)
+      // due to k-means landing on different local optima in the rotated subspaces.
+      // On structured (correlated) data, OPQ consistently beats PQ.
       assertThat(opqMse)
-          .as("OPQ MSE (%.4f) should be <= standard PQ MSE (%.4f)", opqMse, pqMse)
-          .isLessThanOrEqualTo(pqMse * 1.05f); // allow 5% tolerance for randomness
+          .as("OPQ MSE (%.4f) should be within 2%% of standard PQ MSE (%.4f)", opqMse, pqMse)
+          .isLessThanOrEqualTo(pqMse * 1.02f);
     }
 
     @Test

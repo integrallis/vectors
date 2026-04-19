@@ -248,12 +248,24 @@ public final class ArrowIpcExporter {
     sb.append('"');
     for (int i = 0; i < s.length(); i++) {
       char c = s.charAt(i);
-      if (c == '"') sb.append("\\\"");
-      else if (c == '\\') sb.append("\\\\");
-      else if (c == '\n') sb.append("\\n");
-      else if (c == '\r') sb.append("\\r");
-      else if (c == '\t') sb.append("\\t");
-      else sb.append(c);
+      switch (c) {
+        case '"' -> sb.append("\\\"");
+        case '\\' -> sb.append("\\\\");
+        case '\n' -> sb.append("\\n");
+        case '\r' -> sb.append("\\r");
+        case '\t' -> sb.append("\\t");
+        case '\b' -> sb.append("\\b");
+        case '\f' -> sb.append("\\f");
+        default -> {
+          if (c < 0x20) {
+            // RFC 7159: control characters U+0000–U+001F must be escaped
+            sb.append("\\u");
+            sb.append(String.format("%04x", (int) c));
+          } else {
+            sb.append(c);
+          }
+        }
+      }
     }
     sb.append('"');
   }

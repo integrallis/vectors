@@ -374,6 +374,13 @@ public final class HnswSearcher {
       NeighborArray neighbors = graph.getNeighbors(candidateId, layer);
       if (neighbors == null) continue;
 
+      // SSD prefetch pass: issue async touch-reads for all neighbors before scoring.
+      if (prefetchHook != null) {
+        for (int i = 0; i < neighbors.size(); i++) {
+          prefetchHook.accept(neighbors.node(i));
+        }
+      }
+
       for (int i = 0; i < neighbors.size(); i++) {
         int neighborId = neighbors.node(i);
         if (visited.get(neighborId)) continue;

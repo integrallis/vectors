@@ -232,7 +232,7 @@ class VamanaGraphBuilderTest {
 
     @Test
     void concurrentBuild_achievesGoodRecall() {
-      // Recall gate: concurrent Vamana recall@5 vs brute-force >= 0.75 with n=500
+      // Recall gate: concurrent Vamana recall@5 vs brute-force >= 0.90 with n=500
       int n = 500;
       int dim = 32;
       int k = 5;
@@ -266,8 +266,45 @@ class VamanaGraphBuilderTest {
 
       double recall = (double) hits / total;
       assertThat(recall)
-          .as("Concurrent Vamana recall@5 vs brute-force should be >= 0.75, was %.3f", recall)
-          .isGreaterThanOrEqualTo(0.75);
+          .as("Concurrent Vamana recall@5 vs brute-force should be >= 0.90, was %.3f", recall)
+          .isGreaterThanOrEqualTo(0.90);
+    }
+
+    @Test
+    void concurrentBuild_stressDifferentThreadCounts() {
+      // Verify that concurrent build produces a valid, searchable graph regardless of thread count.
+      float[][] data = generateRandomVectors(300, 16, 99L);
+      float[] query = generateRandomVectors(1, 16, 100L)[0];
+
+      for (int threads : new int[] {1, 2, 4, 8}) {
+        var vectors = new InMemoryVectors(data);
+        VamanaGraph graph =
+            ConcurrentVamanaGraphBuilder.create(
+                    16, 50, 1.2f, vectors, SimilarityFunction.EUCLIDEAN, 42L)
+                .build(threads);
+
+        // Graph must have all nodes
+        assertThat(graph.size()).as("Graph size with %d threads", threads).isEqualTo(300);
+
+        // All nodes must have at least one neighbor
+        for (int i = 0; i < 300; i++) {
+          assertThat(graph.getNeighbors(i).size())
+              .as("Node %d with %d threads", i, threads)
+              .isGreaterThan(0);
+        }
+
+        // Graph must be searchable and return valid results
+        var searcher = new VamanaSearcher(graph, vectors, SimilarityFunction.EUCLIDEAN);
+        SearchResult result = searcher.search(query, 10, 100);
+        assertThat(result.size()).as("Search results with %d threads", threads).isEqualTo(10);
+
+        // All result scores must be finite
+        for (int i = 0; i < result.size(); i++) {
+          assertThat(Float.isFinite(result.score(i)))
+              .as("Score %d finite with %d threads", i, threads)
+              .isTrue();
+        }
+      }
     }
   }
 

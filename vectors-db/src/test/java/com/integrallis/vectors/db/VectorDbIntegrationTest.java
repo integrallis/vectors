@@ -7,8 +7,6 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.filter.Filters;
-import com.integrallis.vectors.db.index.SsdHnswIndexAdapter;
-import com.integrallis.vectors.hnsw.SsdHnswConfig;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -657,63 +655,6 @@ class VectorDbIntegrationTest {
           assertThat(r.hits()).hasSize(10);
         }
       }
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // SsdHnswIndexAdapter gate tests (DP5)
-  // ---------------------------------------------------------------------------
-
-  @Nested
-  @Tag("unit")
-  class SsdHnswIndexAdapterTests {
-
-    private static final int DIM = 8;
-    private static final int N = 200;
-
-    @Test
-    void ssdAdapter_build_and_search_returnsResults() {
-      float[][] vecs = randomVectors(N, DIM, 77L);
-      SsdHnswIndexAdapter adapter = new SsdHnswIndexAdapter(8, 100, SsdHnswConfig.defaults());
-
-      adapter.build(vecs, SimilarityFunction.EUCLIDEAN);
-
-      float[] query = randomVectors(1, DIM, 78L)[0];
-      var outcome = adapter.search(query, 5, 50, 1.0f);
-      assertThat(outcome.ordinals()).hasSize(5);
-      adapter.close();
-    }
-
-    @Test
-    void ssdAdapter_prefetchCount_incrementsDuringSearch() {
-      float[][] vecs = randomVectors(N, DIM, 79L);
-      SsdHnswIndexAdapter adapter = new SsdHnswIndexAdapter(8, 100, SsdHnswConfig.defaults());
-      adapter.build(vecs, SimilarityFunction.EUCLIDEAN);
-
-      float[] query = randomVectors(1, DIM, 80L)[0];
-      adapter.search(query, 10, 50, 1.0f);
-
-      // At least one prefetch should have been issued during beam search
-      assertThat(adapter.prefetchCount()).isGreaterThan(0);
-      adapter.close();
-    }
-
-    @Test
-    void ssdAdapter_emptyIndex_returnsEmptyOutcome() {
-      SsdHnswIndexAdapter adapter = new SsdHnswIndexAdapter(8, 100, SsdHnswConfig.defaults());
-      // No build() called — adapter is empty
-      var outcome = adapter.search(new float[DIM], 5, 50, 1.0f);
-      assertThat(outcome.ordinals()).isEmpty();
-      adapter.close();
-    }
-
-    @Test
-    void ssdAdapter_size_matchesBuiltVectorCount() {
-      float[][] vecs = randomVectors(N, DIM, 81L);
-      SsdHnswIndexAdapter adapter = new SsdHnswIndexAdapter(8, 100, SsdHnswConfig.defaults());
-      adapter.build(vecs, SimilarityFunction.EUCLIDEAN);
-      assertThat(adapter.size()).isEqualTo(N);
-      adapter.close();
     }
   }
 }

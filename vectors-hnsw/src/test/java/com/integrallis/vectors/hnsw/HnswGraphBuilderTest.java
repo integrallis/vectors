@@ -406,7 +406,7 @@ class HnswGraphBuilderTest {
 
     @Test
     void concurrentBuild_achievesGoodRecall() {
-      // Recall gate: concurrent HNSW recall@5 vs brute-force >= 0.80 with n=500
+      // Recall gate: concurrent HNSW recall@5 vs brute-force >= 0.95 with n=500
       int n = 500;
       int dim = 32;
       int k = 5;
@@ -442,8 +442,45 @@ class HnswGraphBuilderTest {
 
       double recall = (double) hits / total;
       assertThat(recall)
-          .as("Concurrent HNSW recall@5 vs brute-force should be >= 0.80, was %.3f", recall)
-          .isGreaterThanOrEqualTo(0.80);
+          .as("Concurrent HNSW recall@5 vs brute-force should be >= 0.95, was %.3f", recall)
+          .isGreaterThanOrEqualTo(0.95);
+    }
+
+    @Test
+    void concurrentBuild_stressDifferentThreadCounts() {
+      // Verify that concurrent build produces a valid, searchable graph regardless of thread count.
+      float[][] vecs = randomVectors(300, 16, 99L);
+      float[] query = randomVectors(1, 16, 100L)[0];
+
+      for (int threads : new int[] {1, 2, 4, 8}) {
+        var graph =
+            ConcurrentHnswGraphBuilder.create(
+                    8, 100, new InMemoryVectors(vecs), SimilarityFunction.EUCLIDEAN, 42L)
+                .build(threads);
+
+        // Graph must have all nodes
+        assertThat(graph.size()).as("Graph size with %d threads", threads).isEqualTo(300);
+
+        // All nodes must have at least one neighbor
+        for (int i = 0; i < 300; i++) {
+          assertThat(graph.getNeighbors(i, 0).size())
+              .as("Node %d with %d threads", i, threads)
+              .isGreaterThan(0);
+        }
+
+        // Graph must be searchable and return valid results
+        var searcher =
+            new HnswSearcher(graph, new InMemoryVectors(vecs), SimilarityFunction.EUCLIDEAN);
+        var result = searcher.search(query, 10, 100);
+        assertThat(result.size()).as("Search results with %d threads", threads).isEqualTo(10);
+
+        // All result scores must be finite
+        for (int i = 0; i < result.size(); i++) {
+          assertThat(Float.isFinite(result.score(i)))
+              .as("Score %d finite with %d threads", i, threads)
+              .isTrue();
+        }
+      }
     }
   }
 
@@ -594,13 +631,6 @@ class HnswGraphBuilderTest {
         }
       }
       assertThat(totalRecall / queries).isGreaterThanOrEqualTo(0.90);
-    }
-
-    @Test
-    void ssdHnswConfig_defaults_valid() {
-      SsdHnswConfig cfg = SsdHnswConfig.defaults();
-      assertThat(cfg.ioThreads()).isGreaterThanOrEqualTo(1);
-      assertThat(cfg.prefetchWindowSize()).isGreaterThanOrEqualTo(1);
     }
   }
 }
