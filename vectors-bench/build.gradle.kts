@@ -38,4 +38,9 @@ jmh {
     if (project.hasProperty("jmh.includes")) {
         includes.set(listOf(project.property("jmh.includes") as String))
     }
+
+    // Persist results for audit trail — text format is human-readable; CSV available via
+    // -Pjmh.rf=csv.  Output path is relative to the project directory.
+    resultFormat.set("TEXT")
+    resultsFile.set(project.file("build/results/jmh/results.txt"))
 }

@@ -13,8 +13,7 @@ import com.integrallis.vectors.core.SimilarityFunction;
  *
  * <p><b>Single-pass with ratio check:</b> Candidates are scanned once in score order (best first).
  * Each candidate's inter-neighbor similarity is computed once and compared against the alpha
- * threshold. This is equivalent to the graduated-alpha sweep but avoids re-scanning candidates at
- * multiple alpha levels, reducing distance computations by up to 6x.
+ * threshold. This is the canonical implementation of Algorithm 2 from the DiskANN paper.
  *
  * <ul>
  *   <li>At alpha=1.0: equivalent to HNSW's diversity heuristic (strict diversity)

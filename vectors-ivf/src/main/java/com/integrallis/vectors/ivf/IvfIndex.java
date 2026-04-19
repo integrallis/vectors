@@ -159,15 +159,22 @@ public final class IvfIndex implements Closeable {
   /**
    * Serialises this index to a compact byte array.
    *
-   * <p>Format: {@code [buoyLen:4][buoyBytes][k:4] k×([ordCount:4][ordinals:4*n])}
+   * <p>Format: {@code [buoyLen:4][buoyBytes][k:4]
+   * k×([ordCount:4][ordinals:4*n][keyDimCount:4][keyDims:4*m])} where {@code keyDimCount=0} means
+   * HARMONY pruning is disabled for that partition.
    */
   public byte[] encode() {
     byte[] buoyBytes = buoyIndex.encode();
     int k = partitions.length;
 
     int totalOrds = 0;
-    for (ClusterPartition p : partitions) totalOrds += p.size();
-    int capacity = 4 + buoyBytes.length + 4 + k * 4 + totalOrds * 4;
+    int totalKeyDims = 0;
+    for (ClusterPartition p : partitions) {
+      totalOrds += p.size();
+      if (p.keyDimensions() != null) totalKeyDims += p.keyDimensions().length;
+    }
+    // Each partition: ordCount(4) + ords(4*n) + keyDimCount(4) + keyDims(4*m)
+    int capacity = 4 + buoyBytes.length + 4 + k * 8 + totalOrds * 4 + totalKeyDims * 4;
 
     ByteBuffer buf = ByteBuffer.allocate(capacity);
     buf.putInt(buoyBytes.length);
@@ -176,13 +183,21 @@ public final class IvfIndex implements Closeable {
     for (ClusterPartition p : partitions) {
       buf.putInt(p.size());
       for (int ord : p.ordinals()) buf.putInt(ord);
+      int[] kd = p.keyDimensions();
+      if (kd == null) {
+        buf.putInt(0);
+      } else {
+        buf.putInt(kd.length);
+        for (int d : kd) buf.putInt(d);
+      }
     }
     return buf.array();
   }
 
   /**
    * Deserialises a previously {@link #encode encoded} index, wiring it to {@code vectors} and
-   * {@code metric} without re-running KMeans.
+   * {@code metric} without re-running KMeans. HARMONY {@code keyDimensions} are restored so
+   * partial-distance pruning is active immediately after decode.
    */
   public static IvfIndex decode(byte[] bytes, float[][] vectors, SimilarityFunction metric) {
     ByteBuffer buf = ByteBuffer.wrap(bytes);
@@ -199,7 +214,10 @@ public final class IvfIndex implements Closeable {
       int size = buf.getInt();
       int[] ordinals = new int[size];
       for (int i = 0; i < size; i++) ordinals[i] = buf.getInt();
-      partitions[c] = ClusterPartition.of(c, centroids[c], ordinals);
+      int kdLen = buf.getInt();
+      int[] keyDims = kdLen == 0 ? null : new int[kdLen];
+      if (keyDims != null) for (int i = 0; i < kdLen; i++) keyDims[i] = buf.getInt();
+      partitions[c] = new ClusterPartition(c, centroids[c], ordinals, size, keyDims);
     }
     return new IvfIndex(buoyIndex, partitions, vectors, null, metric);
   }

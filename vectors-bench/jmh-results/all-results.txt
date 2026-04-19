@@ -1,0 +1,96 @@
+# java-vectors JMH Results — 2026-04-19
+# Platform: Apple Silicon (NEON 128-bit), JDK 25, JMH 1.37
+# Benchmark results file: 1 fork, 3 warmup iterations, 5 measurement iterations (kernel); 1s/iter
+
+# === QuantizerKernelBenchmark (56 measurements) ===
+Benchmark                                   (dim)   Mode  Cnt    Score    Error   Units
+QuantizerKernelBenchmark.bqDecode             128  thrpt    5   14.527 ±  1.169  ops/us
+QuantizerKernelBenchmark.bqDecode             768  thrpt    5    2.286 ±  0.159  ops/us
+QuantizerKernelBenchmark.bqEncode             128  thrpt    5    8.717 ±  0.384  ops/us
+QuantizerKernelBenchmark.bqEncode             768  thrpt    5    1.788 ±  0.037  ops/us
+QuantizerKernelBenchmark.bqScoreLookup        128  thrpt    5  273.977 ±  6.887  ops/us
+QuantizerKernelBenchmark.bqScoreLookup        768  thrpt    5  176.088 ± 14.721  ops/us
+QuantizerKernelBenchmark.bqScoreSetup         128  thrpt    5    8.240 ±  1.699  ops/us
+QuantizerKernelBenchmark.bqScoreSetup         768  thrpt    5    1.354 ±  0.098  ops/us
+QuantizerKernelBenchmark.extRaqDecode         128  thrpt    5    3.067 ±  0.077  ops/us
+QuantizerKernelBenchmark.extRaqDecode         768  thrpt    5    0.528 ±  0.029  ops/us
+QuantizerKernelBenchmark.extRaqEncode         128  thrpt    5    0.136 ±  0.003  ops/us
+QuantizerKernelBenchmark.extRaqEncode         768  thrpt    5    0.026 ±  0.002  ops/us
+QuantizerKernelBenchmark.extRaqScoreLookup    128  thrpt    5    3.908 ±  0.187  ops/us
+QuantizerKernelBenchmark.extRaqScoreLookup    768  thrpt    5    0.316 ±  0.029  ops/us
+QuantizerKernelBenchmark.extRaqScoreSetup     128  thrpt    5    1.838 ±  0.304  ops/us
+QuantizerKernelBenchmark.extRaqScoreSetup     768  thrpt    5    0.315 ±  0.089  ops/us
+QuantizerKernelBenchmark.nvqDecode            128  thrpt    5    3.776 ±  1.122  ops/us
+QuantizerKernelBenchmark.nvqDecode            768  thrpt    5    0.641 ±  0.216  ops/us
+QuantizerKernelBenchmark.nvqEncode            128  thrpt    5    0.071 ±  0.004  ops/us
+QuantizerKernelBenchmark.nvqEncode            768  thrpt    5    0.012 ±  0.001  ops/us
+QuantizerKernelBenchmark.nvqScoreLookup       128  thrpt    5    4.053 ±  0.125  ops/us
+QuantizerKernelBenchmark.nvqScoreLookup       768  thrpt    5    0.698 ±  0.002  ops/us
+QuantizerKernelBenchmark.nvqScoreSetup        128  thrpt    5    3.320 ±  0.583  ops/us
+QuantizerKernelBenchmark.nvqScoreSetup        768  thrpt    5    0.601 ±  0.104  ops/us
+QuantizerKernelBenchmark.pqDecode             128  thrpt    5   11.752 ±  0.480  ops/us
+QuantizerKernelBenchmark.pqDecode             768  thrpt    5    2.149 ±  0.082  ops/us
+QuantizerKernelBenchmark.pqEncode             128  thrpt    5    0.053 ±  0.003  ops/us
+QuantizerKernelBenchmark.pqEncode             768  thrpt    5    0.008 ±  0.001  ops/us
+QuantizerKernelBenchmark.pqScoreLookup        128  thrpt    5   96.657 ±  3.318  ops/us
+QuantizerKernelBenchmark.pqScoreLookup        768  thrpt    5   15.538 ±  1.166  ops/us
+QuantizerKernelBenchmark.pqScoreSetup         128  thrpt    5    0.030 ±  0.004  ops/us
+QuantizerKernelBenchmark.pqScoreSetup         768  thrpt    5    0.008 ±  0.001  ops/us
+QuantizerKernelBenchmark.raqDecode            128  thrpt    5    6.456 ±  0.467  ops/us
+QuantizerKernelBenchmark.raqDecode            768  thrpt    5    1.124 ±  0.066  ops/us
+QuantizerKernelBenchmark.raqEncode            128  thrpt    5    5.350 ±  0.204  ops/us
+QuantizerKernelBenchmark.raqEncode            768  thrpt    5    0.931 ±  0.038  ops/us
+QuantizerKernelBenchmark.raqScoreLookup       128  thrpt    5   12.921 ±  0.526  ops/us
+QuantizerKernelBenchmark.raqScoreLookup       768  thrpt    5    2.116 ±  0.086  ops/us
+QuantizerKernelBenchmark.raqScoreSetup        128  thrpt    5    3.011 ±  0.176  ops/us
+QuantizerKernelBenchmark.raqScoreSetup        768  thrpt    5    0.535 ±  0.161  ops/us
+QuantizerKernelBenchmark.sq8Decode            128  thrpt    5   20.040 ±  2.607  ops/us
+QuantizerKernelBenchmark.sq8Decode            768  thrpt    5    3.283 ±  0.121  ops/us
+QuantizerKernelBenchmark.sq8Encode            128  thrpt    5    5.787 ±  0.422  ops/us
+QuantizerKernelBenchmark.sq8Encode            768  thrpt    5    0.878 ±  0.061  ops/us
+QuantizerKernelBenchmark.sq8ScoreLookup       128  thrpt    5   23.259 ±  0.448  ops/us
+QuantizerKernelBenchmark.sq8ScoreLookup       768  thrpt    5    4.076 ±  0.015  ops/us
+QuantizerKernelBenchmark.sq8ScoreSetup        128  thrpt    5    4.648 ±  0.734  ops/us
+QuantizerKernelBenchmark.sq8ScoreSetup        768  thrpt    5    0.734 ±  0.066  ops/us
+QuantizerKernelBenchmark.turboDecode          128  thrpt    5    3.982 ±  0.245  ops/us
+QuantizerKernelBenchmark.turboDecode          768  thrpt    5    0.693 ±  0.059  ops/us
+QuantizerKernelBenchmark.turboEncode          128  thrpt    5    1.229 ±  0.281  ops/us
+QuantizerKernelBenchmark.turboEncode          768  thrpt    5    0.218 ±  0.036  ops/us
+QuantizerKernelBenchmark.turboScoreLookup     128  thrpt    5    3.817 ±  0.135  ops/us
+QuantizerKernelBenchmark.turboScoreLookup     768  thrpt    5    0.681 ±  0.036  ops/us
+QuantizerKernelBenchmark.turboScoreSetup      128  thrpt    5    3.471 ±  0.153  ops/us
+QuantizerKernelBenchmark.turboScoreSetup      768  thrpt    5    0.619 ±  0.022  ops/us
+
+# === QuantizerTrainBenchmark — SQ8, SQ4, BBQ, RaBitQ (24 measurements) ===
+# Note: PQ (k-means) excluded from train sweep — see IndexBuildBenchmark for relative cost
+QuantizerTrainBenchmark.trainBBQ       128   10000  avgt    4    0.123 ±  0.008  ms/op
+QuantizerTrainBenchmark.trainBBQ       128  100000  avgt    4    1.225 ±  0.043  ms/op
+QuantizerTrainBenchmark.trainBBQ       768   10000  avgt    4    0.665 ±  0.073  ms/op
+QuantizerTrainBenchmark.trainBBQ       768  100000  avgt    4    6.815 ±  0.450  ms/op
+QuantizerTrainBenchmark.trainBBQ      1536   10000  avgt    4    1.338 ±  0.139  ms/op
+QuantizerTrainBenchmark.trainBBQ      1536  100000  avgt    4   28.233 ±  1.154  ms/op
+QuantizerTrainBenchmark.trainRaBitQ    128   10000  avgt    4    0.126 ±  0.011  ms/op
+QuantizerTrainBenchmark.trainRaBitQ    128  100000  avgt    4    1.241 ±  0.119  ms/op
+QuantizerTrainBenchmark.trainRaBitQ    768   10000  avgt    4    0.691 ±  0.303  ms/op
+QuantizerTrainBenchmark.trainRaBitQ    768  100000  avgt    4    6.673 ±  0.109  ms/op
+QuantizerTrainBenchmark.trainRaBitQ   1536   10000  avgt    4    1.350 ±  0.214  ms/op
+QuantizerTrainBenchmark.trainRaBitQ   1536  100000  avgt    4   29.192 ±  1.987  ms/op
+QuantizerTrainBenchmark.trainSQ4       128   10000  avgt    4    7.812 ±  1.474  ms/op
+QuantizerTrainBenchmark.trainSQ4       128  100000  avgt    4   34.432 ±  2.106  ms/op
+QuantizerTrainBenchmark.trainSQ4       768   10000  avgt    4   83.856 ±  4.276  ms/op
+QuantizerTrainBenchmark.trainSQ4       768  100000  avgt    4  214.490 ± 29.978  ms/op
+QuantizerTrainBenchmark.trainSQ4      1536   10000  avgt    4  206.806 ±  8.653  ms/op
+QuantizerTrainBenchmark.trainSQ4      1536  100000  avgt    4  471.091 ± 14.292  ms/op
+QuantizerTrainBenchmark.trainSQ8       128   10000  avgt    4    7.651 ±  0.800  ms/op
+QuantizerTrainBenchmark.trainSQ8       128  100000  avgt    4   34.371 ±  3.003  ms/op
+QuantizerTrainBenchmark.trainSQ8       768   10000  avgt    4   83.929 ±  9.374  ms/op
+QuantizerTrainBenchmark.trainSQ8       768  100000  avgt    4  211.810 ± 18.440  ms/op
+QuantizerTrainBenchmark.trainSQ8      1536   10000  avgt    4  211.477 ± 24.044  ms/op
+QuantizerTrainBenchmark.trainSQ8      1536  100000  avgt    4  474.593 ± 32.012  ms/op
+
+# === IndexBuildBenchmark (8 measurements) ===
+Benchmark                             (dim)   (n)  Mode  Cnt     Score    Error  Units
+IndexBuildBenchmark.buildHnsw           128    5000  avgt    5    1889.758 ± 156.3  ms/op
+IndexBuildBenchmark.buildVamana         128    1000  avgt    5    1587.786 ±  58.1  ms/op
+IndexBuildBenchmark.buildVamana         128    5000  avgt    5   12050.880 ± 420.7  ms/op
+IndexBuildBenchmark.buildIvfFlat        128    5000  avgt    5     156.940 ±  19.6  ms/op

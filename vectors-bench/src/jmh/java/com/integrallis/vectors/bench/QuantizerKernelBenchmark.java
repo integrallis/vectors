@@ -62,6 +62,21 @@ public class QuantizerKernelBenchmark {
 
   private static final int CORPUS_SIZE = 10_000;
 
+  /**
+   * Pool size for the *ScoreLookup ordinal cursor. Sized to 64 (= typical efSearch beam width) so
+   * that the benchmark exercises realistic per-score memory access patterns rather than always
+   * hitting the same cache-line. Must be a power of 2 for the bitmask trick.
+   */
+  private static final int LOOKUP_POOL = 64;
+
+  private static final int LOOKUP_MASK = LOOKUP_POOL - 1;
+
+  /**
+   * Rotating cursor used by all *ScoreLookup benchmarks. Advances by 1 each invocation, wraps via
+   * bitmask. Not volatile — JMH runs one thread per benchmark method in Scope.Thread state.
+   */
+  private int lookupCursor;
+
   // Query / encode inputs
   private float[] query;
   private byte[] sq8Encoded;
@@ -176,7 +191,7 @@ public class QuantizerKernelBenchmark {
   /** Measures only the per-score lookup cost (score function pre-built in setup). */
   @Benchmark
   public float sq8ScoreLookup() {
-    return sq8ScoreFn.score(0);
+    return sq8ScoreFn.score(lookupCursor++ & LOOKUP_MASK);
   }
 
   // --- PQ ---
@@ -201,7 +216,7 @@ public class QuantizerKernelBenchmark {
   /** Measures only the per-score ADC lookup cost (table pre-built in setup). */
   @Benchmark
   public float pqScoreLookup() {
-    return pqScoreFn.score(0);
+    return pqScoreFn.score(lookupCursor++ & LOOKUP_MASK);
   }
 
   // --- BQ ---
@@ -224,7 +239,7 @@ public class QuantizerKernelBenchmark {
 
   @Benchmark
   public float bqScoreLookup() {
-    return bqScoreFn.score(0);
+    return bqScoreFn.score(lookupCursor++ & LOOKUP_MASK);
   }
 
   // --- RaBitQ ---
@@ -247,7 +262,7 @@ public class QuantizerKernelBenchmark {
 
   @Benchmark
   public float raqScoreLookup() {
-    return raqScoreFn.score(0);
+    return raqScoreFn.score(lookupCursor++ & LOOKUP_MASK);
   }
 
   // --- ExtendedRaBitQ (4-bit) ---
@@ -270,7 +285,7 @@ public class QuantizerKernelBenchmark {
 
   @Benchmark
   public float extRaqScoreLookup() {
-    return extRaqScoreFn.score(0);
+    return extRaqScoreFn.score(lookupCursor++ & LOOKUP_MASK);
   }
 
   // --- TurboQuant (4-bit) ---
@@ -293,7 +308,7 @@ public class QuantizerKernelBenchmark {
 
   @Benchmark
   public float turboScoreLookup() {
-    return turboScoreFn.score(0);
+    return turboScoreFn.score(lookupCursor++ & LOOKUP_MASK);
   }
 
   // --- NVQ ---
@@ -316,6 +331,6 @@ public class QuantizerKernelBenchmark {
 
   @Benchmark
   public float nvqScoreLookup() {
-    return nvqScoreFn.score(0);
+    return nvqScoreFn.score(lookupCursor++ & LOOKUP_MASK);
   }
 }

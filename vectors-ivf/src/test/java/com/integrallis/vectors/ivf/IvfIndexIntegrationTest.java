@@ -315,4 +315,91 @@ class IvfIndexIntegrationTest {
       assertThat(partial).isEqualTo(32f);
     }
   }
+
+  // -------------------------------------------------------------------------
+  // Codec round-trip tests
+  // -------------------------------------------------------------------------
+
+  @Nested
+  @Tag("unit")
+  class CodecTests {
+
+    @Test
+    void encode_decode_roundTrip_withoutHarmony_preservesSearchResults() {
+      int n = 500, dim = 16, searchK = 5, nprobe = 4;
+      float[][] data = randomVecs(n, dim, 20L);
+      IvfBuildParams params = new IvfBuildParams(10, 30, 0f, false, 42L, 0);
+      IvfIndex idx = IvfIndex.build(data, null, SimilarityFunction.EUCLIDEAN, params);
+
+      // Confirm no keyDimensions were set
+      for (int c = 0; c < idx.k(); c++) {
+        assertThat(idx.partition(c).keyDimensions()).isNull();
+      }
+
+      byte[] bytes = idx.encode();
+      IvfIndex decoded = IvfIndex.decode(bytes, data, SimilarityFunction.EUCLIDEAN);
+
+      // Decoded index returns the same top-k for every query
+      float[] query = randomVecs(1, dim, 99L)[0];
+      IvfSearchRequest req = IvfSearchRequest.of(query, searchK, nprobe);
+      assertThat(decoded.search(req).hits())
+          .containsExactlyInAnyOrderElementsOf(idx.search(req).hits());
+    }
+
+    @Test
+    void encode_decode_roundTrip_withHarmony_preservesKeyDimensions() {
+      int n = 1_000, dim = 32, searchK = 5, nprobe = 8, kd = 8;
+      float[][] data = randomVecs(n, dim, 21L);
+      IvfBuildParams params = new IvfBuildParams(20, 30, 0f, false, 42L, kd);
+      IvfIndex idx = IvfIndex.build(data, null, SimilarityFunction.EUCLIDEAN, params);
+
+      // Confirm at least one non-empty partition has keyDimensions
+      long withKeys = 0;
+      for (int c = 0; c < idx.k(); c++) {
+        if (idx.partition(c).hasKeyDimensions()) withKeys++;
+      }
+      assertThat(withKeys).isGreaterThan(0);
+
+      byte[] bytes = idx.encode();
+      IvfIndex decoded = IvfIndex.decode(bytes, data, SimilarityFunction.EUCLIDEAN);
+
+      // keyDimensions must be restored identically on every partition
+      for (int c = 0; c < idx.k(); c++) {
+        assertThat(decoded.partition(c).keyDimensions())
+            .as("keyDimensions for cluster %d", c)
+            .isEqualTo(idx.partition(c).keyDimensions());
+      }
+
+      // Search results must still match
+      float[] query = randomVecs(1, dim, 100L)[0];
+      IvfSearchRequest req = IvfSearchRequest.of(query, searchK, nprobe);
+      assertThat(decoded.search(req).hits())
+          .containsExactlyInAnyOrderElementsOf(idx.search(req).hits());
+    }
+
+    @Test
+    void encode_decode_roundTrip_withHarmony_pruningActivatesAfterDecode() {
+      int n = 2_000, dim = 32, searchK = 10, nprobe = 8;
+      float[][] data = randomVecs(n, dim, 22L);
+      IvfBuildParams harmonyParams = new IvfBuildParams(20, 50, 0f, false, 42L, 8);
+      IvfBuildParams baseParams = new IvfBuildParams(20, 50, 0f, false, 42L, 0);
+
+      IvfIndex harmonized = IvfIndex.build(data, null, SimilarityFunction.EUCLIDEAN, harmonyParams);
+      IvfIndex baseline = IvfIndex.build(data, null, SimilarityFunction.EUCLIDEAN, baseParams);
+
+      // Round-trip the harmonized index
+      IvfIndex decoded = IvfIndex.decode(harmonized.encode(), data, SimilarityFunction.EUCLIDEAN);
+
+      // Decoded harmonized index should give ≥ 85% recall vs the full-scan baseline
+      float[] query = randomVecs(1, dim, 101L)[0];
+      IvfSearchRequest req = IvfSearchRequest.of(query, searchK, nprobe);
+      IvfSearchRequest bruteReq = IvfSearchRequest.of(query, searchK, 20);
+
+      int[] groundTruth =
+          baseline.search(bruteReq).hits().stream().mapToInt(h -> h.ordinal()).toArray();
+      int[] decodedHits = decoded.search(req).hits().stream().mapToInt(h -> h.ordinal()).toArray();
+
+      assertThat(recall(decodedHits, groundTruth)).isGreaterThanOrEqualTo(0.85);
+    }
+  }
 }

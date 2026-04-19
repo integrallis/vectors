@@ -112,8 +112,8 @@ class RobustPrunerTest {
     }
 
     @Test
-    void graduatedAlpha_prioritizesClosestFirst() {
-      // The closest candidate should always be selected regardless of alpha
+    void alpha_greedy_selectsClosestFirst() {
+      // The closest candidate should always be selected first regardless of alpha value
       float[][] data = {{0, 0}, {1, 0}, {0, 2}, {3, 3}};
       var vectors = new InMemoryVectors(data);
       var sim = SimilarityFunction.EUCLIDEAN;

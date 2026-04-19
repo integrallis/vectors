@@ -163,6 +163,39 @@ class JavaVectorsAutoConfigurationTest {
     }
 
     @Test
+    void vectorCollection_cacheSize_bindsFromProperties_contextLoads() {
+      // Verifies that java-vectors.cache-size=256 reaches VectorCollectionBuilder.cacheSize()
+      // without throwing. The property cannot be inspected across package boundaries, so a clean
+      // context startup is the gate.
+      runner
+          .withPropertyValues(
+              "java-vectors.dimension=4",
+              "java-vectors.metric=COSINE",
+              "java-vectors.cache-size=256")
+          .run(ctx -> assertThat(ctx).hasSingleBean(VectorCollection.class));
+    }
+
+    @Test
+    void vectorCollection_cacheSize_defaultZero_contextLoads() {
+      // cacheSize=0 (the default) disables the cache — must also produce a healthy context.
+      runner
+          .withPropertyValues("java-vectors.dimension=4", "java-vectors.metric=COSINE")
+          .run(ctx -> assertThat(ctx).hasSingleBean(VectorCollection.class));
+    }
+
+    @Test
+    void vectorCollection_cacheSize_negative_failsContextLoad() {
+      // VectorCollectionBuilder.cacheSize(-1) throws IllegalArgumentException, so the context
+      // should fail to start when cache-size is negative.
+      runner
+          .withPropertyValues(
+              "java-vectors.dimension=4",
+              "java-vectors.metric=COSINE",
+              "java-vectors.cache-size=-1")
+          .run(ctx -> assertThat(ctx).hasFailed());
+    }
+
+    @Test
     void userProvidedVectorCollection_suppressesAutoConfiguration() {
       runner
           .withPropertyValues("java-vectors.dimension=4", "java-vectors.metric=COSINE")

@@ -27,6 +27,29 @@ class RaBitQuantizerTest {
     return Files.exists(SIFT_DIR.resolve("siftsmall_base.fvecs"));
   }
 
+  // --- Default Rotation ---
+
+  @Nested
+  @Tag("unit")
+  class DefaultRotation {
+
+    @Test
+    void train_withSeed_defaultsToGivensRotation() {
+      float[][] vectors = generateNormalizedVectors(100, 128, 42L);
+      var dataset = new ArrayVectorDataset(vectors);
+      RaBitQuantizer raq = RaBitQuantizer.train(dataset, 42L);
+      assertThat(raq.rotation()).isInstanceOf(GivensRotation.class);
+    }
+
+    @Test
+    void train_noSeed_defaultsToGivensRotation() {
+      float[][] vectors = generateNormalizedVectors(100, 128, 42L);
+      var dataset = new ArrayVectorDataset(vectors);
+      RaBitQuantizer raq = RaBitQuantizer.train(dataset);
+      assertThat(raq.rotation()).isInstanceOf(GivensRotation.class);
+    }
+  }
+
   // --- Rotation Tests ---
 
   @Nested

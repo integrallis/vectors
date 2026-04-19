@@ -56,7 +56,8 @@ public class JavaVectorsAutoConfiguration {
             .metric(props.getMetric())
             .indexType(props.getIndexType())
             .quantizer(props.getQuantizer())
-            .autoCommitThreshold(props.getAutoCommitThreshold());
+            .autoCommitThreshold(props.getAutoCommitThreshold())
+            .cacheSize(props.getCacheSize());
 
     if (props.getStoragePath() != null) {
       builder.storagePath(props.getStoragePath());

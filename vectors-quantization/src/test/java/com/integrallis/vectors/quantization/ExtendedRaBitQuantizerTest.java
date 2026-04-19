@@ -584,6 +584,29 @@ class ExtendedRaBitQuantizerTest {
     }
   }
 
+  // --- Default Rotation ---
+
+  @Nested
+  @Tag("unit")
+  class DefaultRotation {
+
+    @Test
+    void train_withSeed_defaultsToGivensRotation() {
+      float[][] vectors = generateNormalizedVectors(200, 128, 42L);
+      var dataset = new ArrayVectorDataset(vectors);
+      ExtendedRaBitQuantizer eq = ExtendedRaBitQuantizer.train(dataset, 4, 42L);
+      assertThat(eq.rotation()).isInstanceOf(GivensRotation.class);
+    }
+
+    @Test
+    void train_noSeed_defaultsToGivensRotation() {
+      float[][] vectors = generateNormalizedVectors(200, 128, 42L);
+      var dataset = new ArrayVectorDataset(vectors);
+      ExtendedRaBitQuantizer eq = ExtendedRaBitQuantizer.train(dataset, 4);
+      assertThat(eq.rotation()).isInstanceOf(GivensRotation.class);
+    }
+  }
+
   // --- Rotation Strategies ---
 
   @Nested

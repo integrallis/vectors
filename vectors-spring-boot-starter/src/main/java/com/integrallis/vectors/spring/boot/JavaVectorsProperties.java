@@ -60,6 +60,14 @@ public class JavaVectorsProperties {
    */
   private Path storagePath;
 
+  /**
+   * Maximum number of cached query results (LRU). {@code 0} (the default) disables the {@link
+   * com.integrallis.vectors.db.cache.QvCache} entirely. When positive, queries with {@code
+   * includeVector=false} are eligible for caching; results are keyed by a scalar int8 quantization
+   * of the query vector combined with {@code k} and a filter predicate hash.
+   */
+  private int cacheSize = 0;
+
   // -------------------------------------------------------------------------
   // HNSW parameters
   // -------------------------------------------------------------------------
@@ -279,6 +287,14 @@ public class JavaVectorsProperties {
 
   public void setStoragePath(Path storagePath) {
     this.storagePath = storagePath;
+  }
+
+  public int getCacheSize() {
+    return cacheSize;
+  }
+
+  public void setCacheSize(int cacheSize) {
+    this.cacheSize = cacheSize;
   }
 
   public HnswProperties getHnsw() {
