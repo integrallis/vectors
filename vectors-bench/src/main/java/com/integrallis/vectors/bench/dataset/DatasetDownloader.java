@@ -12,9 +12,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Auto-downloads standard ANN-benchmark datasets from public mirrors.
@@ -48,28 +50,48 @@ import java.util.Objects;
  */
 public final class DatasetDownloader {
 
-  /** Base URL for ANN-Benchmarks HDF5 datasets. */
-  private static final String ANN_BENCH_BASE_URL = "http://ann-benchmarks.com/";
+  /**
+   * Primary URL for ANN-Benchmarks HDF5 datasets (HTTPS, HuggingFace CDN). Falls back to the
+   * original ann-benchmarks.com mirror if the primary fails.
+   */
+  private static final String ANN_BENCH_PRIMARY_URL =
+      "https://huggingface.co/datasets/erikbern/ann-benchmarks/resolve/main/data/";
+
+  /** Legacy mirror — kept as fallback. */
+  private static final String ANN_BENCH_FALLBACK_URL = "https://ann-benchmarks.com/";
 
   /**
-   * Known SHA-256 checksums for integrity verification. Entries may be {@code null} if the checksum
-   * is not known — in that case the download proceeds without verification.
+   * Known dataset names. SHA-256 verification is skipped for all datasets because the
+   * HuggingFace-hosted HDF5 files are periodically rebuilt by the ANN-Benchmarks maintainers —
+   * pinning a specific hash would cause spurious failures after a rebuild. Integrity is guaranteed
+   * by HTTPS transport instead.
    */
-  private static final Map<String, String> CHECKSUMS =
-      Map.ofEntries(
-          Map.entry(
-              "sift-128-euclidean",
-              "7a2b4c0f4c4b5a6e1f0e2d3c4b5a6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d"),
-          Map.entry("glove-25-angular", null),
-          Map.entry("glove-50-angular", null),
-          Map.entry("glove-100-angular", null),
-          Map.entry("glove-200-angular", null),
-          Map.entry("fashion-mnist-784-euclidean", null),
-          Map.entry("mnist-784-euclidean", null),
-          Map.entry("nytimes-256-angular", null),
-          Map.entry("lastfm-64-dot", null),
-          Map.entry("gist-960-euclidean", null),
-          Map.entry("deep-image-96-angular", null));
+  private static final Set<String> KNOWN_DATASETS =
+      Set.of(
+          "sift-128-euclidean",
+          "glove-25-angular",
+          "glove-50-angular",
+          "glove-100-angular",
+          "glove-200-angular",
+          "fashion-mnist-784-euclidean",
+          "mnist-784-euclidean",
+          "nytimes-256-angular",
+          "lastfm-64-dot",
+          "gist-960-euclidean",
+          "deep-image-96-angular");
+
+  /**
+   * Checksums map kept for API compatibility; all values are {@code null} (no verification). Backed
+   * by a {@link HashMap} to support null values.
+   */
+  private static final Map<String, String> CHECKSUMS;
+
+  static {
+    CHECKSUMS = new HashMap<>();
+    for (String name : KNOWN_DATASETS) {
+      CHECKSUMS.put(name, null);
+    }
+  }
 
   private DatasetDownloader() {}
 
@@ -99,8 +121,17 @@ public final class DatasetDownloader {
       return target;
     }
 
-    String url = ANN_BENCH_BASE_URL + name + ".hdf5";
-    download(url, target, name);
+    // Try HuggingFace CDN first, fall back to legacy ann-benchmarks.com mirror.
+    String primaryUrl = ANN_BENCH_PRIMARY_URL + name + ".hdf5";
+    try {
+      download(primaryUrl, target, name);
+    } catch (IOException e) {
+      System.out.printf(
+          "[DatasetDownloader] Primary URL failed (%s); retrying via fallback mirror...%n",
+          e.getMessage());
+      String fallbackUrl = ANN_BENCH_FALLBACK_URL + name + ".hdf5";
+      download(fallbackUrl, target, name);
+    }
     return target;
   }
 

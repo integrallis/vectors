@@ -75,7 +75,7 @@ public final class RecallQpsBenchmark {
             new DatasetConfig("fashion-mnist-784-euclidean", SimilarityFunction.EUCLIDEAN, "hdf5"));
 
     for (DatasetConfig dsCfg : datasets) {
-      if (datasetFilter != null && !dsCfg.name.equals(datasetFilter)) continue;
+      if (datasetFilter != null && !dsCfg.name.contains(datasetFilter)) continue;
 
       System.out.printf("%n=== Dataset: %s ===%n", dsCfg.name);
       DatasetData data = loadDataset(dsCfg);

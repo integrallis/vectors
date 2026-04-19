@@ -44,3 +44,48 @@ jmh {
     resultFormat.set("TEXT")
     resultsFile.set(project.file("build/results/jmh/results.txt"))
 }
+
+// ---------------------------------------------------------------------------
+// recallQps — end-to-end recall-vs-QPS harness (not JMH; plain main-class)
+//
+// Usage:
+//   ./gradlew :vectors-bench:recallQps                          # all datasets & algorithms
+//   ./gradlew :vectors-bench:recallQps -Pbench.dataset=sift     # filter by dataset name
+//   ./gradlew :vectors-bench:recallQps -Pbench.algo=hnsw        # filter by algorithm
+//   ./gradlew :vectors-bench:recallQps -Pbench.dataset=sift -Pbench.algo=hnsw
+//
+// Results are written to build/results/recall-qps/ as CSV + JSON.
+// Datasets are downloaded automatically on first run to ~/.cache/java-vectors/datasets/
+// (or the path set by the JAVA_VECTORS_DATASET_DIR environment variable).
+// ---------------------------------------------------------------------------
+tasks.register<JavaExec>("recallQps") {
+    group = "benchmark"
+    description = "Run the recall-vs-QPS end-to-end harness (downloads datasets if needed)"
+
+    classpath = sourceSets["main"].runtimeClasspath
+
+    mainClass.set("com.integrallis.vectors.bench.RecallQpsBenchmark")
+
+    jvmArgs(
+        "--add-modules", "jdk.incubator.vector",
+        "-Xmx12g", "-Xms4g",
+        "-XX:+UseG1GC",
+        "-XX:MaxGCPauseMillis=100"
+    )
+
+    // Optional dataset and algorithm filters forwarded as positional args.
+    val datasetFilter = project.findProperty("bench.dataset") as String?
+    val algoFilter    = project.findProperty("bench.algo")    as String?
+    if (datasetFilter != null) args(datasetFilter)
+    if (algoFilter    != null) args(algoFilter)
+
+    // Stream harness stdout/stderr to the Gradle console in real time.
+    standardOutput = System.out
+    errorOutput    = System.err
+
+    doFirst {
+        val out = project.file("build/results/recall-qps")
+        out.mkdirs()
+        println("[recallQps] Results will be written to: ${out.absolutePath}")
+    }
+}
