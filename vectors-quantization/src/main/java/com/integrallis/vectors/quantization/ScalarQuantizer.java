@@ -340,6 +340,9 @@ public final class ScalarQuantizer implements Quantizer<ScalarQuantizedVectors> 
    * Computes [minQuantile, maxQuantile] from the dataset using confidence interval percentiles. For
    * datasets larger than {@link #SCALAR_QUANTIZATION_SAMPLE_SIZE}, uses reservoir sampling via
    * {@link ReservoirSampler} (deterministic seed 42).
+   *
+   * <p>For CI=1.0, uses a single-pass min/max scan (O(n), zero allocation). For CI&lt;1.0, uses
+   * quickselect to find the percentile values in O(n) average case — no full sort needed.
    */
   static float[] computeQuantiles(VectorDataset dataset, float confidenceInterval) {
     int dim = dataset.dimension();
@@ -351,33 +354,83 @@ public final class ScalarQuantizer implements Quantizer<ScalarQuantizedVectors> 
             datasetSize, SCALAR_QUANTIZATION_SAMPLE_SIZE, new Random(42L));
     int sampleSize = indices.length;
 
-    // Collect all scalar values from sampled vectors into a flat array for sorting
-    float[] allValues = new float[sampleSize * dim];
-    for (int i = 0; i < sampleSize; i++) {
-      System.arraycopy(dataset.getVector(indices[i]), 0, allValues, i * dim, dim);
-    }
-
-    Arrays.sort(allValues);
-
     if (confidenceInterval >= 1.0f) {
-      float min = allValues[0];
-      float max = allValues[allValues.length - 1];
+      // Single-pass min/max — no allocation, no sorting
+      float min = Float.POSITIVE_INFINITY;
+      float max = Float.NEGATIVE_INFINITY;
+      for (int i = 0; i < sampleSize; i++) {
+        float[] vec = dataset.getVector(indices[i]);
+        for (int d = 0; d < dim; d++) {
+          float v = vec[d];
+          if (v < min) min = v;
+          if (v > max) max = v;
+        }
+      }
       if (min == max) {
         return expandDegenerateRange(min);
       }
       return new float[] {min, max};
     }
 
+    // Collect all scalar values for percentile selection
+    float[] allValues = new float[sampleSize * dim];
+    for (int i = 0; i < sampleSize; i++) {
+      System.arraycopy(dataset.getVector(indices[i]), 0, allValues, i * dim, dim);
+    }
+
     int selectorIndex = (int) (allValues.length * (1f - confidenceInterval) / 2f + 0.5f);
     selectorIndex = Math.max(0, Math.min(selectorIndex, allValues.length - 1));
-    float minQ = allValues[selectorIndex];
-    float maxQ = allValues[allValues.length - 1 - selectorIndex];
+    int maxIndex = allValues.length - 1 - selectorIndex;
+
+    // Use quickselect O(n) instead of full sort O(n log n)
+    float minQ = quickSelect(allValues, 0, allValues.length - 1, selectorIndex);
+    float maxQ = quickSelect(allValues, 0, allValues.length - 1, maxIndex);
 
     if (minQ == maxQ) {
       return expandDegenerateRange(minQ);
     }
 
     return new float[] {minQ, maxQ};
+  }
+
+  /**
+   * Quickselect (Hoare's selection algorithm). Finds the k-th smallest element in O(n) average
+   * case. Modifies the array in place — elements may be reordered.
+   */
+  private static float quickSelect(float[] arr, int left, int right, int k) {
+    while (left < right) {
+      // Median-of-three pivot selection for better average-case behavior
+      int mid = left + (right - left) / 2;
+      if (arr[mid] < arr[left]) swap(arr, left, mid);
+      if (arr[right] < arr[left]) swap(arr, left, right);
+      if (arr[mid] < arr[right]) swap(arr, mid, right);
+      float pivot = arr[right];
+
+      // Lomuto partition
+      int storeIndex = left;
+      for (int i = left; i < right; i++) {
+        if (arr[i] <= pivot) {
+          swap(arr, storeIndex, i);
+          storeIndex++;
+        }
+      }
+      swap(arr, storeIndex, right);
+
+      if (storeIndex == k) {
+        return arr[k];
+      } else if (k < storeIndex) {
+        right = storeIndex - 1;
+      } else {
+        left = storeIndex + 1;
+      }
+    }
+    return arr[left];
+  }
+
+  private static void swap(float[] arr, int i, int j) {
+    float tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
   }
 
   /** Expands a degenerate range (min == max) by a small epsilon. */

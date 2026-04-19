@@ -26,9 +26,12 @@ import org.openjdk.jmh.annotations.Warmup;
  * ./gradlew :vectors-bench:jmh -Pjmh.includes=DistanceKernelBenchmark
  * }</pre>
  *
- * <p>Each benchmark method is a single kernel call; the {@code @Param dim} axis sweeps 32 →
- * 1536-dimensional embeddings so both cache-resident and memory-bandwidth-limited regimes are
- * covered.
+ * <p>Each benchmark method is a single kernel call; the {@code @Param dim} axis sweeps small to
+ * large embeddings so both cache-resident and memory-bandwidth-limited regimes are covered.
+ *
+ * <p>Expanded from the original 5 dimensions to cover the full range: tiny (4-16), standard
+ * (32-256), LLM embeddings (384-768), and large (1024-2048). Added l2normalize and hamming distance
+ * kernels.
  */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -40,16 +43,23 @@ import org.openjdk.jmh.annotations.Warmup;
 @Measurement(iterations = 5, time = 1)
 public class DistanceKernelBenchmark {
 
-  @Param({"32", "128", "256", "768", "1536"})
+  @Param({"4", "8", "16", "32", "64", "128", "256", "384", "512", "768", "1024", "1536", "2048"})
   public int dim;
 
   // float vectors
   private float[] a;
   private float[] b;
 
+  // unnormalized float vector for l2normalize benchmarks
+  private float[] unnormalized;
+
   // byte vectors
   private byte[] ba;
   private byte[] bb;
+
+  // binary vectors (long[]) for hamming distance
+  private long[] binaryA;
+  private long[] binaryB;
 
   // providers
   private VectorUtilSupport simd;
@@ -60,10 +70,12 @@ public class DistanceKernelBenchmark {
     Random rng = new Random(42L);
     a = new float[dim];
     b = new float[dim];
+    unnormalized = new float[dim];
     double normA = 0, normB = 0;
     for (int i = 0; i < dim; i++) {
       a[i] = rng.nextFloat() * 2f - 1f;
       b[i] = rng.nextFloat() * 2f - 1f;
+      unnormalized[i] = rng.nextFloat() * 10f - 5f;
       normA += a[i] * (double) a[i];
       normB += b[i] * (double) b[i];
     }
@@ -79,6 +91,15 @@ public class DistanceKernelBenchmark {
     bb = new byte[dim];
     rng.nextBytes(ba);
     rng.nextBytes(bb);
+
+    // Binary vectors for hamming distance: ceil(dim / 64) longs
+    int longs = (dim + 63) / 64;
+    binaryA = new long[longs];
+    binaryB = new long[longs];
+    for (int i = 0; i < longs; i++) {
+      binaryA[i] = rng.nextLong();
+      binaryB[i] = rng.nextLong();
+    }
 
     simd = VectorizationProvider.getInstance();
     scalar = VectorizationProvider.newScalarProvider();
@@ -101,6 +122,11 @@ public class DistanceKernelBenchmark {
     return simd.cosine(a, b);
   }
 
+  @Benchmark
+  public float[] simdL2Normalize() {
+    return simd.l2normalize(unnormalized, false);
+  }
+
   // --- Scalar float kernels (baseline) ---
 
   @Benchmark
@@ -118,6 +144,11 @@ public class DistanceKernelBenchmark {
     return scalar.cosine(a, b);
   }
 
+  @Benchmark
+  public float[] scalarL2Normalize() {
+    return scalar.l2normalize(unnormalized, false);
+  }
+
   // --- Byte kernels (used by SQ8 scoring) ---
 
   @Benchmark
@@ -133,5 +164,17 @@ public class DistanceKernelBenchmark {
   @Benchmark
   public float byteCosine() {
     return simd.cosine(ba, bb);
+  }
+
+  // --- Binary kernels (hamming distance for BQ) ---
+
+  @Benchmark
+  public int simdHammingDistance() {
+    return simd.hammingDistance(binaryA, binaryB);
+  }
+
+  @Benchmark
+  public int scalarHammingDistance() {
+    return scalar.hammingDistance(binaryA, binaryB);
   }
 }

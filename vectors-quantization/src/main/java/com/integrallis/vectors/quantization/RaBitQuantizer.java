@@ -94,19 +94,21 @@ public final class RaBitQuantizer implements Quantizer<RaBitQuantizedVectors> {
   }
 
   /**
-   * Trains a RaBitQ quantizer on the given dataset using a dense random rotation.
+   * Trains a RaBitQ quantizer on the given dataset using a Givens rotation (O(d) FMAs).
    *
-   * <p>Training computes the dataset centroid and generates a random orthogonal rotation matrix.
-   * The dimension is padded to the next multiple of 64 for efficient bit-packing.
+   * <p>Training computes the dataset centroid and generates a block-diagonal orthogonal rotation.
+   * The dimension is padded to the next multiple of 64 for efficient bit-packing. For an explicit
+   * dense rotation, use {@link #train(VectorDataset, Rotation)} with {@link
+   * RandomRotation#generate}.
    *
    * @param dataset the training data
-   * @param seed random seed for the rotation matrix (deterministic for reproducibility)
+   * @param seed random seed for the rotation (deterministic for reproducibility)
    * @return a trained RaBitQ quantizer
    */
   public static RaBitQuantizer train(VectorDataset dataset, long seed) {
     int dim = dataset.dimension();
     int paddedDim = ((dim + 63) / 64) * 64;
-    Rotation rotation = RandomRotation.generate(paddedDim, seed);
+    Rotation rotation = GivensRotation.generate(paddedDim, seed);
     return train(dataset, rotation);
   }
 

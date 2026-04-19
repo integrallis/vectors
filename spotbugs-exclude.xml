@@ -69,6 +69,26 @@
         <Class name="com.integrallis.vectors.hnsw.RandomAccessVectorDataset"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- HNSW: FusedAdcGraph stores graph/list arrays by reference for zero-copy ADC search -->
+    <Match>
+        <Class name="com.integrallis.vectors.hnsw.FusedAdcGraph"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <!-- HNSW: FusedAdcHnswSearcher stores float[][] corpus by reference for scoring -->
+    <Match>
+        <Class name="com.integrallis.vectors.hnsw.FusedAdcHnswSearcher"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- HNSW: ConcurrentHnswGraphBuilder lock release paths — locks are released in finally
+         blocks within the concurrent insert/snapshot methods; SpotBugs cannot track the
+         lock-per-node scheme through the concurrent algorithm. -->
+    <Match>
+        <Class name="com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder"/>
+        <Bug pattern="UL_UNRELEASED_LOCK,UL_UNRELEASED_LOCK_EXCEPTION_PATH"/>
+    </Match>
     <!-- Vamana: SearchResult record exposes/stores arrays intentionally for zero-copy access -->
     <Match>
         <Class name="com.integrallis.vectors.vamana.SearchResult"/>
@@ -100,6 +120,11 @@
         <Class name="com.integrallis.vectors.vamana.RandomAccessVectorDataset"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
+    <!-- Vamana: ConcurrentVamanaGraphBuilder lock release paths — same pattern as HNSW. -->
+    <Match>
+        <Class name="com.integrallis.vectors.vamana.ConcurrentVamanaGraphBuilder"/>
+        <Bug pattern="UL_UNRELEASED_LOCK,UL_UNRELEASED_LOCK_EXCEPTION_PATH"/>
+    </Match>
     <!-- Quantization module: serialization accessors and public constructors intentionally
          expose/store internal array references for zero-copy codec round-trip. -->
     <Match>
@@ -111,8 +136,15 @@
             <Class name="com.integrallis.vectors.quantization.BinaryQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.RaBitQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.NVQuantizer"/>
+            <Class name="com.integrallis.vectors.quantization.OptimizedProductQuantizer"/>
         </Or>
         <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <!-- Quantization module: QuantizationPipeline.Builder.scalarBits is set by the builder
+         but read via build() — SpotBugs UrF is a false positive for builder-pattern fields. -->
+    <Match>
+        <Class name="com.integrallis.vectors.quantization.QuantizationPipeline$Builder"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
     </Match>
     <Match>
         <Or>
@@ -270,15 +302,45 @@
     </Match>
 
     <!-- vectors-bench: JMH @State setUp() methods use Random seeded once per trial; SpotBugs
-         misidentifies calls across multiple loops/methods as "used only once". -->
+         misidentifies calls across multiple loops/methods as "used only once". Same for
+         macro benchmark corpus generation (deterministic seed for reproducibility). -->
     <Match>
         <Or>
             <Class name="com.integrallis.vectors.bench.DistanceKernelBenchmark"/>
             <Class name="com.integrallis.vectors.bench.QuantizerKernelBenchmark"/>
             <Class name="com.integrallis.vectors.bench.IndexBuildBenchmark"/>
             <Class name="com.integrallis.vectors.bench.AnnSearchBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.IvfSearchBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.VectorDbBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.BuildScalabilityBenchmark"/>
         </Or>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+
+    <!-- vectors-bench: BenchmarkResult.Builder stores Map references for builder-pattern
+         convenience. Record compact constructor does Map.copyOf() for immutability. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.report.BenchmarkResult$Builder"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- vectors-bench: DatasetDownloader.download() and BenchmarkReporter.csv/json create
+         parent directories via Files.createDirectories() which never returns null for valid
+         paths. SpotBugs cannot prove this statically. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.bench.dataset.DatasetDownloader"/>
+            <Class name="com.integrallis.vectors.bench.report.BenchmarkReporter"/>
+        </Or>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+
+    <!-- vectors-bench: JSON output uses literal \n for JSON formatting (not platform newlines).
+         JSON spec requires LF, not CR+LF. SpotBugs FS_BAD_LOCALE warning is a false positive
+         for structured data output. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.report.BenchmarkReporter"/>
+        <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
     </Match>
 
     <!-- vectors-distributed: LocalSearchRequest stores float[]/int[] by reference for zero-copy
@@ -300,6 +362,17 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
 
+    <!-- vectors-db: QvCacheKey stores byte[] quantized query by reference for zero-copy
+         cache key identity. The key is immutable-by-contract; copying the array on every
+         cache lookup would defeat the per-query fast path. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.cache.QvCacheKey"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
     <!-- vectors-db: VectorCollectionImpl.openGeneration intentionally catches Exception
          (not just IOException) so that arena.close() fires even on unchecked exceptions
          like ArithmeticException from Math.toIntExact. The broad catch is a resource-safety
@@ -308,6 +381,17 @@
         <Class name="com.integrallis.vectors.db.VectorCollectionImpl"/>
         <Method name="openGeneration"/>
         <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!-- vectors-spring-boot-starter: JavaVectorsProperties uses standard Spring Boot @ConfigurationProperties
+         getter/setter pattern. Properties are mutable POJO beans managed by the Spring container.
+         EI_EXPOSE_REP/EI2 warnings are inherent to the Spring ConfigurationProperties design. -->
+    <Match>
+        <Class name="com.integrallis.vectors.spring.boot.JavaVectorsProperties"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
     </Match>
 
 </FindBugsFilter>

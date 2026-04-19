@@ -95,7 +95,7 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
 
   /**
    * Trains an Extended RaBitQ quantizer with default seed (42L) and default rotation ({@link
-   * RandomRotation}).
+   * GivensRotation}).
    *
    * @param dataset the training data
    * @param bits magnitude bit-width (2-8; use {@link RaBitQuantizer} for 1-bit)
@@ -107,11 +107,14 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
   }
 
   /**
-   * Trains an Extended RaBitQ quantizer with a dense random rotation.
+   * Trains an Extended RaBitQ quantizer with a Givens rotation (O(d) FMAs).
+   *
+   * <p>For an explicit dense rotation, use {@link #train(VectorDataset, int, Rotation)} with {@link
+   * RandomRotation#generate}.
    *
    * @param dataset the training data
    * @param bits magnitude bit-width (2-8)
-   * @param seed random seed for the rotation matrix
+   * @param seed random seed for the rotation
    * @return a trained Extended RaBitQ quantizer
    * @throws IllegalArgumentException if bits is not in [2, 8]
    */
@@ -119,7 +122,7 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
     validateBits(bits);
     int dim = dataset.dimension();
     int paddedDim = ((dim + 63) / 64) * 64;
-    Rotation rotation = RandomRotation.generate(paddedDim, seed);
+    Rotation rotation = GivensRotation.generate(paddedDim, seed);
     return train(dataset, bits, rotation);
   }
 

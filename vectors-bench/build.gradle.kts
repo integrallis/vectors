@@ -33,4 +33,9 @@ jmh {
         "-XX:+UseG1GC",
         "-XX:MaxGCPauseMillis=100"
     ))
+
+    // Allow filtering via: ./gradlew :vectors-bench:jmh -Pjmh.includes="BenchmarkName"
+    if (project.hasProperty("jmh.includes")) {
+        includes.set(listOf(project.property("jmh.includes") as String))
+    }
 }

@@ -3,9 +3,13 @@ package com.integrallis.vectors.bench;
 import com.integrallis.vectors.quantization.ArrayVectorDataset;
 import com.integrallis.vectors.quantization.BinaryMode;
 import com.integrallis.vectors.quantization.BinaryQuantizer;
+import com.integrallis.vectors.quantization.ExtendedRaBitQuantizer;
+import com.integrallis.vectors.quantization.NVQuantizer;
+import com.integrallis.vectors.quantization.ProductQuantizer;
 import com.integrallis.vectors.quantization.RaBitQuantizer;
 import com.integrallis.vectors.quantization.ScalarBits;
 import com.integrallis.vectors.quantization.ScalarQuantizer;
+import com.integrallis.vectors.quantization.TurboQuantizer;
 import com.integrallis.vectors.quantization.VectorDataset;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -108,5 +112,50 @@ public class QuantizerTrainBenchmark {
     RaBitQuantizer rq = RaBitQuantizer.train(dataset, 42L);
     bh.consume(rq);
     return rq;
+  }
+
+  /**
+   * Trains an ExtendedRaBitQ (4-bit, SIGMOD 2025) quantizer. Cost: centroid + rotation matrix +
+   * greedy magnitude quantization for all vectors.
+   */
+  @Benchmark
+  public ExtendedRaBitQuantizer trainExtRaBitQ4(Blackhole bh) {
+    ExtendedRaBitQuantizer eq = ExtendedRaBitQuantizer.train(dataset, 4, 42L);
+    bh.consume(eq);
+    return eq;
+  }
+
+  /**
+   * Trains a TurboQuant (4-bit) quantizer. Cost: centroid + rotation matrix + Lloyd-Max codebook
+   * per coordinate.
+   */
+  @Benchmark
+  public TurboQuantizer trainTurbo4(Blackhole bh) {
+    TurboQuantizer tq = TurboQuantizer.train(dataset, 4, 42L);
+    bh.consume(tq);
+    return tq;
+  }
+
+  /**
+   * Trains a PQ quantizer (dim/8 subspaces, 256 clusters). Cost: k-means++ per subspace, O(n * iter
+   * * K * dim/M).
+   */
+  @Benchmark
+  public ProductQuantizer trainPQ(Blackhole bh) {
+    int subspaces = Math.max(1, dim / 8);
+    ProductQuantizer pq = ProductQuantizer.train(dataset, subspaces, 256, true);
+    bh.consume(pq);
+    return pq;
+  }
+
+  /**
+   * Trains an NVQ quantizer (auto subvectors). Cost: per-vector alpha grid search + logistic
+   * quantization.
+   */
+  @Benchmark
+  public NVQuantizer trainNVQ(Blackhole bh) {
+    NVQuantizer nq = NVQuantizer.train(dataset);
+    bh.consume(nq);
+    return nq;
   }
 }
