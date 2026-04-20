@@ -19,4 +19,16 @@ public interface NodeScorer {
    * @return the similarity score (higher means more similar)
    */
   float score(int nodeId);
+
+  /**
+   * Scores up to {@code count} node IDs from {@code nodeIds[offset .. offset+count)} and writes the
+   * results into {@code out[0 .. count)}.
+   *
+   * <p>The default implementation is a scalar loop. Scorer implementations that can take advantage
+   * of fused batch SIMD (e.g. by aliasing references into a contiguous {@code float[][]} pool)
+   * should override this with a bulk-friendly path.
+   */
+  default void bulkScore(int[] nodeIds, int offset, int count, float[] out) {
+    for (int i = 0; i < count; i++) out[i] = score(nodeIds[offset + i]);
+  }
 }

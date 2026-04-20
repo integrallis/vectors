@@ -42,4 +42,9 @@ public final class InMemoryVectors implements RandomAccessVectors {
   public float[] getVector(int ordinal) {
     return vectors[ordinal];
   }
+
+  @Override
+  public boolean sharesReturnBuffer() {
+    return false;
+  }
 }

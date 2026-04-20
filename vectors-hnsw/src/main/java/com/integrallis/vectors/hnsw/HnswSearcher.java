@@ -1,6 +1,7 @@
 package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.VectorUtil;
 import java.util.BitSet;
 import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
@@ -31,6 +32,10 @@ public final class HnswSearcher {
   // Scratch arrays for beamSearch() result reversal: pre-sized to graph capacity.
   private final int[] tmpNodes;
   private final float[] tmpScores;
+  // Scratch buffers for fused bulk neighbor scoring. Sized to a generous upper bound on M*2.
+  private static final int BULK_BATCH = 64;
+  private final int[] bulkIds = new int[BULK_BATCH];
+  private final float[] bulkScores = new float[BULK_BATCH];
 
   /**
    * Optional SSD prefetch hook — called for each neighbor id before the scoring loop in {@link
@@ -81,7 +86,59 @@ public final class HnswSearcher {
         graph,
         vectors,
         similarityFunction,
-        query -> nodeId -> similarityFunction.compare(query, vectors.getVector(nodeId)));
+        defaultFullPrecisionFactory(vectors, similarityFunction));
+  }
+
+  /**
+   * Default full-precision scorer factory. When the underlying {@link RandomAccessVectors} returns
+   * stable references (i.e. {@code !sharesReturnBuffer()}), the returned scorer overrides {@link
+   * NodeScorer#bulkScore} with a fused GEMV path that aliases neighbor references into a reusable
+   * pool and invokes {@link VectorUtil#batchSquaredL2} / {@link VectorUtil#batchDotProduct} —
+   * amortising query loads across 4 rows at a time.
+   */
+  private static NodeScorerFactory defaultFullPrecisionFactory(
+      RandomAccessVectors vectors, SimilarityFunction sim) {
+    if (vectors.sharesReturnBuffer()) {
+      // Shared-buffer impls can't safely be pooled for fused scoring; fall back to scalar.
+      return query -> nodeId -> sim.compare(query, vectors.getVector(nodeId));
+    }
+    return query ->
+        new NodeScorer() {
+          private final float[][] pool = new float[64][];
+          private final float[] out = new float[64];
+
+          @Override
+          public float score(int nodeId) {
+            return sim.compare(query, vectors.getVector(nodeId));
+          }
+
+          @Override
+          public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+            // Gather aliased references into the reusable pool.
+            for (int i = 0; i < count; i++) pool[i] = vectors.getVector(nodeIds[offset + i]);
+            switch (sim) {
+              case EUCLIDEAN -> {
+                VectorUtil.batchSquaredL2(query, pool, out, count);
+                // SimilarityFunction.EUCLIDEAN.compare(a,b) = 1 / (1 + sqDist(a,b)).
+                for (int i = 0; i < count; i++) outScores[i] = 1f / (1f + out[i]);
+              }
+              case DOT_PRODUCT -> {
+                VectorUtil.batchDotProduct(query, pool, out, count);
+                // DOT_PRODUCT.compare(a,b) = (1 + dot) / 2.
+                for (int i = 0; i < count; i++) outScores[i] = (1f + out[i]) * 0.5f;
+              }
+              case MAXIMUM_INNER_PRODUCT -> {
+                VectorUtil.batchDotProduct(query, pool, out, count);
+                for (int i = 0; i < count; i++)
+                  outScores[i] = SimilarityFunction.scaleMaxInnerProductScore(out[i]);
+              }
+              case COSINE -> {
+                // No fused cosine kernel; fall back to scalar per row.
+                for (int i = 0; i < count; i++) outScores[i] = sim.compare(query, pool[i]);
+              }
+            }
+          }
+        };
   }
 
   /**
@@ -289,24 +346,23 @@ public final class HnswSearcher {
         }
       }
 
-      for (int i = 0; i < neighbors.size(); i++) {
+      // Gather unvisited neighbors into a batch, then score them all in one fused call.
+      int n = neighbors.size();
+      int batchCount = 0;
+      for (int i = 0; i < n; i++) {
         int neighborId = neighbors.node(i);
         if (visited.get(neighborId)) continue;
         visited.set(neighborId);
-
-        float score = scorer.score(neighborId);
-
-        if (results.size() < ef) {
-          candidates.add(neighborId, score);
-          results.add(neighborId, score);
-        } else {
-          float worstResult = NodeQueue.score(results.peek());
-          if (score > worstResult) {
-            candidates.add(neighborId, score);
-            results.poll();
-            results.add(neighborId, score);
-          }
+        bulkIds[batchCount++] = neighborId;
+        if (batchCount == BULK_BATCH) {
+          scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+          ingestBatch(batchCount, ef);
+          batchCount = 0;
         }
+      }
+      if (batchCount > 0) {
+        scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+        ingestBatch(batchCount, ef);
       }
     }
 
@@ -381,28 +437,23 @@ public final class HnswSearcher {
         }
       }
 
-      for (int i = 0; i < neighbors.size(); i++) {
+      // Gather unvisited neighbors into a batch, then score them all in one fused call.
+      int n = neighbors.size();
+      int batchCount = 0;
+      for (int i = 0; i < n; i++) {
         int neighborId = neighbors.node(i);
         if (visited.get(neighborId)) continue;
         visited.set(neighborId);
-
-        float score = scorer.score(neighborId);
-
-        // Navigation: always add to candidates so non-matching nodes can route us to matching ones.
-        candidates.add(neighborId, score);
-
-        // Results: only admit predicate-passing nodes.
-        if (predicate.test(neighborId)) {
-          if (results.size() < ef) {
-            results.add(neighborId, score);
-          } else {
-            float worstResult = NodeQueue.score(results.peek());
-            if (score > worstResult) {
-              results.poll();
-              results.add(neighborId, score);
-            }
-          }
+        bulkIds[batchCount++] = neighborId;
+        if (batchCount == BULK_BATCH) {
+          scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+          ingestBatchFiltered(batchCount, ef, predicate);
+          batchCount = 0;
         }
+      }
+      if (batchCount > 0) {
+        scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+        ingestBatchFiltered(batchCount, ef, predicate);
       }
     }
 
@@ -419,6 +470,51 @@ public final class HnswSearcher {
     }
 
     return resultArray;
+  }
+
+  /**
+   * Ingests a fused-scored batch into the unfiltered beam-search heaps. Reads ids from {@code
+   * bulkIds[0..count)} and their scores from {@code bulkScores[0..count)}.
+   */
+  private void ingestBatch(int count, int ef) {
+    for (int i = 0; i < count; i++) {
+      int neighborId = bulkIds[i];
+      float score = bulkScores[i];
+      if (results.size() < ef) {
+        candidates.add(neighborId, score);
+        results.add(neighborId, score);
+      } else {
+        float worstResult = NodeQueue.score(results.peek());
+        if (score > worstResult) {
+          candidates.add(neighborId, score);
+          results.poll();
+          results.add(neighborId, score);
+        }
+      }
+    }
+  }
+
+  /**
+   * Ingests a fused-scored batch into the predicate-aware beam-search heaps (ACORN pattern). All
+   * neighbours route through {@code candidates}; only predicate-passing ones enter {@code results}.
+   */
+  private void ingestBatchFiltered(int count, int ef, IntPredicate predicate) {
+    for (int i = 0; i < count; i++) {
+      int neighborId = bulkIds[i];
+      float score = bulkScores[i];
+      candidates.add(neighborId, score);
+      if (predicate.test(neighborId)) {
+        if (results.size() < ef) {
+          results.add(neighborId, score);
+        } else {
+          float worstResult = NodeQueue.score(results.peek());
+          if (score > worstResult) {
+            results.poll();
+            results.add(neighborId, score);
+          }
+        }
+      }
+    }
   }
 
   /** Extracts the top-k results from a sorted NeighborArray. */
