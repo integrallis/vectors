@@ -1,7 +1,7 @@
 package com.integrallis.vectors.hnsw;
 
+import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
-import com.integrallis.vectors.core.VectorUtil;
 import java.util.BitSet;
 import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
@@ -92,9 +92,8 @@ public final class HnswSearcher {
   /**
    * Default full-precision scorer factory. When the underlying {@link RandomAccessVectors} returns
    * stable references (i.e. {@code !sharesReturnBuffer()}), the returned scorer overrides {@link
-   * NodeScorer#bulkScore} with a fused GEMV path that aliases neighbor references into a reusable
-   * pool and invokes {@link VectorUtil#batchSquaredL2} / {@link VectorUtil#batchDotProduct} —
-   * amortising query loads across 4 rows at a time.
+   * NodeScorer#bulkScore} with a fused GEMV path (via {@link FusedSimilarity}) that aliases
+   * neighbor references into a reusable pool — amortising query loads across 4 rows at a time.
    */
   private static NodeScorerFactory defaultFullPrecisionFactory(
       RandomAccessVectors vectors, SimilarityFunction sim) {
@@ -114,29 +113,8 @@ public final class HnswSearcher {
 
           @Override
           public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
-            // Gather aliased references into the reusable pool.
             for (int i = 0; i < count; i++) pool[i] = vectors.getVector(nodeIds[offset + i]);
-            switch (sim) {
-              case EUCLIDEAN -> {
-                VectorUtil.batchSquaredL2(query, pool, out, count);
-                // SimilarityFunction.EUCLIDEAN.compare(a,b) = 1 / (1 + sqDist(a,b)).
-                for (int i = 0; i < count; i++) outScores[i] = 1f / (1f + out[i]);
-              }
-              case DOT_PRODUCT -> {
-                VectorUtil.batchDotProduct(query, pool, out, count);
-                // DOT_PRODUCT.compare(a,b) = (1 + dot) / 2.
-                for (int i = 0; i < count; i++) outScores[i] = (1f + out[i]) * 0.5f;
-              }
-              case MAXIMUM_INNER_PRODUCT -> {
-                VectorUtil.batchDotProduct(query, pool, out, count);
-                for (int i = 0; i < count; i++)
-                  outScores[i] = SimilarityFunction.scaleMaxInnerProductScore(out[i]);
-              }
-              case COSINE -> {
-                // No fused cosine kernel; fall back to scalar per row.
-                for (int i = 0; i < count; i++) outScores[i] = sim.compare(query, pool[i]);
-              }
-            }
+            FusedSimilarity.bulkCompare(sim, query, pool, out, outScores, count);
           }
         };
   }

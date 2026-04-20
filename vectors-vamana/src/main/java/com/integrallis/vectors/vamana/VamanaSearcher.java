@@ -1,7 +1,7 @@
 package com.integrallis.vectors.vamana;
 
+import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
-import com.integrallis.vectors.core.VectorUtil;
 import java.util.BitSet;
 import java.util.Objects;
 
@@ -80,9 +80,8 @@ public final class VamanaSearcher {
   /**
    * Default full-precision scorer factory. When the underlying {@link RandomAccessVectors} returns
    * stable references (i.e. {@code !sharesReturnBuffer()}), the returned scorer overrides {@link
-   * NodeScorer#bulkScore} with a fused GEMV path that aliases neighbor references into a reusable
-   * pool and invokes {@link VectorUtil#batchSquaredL2} / {@link VectorUtil#batchDotProduct} —
-   * amortising query loads across 4 rows at a time.
+   * NodeScorer#bulkScore} with a fused GEMV path (via {@link FusedSimilarity}) that aliases
+   * neighbor references into a reusable pool — amortising query loads across 4 rows at a time.
    */
   private static NodeScorerFactory defaultFullPrecisionFactory(
       RandomAccessVectors vectors, SimilarityFunction sim) {
@@ -102,24 +101,7 @@ public final class VamanaSearcher {
           @Override
           public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
             for (int i = 0; i < count; i++) pool[i] = vectors.getVector(nodeIds[offset + i]);
-            switch (sim) {
-              case EUCLIDEAN -> {
-                VectorUtil.batchSquaredL2(query, pool, out, count);
-                for (int i = 0; i < count; i++) outScores[i] = 1f / (1f + out[i]);
-              }
-              case DOT_PRODUCT -> {
-                VectorUtil.batchDotProduct(query, pool, out, count);
-                for (int i = 0; i < count; i++) outScores[i] = (1f + out[i]) * 0.5f;
-              }
-              case MAXIMUM_INNER_PRODUCT -> {
-                VectorUtil.batchDotProduct(query, pool, out, count);
-                for (int i = 0; i < count; i++)
-                  outScores[i] = SimilarityFunction.scaleMaxInnerProductScore(out[i]);
-              }
-              case COSINE -> {
-                for (int i = 0; i < count; i++) outScores[i] = sim.compare(query, pool[i]);
-              }
-            }
+            FusedSimilarity.bulkCompare(sim, query, pool, out, outScores, count);
           }
         };
   }

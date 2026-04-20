@@ -1,5 +1,6 @@
 package com.integrallis.vectors.hnsw;
 
+import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -36,6 +37,9 @@ public final class ConcurrentHnswGraphBuilder {
   private final SimilarityFunction similarityFunction;
   private final RandomLevelGenerator levelGenerator;
 
+  // Fused bulk scoring is safe only when the backing store returns stable vector references.
+  private final boolean useBulk;
+
   private ConcurrentHnswGraphBuilder(
       int maxConnections,
       int efConstruction,
@@ -47,6 +51,7 @@ public final class ConcurrentHnswGraphBuilder {
     this.vectors = vectors;
     this.similarityFunction = similarityFunction;
     this.levelGenerator = new RandomLevelGenerator(maxConnections, seed);
+    this.useBulk = !vectors.sharesReturnBuffer();
   }
 
   /**
@@ -140,12 +145,21 @@ public final class ConcurrentHnswGraphBuilder {
     final NodeQueue candidates; // max-heap
     final NodeQueue results; // min-heap
     final int[] tmpIds; // snapshot buffer for neighbor reads under lock
+    // Fused-GEMV scratch: aliased row pool + kernel output + per-batch ids/scores.
+    final float[][] pool;
+    final float[] kernelOut;
+    final int[] batchIds;
+    final float[] batchScores;
 
     WorkContext(int maxNodes, int ef, int maxNeighbors) {
       visited = new BitSet(maxNodes);
       candidates = new NodeQueue(ef * 2, false);
       results = new NodeQueue(ef * 2, true);
       tmpIds = new int[maxNeighbors];
+      pool = new float[maxNeighbors][];
+      kernelOut = new float[maxNeighbors];
+      batchIds = new int[maxNeighbors];
+      batchScores = new float[maxNeighbors];
     }
   }
 
@@ -286,11 +300,28 @@ public final class ConcurrentHnswGraphBuilder {
       if (ctx.results.size() >= ef && candScore < NodeQueue.score(ctx.results.peek())) break;
 
       int nCount = snapshotNeighbors(candId, layer, graph, locks, ctx.tmpIds);
+      // Gather unvisited neighbours into a batch, then fused-score them in one SIMD call.
+      int batch = 0;
       for (int i = 0; i < nCount; i++) {
         int nbr = ctx.tmpIds[i];
         if (ctx.visited.get(nbr)) continue;
         ctx.visited.set(nbr);
-        float score = similarityFunction.compare(query, vectors.getVector(nbr));
+        ctx.batchIds[batch] = nbr;
+        if (useBulk) ctx.pool[batch] = vectors.getVector(nbr);
+        batch++;
+      }
+      if (batch == 0) continue;
+      if (useBulk) {
+        FusedSimilarity.bulkCompare(
+            similarityFunction, query, ctx.pool, ctx.kernelOut, ctx.batchScores, batch);
+      } else {
+        for (int i = 0; i < batch; i++)
+          ctx.batchScores[i] =
+              similarityFunction.compare(query, vectors.getVector(ctx.batchIds[i]));
+      }
+      for (int i = 0; i < batch; i++) {
+        int nbr = ctx.batchIds[i];
+        float score = ctx.batchScores[i];
         if (ctx.results.size() < ef) {
           ctx.candidates.add(nbr, score);
           ctx.results.add(nbr, score);
