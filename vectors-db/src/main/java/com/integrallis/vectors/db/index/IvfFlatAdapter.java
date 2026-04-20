@@ -95,13 +95,18 @@ public final class IvfFlatAdapter implements IndexSpi {
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
 
+    // Per-query nprobe override: when the caller supplies searchListSize > 0, treat it as the
+    // IVF beam width for this call (mirrors how HNSW/Vamana use searchListSize). Falls back to
+    // the constructor-time nprobe when the caller passes 0 (the default). Clamped to index.k().
+    int effectiveNprobe = (searchListSize > 0) ? searchListSize : nprobe;
+
     // Two-pass expansion: when overQueryFactor > 1, probe more clusters and retrieve more
     // candidates, then trim to k. Mirrors HnswIndexAdapter / VamanaIndexAdapter contract.
     boolean twoPass = overQueryFactor > 1.0f;
     int probeCount =
         twoPass
-            ? Math.min((int) Math.ceil(nprobe * overQueryFactor), index.k())
-            : Math.min(nprobe, index.k());
+            ? Math.min((int) Math.ceil(effectiveNprobe * overQueryFactor), index.k())
+            : Math.min(effectiveNprobe, index.k());
     int candidateK = twoPass ? (int) Math.ceil(k * overQueryFactor) : k;
 
     IvfSearchRequest req =

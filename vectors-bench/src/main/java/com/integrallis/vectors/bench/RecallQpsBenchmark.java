@@ -16,6 +16,7 @@ import com.integrallis.vectors.db.VectorCollection;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -54,6 +55,9 @@ public final class RecallQpsBenchmark {
   private static final int WARMUP_ROUNDS = 3;
   private static final int MEASUREMENT_ROUNDS = 5;
 
+  /** Dataset-size threshold at which the default profile drops the heaviest HNSW configs. */
+  private static final int LARGE_CORPUS_THRESHOLD = 500_000;
+
   private RecallQpsBenchmark() {}
 
   // -------------------------------------------------------------------------
@@ -65,7 +69,24 @@ public final class RecallQpsBenchmark {
     String datasetFilter = args.length > 0 ? args[0] : null;
     String algoFilter = args.length > 1 ? args[1] : null;
 
-    List<BenchmarkResult> allResults = new ArrayList<>();
+    Path outputDir = DatasetRegistry.dataDir().resolve("results");
+    Path csvFile = outputDir.resolve("recall-qps.csv");
+    Path jsonFile = outputDir.resolve("recall-qps.json");
+    Path markersDir = outputDir.resolve("recall-qps.markers");
+    CheckpointStore checkpoint = new CheckpointStore(csvFile, markersDir);
+
+    String profile = System.getProperty("bench.profile", "default");
+    int hnswThreads =
+        Integer.getInteger(
+            "bench.hnsw.threads", Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+    int vamanaThreads =
+        Integer.getInteger(
+            "bench.vamana.threads", Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+    System.out.printf(
+        "[recallQps] profile=%s hnsw.threads=%d vamana.threads=%d checkpoint=%s%n",
+        profile, hnswThreads, vamanaThreads, csvFile.toAbsolutePath());
+
+    List<BenchmarkResult> sessionResults = new ArrayList<>();
 
     // Dataset configurations: name → similarity function
     List<DatasetConfig> datasets =
@@ -96,26 +117,60 @@ public final class RecallQpsBenchmark {
       }
 
       int dim = data.corpus[0].length;
+      int n = data.corpus.length;
+      SweepConfig sweep = SweepConfig.resolve(profile, n);
+      System.out.printf(
+          "  sweep: HNSW M=%s efC=%s efSearch=%s | Vamana R=%s L=%s alpha=%s lSearch=%s |"
+              + " IVF nprobe=%s%n",
+          Arrays.toString(sweep.hnswM),
+          Arrays.toString(sweep.hnswEf),
+          Arrays.toString(sweep.hnswEfSearch),
+          Arrays.toString(sweep.vamanaR),
+          Arrays.toString(sweep.vamanaL),
+          Arrays.toString(sweep.vamanaAlpha),
+          Arrays.toString(sweep.vamanaLSearch),
+          Arrays.toString(sweep.ivfNprobe));
 
       // --- HNSW sweep ---
       if (algoFilter == null || "hnsw".equals(algoFilter)) {
-        for (int m : new int[] {16, 32, 64}) {
-          for (int efConstruction : new int[] {100, 200, 400}) {
-            allResults.addAll(
+        for (int m : sweep.hnswM) {
+          for (int efConstruction : sweep.hnswEf) {
+            sessionResults.addAll(
                 benchmarkHnsw(
-                    dsCfg, data.corpus, data.queries, groundTruth, dim, m, efConstruction));
+                    dsCfg,
+                    data.corpus,
+                    data.queries,
+                    groundTruth,
+                    dim,
+                    m,
+                    efConstruction,
+                    sweep.hnswEfSearch,
+                    hnswThreads,
+                    checkpoint,
+                    csvFile));
           }
         }
       }
 
       // --- Vamana sweep ---
       if (algoFilter == null || "vamana".equals(algoFilter)) {
-        for (int r : new int[] {32, 64, 128}) {
-          for (int lBuild : new int[] {100, 128, 200}) {
-            for (double alpha : new double[] {1.0, 1.2}) {
-              allResults.addAll(
+        for (int r : sweep.vamanaR) {
+          for (int lBuild : sweep.vamanaL) {
+            for (double alpha : sweep.vamanaAlpha) {
+              sessionResults.addAll(
                   benchmarkVamana(
-                      dsCfg, data.corpus, data.queries, groundTruth, dim, r, lBuild, alpha));
+                      dsCfg,
+                      data.corpus,
+                      data.queries,
+                      groundTruth,
+                      dim,
+                      r,
+                      lBuild,
+                      alpha,
+                      sweep.vamanaLSearch,
+                      vamanaThreads,
+                      checkpoint,
+                      csvFile));
             }
           }
         }
@@ -123,28 +178,40 @@ public final class RecallQpsBenchmark {
 
       // --- FLAT baseline ---
       if (algoFilter == null || "flat".equals(algoFilter)) {
-        allResults.addAll(benchmarkFlat(dsCfg, data.corpus, data.queries, groundTruth, dim));
+        sessionResults.addAll(
+            benchmarkFlat(dsCfg, data.corpus, data.queries, groundTruth, dim, checkpoint, csvFile));
       }
 
       // --- IVF_FLAT sweep ---
       if (algoFilter == null || "ivf".equals(algoFilter)) {
-        int n = data.corpus.length;
         int sqrtN = (int) Math.sqrt(n);
         for (int nlist : new int[] {sqrtN, 2 * sqrtN, 4 * sqrtN}) {
-          allResults.addAll(
-              benchmarkIvf(dsCfg, data.corpus, data.queries, groundTruth, dim, nlist));
+          sessionResults.addAll(
+              benchmarkIvf(
+                  dsCfg,
+                  data.corpus,
+                  data.queries,
+                  groundTruth,
+                  dim,
+                  nlist,
+                  sweep.ivfNprobe,
+                  checkpoint,
+                  csvFile));
         }
       }
     }
 
-    // Output results.
-    if (!allResults.isEmpty()) {
-      BenchmarkReporter.console(allResults, System.out);
-
-      Path outputDir = DatasetRegistry.dataDir().resolve("results");
-      BenchmarkReporter.csv(allResults, outputDir.resolve("recall-qps.csv"));
-      BenchmarkReporter.json(allResults, outputDir.resolve("recall-qps.json"));
-      System.out.printf("%nResults written to %s (CSV + JSON)%n", outputDir.toAbsolutePath());
+    // Final output: console table for this session's results, JSON snapshot of this session.
+    // CSV is the cumulative source of truth — rows have already been appended incrementally.
+    if (!sessionResults.isEmpty()) {
+      BenchmarkReporter.console(sessionResults, System.out);
+      BenchmarkReporter.json(sessionResults, jsonFile);
+      System.out.printf(
+          "%nResults: CSV=%s%n         JSON (this session)=%s%n",
+          csvFile.toAbsolutePath(), jsonFile.toAbsolutePath());
+    } else {
+      System.out.printf(
+          "%nAll configurations were already completed. CSV=%s%n", csvFile.toAbsolutePath());
     }
   }
 
@@ -159,11 +226,22 @@ public final class RecallQpsBenchmark {
       int[][] groundTruth,
       int dim,
       int m,
-      int efConstruction) {
+      int efConstruction,
+      int[] efSearchValues,
+      int hnswThreads,
+      CheckpointStore checkpoint,
+      Path csvFile) {
 
     Map<String, String> buildParams =
         Map.of("M", String.valueOf(m), "efConstruction", String.valueOf(efConstruction));
-    System.out.printf("  HNSW M=%d efConstruction=%d: building...", m, efConstruction);
+    if (isFullyCompleted(checkpoint, dsCfg.name, "hnsw", buildParams, efSearchValues, "efSearch")) {
+      System.out.printf(
+          "  HNSW M=%d efConstruction=%d: already completed, skipping%n", m, efConstruction);
+      checkpoint.markBuildCompleted(dsCfg.name, "hnsw", buildParams);
+      return List.of();
+    }
+    System.out.printf(
+        "  HNSW M=%d efConstruction=%d threads=%d: building...", m, efConstruction, hnswThreads);
 
     long t0 = System.nanoTime();
     VectorCollection col =
@@ -173,6 +251,7 @@ public final class RecallQpsBenchmark {
             .indexType(IndexType.HNSW)
             .hnswM(m)
             .hnswEfConstruction(efConstruction)
+            .hnswBuildThreads(hnswThreads)
             .build();
     addAll(col, corpus);
     col.commit();
@@ -181,24 +260,31 @@ public final class RecallQpsBenchmark {
 
     List<BenchmarkResult> results = new ArrayList<>();
     try {
-      for (int efSearch : new int[] {16, 32, 64, 128, 256, 512}) {
+      for (int efSearch : efSearchValues) {
+        Map<String, String> searchParams = Map.of("efSearch", String.valueOf(efSearch));
+        if (checkpoint.isRowCompleted(dsCfg.name, "hnsw", buildParams, searchParams)) {
+          System.out.printf("    efSearch=%d: cached, skipping%n", efSearch);
+          continue;
+        }
         BenchmarkResult r =
             measureSearch(
                 dsCfg.name,
                 "hnsw",
                 buildParams,
-                Map.of("efSearch", String.valueOf(efSearch)),
+                searchParams,
                 col,
                 queries,
                 groundTruth,
                 K,
                 efSearch,
                 buildTime);
+        recordResult(r, checkpoint, csvFile);
         results.add(r);
       }
     } finally {
       col.close();
     }
+    checkpoint.markBuildCompleted(dsCfg.name, "hnsw", buildParams);
     return results;
   }
 
@@ -214,17 +300,26 @@ public final class RecallQpsBenchmark {
       int dim,
       int r,
       int lBuild,
-      double alpha) {
+      double alpha,
+      int[] lSearchValues,
+      int buildThreads,
+      CheckpointStore checkpoint,
+      Path csvFile) {
 
     Map<String, String> buildParams =
         Map.of(
-            "R",
-            String.valueOf(r),
-            "L_build",
-            String.valueOf(lBuild),
-            "alpha",
-            String.valueOf(alpha));
-    System.out.printf("  Vamana R=%d L=%d alpha=%.1f: building...", r, lBuild, alpha);
+            "R", String.valueOf(r),
+            "L_build", String.valueOf(lBuild),
+            "alpha", String.valueOf(alpha));
+    if (isFullyCompleted(
+        checkpoint, dsCfg.name, "vamana", buildParams, lSearchValues, "L_search")) {
+      System.out.printf(
+          "  Vamana R=%d L=%d alpha=%.1f: already completed, skipping%n", r, lBuild, alpha);
+      checkpoint.markBuildCompleted(dsCfg.name, "vamana", buildParams);
+      return List.of();
+    }
+    System.out.printf(
+        "  Vamana R=%d L=%d alpha=%.1f threads=%d: building...", r, lBuild, alpha, buildThreads);
 
     long t0 = System.nanoTime();
     VectorCollection col =
@@ -235,6 +330,7 @@ public final class RecallQpsBenchmark {
             .vamanaMaxDegree(r)
             .vamanaSearchListSize(lBuild)
             .vamanaAlpha((float) alpha)
+            .vamanaBuildThreads(buildThreads)
             .build();
     addAll(col, corpus);
     col.commit();
@@ -243,24 +339,31 @@ public final class RecallQpsBenchmark {
 
     List<BenchmarkResult> results = new ArrayList<>();
     try {
-      for (int lSearch : new int[] {32, 64, 100, 128, 200, 300}) {
+      for (int lSearch : lSearchValues) {
+        Map<String, String> searchParams = Map.of("L_search", String.valueOf(lSearch));
+        if (checkpoint.isRowCompleted(dsCfg.name, "vamana", buildParams, searchParams)) {
+          System.out.printf("    L_search=%d: cached, skipping%n", lSearch);
+          continue;
+        }
         BenchmarkResult result =
             measureSearch(
                 dsCfg.name,
                 "vamana",
                 buildParams,
-                Map.of("L_search", String.valueOf(lSearch)),
+                searchParams,
                 col,
                 queries,
                 groundTruth,
                 K,
                 lSearch,
                 buildTime);
+        recordResult(result, checkpoint, csvFile);
         results.add(result);
       }
     } finally {
       col.close();
     }
+    checkpoint.markBuildCompleted(dsCfg.name, "vamana", buildParams);
     return results;
   }
 
@@ -269,7 +372,21 @@ public final class RecallQpsBenchmark {
   // -------------------------------------------------------------------------
 
   private static List<BenchmarkResult> benchmarkFlat(
-      DatasetConfig dsCfg, float[][] corpus, float[][] queries, int[][] groundTruth, int dim) {
+      DatasetConfig dsCfg,
+      float[][] corpus,
+      float[][] queries,
+      int[][] groundTruth,
+      int dim,
+      CheckpointStore checkpoint,
+      Path csvFile) {
+
+    Map<String, String> buildParams = Map.of();
+    Map<String, String> searchParams = Map.of();
+    if (checkpoint.isRowCompleted(dsCfg.name, "flat", buildParams, searchParams)) {
+      System.out.println("  FLAT: already completed, skipping");
+      checkpoint.markBuildCompleted(dsCfg.name, "flat", buildParams);
+      return List.of();
+    }
 
     System.out.print("  FLAT: building...");
     long t0 = System.nanoTime();
@@ -287,7 +404,18 @@ public final class RecallQpsBenchmark {
     try {
       BenchmarkResult r =
           measureSearch(
-              dsCfg.name, "flat", Map.of(), Map.of(), col, queries, groundTruth, K, 0, buildTime);
+              dsCfg.name,
+              "flat",
+              buildParams,
+              searchParams,
+              col,
+              queries,
+              groundTruth,
+              K,
+              0,
+              buildTime);
+      recordResult(r, checkpoint, csvFile);
+      checkpoint.markBuildCompleted(dsCfg.name, "flat", buildParams);
       return List.of(r);
     } finally {
       col.close();
@@ -304,62 +432,82 @@ public final class RecallQpsBenchmark {
       float[][] queries,
       int[][] groundTruth,
       int dim,
-      int nlist) {
+      int nlist,
+      int[] nprobeValues,
+      CheckpointStore checkpoint,
+      Path csvFile) {
 
     Map<String, String> buildParams = Map.of("nlist", String.valueOf(nlist));
-    System.out.printf("  IVF_FLAT nlist=%d: building...", nlist);
+    // Filter out nprobe values that exceed nlist before computing the "fully completed" check.
+    int[] effectiveNprobe = filterAtMost(nprobeValues, nlist);
+    if (effectiveNprobe.length == 0) return List.of();
+    if (isFullyCompleted(
+        checkpoint, dsCfg.name, "ivf_flat", buildParams, effectiveNprobe, "nprobe")) {
+      System.out.printf("  IVF_FLAT nlist=%d: already completed, skipping%n", nlist);
+      checkpoint.markBuildCompleted(dsCfg.name, "ivf_flat", buildParams);
+      return List.of();
+    }
 
+    // Skip nprobe values already measured for this nlist; build-once-search-many means we only
+    // need to build the index if at least one nprobe in the sweep is not yet checkpointed.
+    int[] pendingNprobe = new int[effectiveNprobe.length];
+    int pendingCount = 0;
+    for (int nprobe : effectiveNprobe) {
+      Map<String, String> searchParams = Map.of("nprobe", String.valueOf(nprobe));
+      if (checkpoint.isRowCompleted(dsCfg.name, "ivf_flat", buildParams, searchParams)) {
+        System.out.printf("  IVF_FLAT nlist=%d nprobe=%d: cached, skipping%n", nlist, nprobe);
+      } else {
+        pendingNprobe[pendingCount++] = nprobe;
+      }
+    }
+    if (pendingCount == 0) {
+      checkpoint.markBuildCompleted(dsCfg.name, "ivf_flat", buildParams);
+      return List.of();
+    }
+
+    // Single build per nlist: the constructor-time nprobe is used as the default; the per-query
+    // nprobe sweep is driven through SearchRequest.searchListSize (honored by IvfFlatAdapter).
+    int defaultNprobe = pendingNprobe[0];
+    System.out.printf(
+        "  IVF_FLAT nlist=%d (sweep %d nprobe values): building...", nlist, pendingCount);
     long t0 = System.nanoTime();
-    VectorCollection col =
+    VectorCollection ivfCol =
         VectorCollection.builder()
             .dimension(dim)
             .metric(dsCfg.sim)
             .indexType(IndexType.IVF_FLAT)
             .ivfK(nlist)
-            .ivfNprobe(1) // default; overridden per search
+            .ivfNprobe(defaultNprobe)
             .build();
-    addAll(col, corpus);
-    col.commit();
+    addAll(ivfCol, corpus);
+    ivfCol.commit();
     double buildTime = (System.nanoTime() - t0) / 1e9;
     System.out.printf(" %.1fs%n", buildTime);
 
     List<BenchmarkResult> results = new ArrayList<>();
     try {
-      for (int nprobe : new int[] {1, 2, 4, 8, 16, 32, 64}) {
-        if (nprobe > nlist) break;
-        // IVF nprobe is set at build time, so we rebuild for each nprobe.
-        // For efficiency, only rebuild the collection for different nprobe values.
-        VectorCollection ivfCol =
-            VectorCollection.builder()
-                .dimension(dim)
-                .metric(dsCfg.sim)
-                .indexType(IndexType.IVF_FLAT)
-                .ivfK(nlist)
-                .ivfNprobe(nprobe)
-                .build();
-        addAll(ivfCol, corpus);
-        ivfCol.commit();
-        try {
-          BenchmarkResult r =
-              measureSearch(
-                  dsCfg.name,
-                  "ivf_flat",
-                  buildParams,
-                  Map.of("nprobe", String.valueOf(nprobe)),
-                  ivfCol,
-                  queries,
-                  groundTruth,
-                  K,
-                  0,
-                  buildTime);
-          results.add(r);
-        } finally {
-          ivfCol.close();
-        }
+      for (int i = 0; i < pendingCount; i++) {
+        int nprobe = pendingNprobe[i];
+        Map<String, String> searchParams = Map.of("nprobe", String.valueOf(nprobe));
+        BenchmarkResult r =
+            measureSearch(
+                dsCfg.name,
+                "ivf_flat",
+                buildParams,
+                searchParams,
+                ivfCol,
+                queries,
+                groundTruth,
+                K,
+                nprobe,
+                buildTime);
+        recordResult(r, checkpoint, csvFile);
+        results.add(r);
       }
     } finally {
-      col.close();
+      ivfCol.close();
     }
+    checkpoint.markBuildCompleted(dsCfg.name, "ivf_flat", buildParams);
     return results;
   }
 
@@ -518,6 +666,157 @@ public final class RecallQpsBenchmark {
   private static int parseOrdinal(String docId) {
     // doc-{ordinal}
     return Integer.parseInt(docId.substring(4));
+  }
+
+  // -------------------------------------------------------------------------
+  // Checkpointing helpers
+  // -------------------------------------------------------------------------
+
+  private static boolean isFullyCompleted(
+      CheckpointStore checkpoint,
+      String dataset,
+      String algorithm,
+      Map<String, String> buildParams,
+      int[] searchValues,
+      String searchParamKey) {
+    if (checkpoint.isBuildCompleted(dataset, algorithm, buildParams)) return true;
+    for (int v : searchValues) {
+      if (!checkpoint.isRowCompleted(
+          dataset, algorithm, buildParams, Map.of(searchParamKey, String.valueOf(v)))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static void recordResult(
+      BenchmarkResult result, CheckpointStore checkpoint, Path csvFile) {
+    BenchmarkReporter.csvAppend(result, csvFile);
+    checkpoint.markRowCompleted(
+        result.dataset(), result.algorithm(), result.buildParams(), result.searchParams());
+  }
+
+  private static int[] filterAtMost(int[] values, int cap) {
+    int count = 0;
+    for (int v : values) if (v <= cap) count++;
+    int[] out = new int[count];
+    int j = 0;
+    for (int v : values) if (v <= cap) out[j++] = v;
+    return out;
+  }
+
+  // -------------------------------------------------------------------------
+  // Sweep configuration
+  // -------------------------------------------------------------------------
+
+  /**
+   * Per-dataset sweep parameters. Resolved from the {@code bench.profile} system property
+   * (quick|default|full) with optional per-axis overrides via {@code bench.<algo>.<param>} comma
+   * lists.
+   */
+  private static final class SweepConfig {
+    final int[] hnswM;
+    final int[] hnswEf;
+    final int[] hnswEfSearch;
+    final int[] vamanaR;
+    final int[] vamanaL;
+    final double[] vamanaAlpha;
+    final int[] vamanaLSearch;
+    final int[] ivfNprobe;
+
+    private SweepConfig(
+        int[] hnswM,
+        int[] hnswEf,
+        int[] hnswEfSearch,
+        int[] vamanaR,
+        int[] vamanaL,
+        double[] vamanaAlpha,
+        int[] vamanaLSearch,
+        int[] ivfNprobe) {
+      this.hnswM = hnswM;
+      this.hnswEf = hnswEf;
+      this.hnswEfSearch = hnswEfSearch;
+      this.vamanaR = vamanaR;
+      this.vamanaL = vamanaL;
+      this.vamanaAlpha = vamanaAlpha;
+      this.vamanaLSearch = vamanaLSearch;
+      this.ivfNprobe = ivfNprobe;
+    }
+
+    static SweepConfig resolve(String profile, int n) {
+      // Base grids per profile.
+      int[] hnswM, hnswEf, hnswEfSearch;
+      int[] vamanaR, vamanaL, vamanaLSearch;
+      double[] vamanaAlpha;
+      int[] ivfNprobe;
+      switch (profile) {
+        case "quick" -> {
+          hnswM = new int[] {16};
+          hnswEf = new int[] {100};
+          hnswEfSearch = new int[] {64, 128, 256};
+          vamanaR = new int[] {64};
+          vamanaL = new int[] {100};
+          vamanaAlpha = new double[] {1.2};
+          vamanaLSearch = new int[] {64, 128};
+          ivfNprobe = new int[] {1, 4, 16};
+        }
+        case "full" -> {
+          hnswM = new int[] {16, 32, 64};
+          hnswEf = new int[] {100, 200, 400};
+          hnswEfSearch = new int[] {16, 32, 64, 128, 256, 512};
+          vamanaR = new int[] {32, 64, 128};
+          vamanaL = new int[] {100, 128, 200};
+          vamanaAlpha = new double[] {1.0, 1.2};
+          vamanaLSearch = new int[] {32, 64, 100, 128, 200, 300};
+          ivfNprobe = new int[] {1, 2, 4, 8, 16, 32, 64};
+        }
+        default -> {
+          // "default": full grid, but drop the heaviest HNSW configs for large corpora.
+          if (n >= LARGE_CORPUS_THRESHOLD) {
+            hnswM = new int[] {16, 32};
+            hnswEf = new int[] {100, 200};
+          } else {
+            hnswM = new int[] {16, 32, 64};
+            hnswEf = new int[] {100, 200, 400};
+          }
+          hnswEfSearch = new int[] {16, 32, 64, 128, 256, 512};
+          vamanaR = new int[] {32, 64, 128};
+          vamanaL = new int[] {100, 128, 200};
+          vamanaAlpha = new double[] {1.0, 1.2};
+          vamanaLSearch = new int[] {32, 64, 100, 128, 200, 300};
+          ivfNprobe = new int[] {1, 2, 4, 8, 16, 32, 64};
+        }
+      }
+      // Per-axis overrides (comma-separated system properties).
+      hnswM = overrideInts("bench.hnsw.m", hnswM);
+      hnswEf = overrideInts("bench.hnsw.ef", hnswEf);
+      hnswEfSearch = overrideInts("bench.hnsw.efSearch", hnswEfSearch);
+      vamanaR = overrideInts("bench.vamana.r", vamanaR);
+      vamanaL = overrideInts("bench.vamana.l", vamanaL);
+      vamanaAlpha = overrideDoubles("bench.vamana.alpha", vamanaAlpha);
+      vamanaLSearch = overrideInts("bench.vamana.lSearch", vamanaLSearch);
+      ivfNprobe = overrideInts("bench.ivf.nprobe", ivfNprobe);
+      return new SweepConfig(
+          hnswM, hnswEf, hnswEfSearch, vamanaR, vamanaL, vamanaAlpha, vamanaLSearch, ivfNprobe);
+    }
+
+    private static int[] overrideInts(String key, int[] defaults) {
+      String v = System.getProperty(key);
+      if (v == null || v.isBlank()) return defaults;
+      String[] parts = v.split(",");
+      int[] out = new int[parts.length];
+      for (int i = 0; i < parts.length; i++) out[i] = Integer.parseInt(parts[i].trim());
+      return out;
+    }
+
+    private static double[] overrideDoubles(String key, double[] defaults) {
+      String v = System.getProperty(key);
+      if (v == null || v.isBlank()) return defaults;
+      String[] parts = v.split(",");
+      double[] out = new double[parts.length];
+      for (int i = 0; i < parts.length; i++) out[i] = Double.parseDouble(parts[i].trim());
+      return out;
+    }
   }
 
   // -------------------------------------------------------------------------

@@ -192,15 +192,16 @@ public record VectorCollectionConfig(
 
   /**
    * HNSW graph-construction parameters captured on {@code VectorCollection.builder().build()}. Only
-   * {@code M} is persisted on disk (inside {@code graph.bin}); {@code efConstruction} is a
-   * build-time hint that is NOT preserved across a close/reopen, so a reopened collection that
-   * triggers another commit will use whichever {@code efConstruction} the caller sets on the new
+   * {@code M} is persisted on disk (inside {@code graph.bin}); {@code efConstruction} and {@code
+   * threads} are build-time hints that are NOT preserved across a close/reopen, so a reopened
+   * collection that triggers another commit will use whichever values the caller sets on the new
    * builder invocation.
    *
    * @param m max connections per upper layer (must be positive)
    * @param efConstruction beam width during construction (must be {@code >= m})
+   * @param threads number of worker threads for graph construction (must be {@code >= 1})
    */
-  public record HnswParams(int m, int efConstruction) {
+  public record HnswParams(int m, int efConstruction, int threads) {
     public HnswParams {
       if (m <= 0) {
         throw new IllegalArgumentException("M must be positive: " + m);
@@ -209,6 +210,14 @@ public record VectorCollectionConfig(
         throw new IllegalArgumentException(
             "efConstruction (" + efConstruction + ") must be >= M (" + m + ")");
       }
+      if (threads < 1) {
+        throw new IllegalArgumentException("threads must be >= 1: " + threads);
+      }
+    }
+
+    /** Convenience constructor defaulting to single-threaded (deterministic) construction. */
+    public HnswParams(int m, int efConstruction) {
+      this(m, efConstruction, 1);
     }
   }
 
@@ -229,8 +238,12 @@ public record VectorCollectionConfig(
    *     maxDegree})
    * @param alpha diversity parameter (must be {@code >= 1.0}; the Vamana default is {@code 1.2})
    * @param seed random seed for deterministic construction
+   * @param threads worker thread count for graph construction (must be {@code >= 1}). Values {@code
+   *     > 1} engage {@code ConcurrentVamanaGraphBuilder}; the default {@code 1} preserves byte
+   *     identical, deterministic output.
    */
-  public record VamanaParams(int maxDegree, int searchListSize, float alpha, long seed) {
+  public record VamanaParams(
+      int maxDegree, int searchListSize, float alpha, long seed, int threads) {
     public VamanaParams {
       if (maxDegree <= 0) {
         throw new IllegalArgumentException("maxDegree must be positive: " + maxDegree);
@@ -242,6 +255,14 @@ public record VectorCollectionConfig(
       if (alpha < 1.0f) {
         throw new IllegalArgumentException("alpha must be >= 1.0: " + alpha);
       }
+      if (threads < 1) {
+        throw new IllegalArgumentException("threads must be >= 1: " + threads);
+      }
+    }
+
+    /** Convenience constructor defaulting to single-threaded (deterministic) construction. */
+    public VamanaParams(int maxDegree, int searchListSize, float alpha, long seed) {
+      this(maxDegree, searchListSize, alpha, seed, 1);
     }
   }
 

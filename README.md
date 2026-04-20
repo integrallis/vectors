@@ -108,7 +108,7 @@ byte[] quantized = sq.encode(floatVector);
 - 4x unrolled FMA dot product, L2, cosine similarity
 - Conditional FMA dispatch based on hardware capability
 - `SPECIES_PREFERRED` for automatic adaptation to AVX2, AVX-512, NEON, SVE
-- Byte operations with tiered 512-bit + 256-bit widening
+- Byte operations with tiered 512-bit + 256-bit + 128-bit (NEON) widening
 - No JNI, no FFM-to-C++ bindings -- pure Java Vector API
 
 ### Quantization (`vectors-quantization`)

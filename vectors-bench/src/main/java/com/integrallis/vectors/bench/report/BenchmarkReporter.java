@@ -153,22 +153,7 @@ public final class BenchmarkReporter {
 
       String ts = Instant.now().toString();
       for (BenchmarkResult r : results) {
-        sb.append(ts).append(',');
-        sb.append(csvEscape(r.dataset())).append(',');
-        sb.append(csvEscape(r.algorithm())).append(',');
-        sb.append(csvEscape(formatParams(r.buildParams()))).append(',');
-        sb.append(csvEscape(formatParams(r.searchParams()))).append(',');
-        sb.append(String.format(Locale.ROOT, "%.4f", r.recall10())).append(',');
-        sb.append(r.recall100() >= 0 ? String.format(Locale.ROOT, "%.4f", r.recall100()) : "")
-            .append(',');
-        sb.append(String.format(Locale.ROOT, "%.1f", r.qps())).append(',');
-        sb.append(String.format(Locale.ROOT, "%.1f", r.p50Us())).append(',');
-        sb.append(String.format(Locale.ROOT, "%.1f", r.p95Us())).append(',');
-        sb.append(String.format(Locale.ROOT, "%.1f", r.p99Us())).append(',');
-        sb.append(String.format(Locale.ROOT, "%.2f", r.buildTimeSeconds())).append(',');
-        sb.append(String.format(Locale.ROOT, "%.2f", r.indexSizeMb())).append(',');
-        sb.append(String.format(Locale.ROOT, "%.2f", r.compressionRatio()));
-        sb.append('\n');
+        appendCsvRow(sb, r, ts);
       }
 
       Files.writeString(
@@ -180,6 +165,55 @@ public final class BenchmarkReporter {
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to write CSV to " + file, e);
     }
+  }
+
+  /**
+   * Appends a single benchmark result to the CSV file, writing the header if the file is new or
+   * empty. Each call flushes to disk so partial progress survives a crash or kill.
+   */
+  public static void csvAppend(BenchmarkResult result, Path file) {
+    Objects.requireNonNull(result);
+    Objects.requireNonNull(file);
+
+    try {
+      Files.createDirectories(file.getParent());
+      boolean writeHeader = !Files.exists(file) || Files.size(file) == 0;
+
+      StringBuilder sb = new StringBuilder();
+      if (writeHeader) {
+        sb.append(CSV_HEADER).append('\n');
+      }
+      appendCsvRow(sb, result, Instant.now().toString());
+
+      Files.writeString(
+          file,
+          sb.toString(),
+          StandardCharsets.UTF_8,
+          StandardOpenOption.CREATE,
+          StandardOpenOption.APPEND,
+          StandardOpenOption.SYNC);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to append CSV row to " + file, e);
+    }
+  }
+
+  private static void appendCsvRow(StringBuilder sb, BenchmarkResult r, String ts) {
+    sb.append(ts).append(',');
+    sb.append(csvEscape(r.dataset())).append(',');
+    sb.append(csvEscape(r.algorithm())).append(',');
+    sb.append(csvEscape(formatParams(r.buildParams()))).append(',');
+    sb.append(csvEscape(formatParams(r.searchParams()))).append(',');
+    sb.append(String.format(Locale.ROOT, "%.4f", r.recall10())).append(',');
+    sb.append(r.recall100() >= 0 ? String.format(Locale.ROOT, "%.4f", r.recall100()) : "")
+        .append(',');
+    sb.append(String.format(Locale.ROOT, "%.1f", r.qps())).append(',');
+    sb.append(String.format(Locale.ROOT, "%.1f", r.p50Us())).append(',');
+    sb.append(String.format(Locale.ROOT, "%.1f", r.p95Us())).append(',');
+    sb.append(String.format(Locale.ROOT, "%.1f", r.p99Us())).append(',');
+    sb.append(String.format(Locale.ROOT, "%.2f", r.buildTimeSeconds())).append(',');
+    sb.append(String.format(Locale.ROOT, "%.2f", r.indexSizeMb())).append(',');
+    sb.append(String.format(Locale.ROOT, "%.2f", r.compressionRatio()));
+    sb.append('\n');
   }
 
   // -------------------------------------------------------------------------
@@ -270,10 +304,15 @@ public final class BenchmarkReporter {
   // Helpers
   // -------------------------------------------------------------------------
 
-  /** Formats a parameter map as a human-readable string (e.g., "M=32, efSearch=128"). */
+  /**
+   * Formats a parameter map as a human-readable string (e.g., {@code "M=32, efSearch=128"}). Keys
+   * are emitted in lexicographic order so that the resulting string is stable across runs (the
+   * checkpointing store uses this as part of its canonical key).
+   */
   public static String formatParams(Map<String, String> params) {
     if (params.isEmpty()) return "default";
     return params.entrySet().stream()
+        .sorted(Map.Entry.comparingByKey())
         .map(e -> e.getKey() + "=" + e.getValue())
         .collect(Collectors.joining(", "));
   }

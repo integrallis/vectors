@@ -38,11 +38,19 @@ jmh {
     if (project.hasProperty("jmh.includes")) {
         includes.set(listOf(project.property("jmh.includes") as String))
     }
+    // Time-box overrides for short/dev runs:
+    //   -Pjmh.fork=1 -Pjmh.warmup=1 -Pjmh.iterations=2 -Pjmh.timeOnIteration=1s
+    (project.findProperty("jmh.fork") as String?)?.let { fork.set(it.toInt()) }
+    (project.findProperty("jmh.warmup") as String?)?.let { warmupIterations.set(it.toInt()) }
+    (project.findProperty("jmh.iterations") as String?)?.let { iterations.set(it.toInt()) }
+    (project.findProperty("jmh.timeOnIteration") as String?)?.let { timeOnIteration.set(it) }
+    (project.findProperty("jmh.resultFormat") as String?)?.let { resultFormat.set(it) }
 
     // Persist results for audit trail — text format is human-readable; CSV available via
-    // -Pjmh.rf=csv.  Output path is relative to the project directory.
-    resultFormat.set("TEXT")
-    resultsFile.set(project.file("build/results/jmh/results.txt"))
+    // -Pjmh.resultFormat=CSV.  Output path is relative to the project directory.
+    resultFormat.set(project.findProperty("jmh.resultFormat") as String? ?: "TEXT")
+    val resultExt = (resultFormat.get() as String).lowercase()
+    resultsFile.set(project.file("build/results/jmh/results.$resultExt"))
 }
 
 // ---------------------------------------------------------------------------
@@ -79,6 +87,18 @@ tasks.register<JavaExec>("recallQps") {
     if (datasetFilter != null) args(datasetFilter)
     if (algoFilter    != null) args(algoFilter)
 
+    // Forward -Pbench.* properties as -Dbench.* system properties the harness reads for its
+    // sweep profile, per-axis overrides, and HNSW build parallelism.
+    listOf(
+        "bench.profile",
+        "bench.hnsw.m", "bench.hnsw.ef", "bench.hnsw.efSearch", "bench.hnsw.threads",
+        "bench.vamana.r", "bench.vamana.l", "bench.vamana.alpha", "bench.vamana.lSearch",
+        "bench.vamana.threads",
+        "bench.ivf.nprobe"
+    ).forEach { key ->
+        (project.findProperty(key) as String?)?.let { systemProperty(key, it) }
+    }
+
     // Stream harness stdout/stderr to the Gradle console in real time.
     standardOutput = System.out
     errorOutput    = System.err
@@ -89,3 +109,74 @@ tasks.register<JavaExec>("recallQps") {
         println("[recallQps] Results will be written to: ${out.absolutePath}")
     }
 }
+
+// ---------------------------------------------------------------------------
+// buildScalability — HNSW/Vamana/FLAT build-time scaling sweep
+//
+// Usage:
+//   ./gradlew :vectors-bench:buildScalability
+//   ./gradlew :vectors-bench:buildScalability \
+//       -Pbench.algo=hnsw -Pbench.sizes=10000,50000,100000 \
+//       -Pbench.hnsw.m=16 -Pbench.hnsw.ef=100
+//
+// Captures per-run wall time, throughput, heap delta, and GC count/time.
+// Results land in ${DatasetRegistry.dataDir()}/results/build-scalability.{csv,json}.
+// ---------------------------------------------------------------------------
+tasks.register<JavaExec>("buildScalability") {
+    group = "benchmark"
+    description = "Sweep HNSW/Vamana/FLAT build time vs corpus size (synthetic random)"
+
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.integrallis.vectors.bench.BuildScalabilityBenchmark")
+
+    jvmArgs(
+        "--add-modules", "jdk.incubator.vector",
+        "-Xmx12g", "-Xms4g",
+        "-XX:+UseG1GC",
+        "-XX:MaxGCPauseMillis=100",
+        "-Xlog:gc*:file=${project.file("build/results/build-scalability-gc.log")}:uptime,level,tags:filecount=1"
+    )
+
+    // Forward -Pbench.* properties as -Dbench.* system properties the main class reads.
+    listOf(
+        "bench.dim", "bench.algo", "bench.sizes", "bench.dataset",
+        "bench.hnsw.m", "bench.hnsw.ef",
+        "bench.vamana.r", "bench.vamana.l"
+    ).forEach { key ->
+        (project.findProperty(key) as String?)?.let { systemProperty(key, it) }
+    }
+
+    standardOutput = System.out
+    errorOutput    = System.err
+
+    doFirst {
+        val out = project.file("build/results")
+        out.mkdirs()
+        println("[buildScalability] GC log: ${project.file("build/results/build-scalability-gc.log").absolutePath}")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// pqTrainProbe — one-shot PQ training timing (Round-2.E validation)
+// ---------------------------------------------------------------------------
+tasks.register<JavaExec>("pqTrainProbe") {
+    group = "benchmark"
+    description = "Measure PQ training wall clock (sequential vs parallel)"
+
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.integrallis.vectors.bench.PqTrainProbe")
+
+    jvmArgs(
+        "--add-modules", "jdk.incubator.vector",
+        "-Xmx12g", "-Xms4g",
+        "-XX:+UseG1GC"
+    )
+
+    listOf("probe.n", "probe.dim", "probe.m", "probe.ks", "probe.threads").forEach { key ->
+        (project.findProperty(key) as String?)?.let { systemProperty(key, it) }
+    }
+
+    standardOutput = System.out
+    errorOutput    = System.err
+}
+

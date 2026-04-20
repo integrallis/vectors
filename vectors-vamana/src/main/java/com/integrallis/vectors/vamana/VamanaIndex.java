@@ -254,6 +254,7 @@ public final class VamanaIndex {
     private int searchListSize = 128;
     private float alpha = 1.2f;
     private long seed = System.nanoTime();
+    private int buildThreads = 1;
 
     private Builder(RandomAccessVectors vectors, SimilarityFunction sim) {
       this.vectors = Objects.requireNonNull(vectors, "vectors must not be null");
@@ -293,11 +294,33 @@ public final class VamanaIndex {
       return this;
     }
 
+    /**
+     * Sets the number of threads used for graph construction (default: 1 = deterministic,
+     * sequential). When {@code threads > 1}, construction is routed through {@link
+     * ConcurrentVamanaGraphBuilder} which partitions the two-pass insert across worker threads
+     * guarded by per-node {@link java.util.concurrent.locks.ReentrantLock ReentrantLock}s. Search
+     * and graph topology remain unchanged; recall is preserved within statistical noise.
+     */
+    public Builder buildThreads(int threads) {
+      if (threads < 1) {
+        throw new IllegalArgumentException("buildThreads must be >= 1: " + threads);
+      }
+      this.buildThreads = threads;
+      return this;
+    }
+
     /** Builds the index. */
     public VamanaIndex build() {
-      VamanaGraphBuilder graphBuilder =
-          VamanaGraphBuilder.create(maxDegree, searchListSize, alpha, vectors, sim, seed);
-      VamanaGraph graph = graphBuilder.build();
+      VamanaGraph graph;
+      if (buildThreads > 1) {
+        graph =
+            ConcurrentVamanaGraphBuilder.create(
+                    maxDegree, searchListSize, alpha, vectors, sim, seed)
+                .build(buildThreads);
+      } else {
+        graph =
+            VamanaGraphBuilder.create(maxDegree, searchListSize, alpha, vectors, sim, seed).build();
+      }
       return new VamanaIndex(graph, vectors, sim);
     }
   }

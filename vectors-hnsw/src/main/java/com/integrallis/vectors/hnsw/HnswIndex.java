@@ -303,6 +303,7 @@ public final class HnswIndex {
     private int maxConnections = 16;
     private int efConstruction = 200;
     private long seed = System.nanoTime();
+    private int parallelism = 1;
 
     private Builder(RandomAccessVectors vectors, SimilarityFunction similarityFunction) {
       this.vectors = vectors;
@@ -327,12 +328,34 @@ public final class HnswIndex {
       return this;
     }
 
+    /**
+     * Sets the number of worker threads used during graph construction. Default 1 routes to the
+     * deterministic {@link HnswGraphBuilder}; values {@code > 1} route to {@link
+     * ConcurrentHnswGraphBuilder}, which produces valid (but non-deterministic) graphs with
+     * equivalent recall. Must be {@code >= 1}.
+     */
+    public Builder parallelism(int threads) {
+      if (threads < 1) {
+        throw new IllegalArgumentException("parallelism must be >= 1: " + threads);
+      }
+      this.parallelism = threads;
+      return this;
+    }
+
     /** Builds the HNSW index by inserting all vectors. */
     public HnswIndex build() {
-      var graphBuilder =
-          HnswGraphBuilder.create(
-              maxConnections, efConstruction, vectors, similarityFunction, seed);
-      HnswGraph graph = graphBuilder.build();
+      HnswGraph graph;
+      if (parallelism <= 1) {
+        graph =
+            HnswGraphBuilder.create(
+                    maxConnections, efConstruction, vectors, similarityFunction, seed)
+                .build();
+      } else {
+        graph =
+            ConcurrentHnswGraphBuilder.create(
+                    maxConnections, efConstruction, vectors, similarityFunction, seed)
+                .build(parallelism);
+      }
       return new HnswIndex(graph, vectors, similarityFunction);
     }
   }

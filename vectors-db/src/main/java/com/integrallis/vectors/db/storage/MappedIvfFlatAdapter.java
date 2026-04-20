@@ -71,7 +71,10 @@ public final class MappedIvfFlatAdapter implements IndexSpi {
       throw new IllegalArgumentException(
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
-    int effectiveNprobe = Math.min(nprobe, index.k());
+    // Per-query nprobe override: searchListSize > 0 acts as the IVF beam width for this call,
+    // matching the HNSW/Vamana contract; falls back to the constructor-time nprobe otherwise.
+    int requestedNprobe = (searchListSize > 0) ? searchListSize : nprobe;
+    int effectiveNprobe = Math.min(requestedNprobe, index.k());
     IvfSearchRequest req = new IvfSearchRequest(query, k, effectiveNprobe, gamma, -Float.MAX_VALUE);
     IvfSearchResult result = index.search(req);
     int sz = result.hits().size();

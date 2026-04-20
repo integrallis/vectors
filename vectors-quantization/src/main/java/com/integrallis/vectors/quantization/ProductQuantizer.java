@@ -3,6 +3,11 @@ package com.integrallis.vectors.quantization;
 import com.integrallis.vectors.core.VectorUtil;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Product Quantization (PQ) of float32 vectors into compact byte codes.
@@ -108,7 +113,8 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
   }
 
   /**
-   * Trains a PQ with full control over parameters.
+   * Trains a PQ with full control over parameters (single-threaded, deterministic). Equivalent to
+   * {@link #train(VectorDataset, int, int, boolean, int)} with {@code trainThreads == 1}.
    *
    * @param dataset the training data
    * @param numSubspaces number of sub-vector partitions (M)
@@ -118,6 +124,35 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
    */
   public static ProductQuantizer train(
       VectorDataset dataset, int numSubspaces, int numClusters, boolean center) {
+    return train(dataset, numSubspaces, numClusters, center, 1);
+  }
+
+  /**
+   * Trains a PQ with full control over parameters and optional per-subspace parallelism.
+   *
+   * <p>The outer loop over M subspaces is trivially embarrassingly parallel — each subspace
+   * clusters an independent slice of the training data into an independent codebook. Passing {@code
+   * trainThreads > 1} schedules the M k-means jobs on a fixed-size {@link ExecutorService}.
+   *
+   * <p>Determinism: two calls with the same parameters always return identical codebooks. When
+   * {@code trainThreads == 1}, the sequential legacy path is preserved (shared {@link Random}
+   * chained across subspaces, seed {@value #SEED}) so output is byte-identical to pre-R2.E
+   * releases. When {@code trainThreads > 1}, each subspace derives its own seed deterministically
+   * from ({@value #SEED}, subspace index), yielding a different — but reproducible — codebook.
+   *
+   * @param dataset the training data
+   * @param numSubspaces number of sub-vector partitions (M)
+   * @param numClusters centroids per subspace (Ks), must be &le; 256
+   * @param center if true, subtract global centroid before quantization
+   * @param trainThreads worker thread count for per-subspace k-means (must be {@code >= 1}); set to
+   *     {@code Math.min(M, Runtime.getRuntime().availableProcessors())} for typical use
+   * @return a trained product quantizer
+   */
+  public static ProductQuantizer train(
+      VectorDataset dataset, int numSubspaces, int numClusters, boolean center, int trainThreads) {
+    if (trainThreads < 1) {
+      throw new IllegalArgumentException("trainThreads must be >= 1: " + trainThreads);
+    }
     int dim = dataset.dimension();
     validateParameters(dim, numSubspaces, numClusters);
 
@@ -129,30 +164,96 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
     // Sample training data if dataset is large
     float[][] trainingData = sampleTrainingData(dataset, centroid);
 
-    // Train codebook for each subspace via k-means++
-    Random rng = new Random(42L);
     float[][] codebooks = new float[numSubspaces][];
 
-    for (int m = 0; m < numSubspaces; m++) {
-      int subDim = sizesAndOffsets[m][0];
-      int offset = sizesAndOffsets[m][1];
-
-      // Extract sub-vectors for this subspace
-      float[] subVectors = extractSubvectors(trainingData, offset, subDim);
-
-      // Cluster
-      codebooks[m] =
-          KMeansPlusPlusClusterer.cluster(
-              subVectors,
-              trainingData.length,
-              subDim,
-              numClusters,
-              KMeansPlusPlusClusterer.DEFAULT_MAX_ITERATIONS,
-              rng);
+    if (trainThreads == 1 || numSubspaces == 1) {
+      // Legacy sequential path: a single Random chained across all subspaces. Preserves
+      // byte-identical codebook output vs pre-R2.E releases.
+      Random rng = new Random(SEED);
+      for (int m = 0; m < numSubspaces; m++) {
+        int subDim = sizesAndOffsets[m][0];
+        int offset = sizesAndOffsets[m][1];
+        float[] subVectors = extractSubvectors(trainingData, offset, subDim);
+        codebooks[m] =
+            KMeansPlusPlusClusterer.cluster(
+                subVectors,
+                trainingData.length,
+                subDim,
+                numClusters,
+                KMeansPlusPlusClusterer.DEFAULT_MAX_ITERATIONS,
+                rng);
+      }
+    } else {
+      // Parallel path: per-subspace deterministic seeds so output is reproducible across thread
+      // counts and JDK scheduler variance. Codebooks will differ numerically from the sequential
+      // path but remain algorithmically equivalent (identical MSE-convergence properties).
+      int workers = Math.min(trainThreads, numSubspaces);
+      ExecutorService pool =
+          Executors.newFixedThreadPool(
+              workers,
+              r -> {
+                Thread t = new Thread(r, "pq-train-" + PQ_TRAIN_WORKER_ID.incrementAndGet());
+                t.setDaemon(true);
+                return t;
+              });
+      try {
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        Future<float[]>[] futures = new Future[numSubspaces];
+        for (int m = 0; m < numSubspaces; m++) {
+          final int mi = m;
+          final int[] sz = sizesAndOffsets[m];
+          futures[m] =
+              pool.submit(() -> clusterSubspaceIndependent(trainingData, sz, numClusters, mi));
+        }
+        for (int m = 0; m < numSubspaces; m++) {
+          try {
+            codebooks[m] = futures[m].get();
+          } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("PQ training interrupted at subspace " + m, ie);
+          } catch (ExecutionException ee) {
+            Throwable cause = ee.getCause();
+            if (cause instanceof RuntimeException re) throw re;
+            if (cause instanceof Error err) throw err;
+            throw new RuntimeException("PQ training failed at subspace " + m, cause);
+          }
+        }
+      } finally {
+        pool.shutdown();
+      }
     }
 
     return new ProductQuantizer(
         dim, numSubspaces, numClusters, sizesAndOffsets, codebooks, centroid);
+  }
+
+  /** Deterministic base seed shared by all train() overloads. */
+  private static final long SEED = 42L;
+
+  /** SplitMix64-style mixer for derived per-subspace seeds (reproducible across JDK versions). */
+  private static final long SEED_MIXER = 0x9E3779B97F4A7C15L;
+
+  /** Counter used to give pq-train worker threads unique names across invocations. */
+  private static final AtomicInteger PQ_TRAIN_WORKER_ID = new AtomicInteger();
+
+  /**
+   * Clusters one subspace with an independent, per-subspace-seeded {@link Random}. Used only on the
+   * parallel train path; thread-safe because it reads {@code trainingData} and writes only a
+   * freshly-allocated return array.
+   */
+  private static float[] clusterSubspaceIndependent(
+      float[][] trainingData, int[] sizeAndOffset, int numClusters, int m) {
+    int subDim = sizeAndOffset[0];
+    int offset = sizeAndOffset[1];
+    float[] subVectors = extractSubvectors(trainingData, offset, subDim);
+    Random rng = new Random(SEED ^ ((long) m * SEED_MIXER));
+    return KMeansPlusPlusClusterer.cluster(
+        subVectors,
+        trainingData.length,
+        subDim,
+        numClusters,
+        KMeansPlusPlusClusterer.DEFAULT_MAX_ITERATIONS,
+        rng);
   }
 
   // --- Quantizer interface ---

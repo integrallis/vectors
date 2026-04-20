@@ -188,7 +188,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return res1.add(res2).reduceLanes(VectorOperators.ADD);
   }
 
-  // --- Float cosine similarity: 2x unrolled, 3 FMAs per iteration ---
+  // --- Float cosine similarity: 4x unrolled, 3 FMAs per iteration ---
 
   @Override
   public float cosine(float[] a, float[] b) {
@@ -197,9 +197,18 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     float norm1 = 0f;
     float norm2 = 0f;
 
-    if (a.length > 2 * FLOAT_SPECIES.length()) {
+    if (a.length >= 4 * FLOAT_SPECIES.length()) {
+      // 4x unrolled main body: 12 independent FMA accumulators hide FMA latency on NEON/AVX.
       int limit = FLOAT_SPECIES.loopBound(a.length);
-      float[] result = cosineBody(a, b, limit);
+      float[] result = cosineBody4x(a, b, limit);
+      sum = result[0];
+      norm1 = result[1];
+      norm2 = result[2];
+      i = limit;
+    } else if (a.length >= FLOAT_SPECIES.length()) {
+      // Short vectors: single-accumulator vector body (no unroll), avoids unroll-prologue cost.
+      int limit = FLOAT_SPECIES.loopBound(a.length);
+      float[] result = cosineBody1x(a, b, limit);
       sum = result[0];
       norm1 = result[1];
       norm2 = result[2];
@@ -216,44 +225,79 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
   }
 
-  private float[] cosineBody(float[] a, float[] b, int limit) {
-    // 2x unrolling (3 FMAs per iteration already adds significant instruction pressure)
-    FloatVector sum1 = FloatVector.zero(FLOAT_SPECIES);
-    FloatVector sum2 = FloatVector.zero(FLOAT_SPECIES);
-    FloatVector norm1_1 = FloatVector.zero(FLOAT_SPECIES);
-    FloatVector norm1_2 = FloatVector.zero(FLOAT_SPECIES);
-    FloatVector norm2_1 = FloatVector.zero(FLOAT_SPECIES);
-    FloatVector norm2_2 = FloatVector.zero(FLOAT_SPECIES);
+  private float[] cosineBody4x(float[] a, float[] b, int limit) {
+    FloatVector s0 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector s1 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector s2 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector s3 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n1_0 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n1_1 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n1_2 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n1_3 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n2_0 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n2_1 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n2_2 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n2_3 = FloatVector.zero(FLOAT_SPECIES);
     int i = 0;
-    int unrolledLimit = limit - FLOAT_SPECIES.length();
+    int lanes = FLOAT_SPECIES.length();
+    int unrolledLimit = limit - 3 * lanes;
 
-    for (; i < unrolledLimit; i += 2 * FLOAT_SPECIES.length()) {
-      FloatVector va1 = FloatVector.fromArray(FLOAT_SPECIES, a, i);
-      FloatVector vb1 = FloatVector.fromArray(FLOAT_SPECIES, b, i);
-      sum1 = fma(va1, vb1, sum1);
-      norm1_1 = fma(va1, va1, norm1_1);
-      norm2_1 = fma(vb1, vb1, norm2_1);
+    for (; i < unrolledLimit; i += 4 * lanes) {
+      FloatVector va0 = FloatVector.fromArray(FLOAT_SPECIES, a, i);
+      FloatVector vb0 = FloatVector.fromArray(FLOAT_SPECIES, b, i);
+      FloatVector va1 = FloatVector.fromArray(FLOAT_SPECIES, a, i + lanes);
+      FloatVector vb1 = FloatVector.fromArray(FLOAT_SPECIES, b, i + lanes);
+      FloatVector va2 = FloatVector.fromArray(FLOAT_SPECIES, a, i + 2 * lanes);
+      FloatVector vb2 = FloatVector.fromArray(FLOAT_SPECIES, b, i + 2 * lanes);
+      FloatVector va3 = FloatVector.fromArray(FLOAT_SPECIES, a, i + 3 * lanes);
+      FloatVector vb3 = FloatVector.fromArray(FLOAT_SPECIES, b, i + 3 * lanes);
 
-      FloatVector va2 = FloatVector.fromArray(FLOAT_SPECIES, a, i + FLOAT_SPECIES.length());
-      FloatVector vb2 = FloatVector.fromArray(FLOAT_SPECIES, b, i + FLOAT_SPECIES.length());
-      sum2 = fma(va2, vb2, sum2);
-      norm1_2 = fma(va2, va2, norm1_2);
-      norm2_2 = fma(vb2, vb2, norm2_2);
+      s0 = fma(va0, vb0, s0);
+      s1 = fma(va1, vb1, s1);
+      s2 = fma(va2, vb2, s2);
+      s3 = fma(va3, vb3, s3);
+      n1_0 = fma(va0, va0, n1_0);
+      n1_1 = fma(va1, va1, n1_1);
+      n1_2 = fma(va2, va2, n1_2);
+      n1_3 = fma(va3, va3, n1_3);
+      n2_0 = fma(vb0, vb0, n2_0);
+      n2_1 = fma(vb1, vb1, n2_1);
+      n2_2 = fma(vb2, vb2, n2_2);
+      n2_3 = fma(vb3, vb3, n2_3);
     }
 
-    // Vector tail
-    for (; i < limit; i += FLOAT_SPECIES.length()) {
+    // Vector tail (1 lane-width at a time)
+    for (; i < limit; i += lanes) {
       FloatVector va = FloatVector.fromArray(FLOAT_SPECIES, a, i);
       FloatVector vb = FloatVector.fromArray(FLOAT_SPECIES, b, i);
-      sum1 = fma(va, vb, sum1);
-      norm1_1 = fma(va, va, norm1_1);
-      norm2_1 = fma(vb, vb, norm2_1);
+      s0 = fma(va, vb, s0);
+      n1_0 = fma(va, va, n1_0);
+      n2_0 = fma(vb, vb, n2_0);
     }
 
     return new float[] {
-      sum1.add(sum2).reduceLanes(VectorOperators.ADD),
-      norm1_1.add(norm1_2).reduceLanes(VectorOperators.ADD),
-      norm2_1.add(norm2_2).reduceLanes(VectorOperators.ADD)
+      s0.add(s1).add(s2.add(s3)).reduceLanes(VectorOperators.ADD),
+      n1_0.add(n1_1).add(n1_2.add(n1_3)).reduceLanes(VectorOperators.ADD),
+      n2_0.add(n2_1).add(n2_2.add(n2_3)).reduceLanes(VectorOperators.ADD)
+    };
+  }
+
+  private float[] cosineBody1x(float[] a, float[] b, int limit) {
+    FloatVector s = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n1 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n2 = FloatVector.zero(FLOAT_SPECIES);
+    int lanes = FLOAT_SPECIES.length();
+    for (int i = 0; i < limit; i += lanes) {
+      FloatVector va = FloatVector.fromArray(FLOAT_SPECIES, a, i);
+      FloatVector vb = FloatVector.fromArray(FLOAT_SPECIES, b, i);
+      s = fma(va, vb, s);
+      n1 = fma(va, va, n1);
+      n2 = fma(vb, vb, n2);
+    }
+    return new float[] {
+      s.reduceLanes(VectorOperators.ADD),
+      n1.reduceLanes(VectorOperators.ADD),
+      n2.reduceLanes(VectorOperators.ADD)
     };
   }
 
@@ -262,6 +306,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   // Tiered widening strategy (B2I = byte-to-int, 4x lane expansion):
   //   512-bit path: ByteVector.SPECIES_128 (16 bytes) → IntVector.SPECIES_512 (16 ints)
   //   256-bit path: ByteVector.SPECIES_64  ( 8 bytes) → IntVector.SPECIES_256 ( 8 ints)
+  //   128-bit path: ByteVector.SPECIES_64  ( 8 bytes) → ShortVector.SPECIES_128 (8 shorts) →
+  //                 2× IntVector.SPECIES_128 (lo/hi halves) via S2I; split accumulators
   // Each tier accumulates into its own IntVector and adds to `res` via +=, so tiers compose safely.
   // Int32 overflow is safe: max per-lane accumulation ≤ (dim/lanes) * 127^2 which for dim=1536
   // is ≤ 96 * 16129 ≈ 1.5M, well within int32 range (2.1B).
@@ -297,6 +343,30 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         acc = acc.add(ia.mul(ib));
       }
       res += acc.reduceLanes(VectorOperators.ADD);
+    }
+
+    // 128-bit path (NEON, RVV-128): 8 bytes → 8 shorts → 2× 4 ints per iteration.
+    // Byte*byte products fit in int16 (|a*b| ≤ 127*127 = 16129), so short mul is safe.
+    if (VECTOR_BITSIZE == 128 && a.length - i >= ByteVector.SPECIES_64.length()) {
+      int limit = i + ByteVector.SPECIES_64.loopBound(a.length - i);
+      IntVector acc1 = IntVector.zero(IntVector.SPECIES_128);
+      IntVector acc2 = IntVector.zero(IntVector.SPECIES_128);
+      for (; i < limit; i += ByteVector.SPECIES_64.length()) {
+        ByteVector va = ByteVector.fromArray(ByteVector.SPECIES_64, a, i);
+        ByteVector vb = ByteVector.fromArray(ByteVector.SPECIES_64, b, i);
+        ShortVector va16 =
+            (ShortVector) va.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        ShortVector vb16 =
+            (ShortVector) vb.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        ShortVector prod16 = va16.mul(vb16);
+        acc1 =
+            acc1.add(
+                (IntVector) prod16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0));
+        acc2 =
+            acc2.add(
+                (IntVector) prod16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 1));
+      }
+      res += acc1.add(acc2).reduceLanes(VectorOperators.ADD);
     }
 
     // Scalar tail
@@ -339,6 +409,30 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         acc = acc.add(diff.mul(diff));
       }
       res += acc.reduceLanes(VectorOperators.ADD);
+    }
+
+    // 128-bit path: 8 bytes → 8 shorts → sub in short, then split into 2× 4 ints for mul+add.
+    // |a - b| ≤ 255 fits in int16; diff*diff ≤ 65025 does not fit in int16, hence mul in int.
+    if (VECTOR_BITSIZE == 128 && a.length - i >= ByteVector.SPECIES_64.length()) {
+      int limit = i + ByteVector.SPECIES_64.loopBound(a.length - i);
+      IntVector acc1 = IntVector.zero(IntVector.SPECIES_128);
+      IntVector acc2 = IntVector.zero(IntVector.SPECIES_128);
+      for (; i < limit; i += ByteVector.SPECIES_64.length()) {
+        ByteVector va = ByteVector.fromArray(ByteVector.SPECIES_64, a, i);
+        ByteVector vb = ByteVector.fromArray(ByteVector.SPECIES_64, b, i);
+        ShortVector va16 =
+            (ShortVector) va.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        ShortVector vb16 =
+            (ShortVector) vb.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        ShortVector diff16 = va16.sub(vb16);
+        IntVector diff32_lo =
+            (IntVector) diff16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+        IntVector diff32_hi =
+            (IntVector) diff16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 1);
+        acc1 = acc1.add(diff32_lo.mul(diff32_lo));
+        acc2 = acc2.add(diff32_hi.mul(diff32_hi));
+      }
+      res += acc1.add(acc2).reduceLanes(VectorOperators.ADD);
     }
 
     for (; i < a.length; i++) {
@@ -393,6 +487,50 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       sum += vSum.reduceLanes(VectorOperators.ADD);
       norm1 += vNorm1.reduceLanes(VectorOperators.ADD);
       norm2 += vNorm2.reduceLanes(VectorOperators.ADD);
+    }
+
+    // 128-bit path: 8 bytes → 8 shorts, multiply in short, widen halves to int for accumulation.
+    // All three quantities (a*b, a*a, b*b) stay within int16 range (≤ 16129 for int8 inputs).
+    if (VECTOR_BITSIZE == 128 && a.length - i >= ByteVector.SPECIES_64.length()) {
+      int limit = i + ByteVector.SPECIES_64.loopBound(a.length - i);
+      IntVector vSum1 = IntVector.zero(IntVector.SPECIES_128);
+      IntVector vSum2 = IntVector.zero(IntVector.SPECIES_128);
+      IntVector vNorm1Lo = IntVector.zero(IntVector.SPECIES_128);
+      IntVector vNorm1Hi = IntVector.zero(IntVector.SPECIES_128);
+      IntVector vNorm2Lo = IntVector.zero(IntVector.SPECIES_128);
+      IntVector vNorm2Hi = IntVector.zero(IntVector.SPECIES_128);
+      for (; i < limit; i += ByteVector.SPECIES_64.length()) {
+        ByteVector va = ByteVector.fromArray(ByteVector.SPECIES_64, a, i);
+        ByteVector vb = ByteVector.fromArray(ByteVector.SPECIES_64, b, i);
+        ShortVector va16 =
+            (ShortVector) va.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        ShortVector vb16 =
+            (ShortVector) vb.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        ShortVector dot16 = va16.mul(vb16);
+        ShortVector n1_16 = va16.mul(va16);
+        ShortVector n2_16 = vb16.mul(vb16);
+        vSum1 =
+            vSum1.add(
+                (IntVector) dot16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0));
+        vSum2 =
+            vSum2.add(
+                (IntVector) dot16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 1));
+        vNorm1Lo =
+            vNorm1Lo.add(
+                (IntVector) n1_16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0));
+        vNorm1Hi =
+            vNorm1Hi.add(
+                (IntVector) n1_16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 1));
+        vNorm2Lo =
+            vNorm2Lo.add(
+                (IntVector) n2_16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0));
+        vNorm2Hi =
+            vNorm2Hi.add(
+                (IntVector) n2_16.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 1));
+      }
+      sum += vSum1.add(vSum2).reduceLanes(VectorOperators.ADD);
+      norm1 += vNorm1Lo.add(vNorm1Hi).reduceLanes(VectorOperators.ADD);
+      norm2 += vNorm2Lo.add(vNorm2Hi).reduceLanes(VectorOperators.ADD);
     }
 
     for (; i < a.length; i++) {

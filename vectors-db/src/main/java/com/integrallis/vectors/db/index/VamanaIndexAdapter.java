@@ -37,6 +37,7 @@ public final class VamanaIndexAdapter implements IndexSpi {
   private final int searchListSize;
   private final float alpha;
   private final long seed;
+  private final int buildThreads;
 
   // Null until build() is called, or if build() was called with an empty vector array.
   private VamanaIndex index;
@@ -44,7 +45,9 @@ public final class VamanaIndexAdapter implements IndexSpi {
   private int size;
 
   /**
-   * Creates a new adapter with the given Vamana build parameters.
+   * Creates a new adapter with the given Vamana build parameters (deterministic, single-threaded
+   * construction). Equivalent to {@link #VamanaIndexAdapter(int, int, float, long, int)} with
+   * {@code buildThreads == 1}.
    *
    * @param maxDegree Vamana {@code R} (must be positive)
    * @param searchListSize Vamana {@code L} — beam width during construction (must be {@code >=
@@ -54,6 +57,24 @@ public final class VamanaIndexAdapter implements IndexSpi {
    * @throws IllegalArgumentException if any argument violates its contract
    */
   public VamanaIndexAdapter(int maxDegree, int searchListSize, float alpha, long seed) {
+    this(maxDegree, searchListSize, alpha, seed, 1);
+  }
+
+  /**
+   * Creates a new adapter with the given Vamana build parameters.
+   *
+   * @param maxDegree Vamana {@code R} (must be positive)
+   * @param searchListSize Vamana {@code L} — beam width during construction (must be {@code >=
+   *     maxDegree})
+   * @param alpha diversity parameter (must be {@code >= 1.0})
+   * @param seed random seed for deterministic construction
+   * @param buildThreads worker thread count for graph construction (must be {@code >= 1}); values
+   *     {@code > 1} route through {@link
+   *     com.integrallis.vectors.vamana.ConcurrentVamanaGraphBuilder}
+   * @throws IllegalArgumentException if any argument violates its contract
+   */
+  public VamanaIndexAdapter(
+      int maxDegree, int searchListSize, float alpha, long seed, int buildThreads) {
     if (maxDegree <= 0) {
       throw new IllegalArgumentException("maxDegree must be positive: " + maxDegree);
     }
@@ -64,10 +85,14 @@ public final class VamanaIndexAdapter implements IndexSpi {
     if (alpha < 1.0f) {
       throw new IllegalArgumentException("alpha must be >= 1.0: " + alpha);
     }
+    if (buildThreads < 1) {
+      throw new IllegalArgumentException("buildThreads must be >= 1: " + buildThreads);
+    }
     this.maxDegree = maxDegree;
     this.searchListSize = searchListSize;
     this.alpha = alpha;
     this.seed = seed;
+    this.buildThreads = buildThreads;
   }
 
   @Override
@@ -89,6 +114,7 @@ public final class VamanaIndexAdapter implements IndexSpi {
             .searchListSize(searchListSize)
             .alpha(alpha)
             .seed(seed)
+            .buildThreads(buildThreads)
             .build();
   }
 

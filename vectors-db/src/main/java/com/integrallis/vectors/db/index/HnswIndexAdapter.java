@@ -38,6 +38,7 @@ public final class HnswIndexAdapter implements IndexSpi {
 
   private final int maxConnections;
   private final int efConstruction;
+  private final int buildThreads;
 
   // Null until build() is called, or if build() was called with an empty vector array.
   private HnswIndex index;
@@ -45,13 +46,28 @@ public final class HnswIndexAdapter implements IndexSpi {
   private int size;
 
   /**
-   * Creates a new adapter with the given HNSW build parameters.
+   * Creates a new adapter with the given HNSW build parameters and a single-threaded
+   * (deterministic) graph builder.
    *
    * @param maxConnections HNSW {@code M} (must be positive)
    * @param efConstruction beam width during construction (must be {@code >= maxConnections})
    * @throws IllegalArgumentException if either argument violates the contract
    */
   public HnswIndexAdapter(int maxConnections, int efConstruction) {
+    this(maxConnections, efConstruction, 1);
+  }
+
+  /**
+   * Creates a new adapter with the given HNSW build parameters and parallelism for graph
+   * construction. Values {@code > 1} route through {@link
+   * com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder}.
+   *
+   * @param maxConnections HNSW {@code M} (must be positive)
+   * @param efConstruction beam width during construction (must be {@code >= maxConnections})
+   * @param buildThreads number of worker threads for construction (must be {@code >= 1})
+   * @throws IllegalArgumentException if any argument violates the contract
+   */
+  public HnswIndexAdapter(int maxConnections, int efConstruction, int buildThreads) {
     if (maxConnections <= 0) {
       throw new IllegalArgumentException("maxConnections must be positive: " + maxConnections);
     }
@@ -63,8 +79,12 @@ public final class HnswIndexAdapter implements IndexSpi {
               + maxConnections
               + ")");
     }
+    if (buildThreads < 1) {
+      throw new IllegalArgumentException("buildThreads must be >= 1: " + buildThreads);
+    }
     this.maxConnections = maxConnections;
     this.efConstruction = efConstruction;
+    this.buildThreads = buildThreads;
   }
 
   /** Returns the backing {@link HnswIndex} or {@code null} when the collection is empty. */
@@ -94,6 +114,7 @@ public final class HnswIndexAdapter implements IndexSpi {
         HnswIndex.builder(vectors, metric)
             .maxConnections(maxConnections)
             .efConstruction(efConstruction)
+            .parallelism(buildThreads)
             .build();
   }
 
@@ -227,5 +248,10 @@ public final class HnswIndexAdapter implements IndexSpi {
   /** Returns the HNSW {@code efConstruction} parameter this adapter was configured with. */
   public int efConstruction() {
     return efConstruction;
+  }
+
+  /** Returns the number of worker threads used during graph construction. */
+  public int buildThreads() {
+    return buildThreads;
   }
 }

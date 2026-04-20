@@ -332,11 +332,12 @@ final class VectorCollectionImpl implements VectorCollection {
       case FLAT -> new FlatScanAdapter();
       case HNSW -> {
         VectorCollectionConfig.HnswParams p = config.hnswParams();
-        yield new HnswIndexAdapter(p.m(), p.efConstruction());
+        yield new HnswIndexAdapter(p.m(), p.efConstruction(), p.threads());
       }
       case VAMANA -> {
         VectorCollectionConfig.VamanaParams p = config.vamanaParams();
-        yield new VamanaIndexAdapter(p.maxDegree(), p.searchListSize(), p.alpha(), p.seed());
+        yield new VamanaIndexAdapter(
+            p.maxDegree(), p.searchListSize(), p.alpha(), p.seed(), p.threads());
       }
       case IVF_FLAT -> {
         VectorCollectionConfig.IvfParams p = config.ivfParams();
@@ -1234,7 +1235,7 @@ final class VectorCollectionImpl implements VectorCollection {
     return switch (config.indexType()) {
       case HNSW -> {
         VectorCollectionConfig.HnswParams hp = config.hnswParams();
-        HnswIndexAdapter adapter = new HnswIndexAdapter(hp.m(), hp.efConstruction());
+        HnswIndexAdapter adapter = new HnswIndexAdapter(hp.m(), hp.efConstruction(), hp.threads());
         adapter.build(matrix, config.metric());
         HnswGraph graph = adapter.graph();
         yield graph == null ? null : HnswGraphCodec.encode(graph);
@@ -1242,7 +1243,8 @@ final class VectorCollectionImpl implements VectorCollection {
       case VAMANA -> {
         VectorCollectionConfig.VamanaParams vp = config.vamanaParams();
         VamanaIndexAdapter adapter =
-            new VamanaIndexAdapter(vp.maxDegree(), vp.searchListSize(), vp.alpha(), vp.seed());
+            new VamanaIndexAdapter(
+                vp.maxDegree(), vp.searchListSize(), vp.alpha(), vp.seed(), vp.threads());
         adapter.build(matrix, config.metric());
         VamanaGraph graph = adapter.graph();
         yield graph == null ? null : VamanaGraphCodec.encode(graph);
@@ -1286,7 +1288,8 @@ final class VectorCollectionImpl implements VectorCollection {
                         Math.max(1, config.dimension() / 8),
                         VectorCollectionBuilder.DEFAULT_PQ_CLUSTERS,
                         true);
-            yield ProductQuantizer.train(dataset, pq.numSubspaces(), pq.numClusters(), pq.center());
+            yield ProductQuantizer.train(
+                dataset, pq.numSubspaces(), pq.numClusters(), pq.center(), pq.trainThreads());
           }
           case BQ -> {
             boolean bbq = params instanceof QuantizerParams.BqParams b ? b.bbq() : true;

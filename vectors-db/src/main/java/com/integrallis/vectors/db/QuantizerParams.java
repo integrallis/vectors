@@ -35,8 +35,14 @@ public sealed interface QuantizerParams {
    *     dimension. Default: {@code max(1, dimension / 8)}.
    * @param numClusters number of clusters per subspace (Ks). Must be in [2, 256]. Default: 256.
    * @param center whether to subtract a global centroid before quantization. Default: true.
+   * @param trainThreads worker thread count for per-subspace k-means during training. Must be
+   *     {@code >= 1}. Default: 1 (sequential, byte-identical to pre-R2.E releases). Values {@code >
+   *     1} route through the parallel path of {@link
+   *     com.integrallis.vectors.quantization.ProductQuantizer#train(com.integrallis.vectors.quantization.VectorDataset,
+   *     int, int, boolean, int)} and yield a deterministic but numerically distinct codebook.
    */
-  record PqParams(int numSubspaces, int numClusters, boolean center) implements QuantizerParams {
+  record PqParams(int numSubspaces, int numClusters, boolean center, int trainThreads)
+      implements QuantizerParams {
     public PqParams {
       if (numSubspaces <= 0) {
         throw new IllegalArgumentException("numSubspaces must be positive: " + numSubspaces);
@@ -44,6 +50,14 @@ public sealed interface QuantizerParams {
       if (numClusters < 2 || numClusters > 256) {
         throw new IllegalArgumentException("numClusters must be in [2, 256]: " + numClusters);
       }
+      if (trainThreads < 1) {
+        throw new IllegalArgumentException("trainThreads must be >= 1: " + trainThreads);
+      }
+    }
+
+    /** Convenience constructor defaulting to single-threaded training. */
+    public PqParams(int numSubspaces, int numClusters, boolean center) {
+      this(numSubspaces, numClusters, center, 1);
     }
   }
 

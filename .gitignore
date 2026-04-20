@@ -39,3 +39,6 @@ spotbugs-output.txt
 
 # JMH
 *.jmh
+
+# Benchmark run artifacts (ad-hoc logs captured from ./gradlew invocations)
+*.log

@@ -24,6 +24,20 @@ public final class VectorCollectionBuilder {
   /** HNSW {@code efConstruction} parameter default. Matches the HnswIndex.Builder default. */
   public static final int DEFAULT_HNSW_EF_CONSTRUCTION = 200;
 
+  /**
+   * HNSW build-time thread count default. Defaults to {@code 1} (deterministic, single-threaded) so
+   * the graph encoding is bit-exact reproducible; call {@link #hnswBuildThreads(int)} to opt in to
+   * parallel construction via {@link com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder}.
+   */
+  public static final int DEFAULT_HNSW_BUILD_THREADS = 1;
+
+  /**
+   * Vamana build-time thread count default. Defaults to {@code 1} (deterministic, single-threaded)
+   * so the graph encoding is bit-exact reproducible; call {@link #vamanaBuildThreads(int)} to opt
+   * in to parallel construction via {@code ConcurrentVamanaGraphBuilder}.
+   */
+  public static final int DEFAULT_VAMANA_BUILD_THREADS = 1;
+
   /** Vamana {@code R} (maxDegree) parameter default. Matches the VamanaIndex.Builder default. */
   public static final int DEFAULT_VAMANA_R = 64;
 
@@ -61,10 +75,12 @@ public final class VectorCollectionBuilder {
   private Path storageRoot;
   private int hnswM = DEFAULT_HNSW_M;
   private int hnswEfConstruction = DEFAULT_HNSW_EF_CONSTRUCTION;
+  private int hnswBuildThreads = DEFAULT_HNSW_BUILD_THREADS;
   private int vamanaMaxDegree = DEFAULT_VAMANA_R;
   private int vamanaSearchListSize = DEFAULT_VAMANA_L;
   private float vamanaAlpha = DEFAULT_VAMANA_ALPHA;
   private Long vamanaSeed; // lazily filled with System.nanoTime() at build() time if unset
+  private int vamanaBuildThreads = DEFAULT_VAMANA_BUILD_THREADS;
 
   // IVF-specific params
   private int ivfK = DEFAULT_IVF_K;
@@ -81,6 +97,7 @@ public final class VectorCollectionBuilder {
   private Integer pqSubspaces;
   private Integer pqClusters;
   private Boolean pqCenter;
+  private Integer pqTrainThreads;
   private Boolean bqBbq;
   private Long rabitSeed;
   private Integer nvqSubvectors;
@@ -159,6 +176,21 @@ public final class VectorCollectionBuilder {
   }
 
   /**
+   * Sets the number of worker threads used during HNSW graph construction. Values {@code > 1} route
+   * the build through {@link com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder}, which
+   * produces valid (but non-deterministic) graphs with equivalent recall. Ignored unless {@link
+   * #indexType(IndexType)} is {@link IndexType#HNSW}. Must be {@code >= 1}. Default: {@link
+   * #DEFAULT_HNSW_BUILD_THREADS} (half of {@code Runtime.availableProcessors()}).
+   */
+  public VectorCollectionBuilder hnswBuildThreads(int threads) {
+    if (threads < 1) {
+      throw new IllegalArgumentException("threads must be >= 1: " + threads);
+    }
+    this.hnswBuildThreads = threads;
+    return this;
+  }
+
+  /**
    * Sets the Vamana {@code R} (maxDegree) parameter — max out-degree after robust pruning. Ignored
    * unless {@link #indexType(IndexType)} is {@link IndexType#VAMANA}. Must be positive. Default:
    * {@value #DEFAULT_VAMANA_R}.
@@ -214,6 +246,21 @@ public final class VectorCollectionBuilder {
    */
   public VectorCollectionBuilder vamanaSeed(long seed) {
     this.vamanaSeed = seed;
+    return this;
+  }
+
+  /**
+   * Sets the number of worker threads used by {@code ConcurrentVamanaGraphBuilder} during
+   * construction. Ignored unless {@link #indexType(IndexType)} is {@link IndexType#VAMANA}. Must be
+   * {@code >= 1}. Default: {@link #DEFAULT_VAMANA_BUILD_THREADS} (single-threaded, deterministic).
+   * Values {@code > 1} trade determinism for wall-clock parallelism; recall is preserved within
+   * statistical noise.
+   */
+  public VectorCollectionBuilder vamanaBuildThreads(int threads) {
+    if (threads < 1) {
+      throw new IllegalArgumentException("threads must be >= 1: " + threads);
+    }
+    this.vamanaBuildThreads = threads;
     return this;
   }
 
@@ -323,6 +370,22 @@ public final class VectorCollectionBuilder {
   }
 
   /**
+   * Sets the number of worker threads used by per-subspace k-means during PQ training. Ignored
+   * unless {@link #quantizer(QuantizerKind)} is {@link QuantizerKind#PQ}. Must be {@code >= 1}.
+   * Default: {@code 1} (single-threaded, byte-identical to pre-R2.E releases). Values {@code > 1}
+   * route through the parallel train path of {@link
+   * com.integrallis.vectors.quantization.ProductQuantizer}; the resulting codebook is deterministic
+   * but numerically distinct from the sequential codebook.
+   */
+  public VectorCollectionBuilder pqTrainThreads(int threads) {
+    if (threads < 1) {
+      throw new IllegalArgumentException("threads must be >= 1: " + threads);
+    }
+    this.pqTrainThreads = threads;
+    return this;
+  }
+
+  /**
    * Sets the BQ mode. Only used when {@link #quantizer(QuantizerKind)} is {@link QuantizerKind#BQ}.
    * Pass {@code true} for BBQ (Better Binary Quantization — computes a centroid and per-vector
    * corrections for asymmetric distance estimation), or {@code false} for plain sign-bit mode.
@@ -428,7 +491,7 @@ public final class VectorCollectionBuilder {
 
     VectorCollectionConfig.HnswParams hnswParams =
         (indexType == IndexType.HNSW)
-            ? new VectorCollectionConfig.HnswParams(hnswM, hnswEfConstruction)
+            ? new VectorCollectionConfig.HnswParams(hnswM, hnswEfConstruction, hnswBuildThreads)
             : null;
     VectorCollectionConfig.VamanaParams vamanaParams =
         (indexType == IndexType.VAMANA)
@@ -436,7 +499,8 @@ public final class VectorCollectionBuilder {
                 vamanaMaxDegree,
                 vamanaSearchListSize,
                 vamanaAlpha,
-                vamanaSeed != null ? vamanaSeed : System.nanoTime())
+                vamanaSeed != null ? vamanaSeed : System.nanoTime(),
+                vamanaBuildThreads)
             : null;
     VectorCollectionConfig.IvfParams ivfParams =
         (indexType == IndexType.IVF_FLAT)
@@ -473,7 +537,8 @@ public final class VectorCollectionBuilder {
           new QuantizerParams.PqParams(
               pqSubspaces != null ? pqSubspaces : Math.max(1, dimension / 8),
               pqClusters != null ? pqClusters : DEFAULT_PQ_CLUSTERS,
-              pqCenter != null ? pqCenter : true);
+              pqCenter != null ? pqCenter : true,
+              pqTrainThreads != null ? pqTrainThreads : 1);
       case BQ -> new QuantizerParams.BqParams(bqBbq != null ? bqBbq : true);
       case RABITQ ->
           new QuantizerParams.RaBitParams(rabitSeed != null ? rabitSeed : DEFAULT_RABIT_SEED);
