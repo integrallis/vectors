@@ -112,4 +112,14 @@ public final class MemorySegmentRandomAccessVectors
     MemorySegment.copy(slice, ValueLayout.JAVA_FLOAT, 0L, dst, 0, dimension);
     return dst;
   }
+
+  /**
+   * Explicit override to resolve the inherited default from both {@code hnsw.RandomAccessVectors}
+   * and {@code vamana.RandomAccessVectors}. Always {@code true} — this adapter returns a per-thread
+   * scratch buffer that is overwritten on every call.
+   */
+  @Override
+  public boolean sharesReturnBuffer() {
+    return true;
+  }
 }

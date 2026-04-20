@@ -23,4 +23,17 @@ public interface RandomAccessVectors {
    * @return the vector data
    */
   float[] getVector(int ordinal);
+
+  /**
+   * {@code true} when every call to {@link #getVector(int)} may overwrite the buffer returned by
+   * previous calls (e.g. mmap-backed implementations with a single scratch row). Callers that want
+   * to gather multiple vectors into a reusable {@code float[][]} pool before a fused SIMD scan must
+   * copy the returned data (or skip the bulk path) when this is {@code true}.
+   *
+   * <p>The default is {@code true} (safe assumption). Implementations backed by a stable {@code
+   * float[][]} (e.g. {@code InMemoryVectors}) should override this to return {@code false}.
+   */
+  default boolean sharesReturnBuffer() {
+    return true;
+  }
 }

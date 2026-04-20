@@ -1,6 +1,7 @@
 package com.integrallis.vectors.vamana;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.VectorUtil;
 import java.util.BitSet;
 import java.util.Objects;
 
@@ -28,6 +29,10 @@ public final class VamanaSearcher {
   // Scratch buffer for rescore(): avoids allocating a new NodeQueue on every two-pass call.
   private final NodeQueue rescoreHeap;
   private BitSet visited;
+  // Scratch buffers for fused bulk neighbor scoring. Sized to an upper bound on graph degree R.
+  private static final int BULK_BATCH = 128;
+  private final int[] bulkIds = new int[BULK_BATCH];
+  private final float[] bulkScores = new float[BULK_BATCH];
 
   /**
    * Creates a searcher with a custom {@link NodeScorerFactory}.
@@ -69,7 +74,54 @@ public final class VamanaSearcher {
    * @param sim similarity function
    */
   VamanaSearcher(VamanaGraph graph, RandomAccessVectors vectors, SimilarityFunction sim) {
-    this(graph, vectors, sim, query -> nodeId -> sim.compare(query, vectors.getVector(nodeId)));
+    this(graph, vectors, sim, defaultFullPrecisionFactory(vectors, sim));
+  }
+
+  /**
+   * Default full-precision scorer factory. When the underlying {@link RandomAccessVectors} returns
+   * stable references (i.e. {@code !sharesReturnBuffer()}), the returned scorer overrides {@link
+   * NodeScorer#bulkScore} with a fused GEMV path that aliases neighbor references into a reusable
+   * pool and invokes {@link VectorUtil#batchSquaredL2} / {@link VectorUtil#batchDotProduct} —
+   * amortising query loads across 4 rows at a time.
+   */
+  private static NodeScorerFactory defaultFullPrecisionFactory(
+      RandomAccessVectors vectors, SimilarityFunction sim) {
+    if (vectors.sharesReturnBuffer()) {
+      return query -> nodeId -> sim.compare(query, vectors.getVector(nodeId));
+    }
+    return query ->
+        new NodeScorer() {
+          private final float[][] pool = new float[BULK_BATCH][];
+          private final float[] out = new float[BULK_BATCH];
+
+          @Override
+          public float score(int nodeId) {
+            return sim.compare(query, vectors.getVector(nodeId));
+          }
+
+          @Override
+          public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+            for (int i = 0; i < count; i++) pool[i] = vectors.getVector(nodeIds[offset + i]);
+            switch (sim) {
+              case EUCLIDEAN -> {
+                VectorUtil.batchSquaredL2(query, pool, out, count);
+                for (int i = 0; i < count; i++) outScores[i] = 1f / (1f + out[i]);
+              }
+              case DOT_PRODUCT -> {
+                VectorUtil.batchDotProduct(query, pool, out, count);
+                for (int i = 0; i < count; i++) outScores[i] = (1f + out[i]) * 0.5f;
+              }
+              case MAXIMUM_INNER_PRODUCT -> {
+                VectorUtil.batchDotProduct(query, pool, out, count);
+                for (int i = 0; i < count; i++)
+                  outScores[i] = SimilarityFunction.scaleMaxInnerProductScore(out[i]);
+              }
+              case COSINE -> {
+                for (int i = 0; i < count; i++) outScores[i] = sim.compare(query, pool[i]);
+              }
+            }
+          }
+        };
   }
 
   /**
@@ -134,26 +186,24 @@ public final class VamanaSearcher {
         break;
       }
 
-      // Expand neighbors
+      // Expand neighbors — gather unvisited into a batch, then fused-score in one call.
       NeighborArray neighbors = graph.getNeighbors(candidateId);
-      for (int i = 0; i < neighbors.size(); i++) {
+      int n = neighbors.size();
+      int batchCount = 0;
+      for (int i = 0; i < n; i++) {
         int neighborId = neighbors.node(i);
-        if (visited.get(neighborId)) {
-          continue;
-        }
+        if (visited.get(neighborId)) continue;
         visited.set(neighborId);
-
-        float neighborScore = scorer.score(neighborId);
-
-        // Add to results if room or better than worst
-        if (results.size() < L) {
-          results.add(neighborId, neighborScore);
-          candidates.add(neighborId, neighborScore);
-        } else if (neighborScore > NodeQueue.score(results.peek())) {
-          results.poll();
-          results.add(neighborId, neighborScore);
-          candidates.add(neighborId, neighborScore);
+        bulkIds[batchCount++] = neighborId;
+        if (batchCount == BULK_BATCH) {
+          scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+          ingestBatch(batchCount, L);
+          batchCount = 0;
         }
+      }
+      if (batchCount > 0) {
+        scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+        ingestBatch(batchCount, L);
       }
     }
 
@@ -173,6 +223,25 @@ public final class VamanaSearcher {
     }
 
     return new SearchResult(nodeIds, scores);
+  }
+
+  /**
+   * Ingests a fused-scored batch into the beam-search heaps. Reads ids from {@code
+   * bulkIds[0..count)} and their scores from {@code bulkScores[0..count)}.
+   */
+  private void ingestBatch(int count, int L) {
+    for (int i = 0; i < count; i++) {
+      int neighborId = bulkIds[i];
+      float neighborScore = bulkScores[i];
+      if (results.size() < L) {
+        results.add(neighborId, neighborScore);
+        candidates.add(neighborId, neighborScore);
+      } else if (neighborScore > NodeQueue.score(results.peek())) {
+        results.poll();
+        results.add(neighborId, neighborScore);
+        candidates.add(neighborId, neighborScore);
+      }
+    }
   }
 
   /**
