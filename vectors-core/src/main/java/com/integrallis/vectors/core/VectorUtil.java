@@ -143,6 +143,15 @@ public final class VectorUtil {
   }
 
   /**
+   * Fused GEMV dot product over the first {@code numRows} rows of {@code matrix}. Useful when
+   * {@code matrix} is a reusable scratch buffer sized for a maximum batch but the current call
+   * processes only a prefix.
+   */
+  public static void batchDotProduct(float[] query, float[][] matrix, float[] out, int numRows) {
+    IMPL.matVecDot(query, matrix, out, numRows);
+  }
+
+  /**
    * Fills {@code out[i]} with the squared L2 distance from {@code query} to {@code matrix[i]} for
    * all rows {@code i} in {@code [0, matrix.length)}. {@code out.length} must be &ge; {@code
    * matrix.length}.
@@ -151,6 +160,15 @@ public final class VectorUtil {
    */
   public static void batchSquaredL2(float[] query, float[][] matrix, float[] out) {
     IMPL.matVecSquaredL2(query, matrix, out, matrix.length);
+  }
+
+  /**
+   * Fused GEMV squared-L2 over the first {@code numRows} rows of {@code matrix}. Useful when {@code
+   * matrix} is a reusable scratch buffer sized for a maximum batch but the current call processes
+   * only a prefix.
+   */
+  public static void batchSquaredL2(float[] query, float[][] matrix, float[] out, int numRows) {
+    IMPL.matVecSquaredL2(query, matrix, out, numRows);
   }
 
   // --- Normalization ---

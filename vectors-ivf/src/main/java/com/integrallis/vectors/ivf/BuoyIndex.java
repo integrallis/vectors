@@ -73,6 +73,14 @@ public final class BuoyIndex {
     return centroidIndex.routeWithSpill(query, nprobe, gamma, spillTargets);
   }
 
+  /**
+   * Same as {@link #route(float[], int, float)} but additionally returns the centroid-to-query
+   * distance used for ranking, enabling triangle-inequality partition pruning downstream.
+   */
+  public CentroidIndex.RouteResult routeWithDistances(float[] query, int nprobe, float gamma) {
+    return centroidIndex.routeWithSpillDistances(query, nprobe, gamma, spillTargets);
+  }
+
   public int k() {
     return buoyVectors.length;
   }

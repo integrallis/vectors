@@ -58,44 +58,120 @@ public final class CentroidIndex {
    *     i); may be null when gamma == 0
    */
   public int[] routeWithSpill(float[] query, int nprobe, float gamma, int[] spillTargets) {
+    return routeWithSpillDistances(query, nprobe, gamma, spillTargets).clusterIds();
+  }
+
+  /**
+   * Route with per-cluster distances preserved. The returned arrays are parallel and sorted by
+   * ascending distance for primary probes; spill targets (when {@code gamma > 0}) are appended
+   * after, in the order they were added, with their distances recomputed from {@code distances[]}.
+   * Distances are in the internal metric scale (squared L2 for EUCLIDEAN; negated dot otherwise).
+   */
+  public RouteResult routeWithSpillDistances(
+      float[] query, int nprobe, float gamma, int[] spillTargets) {
     int k = centroids.length;
     int probes = Math.min(nprobe, k);
     float[] distances = new float[k];
     computeDistances(query, distances);
 
-    // Build index array sorted by ascending distance
-    Integer[] order = new Integer[k];
-    for (int i = 0; i < k; i++) order[i] = i;
-    Arrays.sort(order, (a, b) -> Float.compare(distances[a], distances[b]));
-
-    // Collect primary probes
-    boolean[] included = new boolean[k];
-    int[] result = new int[Math.min(k, probes * 2 + 1)]; // over-allocate for spill
-    int count = 0;
-    for (int r = 0; r < probes && r < k; r++) {
-      int id = order[r];
-      result[count++] = id;
-      included[id] = true;
+    // Partial-sort: primitive top-probes via a bounded max-heap on distance[i].
+    int[] topIds = new int[probes];
+    float[] topDists = new float[probes];
+    int heapSize = 0;
+    for (int i = 0; i < k; i++) {
+      float d = distances[i];
+      if (heapSize < probes) {
+        topIds[heapSize] = i;
+        topDists[heapSize] = d;
+        heapSize++;
+        // sift up (max-heap on dist)
+        int idx = heapSize - 1;
+        while (idx > 0) {
+          int parent = (idx - 1) >>> 1;
+          if (topDists[idx] > topDists[parent]) {
+            float tf = topDists[idx];
+            topDists[idx] = topDists[parent];
+            topDists[parent] = tf;
+            int ti = topIds[idx];
+            topIds[idx] = topIds[parent];
+            topIds[parent] = ti;
+            idx = parent;
+          } else break;
+        }
+      } else if (d < topDists[0]) {
+        topIds[0] = i;
+        topDists[0] = d;
+        // sift down
+        int idx = 0;
+        int half = heapSize >>> 1;
+        while (idx < half) {
+          int left = (idx << 1) + 1;
+          int right = left + 1;
+          int largest = left;
+          if (right < heapSize && topDists[right] > topDists[left]) largest = right;
+          if (topDists[idx] >= topDists[largest]) break;
+          float tf = topDists[idx];
+          topDists[idx] = topDists[largest];
+          topDists[largest] = tf;
+          int ti = topIds[idx];
+          topIds[idx] = topIds[largest];
+          topIds[largest] = ti;
+          idx = largest;
+        }
+      }
+    }
+    // Sort (id, dist) pairs ascending by dist — tiny (≤ nprobe) so insertion sort suffices.
+    for (int i = 1; i < heapSize; i++) {
+      float d = topDists[i];
+      int id = topIds[i];
+      int j = i - 1;
+      while (j >= 0 && topDists[j] > d) {
+        topDists[j + 1] = topDists[j];
+        topIds[j + 1] = topIds[j];
+        j--;
+      }
+      topDists[j + 1] = d;
+      topIds[j + 1] = id;
     }
 
-    // SOAR boundary expansion
+    boolean[] included = new boolean[k];
+    int[] result = new int[Math.min(k, probes * 2 + 1)];
+    float[] resultDists = new float[result.length];
+    int count = 0;
+    for (int r = 0; r < heapSize; r++) {
+      result[count] = topIds[r];
+      resultDists[count] = topDists[r];
+      included[topIds[r]] = true;
+      count++;
+    }
+
     if (gamma > 0f && spillTargets != null && count > 0) {
-      float nearestDist = distances[order[0]];
+      float nearestDist = topDists[0];
       float boundary = nearestDist * (1f + gamma);
-      for (int r = 0; r < probes && r < k; r++) {
-        int id = order[r];
-        if (distances[id] > boundary) break;
-        int spill = spillTargets[id];
+      for (int r = 0; r < heapSize; r++) {
+        if (topDists[r] > boundary) break;
+        int spill = spillTargets[topIds[r]];
         if (spill >= 0 && spill < k && !included[spill]) {
-          if (count >= result.length) result = Arrays.copyOf(result, result.length * 2);
-          result[count++] = spill;
+          if (count >= result.length) {
+            result = Arrays.copyOf(result, result.length * 2);
+            resultDists = Arrays.copyOf(resultDists, result.length);
+          }
+          result[count] = spill;
+          resultDists[count] = distances[spill];
           included[spill] = true;
+          count++;
         }
       }
     }
 
-    return Arrays.copyOf(result, count);
+    return new RouteResult(Arrays.copyOf(result, count), Arrays.copyOf(resultDists, count));
   }
+
+  /**
+   * Parallel (clusterId, distance) arrays returned by {@link #routeWithSpillDistances(float[], int,
+   * float, int[])}.
+   */
+  public record RouteResult(int[] clusterIds, float[] distances) {}
 
   // --- internals ---
 

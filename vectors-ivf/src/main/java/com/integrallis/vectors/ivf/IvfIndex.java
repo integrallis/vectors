@@ -5,9 +5,7 @@ import com.integrallis.vectors.core.VectorUtil;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.PriorityQueue;
 
 /**
  * IVF-flat index: route query to {@code nprobe} clusters via {@link BuoyIndex}, then brute-force
@@ -81,49 +79,119 @@ public final class IvfIndex implements Closeable {
   /**
    * Searches the index for the top-k nearest neighbours of {@code request.query()}.
    *
-   * <p>Route → brute-force per cluster → merge top-k across clusters.
+   * <p>Route → bulk SIMD scan per cluster (fused GEMV, 4-row unrolled) → primitive top-k heap. When
+   * HARMONY key-dimension pruning is active and the heap is saturated, falls back to a scalar path
+   * within that partition so the partial-distance lower bound stays on the hot path.
+   *
+   * <p>For EUCLIDEAN, clusters are visited in ascending centroid distance and a triangle-inequality
+   * lower bound ({@code sqrt(centroidSqDist) - radius}) is compared against the current worst top-k
+   * distance; the loop terminates early once even the nearest unscanned cluster cannot contribute a
+   * competing result.
    */
   public IvfSearchResult search(IvfSearchRequest request) {
     float[] query = request.query();
     int k = request.k();
     int nprobe = Math.min(request.nprobe(), partitions.length);
-    int[] clusterIds = buoyIndex.route(query, nprobe, request.gamma());
+    var route = buoyIndex.routeWithDistances(query, nprobe, request.gamma());
+    int[] clusterIds = route.clusterIds();
+    float[] centroidDists = route.distances();
+    float[] radii = buoyIndex.clusterRadii();
 
-    // Min-heap keyed on score descending: we want the top-k highest scores.
-    // Use a min-heap of size k: evict the smallest when heap is full.
-    PriorityQueue<IvfHit> heap =
-        new PriorityQueue<>(k + 1, (a, b) -> Float.compare(a.score(), b.score()));
+    TopKHeap heap = new TopKHeap(k);
+    boolean euclidean = metric == SimilarityFunction.EUCLIDEAN;
+    float minScore = request.minScore();
 
-    boolean harmonyEuclidean = metric == SimilarityFunction.EUCLIDEAN;
-    for (int cid : clusterIds) {
-      ClusterPartition partition = partitions[cid];
-      boolean prune = harmonyEuclidean && partition.hasKeyDimensions();
-      int[] keyDims = prune ? partition.keyDimensions() : null;
-      for (int ordinal : partition.ordinals()) {
-        // HARMONY partial-distance lower bound: skip if partial L2 already exceeds worst result.
-        // Valid only for EUCLIDEAN (partial sum ≤ full sum for any dimension subset).
-        if (prune && heap.size() >= k) {
-          float partialSq =
-              DimensionAnalysis.partialSquaredDistance(query, vectors[ordinal], keyDims);
-          // score = -fullSqDist; worstScore = heap.peek().score() (negative).
-          // Prune when fullSqDist >= -worstScore, i.e. partialSqDist >= -worstScore.
-          if (partialSq >= -heap.peek().score()) continue;
-        }
-        float score = score(query, vectors[ordinal]);
-        if (score < request.minScore()) continue;
-        if (heap.size() < k) {
-          heap.offer(new IvfHit(ordinal, ids != null ? ids[ordinal] : null, score));
-        } else if (score > heap.peek().score()) {
-          heap.poll();
-          heap.offer(new IvfHit(ordinal, ids != null ? ids[ordinal] : null, score));
+    // Reusable scratch buffers for batch SIMD scan.
+    float[][] batchRows = new float[BATCH_ROWS][];
+    float[] batchOut = new float[BATCH_ROWS];
+
+    int clustersScanned = 0;
+    for (int i = 0; i < clusterIds.length; i++) {
+      int cid = clusterIds[i];
+      // Triangle-inequality lower-bound pruning. Applicable only for EUCLIDEAN where
+      // centroidDists[] are squared L2 distances and radii are L2 distances. score = -sqDist,
+      // so the heap's worst entry has score = -worstSqDist; lowerBound on sqDist for any v in
+      // this cluster is (max(0, sqrt(centroidSqDist) - radius))^2.
+      if (euclidean && heap.isFull()) {
+        float centroidL2 = (float) Math.sqrt(centroidDists[i]);
+        float lb = centroidL2 - radii[cid];
+        if (lb > 0f) {
+          float lbSq = lb * lb;
+          if (lbSq >= -heap.worst()) break; // route() sorted ascending, so no later cluster fits
         }
       }
+
+      ClusterPartition partition = partitions[cid];
+      int[] ords = partition.ordinals();
+      if (ords.length == 0) {
+        clustersScanned++;
+        continue;
+      }
+
+      boolean prune = euclidean && partition.hasKeyDimensions();
+      if (prune && heap.isFull()) {
+        scanPartitionWithHarmony(query, ords, partition.keyDimensions(), minScore, heap);
+      } else {
+        scanPartitionBulk(query, ords, minScore, heap, batchRows, batchOut);
+      }
+      clustersScanned++;
     }
 
-    // Drain heap into descending-score list
-    IvfHit[] arr = heap.toArray(new IvfHit[0]);
-    Arrays.sort(arr); // IvfHit.compareTo is descending by score
-    return new IvfSearchResult(List.of(arr), clusterIds.length);
+    TopKHeap.DrainResult drained = heap.drainDescending();
+    List<IvfHit> hits = new ArrayList<>(drained.ordinals().length);
+    for (int i = 0; i < drained.ordinals().length; i++) {
+      int ord = drained.ordinals()[i];
+      hits.add(new IvfHit(ord, ids != null ? ids[ord] : null, drained.scores()[i]));
+    }
+    return new IvfSearchResult(hits, clustersScanned);
+  }
+
+  /** Batch size for fused GEMV scan. Matched to {@link VectorUtil#batchSquaredL2} unroll factor. */
+  private static final int BATCH_ROWS = 64;
+
+  /**
+   * Fused 4-row SIMD scan over a partition. No per-row allocation, no pruning. COSINE falls back to
+   * scalar since there is no fused GEMV cosine kernel yet.
+   */
+  private void scanPartitionBulk(
+      float[] query, int[] ords, float minScore, TopKHeap heap, float[][] rows, float[] out) {
+    int n = ords.length;
+    if (metric == SimilarityFunction.COSINE) {
+      for (int ord : ords) {
+        float score = score(query, vectors[ord]);
+        if (score < minScore) continue;
+        heap.offer(ord, score);
+      }
+      return;
+    }
+    boolean euclidean = metric == SimilarityFunction.EUCLIDEAN;
+    for (int start = 0; start < n; start += BATCH_ROWS) {
+      int count = Math.min(BATCH_ROWS, n - start);
+      for (int j = 0; j < count; j++) rows[j] = vectors[ords[start + j]];
+      if (euclidean) {
+        VectorUtil.batchSquaredL2(query, rows, out, count);
+      } else {
+        VectorUtil.batchDotProduct(query, rows, out, count);
+      }
+      for (int j = 0; j < count; j++) {
+        float score = euclidean ? -out[j] : out[j];
+        if (score < minScore) continue;
+        heap.offer(ords[start + j], score);
+      }
+    }
+  }
+
+  /** Scalar path preserving HARMONY partial-distance pruning. */
+  private void scanPartitionWithHarmony(
+      float[] query, int[] ords, int[] keyDims, float minScore, TopKHeap heap) {
+    for (int ordinal : ords) {
+      // Pruning is valid only for EUCLIDEAN (partial sum ≤ full sum).
+      float partialSq = DimensionAnalysis.partialSquaredDistance(query, vectors[ordinal], keyDims);
+      if (partialSq >= -heap.worst()) continue;
+      float score = score(query, vectors[ordinal]);
+      if (score < minScore) continue;
+      heap.offer(ordinal, score);
+    }
   }
 
   /** Returns the total number of indexed vectors. */
