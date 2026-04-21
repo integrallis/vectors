@@ -13,6 +13,7 @@ import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
+import com.integrallis.vectors.hnsw.HnswFusedAdcIndex;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -146,6 +147,35 @@ public final class RecallQpsBenchmark {
                     efConstruction,
                     sweep.hnswEfSearch,
                     hnswThreads,
+                    checkpoint,
+                    csvFile));
+          }
+        }
+      }
+
+      // --- HNSW + Fused ADC two-pass sweep (PQ-compressed beam, full-precision rerank) ---
+      if ("hnsw_fused_adc".equals(algoFilter)) {
+        int pqSubvectors = bestPqSubvectors(dim, Integer.getInteger("bench.adc.pq", 16));
+        int pqClusters = Integer.getInteger("bench.adc.clusters", 256);
+        float[] overQueryValues = parseFloats(System.getProperty("bench.adc.overQuery"), 2.0f);
+        float anisoThreshold =
+            Float.parseFloat(System.getProperty("bench.adc.aniso", "-1.0"));
+        for (int m : sweep.hnswM) {
+          for (int efConstruction : sweep.hnswEf) {
+            sessionResults.addAll(
+                benchmarkHnswFusedAdc(
+                    dsCfg,
+                    data.corpus,
+                    data.queries,
+                    groundTruth,
+                    dim,
+                    m,
+                    efConstruction,
+                    sweep.hnswEfSearch,
+                    pqSubvectors,
+                    pqClusters,
+                    overQueryValues,
+                    anisoThreshold,
                     checkpoint,
                     csvFile));
           }
@@ -286,6 +316,192 @@ public final class RecallQpsBenchmark {
     }
     checkpoint.markBuildCompleted(dsCfg.name, "hnsw", buildParams);
     return results;
+  }
+
+  // -------------------------------------------------------------------------
+  // HNSW + Fused ADC (PQ-compressed beam + exact rerank)
+  // -------------------------------------------------------------------------
+
+  private static List<BenchmarkResult> benchmarkHnswFusedAdc(
+      DatasetConfig dsCfg,
+      float[][] corpus,
+      float[][] queries,
+      int[][] groundTruth,
+      int dim,
+      int m,
+      int efConstruction,
+      int[] efSearchValues,
+      int pqSubvectors,
+      int pqClusters,
+      float[] overQueryValues,
+      float anisoThreshold,
+      CheckpointStore checkpoint,
+      Path csvFile) {
+
+    // Include anisoThreshold in buildParams only when non-default so pre-Phase-D rows keep their
+    // original key and don't become "missing" on the old checkpoint.
+    Map<String, String> buildParams;
+    if (anisoThreshold >= 0f) {
+      buildParams =
+          Map.of(
+              "M", String.valueOf(m),
+              "efConstruction", String.valueOf(efConstruction),
+              "pqSubvectors", String.valueOf(pqSubvectors),
+              "pqClusters", String.valueOf(pqClusters),
+              "aniso", String.valueOf(anisoThreshold));
+    } else {
+      buildParams =
+          Map.of(
+              "M", String.valueOf(m),
+              "efConstruction", String.valueOf(efConstruction),
+              "pqSubvectors", String.valueOf(pqSubvectors),
+              "pqClusters", String.valueOf(pqClusters));
+    }
+
+    // Pre-compute the full efSearch x overQuery search grid and skip the build entirely if every
+    // combination is already recorded in the checkpoint.
+    boolean anyPending = false;
+    for (int efSearch : efSearchValues) {
+      for (float oq : overQueryValues) {
+        Map<String, String> sp =
+            Map.of("efSearch", String.valueOf(efSearch), "overQuery", String.valueOf(oq));
+        if (!checkpoint.isRowCompleted(dsCfg.name, "hnsw_fused_adc", buildParams, sp)) {
+          anyPending = true;
+          break;
+        }
+      }
+      if (anyPending) break;
+    }
+    if (!anyPending) {
+      System.out.printf(
+          "  HNSW+FusedADC M=%d efC=%d pq=%d/%d: already completed, skipping%n",
+          m, efConstruction, pqSubvectors, pqClusters);
+      checkpoint.markBuildCompleted(dsCfg.name, "hnsw_fused_adc", buildParams);
+      return List.of();
+    }
+    System.out.printf(
+        "  HNSW+FusedADC M=%d efC=%d pq=%d/%d%s: building...",
+        m, efConstruction, pqSubvectors, pqClusters,
+        anisoThreshold >= 0f ? String.format(" aniso=%.2f", anisoThreshold) : "");
+
+    long t0 = System.nanoTime();
+    HnswFusedAdcIndex idx =
+        HnswFusedAdcIndex.build(
+            corpus, dsCfg.sim, m, efConstruction, pqSubvectors, pqClusters, 42L, anisoThreshold);
+    double buildTime = (System.nanoTime() - t0) / 1e9;
+    System.out.printf(" %.1fs%n", buildTime);
+
+    List<BenchmarkResult> results = new ArrayList<>();
+    for (float overQuery : overQueryValues) {
+      for (int efSearch : efSearchValues) {
+        Map<String, String> searchParams =
+            Map.of("efSearch", String.valueOf(efSearch), "overQuery", String.valueOf(overQuery));
+        if (checkpoint.isRowCompleted(dsCfg.name, "hnsw_fused_adc", buildParams, searchParams)) {
+          System.out.printf("    efSearch=%d overQuery=%.1f: cached, skipping%n", efSearch, overQuery);
+          continue;
+        }
+        BenchmarkResult r =
+            measureSearchFusedAdc(
+                dsCfg.name,
+                buildParams,
+                searchParams,
+                idx,
+                queries,
+                groundTruth,
+                K,
+                efSearch,
+                overQuery,
+                buildTime);
+        recordResult(r, checkpoint, csvFile);
+        results.add(r);
+      }
+    }
+    checkpoint.markBuildCompleted(dsCfg.name, "hnsw_fused_adc", buildParams);
+    return results;
+  }
+
+  /**
+   * Measures {@link HnswFusedAdcIndex#searchTwoPass} directly — unlike {@link #measureSearch} it
+   * bypasses the {@link VectorCollection} facade because the Fused ADC index isn't wired into the
+   * standard {@code IndexType} enum.
+   */
+  private static BenchmarkResult measureSearchFusedAdc(
+      String dataset,
+      Map<String, String> buildParams,
+      Map<String, String> searchParams,
+      HnswFusedAdcIndex idx,
+      float[][] queries,
+      int[][] groundTruth,
+      int k,
+      int efSearch,
+      float overQuery,
+      double buildTime) {
+
+    int numQueries = queries.length;
+
+    for (int round = 0; round < WARMUP_ROUNDS; round++) {
+      for (float[] q : queries) idx.searchTwoPass(q, k, efSearch, overQuery);
+    }
+    System.gc();
+
+    LatencyCollector latency = new LatencyCollector(numQueries * MEASUREMENT_ROUNDS);
+    int[][] approxResults = new int[numQueries][k];
+    for (int round = 0; round < MEASUREMENT_ROUNDS; round++) {
+      for (int qi = 0; qi < numQueries; qi++) {
+        long t0 = System.nanoTime();
+        com.integrallis.vectors.hnsw.SearchResult r =
+            idx.searchTwoPass(queries[qi], k, efSearch, overQuery);
+        latency.record(System.nanoTime() - t0);
+        if (round == MEASUREMENT_ROUNDS - 1) {
+          int[] ids = r.nodeIds();
+          int take = Math.min(k, ids.length);
+          System.arraycopy(ids, 0, approxResults[qi], 0, take);
+          for (int i = take; i < k; i++) approxResults[qi][i] = -1;
+        }
+      }
+    }
+    latency.compute();
+    double recall10 = RecallUtil.meanRecallAtK(groundTruth, approxResults, k);
+
+    System.out.printf(
+        "    %s: recall@%d=%.3f  QPS=%,.0f  p50=%.0fus  p99=%.0fus%n",
+        BenchmarkReporter.formatParams(searchParams),
+        k,
+        recall10,
+        latency.qps(),
+        latency.p50Us(),
+        latency.p99Us());
+
+    return BenchmarkResult.builder(dataset, "hnsw_fused_adc")
+        .buildParams(buildParams)
+        .searchParams(searchParams)
+        .recall10(recall10)
+        .recall100(-1)
+        .qps(latency.qps())
+        .p50Us(latency.p50Us())
+        .p95Us(latency.p95Us())
+        .p99Us(latency.p99Us())
+        .buildTimeSeconds(buildTime)
+        .build();
+  }
+
+  /**
+   * Returns the divisor of {@code dim} closest to {@code target} (ties broken toward the larger
+   * divisor). {@link HnswFusedAdcIndex#build} requires {@code pqSubvectors} to divide the embedding
+   * dimension exactly — this helper picks a practical default.
+   */
+  private static int bestPqSubvectors(int dim, int target) {
+    int best = 1;
+    int bestDist = Math.abs(1 - target);
+    for (int k = 2; k <= dim; k++) {
+      if (dim % k != 0) continue;
+      int d = Math.abs(k - target);
+      if (d < bestDist || (d == bestDist && k > best)) {
+        best = k;
+        bestDist = d;
+      }
+    }
+    return best;
   }
 
   // -------------------------------------------------------------------------
@@ -702,6 +918,14 @@ public final class RecallQpsBenchmark {
     int[] out = new int[count];
     int j = 0;
     for (int v : values) if (v <= cap) out[j++] = v;
+    return out;
+  }
+
+  private static float[] parseFloats(String csv, float fallback) {
+    if (csv == null || csv.isBlank()) return new float[] {fallback};
+    String[] parts = csv.split(",");
+    float[] out = new float[parts.length];
+    for (int i = 0; i < parts.length; i++) out[i] = Float.parseFloat(parts[i].trim());
     return out;
   }
 

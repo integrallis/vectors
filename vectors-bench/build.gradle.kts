@@ -94,7 +94,8 @@ tasks.register<JavaExec>("recallQps") {
         "bench.hnsw.m", "bench.hnsw.ef", "bench.hnsw.efSearch", "bench.hnsw.threads",
         "bench.vamana.r", "bench.vamana.l", "bench.vamana.alpha", "bench.vamana.lSearch",
         "bench.vamana.threads",
-        "bench.ivf.nprobe"
+        "bench.ivf.nprobe",
+        "bench.adc.pq", "bench.adc.clusters", "bench.adc.overQuery", "bench.adc.aniso"
     ).forEach { key ->
         (project.findProperty(key) as String?)?.let { systemProperty(key, it) }
     }
@@ -154,6 +155,33 @@ tasks.register<JavaExec>("buildScalability") {
         out.mkdirs()
         println("[buildScalability] GC log: ${project.file("build/results/build-scalability-gc.log").absolutePath}")
     }
+}
+
+// ---------------------------------------------------------------------------
+// hnswScalingProbe — HNSW parallel-build thread scaling (Phase D premise check)
+// ---------------------------------------------------------------------------
+tasks.register<JavaExec>("hnswScalingProbe") {
+    group = "benchmark"
+    description = "Measure ConcurrentHnswGraphBuilder speedup across thread counts"
+
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.integrallis.vectors.bench.HnswThreadScalingProbe")
+
+    jvmArgs(
+        "--add-modules", "jdk.incubator.vector",
+        "-Xmx6g", "-Xms2g",
+        "-XX:+UseG1GC"
+    )
+
+    listOf(
+        "bench.n", "bench.dim", "bench.hnsw.m", "bench.hnsw.ef",
+        "bench.threads", "bench.warmup", "bench.iters"
+    ).forEach { key ->
+        (project.findProperty(key) as String?)?.let { systemProperty(key, it) }
+    }
+
+    standardOutput = System.out
+    errorOutput    = System.err
 }
 
 // ---------------------------------------------------------------------------

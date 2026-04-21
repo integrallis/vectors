@@ -150,6 +150,29 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
    */
   public static ProductQuantizer train(
       VectorDataset dataset, int numSubspaces, int numClusters, boolean center, int trainThreads) {
+    return train(
+        dataset,
+        numSubspaces,
+        numClusters,
+        center,
+        trainThreads,
+        KMeansPlusPlusClusterer.UNWEIGHTED);
+  }
+
+  /**
+   * Same as {@link #train(VectorDataset, int, int, boolean, int)} with an optional anisotropic
+   * refinement threshold. Pass {@link KMeansPlusPlusClusterer#UNWEIGHTED} to disable (standard PQ).
+   *
+   * <p>Valid threshold range is {@code [0, 1)}; typical values are 0.1\u20130.3. Larger values sharpen
+   * the parallel-direction weighting. See <em>Guo et al. 2020</em> (ScaNN / AVQ) \u00a73.
+   */
+  public static ProductQuantizer train(
+      VectorDataset dataset,
+      int numSubspaces,
+      int numClusters,
+      boolean center,
+      int trainThreads,
+      float anisotropicThreshold) {
     if (trainThreads < 1) {
       throw new IllegalArgumentException("trainThreads must be >= 1: " + trainThreads);
     }
@@ -165,6 +188,8 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
     float[][] trainingData = sampleTrainingData(dataset, centroid);
 
     float[][] codebooks = new float[numSubspaces][];
+    int anisoIters =
+        anisotropicThreshold >= 0f ? KMeansPlusPlusClusterer.DEFAULT_MAX_ITERATIONS : 0;
 
     if (trainThreads == 1 || numSubspaces == 1) {
       // Legacy sequential path: a single Random chained across all subspaces. Preserves
@@ -181,6 +206,8 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
                 subDim,
                 numClusters,
                 KMeansPlusPlusClusterer.DEFAULT_MAX_ITERATIONS,
+                anisoIters,
+                anisotropicThreshold,
                 rng);
       }
     } else {
@@ -202,8 +229,11 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
         for (int m = 0; m < numSubspaces; m++) {
           final int mi = m;
           final int[] sz = sizesAndOffsets[m];
+          final int aIters = anisoIters;
+          final float aT = anisotropicThreshold;
           futures[m] =
-              pool.submit(() -> clusterSubspaceIndependent(trainingData, sz, numClusters, mi));
+              pool.submit(
+                  () -> clusterSubspaceIndependent(trainingData, sz, numClusters, mi, aIters, aT));
         }
         for (int m = 0; m < numSubspaces; m++) {
           try {
@@ -242,7 +272,12 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
    * freshly-allocated return array.
    */
   private static float[] clusterSubspaceIndependent(
-      float[][] trainingData, int[] sizeAndOffset, int numClusters, int m) {
+      float[][] trainingData,
+      int[] sizeAndOffset,
+      int numClusters,
+      int m,
+      int anisoIters,
+      float anisoT) {
     int subDim = sizeAndOffset[0];
     int offset = sizeAndOffset[1];
     float[] subVectors = extractSubvectors(trainingData, offset, subDim);
@@ -253,6 +288,8 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
         subDim,
         numClusters,
         KMeansPlusPlusClusterer.DEFAULT_MAX_ITERATIONS,
+        anisoIters,
+        anisoT,
         rng);
   }
 

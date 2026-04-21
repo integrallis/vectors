@@ -111,8 +111,10 @@ public final class HnswFusedAdcIndex {
 
   private static float toScore(float adcSum, boolean useDot) {
     // Mirror the non-negative transforms in SimilarityFunction.compare() so that
-    // NodeQueue's non-negative float constraint is always satisfied.
-    if (useDot) return (1f + adcSum) / 2f;
+    // NodeQueue's non-negative float constraint is always satisfied. The dot-product branch uses
+    // the MIPS piecewise mapping so non-unit corpora (e.g. glove-100-angular) do not produce
+    // negative scores from adcSum < -1.
+    if (useDot) return SimilarityFunction.scaleMaxInnerProductScore(adcSum);
     return 1f / (1f + adcSum); // EUCLIDEAN: adcSum = partial squared L2 distance sum >= 0
   }
 
@@ -135,21 +137,62 @@ public final class HnswFusedAdcIndex {
       int pqSubvectors,
       int pqClusters,
       long seed) {
+    return build(
+        corpus, metric, maxConnections, efConstruction, pqSubvectors, pqClusters, seed, -1.0f);
+  }
+
+  /**
+   * Same as {@link #build(float[][], SimilarityFunction, int, int, int, int, long)} with an
+   * optional anisotropic PQ threshold (ScaNN / AVQ). Pass a negative value to use standard
+   * unweighted PQ; typical anisotropic values are 0.1\u20130.3.
+   */
+  public static HnswFusedAdcIndex build(
+      float[][] corpus,
+      SimilarityFunction metric,
+      int maxConnections,
+      int efConstruction,
+      int pqSubvectors,
+      int pqClusters,
+      long seed,
+      float anisotropicThreshold) {
 
     int n = corpus.length;
-    InMemoryVectors ivec = new InMemoryVectors(corpus);
 
-    // Step 1: Build the HNSW graph using the standard builder path.
+    // For COSINE the ADC lookup table is a dot product by construction, so the corpus and query
+    // must be unit-normalised before encoding; otherwise large-norm vectors dominate the PQ
+    // ranking (the graph itself still works because SimilarityFunction.COSINE.compare normalises
+    // on the fly, but the precomputed PQ tables do not).
+    float[][] workCorpus = corpus;
+    if (metric == SimilarityFunction.COSINE) {
+      workCorpus = new float[n][];
+      for (int i = 0; i < n; i++) workCorpus[i] = unitNormalize(corpus[i]);
+    }
+
+    InMemoryVectors ivec = new InMemoryVectors(workCorpus);
+
+    // Step 1: Build the HNSW graph. Use the concurrent builder — it scales ~7\u00d7 on M3 and the
+    // graph topology matches the sequential path at threads=1 (same seed).
+    int buildThreads =
+        Integer.parseInt(
+            System.getProperty("bench.hnsw.threads",
+                String.valueOf(Math.max(1, Runtime.getRuntime().availableProcessors() / 2))));
     HnswGraph graph =
-        HnswGraphBuilder.create(maxConnections, efConstruction, ivec, metric, seed).build();
+        ConcurrentHnswGraphBuilder.create(maxConnections, efConstruction, ivec, metric, seed)
+            .build(buildThreads);
 
     // Step 2: Train PQ quantizer on the corpus.
     ProductQuantizer pq =
-        ProductQuantizer.train(new ArrayVectorDataset(corpus), pqSubvectors, pqClusters, true);
+        ProductQuantizer.train(
+            new ArrayVectorDataset(workCorpus),
+            pqSubvectors,
+            pqClusters,
+            true,
+            1,
+            anisotropicThreshold);
 
     // Step 3: Encode every vector to a PQ byte code.
     byte[][] allCodes = new byte[n][];
-    for (int i = 0; i < n; i++) allCodes[i] = pq.encode(corpus[i]);
+    for (int i = 0; i < n; i++) allCodes[i] = pq.encode(workCorpus[i]);
 
     // Step 4: Build fused layer-0 neighbor lists (neighbor codes packed contiguously per node).
     int M = pq.numSubspaces();
@@ -173,12 +216,28 @@ public final class HnswFusedAdcIndex {
    * #searchTwoPass} which applies exact rescoring after ADC navigation.
    */
   public SearchResult search(float[] query, int k, int efSearch) {
-    return searchers.get().search(query, k, efSearch);
+    return searchers.get().search(normalizedQuery(query), k, efSearch);
   }
 
   /** Searches with default {@code efSearch = max(k, 100)}. */
   public SearchResult search(float[] query, int k) {
     return search(query, k, Math.max(k, 100));
+  }
+
+  /** Returns a unit-normalised copy of the query for COSINE; the original vector otherwise. */
+  private float[] normalizedQuery(float[] query) {
+    return metric == SimilarityFunction.COSINE ? unitNormalize(query) : query;
+  }
+
+  private static float[] unitNormalize(float[] v) {
+    double sum = 0;
+    for (float x : v) sum += (double) x * x;
+    double norm = Math.sqrt(sum);
+    if (norm == 0) return v.clone();
+    float inv = (float) (1.0 / norm);
+    float[] out = new float[v.length];
+    for (int i = 0; i < v.length; i++) out[i] = v[i] * inv;
+    return out;
   }
 
   /**
@@ -196,7 +255,7 @@ public final class HnswFusedAdcIndex {
    * @return top-k results after exact rescoring, sorted by score descending
    */
   public SearchResult searchTwoPass(float[] query, int k, int efSearch, float overQueryFactor) {
-    return searchers.get().searchTwoPass(query, k, efSearch, overQueryFactor);
+    return searchers.get().searchTwoPass(normalizedQuery(query), k, efSearch, overQueryFactor);
   }
 
   /**
