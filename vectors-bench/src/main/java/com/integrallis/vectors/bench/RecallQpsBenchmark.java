@@ -158,8 +158,7 @@ public final class RecallQpsBenchmark {
         int pqSubvectors = bestPqSubvectors(dim, Integer.getInteger("bench.adc.pq", 16));
         int pqClusters = Integer.getInteger("bench.adc.clusters", 256);
         float[] overQueryValues = parseFloats(System.getProperty("bench.adc.overQuery"), 2.0f);
-        float anisoThreshold =
-            Float.parseFloat(System.getProperty("bench.adc.aniso", "-1.0"));
+        float anisoThreshold = Float.parseFloat(System.getProperty("bench.adc.aniso", "-1.0"));
         for (int m : sweep.hnswM) {
           for (int efConstruction : sweep.hnswEf) {
             sessionResults.addAll(
@@ -381,7 +380,10 @@ public final class RecallQpsBenchmark {
     }
     System.out.printf(
         "  HNSW+FusedADC M=%d efC=%d pq=%d/%d%s: building...",
-        m, efConstruction, pqSubvectors, pqClusters,
+        m,
+        efConstruction,
+        pqSubvectors,
+        pqClusters,
         anisoThreshold >= 0f ? String.format(" aniso=%.2f", anisoThreshold) : "");
 
     long t0 = System.nanoTime();
@@ -397,7 +399,8 @@ public final class RecallQpsBenchmark {
         Map<String, String> searchParams =
             Map.of("efSearch", String.valueOf(efSearch), "overQuery", String.valueOf(overQuery));
         if (checkpoint.isRowCompleted(dsCfg.name, "hnsw_fused_adc", buildParams, searchParams)) {
-          System.out.printf("    efSearch=%d overQuery=%.1f: cached, skipping%n", efSearch, overQuery);
+          System.out.printf(
+              "    efSearch=%d overQuery=%.1f: cached, skipping%n", efSearch, overQuery);
           continue;
         }
         BenchmarkResult r =

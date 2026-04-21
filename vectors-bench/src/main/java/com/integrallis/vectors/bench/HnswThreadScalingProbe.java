@@ -9,11 +9,11 @@ import java.util.Random;
 
 /**
  * Probe: how well does the current ReentrantLock-based ConcurrentHnswGraphBuilder scale with thread
- * count? If speedup is near-linear to the core count, lock contention is not a real bottleneck and a
- * CAS-based rewrite would not pay off. If speedup flattens early, there is headroom.
+ * count? If speedup is near-linear to the core count, lock contention is not a real bottleneck and
+ * a CAS-based rewrite would not pay off. If speedup flattens early, there is headroom.
  *
- * <p>Runs a synthetic 10k-vector / 128-dim build with M=16 / efC=100 at {1, 2, 4, 6, 8} threads (and
- * single-threaded for reference), and prints wall-time + speedup.
+ * <p>Runs a synthetic 10k-vector / 128-dim build with M=16 / efC=100 at {1, 2, 4, 6, 8} threads
+ * (and single-threaded for reference), and prints wall-time + speedup.
  */
 public final class HnswThreadScalingProbe {
 
@@ -31,19 +31,27 @@ public final class HnswThreadScalingProbe {
     float[][] corpus = synthetic(n, dim, 42L);
     InMemoryVectors vec = new InMemoryVectors(corpus);
 
-    System.out.printf(
-        "HNSW thread-scaling probe: n=%,d dim=%d M=%d efC=%d%n", n, dim, m, efC);
+    System.out.printf("HNSW thread-scaling probe: n=%,d dim=%d M=%d efC=%d%n", n, dim, m, efC);
 
     // Reference: the single-threaded HnswGraphBuilder. This is the real baseline that any parallel
     // implementation must beat; ConcurrentHnswGraphBuilder.build(1) has extra per-node lock /
     // executor overhead even at parallelism=1.
-    long seqNs = time(warmup, iters, () -> HnswGraphBuilder.create(m, efC, vec, SimilarityFunction.EUCLIDEAN, 42L).build());
+    long seqNs =
+        time(
+            warmup,
+            iters,
+            () -> HnswGraphBuilder.create(m, efC, vec, SimilarityFunction.EUCLIDEAN, 42L).build());
     System.out.printf("  seq HnswGraphBuilder:           %,10.1f ms%n", seqNs / 1e6);
 
     long base = -1;
     for (int t : threads) {
-      long ns = time(warmup, iters,
-          () -> ConcurrentHnswGraphBuilder.create(m, efC, vec, SimilarityFunction.EUCLIDEAN, 42L).build(t));
+      long ns =
+          time(
+              warmup,
+              iters,
+              () ->
+                  ConcurrentHnswGraphBuilder.create(m, efC, vec, SimilarityFunction.EUCLIDEAN, 42L)
+                      .build(t));
       if (base < 0) base = ns;
       double speedupVsSeq = seqNs / (double) ns;
       double speedupVsT1 = base / (double) ns;

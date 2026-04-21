@@ -305,6 +305,11 @@ public final class HnswSearcher {
       }
     }
 
+    // Hoist the neighbor-batch capability check once: it's a virtual call on a per-search-fresh
+    // scorer and would otherwise sit inside the hot while loop. Only Fused ADC scorers return
+    // true here, and only at layer 0 (packed codes are a leaf-layer optimization).
+    final boolean useNeighborBatch = layer == 0 && scorer.supportsNeighborBatch();
+
     // Beam search
     while (!candidates.isEmpty()) {
       long topCandidate = candidates.poll();
@@ -332,7 +337,7 @@ public final class HnswSearcher {
       }
 
       int n = neighbors.size();
-      if (scorer.supportsNeighborBatch() && layer == 0) {
+      if (useNeighborBatch) {
         // Fused ADC path: score the whole neighbor list with one stride-1 sweep over the
         // origin's packed code layout. Visited neighbors are filtered post-score — negligible
         // overhead since the ADC cost scales with M (≤ 32) rather than dim.
@@ -412,6 +417,9 @@ public final class HnswSearcher {
       }
     }
 
+    // Hoist the neighbor-batch capability check once (see beamSearch for rationale).
+    final boolean useNeighborBatch = layer == 0 && scorer.supportsNeighborBatch();
+
     while (!candidates.isEmpty()) {
       long topCandidate = candidates.poll();
       float candidateScore = NodeQueue.score(topCandidate);
@@ -436,7 +444,7 @@ public final class HnswSearcher {
       }
 
       int n = neighbors.size();
-      if (scorer.supportsNeighborBatch() && layer == 0) {
+      if (useNeighborBatch) {
         // Fused ADC path: score every neighbor in one call, then filter visited and apply
         // the predicate. Non-matching but unvisited neighbors still route through {@code
         // candidates} to preserve ACORN navigation semantics.

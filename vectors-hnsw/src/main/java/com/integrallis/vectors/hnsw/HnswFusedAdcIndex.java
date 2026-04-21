@@ -174,7 +174,8 @@ public final class HnswFusedAdcIndex {
     // graph topology matches the sequential path at threads=1 (same seed).
     int buildThreads =
         Integer.parseInt(
-            System.getProperty("bench.hnsw.threads",
+            System.getProperty(
+                "bench.hnsw.threads",
                 String.valueOf(Math.max(1, Runtime.getRuntime().availableProcessors() / 2))));
     HnswGraph graph =
         ConcurrentHnswGraphBuilder.create(maxConnections, efConstruction, ivec, metric, seed)

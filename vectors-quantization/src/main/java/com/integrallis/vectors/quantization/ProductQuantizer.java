@@ -163,8 +163,8 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
    * Same as {@link #train(VectorDataset, int, int, boolean, int)} with an optional anisotropic
    * refinement threshold. Pass {@link KMeansPlusPlusClusterer#UNWEIGHTED} to disable (standard PQ).
    *
-   * <p>Valid threshold range is {@code [0, 1)}; typical values are 0.1\u20130.3. Larger values sharpen
-   * the parallel-direction weighting. See <em>Guo et al. 2020</em> (ScaNN / AVQ) \u00a73.
+   * <p>Valid threshold range is {@code [0, 1)}; typical values are 0.1\u20130.3. Larger values
+   * sharpen the parallel-direction weighting. See <em>Guo et al. 2020</em> (ScaNN / AVQ) \u00a73.
    */
   public static ProductQuantizer train(
       VectorDataset dataset,
