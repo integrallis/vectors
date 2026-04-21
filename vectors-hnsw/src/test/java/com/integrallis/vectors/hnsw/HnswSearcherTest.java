@@ -434,6 +434,35 @@ class HnswSearcherTest {
     }
 
     @Test
+    void defaultSubvectors_clampsToDivisorsOfDim() {
+      // dim/8 is itself a divisor of dim — return dim/8 directly.
+      assertThat(HnswFusedAdcIndex.defaultSubvectors(128)).isEqualTo(16);
+      assertThat(HnswFusedAdcIndex.defaultSubvectors(64)).isEqualTo(8);
+      assertThat(HnswFusedAdcIndex.defaultSubvectors(768)).isEqualTo(96);
+      // dim/8 = 98 is a divisor of 784 (784 = 8 * 98).
+      assertThat(HnswFusedAdcIndex.defaultSubvectors(784)).isEqualTo(98);
+      // dim/8 is not a divisor — clamp to nearest divisor (ties break larger).
+      // 100/8 = 12; divisors of 100 near 12 are {10, 20}; |12-10|=2, |12-20|=8 → 10 wins.
+      assertThat(HnswFusedAdcIndex.defaultSubvectors(100)).isEqualTo(10);
+    }
+
+    @Test
+    void defaultSubvectors_rejectsNonPositiveDim() {
+      assertThatThrownBy(() -> HnswFusedAdcIndex.defaultSubvectors(0))
+          .isInstanceOf(IllegalArgumentException.class);
+      assertThatThrownBy(() -> HnswFusedAdcIndex.defaultSubvectors(-4))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void fusedAdcIndex_buildsWithDefaultsOverload() {
+      float[][] vecs = randomVectors(200, 64, 1L);
+      // defaults: pqSubvectors = defaultSubvectors(64) = 8, pqClusters = 256
+      var index = HnswFusedAdcIndex.build(vecs, SimilarityFunction.EUCLIDEAN, 16, 100, 42L);
+      assertThat(index.size()).isEqualTo(200);
+    }
+
+    @Test
     void fusedAdcSearch_returnsSelf() {
       float[][] vecs = randomVectors(100, 32, 2L);
       // 32-dim, 4 subspaces of 8 each, 16 clusters (small for speed)

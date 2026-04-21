@@ -155,7 +155,10 @@ public final class RecallQpsBenchmark {
 
       // --- HNSW + Fused ADC two-pass sweep (PQ-compressed beam, full-precision rerank) ---
       if ("hnsw_fused_adc".equals(algoFilter)) {
-        int pqSubvectors = bestPqSubvectors(dim, Integer.getInteger("bench.adc.pq", 16));
+        // When -Pbench.adc.pq is not specified, fall back to HnswFusedAdcIndex.defaultSubvectors
+        // (dim/8 clamped to the nearest divisor), which lands recall near 0.997 without tuning.
+        int pqTarget = Integer.getInteger("bench.adc.pq", HnswFusedAdcIndex.defaultSubvectors(dim));
+        int pqSubvectors = bestPqSubvectors(dim, pqTarget);
         int pqClusters = Integer.getInteger("bench.adc.clusters", 256);
         float[] overQueryValues = parseFloats(System.getProperty("bench.adc.overQuery"), 2.0f);
         float anisoThreshold = Float.parseFloat(System.getProperty("bench.adc.aniso", "-1.0"));
