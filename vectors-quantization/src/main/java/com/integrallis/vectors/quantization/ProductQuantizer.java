@@ -48,6 +48,14 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
   private final int[][] subspaceSizesAndOffsets; // [m][0]=size, [m][1]=offset
   private final float[][] codebooks; // codebooks[m] has size numClusters * subDim_m
   private final float[] globalCentroid; // null if not centered
+  // Anisotropic PQ (ScaNN / AVQ): threshold >= 0 switches encode() to the coordinate-descent
+  // encoder that minimises the weighted MIPS-error cost. UNWEIGHTED (-1) keeps the legacy
+  // nearest-L2 encoder so byte-identical output is preserved for unweighted PQ.
+  private final float anisotropicThreshold;
+  // centroidNormsSquared[m][c] = ||c||^2 for centroid c in subspace m. Precomputed once in the
+  // constructor — used by the anisotropic encoder to build per-(subspace, cluster) residuals in
+  // O(1) per centroid (excluding the one dot product).
+  private final float[][] centroidNormsSquared;
 
   private ProductQuantizer(
       int dimension,
@@ -55,13 +63,32 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
       int numClusters,
       int[][] subspaceSizesAndOffsets,
       float[][] codebooks,
-      float[] globalCentroid) {
+      float[] globalCentroid,
+      float anisotropicThreshold) {
     this.dimension = dimension;
     this.numSubspaces = numSubspaces;
     this.numClusters = numClusters;
     this.subspaceSizesAndOffsets = subspaceSizesAndOffsets;
     this.codebooks = codebooks;
     this.globalCentroid = globalCentroid;
+    this.anisotropicThreshold = anisotropicThreshold;
+    this.centroidNormsSquared =
+        anisotropicThreshold >= 0f ? precomputeCentroidNormsSquared(codebooks, numClusters) : null;
+  }
+
+  private static float[][] precomputeCentroidNormsSquared(float[][] codebooks, int numClusters) {
+    float[][] norms = new float[codebooks.length][numClusters];
+    for (int m = 0; m < codebooks.length; m++) {
+      float[] book = codebooks[m];
+      int subDim = book.length / numClusters;
+      for (int c = 0; c < numClusters; c++) {
+        int off = c * subDim;
+        float s = 0f;
+        for (int i = 0; i < subDim; i++) s += book[off + i] * book[off + i];
+        norms[m][c] = s;
+      }
+    }
+    return norms;
   }
 
   // --- Factory methods ---
@@ -85,8 +112,38 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
       int[][] subspaceSizesAndOffsets,
       float[][] codebooks,
       float[] globalCentroid) {
+    return fromState(
+        dimension,
+        numSubspaces,
+        numClusters,
+        subspaceSizesAndOffsets,
+        codebooks,
+        globalCentroid,
+        KMeansPlusPlusClusterer.UNWEIGHTED);
+  }
+
+  /**
+   * Same as {@link #fromState(int, int, int, int[][], float[][], float[])} with the anisotropic
+   * threshold that was used at training time. Pass {@link KMeansPlusPlusClusterer#UNWEIGHTED} for
+   * standard PQ. When {@code anisotropicThreshold >= 0}, {@link #encode} uses the coordinate-
+   * descent encoder instead of nearest-L2.
+   */
+  public static ProductQuantizer fromState(
+      int dimension,
+      int numSubspaces,
+      int numClusters,
+      int[][] subspaceSizesAndOffsets,
+      float[][] codebooks,
+      float[] globalCentroid,
+      float anisotropicThreshold) {
     return new ProductQuantizer(
-        dimension, numSubspaces, numClusters, subspaceSizesAndOffsets, codebooks, globalCentroid);
+        dimension,
+        numSubspaces,
+        numClusters,
+        subspaceSizesAndOffsets,
+        codebooks,
+        globalCentroid,
+        anisotropicThreshold);
   }
 
   /**
@@ -254,7 +311,7 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
     }
 
     return new ProductQuantizer(
-        dim, numSubspaces, numClusters, sizesAndOffsets, codebooks, centroid);
+        dim, numSubspaces, numClusters, sizesAndOffsets, codebooks, centroid, anisotropicThreshold);
   }
 
   /** Deterministic base seed shared by all train() overloads. */
@@ -370,6 +427,16 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
   }
 
   /**
+   * Returns the anisotropic threshold used at training time. {@link
+   * KMeansPlusPlusClusterer#UNWEIGHTED} (-1) means standard unweighted PQ (nearest-L2 encoder);
+   * {@code >= 0} means the coordinate-descent anisotropic encoder is active. Exposed primarily for
+   * codecs that need to round-trip the value through serialisation.
+   */
+  public float anisotropicThreshold() {
+    return anisotropicThreshold;
+  }
+
+  /**
    * Returns the codebook for subspace m. The codebook is a flat array of size {@code numClusters *
    * subDim}, where entry c starts at index {@code c * subDim}.
    */
@@ -446,6 +513,11 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
       VectorUtil.subInPlace(v, globalCentroid);
     }
 
+    if (anisotropicThreshold >= 0f) {
+      encodeAnisotropic(v, dst);
+      return;
+    }
+
     for (int m = 0; m < numSubspaces; m++) {
       int subDim = subspaceSizesAndOffsets[m][0];
       int offset = subspaceSizesAndOffsets[m][1];
@@ -464,6 +536,94 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
       }
 
       dst[m] = (byte) nearest;
+    }
+  }
+
+  /**
+   * Coordinate-descent anisotropic encoder (ScaNN / AVQ — Guo et al. 2020). Port of JVector's
+   * {@code encodeAnisotropic}; uses the same parallel-cost-multiplier and residual decomposition as
+   * {@link KMeansPlusPlusClusterer#parallelCostMultiplier} so the encoded codes are consistent with
+   * the codebooks produced by anisotropic k-means.
+   *
+   * <p>After training with an anisotropic loss, the centroids are shaped to preserve parallel
+   * components of each training point. Encoding with plain nearest-L2 would then select centroids
+   * that match the overall point norm rather than its parallel component, erasing most of the
+   * training benefit. This encoder swaps each subspace's centroid in turn whenever the total
+   * weighted cost {@code pcm * ||e_‖||² + ||e_⊥||²} decreases.
+   */
+  private void encodeAnisotropic(float[] v, byte[] dst) {
+    // Full-vector inverse norm (for the parallel-residual component).
+    float xNormSq = 0f;
+    for (float x : v) xNormSq += x * x;
+    float inverseNorm = xNormSq > 0f ? (float) (1.0 / Math.sqrt(xNormSq)) : 0f;
+    float pcm = KMeansPlusPlusClusterer.parallelCostMultiplier(anisotropicThreshold, dimension);
+
+    // Pre-compute residuals[m][k] = (||x_m - c_{m,k}||², (c_{m,k}·x_m - ||x_m||²)² * inverseNorm)
+    // and initialise dst[m] to the centroid with minimum residual norm squared (same as standard
+    // nearest-L2 encoding) — this gives the coordinate descent a good starting point.
+    float[][] residualNormSq = new float[numSubspaces][numClusters];
+    float[][] parallelComp = new float[numSubspaces][numClusters];
+    float parallelSum = 0f;
+
+    for (int m = 0; m < numSubspaces; m++) {
+      int subDim = subspaceSizesAndOffsets[m][0];
+      int offset = subspaceSizesAndOffsets[m][1];
+      float[] book = codebooks[m];
+      float[] cNorms = centroidNormsSquared[m];
+      // Subvector norm squared.
+      float subNormSq = 0f;
+      for (int i = 0; i < subDim; i++) subNormSq += v[offset + i] * v[offset + i];
+
+      int bestIdx = 0;
+      float bestNormSq = Float.POSITIVE_INFINITY;
+      for (int c = 0; c < numClusters; c++) {
+        float cDotX = VectorUtil.dotProduct(v, offset, book, c * subDim, subDim);
+        float normSq = cNorms[c] - 2f * cDotX + subNormSq;
+        float parallelErrorSubtotal = cDotX - subNormSq;
+        residualNormSq[m][c] = normSq;
+        parallelComp[m][c] = parallelErrorSubtotal * parallelErrorSubtotal * inverseNorm;
+        if (normSq < bestNormSq) {
+          bestNormSq = normSq;
+          bestIdx = c;
+        }
+      }
+      dst[m] = (byte) bestIdx;
+      parallelSum += parallelComp[m][bestIdx];
+    }
+
+    // Coordinate descent: at most 10 sweeps, breaking out once a full pass makes no change.
+    // Loop count matches JVector / SCANN reference.
+    final int MAX_ITERATIONS = 10;
+    for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+      boolean changed = false;
+      for (int m = 0; m < numSubspaces; m++) {
+        int oldIdx = dst[m] & 0xFF;
+        float oldNormSq = residualNormSq[m][oldIdx];
+        float oldParallel = parallelComp[m][oldIdx];
+        float bestCostDelta = 0f;
+        int bestIdx = oldIdx;
+        float bestParallelSum = parallelSum;
+        for (int c = 0; c < numClusters; c++) {
+          if (c == oldIdx) continue;
+          float thisParallelSum = parallelSum - oldParallel + parallelComp[m][c];
+          float parallelNormDelta = thisParallelSum * thisParallelSum - parallelSum * parallelSum;
+          if (parallelNormDelta > 0f) continue; // parallel cost got worse
+          float residualNormDelta = residualNormSq[m][c] - oldNormSq;
+          float perpendicularNormDelta = residualNormDelta - parallelNormDelta;
+          float costDelta = pcm * parallelNormDelta + perpendicularNormDelta;
+          if (costDelta < bestCostDelta) {
+            bestCostDelta = costDelta;
+            bestIdx = c;
+            bestParallelSum = thisParallelSum;
+          }
+        }
+        if (bestIdx != oldIdx) {
+          dst[m] = (byte) bestIdx;
+          parallelSum = bestParallelSum;
+          changed = true;
+        }
+      }
+      if (!changed) break;
     }
   }
 

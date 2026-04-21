@@ -204,6 +204,57 @@ class ProductQuantizerTest {
       float[] decoded = pq.decode(encoded);
       assertThat(decoded).hasSize(dim);
     }
+
+    @Test
+    void anisotropicEncode_preservesParallelComponentBetterThanL2() {
+      // On unit-normalised vectors, anisotropic PQ (train + CD encode) should preserve the parallel
+      // (inner-product) component better than standard nearest-L2 PQ trained on the same corpus.
+      float[][] vectors = generateNormalizedVectors(2000, 64, 42L);
+      var dataset = new ArrayVectorDataset(vectors);
+      // Train both with the same thread count / seed; anisotropic path uses a weighted
+      // refinement followed by CD encoding, unweighted uses standard Lloyd's + nearest-L2.
+      var unweighted = ProductQuantizer.train(dataset, 8, 256, true, 1);
+      var anisotropic = ProductQuantizer.train(dataset, 8, 256, true, 1, 0.2f);
+
+      double avgParallelErrUnw = 0;
+      double avgParallelErrAni = 0;
+      for (int i = 0; i < vectors.length; i++) {
+        float[] x = vectors[i];
+        float[] rUnw = unweighted.decode(unweighted.encode(x));
+        float[] rAni = anisotropic.decode(anisotropic.encode(x));
+        avgParallelErrUnw += parallelErrorSquared(x, rUnw);
+        avgParallelErrAni += parallelErrorSquared(x, rAni);
+      }
+      avgParallelErrUnw /= vectors.length;
+      avgParallelErrAni /= vectors.length;
+      // Anisotropic should beat unweighted on parallel-error preservation (the metric it
+      // optimizes).
+      assertThat(avgParallelErrAni).isLessThan(avgParallelErrUnw);
+    }
+
+    @Test
+    void anisotropicEncode_isByteIdenticalWhenDisabled() {
+      // anisotropicThreshold = UNWEIGHTED must produce identical codes to legacy nearest-L2.
+      float[][] vectors = generateNormalizedVectors(100, 32, 7L);
+      var dataset = new ArrayVectorDataset(vectors);
+      var legacy = ProductQuantizer.train(dataset, 4);
+      var unweightedExplicit =
+          ProductQuantizer.train(dataset, 4, 256, true, 1, KMeansPlusPlusClusterer.UNWEIGHTED);
+      for (float[] v : vectors) {
+        assertThat(unweightedExplicit.encode(v)).isEqualTo(legacy.encode(v));
+      }
+    }
+  }
+
+  private static double parallelErrorSquared(float[] x, float[] reconstruction) {
+    // (||x||² - x·r)² / ||x||²  — square of the residual component parallel to x.
+    double xNormSq = 0, xr = 0;
+    for (int i = 0; i < x.length; i++) {
+      xNormSq += x[i] * x[i];
+      xr += x[i] * reconstruction[i];
+    }
+    double num = xNormSq - xr;
+    return xNormSq > 0 ? (num * num) / xNormSq : 0;
   }
 
   @Nested
