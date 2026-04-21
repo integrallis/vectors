@@ -1,6 +1,7 @@
 package com.integrallis.vectors.bench;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.VectorUtil;
 import com.integrallis.vectors.quantization.ArrayVectorDataset;
 import com.integrallis.vectors.quantization.BinaryQuantizedVectors;
 import com.integrallis.vectors.quantization.BinaryQuantizer;
@@ -105,6 +106,18 @@ public class QuantizerKernelBenchmark {
   private TurboQuantizedVectors turboVectors;
   private NVQuantizedVectors nvqVectors;
 
+  // Fused ADC neighbor-batch scoring (Phase C)
+  /**
+   * Neighbor list size used for the batched ADC benchmarks; chosen to match a typical M=16 HNSW
+   * layer-0 degree (2*M).
+   */
+  private static final int ADC_NEIGHBORS = 32;
+
+  private float[][] adcTable; // [M][K] query→centroid partial distances
+  private byte[] adcPackedCodes; // ADC_NEIGHBORS * M bytes, neighbor-major
+  private final float[] adcOut = new float[ADC_NEIGHBORS];
+  private int adcPackedCursor;
+
   // Pre-created score functions (created once per query, not per-score)
   private ScoreFunction sq8ScoreFn;
   private ScoreFunction pqScoreFn;
@@ -158,6 +171,15 @@ public class QuantizerKernelBenchmark {
     nvq = NVQuantizer.train(dataset);
     nvqEncoded = nvq.encode(query);
     nvqVectors = nvq.encodeAll(dataset);
+
+    // Fused ADC inputs: one query→centroid table + a packed byte buffer with ADC_NEIGHBORS codes.
+    adcTable = pq.buildADCTable(query, true /* useDot */);
+    adcPackedCodes = new byte[ADC_NEIGHBORS * subspaces];
+    Random packRng = new Random(31L);
+    for (int i = 0; i < ADC_NEIGHBORS; i++) {
+      byte[] code = pq.encode(data[packRng.nextInt(CORPUS_SIZE)]);
+      System.arraycopy(code, 0, adcPackedCodes, i * subspaces, subspaces);
+    }
 
     // Pre-create score functions: measures only per-score lookup cost, not per-query setup
     sq8ScoreFn = sq8Vectors.scoreFunctionFor(query, SimilarityFunction.DOT_PRODUCT);
@@ -217,6 +239,40 @@ public class QuantizerKernelBenchmark {
   @Benchmark
   public float pqScoreLookup() {
     return pqScoreFn.score(lookupCursor++ & LOOKUP_MASK);
+  }
+
+  /**
+   * Measures the per-score cost of scalar ADC over the packed-neighbor layout — one call per
+   * neighbor to {@link VectorUtil#assembleAndSum}. Reflects what a loop through a node's neighbors
+   * looked like before the Phase C batched kernel landed.
+   */
+  @Benchmark
+  public float pqAdcPackedPerNode() {
+    float sum = 0f;
+    int M = adcTable.length;
+    int idx = adcPackedCursor;
+    for (int i = 0; i < ADC_NEIGHBORS; i++) {
+      sum +=
+          VectorUtil.assembleAndSum(
+              adcTable, adcPackedCodes, (idx + i) * M % adcPackedCodes.length, M);
+    }
+    adcPackedCursor = (adcPackedCursor + 1) & 31;
+    return sum;
+  }
+
+  /**
+   * Measures the Phase C batched ADC kernel ({@link VectorUtil#batchAssembleAndSum}) over the same
+   * packed-neighbor layout as {@link #pqAdcPackedPerNode}. The 4-row unrolled kernel amortises the
+   * subspace-table pointer load across four neighbors per iteration.
+   */
+  @Benchmark
+  public float pqAdcPackedBatch() {
+    int M = adcTable.length;
+    VectorUtil.batchAssembleAndSum(adcTable, adcPackedCodes, 0, adcOut, ADC_NEIGHBORS, M);
+    // Consume the output to prevent DCE.
+    float sum = 0f;
+    for (int i = 0; i < ADC_NEIGHBORS; i++) sum += adcOut[i];
+    return sum;
   }
 
   // --- BQ ---

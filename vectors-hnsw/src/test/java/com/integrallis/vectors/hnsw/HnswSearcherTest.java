@@ -541,6 +541,53 @@ class HnswSearcherTest {
           .isGreaterThanOrEqualTo(0.90);
     }
 
+    /**
+     * Verifies that scoring a node's entire neighbor list via the batched Fused ADC path ({@code
+     * NodeScorer.scoreNeighborBatch}) yields bit-exact results vs scoring each neighbor
+     * individually through {@code NodeScorer.score(neighborId)}. This guards the packed-layout byte
+     * alignment (neighbor-major {@code [size * M]} bytes).
+     */
+    @Test
+    void fusedAdcBatchScoring_matchesPerNodeScoring() {
+      int n = 300;
+      int dim = 32;
+      float[][] vecs = randomVectors(n, dim, 13L);
+      var pq =
+          com.integrallis.vectors.quantization.ProductQuantizer.train(
+              new com.integrallis.vectors.quantization.ArrayVectorDataset(vecs), 4, 16, true);
+      byte[][] allCodes = new byte[n][];
+      for (int i = 0; i < n; i++) allCodes[i] = pq.encode(vecs[i]);
+
+      // Build the packed layout for a handful of synthetic "origins".
+      int[] origin1Neighbors = {5, 17, 42, 99, 120};
+      int[] origin2Neighbors = {0, 1, 2, 3};
+      var packed1 = FusedAdcNeighborList.pack(origin1Neighbors, allCodes, pq.numSubspaces());
+      var packed2 = FusedAdcNeighborList.pack(origin2Neighbors, allCodes, pq.numSubspaces());
+
+      float[] query = vecs[50].clone();
+      float[][] table = pq.buildADCTable(query, false /* L2 */);
+
+      // Batched
+      float[] batched1 = new float[origin1Neighbors.length];
+      packed1.batchAdcScore(table, batched1);
+      float[] batched2 = new float[origin2Neighbors.length];
+      packed2.batchAdcScore(table, batched2);
+
+      // Per-node reference via scalar adcScore
+      for (int i = 0; i < origin1Neighbors.length; i++) {
+        float expected =
+            com.integrallis.vectors.core.VectorUtil.assembleAndSum(
+                table, allCodes[origin1Neighbors[i]], 0, pq.numSubspaces());
+        assertThat(batched1[i]).isCloseTo(expected, within(1e-5f));
+      }
+      for (int i = 0; i < origin2Neighbors.length; i++) {
+        float expected =
+            com.integrallis.vectors.core.VectorUtil.assembleAndSum(
+                table, allCodes[origin2Neighbors[i]], 0, pq.numSubspaces());
+        assertThat(batched2[i]).isCloseTo(expected, within(1e-5f));
+      }
+    }
+
     @Test
     void fusedAdcSearch_neighborListSize_matches() {
       float[][] vecs = randomVectors(50, 16, 9L);

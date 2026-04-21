@@ -147,4 +147,74 @@ class VectorUtilTest {
       assertThat(VectorUtil.cosine(segA, segB, a.length)).isCloseTo(expected, within(1e-4f));
     }
   }
+
+  @Test
+  void assembleAndSum_knownValues() {
+    // M=3 subspaces, K=4 clusters, codes pick (0, 2, 1) → 0.5 + 3.0 + 1.25 = 4.75
+    float[][] table = {
+      {0.5f, 1.0f, 2.0f, 3.0f},
+      {0.0f, 0.25f, 3.0f, 5.0f},
+      {0.1f, 1.25f, 4.0f, 9.0f},
+    };
+    byte[] codes = {(byte) 0, (byte) 2, (byte) 1};
+    float s = VectorUtil.assembleAndSum(table, codes, 0, 3);
+    assertThat(s).isCloseTo(4.75f, within(1e-5f));
+  }
+
+  @Test
+  void assembleAndSum_unsignedByteWraparound() {
+    // code 0xFF must index cluster 255 (not -1).
+    float[][] table = new float[1][256];
+    table[0][255] = 42.0f;
+    byte[] codes = {(byte) 0xFF};
+    assertThat(VectorUtil.assembleAndSum(table, codes, 0, 1)).isCloseTo(42.0f, within(1e-5f));
+  }
+
+  @Test
+  void batchAssembleAndSum_matchesScalar() {
+    int M = 4;
+    int K = 256;
+    int count = 17; // exercises 4x unroll + tail
+    java.util.Random rng = new java.util.Random(42);
+    float[][] table = new float[M][K];
+    for (int m = 0; m < M; m++) {
+      for (int k = 0; k < K; k++) table[m][k] = rng.nextFloat();
+    }
+    byte[] packed = new byte[count * M];
+    rng.nextBytes(packed);
+
+    float[] expected = new float[count];
+    for (int i = 0; i < count; i++) {
+      expected[i] = VectorUtil.assembleAndSum(table, packed, i * M, M);
+    }
+    float[] actual = new float[count];
+    VectorUtil.batchAssembleAndSum(table, packed, 0, actual, count, M);
+    for (int i = 0; i < count; i++) {
+      assertThat(actual[i]).isCloseTo(expected[i], within(1e-5f));
+    }
+  }
+
+  @Test
+  void batchAssembleAndSum_withOffsetAndPartialCount() {
+    int M = 8;
+    int K = 256;
+    int total = 9;
+    java.util.Random rng = new java.util.Random(7);
+    float[][] table = new float[M][K];
+    for (int m = 0; m < M; m++) {
+      for (int k = 0; k < K; k++) table[m][k] = rng.nextFloat() * 10f - 5f;
+    }
+    byte[] packed = new byte[total * M];
+    rng.nextBytes(packed);
+
+    // Score only neighbors [2..6) starting at packed[2*M].
+    int startIndex = 2;
+    int count = 4;
+    float[] actual = new float[count];
+    VectorUtil.batchAssembleAndSum(table, packed, startIndex * M, actual, count, M);
+    for (int i = 0; i < count; i++) {
+      float expect = VectorUtil.assembleAndSum(table, packed, (startIndex + i) * M, M);
+      assertThat(actual[i]).isCloseTo(expect, within(1e-5f));
+    }
+  }
 }

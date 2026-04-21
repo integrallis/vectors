@@ -1,44 +1,75 @@
 package com.integrallis.vectors.hnsw;
 
+import com.integrallis.vectors.core.VectorUtil;
+
 /**
- * A neighbor list that stores PQ-encoded vectors <em>adjacent to</em> the neighbor IDs in a single
- * contiguous structure, matching the Fused ADC pattern described in the JVector paper.
+ * A neighbor list that stores PQ-encoded codes in a single contiguous byte array laid out
+ * neighbor-major: the {@code M} codes for the {@code i}-th neighbor occupy {@code packedCodes[i*M
+ * .. (i+1)*M)}.
  *
- * <p>Layout per entry: {@code [int nodeId, byte[M] codes]}. Storing codes next to IDs means that
- * when the CPU fetches a neighbor-ID cache line it simultaneously fetches the codes needed to score
- * that neighbor — eliminating the random-access hop to the global vector matrix.
+ * <p>This is the layout JVector uses for its Fused ADC graph feature: fetching one cache line from
+ * {@code packedCodes} at the origin node's base address typically delivers the codes for multiple
+ * neighbors at once, letting a batched ADC scorer read them with stride-1 access and no per-row
+ * pointer indirection.
  *
- * <p>This class is intentionally simple and immutable; it is built once during index construction
- * and read many times during search. Thread-safe by design (no mutable state after construction).
+ * <p>The list is immutable — built once during index construction and read many times during
+ * search. Thread-safe by design.
  */
 public final class FusedAdcNeighborList {
 
   private final int[] nodeIds;
-  private final byte[][] codes; // codes[i] is the M-byte PQ code for nodeIds[i]
+  private final byte[] packedCodes; // neighbor-major: [M bytes for nb0][M bytes for nb1]...
+  private final int subspaceCount; // M
   private final int size;
 
   /**
    * Constructs a fused neighbor list.
    *
    * @param nodeIds the neighbor node IDs (in descending-score order from the builder)
-   * @param codes the PQ codes for each neighbor; {@code codes[i]} corresponds to {@code nodeIds[i]}
+   * @param packedCodes neighbor-major packed PQ codes of length {@code nodeIds.length *
+   *     subspaceCount}
+   * @param subspaceCount the number of PQ subspaces (M)
    */
-  public FusedAdcNeighborList(int[] nodeIds, byte[][] codes) {
-    if (nodeIds.length != codes.length) {
+  public FusedAdcNeighborList(int[] nodeIds, byte[] packedCodes, int subspaceCount) {
+    if (packedCodes.length != nodeIds.length * subspaceCount) {
       throw new IllegalArgumentException(
-          "nodeIds.length=" + nodeIds.length + " != codes.length=" + codes.length);
+          "packedCodes.length="
+              + packedCodes.length
+              + " != nodeIds.length*subspaceCount="
+              + (nodeIds.length * subspaceCount));
     }
     this.nodeIds = nodeIds.clone();
-    this.codes = new byte[codes.length][];
-    for (int i = 0; i < codes.length; i++) {
-      this.codes[i] = codes[i].clone();
-    }
+    this.packedCodes = packedCodes.clone();
+    this.subspaceCount = subspaceCount;
     this.size = nodeIds.length;
+  }
+
+  /**
+   * Builds a fused neighbor list by copying {@code nodeIds} and pulling each neighbor's M-byte code
+   * from {@code allCodes[neighborId]} into the packed layout.
+   *
+   * @param nodeIds the neighbor IDs in insertion order
+   * @param allCodes per-node PQ codes; {@code allCodes[globalId]} holds the M bytes for that node
+   * @param subspaceCount M — the number of PQ subspaces
+   * @return a fully packed {@link FusedAdcNeighborList}
+   */
+  public static FusedAdcNeighborList pack(int[] nodeIds, byte[][] allCodes, int subspaceCount) {
+    byte[] packed = new byte[nodeIds.length * subspaceCount];
+    for (int i = 0; i < nodeIds.length; i++) {
+      byte[] code = allCodes[nodeIds[i]];
+      System.arraycopy(code, 0, packed, i * subspaceCount, subspaceCount);
+    }
+    return new FusedAdcNeighborList(nodeIds, packed, subspaceCount);
   }
 
   /** Returns the number of neighbors in this list. */
   public int size() {
     return size;
+  }
+
+  /** Returns the number of PQ subspaces (M) per code. */
+  public int subspaceCount() {
+    return subspaceCount;
   }
 
   /** Returns the neighbor node ID at position {@code i}. */
@@ -47,23 +78,31 @@ public final class FusedAdcNeighborList {
   }
 
   /**
-   * Scores neighbor {@code i} using the precomputed ADC lookup table.
+   * Returns the underlying packed byte buffer of length {@code size() * subspaceCount()} for direct
+   * SIMD ADC scoring via {@link VectorUtil#batchAssembleAndSum}. The returned array is the internal
+   * storage — callers must not mutate it.
+   */
+  public byte[] packedCodes() {
+    return packedCodes;
+  }
+
+  /**
+   * Scores neighbor {@code i} using the precomputed ADC lookup {@code table} of shape {@code
+   * [M][K]}. Each lookup is O(M) additions with a single sequential scan through {@code
+   * packedCodes[i*M..]}.
    *
-   * <p>The lookup is O(M) integer-indexed float additions — one per PQ subspace — with no
-   * additional memory indirection beyond the local {@code codes[i]} array that was prefetched when
-   * the CPU fetched this neighbor's entry.
-   *
-   * @param i the neighbor index (0-based)
-   * @param table the precomputed ADC table returned by {@link
-   *     com.integrallis.vectors.quantization.ProductQuantizer#buildADCTable}
-   * @return approximate distance/similarity for this neighbor
+   * @return the raw partial-sum score (caller maps to a similarity via the appropriate transform)
    */
   public float adcScore(int i, float[][] table) {
-    byte[] code = codes[i];
-    float sum = 0f;
-    for (int m = 0; m < code.length; m++) {
-      sum += table[m][code[m] & 0xFF];
-    }
-    return sum;
+    return VectorUtil.assembleAndSum(table, packedCodes, i * subspaceCount, subspaceCount);
+  }
+
+  /**
+   * Scores all neighbors into {@code out[0..size())} via {@link VectorUtil#batchAssembleAndSum}.
+   * The batched kernel is 4-row unrolled — significantly faster than calling {@link #adcScore} in a
+   * loop for typical degrees ({@code size >= 4}).
+   */
+  public void batchAdcScore(float[][] table, float[] out) {
+    VectorUtil.batchAssembleAndSum(table, packedCodes, 0, out, size, subspaceCount);
   }
 }

@@ -32,10 +32,13 @@ public final class HnswSearcher {
   // Scratch arrays for beamSearch() result reversal: pre-sized to graph capacity.
   private final int[] tmpNodes;
   private final float[] tmpScores;
-  // Scratch buffers for fused bulk neighbor scoring. Sized to a generous upper bound on M*2.
+  // Scratch buffers for fused bulk neighbor scoring. Sized to at least the maximum layer-0 degree
+  // (2*M) so a single pass over an origin's full neighbor list never overflows when using the
+  // neighbor-batch path (Fused ADC).
   private static final int BULK_BATCH = 64;
-  private final int[] bulkIds = new int[BULK_BATCH];
-  private final float[] bulkScores = new float[BULK_BATCH];
+  private final int[] bulkIds;
+  private final float[] bulkScores;
+  private final int bulkCapacity;
 
   /**
    * Optional SSD prefetch hook — called for each neighbor id before the scoring loop in {@link
@@ -77,6 +80,10 @@ public final class HnswSearcher {
     this.rescoreHeap = new NodeQueue(64, true); // min-heap, grows as needed
     this.tmpNodes = new int[graphSize];
     this.tmpScores = new float[graphSize];
+    // Fit the widest possible layer-0 neighbor list (2M+1 upper bound) but never below BULK_BATCH.
+    this.bulkCapacity = Math.max(BULK_BATCH, graph.maxConnections0() + 2);
+    this.bulkIds = new int[bulkCapacity];
+    this.bulkScores = new float[bulkCapacity];
   }
 
   /** Creates a searcher using full-precision scoring. */
@@ -324,23 +331,36 @@ public final class HnswSearcher {
         }
       }
 
-      // Gather unvisited neighbors into a batch, then score them all in one fused call.
       int n = neighbors.size();
-      int batchCount = 0;
-      for (int i = 0; i < n; i++) {
-        int neighborId = neighbors.node(i);
-        if (visited.get(neighborId)) continue;
-        visited.set(neighborId);
-        bulkIds[batchCount++] = neighborId;
-        if (batchCount == BULK_BATCH) {
+      if (scorer.supportsNeighborBatch() && layer == 0) {
+        // Fused ADC path: score the whole neighbor list with one stride-1 sweep over the
+        // origin's packed code layout. Visited neighbors are filtered post-score — negligible
+        // overhead since the ADC cost scales with M (≤ 32) rather than dim.
+        scorer.scoreNeighborBatch(candidateId, n, bulkScores);
+        for (int i = 0; i < n; i++) {
+          int neighborId = neighbors.node(i);
+          if (visited.get(neighborId)) continue;
+          visited.set(neighborId);
+          ingestOne(neighborId, bulkScores[i], ef);
+        }
+      } else {
+        // Gather unvisited neighbors into a batch, then score them all in one fused call.
+        int batchCount = 0;
+        for (int i = 0; i < n; i++) {
+          int neighborId = neighbors.node(i);
+          if (visited.get(neighborId)) continue;
+          visited.set(neighborId);
+          bulkIds[batchCount++] = neighborId;
+          if (batchCount == BULK_BATCH) {
+            scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+            ingestBatch(batchCount, ef);
+            batchCount = 0;
+          }
+        }
+        if (batchCount > 0) {
           scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
           ingestBatch(batchCount, ef);
-          batchCount = 0;
         }
-      }
-      if (batchCount > 0) {
-        scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
-        ingestBatch(batchCount, ef);
       }
     }
 
@@ -415,23 +435,36 @@ public final class HnswSearcher {
         }
       }
 
-      // Gather unvisited neighbors into a batch, then score them all in one fused call.
       int n = neighbors.size();
-      int batchCount = 0;
-      for (int i = 0; i < n; i++) {
-        int neighborId = neighbors.node(i);
-        if (visited.get(neighborId)) continue;
-        visited.set(neighborId);
-        bulkIds[batchCount++] = neighborId;
-        if (batchCount == BULK_BATCH) {
+      if (scorer.supportsNeighborBatch() && layer == 0) {
+        // Fused ADC path: score every neighbor in one call, then filter visited and apply
+        // the predicate. Non-matching but unvisited neighbors still route through {@code
+        // candidates} to preserve ACORN navigation semantics.
+        scorer.scoreNeighborBatch(candidateId, n, bulkScores);
+        for (int i = 0; i < n; i++) {
+          int neighborId = neighbors.node(i);
+          if (visited.get(neighborId)) continue;
+          visited.set(neighborId);
+          ingestOneFiltered(neighborId, bulkScores[i], ef, predicate);
+        }
+      } else {
+        // Gather unvisited neighbors into a batch, then score them all in one fused call.
+        int batchCount = 0;
+        for (int i = 0; i < n; i++) {
+          int neighborId = neighbors.node(i);
+          if (visited.get(neighborId)) continue;
+          visited.set(neighborId);
+          bulkIds[batchCount++] = neighborId;
+          if (batchCount == BULK_BATCH) {
+            scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+            ingestBatchFiltered(batchCount, ef, predicate);
+            batchCount = 0;
+          }
+        }
+        if (batchCount > 0) {
           scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
           ingestBatchFiltered(batchCount, ef, predicate);
-          batchCount = 0;
         }
-      }
-      if (batchCount > 0) {
-        scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
-        ingestBatchFiltered(batchCount, ef, predicate);
       }
     }
 
@@ -450,21 +483,44 @@ public final class HnswSearcher {
     return resultArray;
   }
 
+  /** Ingests a single scored neighbor into the unfiltered beam-search heaps. */
+  private void ingestOne(int neighborId, float score, int ef) {
+    if (results.size() < ef) {
+      candidates.add(neighborId, score);
+      results.add(neighborId, score);
+    } else {
+      float worstResult = NodeQueue.score(results.peek());
+      if (score > worstResult) {
+        candidates.add(neighborId, score);
+        results.poll();
+        results.add(neighborId, score);
+      }
+    }
+  }
+
   /**
    * Ingests a fused-scored batch into the unfiltered beam-search heaps. Reads ids from {@code
    * bulkIds[0..count)} and their scores from {@code bulkScores[0..count)}.
    */
   private void ingestBatch(int count, int ef) {
     for (int i = 0; i < count; i++) {
-      int neighborId = bulkIds[i];
-      float score = bulkScores[i];
+      ingestOne(bulkIds[i], bulkScores[i], ef);
+    }
+  }
+
+  /**
+   * Ingests a single scored neighbor into the predicate-aware beam-search heaps (ACORN pattern).
+   * All neighbors route through {@code candidates}; only predicate-passing ones enter {@code
+   * results}.
+   */
+  private void ingestOneFiltered(int neighborId, float score, int ef, IntPredicate predicate) {
+    candidates.add(neighborId, score);
+    if (predicate.test(neighborId)) {
       if (results.size() < ef) {
-        candidates.add(neighborId, score);
         results.add(neighborId, score);
       } else {
         float worstResult = NodeQueue.score(results.peek());
         if (score > worstResult) {
-          candidates.add(neighborId, score);
           results.poll();
           results.add(neighborId, score);
         }
@@ -478,20 +534,7 @@ public final class HnswSearcher {
    */
   private void ingestBatchFiltered(int count, int ef, IntPredicate predicate) {
     for (int i = 0; i < count; i++) {
-      int neighborId = bulkIds[i];
-      float score = bulkScores[i];
-      candidates.add(neighborId, score);
-      if (predicate.test(neighborId)) {
-        if (results.size() < ef) {
-          results.add(neighborId, score);
-        } else {
-          float worstResult = NodeQueue.score(results.peek());
-          if (score > worstResult) {
-            results.poll();
-            results.add(neighborId, score);
-          }
-        }
-      }
+      ingestOneFiltered(bulkIds[i], bulkScores[i], ef, predicate);
     }
   }
 

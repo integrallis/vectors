@@ -171,6 +171,36 @@ public final class VectorUtil {
     IMPL.matVecSquaredL2(query, matrix, out, numRows);
   }
 
+  // --- PQ ADC (Asymmetric Distance Computation) kernels ---
+
+  /**
+   * Sums one entry per subspace from {@code table}, indexed by the unsigned PQ codes starting at
+   * {@code codesOffset}. Returns the raw partial sum — callers typically remap it through a
+   * similarity-specific transform (e.g. {@code 1/(1+d)} for L2).
+   *
+   * @see VectorUtilSupport#assembleAndSum
+   */
+  public static float assembleAndSum(
+      float[][] table, byte[] codes, int codesOffset, int numSubspaces) {
+    return IMPL.assembleAndSum(table, codes, codesOffset, numSubspaces);
+  }
+
+  /**
+   * Batched ADC scorer: fills {@code out[i]} with the partial-sum score for the {@code i}-th
+   * neighbor whose M codes occupy bytes {@code [codesOffset + i*M, codesOffset + (i+1)*M)} of
+   * {@code packedCodes}. See {@link VectorUtilSupport#batchAssembleAndSum} for the 4-row unroll
+   * pattern.
+   */
+  public static void batchAssembleAndSum(
+      float[][] table,
+      byte[] packedCodes,
+      int codesOffset,
+      float[] out,
+      int count,
+      int numSubspaces) {
+    IMPL.batchAssembleAndSum(table, packedCodes, codesOffset, out, count, numSubspaces);
+  }
+
   // --- Normalization ---
 
   /**

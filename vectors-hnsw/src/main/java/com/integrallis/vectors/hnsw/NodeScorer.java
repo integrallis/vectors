@@ -31,4 +31,29 @@ public interface NodeScorer {
   default void bulkScore(int[] nodeIds, int offset, int count, float[] out) {
     for (int i = 0; i < count; i++) out[i] = score(nodeIds[offset + i]);
   }
+
+  /**
+   * Returns true if this scorer can provide neighbor-scoped batched scoring via {@link
+   * #scoreNeighborBatch}. When true, the searcher may elect to score an origin's entire neighbor
+   * list in a single call, typically to exploit a fused/packed per-node code layout (Fused ADC).
+   */
+  default boolean supportsNeighborBatch() {
+    return false;
+  }
+
+  /**
+   * Scores all {@code count} neighbors of {@code originId} at the layer this scorer was configured
+   * for, writing the score for the i-th neighbor into {@code out[i]}. The ordering of the scores
+   * must match the ordering of the origin's neighbor list as returned by {@code
+   * HnswGraph#getNeighbors(originId, layer)}.
+   *
+   * <p>Only defined when {@link #supportsNeighborBatch()} returns true. Default throws.
+   *
+   * @param originId the node whose neighbor list is being scored
+   * @param count size of the origin's neighbor list at the relevant layer
+   * @param out output scores buffer; {@code out.length >= count} must hold
+   */
+  default void scoreNeighborBatch(int originId, int count, float[] out) {
+    throw new UnsupportedOperationException("scoreNeighborBatch not supported by this NodeScorer");
+  }
 }

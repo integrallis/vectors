@@ -60,15 +60,46 @@ public final class HnswFusedAdcIndex {
         ThreadLocal.withInitial(() -> new HnswSearcher(graph, ivec, metric, adcFactory()));
   }
 
-  /** Builds a {@link NodeScorerFactory} that uses the ADC lookup table for this index. */
+  /**
+   * Builds a {@link NodeScorerFactory} that uses the ADC lookup table for this index. Layer-0
+   * neighbor expansion in beam search is served by {@link NodeScorer#scoreNeighborBatch}, which
+   * reads the origin's packed codes in a single stride-1 SIMD sweep via {@link
+   * com.integrallis.vectors.core.VectorUtil#batchAssembleAndSum}. Entry-point seeding, greedy
+   * descent, and upper-layer scoring fall back to per-{@code nodeId} ADC lookups against {@link
+   * #allCodes}.
+   */
   private NodeScorerFactory adcFactory() {
     boolean useDot =
         metric == SimilarityFunction.DOT_PRODUCT
             || metric == SimilarityFunction.COSINE
             || metric == SimilarityFunction.MAXIMUM_INNER_PRODUCT;
+    int M = pq.numSubspaces();
     return query -> {
       float[][] table = pq.buildADCTable(query, useDot);
-      return nodeId -> toScore(adcRawSum(table, allCodes[nodeId]), useDot);
+      // Reusable scratch for the raw ADC sums before similarity remapping.
+      float[] rawScratch = new float[graph.maxConnections0() + 2];
+      return new NodeScorer() {
+        @Override
+        public float score(int nodeId) {
+          return toScore(adcRawSum(table, allCodes[nodeId]), useDot);
+        }
+
+        @Override
+        public boolean supportsNeighborBatch() {
+          return true;
+        }
+
+        @Override
+        public void scoreNeighborBatch(int originId, int count, float[] out) {
+          FusedAdcNeighborList fused = fusedGraph.fusedNeighbors(originId);
+          // Packed-layout batched ADC scan, then in-place similarity remap.
+          com.integrallis.vectors.core.VectorUtil.batchAssembleAndSum(
+              table, fused.packedCodes(), 0, rawScratch, count, M);
+          for (int i = 0; i < count; i++) {
+            out[i] = toScore(rawScratch[i], useDot);
+          }
+        }
+      };
     };
   }
 
@@ -120,18 +151,15 @@ public final class HnswFusedAdcIndex {
     byte[][] allCodes = new byte[n][];
     for (int i = 0; i < n; i++) allCodes[i] = pq.encode(corpus[i]);
 
-    // Step 4: Build fused layer-0 neighbor lists (codes adjacent to IDs in memory).
+    // Step 4: Build fused layer-0 neighbor lists (neighbor codes packed contiguously per node).
+    int M = pq.numSubspaces();
     FusedAdcNeighborList[] fused = new FusedAdcNeighborList[n];
     for (int nodeId = 0; nodeId < n; nodeId++) {
       NeighborArray neighbors = graph.getNeighbors(nodeId, 0);
       int sz = neighbors == null ? 0 : neighbors.size();
       int[] ids = new int[sz];
-      byte[][] codes = new byte[sz][];
-      for (int i = 0; i < sz; i++) {
-        ids[i] = neighbors.node(i);
-        codes[i] = allCodes[ids[i]];
-      }
-      fused[nodeId] = new FusedAdcNeighborList(ids, codes);
+      for (int i = 0; i < sz; i++) ids[i] = neighbors.node(i);
+      fused[nodeId] = FusedAdcNeighborList.pack(ids, allCodes, M);
     }
 
     return new HnswFusedAdcIndex(

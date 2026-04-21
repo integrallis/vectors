@@ -121,4 +121,79 @@ public interface VectorUtilSupport {
       out[i] = squareDistance(query, 0, matrix[i], 0, query.length);
     }
   }
+
+  // --- PQ ADC (Asymmetric Distance Computation) kernels ---
+
+  /**
+   * Sums one entry per subspace from a precomputed query→centroid table, indexed by PQ codes.
+   *
+   * <p>Computes {@code sum_{m=0..M-1} table[m][codes[codesOffset + m] & 0xFF]} — the core inner
+   * loop of ADC scoring against PQ-compressed vectors. Equivalent to the lookup {@code T[m][c_m]}
+   * pattern used by JVector's {@code VectorUtil.assembleAndSum}.
+   *
+   * @param table precomputed table of shape {@code [numSubspaces][numClusters]}; typically produced
+   *     by {@link com.integrallis.vectors.quantization.ProductQuantizer#buildADCTable}
+   * @param codes byte buffer holding at least {@code numSubspaces} PQ codes starting at {@code
+   *     codesOffset} (unsigned)
+   * @param codesOffset starting offset in {@code codes}
+   * @param numSubspaces M — the number of PQ subspaces
+   * @return the accumulated partial distance/similarity (unscored raw sum)
+   */
+  default float assembleAndSum(float[][] table, byte[] codes, int codesOffset, int numSubspaces) {
+    float sum = 0f;
+    for (int m = 0; m < numSubspaces; m++) {
+      sum += table[m][codes[codesOffset + m] & 0xFF];
+    }
+    return sum;
+  }
+
+  /**
+   * Batched variant of {@link #assembleAndSum} over {@code count} neighbors stored in a packed byte
+   * buffer. Each neighbor occupies {@code numSubspaces} consecutive bytes: neighbor {@code i}
+   * starts at {@code codesOffset + i * numSubspaces}.
+   *
+   * <p>The 4-row unrolled default keeps each {@code table[m]} pointer hot across four lookups,
+   * amortising the subspace-table load and eliminating three redundant table row references per
+   * iteration vs the scalar scorer.
+   */
+  default void batchAssembleAndSum(
+      float[][] table,
+      byte[] packedCodes,
+      int codesOffset,
+      float[] out,
+      int count,
+      int numSubspaces) {
+    int i = 0;
+    int m;
+    int rowGroup = count & ~3;
+    for (; i < rowGroup; i += 4) {
+      float s0 = 0f;
+      float s1 = 0f;
+      float s2 = 0f;
+      float s3 = 0f;
+      int o0 = codesOffset + i * numSubspaces;
+      int o1 = o0 + numSubspaces;
+      int o2 = o1 + numSubspaces;
+      int o3 = o2 + numSubspaces;
+      for (m = 0; m < numSubspaces; m++) {
+        float[] tm = table[m];
+        s0 += tm[packedCodes[o0 + m] & 0xFF];
+        s1 += tm[packedCodes[o1 + m] & 0xFF];
+        s2 += tm[packedCodes[o2 + m] & 0xFF];
+        s3 += tm[packedCodes[o3 + m] & 0xFF];
+      }
+      out[i] = s0;
+      out[i + 1] = s1;
+      out[i + 2] = s2;
+      out[i + 3] = s3;
+    }
+    for (; i < count; i++) {
+      float s = 0f;
+      int o = codesOffset + i * numSubspaces;
+      for (m = 0; m < numSubspaces; m++) {
+        s += table[m][packedCodes[o + m] & 0xFF];
+      }
+      out[i] = s;
+    }
+  }
 }
