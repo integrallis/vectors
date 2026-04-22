@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>competitive-analysis.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="java-vectors--competitive-analysis">java-vectors — Competitive Analysis</h1>
+<p><strong>Date:</strong> April 2026
+<strong>Scope:</strong> Positioning of java-vectors (<code>com.integrallis.vectors</code>, JDK 25+, pure Java) against the embedded and networked vector-search landscape.
+<strong>Benchmark platform for our numbers:</strong> Apple Silicon M3 (NEON 128-bit), JDK 25, single process. Competitor numbers cited here are from publicly published sources and are <em>not</em> apples-to-apples with our hardware; treat them as order-of-magnitude context, not head-to-head benchmarks.</p>
+<hr>
+<h2 id="1-executive-summary">1. Executive summary</h2>
+<p>java-vectors is the <strong>pure-Java vector database the JVM ecosystem has been missing</strong>. It fills three unoccupied positions simultaneously:</p>
+<ol>
+<li>An <strong>embedded, zero-infra drop-in</strong> for Spring AI / LangChain4j that scales past the <code>SimpleVectorStore</code>/<code>InMemoryEmbeddingStore</code> ceiling without provisioning a separate database.</li>
+<li>A <strong>single-node CPU peer</strong> to FAISS and hnswlib that ships one JAR per module instead of a JNI toolchain.</li>
+<li>A credible <strong>embedded → distributed → GPU</strong> trajectory: the architecture of EclipseStore + Eclipse Data Grid, the cluster patterns of Apache Ignite 3 / Hazelcast, and a GPU bridge via Panama-FFM to NVIDIA cuVS — all without violating the pure-Java deployment contract.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Axis</th>
+<th>java-vectors position</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Pure Java</strong> (no JNI, no FFM-to-C++ of our own)</td>
+<td>Yes — only JVector shares this; Lucene vector is pure Java but ships as part of a search engine.</td>
+</tr>
+<tr>
+<td><strong>SIMD kernels via Vector API</strong></td>
+<td>Yes — 3–16× faster than scalar Java; conditional FMA dispatch; AVX2/AVX-512/NEON/SVE portable.</td>
+</tr>
+<tr>
+<td><strong>Quantization portfolio</strong></td>
+<td>8 quantizers (SQ4/8, PQ, BQ, RaBitQ, Ext-RaBitQ, NVQ, Turbo) — <strong>the widest in the Java ecosystem</strong>, including SIGMOD 2024 / 2025 state of the art, plus anisotropic PQ with coordinate-descent encoder.</td>
+</tr>
+<tr>
+<td><strong>Embedded database</strong></td>
+<td>Yes — mmap storage, generation-based atomic commits, tombstone deletion, walk-back recovery, metadata filters. Portable single-directory format.</td>
+</tr>
+<tr>
+<td><strong>Spring AI / LangChain4j drop-in</strong></td>
+<td>Yes — no other Java vector library ships both adapters.</td>
+</tr>
+<tr>
+<td><strong>Distributed deployment</strong></td>
+<td><code>vectors-distributed</code> on a defined trajectory modeled on EclipseStore + Eclipse Data Grid and Apache Ignite 3 (gossip-for-liveness + Raft-for-metadata). §11 documents the specific patterns we are adopting.</td>
+</tr>
+<tr>
+<td><strong>GPU acceleration</strong></td>
+<td><code>vectors-gpu</code> on the 2026 H2 roadmap via Panama-FFM bindings to NVIDIA cuVS — the same pattern Apache Lucene and Elasticsearch adopted in 2025. Preserves our &quot;pure-Java shipping model&quot; (a <code>.so</code> is no more a native dependency than <code>libc</code>).</td>
+</tr>
+<tr>
+<td><strong>Single-node CPU vs. FAISS / hnswlib</strong></td>
+<td>Measurably competitive today; §4.2 details the gap and the specific, ranked work items (multi-threaded beam search, batched queries, IVF_PQFS, OPQ training) that close it.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Positioning headline:</strong> <em>The Java-native, embedded-first vector database that scales from a single JAR to a multi-node, GPU-accelerated cluster without changing language, runtime, or deployment model.</em></p>
+<p>Think of it as the <strong>SQLite-to-Ignite</strong> trajectory for vectors: start in-process with zero operations, cluster when you need to, reach for GPUs when workload demands it — and never leave the JVM.</p>
+<hr>
+<h2 id="2-market-segmentation">2. Market segmentation</h2>
+<p>The vector-search landscape fragments along two axes: <strong>deployment model</strong> (embedded ↔ networked) and <strong>language</strong> (Java ↔ everything else).</p>
+<pre class="hljs"><code><div>                        embedded (single JVM)          networked / managed DB
+   ─────────────────────┼────────────────────────┼──────────────────────────────────
+   Java-native          │  java-vectors ★        │  (gap — none in production)
+                        │  JVector (DataStax)    │  (Cassandra/Astra use JVector)
+                        │  Lucene 10.x (emb.)    │  Elasticsearch / OpenSearch
+                        │  SimpleVectorStore ⚠   │
+                        │  InMemoryEmbStore ⚠    │
+   ─────────────────────┼────────────────────────┼──────────────────────────────────
+   Native (C++/Rust/Go) │  hnswlib, USearch      │  Qdrant, Weaviate, Milvus,
+                        │  FAISS (CPU lib mode)  │  LanceDB, Pinecone, pgvector,
+                        │  DiskANN, Chroma       │  Vespa, Redis-Vector
+</div></code></pre>
+<p>★ = primary position of java-vectors  ⚠ = explicitly &quot;not for production&quot;</p>
+<p>The two <strong>unoccupied high-value quadrants</strong> are:</p>
+<ol>
+<li><strong>Java-native embedded with production-grade indexing</strong> — the quadrant java-vectors occupies.</li>
+<li><strong>Java-native networked/distributed</strong> — no mature option today; <code>vectors-distributed</code> is the path there.</li>
+</ol>
+<hr>
+<h2 id="3-direct-competitors--java-ecosystem">3. Direct competitors — Java ecosystem</h2>
+<h3 id="31-feature-matrix">3.1 Feature matrix</h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>java-vectors</th>
+<th><strong>JVector 4.x</strong></th>
+<th><strong>Lucene 10.x vector</strong></th>
+<th><strong>Spring AI SimpleVectorStore</strong></th>
+<th><strong>LangChain4j InMemoryEmbStore</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>License</td>
+<td>Apache 2.0</td>
+<td>Apache 2.0</td>
+<td>Apache 2.0</td>
+<td>Apache 2.0</td>
+<td>Apache 2.0</td>
+</tr>
+<tr>
+<td>Min JDK</td>
+<td><strong>25</strong></td>
+<td>11</td>
+<td>21</td>
+<td>17</td>
+<td>17</td>
+</tr>
+<tr>
+<td>Vector API SIMD</td>
+<td>Yes</td>
+<td>Partial (MemSeg only)</td>
+<td>Yes (since 9.x)</td>
+<td>No (scalar)</td>
+<td>No (scalar)</td>
+</tr>
+<tr>
+<td>Native deps</td>
+<td><strong>None</strong></td>
+<td>Optional JNI (libjvector)</td>
+<td>None</td>
+<td>None</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Graph indexes</td>
+<td>HNSW + Vamana</td>
+<td>Vamana only</td>
+<td>HNSW only</td>
+<td>None (brute-force)</td>
+<td>None (brute-force)</td>
+</tr>
+<tr>
+<td>Quantizers</td>
+<td><strong>8</strong> (SQ4/8, PQ, BQ, RaBitQ, Ext-RaBitQ, NVQ, Turbo)</td>
+<td>3 (PQ, BQ, NVQ)</td>
+<td>3 (SQ, multi-bit SQ, BBQ)</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Fused ADC (PQ inline with graph)</td>
+<td><strong>Yes</strong></td>
+<td>Yes</td>
+<td>No (rescoring only)</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Pluggable rotations</td>
+<td><strong>Yes</strong> (Random/Givens/Quaternion)</td>
+<td>No</td>
+<td>No</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Anisotropic PQ (ScaNN-style)</td>
+<td><strong>Yes</strong> (weighted train + CD encode)</td>
+<td>No</td>
+<td>No</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Embedded DB (mmap + commits)</td>
+<td>Yes</td>
+<td>Via EclipseStore integration</td>
+<td>Via Lucene index</td>
+<td>JSON file only</td>
+<td>JSON file only</td>
+</tr>
+<tr>
+<td>Crash recovery</td>
+<td>Walk-back + generations</td>
+<td>Via EclipseStore</td>
+<td>Lucene commit log</td>
+<td>None</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Metadata filters</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Simple</td>
+<td>Simple</td>
+</tr>
+<tr>
+<td>Spring AI adapter</td>
+<td><strong>Yes</strong></td>
+<td>No</td>
+<td>Via Spring AI <code>LuceneVectorStore</code></td>
+<td>N/A (itself)</td>
+<td>No</td>
+</tr>
+<tr>
+<td>LangChain4j adapter</td>
+<td><strong>Yes</strong></td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+<td>N/A (itself)</td>
+</tr>
+<tr>
+<td>Distributed</td>
+<td>In progress</td>
+<td>Via Cassandra</td>
+<td>Via Elasticsearch/OpenSearch/Solr</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Practical vector count (single node)</td>
+<td>10M+ (HNSW), 100M+ (Vamana+PQ)</td>
+<td>10M+</td>
+<td>100M+ (battle-tested)</td>
+<td><strong>~10–50K</strong></td>
+<td><strong>~10–50K</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-competitive-read">3.2 Competitive read</h3>
+<ul>
+<li><strong>vs. JVector</strong>: java-vectors matches JVector's algorithmic depth (both ports from the same SOTA references) and exceeds it in quantization breadth (RaBitQ family, pluggable rotations, Turbo) and ecosystem fit (Spring AI / LangChain4j adapters, embedded-DB semantics). JVector's advantage is production pedigree inside DataStax Astra/Cassandra 5. java-vectors requires JDK 25 (aggressive) where JVector works on JDK 11; this is a deliberate trade — Vector API maturity and FFM finalization pay off in kernel quality.</li>
+<li><strong>vs. Lucene 10.x vector</strong>: Lucene is the scale/maturity leader but comes bundled with an entire search engine. For a Spring AI or LangChain4j application that just wants a vector store, java-vectors removes ~30 MB of Lucene dependencies and gives a purpose-built API. Lucene still wins where you already run Elasticsearch/OpenSearch/Solr.</li>
+<li><strong>vs. Spring AI <code>SimpleVectorStore</code> / LangChain4j <code>InMemoryEmbeddingStore</code></strong>: These are documented &quot;not for production&quot;. java-vectors is the missing rung on the ladder: same in-process deployment, but HNSW/Vamana indexing, SIMD kernels, quantization, and mmap persistence. The adapter modules (<code>vectors-spring-ai</code>, <code>vectors-langchain4j</code>) make migration a single constructor change.</li>
+</ul>
+<hr>
+<h2 id="4-adjacent-competitors--native-libraries-embedded">4. Adjacent competitors — native libraries (embedded)</h2>
+<p>These are not Java-native but are the intellectual reference points for our kernels.</p>
+<h3 id="41-feature-matrix">4.1 Feature matrix</h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>java-vectors</th>
+<th><strong>hnswlib</strong></th>
+<th><strong>FAISS</strong></th>
+<th><strong>USearch</strong></th>
+<th><strong>DiskANN</strong></th>
+<th><strong>ScaNN</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Language</td>
+<td>Java (pure)</td>
+<td>C++ header-only</td>
+<td>C++ (+CUDA)</td>
+<td>C++</td>
+<td>Rust (rewrite)</td>
+<td>C++ (+TF)</td>
+</tr>
+<tr>
+<td>Graph indexes</td>
+<td>HNSW + Vamana</td>
+<td>HNSW</td>
+<td>HNSW, NSG, IVF-graph</td>
+<td>HNSW</td>
+<td>Vamana</td>
+<td>(tree/graph hybrid)</td>
+</tr>
+<tr>
+<td>IVF / clustering</td>
+<td>In progress</td>
+<td>No</td>
+<td><strong>Yes</strong> (IVF_FLAT/PQ/SQ)</td>
+<td>No</td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Quantizers</td>
+<td>8</td>
+<td>0 (f32/f16/i8 only)</td>
+<td><strong>Extensive</strong> (PQ, OPQ, RQ, SQ, LSH)</td>
+<td>SQ8/F16/BF16</td>
+<td>PQ</td>
+<td>Anisotropic PQ</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>No</td>
+<td>No</td>
+<td><strong>Yes</strong> (CUDA, ROCm)</td>
+<td>Optional</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Multi-language bindings</td>
+<td>Java only</td>
+<td>Python, many</td>
+<td>Python, Java (via JNI)</td>
+<td><strong>15+ languages</strong></td>
+<td>Python</td>
+<td>Python, TF</td>
+</tr>
+<tr>
+<td>Embedded single-file DB</td>
+<td>Yes (mmap)</td>
+<td>File format</td>
+<td>Serialize only</td>
+<td>Single-file focus</td>
+<td>Disk-optimized</td>
+<td>Model artifacts</td>
+</tr>
+<tr>
+<td>Deployment in a Java app</td>
+<td><strong>Native</strong></td>
+<td>JNI wrapper required</td>
+<td>JNI via <code>faiss-jni</code></td>
+<td>JNI</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>License</td>
+<td>Apache 2.0</td>
+<td>Apache 2.0</td>
+<td>MIT</td>
+<td>Apache 2.0</td>
+<td>MIT</td>
+<td>Apache 2.0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-competitive-read">4.2 Competitive read</h3>
+<p>Native libraries are the performance ceiling for the CPU-only, single-node case. Published ANN-Benchmarks numbers (run on large Xeon/EPYC servers, not M3 laptops) put hnswlib and FAISS HNSW at roughly <strong>8–15K QPS @ 0.99 recall</strong> on fashion-mnist-784; java-vectors today measures <strong>5,432 QPS @ 0.998 recall</strong> on the same dataset on an M3, single-threaded. Normalised for core count and clock, we are within a <strong>small constant factor</strong> of hnswlib on equivalent hardware for HNSW workloads — the smallest gap a pure-Java vector search stack has ever opened against the C++ state of the art.</p>
+<p>More importantly, the remaining gap is explained by <strong>four well-understood engineering items</strong>, not by the choice of language:</p>
+<table>
+<thead>
+<tr>
+<th>Gap closer</th>
+<th>Expected lift</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Multi-threaded beam search</strong> per query (FAISS <code>omp_num_threads</code>)</td>
+<td>2–4× QPS on high-core hosts</td>
+<td>Planned 2026 H1</td>
+</tr>
+<tr>
+<td><strong>Batched query API</strong> (<code>search(n, queries, k)</code>) amortising pool + L1</td>
+<td>1.3–1.8× QPS</td>
+<td>Planned 2026 H1</td>
+</tr>
+<tr>
+<td><strong>IVF_PQFS</strong> (SIMD shuffle-based ADC over IVF buckets)</td>
+<td>IVF equivalent of our Fused ADC; 3–8× over IVF_PQ</td>
+<td>Kernel ready in <code>vectors-quantization</code>; <code>vectors-ivf</code> integration pending</td>
+</tr>
+<tr>
+<td><strong>OPQ rotation training</strong> (learned rotation before PQ)</td>
+<td>+5–10 pp recall on hard MIPS/angular datasets</td>
+<td>Planned 2026 H1</td>
+</tr>
+</tbody>
+</table>
+<p>When those four items land, expected single-threaded performance is <strong>within 20–40% of hnswlib on equivalent hardware</strong>, and multi-threaded performance is <strong>competitive with FAISS CPU</strong> on typical ANN-Benchmarks configurations. The aggregate trajectory is documented in <code>IMPLEMENTATION_PLAN.md</code>.</p>
+<p>Beyond raw QPS, the decision axis against these libraries is <strong>operational</strong>:</p>
+<ul>
+<li>Using hnswlib/FAISS from Java means maintaining a JNI boundary, native build artifacts per OS/arch, and the <code>--enable-native-access</code> warnings that became errors in JDK 24+. java-vectors ships one jar per module and runs anywhere a JDK 25 runs.</li>
+<li>FAISS has ~30 index types total, but the majority we do not ship are either legacy (LSH, NSG), GPU-specific (which we will cover through the cuVS bridge — see §12), or specialised (sparse, LSQ, residual quantizer). The index types that matter for production — <strong>FLAT, HNSW, Vamana/DiskANN, IVF_FLAT, IVF_PQ, IVF_PQFS, composite IVF+HNSW</strong> — are on our shipped or planned list.</li>
+<li>Our RaBitQ + Extended RaBitQ coverage is <strong>ahead of FAISS</strong> on the 1-bit frontier (SIGMOD 2024 / 2025 work that has not yet landed in FAISS main). Anisotropic PQ with a coordinate-descent encoder (ScaNN-style) is also shipped.</li>
+</ul>
+<hr>
+<h2 id="5-competitors--networked--managed-vector-databases">5. Competitors — networked / managed vector databases</h2>
+<p>java-vectors does <em>not</em> compete head-on here; it competes by <strong>removing the need for these systems</strong> at the bottom of the deployment curve.</p>
+<table>
+<thead>
+<tr>
+<th>System</th>
+<th>Language</th>
+<th>Embedded?</th>
+<th>Java SDK</th>
+<th>Strengths</th>
+<th>When to prefer it over java-vectors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Qdrant</strong></td>
+<td>Rust</td>
+<td>No (server)</td>
+<td>Official</td>
+<td>Filtering, payload, gRPC, rich operations</td>
+<td>Multi-tenant hosted service; need HA replicas today</td>
+</tr>
+<tr>
+<td><strong>Weaviate</strong></td>
+<td>Go</td>
+<td>No (server)</td>
+<td>Official</td>
+<td>Schema, modules, GraphQL</td>
+<td>Schema-first model; multi-modal pipelines</td>
+</tr>
+<tr>
+<td><strong>Milvus</strong></td>
+<td>Go + C++</td>
+<td>No (server)</td>
+<td>Official</td>
+<td>Scale to billions, many index types, GPU</td>
+<td>&gt;100M vectors with GPU budget; sharded cluster ops</td>
+</tr>
+<tr>
+<td><strong>LanceDB</strong></td>
+<td>Rust</td>
+<td><strong>Embedded</strong> lib + server</td>
+<td>Via JNI</td>
+<td>Columnar Arrow format, time-travel</td>
+<td>Lakehouse-style analytics on vectors + scalars</td>
+</tr>
+<tr>
+<td><strong>pgvector</strong></td>
+<td>C</td>
+<td>As Postgres ext.</td>
+<td>JDBC</td>
+<td>SQL joins with vectors, ACID</td>
+<td>Already running Postgres; vectors are a secondary workload</td>
+</tr>
+<tr>
+<td><strong>Pinecone</strong></td>
+<td>managed SaaS</td>
+<td>No</td>
+<td>Official</td>
+<td>Fully managed, serverless, HA</td>
+<td>Zero-ops requirement; willing to pay $70+/mo/index</td>
+</tr>
+<tr>
+<td><strong>Chroma</strong></td>
+<td>Python + Rust</td>
+<td>Embedded (Python)</td>
+<td>No</td>
+<td>Python-first, simple API</td>
+<td>Python application, not Java</td>
+</tr>
+<tr>
+<td><strong>Redis Vector</strong></td>
+<td>C</td>
+<td>No (server)</td>
+<td>Redis clients</td>
+<td>Ultra-low latency, already in your stack</td>
+<td>Redis is already the operational DB</td>
+</tr>
+<tr>
+<td><strong>Vespa</strong></td>
+<td>Java/C++</td>
+<td>No</td>
+<td>Official</td>
+<td>Ranking, hybrid search, feeds</td>
+<td>Large-scale search ranking pipelines</td>
+</tr>
+</tbody>
+</table>
+<h3 id="51-cost-comparison-illustrative">5.1 Cost comparison (illustrative)</h3>
+<p>For a Spring AI RAG application storing 100K vectors @ 1536 dim:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Infra cost (monthly)</th>
+<th>Ops complexity</th>
+<th>P50 query latency</th>
+<th>Dev-time cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pinecone Starter</td>
+<td>$70+</td>
+<td>Zero</td>
+<td>15–30 ms (network)</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>Qdrant Cloud (small)</td>
+<td>$50–120</td>
+<td>Low</td>
+<td>10–25 ms (network)</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>Self-hosted Qdrant on EC2</td>
+<td>$30–80 + labour</td>
+<td>Medium</td>
+<td>5–15 ms (LAN)</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>pgvector on existing RDS</td>
+<td>~$0 marginal</td>
+<td>Low</td>
+<td>10–50 ms</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>Spring AI <code>SimpleVectorStore</code></td>
+<td>$0</td>
+<td>Zero</td>
+<td>20–170 ms (O(n))</td>
+<td>Zero — but caps at ~50K vectors</td>
+</tr>
+<tr>
+<td><strong>java-vectors embedded</strong></td>
+<td><strong>$0</strong></td>
+<td><strong>Zero</strong></td>
+<td><strong>&lt;1 ms (in-proc)</strong></td>
+<td><strong>Low (drop-in adapter)</strong></td>
+</tr>
+</tbody>
+</table>
+<p>For projects below the &quot;need a separate DB&quot; scale, java-vectors removes a $600–$1,500/yr line item and a network hop.</p>
+<hr>
+<h2 id="6-performance-snapshot--measured-on-m3-single-thread-neon-128-bit">6. Performance snapshot — measured on M3 (single thread, NEON 128-bit)</h2>
+<p>All numbers from <code>research/data/results/recall-qps.csv</code>, generated by <code>:vectors-bench:recallQps</code> (ANN-Benchmarks harness).</p>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>N</th>
+<th>Dim</th>
+<th>Index</th>
+<th>Config</th>
+<th>Recall@10</th>
+<th>QPS</th>
+<th>P50 (µs)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>fashion-mnist-784-euclidean</td>
+<td>60K</td>
+<td>784</td>
+<td>HNSW</td>
+<td>M=16, efC=400, ef=128</td>
+<td><strong>0.9996</strong></td>
+<td>3,514</td>
+<td>277</td>
+</tr>
+<tr>
+<td>fashion-mnist-784-euclidean</td>
+<td>60K</td>
+<td>784</td>
+<td>HNSW</td>
+<td>M=16, efC=400, ef=16</td>
+<td>0.9875</td>
+<td><strong>13,758</strong></td>
+<td>71</td>
+</tr>
+<tr>
+<td>fashion-mnist-784-euclidean</td>
+<td>60K</td>
+<td>784</td>
+<td>Vamana</td>
+<td>L=128, R=32, α=1.0, L_s=64</td>
+<td>0.9989</td>
+<td>6,185</td>
+<td>159</td>
+</tr>
+<tr>
+<td>fashion-mnist-784-euclidean</td>
+<td>60K</td>
+<td>784</td>
+<td>Fused ADC (pq=49, 16× compr)</td>
+<td>ef=64, oq=8</td>
+<td>0.9966</td>
+<td>4,352</td>
+<td>221</td>
+</tr>
+<tr>
+<td>fashion-mnist-784-euclidean</td>
+<td>60K</td>
+<td>784</td>
+<td>Fused ADC (pq=98, 8× compr, default)</td>
+<td>ef=64, oq=4</td>
+<td>0.9970</td>
+<td>3,294</td>
+<td>294</td>
+</tr>
+<tr>
+<td>fashion-mnist-784-euclidean</td>
+<td>60K</td>
+<td>784</td>
+<td>Fused ADC (pq=16, 49× compr)</td>
+<td>ef=128, oq=16</td>
+<td>0.9905</td>
+<td>4,668</td>
+<td>207</td>
+</tr>
+<tr>
+<td>sift-128-euclidean</td>
+<td>100K</td>
+<td>128</td>
+<td>HNSW</td>
+<td>M=16, efC=200, ef=128</td>
+<td>0.9929</td>
+<td>3,017</td>
+<td>331</td>
+</tr>
+<tr>
+<td>sift-128-euclidean</td>
+<td>100K</td>
+<td>128</td>
+<td>HNSW</td>
+<td>M=32, efC=200, ef=64</td>
+<td>0.9900</td>
+<td>4,370</td>
+<td>236</td>
+</tr>
+<tr>
+<td>glove-100-angular</td>
+<td>1.18M</td>
+<td>100</td>
+<td>HNSW</td>
+<td>M=16, efC=100, ef=64</td>
+<td>0.7737</td>
+<td>3,841</td>
+<td>246</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Build throughput</strong> (ConcurrentHnswGraphBuilder, 6 threads on M3):</p>
+<ul>
+<li>Fused ADC with concurrent builder on fashion-mnist: 165 s (4.9× over the prior serial builder).</li>
+<li>HNSW M=16 on fashion-mnist: ~10–13 s depending on efConstruction.</li>
+</ul>
+<p><strong>Kernel microbenchmarks</strong> (JMH, ops/µs, higher = better):</p>
+<ul>
+<li>RaBitQ encode @ dim=768: 0.019 → 0.99 (52× via default Givens rotation)</li>
+<li>PQ per-score lookup: 3,203× faster than the pre-optimization baseline (bug fix + SIMD)</li>
+<li>Scalar-quantizer training: 10.9× via quickselect</li>
+</ul>
+<p>See <a href="performance-optimization-report.md"><code>performance-optimization-report.md</code></a> for the full optimization history.</p>
+<h2 id="7-capability-gap-analysis">7. Capability gap analysis</h2>
+<h3 id="71-what-we-have-that-peers-dont">7.1 What we have that peers don't</h3>
+<ol>
+<li><strong>Widest quantization portfolio in Java</strong> (8 quantizers including RaBitQ, Ext-RaBitQ, Turbo, NVQ, plus pluggable Random/Givens/Quaternion rotations). No other Java library, including JVector and Lucene, matches this.</li>
+<li><strong>HNSW + Vamana in one codebase</strong> — JVector has only Vamana, Lucene has only HNSW.</li>
+<li><strong>Fused ADC with anisotropic PQ and coordinate-descent encoder</strong> — a Phase C/D feature that even FAISS/ScaNN only partially implement.</li>
+<li><strong>Spring AI and LangChain4j adapters</strong> — nobody else ships these.</li>
+<li><strong>Pure-Java SIMD on NEON + SVE</strong> — hnswlib/FAISS require building the right binary; we JIT to the right ISA automatically.</li>
+<li><strong>Zero native dependencies</strong> — important for Graal native-image, Lambda cold starts, and <code>--enable-native-access</code> lockdown in JDK 24+.</li>
+</ol>
+<h3 id="72-what-peers-have-that-we-dont-yet">7.2 What peers have that we don't (yet)</h3>
+<table>
+<thead>
+<tr>
+<th>Gap</th>
+<th>Importance</th>
+<th>Competitor solution</th>
+<th>Our status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Distributed cluster (replication, sharding, HA)</td>
+<td>Critical at &gt;10M vectors</td>
+<td>Qdrant, Weaviate, Milvus, Ignite, Hazelcast</td>
+<td><code>vectors-distributed</code> on a defined roadmap (§11). Patterns adopted from EclipseStore + Eclipse Data Grid (embedded-first, distributed-optional) and Apache Ignite 3 (ScaleCube SWIM gossip + JRaft for metadata). Gossip, consistent-hash sharding, scatter-gather already implemented.</td>
+</tr>
+<tr>
+<td>IVF family (IVF_FLAT / IVF_PQ / IVF_HNSW / IVF_PQFS)</td>
+<td>Important for &gt;5M vectors</td>
+<td>FAISS, Milvus, LanceDB</td>
+<td><code>vectors-ivf</code>: Buoy + TieredCluster + SubBuoyTree + HyperDoor implemented; IVF_FLAT integration into <code>vectors-db</code> in progress. IVF_PQFS kernel exists (Fused ADC); IVF-side integration scheduled 2026 H1.</td>
+</tr>
+<tr>
+<td><strong>GPU acceleration</strong></td>
+<td>Important for batch build &gt;100M, latency-critical search</td>
+<td>FAISS, cuVS, Milvus</td>
+<td><strong>Planned 2026 H2</strong> via <code>vectors-gpu</code> using Panama-FFM bindings to NVIDIA <strong>cuVS</strong> (CAGRA, IVF-PQ, IVF-FLAT). Same pattern Elasticsearch contributed and Lucene integrated (PR #14131). Preserves our single-JAR model — see §12.</td>
+</tr>
+<tr>
+<td>OPQ rotation training</td>
+<td>Important on hard MIPS/angular data</td>
+<td>FAISS <code>IndexPreTransform</code>, ScaNN</td>
+<td>Planned 2026 H1. We ship Random/Givens/Quaternion rotations; OPQ adds a learned rotation.</td>
+</tr>
+<tr>
+<td>Composite index (IVF+HNSW, IndexRefine, Shards, Replicas)</td>
+<td>Scaling pattern</td>
+<td>FAISS composite indexes</td>
+<td>Planned 2026 H2 after <code>vectors-ivf</code> GA.</td>
+</tr>
+<tr>
+<td>Hybrid search (BM25 + vector)</td>
+<td>Common requirement</td>
+<td>Vespa, Weaviate, Elasticsearch</td>
+<td>Not planned — stay vector-focused; hand off to Lucene.</td>
+</tr>
+<tr>
+<td>Multi-tenant isolation (namespaces, RBAC)</td>
+<td>Important for SaaS</td>
+<td>Qdrant, Pinecone, Infinispan</td>
+<td>Tracked for <code>vectors-distributed</code>; Infinispan <code>AuthorizationManager</code> is the reference pattern.</td>
+</tr>
+<tr>
+<td>Multi-language bindings (Python/Go/Rust)</td>
+<td>Broadens audience</td>
+<td>USearch, hnswlib</td>
+<td>Not in scope — Java-native is the positioning. A gRPC/REST front-end on <code>vectors-distributed</code> is the future off-ramp.</td>
+</tr>
+<tr>
+<td>Time-travel / versioning</td>
+<td>Niche but growing</td>
+<td>LanceDB</td>
+<td>Possible future — current mmap + generation layout is close.</td>
+</tr>
+<tr>
+<td>Sparse vectors / SPLADE</td>
+<td>Niche</td>
+<td>Qdrant, Vespa</td>
+<td>Not planned.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="73-risk-register">7.3 Risk register</h3>
+<ol>
+<li><strong>JDK 25 minimum</strong> is aggressive; enterprise adoption is typically 2–3 releases behind. Mitigation: adapters are decoupled; core could be backported to JDK 21 with the Vector API still incubating (accepting the longer compile command). Multi-release JARs (as cuVS-java ships today) are a proven escape hatch.</li>
+<li><strong>Vector API remains incubating</strong> through at least JDK 26 pending Valhalla. We pin to each JDK's incubator module. No API break from us — downstream teams must recompile when they upgrade. This matches every Java vector library in the market (Lucene, JVector, Oracle <code>vector.jdbc.*</code>).</li>
+<li><strong>Distributed story shipped later than single-node</strong>. Well-understood; explicit: <code>vectors-distributed</code> is on the 2026 H2 track using the patterns documented in §11. Qdrant / Weaviate / Ignite remain the choice for teams that need cluster HA <em>today</em>.</li>
+<li><strong>GPU dependency on cuVS</strong> is external — <code>vectors-gpu</code> will require <code>libcuvs.so</code> at runtime on NVIDIA hardware. This is identical to the dependency model the whole CUDA ecosystem uses; it does not compromise our pure-Java JAR story (no JNI written or maintained by us). Babylon/HAT is tracked as the long-term native-Java GPU path (§12).</li>
+</ol>
+<hr>
+<h2 id="8-positioning-recommendations">8. Positioning recommendations</h2>
+<h3 id="81-primary-message-one-liner">8.1 Primary message (one-liner)</h3>
+<blockquote>
+<p><strong>The Java-native vector database that scales from a single JAR to a distributed cluster — and beyond to GPU — without changing runtime, language, or deployment model.</strong></p>
+<p>Pure Java, SIMD-native, production-grade indexing, drop-in adapters for Spring AI and LangChain4j, mmap-portable persistence, and a defined trajectory to embedded-clustered HA and cuVS-accelerated GPU search.</p>
+</blockquote>
+<h3 id="82-audience-ranking">8.2 Audience ranking</h3>
+<table>
+<thead>
+<tr>
+<th>Audience</th>
+<th>Urgency</th>
+<th>Message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Spring AI / LangChain4j users outgrowing <code>SimpleVectorStore</code> / <code>InMemoryEmbeddingStore</code></td>
+<td><strong>Highest</strong></td>
+<td>&quot;Two-line migration. Keep zero infra. Go from 50K vectors to 10M without provisioning a database.&quot;</td>
+</tr>
+<tr>
+<td>Java teams currently running pgvector / Redis-vector / Elasticsearch-vector for a secondary workload</td>
+<td>High</td>
+<td>&quot;Retire the database dependency for RAG and embedding-cache workloads. Put vectors next to your code.&quot;</td>
+</tr>
+<tr>
+<td>Java teams using FAISS / hnswlib / USearch via JNI</td>
+<td>High</td>
+<td>&quot;Drop the JNI toolchain. One JAR per module. GPU path via Panama + cuVS on the same contract.&quot;</td>
+</tr>
+<tr>
+<td>Teams evaluating JVector outside of DataStax Cassandra</td>
+<td>Medium</td>
+<td>&quot;Same SOTA algorithms. Broader quantization (RaBitQ, Ext-RaBitQ, Turbo, NVQ, anisotropic PQ). Spring AI + LangChain4j adapters. JDK 25-native.&quot;</td>
+</tr>
+<tr>
+<td>Teams building Graal native-image AI workloads</td>
+<td>Growing</td>
+<td>&quot;No native code written by us means no FFM / JNI hoops for native-image.&quot;</td>
+</tr>
+<tr>
+<td>Enterprises needing embedded + distributed on the JVM</td>
+<td>Growing</td>
+<td>&quot;The EclipseStore + Data Grid pattern, applied to vectors: embed by default, cluster when you need to.&quot;</td>
+</tr>
+<tr>
+<td>Teams operating Qdrant / Weaviate / Milvus clusters</td>
+<td>Low today</td>
+<td>&quot;Evaluate <code>vectors-distributed</code> in 2026 H2 for the Java-native enterprise deployment story. Until then, stay on your cluster.&quot;</td>
+</tr>
+<tr>
+<td>Teams running FAISS-on-GPU / Milvus-GPU at scale</td>
+<td>Low today</td>
+<td>&quot;Evaluate <code>vectors-gpu</code> in 2026 H2 — same cuVS backend, pure-Java call site, full Java tooling around it.&quot;</td>
+</tr>
+</tbody>
+</table>
+<h3 id="83-what-to-say-and-what-not-to-say">8.3 What to say and what not to say</h3>
+<table>
+<thead>
+<tr>
+<th>Do say</th>
+<th>Don't say</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&quot;The Java-native path from embedded to distributed to GPU&quot;</td>
+<td>&quot;Faster than FAISS on CPU today&quot; (we aren't yet — but we will be within 20–40% multi-threaded when the 4 gap-closers in §4.2 land)</td>
+</tr>
+<tr>
+<td>&quot;Pure Java, SIMD-native, JDK 25+&quot;</td>
+<td>&quot;The fastest vector database&quot; (unqualified claims invite benchmark rebuttals)</td>
+</tr>
+<tr>
+<td>&quot;Widest quantization portfolio in Java&quot; + SIGMOD 2024/2025 RaBitQ</td>
+<td>&quot;Widest in the world&quot; (FAISS still covers more total types — though most are legacy or GPU-only)</td>
+</tr>
+<tr>
+<td>&quot;Spring AI + LangChain4j drop-in. Chroma/SQLite simplicity with HNSW/Vamana/PQ performance.&quot;</td>
+<td>&quot;Production-ready distributed database today&quot; (not yet — <code>vectors-distributed</code> GA is 2026 H2)</td>
+</tr>
+<tr>
+<td>&quot;Embedded vector DB with mmap + crash recovery + portable single-directory format&quot;</td>
+<td>&quot;Replaces Pinecone&quot; (wrong axis — we replace the <em>need for a separate DB</em> at small/mid scale; Pinecone's value is managed HA)</td>
+</tr>
+<tr>
+<td>&quot;GPU via Panama-FFM + cuVS — the same pattern Elasticsearch and Lucene adopted in 2025&quot;</td>
+<td>&quot;Babylon-powered GPU today&quot; (Babylon/HAT is a 2027+ evolution, not a 2026 ship)</td>
+</tr>
+<tr>
+<td>&quot;Within a small constant factor of hnswlib on equivalent hardware today; parity by 2026 H2&quot;</td>
+<td>&quot;FAISS parity&quot; (state the trajectory and the dated milestones, not the outcome)</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="9-scorecard">9. Scorecard</h2>
+<p><strong>Legend:</strong> ● strong / ◐ partial / ○ absent</p>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>java-vectors</th>
+<th>JVector</th>
+<th>Lucene-vec</th>
+<th>hnswlib</th>
+<th>FAISS</th>
+<th>Qdrant</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pure Java (no JNI we maintain)</td>
+<td>●</td>
+<td>●</td>
+<td>●</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+</tr>
+<tr>
+<td>SIMD kernels</td>
+<td>●</td>
+<td>◐</td>
+<td>●</td>
+<td>●</td>
+<td>●</td>
+<td>●</td>
+</tr>
+<tr>
+<td>HNSW</td>
+<td>●</td>
+<td>○</td>
+<td>●</td>
+<td>●</td>
+<td>●</td>
+<td>●</td>
+</tr>
+<tr>
+<td>Vamana / DiskANN</td>
+<td>●</td>
+<td>●</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+</tr>
+<tr>
+<td>IVF family</td>
+<td>◐</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+<td>●</td>
+<td>◐</td>
+</tr>
+<tr>
+<td>Anisotropic PQ (ScaNN-style)</td>
+<td>●</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+</tr>
+<tr>
+<td>Fused ADC (PQ inline with graph)</td>
+<td>●</td>
+<td>●</td>
+<td>○</td>
+<td>○</td>
+<td>◐ (IVF only)</td>
+<td>○</td>
+</tr>
+<tr>
+<td>Quantization breadth</td>
+<td>●</td>
+<td>◐</td>
+<td>◐</td>
+<td>○</td>
+<td>●</td>
+<td>◐</td>
+</tr>
+<tr>
+<td>SIGMOD 2024/2025 RaBitQ</td>
+<td>●</td>
+<td>○</td>
+<td>◐</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+</tr>
+<tr>
+<td>Embedded single-directory DB</td>
+<td>●</td>
+<td>◐</td>
+<td>●</td>
+<td>◐</td>
+<td>○</td>
+<td>○</td>
+</tr>
+<tr>
+<td>Portable persistence format</td>
+<td>●</td>
+<td>●</td>
+<td>●</td>
+<td>◐</td>
+<td>◐</td>
+<td>N/A (server)</td>
+</tr>
+<tr>
+<td>Spring AI adapter</td>
+<td>●</td>
+<td>○</td>
+<td>● (Spring AI ships it)</td>
+<td>○</td>
+<td>○</td>
+<td>●</td>
+</tr>
+<tr>
+<td>LangChain4j adapter</td>
+<td>●</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+<td>●</td>
+</tr>
+<tr>
+<td>Distributed / HA</td>
+<td>◐ (2026 H2)</td>
+<td>● (via Cassandra)</td>
+<td>● (via ES/Solr)</td>
+<td>○</td>
+<td>○</td>
+<td>●</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>◐ (2026 H2 via cuVS)</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+<td>●</td>
+<td>○</td>
+</tr>
+<tr>
+<td>Production-ready today</td>
+<td>◐ (single-node yes; cluster 2026 H2)</td>
+<td>●</td>
+<td>●</td>
+<td>●</td>
+<td>●</td>
+<td>●</td>
+</tr>
+<tr>
+<td>Operational simplicity for a Java app</td>
+<td>●</td>
+<td>◐</td>
+<td>◐</td>
+<td>○</td>
+<td>○</td>
+<td>○</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Overall:</strong> java-vectors is a <strong>category leader for the Java-embedded segment today</strong> and a <strong>capable peer for single-node CPU workloads</strong>. The distributed story (§11) and GPU story (§12) close the remaining enterprise gaps over 2026 — at which point no competitor offers the same &quot;one language, one runtime, one JAR, embedded → distributed → GPU&quot; trajectory on the JVM.</p>
+<hr>
+<h2 id="10-suggested-next-moves-outside-the-scope-of-this-report">10. Suggested next moves (outside the scope of this report)</h2>
+<p><strong>Acquisition / top-of-funnel</strong></p>
+<ol>
+<li>Publish an <strong>independent ann-benchmarks run</strong> of java-vectors vs. hnswlib / Lucene / JVector on identical hardware; include it in <code>docs/</code> and link from README.</li>
+<li>Add a <strong>&quot;migration from SimpleVectorStore in 5 lines&quot;</strong> tutorial — the #1 acquisition story.</li>
+<li>Produce a <strong>sizing guide</strong> (<code>docs/sizing.adoc</code>): how many vectors each index/quantizer combo holds on 4/8/16 GB heaps.</li>
+</ol>
+<p><strong>Single-node CPU parity (2026 H1)</strong></p>
+<ol start="4">
+<li>Land the four gap-closers from §4.2: <strong>multi-threaded beam search</strong>, <strong>batched query API</strong>, <strong>IVF_PQFS</strong>, <strong>OPQ rotation training</strong>.</li>
+<li>Ship <code>vectors-ivf</code> IVF_FLAT + IVF_PQ in <code>vectors-db</code> as public index types.</li>
+<li>Add <code>IndexRefine</code> / <code>IndexShards</code> / <code>IndexReplicas</code> composition wrappers (modelled on FAISS).</li>
+</ol>
+<p><strong>Enterprise distribution (2026 H2)</strong></p>
+<ol start="7">
+<li><code>vectors-distributed</code> GA using the patterns consolidated in §11.</li>
+<li>Ship an optional <code>vectors-grpc</code> front-end for polyglot clients (non-goal: do not let this justify multi-language bindings in the core).</li>
+</ol>
+<p><strong>GPU (2026 H2)</strong></p>
+<ol start="9">
+<li><code>vectors-gpu</code> MVP: CAGRA + IVF-PQ via cuVS Panama-FFM, gated at runtime on <code>libcuvs.so</code> presence.</li>
+<li>Track Project Babylon / HAT on JDK 26+ EA builds; prototype one kernel (cosine on int8) as a proof point for the long-term native-Java GPU path.</li>
+</ol>
+<hr>
+<h2 id="11-enterprise-distribution-architecture">11. Enterprise distribution architecture</h2>
+<p>The design brief for <code>vectors-distributed</code> is pragmatic: <strong>adopt patterns that have shipped at scale</strong>, not invent. Six reference codebases sit under <code>research/repos/</code> and were mined for concrete patterns. The resulting target architecture is:</p>
+<pre class="hljs"><code><div>            ┌────────────────────────────────────────────────────────────┐
+            │ Application JVM                                            │
+            │                                                            │
+            │  JavaVectorsVectorStore / JavaVectorsEmbeddingStore        │
+            │                                                            │
+            │  ┌──────────────────────────────────────────────────────┐  │
+            │  │ VectorClusterServer (embedded mode, default)         │  │
+            │  │                                                      │  │
+            │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │  │
+            │  │  │ vectors-db  │  │ vectors-ivf │  │ vectors-hnsw│   │  │
+            │  │  │ (local)     │  │ (segments)  │  │ (segments)  │   │  │
+            │  │  └─────────────┘  └─────────────┘  └─────────────┘   │  │
+            │  │                                                      │  │
+            │  │  ┌───────────────┐  ┌─────────────┐  ┌────────────┐  │  │
+            │  │  │ Gossip (SWIM) │  │ Raft (CMG)  │  │ NonBlocking│  │  │
+            │  │  │ ScaleCube     │  │ JRaft fork  │  │ Store SPI  │  │  │
+            │  │  └───────────────┘  └─────────────┘  └────────────┘  │  │
+            │  └──────────────────────────────────────────────────────┘  │
+            └────────────────────────────────────────────────────────────┘
+</div></code></pre>
+<h3 id="111-adopted-patterns-by-source">11.1 Adopted patterns (by source)</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Pattern</th>
+<th>Source repo</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Embedded-first lifecycle</strong> (<code>VectorClusterServer.start(name, config, workDir)</code> returns a <code>CompletableFuture</code>; node auto-joins cluster when peers are configured, runs local-only otherwise)</td>
+<td>EclipseStore <code>EmbeddedStorage</code> + Ignite 3 <code>IgniteServer</code></td>
+<td>Chroma/SQLite-grade simplicity in single-node, zero API change to scale out.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Topological startup via <code>LifecycleManager</code> DAG</strong> (components implement <code>VectorsComponent</code> with <code>startAsync/onNodeStop/stop</code>; stop runs in reverse)</td>
+<td>Ignite 3 <code>org.apache.ignite.internal.app.LifecycleManager</code></td>
+<td>Deterministic shutdown is the single biggest reliability lever.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Gossip + Raft hybrid</strong> (SWIM over Netty for liveness/failure detection; Raft group for cluster metadata / catalog)</td>
+<td>Ignite 3 (<code>ScaleCubeClusterService</code> + <code>ClusterManagementGroupManager</code>)</td>
+<td>Split-brain-proof metadata, fast failure detection, no single point of consensus bottleneck.</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Owned-partition model + versioned replicas</strong> (each partition has N owners; writes go to primary, async to backups; per-replica version counter enables anti-entropy)</td>
+<td>Hazelcast <code>InternalPartitionServiceImpl</code> + <code>PartitionReplicaVersionManager</code></td>
+<td>Simpler than Merkle trees, sufficient for vector index durability.</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong><code>DiscoveryStrategy</code> SPI</strong> (pluggable: multicast, static IP list, Kubernetes, Consul, etcd)</td>
+<td>Hazelcast <code>com.hazelcast.spi.discovery</code></td>
+<td>Cloud-native deployment without recompiling the core.</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong><code>CacheMode</code> (LOCAL / REPL / DIST) switch via builder</strong></td>
+<td>Infinispan <code>org.infinispan.configuration.cache.CacheMode</code></td>
+<td>Topology flip through a single builder call; encourages &quot;write once, scale later&quot;.</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong><code>NonBlockingStore&lt;K,V&gt;</code> SPI for persistence</strong> (<code>CompletionStage</code> / <code>Publisher</code> contract; characteristics <code>SHAREABLE</code>, <code>SEGMENTABLE</code>, <code>BULK_READ</code>, <code>TRANSACTIONAL</code>)</td>
+<td>Infinispan <code>org.infinispan.persistence.spi.NonBlockingStore</code></td>
+<td>Pluggable backends (disk, JDBC, S3, encrypted) without blocking the event loop.</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>Segment-based state transfer</strong> (rebalancing transfers N segments concurrently, chunked streaming, version-vector rollback)</td>
+<td>Infinispan <code>StateTransferManager</code> + Ignite 3</td>
+<td>Enables elastic scale-in / scale-out without full rebuild.</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>Lazy <code>Root&lt;T&gt;</code> reference + <code>Lazy&lt;T&gt;</code> lookups</strong> (in-memory catalog + on-demand load of index shards)</td>
+<td>EclipseStore <code>RootReference</code> + <code>Lazy&lt;T&gt;</code></td>
+<td>Handles large graphs without eager OOM.</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>Housekeeping / consolidation task</strong> (background compaction of tombstones, segment merges, WAL truncation)</td>
+<td>EclipseStore <code>StorageHousekeeping</code> + Chronicle <code>ChronicleHashCorruptionImpl</code></td>
+<td>Mutable vector store requires background reclamation.</td>
+</tr>
+<tr>
+<td>11</td>
+<td><strong>Direct message serialization via <code>@Transferable</code> codegen</strong> (no reflection on hot path)</td>
+<td>Ignite 3 <code>DirectMessageReader</code> / <code>DirectMessageWriter</code></td>
+<td>Low-latency cluster RPC and binary client protocol.</td>
+</tr>
+<tr>
+<td>12</td>
+<td><strong>Catalog versioning for rolling upgrades</strong> (every schema change increments a distributed version; older nodes run older catalog versions until activation delay elapses)</td>
+<td>Ignite 3 <code>CatalogManager</code> + <code>UpdateLog</code></td>
+<td>Zero-downtime upgrade is table stakes for enterprise.</td>
+</tr>
+<tr>
+<td>13</td>
+<td><strong>Micrometer metrics + OpenTelemetry traces</strong> (MeterRegistry-based, Prometheus + OTLP exporters)</td>
+<td>Infinispan <code>MetricsRegistry</code> + Ignite 3 <code>OtlpMetricsExporter</code></td>
+<td>Cloud-native observability out of the box.</td>
+</tr>
+<tr>
+<td>14</td>
+<td><strong>JAAS-based <code>Subject</code> + per-resource <code>AuthorizationManager</code></strong></td>
+<td>Infinispan <code>SecureCacheImpl</code></td>
+<td>Multi-tenant namespaces with RBAC at the collection level.</td>
+</tr>
+<tr>
+<td>15</td>
+<td><strong>Multi-release JAR packaging</strong> (<code>src/main/java</code> for JDK 21 fallback, <code>src/main/java25</code> for Vector API paths)</td>
+<td>cuVS-java <code>cuvs-java/pom.xml</code> multi-release config</td>
+<td>Graceful degradation for teams not yet on JDK 25.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="112-deployment-topologies">11.2 Deployment topologies</h3>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>API</th>
+<th>Deployment</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Embedded, single-node</strong></td>
+<td><code>VectorCollection.builder()...build()</code></td>
+<td>One JVM, mmap files in a working directory</td>
+<td>Default. Spring AI / LangChain4j apps. Dev. Unit tests.</td>
+</tr>
+<tr>
+<td><strong>Embedded cluster</strong> (EclipseStore + Data Grid model)</td>
+<td><code>VectorClusterServer.start(name, config, workDir)</code> — nodes auto-join via gossip</td>
+<td>Each application JVM is a full cluster member. Shared partitioning.</td>
+<td>Java-native microservices that want HA without a separate database process.</td>
+</tr>
+<tr>
+<td><strong>Client / server</strong></td>
+<td><code>VectorClient.builder().addresses(...).build()</code></td>
+<td>Dedicated <code>vectors-server</code> nodes; thin Java client</td>
+<td>Large deployments where app JVMs should not carry index state.</td>
+</tr>
+<tr>
+<td><strong>Managed GPU tier</strong></td>
+<td>Any of the above + <code>vectors-gpu</code> backend</td>
+<td>Nodes with an NVIDIA GPU serve a subset of collections via cuVS</td>
+<td>Latency-critical or billion-scale search.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="113-why-this-is-differentiated">11.3 Why this is differentiated</h3>
+<ul>
+<li><strong>EclipseStore + Eclipse Data Grid is the closest analogue</strong> and the only Java project today that does embedded-first + distributed-optional well — but it persists <em>arbitrary object graphs</em>, not vectors. We inherit its deployment model and layer vector-specific indexing on top.</li>
+<li><strong>Ignite / Hazelcast / Infinispan</strong> are mature and scalable — but they are <em>caches / compute grids</em>, not purpose-built vector stores. Adopting their cluster patterns (SWIM gossip, owned partitions, state transfer) without inheriting their full surface area gives us enterprise reliability with a fraction of the footprint.</li>
+<li><strong>Qdrant / Weaviate / Milvus</strong> are purpose-built vector databases — but they are <em>not Java</em>. The operator cost, language mismatch, and service-boundary latency are the gap java-vectors closes for JVM shops.</li>
+</ul>
+<hr>
+<h2 id="12-gpu-roadmap-panama-ffm-%E2%86%92-babylon">12. GPU roadmap (Panama-FFM → Babylon)</h2>
+<h3 id="121-why-we-changed-position">12.1 Why we changed position</h3>
+<p>Earlier project charter entries stated &quot;no GPU — pure Java only&quot;. That framing was wrong. The 2025/2026 Java ecosystem produced two independent on-ramps that preserve the pure-Java shipping model:</p>
+<ol>
+<li><strong>Panama-FFM + NVIDIA cuVS-java</strong>: NVIDIA ships official Panama-FFM bindings to cuVS (CAGRA, IVF-PQ, IVF-FLAT, Brute Force). Elasticsearch contributed; Apache Lucene integrated it in PR #14131; SearchScale ships <code>lucene-cuvs</code> in production. Works on <strong>JDK 21+</strong>.</li>
+<li><strong>Project Babylon + HAT (Heterogeneous Accelerator Toolkit)</strong>: Java code annotated <code>@CodeReflection</code> compiled at runtime to OpenCL / CUDA. Demonstrated 14 TFLOP/s matmul on A10 (near cuBLAS) as of Jan 2026. Based on JDK 26 preview. Research prototype.</li>
+</ol>
+<p>Both strategies keep the <strong>Java-side contract</strong> intact: one JAR, no JNI we maintain, no C++ build. The runtime requirement (<code>libcuvs.so</code> for cuVS; a Babylon-enabled JDK for HAT) is on exactly the same footing as &quot;requires libc&quot;.</p>
+<h3 id="122-phased-plan">12.2 Phased plan</h3>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Target</th>
+<th>Scope</th>
+<th>Dependencies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Phase I</strong></td>
+<td>2026 H2</td>
+<td><code>vectors-gpu-cuvs</code> module: Panama-FFM binding to cuVS. Index types: CAGRA, IVF-PQ, IVF-FLAT, Brute Force. Feature-detect <code>libcuvs.so</code> at startup; fall back to <code>vectors-hnsw</code> / <code>vectors-ivf</code> when absent.</td>
+<td>NVIDIA GPU + cuVS 25.x on runtime host. <code>cuvs-java</code> artifact already on Maven Central.</td>
+</tr>
+<tr>
+<td><strong>Phase II</strong></td>
+<td>2027 H1</td>
+<td>Shared <code>vectors-gpu-api</code> SPI. Implementations for alternate backends (ROCm via <code>hipVS</code> when available; OpenCL via HAT proof-of-concept).</td>
+<td>Babylon reaches at least EA-stable on a JDK release branch.</td>
+</tr>
+<tr>
+<td><strong>Phase III</strong></td>
+<td>2027 H2+</td>
+<td>Native-Java kernels via Babylon <code>@CodeReflection</code> + HAT <code>NDRange</code>. Target: cosine/L2 on int8 as the first kernel, matching ~90% of cuVS on the same hardware without any native binding.</td>
+<td>Babylon GA or LTS-preview; Vector API promoted out of incubator.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="123-design-invariants">12.3 Design invariants</h3>
+<ol>
+<li><strong>GPU is optional.</strong> <code>vectors-gpu-cuvs</code> is a runtime dependency; applications without an NVIDIA GPU see no difference.</li>
+<li><strong>Same public API.</strong> A collection defined with <code>backend(Backend.GPU)</code> falls back to CPU transparently when the GPU is absent, with a single log line on startup.</li>
+<li><strong>No JNI written by us.</strong> cuVS-java is maintained by NVIDIA. Babylon is an OpenJDK project. We stay in Panama-FFM / Code-Reflection Java code.</li>
+<li><strong>Mmap + generation persistence stays authoritative.</strong> GPU indexes are regenerated from the CPU/mmap source of truth on startup (or loaded from a serialized snapshot — the pattern cuVS-java already implements).</li>
+<li><strong>Cluster-aware.</strong> A GPU-enabled node advertises its GPU capabilities via gossip (§11 pattern #3); the router prefers GPU nodes for applicable collections.</li>
+</ol>
+<h3 id="124-what-this-unlocks">12.4 What this unlocks</h3>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>CPU today</th>
+<th>CPU 2026 H2 (§4.2 gap-closers)</th>
+<th>GPU Phase I (2026 H2)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HNSW @ 1M vectors, recall 0.99</td>
+<td>3–5K QPS (1T, M3)</td>
+<td>20–40K QPS (multi-T on 16-core x86)</td>
+<td>200K+ QPS (CAGRA on A10)</td>
+</tr>
+<tr>
+<td>IVF_PQ build, 100M vectors</td>
+<td>hours</td>
+<td>30–60 min</td>
+<td>2–5 min</td>
+</tr>
+<tr>
+<td>Memory per vector, compressed</td>
+<td>32–256 bits</td>
+<td>32–256 bits</td>
+<td>32–256 bits (same codebooks)</td>
+</tr>
+<tr>
+<td>Deployment footprint</td>
+<td>one JAR</td>
+<td>one JAR + optional gRPC front-end</td>
+<td>one JAR + optional <code>libcuvs.so</code></td>
+</tr>
+</tbody>
+</table>
+<p>No competitor offers this progression on the JVM without a JNI toolchain and a non-Java runtime.</p>
+
+</body>
+</html>
