@@ -783,10 +783,13 @@ public final class RecallQpsBenchmark {
         // Use last round's results for recall.
         if (round == MEASUREMENT_ROUNDS - 1) {
           List<SearchResult.Hit> hits = result.hits();
-          for (int i = 0; i < Math.min(k, hits.size()); i++) {
+          int take = Math.min(k, hits.size());
+          for (int i = 0; i < take; i++) {
             // Extract ordinal from doc id: "doc-{ordinal}"
             approxResults[qi][i] = parseOrdinal(hits.get(i).id());
           }
+          // Fill unused slots with -1 so they cannot accidentally match ordinal 0 in ground truth.
+          for (int i = take; i < k; i++) approxResults[qi][i] = -1;
         }
       }
     }
