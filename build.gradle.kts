@@ -186,11 +186,13 @@ tasks.register<Javadoc>("aggregateJavadoc") {
     group = "documentation"
 
     val libProjects = libraryProjects.filter { it.name != "vectors-bench" }
+    // Library projects are evaluated before :docs (the caller), so the main source sets are
+    // already realised by the time this task's configure lambda runs. Using afterEvaluate here
+    // fails under Gradle 9 because the callback would fire on an already-evaluated project.
     libProjects.forEach { proj ->
-        proj.afterEvaluate {
-            source(proj.the<SourceSetContainer>()["main"].allJava)
-            classpath += files(proj.the<SourceSetContainer>()["main"].compileClasspath)
-        }
+        dependsOn(proj.tasks.named("compileJava"))
+        source(proj.the<SourceSetContainer>()["main"].allJava)
+        classpath += files(proj.the<SourceSetContainer>()["main"].compileClasspath)
     }
     setDestinationDir(layout.buildDirectory.dir("docs/javadoc/aggregate").get().asFile)
 
