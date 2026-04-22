@@ -122,7 +122,7 @@ public final class RecallQpsBenchmark {
       SweepConfig sweep = SweepConfig.resolve(profile, n);
       System.out.printf(
           "  sweep: HNSW M=%s efC=%s efSearch=%s | Vamana R=%s L=%s alpha=%s lSearch=%s |"
-              + " IVF nprobe=%s%n",
+              + " IVF nprobe=%s | IVF_PQ M=%s rescore=%s%n",
           Arrays.toString(sweep.hnswM),
           Arrays.toString(sweep.hnswEf),
           Arrays.toString(sweep.hnswEfSearch),
@@ -130,7 +130,9 @@ public final class RecallQpsBenchmark {
           Arrays.toString(sweep.vamanaL),
           Arrays.toString(sweep.vamanaAlpha),
           Arrays.toString(sweep.vamanaLSearch),
-          Arrays.toString(sweep.ivfNprobe));
+          Arrays.toString(sweep.ivfNprobe),
+          Arrays.toString(sweep.ivfPqSubspaces),
+          Arrays.toString(sweep.ivfPqRescore));
 
       // --- HNSW sweep ---
       if (algoFilter == null || "hnsw".equals(algoFilter)) {
@@ -229,6 +231,31 @@ public final class RecallQpsBenchmark {
                   sweep.ivfNprobe,
                   checkpoint,
                   csvFile));
+        }
+      }
+
+      // --- IVF_PQ sweep ---
+      if (algoFilter == null || "ivfpq".equals(algoFilter)) {
+        int sqrtN = (int) Math.sqrt(n);
+        for (int nlist : new int[] {sqrtN, 2 * sqrtN, 4 * sqrtN}) {
+          for (int pqM : sweep.ivfPqSubspaces) {
+            if (pqM > dim) continue; // ProductQuantizer requires M <= dim
+            for (int rescore : sweep.ivfPqRescore) {
+              sessionResults.addAll(
+                  benchmarkIvfPq(
+                      dsCfg,
+                      data.corpus,
+                      data.queries,
+                      groundTruth,
+                      dim,
+                      nlist,
+                      pqM,
+                      rescore,
+                      sweep.ivfNprobe,
+                      checkpoint,
+                      csvFile));
+            }
+          }
         }
       }
     }
@@ -734,6 +761,103 @@ public final class RecallQpsBenchmark {
   }
 
   // -------------------------------------------------------------------------
+  // IVF_PQ
+  // -------------------------------------------------------------------------
+
+  private static List<BenchmarkResult> benchmarkIvfPq(
+      DatasetConfig dsCfg,
+      float[][] corpus,
+      float[][] queries,
+      int[][] groundTruth,
+      int dim,
+      int nlist,
+      int pqM,
+      int rescoreFactor,
+      int[] nprobeValues,
+      CheckpointStore checkpoint,
+      Path csvFile) {
+
+    Map<String, String> buildParams =
+        Map.of(
+            "nlist", String.valueOf(nlist),
+            "pqM", String.valueOf(pqM),
+            "rescoreFactor", String.valueOf(rescoreFactor));
+    int[] effectiveNprobe = filterAtMost(nprobeValues, nlist);
+    if (effectiveNprobe.length == 0) return List.of();
+    if (isFullyCompleted(
+        checkpoint, dsCfg.name, "ivf_pq", buildParams, effectiveNprobe, "nprobe")) {
+      System.out.printf(
+          "  IVF_PQ nlist=%d pqM=%d rescore=%d: already completed, skipping%n",
+          nlist, pqM, rescoreFactor);
+      checkpoint.markBuildCompleted(dsCfg.name, "ivf_pq", buildParams);
+      return List.of();
+    }
+
+    int[] pendingNprobe = new int[effectiveNprobe.length];
+    int pendingCount = 0;
+    for (int nprobe : effectiveNprobe) {
+      Map<String, String> searchParams = Map.of("nprobe", String.valueOf(nprobe));
+      if (checkpoint.isRowCompleted(dsCfg.name, "ivf_pq", buildParams, searchParams)) {
+        System.out.printf(
+            "  IVF_PQ nlist=%d pqM=%d rescore=%d nprobe=%d: cached, skipping%n",
+            nlist, pqM, rescoreFactor, nprobe);
+      } else {
+        pendingNprobe[pendingCount++] = nprobe;
+      }
+    }
+    if (pendingCount == 0) {
+      checkpoint.markBuildCompleted(dsCfg.name, "ivf_pq", buildParams);
+      return List.of();
+    }
+
+    int defaultNprobe = pendingNprobe[0];
+    System.out.printf(
+        "  IVF_PQ nlist=%d pqM=%d rescore=%d (sweep %d nprobe values): building...",
+        nlist, pqM, rescoreFactor, pendingCount);
+    long t0 = System.nanoTime();
+    VectorCollection ivfCol =
+        VectorCollection.builder()
+            .dimension(dim)
+            .metric(dsCfg.sim)
+            .indexType(IndexType.IVF_PQ)
+            .ivfK(nlist)
+            .ivfNprobe(defaultNprobe)
+            .ivfPqSubspaces(pqM)
+            .ivfRescoreFactor(rescoreFactor)
+            .build();
+    addAll(ivfCol, corpus);
+    ivfCol.commit();
+    double buildTime = (System.nanoTime() - t0) / 1e9;
+    System.out.printf(" %.1fs%n", buildTime);
+
+    List<BenchmarkResult> results = new ArrayList<>();
+    try {
+      for (int i = 0; i < pendingCount; i++) {
+        int nprobe = pendingNprobe[i];
+        Map<String, String> searchParams = Map.of("nprobe", String.valueOf(nprobe));
+        BenchmarkResult r =
+            measureSearch(
+                dsCfg.name,
+                "ivf_pq",
+                buildParams,
+                searchParams,
+                ivfCol,
+                queries,
+                groundTruth,
+                K,
+                nprobe,
+                buildTime);
+        recordResult(r, checkpoint, csvFile);
+        results.add(r);
+      }
+    } finally {
+      ivfCol.close();
+    }
+    checkpoint.markBuildCompleted(dsCfg.name, "ivf_pq", buildParams);
+    return results;
+  }
+
+  // -------------------------------------------------------------------------
   // Core measurement
   // -------------------------------------------------------------------------
 
@@ -956,6 +1080,8 @@ public final class RecallQpsBenchmark {
     final double[] vamanaAlpha;
     final int[] vamanaLSearch;
     final int[] ivfNprobe;
+    final int[] ivfPqSubspaces;
+    final int[] ivfPqRescore;
 
     private SweepConfig(
         int[] hnswM,
@@ -965,7 +1091,9 @@ public final class RecallQpsBenchmark {
         int[] vamanaL,
         double[] vamanaAlpha,
         int[] vamanaLSearch,
-        int[] ivfNprobe) {
+        int[] ivfNprobe,
+        int[] ivfPqSubspaces,
+        int[] ivfPqRescore) {
       this.hnswM = hnswM;
       this.hnswEf = hnswEf;
       this.hnswEfSearch = hnswEfSearch;
@@ -974,6 +1102,8 @@ public final class RecallQpsBenchmark {
       this.vamanaAlpha = vamanaAlpha;
       this.vamanaLSearch = vamanaLSearch;
       this.ivfNprobe = ivfNprobe;
+      this.ivfPqSubspaces = ivfPqSubspaces;
+      this.ivfPqRescore = ivfPqRescore;
     }
 
     static SweepConfig resolve(String profile, int n) {
@@ -982,6 +1112,8 @@ public final class RecallQpsBenchmark {
       int[] vamanaR, vamanaL, vamanaLSearch;
       double[] vamanaAlpha;
       int[] ivfNprobe;
+      int[] ivfPqSubspaces;
+      int[] ivfPqRescore;
       switch (profile) {
         case "quick" -> {
           hnswM = new int[] {16};
@@ -992,6 +1124,8 @@ public final class RecallQpsBenchmark {
           vamanaAlpha = new double[] {1.2};
           vamanaLSearch = new int[] {64, 128};
           ivfNprobe = new int[] {1, 4, 16};
+          ivfPqSubspaces = new int[] {8, 16};
+          ivfPqRescore = new int[] {1, 4};
         }
         case "full" -> {
           hnswM = new int[] {16, 32, 64};
@@ -1002,6 +1136,8 @@ public final class RecallQpsBenchmark {
           vamanaAlpha = new double[] {1.0, 1.2};
           vamanaLSearch = new int[] {32, 64, 100, 128, 200, 300};
           ivfNprobe = new int[] {1, 2, 4, 8, 16, 32, 64};
+          ivfPqSubspaces = new int[] {8, 16, 32, 64};
+          ivfPqRescore = new int[] {1, 2, 4, 8};
         }
         default -> {
           // "default": full grid, but drop the heaviest HNSW configs for large corpora.
@@ -1018,6 +1154,8 @@ public final class RecallQpsBenchmark {
           vamanaAlpha = new double[] {1.0, 1.2};
           vamanaLSearch = new int[] {32, 64, 100, 128, 200, 300};
           ivfNprobe = new int[] {1, 2, 4, 8, 16, 32, 64};
+          ivfPqSubspaces = new int[] {8, 16, 32};
+          ivfPqRescore = new int[] {1, 4};
         }
       }
       // Per-axis overrides (comma-separated system properties).
@@ -1029,8 +1167,19 @@ public final class RecallQpsBenchmark {
       vamanaAlpha = overrideDoubles("bench.vamana.alpha", vamanaAlpha);
       vamanaLSearch = overrideInts("bench.vamana.lSearch", vamanaLSearch);
       ivfNprobe = overrideInts("bench.ivf.nprobe", ivfNprobe);
+      ivfPqSubspaces = overrideInts("bench.ivfpq.m", ivfPqSubspaces);
+      ivfPqRescore = overrideInts("bench.ivfpq.rescore", ivfPqRescore);
       return new SweepConfig(
-          hnswM, hnswEf, hnswEfSearch, vamanaR, vamanaL, vamanaAlpha, vamanaLSearch, ivfNprobe);
+          hnswM,
+          hnswEf,
+          hnswEfSearch,
+          vamanaR,
+          vamanaL,
+          vamanaAlpha,
+          vamanaLSearch,
+          ivfNprobe,
+          ivfPqSubspaces,
+          ivfPqRescore);
     }
 
     private static int[] overrideInts(String key, int[] defaults) {

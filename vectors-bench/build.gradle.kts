@@ -95,6 +95,7 @@ tasks.register<JavaExec>("recallQps") {
         "bench.vamana.r", "bench.vamana.l", "bench.vamana.alpha", "bench.vamana.lSearch",
         "bench.vamana.threads",
         "bench.ivf.nprobe",
+        "bench.ivfpq.m", "bench.ivfpq.rescore",
         "bench.adc.pq", "bench.adc.clusters", "bench.adc.overQuery", "bench.adc.aniso"
     ).forEach { key ->
         (project.findProperty(key) as String?)?.let { systemProperty(key, it) }
