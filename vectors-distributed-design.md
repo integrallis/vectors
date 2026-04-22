@@ -1,8 +1,8 @@
 # Distributed Vector Database: Design and Development Plan
 
-**Status**: Design Draft (April 2026)
+**Status**: Design Draft (April 2026, revised after competitive-analysis.md §11)
 **Author**: java-vectors project
-**Inputs**: `tiered-buoy-architecture.md`, `distributed-vector-search-analysis.md`, `design-strategy.md`
+**Inputs**: `tiered-buoy-architecture.md`, `distributed-vector-search-analysis.md`, `design-strategy.md`, `competitive-analysis.md` §11 (enterprise-pattern adoption) and §12 (GPU roadmap)
 
 ---
 
@@ -20,36 +20,96 @@ existing modules — `vectors-core`, `vectors-storage`, `vectors-db`, `vectors-q
 make them distribution-aware without coupling them to a particular distribution strategy.
 A new `vectors-ivf` module provides the IVF routing layer. Distribution is a layer on top.
 
+The design has two interlocking halves:
+
+1. **Algorithmic core** (§3, §5–§8): the three-layer IVF architecture — `BuoyIndex` (global
+   routing), `SubBuoyTree` (hierarchical refinement), `TieredCluster` (per-cluster T0→T3
+   cascade) — supported by primitive additions to `vectors-core`, `vectors-storage`,
+   `vectors-db`.
+2. **Cluster / deployment fabric** (§9): the enterprise-grade wrapper around the algorithmic
+   core, adopting proven patterns from Apache Ignite 3, Hazelcast, Infinispan, EclipseStore
+   + Eclipse Data Grid, and Chronicle Map. Covers lifecycle, membership, replication,
+   state transfer, rolling upgrades, observability, and security. Mapping in §15.
+
+The algorithmic core is unchanged from prior drafts. §9 (cluster fabric) and §15 (pattern
+mapping) are the revisions driven by `competitive-analysis.md` §11.
+
 ### 1.1 Non-Goals
 
 - No changes to the `VectorCollection` public API as seen by Spring AI / LangChain4j adapters
-- No consensus protocol (Raft/Paxos) — S3 compare-and-swap is the coordination primitive
-- No JNI, no native bindings, no C++ dependencies — pure Java throughout
+- **No JNI we maintain** — the runtime may optionally load `libcuvs.so` via the Panama-FFM
+  bindings `cuvs-java` ships (see §12 and `vectors-gpu`), but no C/C++ source is built or
+  maintained inside this repository
 - `vectors-distributed` does **not** depend on `vectors-spring-ai` or `vectors-langchain4j`
+- `vectors-distributed` does **not** depend on `vectors-gpu`; GPU acceleration is an
+  orthogonal axis applied per-node, not a distribution concern
+
+### 1.2 Revised position on consensus
+
+Earlier drafts stated a flat "no consensus protocol" non-goal and named S3 compare-and-swap
+as the sole coordination primitive. Adopting enterprise patterns from Apache Ignite 3
+(§11 pattern #3) refines this:
+
+- **Data durability** remains anchored on S3 / object-store PutObject (or any
+  `NonBlockingStore` implementation). No synchronous multi-node write-quorum.
+- **Cluster metadata** (BuoyIndex version, catalog, shard ownership, membership epoch) uses
+  a **small Raft group** (JRaft embedded, single consensus group per cluster — the
+  "Cluster Management Group" pattern). This prevents split-brain when two partitions attempt
+  to rebalance or commit a new BuoyIndex concurrently.
+- **Per-partition leadership**: within a partition, writes go to the primary owner and
+  replicate asynchronously to backups with per-replica version counters (Hazelcast
+  `PartitionReplicaVersionManager` pattern). No Raft per partition.
+
+The result: Raft runs once per cluster over a small, infrequently-updated state (catalog +
+topology); the vector data path remains free of consensus latency.
 
 ---
 
 ## 2. Design Principles
 
 1. **Embedded first** — the single-node `VectorCollection` must work identically at every
-   scale. The distributed layer is a thin shell, not a redesign.
+   scale. The distributed layer is a thin shell, not a redesign. A `VectorClusterServer`
+   instance runs inside the application JVM by default, auto-joins a cluster when peers are
+   configured, and falls back to local-only mode when they are not (EclipseStore
+   `EmbeddedStorage` + Ignite 3 `IgniteServer` pattern).
 2. **Quantization = tier** — 1-bit RaBitQ codes live on every node (globally replicated);
    full-precision vectors live only where they're needed (SSD/S3).
-3. **S3 as source of truth** — no replication protocol. Write durability = S3 PutObject.
+3. **Object store as durable data floor** — data durability = `NonBlockingStore.put()` ack,
+   backed by S3 / GCS / any object store. Cluster metadata is anchored by an embedded
+   Raft group on top of the same store (see §1.2).
 4. **Virtual threads for scatter-gather** — Java Loom eliminates thread-pool tuning.
-5. **Test-first** — each primitive has an acceptance test before the first implementation line.
-6. **Benchmark-gated** — each phase has explicit JMH throughput/latency targets that must
+5. **Pluggable SPIs, sensible defaults** — `DiscoveryStrategy` (Hazelcast pattern),
+   `NonBlockingStore` (Infinispan pattern), `AuthorizationManager` (Infinispan pattern)
+   are discovered via `ServiceLoader`. Core ships in-process and local-file implementations
+   out of the box.
+6. **Topology as a builder flag** — the collection builder accepts `CacheMode.LOCAL`,
+   `CacheMode.REPLICATED`, or `CacheMode.DISTRIBUTED` (Infinispan pattern). Code that
+   works against one mode works against all three.
+7. **Deterministic startup, reverse shutdown** — components implement `VectorsComponent`
+   with `startAsync` / `stopAsync`; the `LifecycleManager` brings them up in dependency
+   order and tears them down in reverse (Ignite 3 pattern).
+8. **Test-first** — each primitive has an acceptance test before the first implementation line.
+9. **Benchmark-gated** — each phase has explicit JMH throughput/latency targets that must
    pass before the phase is considered complete.
 
 ---
 
 ## 3. Architecture Overview
 
-The architecture has three interlocking conceptual layers — the core of the design — each
-buildable and testable independently. All three are implemented in `vectors-ivf`; the
-`vectors-distributed` module adds the multi-node execution shell on top.
+The design composes two concentric shells:
 
-### 3.1 The Three Layers
+- **Algorithmic shell** — three interlocking IVF layers (Global Buoy, Sub-Buoy Tree, Tiered
+  Cluster) implemented in `vectors-ivf`. Described in §3.1 below.
+- **Deployment shell** — lifecycle, membership, replication, state transfer, observability,
+  and security — implemented in `vectors-distributed` as an enterprise-grade wrapper around
+  the algorithmic core. Described in §3.4 and detailed in §9. Patterns adopted from
+  Apache Ignite 3 / Hazelcast / Infinispan / EclipseStore + Eclipse Data Grid / Chronicle Map.
+
+Both shells are buildable and testable independently. The algorithmic shell is a pure
+library that runs fine single-node; the deployment shell wraps it into a cluster-capable
+server.
+
+### 3.1 The Three Algorithmic Layers
 
 **Layer 1 — Global Buoy Index** (always-hot, JVM heap)
 
@@ -178,6 +238,60 @@ TopKMerger.merge(results, k)               -- heap merge, O(nodes × k × log k)
 Client: top-k results with exact float32 scores
 ```
 
+### 3.4 Deployment Shell (enterprise wrapper around the algorithmic core)
+
+Every `vectors-distributed` node is a self-contained JVM process (or an embedded
+participant in the application JVM) composed of the following components, each backed by a
+proven enterprise pattern. §9 specifies each in detail; §15 maps them back to the
+`competitive-analysis.md` §11 pattern inventory.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  VectorClusterServer  (embedded mode by default, or standalone process)      │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │  LifecycleManager  — DAG startup / reverse shutdown (Ignite 3)         │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ Discovery    │  │ ClusterSvc   │  │ CMG          │  │ Partition    │      │
+│  │ (SPI:        │→ │ (SWIM gossip │→ │ (JRaft CMG   │→ │ Service      │      │
+│  │  multicast / │  │  ScaleCube)  │  │  — metadata, │  │ (owned-      │      │
+│  │  k8s / static│  │  liveness &  │  │  catalog,    │  │  partition   │      │
+│  │ /consul)     │  │  failure det │  │  topology)   │  │  model,      │      │
+│  │              │  │              │  │              │  │  Hazelcast)  │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘      │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐    │
+│  │  ALGORITHMIC CORE (§3.1)                                             │    │
+│  │    BuoyIndex · SubBuoyTree · TieredCluster · HyperDoor               │    │
+│  │    IvfIndex / IvfHnswIndex (per owned partition)                     │    │
+│  └──────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ State        │  │ NonBlocking  │  │ Catalog      │  │ Metrics &    │      │
+│  │ Transfer     │  │ Store SPI    │  │ Manager      │  │ OTel         │      │
+│  │ (segment     │  │ (local file /│  │ (rolling     │  │ (Micrometer  │      │
+│  │  rebalance,  │  │  S3 / GCS /  │  │  upgrades,   │  │  + OTLP,     │      │
+│  │  Infinispan) │  │  JDBC, Inf.) │  │  Ignite 3)   │  │  Infinispan) │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘      │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐    │
+│  │  Authorization (Subject + AuthorizationManager, Infinispan)          │    │
+│  │  Transport (Netty direct-message codegen, Ignite 3 `@Transferable`)  │    │
+│  └──────────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Deployment topologies supported** (all exposed via a `CacheMode` builder flag — Infinispan
+pattern):
+
+| Mode | Builder | Semantics | When |
+|---|---|---|---|
+| `CacheMode.LOCAL` | `VectorCollection.builder()...build()` | Single JVM, mmap directory. No cluster, no gossip. Zero new threads. | Default. Dev. Tests. Spring AI / LangChain4j single-instance apps. |
+| `CacheMode.REPLICATED` | `VectorCollection.builder().mode(REPLICATED)...build()` | Full copy on every node. Gossip for membership, BuoyIndex gossip'd in full. No sharding. | Small collections (<10M vectors), read-heavy, HA-critical. |
+| `CacheMode.DISTRIBUTED` | `VectorCollection.builder().mode(DISTRIBUTED)...ownersPerPartition(2).build()` | Partitions owned by N replicas; writes go to primary + async backups; shard rebalance on topology change. | The default for >10M vectors / write-heavy / elastic scale. |
+
 ---
 
 ## 4. Module Impact Summary
@@ -185,14 +299,15 @@ Client: top-k results with exact float32 scores
 | Module | Change type | What changes |
 |--------|-------------|--------------|
 | `vectors-core` | Additions | `KMeans`, `CentroidIndex`, batch SIMD distance methods in `VectorUtil` |
-| `vectors-storage` | Additions | `StorageBackend` interface, `HeapStorageBackend`, `LocalFileStorageBackend`, `SegmentedWriteAheadLog` |
-| `vectors-db` | Additions | `VectorEvent` sealed hierarchy, `VectorEventCodec`, `SegmentExporter/Importer`; `IndexType.IVF_HNSW` enum value |
+| `vectors-storage` | Additions | `NonBlockingStore` SPI (§9.4 — Infinispan pattern), `HeapStore`, `LocalFileStore`, `SegmentedWriteAheadLog`. Retains the older `StorageBackend` interface as an adapter over `NonBlockingStore` for back-compat with existing `vectors-db`. |
+| `vectors-db` | Additions | `VectorEvent` sealed hierarchy, `VectorEventCodec`, `SegmentExporter/Importer`; `IndexType.IVF_HNSW` enum value; `CacheMode` enum on the collection builder |
 | `vectors-quantization` | No change | Consumed as-is by `TieredCluster` tiers |
 | `vectors-hnsw` | No change | Used within clusters via `IvfHnswIndex` |
 | `vectors-vamana` | No change | Used within clusters |
 | `vectors-ivf` | **New module** | `BuoyIndex` (Layer 1), `SubBuoyTree` + `ClusterSplitter` (Layer 2), `HyperDoor`, `TieredCluster`, `TierPolicy`, `ClusterPartition`, `IvfIndex`, `IvfHnswIndex` (Layer 3) |
-| `vectors-distributed` | **New module** | `DistributedVectorCollection`, `ShardRouter`, `ScatterGatherExecutor`, `GossipMembership`, `S3StorageBackend`, `WriteAheadLog` |
-| `vectors-bench` | Additions | `BuoyIndexBenchmark`, `IvfIndexBenchmark`, `ScatterGatherBenchmark`, `TieredClusterBenchmark` |
+| `vectors-distributed` | **New module** | **Lifecycle**: `LifecycleManager`, `VectorsComponent`. **Membership**: `DiscoveryStrategy` SPI (multicast / static / k8s / consul), `SwimClusterService`, `ClusterManagementGroup` (JRaft). **Partition**: `PartitionService`, `OwnedPartition`, `PartitionReplicaVersionManager`. **Topology**: `CacheMode` honoured end-to-end, `StateTransferManager`. **Execution**: `ShardRouter`, `ScatterGatherExecutor`, `DistributedVectorCollection` (implements `VectorCollection`). **Persistence**: `S3Store` (`NonBlockingStore` impl), `SegmentedWriteAheadLog` adapter. **Operations**: `CatalogManager` (rolling upgrades), `MetricsRegistry` (Micrometer + OTLP), `AuthorizationManager`. **Transport**: `NettyTransport` + `@Transferable` direct-message codegen. |
+| `vectors-gpu` | **New module (§12)** | Panama-FFM bindings to NVIDIA cuVS (CAGRA, IVF-PQ, IVF-FLAT, Brute Force). Feature-detected at runtime; transparent CPU fallback. Independent of `vectors-distributed`. |
+| `vectors-bench` | Additions | `BuoyIndexBenchmark`, `IvfIndexBenchmark`, `ScatterGatherBenchmark`, `TieredClusterBenchmark`, `PartitionRebalanceBenchmark` |
 
 ---
 
@@ -966,100 +1081,413 @@ VectorCollection collection = VectorCollection.builder()
 
 ### 9.1 Purpose and Boundaries
 
-`vectors-distributed` wires together the IVF routing layer with a multi-node execution
-fabric. It is the only module that:
-- Knows about nodes, network addresses, and gossip
-- Owns the S3 write-ahead log and `S3StorageBackend`
-- Implements `DistributedVectorCollection`, which honours the full `VectorCollection` API
+`vectors-distributed` is the cluster fabric around the algorithmic core (`vectors-ivf`).
+It alone knows about nodes, network addresses, cluster membership, partitions, replication,
+state transfer, rolling upgrades, observability, and security. Every component in the
+module is designed to be:
 
-Everything in this module has a pure-Java in-process simulation so that tests never
-require real network or S3 access.
+- **Optional at single-node**: `CacheMode.LOCAL` collections never start the cluster stack.
+- **Embeddable**: `VectorClusterServer.start(name, config, workDir)` runs inside the
+  application JVM without a separate process (EclipseStore + Eclipse Data Grid / Ignite 3
+  `IgniteServer` pattern).
+- **In-process testable**: every SPI has an in-JVM implementation so unit tests never
+  require network or Docker. Integration tests tagged `@Tag("integration")` exercise real
+  object storage via LocalStack and real Netty transport on loopback.
 
-Dependencies: `vectors-core`, `vectors-storage`, `vectors-db`, `vectors-ivf`
-Optional (compile-only): AWS SDK v2 (`software.amazon.awssdk:s3`), for `S3StorageBackend`
+**Dependencies** (`vectors-distributed/build.gradle.kts`):
 
-### 9.2 Core Types
+- `vectors-core`, `vectors-storage`, `vectors-db`, `vectors-ivf` (internal)
+- `io.scalecube:scalecube-cluster` (SWIM gossip — §9.5)
+- `com.alipay.sofa:jraft-core` (embedded Raft for CMG — §9.6)
+- `io.netty:netty-all` (transport — §9.13)
+- `io.micrometer:micrometer-core` + `micrometer-registry-otlp` (metrics — §9.11)
+- Optional (compile-only): `software.amazon.awssdk:s3` (S3 `NonBlockingStore` — §9.9)
+
+### 9.2 Core Identifiers and Value Types
 
 Package: `com.integrallis.vectors.distributed`
 
 ```java
-/** Opaque identifier for a cluster node. Immutable value type. */
-public record NodeId(String id) {}
+/** Opaque cluster-unique node identifier. Immutable, gossipable. */
+public record NodeId(String id, InetSocketAddress address) {}
 
-/** The ownershipmap: for each cluster id, which node is the primary. */
-public interface ShardOwnership {
-    NodeId primaryFor(int clusterId);
-    List<NodeId> replicasFor(int clusterId);      // Phase 3
-    Set<Integer> clustersFor(NodeId node);
-    int totalClusters();
+/** Partition id within a collection. Partitions are the unit of ownership and rebalance. */
+public record PartitionId(String collection, int index) {}
+
+/** A partition's ownership state: one primary and zero-or-more backups. */
+public record PartitionOwners(NodeId primary, List<NodeId> backups) {
+    public List<NodeId> all() {
+        var out = new ArrayList<NodeId>(backups.size() + 1);
+        out.add(primary); out.addAll(backups); return out;
+    }
 }
 
-/** Static shard ownership computed from BuoyIndex + consistent hashing. */
-public final class ConsistentHashShardOwnership implements ShardOwnership { ... }
+/** Monotonically-increasing cluster state epoch, incremented on any topology change. */
+public record ClusterEpoch(long value) implements Comparable<ClusterEpoch> {
+    public ClusterEpoch next() { return new ClusterEpoch(value + 1); }
+    @Override public int compareTo(ClusterEpoch o) { return Long.compare(value, o.value); }
+}
 
-/** Routes IvfSearchRequests to the correct node(s) and collects results. */
+/** Per-replica version counter for anti-entropy (Hazelcast PartitionReplicaVersionManager). */
+public record ReplicaVersion(PartitionId partition, int replicaIndex, long version) {}
+```
+
+### 9.3 Lifecycle — `VectorsComponent` + `LifecycleManager`
+
+**Adopts Ignite 3 pattern #2** (`competitive-analysis.md` §11): components declare their
+start/stop contract, the `LifecycleManager` orchestrates a DAG startup and reverse shutdown.
+
+```java
+/** Every cluster component implements this contract. */
+public interface VectorsComponent {
+    String name();
+    List<String> dependsOn();   // names of components that must start first
+
+    CompletionStage<Void> startAsync(ComponentContext ctx);
+    CompletionStage<Void> stopAsync();     // invoked in reverse dependency order
+    default void beforeNodeStop() {}       // synchronous hook for draining work
+}
+
+public final class LifecycleManager {
+    public LifecycleManager register(VectorsComponent component);
+    public CompletionStage<Void> startAll(Duration timeout);
+    public CompletionStage<Void> stopAll(Duration timeout);
+    public ComponentState state(String componentName);
+}
+```
+
+**Test class**: `LifecycleManagerTest` (`@Tag("unit")`)
+- `startAll_respectsDependencyOrder`
+- `stopAll_reverseOrderOfStart`
+- `startFailure_stopsAlreadyStartedComponentsThenFails`
+- `circularDependency_rejectedAtRegistration`
+
+### 9.4 Discovery SPI — `DiscoveryStrategy`
+
+**Adopts Hazelcast pattern #5** (`competitive-analysis.md` §11). Discovery is pluggable
+via `ServiceLoader`. Core ships multicast and static implementations; external impls for
+Kubernetes, Consul, etc. live in separate optional modules.
+
+```java
+public interface DiscoveryStrategy {
+    String name();    // e.g. "multicast", "static", "kubernetes", "consul"
+
+    /** Seeds for initial cluster join. Called by SwimClusterService during startup. */
+    CompletionStage<List<InetSocketAddress>> discoverSeeds();
+
+    /** Register this node's address with the discovery backend (if applicable). */
+    CompletionStage<Void> registerSelf(NodeId self);
+
+    /** Deregister on graceful shutdown. */
+    CompletionStage<Void> deregisterSelf(NodeId self);
+}
+
+public final class MulticastDiscoveryStrategy implements DiscoveryStrategy { ... }
+public final class StaticDiscoveryStrategy implements DiscoveryStrategy {
+    public StaticDiscoveryStrategy(List<InetSocketAddress> seeds) { ... }
+}
+```
+
+**Test class**: `DiscoveryStrategyContractTest` (`@ParameterizedTest`, `@Tag("unit")`)
+- `discoverSeeds_returnsConfiguredSeedsForStatic`
+- `registerThenDeregister_roundTrip`
+
+### 9.5 Cluster Service — `SwimClusterService` (ScaleCube)
+
+**Adopts Ignite 3 pattern #3a** (SWIM gossip for liveness). Wraps `io.scalecube.cluster`.
+
+```java
+public interface ClusterService extends VectorsComponent {
+    Set<NodeId> liveMembers();
+    NodeId localNode();
+    void addMembershipListener(MembershipListener listener);
+
+    interface MembershipListener {
+        void onJoined(NodeId node);
+        void onLeft(NodeId node);
+        void onSuspect(NodeId node);
+    }
+}
+
+public final class SwimClusterService implements ClusterService {
+    public SwimClusterService(DiscoveryStrategy discovery, NodeId self,
+                               Duration failureDetectInterval);
+}
+```
+
+**Test class**: `SwimClusterServiceTest` (`@Tag("unit")`)
+- `threeNodes_allSeeEachOther` (in-JVM via loopback)
+- `nodeCrash_othersObserveLeftWithinFiveIntervals`
+- `networkPartition_bothSidesSuspectOtherWithinTimeout`
+
+### 9.6 Cluster Management Group — `ClusterManagementGroup` (JRaft)
+
+**Adopts Ignite 3 pattern #3b** (Raft for cluster metadata). A single Raft consensus group
+per cluster (name **CMG** — Cluster Management Group) holds the authoritative state for:
+
+- cluster topology and `ClusterEpoch`,
+- the `PartitionOwners` assignment for every partition,
+- the catalog (collections, schemas, rolling-upgrade versions — §9.10),
+- persistent cluster-level config overrides.
+
+Three voting members by default; the remaining cluster nodes are learners. This bounds
+Raft traffic regardless of cluster size. Data-path writes never touch CMG; only topology
+and schema changes do.
+
+```java
+public interface ClusterManagementGroup extends VectorsComponent {
+    /** Read the current cluster state (monotonic). */
+    CompletionStage<ClusterState> readState();
+
+    /** Submit a metadata mutation; returns when the entry has been committed by majority. */
+    <T> CompletionStage<T> submit(MetadataCommand<T> command);
+
+    boolean isLeader();
+    Optional<NodeId> currentLeader();
+}
+
+public sealed interface MetadataCommand<T> permits
+    MetadataCommand.AddCollection, MetadataCommand.RemoveCollection,
+    MetadataCommand.UpdatePartitionOwners, MetadataCommand.BumpCatalogVersion {
+    record AddCollection(String name, CollectionDescriptor desc)
+        implements MetadataCommand<Boolean> {}
+    record UpdatePartitionOwners(PartitionId p, PartitionOwners owners, ClusterEpoch epoch)
+        implements MetadataCommand<Boolean> {}
+    /* ... */
+}
+```
+
+**Test class**: `ClusterManagementGroupTest` (`@Tag("unit")`)
+- `threeNodeMajority_commitSucceeds` (in-JVM JRaft)
+- `oneNodeDown_majorityStillCommits`
+- `twoNodesDown_submitFailsAfterTimeout`
+- `leaderElectionAfterCrash`
+
+### 9.7 Partition Service — owned partitions, versioned replicas
+
+**Adopts Hazelcast pattern #4** (`competitive-analysis.md` §11): consistent-hash assignment
+of partitions to owners; writes go to the primary and fan out async to backups; per-replica
+version counters enable anti-entropy without Merkle trees.
+
+```java
+public interface PartitionService extends VectorsComponent {
+    int partitionCount(String collection);
+    PartitionOwners owners(PartitionId partition);
+    boolean isLocalPrimary(PartitionId partition);
+    boolean isLocalBackup(PartitionId partition);
+
+    /** Writes go here from the data path. Fans out to backups asynchronously. */
+    <R> CompletionStage<R> runOnPrimary(PartitionId p, PartitionOperation<R> op);
+
+    /** Anti-entropy: query a peer for version vectors; ship deltas. */
+    CompletionStage<Void> reconcile(PartitionId p);
+}
+
+public interface PartitionReplicaVersionManager {
+    ReplicaVersion current(PartitionId p, int replicaIndex);
+    void bumpVersion(PartitionId p, int replicaIndex);
+    ReplicaVersionVector vectorFor(NodeId node);
+}
+```
+
+The partition-to-owner mapping is computed from the CMG-held `PartitionOwners` assignment;
+rebalance is performed by `StateTransferManager` (§9.8). Partitions within a collection map
+1:1 to IVF *clusters* for `IVF_FLAT` / `IVF_HNSW` indexes — a partition owns a contiguous
+range of cluster ids.
+
+**Test class**: `PartitionServiceTest` (`@Tag("unit")`)
+- `primaryWrite_replicatesToBackups`
+- `replicaVersions_monotonic`
+- `reconcile_catchesUpStaleReplica`
+- `primaryCrash_backupPromotedByCmg`
+
+### 9.8 State Transfer — `StateTransferManager`
+
+**Adopts Infinispan pattern #8**. On topology change (`ClusterEpoch` increment from CMG),
+the manager computes `(source, target)` diffs and streams partition state in chunks.
+
+```java
+public interface StateTransferManager extends VectorsComponent {
+    CompletionStage<Void> onTopologyChange(ClusterEpoch newEpoch);
+    StateTransferProgress progress();
+
+    record StateTransferProgress(
+        int totalPartitions, int transferred, int inFlight,
+        long bytesTransferred, Duration elapsed) {}
+}
+```
+
+Transfers are:
+- **Chunked**: 64 MiB default chunk, backpressure via reactive-streams.
+- **Parallel**: N concurrent partition transfers (configurable, default 4).
+- **Resumable**: per-chunk checkpoints in local WAL; interrupted transfers resume without
+  re-shipping already-acked chunks.
+- **Priority**: incoming primary assignments before backups.
+
+**Test class**: `StateTransferManagerTest` (`@Tag("unit")`, in-JVM)
+- `topologyChange_threePartitionsRebalanced`
+- `transferInterruption_resumesFromCheckpoint`
+- `chunkBackpressure_respectsDownstreamConsumer`
+
+### 9.9 Persistence SPI — `NonBlockingStore`
+
+**Adopts Infinispan pattern #7**. Replaces the older `StorageBackend` interface as the
+canonical persistence SPI for `vectors-distributed`. The existing `StorageBackend` in
+`vectors-storage` becomes a thin adapter layered on `NonBlockingStore`.
+
+```java
+public interface NonBlockingStore<K, V> {
+    Set<Characteristic> characteristics();  // SHAREABLE, SEGMENTABLE, BULK_READ, TRANSACTIONAL
+
+    CompletionStage<Void> start(StoreConfiguration cfg);
+    CompletionStage<Void> stop();
+
+    Publisher<Entry<K, V>> publishEntries(IntSet segments, Predicate<K> filter, boolean includeValues);
+    CompletionStage<V> load(int segment, K key);
+    CompletionStage<Void> write(int segment, Entry<K, V> entry);
+    CompletionStage<Boolean> delete(int segment, K key);
+    CompletionStage<Void> clear();
+    CompletionStage<Long> size(IntSet segments);
+
+    enum Characteristic { SHAREABLE, SEGMENTABLE, BULK_READ, TRANSACTIONAL, READ_ONLY }
+}
+
+/** Core implementations. External impls (S3, JDBC) live in optional modules. */
+public final class LocalFileStore implements NonBlockingStore<SegmentKey, SegmentBlob> { ... }
+public final class HeapStore implements NonBlockingStore<SegmentKey, SegmentBlob> { ... }
+```
+
+Optional module `vectors-distributed-s3` ships `S3Store` (AWS SDK v2 FFM-free client on
+Panama-HttpClient).
+
+**Test class**: `NonBlockingStoreContractTest` (`@ParameterizedTest`, `@Tag("unit")`)
+- Runs the same test suite against every registered `NonBlockingStore` implementation.
+- Validates ordering guarantees, characteristic semantics, and the `Publisher` contract.
+
+### 9.10 Catalog & Rolling Upgrades — `CatalogManager`
+
+**Adopts Ignite 3 pattern #12**. Every schema / collection change increments a distributed
+`CatalogVersion`. The catalog is persisted in CMG (§9.6). Nodes running an older catalog
+version continue to serve reads until the activation delay elapses, at which point they
+switch atomically. This enables zero-downtime rolling upgrades.
+
+```java
+public interface CatalogManager extends VectorsComponent {
+    CatalogVersion currentVersion();
+    CollectionDescriptor collection(String name);
+
+    /** Apply a catalog change. Waits for quorum commit; returns the new version. */
+    CompletionStage<CatalogVersion> apply(CatalogChange change);
+
+    /** Cluster-wide activation delay (typically 10s) before new version becomes effective. */
+    Duration activationDelay();
+}
+
+public record CatalogVersion(long value) implements Comparable<CatalogVersion> { /* ... */ }
+public sealed interface CatalogChange permits
+    CatalogChange.CreateCollection, CatalogChange.DropCollection,
+    CatalogChange.UpdateIndexType, CatalogChange.UpdateQuantizer { /* ... */ }
+```
+
+**Test class**: `CatalogManagerTest` (`@Tag("unit")`)
+- `createCollection_bumpsVersion_allNodesConverge`
+- `mixedVersionCluster_oldNodesServeOldVersionUntilActivation`
+- `rollingUpgrade_sevenNodes_zeroFailedQueries` (long-running)
+
+### 9.11 Observability — `MetricsRegistry` + OpenTelemetry
+
+**Adopts Ignite 3 + Infinispan pattern #13**. Micrometer-based `MeterRegistry` with
+Prometheus and OTLP exporters. Standard metric families: `vectors.search.latency`,
+`vectors.search.recall` (when ground-truth mode enabled), `vectors.index.size`,
+`vectors.wal.backlog`, `vectors.cluster.members`, `vectors.partition.rebalance.inflight`,
+`vectors.gpu.utilization` (when `vectors-gpu` is present).
+
+```java
+public interface MetricsRegistry extends VectorsComponent {
+    MeterRegistry meterRegistry();    // underlying Micrometer
+
+    // Convenience recorders for hot-path metrics (pre-bound tags):
+    void recordSearch(String collection, Duration latency, int resultCount);
+    void recordIndexMutation(String collection, int added, int deleted);
+    void recordRebalanceProgress(PartitionId partition, double fraction);
+}
+```
+
+Traces follow OpenTelemetry semantic conventions. A search span wraps the BuoyIndex lookup,
+`ShardRouter.plan`, each `LocalSearchRequest`, and the final top-k merge.
+
+### 9.12 Authorization — `Subject` + `AuthorizationManager`
+
+**Adopts Infinispan pattern #14**. JAAS-style `Subject` carried on every request context.
+Collection-level ACLs stored in the catalog (§9.10). Off by default for embedded single-JVM
+usage; enabled per collection via `CollectionDescriptor.authorization(...)`.
+
+```java
+public interface AuthorizationManager extends VectorsComponent {
+    void authorize(Subject subject, String collection, Permission permission)
+        throws SecurityException;
+
+    enum Permission { READ, WRITE, ADMIN, SCHEMA }
+}
+```
+
+### 9.13 Transport — Netty + direct-message codegen
+
+**Adopts Ignite 3 pattern #11**. All inter-node RPC (search, replication, state transfer,
+CMG) travels over a single Netty channel per peer. Messages implement a `@Transferable`
+marker; annotation-processor generated `DirectMessageReader` / `DirectMessageWriter` avoid
+reflection on the hot path.
+
+```java
+public interface Transport extends VectorsComponent {
+    CompletionStage<Void> send(NodeId target, NetworkMessage msg);
+    <R extends NetworkMessage> CompletionStage<R> request(NodeId target,
+                                                          NetworkMessage req, Class<R> responseType);
+    void registerHandler(Class<? extends NetworkMessage> type, MessageHandler handler);
+}
+
+@Transferable(type = 101)
+public record SearchRequest(PartitionId partition, float[] query, int k) implements NetworkMessage {}
+```
+
+**Test class**: `TransportContractTest` (`@Tag("unit")`, in-JVM Netty on loopback)
+
+### 9.14 Execution — `ShardRouter` + `ScatterGatherExecutor`
+
+The algorithmic shell meets the deployment shell here. `BuoyIndex.route()` returns the
+cluster ids for a query; `ShardRouter` maps those to partitions and thence to primary
+owners via `PartitionService.owners()`. `ScatterGatherExecutor` fans out
+`LocalSearchRequest`s over `Transport` and merges the results.
+
+```java
 public interface ShardRouter {
-    /**
-     * Given a query's cluster ids (from BuoyIndex.route), return one
-     * LocalSearchRequest per node that owns at least one of those clusters.
-     * Merges cluster ids for nodes that own multiple.
-     */
+    /** From query cluster ids, produce one LocalSearchRequest per owning node. */
     List<LocalSearchRequest> plan(float[] query, int[] clusterIds, int k);
 }
 
-/** A search request destined for a single node. */
-public record LocalSearchRequest(
-    NodeId targetNode,
-    float[] query,
-    int[] clusterIds,   // clusters this node should search
-    int k,
-    float minScore
-) {}
-```
+public final class DefaultShardRouter implements ShardRouter {
+    public DefaultShardRouter(PartitionService partitions, BuoyIndex buoys);
+}
 
-### 9.3 `ScatterGatherExecutor`
-
-The execution engine. Uses virtual threads (one per node per query) to fan out
-`LocalSearchRequest`s, collect results, and merge them.
-
-```java
 /**
- * Stateless scatter-gather over a NodeDirectory using virtual threads.
- * One virtual thread per node per query. Merges top-k via TopKMerger.
+ * Stateless scatter-gather using virtual threads; one VT per target node per query.
+ * Partial results are returned on per-node timeout (with a warning counter).
  */
 public final class ScatterGatherExecutor {
-    public ScatterGatherExecutor(NodeDirectory directory, Duration timeout);
-
-    /**
-     * Execute plan against all target nodes concurrently.
-     * Partial results are returned if some nodes time out (with a WARNING log).
-     */
+    public ScatterGatherExecutor(Transport transport, Duration perNodeTimeout);
     public SearchResult execute(List<LocalSearchRequest> plan, int k);
 }
 
-/** Resolves NodeId to a callable search endpoint. */
-public interface NodeDirectory {
-    NodeSearchClient clientFor(NodeId nodeId);
-}
-
-/** Thin call abstraction. In-process impl for tests; gRPC impl for production. */
-public interface NodeSearchClient {
-    SearchResult search(LocalSearchRequest request);
-}
+public record LocalSearchRequest(
+    NodeId targetNode, float[] query, int[] clusterIds, int k, float minScore) {}
 ```
 
-**Test class**: `ScatterGatherExecutorTest` (new, `@Tag("unit")`)
-
-Uses `InProcessNodeDirectory` — a `NodeDirectory` backed by real `VectorCollection`s
-running in the same JVM (no network). This is the primary integration vehicle.
-
-Acceptance tests:
-- `scatterGatherAcross3Nodes_returnsTopK` — 3 in-process nodes, 10K docs each,
-  top-10 from scatter-gather matches brute-force top-10 on the merged dataset
-- `partialTimeoutReturnsPartialResults` — one node's client sleeps past timeout;
-  executor returns results from the two responding nodes
+**Test class**: `ScatterGatherExecutorTest` (`@Tag("unit")`)
+- `scatterGatherAcross3Nodes_returnsTopK` — 3 in-process nodes, 10K docs each, top-10
+  matches brute-force merged
+- `partialTimeoutReturnsPartialResults` — one node sleeps; two nodes respond; warning logged
 - `allNodesTimeOutReturnsEmpty`
-- `singleNodeClusterWorksAsPassthrough` — degenerate 1-node case
+- `singleNodeClusterWorksAsPassthrough`
 
 **Benchmark class**: `ScatterGatherBenchmark` (`vectors-bench`)
 
@@ -1069,76 +1497,57 @@ Acceptance tests:
 | `scatterGather_10nodes_FLAT` | 10 | 10K | 128 | 10 | < 10 ms p99 |
 | `scatterGather_3nodes_HNSW` | 3 | 100K | 128 | 10 | < 20 ms p99 |
 
-### 9.4 `GossipMembership` — centroid propagation
+### 9.15 `VectorClusterServer` — the entry point
 
-The `BuoyIndex` must be consistent across all nodes. Rather than a consensus protocol,
-nodes gossip the current `BuoyIndex` version hash. On mismatch, nodes fetch the new
-`BuoyIndex` from S3 (or the coordinator). The gossip is passive: no leader required.
+Embedded mode default (EclipseStore `EmbeddedStorage` + Ignite 3 `IgniteServer` pattern).
+A single call brings up the entire deployment shell; auto-joins the cluster when peers
+are configured, runs local-only otherwise.
 
 ```java
-public interface ClusterMembership {
-    Set<NodeId> liveNodes();
-    void registerChangeListener(Consumer<MembershipEvent> listener);
+public interface VectorClusterServer extends AutoCloseable {
+    static CompletionStage<VectorClusterServer> start(
+        String nodeName, Path configPath, Path workDir);
 
-    sealed interface MembershipEvent permits MembershipEvent.NodeJoined,
-        MembershipEvent.NodeLeft, MembershipEvent.BuoyIndexUpdated {
-        record NodeJoined(NodeId nodeId) implements MembershipEvent {}
-        record NodeLeft(NodeId nodeId) implements MembershipEvent {}
-        record BuoyIndexUpdated(String newVersionHash) implements MembershipEvent {}
-    }
+    /** Handle to all public cluster services. */
+    ClusterNode node();
+
+    /** Access a collection as a VectorCollection — mode (LOCAL/REPL/DIST) honoured. */
+    VectorCollection collection(String name);
+
+    @Override void close();
 }
-
-/** Static in-process membership for tests. No gossip protocol. */
-public final class StaticClusterMembership implements ClusterMembership { ... }
 ```
 
-### 9.5 `DistributedVectorCollection` — the public facade
+### 9.16 `DistributedVectorCollection` — the public facade
+
+Implements `VectorCollection` over the deployment shell. The same user-facing interface
+works in `LOCAL`, `REPLICATED`, and `DISTRIBUTED` modes.
 
 ```java
-/**
- * Implements the full VectorCollection API across a distributed cluster.
- * Writes go to the local node's EventLog (S3 WAL). Reads scatter-gather
- * across cluster nodes via the BuoyIndex routing.
- *
- * Consistency model: read-your-own-writes within a session; eventual
- * consistency across nodes (followers lag by at most one WAL flush interval).
- */
 public final class DistributedVectorCollection implements VectorCollection {
-    public static Builder builder();
-
-    // All VectorCollection methods implemented.
-    // add() / delete() / upsert() → append to local S3 WAL → periodic local commit
-    // search() → BuoyIndex.route() → ShardRouter.plan() → ScatterGather → merge
-    // size() → sum of live node sizes (approximate, cached)
-    // compact() → each node compacts its own shard
+    // add() / delete() / upsert() → PartitionService.runOnPrimary(p, ...)
+    //                             → primary appends to WAL (NonBlockingStore)
+    //                             → async replicate to backups with version bump
+    // search()                    → BuoyIndex.route → ShardRouter.plan → ScatterGather → merge
+    // size()                      → aggregated from partition replicas (cached)
+    // compact()                   → primary-driven tier compaction on each partition
 }
 ```
 
-**Test class**: `DistributedVectorCollectionTest` (new, `@Tag("unit")`,
-uses `InProcessNodeDirectory` + `HeapStorageBackend` — **no Docker**)
+**Test class**: `DistributedVectorCollectionTest` (`@Tag("unit")`, in-JVM 3-node cluster)
+- `addSearchConsistency_3nodes`
+- `deletePropagatesToSearchResults`
+- `scatterGatherRecall_3nodes_1M_total` (`@Tag("slow")`)
+- `nodeFailureReturnsPartialResults_underRf1`
+- `nodeFailureNoDataLoss_underRf2` (owned-partition with backup)
+- `buoyIndexUpdate_propagatesViaCmg_within500ms`
 
-Acceptance tests — Phase 3 gate (fast, always run):
-- `addSearchConsistency_3nodes` — add 100 docs, `commit()`, search finds them
-- `deletePropagatesToSearchResults` — delete 10 docs, commit, they don't appear in search
-- `scatterGatherRecall_3nodes_1M_total` — 3 nodes × 333K docs, recall@10 ≥ 0.90
-  with nprobe=32 (`@Tag("slow")`)
-- `nodeFailureReturnsPartialResults` — one in-process node returns errors;
-  result is non-empty and warning is logged
-- `buoyIndexGossipConverges` — BuoyIndex update propagates to all nodes within 500 ms
-
-**Test class**: `DistributedVectorCollectionIT` (new, `@Tag("integration")` — requires Docker)
-
-Uses a static `LocalStackContainer` for S3 WAL + T3 tier. Validates the full durable path:
-- `walAppend_persistsToS3_survivesColdStart` — write 50 docs, stop and restart
-  `DistributedVectorCollection` with a fresh JVM state; replay from S3 WAL restores all docs
-- `coldClusterFetch_searchAfterT2Eviction` — evict T2 for a cluster; next search triggers
-  `fetchFromT3`, result matches pre-eviction result
-- `s3BackedBuoyIndexGossip_usesRealS3` — updated BuoyIndex is written to S3; second node
-  fetches and applies it; routing on second node matches first node's routing
-- `concurrentWalWriters_noEntriesLost` — 4 threads writing simultaneously; after S3 WAL
-  replay all writes are visible
-- `conditionalPut_preventsDoubleCommit` — two nodes attempt to commit same generation to S3;
-  only one succeeds (CAS semantics); losing node retries with incremented generation
+**Test class**: `DistributedVectorCollectionIT` (`@Tag("integration")`, LocalStack + Docker)
+- `walAppend_persistsToS3Store_survivesColdStart`
+- `coldClusterFetch_afterT2Eviction`
+- `rollingUpgrade_sevenNodes_zeroFailedQueries`
+- `concurrentWalWriters_noEntriesLost`
+- `catalogCas_preventsDoubleSchemaCommit`
 
 ---
 
@@ -1475,8 +1884,11 @@ Combined (IVF + cascade):                     <1 MB per query — 512× vs brute
    belong to? Options: (a) nearest centroid at insert time, (b) deferred to next retrain.
    Recommendation: (a) nearest centroid at insert time; cluster imbalance corrected at retrain.
 
-4. **Replication factor**: Phase 3 designs for RF=1 (no replicas). RF>1 requires either
-   synchronous dual-write or an async catch-up protocol. Deferred to Phase 4.
+4. **Replication factor**: RF>1 is handled by the owned-partition + versioned-replica
+   pattern (§9.7 — Hazelcast). Writes go to the primary synchronously and fan out async to
+   backups; per-replica version counters drive anti-entropy reconciliation. RF=1 is the
+   degenerate case of the same code path. No separate protocol is needed — **this question
+   is resolved by the §11 pattern adoption**.
 
 5. **Filter + IVF interaction**: Pre-filtering (restrict ANN search to matching ordinals per
    cluster) vs post-filtering (filter after ANN, existing behaviour). Pre-filtering within
@@ -1486,3 +1898,51 @@ Combined (IVF + cascade):                     <1 MB per query — 512× vs brute
 6. **Quantizer-per-cluster vs global**: FAISS trains one PQ codebook per cluster for OPQ
    alignment. RaBitQ uses one global rotation. Recommendation: global RaBitQ for T0 (already
    implemented); per-cluster SQ8 for T1 (cluster distribution centred, better utilisation).
+
+---
+
+## 15. Mapping to `competitive-analysis.md` §11 patterns
+
+Every pattern catalogued in `competitive-analysis.md` §11 maps to a concrete component of
+this design. The table is the contract: a pattern listed there must correspond to a named
+section or class below; new patterns adopted later must update both documents.
+
+| §11 # | Pattern | Source reference | This design — section & class |
+|---|---|---|---|
+| 1 | Embedded-first lifecycle (`start(name, config, workDir)`, auto-join or local-only) | EclipseStore `EmbeddedStorage` + Ignite 3 `IgniteServer` | §9.15 `VectorClusterServer` |
+| 2 | `LifecycleManager` DAG, reverse shutdown | Ignite 3 `LifecycleManager` | §9.3 `VectorsComponent` + `LifecycleManager` |
+| 3 | Gossip + Raft hybrid (SWIM for liveness, Raft for metadata) | Ignite 3 `ScaleCubeClusterService` + `ClusterManagementGroupManager` | §9.5 `SwimClusterService` + §9.6 `ClusterManagementGroup` |
+| 4 | Owned-partition + versioned replicas | Hazelcast `InternalPartitionServiceImpl` + `PartitionReplicaVersionManager` | §9.7 `PartitionService` + `PartitionReplicaVersionManager` |
+| 5 | `DiscoveryStrategy` SPI (multicast, static, k8s, consul) | Hazelcast `com.hazelcast.spi.discovery` | §9.4 `DiscoveryStrategy` |
+| 6 | `CacheMode` (LOCAL / REPL / DIST) switch on builder | Infinispan `CacheMode` | §3.4 deployment topologies + `CollectionBuilder.mode(...)` in `vectors-db` |
+| 7 | `NonBlockingStore<K,V>` SPI with characteristics | Infinispan `NonBlockingStore` | §9.9 `NonBlockingStore` + `LocalFileStore` / `HeapStore` / `S3Store` |
+| 8 | Segment-based state transfer (chunked, resumable) | Infinispan `StateTransferManager` + Ignite 3 | §9.8 `StateTransferManager` |
+| 9 | Lazy `Root<T>` + `Lazy<T>` for large graphs | EclipseStore `RootReference` + `Lazy<T>` | §9.9 `NonBlockingStore.load(segment, key)` + T3 fetch in `TieredCluster.fetchFromT3` |
+| 10 | Housekeeping / consolidation background task | EclipseStore `StorageHousekeeping` + Chronicle | `TieredCluster.compact()` (driven by `PartitionService` primary) + WAL truncation in `NonBlockingStore` |
+| 11 | Direct message codegen via `@Transferable` | Ignite 3 `DirectMessageReader` / `DirectMessageWriter` | §9.13 `Transport` + `@Transferable` annotation processor |
+| 12 | Catalog versioning for rolling upgrades | Ignite 3 `CatalogManager` + `UpdateLog` | §9.10 `CatalogManager` + `CatalogVersion` + CMG-backed `UpdateLog` |
+| 13 | Micrometer metrics + OTel traces | Infinispan `MetricsRegistry` + Ignite 3 `OtlpMetricsExporter` | §9.11 `MetricsRegistry` |
+| 14 | JAAS `Subject` + `AuthorizationManager` | Infinispan `SecureCacheImpl` | §9.12 `AuthorizationManager` + `Subject` in request context |
+| 15 | Multi-release JAR (JDK 21 fallback, JDK 25 Vector API) | `cuvs-java` multi-release `pom.xml` | `vectors-distributed/build.gradle.kts` multi-release JAR packaging (Phase 4) |
+
+### 15.1 What is NOT adopted (and why)
+
+| Not adopted | Why |
+|---|---|
+| Full Raft per partition (etcd / CockroachDB model) | Our data path writes are latency-sensitive; CMG-in-Raft + async replication is the Ignite 3 / Hazelcast compromise that keeps consensus off the hot path. |
+| Compute grid (`EntryProcessor` running arbitrary user code on owner) | Non-goal. A vector DB's domain is search, not arbitrary compute. We expose scatter-gather, not general distributed tasks. |
+| JPA / SQL front-end (Infinispan HotRod / Ignite SQL) | Non-goal. The `VectorCollection` API and its Spring AI / LangChain4j adapters are the surface. Optional `vectors-grpc` front-end is tracked separately. |
+| Off-heap object graph allocator (Chronicle Map `Byteable` codegen) | Our off-heap story uses `MemorySegment` + `Arena` directly (see `vectors-storage`). Chronicle's codegen solves a different problem (replacing a `HashMap` drop-in). |
+| Kubernetes operator in-tree | Out of scope for the core. Can ship as `vectors-distributed-k8s` optional module once GA. |
+
+### 15.2 Validation rule
+
+Before a `vectors-distributed` PR is merged, the author confirms that every new cluster
+component either:
+
+1. Appears in the table above (pattern # cited in Javadoc), **or**
+2. Is added to the table in the same PR, with a companion entry in
+   `competitive-analysis.md` §11 identifying the source reference repo and a justification.
+
+This keeps the two documents in sync as the design evolves and ensures every cluster-layer
+decision is anchored to a pattern that has shipped at scale.
