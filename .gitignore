@@ -24,6 +24,7 @@ docs/node_modules/
 docs/node/
 docs/build/
 docs/.cache/
+docs/package-lock.json
 docs/content/modules/ROOT/attachments/javadoc/
 
 # Security - Never commit secrets
