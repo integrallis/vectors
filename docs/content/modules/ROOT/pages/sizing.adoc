@@ -27,7 +27,12 @@ The dominant cost is the vector payload. For dimension `dim`:
 | `FLOAT32`        | `4 × dim`       | Full precision; reference.
 | `INT8` (scalar)  | `1 × dim` + 8   | 1 byte per element + per-vector `{min, scale}`.
 | `BINARY` (BQ)    | `dim / 8`       | 1 bit per element, rounded up to the nearest byte.
+| `PQ` (M subspaces, Ks=256) | `M` | 1 byte per subspace; codebook is amortised across the dataset.
 |===
+
+Product quantization stores one 8-bit code per subspace (`M` bytes per vector) plus a
+shared codebook of `M × Ks × (dim / M) × 4` bytes -- typically a few MB total and
+amortised across the entire corpus. The codebook dominates only at very small `n`.
 
 For rescore-style configurations (quantized navigator + full-precision retained for exact
 rescore via `IndexRefine`), add the `FLOAT32` cost on top of the navigator encoding.
@@ -43,10 +48,16 @@ Graph indexes add adjacency lists per node. Approximate overhead in bytes:
 | `HNSW`    | `≈ 12 × M`                         | M=16 → ~192 B; M=32 → ~384 B
 | `VAMANA`  | `≈ 4 × R`                          | R=32 → ~128 B; R=64 → ~256 B
 | `IVF_FLAT`| `≈ 4 × k` (centroid ids only)      | k=√n; tiny per vector
+| `IVF_PQ`  | `M + 4` (PQ code + partition id)   | M=48 → ~52 B per vector
 |===
 
 The `12 × M` factor for HNSW reflects level-0 adjacency (`2 × M` neighbours × 4 bytes)
 plus upper-level contributions amortised across the node population. Vamana is single-layer.
+
+`IVF_PQ` is the compression-dominated row: the payload is the `M`-byte PQ code rather
+than the `4 × dim` float vector, so the per-vector footprint is roughly `dim / 8` when
+the default `M = dim / 8` is used. Add `4 × dim` per vector if you retain full-precision
+vectors for rescore.
 
 == Capacity tables (heap-resident)
 
@@ -112,6 +123,32 @@ Per vector: `4 × dim + dim/8 + 200`.
 | 1536 | ~0.48 M | ~0.96 M | ~1.92 M
 |===
 
+=== IVF_PQ (M = dim / 8, Ks = 256, no rescore vectors)
+
+Per vector: `M + 4` bytes ≈ `dim / 8 + 4`. The codebook (`M × 256 × 4 × dim / M` =
+`1024 × dim` bytes) is a one-off cost independent of `n`.
+
+[cols="1,1,1,1", options="header"]
+|===
+| dim | `-Xmx 4G` | `-Xmx 8G` | `-Xmx 16G`
+| 384  | ~62 M  | ~124 M | ~248 M
+| 768  | ~32 M  | ~64 M  | ~128 M
+| 1536 | ~16 M  | ~33 M  | ~65 M
+|===
+
+=== IVF_PQ (M = dim / 8) + FLOAT32 rescore
+
+Per vector: `4 × dim + M + 4` ≈ `4.125 × dim + 4`. Retaining full-precision vectors
+enables `rescoreFactor > 1` to recover recall lost to ADC.
+
+[cols="1,1,1,1", options="header"]
+|===
+| dim | `-Xmx 4G` | `-Xmx 8G` | `-Xmx 16G`
+| 384  | ~2.03 M | ~4.05 M | ~8.1 M
+| 768  | ~1.01 M | ~2.03 M | ~4.05 M
+| 1536 | ~0.51 M | ~1.01 M | ~2.03 M
+|===
+
 == Choosing a configuration
 
 [cols="2,3,3", options="header"]
@@ -120,7 +157,7 @@ Per vector: `4 × dim + dim/8 + 200`.
 | `< 100K`    | `FLAT` (exact)                    | `FLAT`
 | `100K–10M`  | `HNSW` M=16 + FLOAT32             | `VAMANA` (mmap) or `HNSW` mmap
 | `10M–100M`  | `HNSW` + INT8 + rescore           | `VAMANA` + INT8 rescore
-| `> 100M`    | Shards (`IndexShards`) of the above or `IVF_FLAT` | `VAMANA` mmap + shards
+| `> 100M`    | `IVF_PQ` + rescore or shards (`IndexShards`) of the above | `IVF_PQ` mmap or `VAMANA` mmap + shards
 |===
 
 == Tuning knobs
@@ -132,6 +169,10 @@ Per vector: `4 × dim + dim/8 + 200`.
 * **`searchMultiStart`** -- intra-query parallelism for HNSW via virtual threads; raises
   QPS at high recall at the cost of extra CPU per query.
 * **IVF `nprobe`** -- number of clusters scanned; controls recall/latency trade.
+* **PQ `M`** -- number of subspaces. Compression ratio is `4 × dim / M`; recall drops as
+  `M` shrinks. Defaults to `max(1, dim / 8)`. Typical range: `dim / 16` to `dim / 4`.
+* **PQ `rescoreFactor`** -- wide-heap multiplier used when full-precision vectors are
+  retained. `1` = pure ADC; `4–10` typically closes the recall gap to the flat baseline.
 
 == Off-heap (mmap) note
 
