@@ -269,8 +269,12 @@ public final class HnswSearcher {
         try {
           perWorker.add(f.get());
         } catch (ExecutionException e) {
+          // Cancel outstanding workers eagerly so the try-with-resources close() does not block
+          // draining virtual threads that are no longer needed.
+          exec.shutdownNow();
           throw new RuntimeException("searchMultiStart worker failed", e.getCause());
         } catch (InterruptedException e) {
+          exec.shutdownNow();
           Thread.currentThread().interrupt();
           throw new RuntimeException("searchMultiStart interrupted", e);
         }

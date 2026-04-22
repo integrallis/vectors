@@ -2,10 +2,12 @@ package com.integrallis.vectors.hnsw;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -142,6 +144,44 @@ class HnswSearcherMultiStartTest {
         for (int id : r.nodeIds()) unique.add(id);
         assertThat(unique).as("iteration %d unique ordinals", iter).hasSize(10);
       }
+    }
+  }
+
+  @Nested
+  @Tag("unit")
+  class ExceptionPropagation {
+
+    /**
+     * When a worker throws, the caller sees a {@link RuntimeException} wrapping the original cause
+     * with the message {@code "searchMultiStart worker failed"}. The factory here succeeds on the
+     * first invocation (used by the orchestrator for greedy descent + pickSeeds) and throws on
+     * every subsequent invocation (one per worker thread).
+     */
+    @Test
+    void workerExceptionPropagatesWithOriginalCause() {
+      float[][] vectors = HnswSearcherTest.randomVectors(500, 16, 42L);
+      HnswGraph graph =
+          HnswGraphBuilder.create(
+                  16, 100, new InMemoryVectors(vectors), SimilarityFunction.EUCLIDEAN, 42L)
+              .build();
+
+      AtomicInteger calls = new AtomicInteger();
+      NodeScorerFactory throwingFactory =
+          query -> {
+            if (calls.getAndIncrement() == 0) {
+              // Orchestrator path: return a real scorer so greedy descent + pickSeeds succeed.
+              return nodeId -> SimilarityFunction.EUCLIDEAN.compare(query, vectors[nodeId]);
+            }
+            throw new IllegalStateException("synthetic worker failure");
+          };
+      HnswSearcher searcher =
+          new HnswSearcher(
+              graph, new InMemoryVectors(vectors), SimilarityFunction.EUCLIDEAN, throwingFactory);
+
+      assertThatThrownBy(() -> searcher.searchMultiStart(vectors[0], 10, 100, 4))
+          .isInstanceOf(RuntimeException.class)
+          .hasMessageContaining("searchMultiStart worker failed")
+          .hasCauseInstanceOf(IllegalStateException.class);
     }
   }
 }
