@@ -254,8 +254,11 @@ final class KMeansPlusPlusClusterer {
 
   /**
    * PCM = max(1, (t\u00b2) / ((1 - t\u00b2) / (dim - 1))) — from JVector KMeansPlusPlusClusterer.
+   * Returns {@code 1.0f} (unweighted) when {@code dimensions < 2} to avoid a division by zero;
+   * callers should also short-circuit in this case, but the guard is defensive.
    */
   static float parallelCostMultiplier(double threshold, int dimensions) {
+    if (dimensions < 2) return 1.0f;
     double parallelCost = threshold * threshold;
     double perpendicularCost = (1 - parallelCost) / (dimensions - 1);
     return (float) Math.max(1.0, parallelCost / perpendicularCost);
