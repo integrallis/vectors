@@ -2,19 +2,35 @@ package com.integrallis.vectors.ivf;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
+import com.integrallis.vectors.quantization.ArrayVectorDataset;
+import com.integrallis.vectors.quantization.ProductQuantizer;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * IVF-flat index: route query to {@code nprobe} clusters via {@link BuoyIndex}, then brute-force
- * scan each cluster's vectors, merge top-k.
+ * IVF index with optional product quantization: route query to {@code nprobe} clusters via {@link
+ * BuoyIndex}, then scan each cluster's vectors, merge top-k.
  *
- * <p>This is the Phase 1 search target and the simplest correct IVF implementation. Builds entirely
- * in-heap from raw float arrays; no dependency on {@code vectors-db}.
+ * <p>Two modes, selected at build time via {@link IvfBuildParams#pqEnabled()}:
  *
- * <p>Build complexity: O(n * k * maxIter). Search complexity: O(nprobe * clusterSize * D).
+ * <ul>
+ *   <li><b>IVF-flat</b>: brute-force full-precision scan per cluster. Simplest correct IVF
+ *       implementation. Build complexity: {@code O(n * k * maxIter)}; search complexity: {@code
+ *       O(nprobe * clusterSize * D)}.
+ *   <li><b>IVF-PQ</b>: a {@link ProductQuantizer} is trained on per-cluster residuals ({@code v -
+ *       centroid(assigned cluster)}). Each vector is encoded into an {@code M}-byte code. At search
+ *       time, for each probed cluster the residual query {@code q - centroid(c)} drives an {@link
+ *       ProductQuantizer#buildADCTable ADC lookup table}, and ordinals in the partition are scored
+ *       via {@code M} table lookups per ordinal (asymmetric distance computation). An optional
+ *       full-precision rescore pass re-ranks the top {@code k * rescoreFactor} ADC candidates.
+ * </ul>
+ *
+ * <p>Full-precision vectors are retained in-heap in both modes to support rescoring and to keep the
+ * codec compatible across modes. Pure-PQ storage (code-only) is a future extension.
+ *
+ * <p>HARMONY partial-distance pruning is silently ignored when PQ is enabled.
  */
 public final class IvfIndex implements Closeable {
 
@@ -23,22 +39,31 @@ public final class IvfIndex implements Closeable {
   private final float[][] vectors; // all indexed vectors [n][dim]
   private final String[] ids; // optional document ids; may be null entries
   private final SimilarityFunction metric;
+  // PQ state; both null when the index is IVF-flat.
+  private final ProductQuantizer pq;
+  private final byte[][] pqCodes; // [n][M]; pqCodes[i] is the PQ code for vectors[i]
 
   private IvfIndex(
       BuoyIndex buoyIndex,
       ClusterPartition[] partitions,
       float[][] vectors,
       String[] ids,
-      SimilarityFunction metric) {
+      SimilarityFunction metric,
+      ProductQuantizer pq,
+      byte[][] pqCodes) {
     this.buoyIndex = buoyIndex;
     this.partitions = partitions;
     this.vectors = vectors;
     this.ids = ids;
     this.metric = metric;
+    this.pq = pq;
+    this.pqCodes = pqCodes;
   }
 
   /**
-   * Builds an IVF-flat index from {@code vectors} using {@code params}.
+   * Builds an IVF index from {@code vectors} using {@code params}. When {@link
+   * IvfBuildParams#pqEnabled()} is {@code true}, trains a {@link ProductQuantizer} on per-cluster
+   * residuals and encodes each vector into an {@code M}-byte code; otherwise builds IVF-flat.
    *
    * @param vectors input vectors [n][dim]; not modified
    * @param ids optional document identifiers (null = no ids); if non-null must have length n
@@ -73,7 +98,33 @@ public final class IvfIndex implements Closeable {
       partitions[c] = new ClusterPartition(c, buoys[c], ordinals, ordinals.length, keyDims);
     }
 
-    return new IvfIndex(buoy, partitions, vectors, ids, metric);
+    ProductQuantizer pq = null;
+    byte[][] pqCodes = null;
+    if (params.pqEnabled()) {
+      // Residuals r[i] = vectors[i] - centroid(assignments[i]). Training happens on the residuals
+      // with center=false so buildADCTable() does not subtract any global centroid at query time
+      // — the residual query (q - centroid(c)) is already the correct input per probed cluster.
+      int dim = vectors[0].length;
+      float[][] residuals = new float[n][dim];
+      for (int i = 0; i < n; i++) {
+        float[] centroid = buoys[assignments[i]];
+        float[] v = vectors[i];
+        float[] r = residuals[i];
+        for (int d = 0; d < dim; d++) r[d] = v[d] - centroid[d];
+      }
+      pq =
+          ProductQuantizer.train(
+              new ArrayVectorDataset(residuals),
+              params.pqSubspaces(),
+              params.pqClusters(),
+              false,
+              1,
+              params.pqAnisotropicThreshold());
+      pqCodes = new byte[n][];
+      for (int i = 0; i < n; i++) pqCodes[i] = pq.encode(residuals[i]);
+    }
+
+    return new IvfIndex(buoy, partitions, vectors, ids, metric, pq, pqCodes);
   }
 
   /**
@@ -89,6 +140,7 @@ public final class IvfIndex implements Closeable {
    * competing result.
    */
   public IvfSearchResult search(IvfSearchRequest request) {
+    if (pq != null) return pqSearch(request);
     float[] query = request.query();
     int k = request.k();
     int nprobe = Math.min(request.nprobe(), partitions.length);
@@ -212,16 +264,48 @@ public final class IvfIndex implements Closeable {
     return partitions[clusterId];
   }
 
+  /** Returns the {@link ProductQuantizer} used by this index, or {@code null} for IVF-flat. */
+  public ProductQuantizer quantizer() {
+    return pq;
+  }
+
+  /** Returns {@code true} if this index was built with product quantization enabled. */
+  public boolean isQuantized() {
+    return pq != null;
+  }
+
+  /**
+   * Returns the per-ordinal PQ codes ({@code byte[n][M]}), or {@code null} for IVF-flat. Exposed
+   * for codec serialisers; callers must not mutate the returned array.
+   */
+  public byte[][] pqCodes() {
+    return pqCodes;
+  }
+
   /**
    * Constructs an {@link IvfIndex} from pre-trained components — used by codec deserialisers to
-   * avoid re-running KMeans on load.
+   * avoid re-running KMeans on load. Builds an IVF-flat index.
    */
   public static IvfIndex fromPrebuilt(
       BuoyIndex buoyIndex,
       ClusterPartition[] partitions,
       float[][] vectors,
       SimilarityFunction metric) {
-    return new IvfIndex(buoyIndex, partitions, vectors, null, metric);
+    return new IvfIndex(buoyIndex, partitions, vectors, null, metric, null, null);
+  }
+
+  /**
+   * Constructs an {@link IvfIndex} from pre-trained components including a pre-trained {@link
+   * ProductQuantizer} and its per-ordinal codes. Used by codec deserialisers for IVF-PQ.
+   */
+  public static IvfIndex fromPrebuilt(
+      BuoyIndex buoyIndex,
+      ClusterPartition[] partitions,
+      float[][] vectors,
+      SimilarityFunction metric,
+      ProductQuantizer pq,
+      byte[][] pqCodes) {
+    return new IvfIndex(buoyIndex, partitions, vectors, null, metric, pq, pqCodes);
   }
 
   /**
@@ -287,12 +371,116 @@ public final class IvfIndex implements Closeable {
       if (keyDims != null) for (int i = 0; i < kdLen; i++) keyDims[i] = buf.getInt();
       partitions[c] = new ClusterPartition(c, centroids[c], ordinals, size, keyDims);
     }
-    return new IvfIndex(buoyIndex, partitions, vectors, null, metric);
+    return new IvfIndex(buoyIndex, partitions, vectors, null, metric, null, null);
   }
 
   @Override
   public void close() {
     // no off-heap resources in Phase 1
+  }
+
+  // --- IVF-PQ search ---
+
+  /**
+   * ADC search over PQ codes with per-cluster residuals. For each probed cluster {@code c}, a fresh
+   * ADC lookup table is built from the residual query {@code q - centroid(c)}, and each ordinal in
+   * the partition is scored via {@code M} table lookups. Candidates populate a wide heap sized
+   * {@code k * rescoreFactor}; when {@code rescoreFactor > 1} the wide-heap contents are re-ranked
+   * against full-precision vectors to produce the final top-k.
+   *
+   * <p>Score conventions (higher = more similar, consistent with IVF-flat):
+   *
+   * <ul>
+   *   <li>EUCLIDEAN: {@code -adcSqL2(q - centroid(c), code)}
+   *   <li>DOT_PRODUCT / MAXIMUM_INNER_PRODUCT: {@code q·centroid(c) + adcDot(q, code)}
+   *   <li>COSINE: {@code adcDot(q, code)} as an unnormalised dot proxy. Use {@code rescoreFactor >=
+   *       2} for correct cosine scores (the final rescore pass computes {@code VectorUtil.cosine}).
+   * </ul>
+   *
+   * <p>HARMONY pruning and triangle-inequality early termination are both disabled on this path;
+   * ADC scoring is already cheap enough that the scan is typically bounded by the product-quantised
+   * table lookups, not by vector fetches.
+   */
+  private IvfSearchResult pqSearch(IvfSearchRequest request) {
+    float[] query = request.query();
+    int k = request.k();
+    int rescoreFactor = request.rescoreFactor();
+    int wideK = Math.min(Math.multiplyExact(k, rescoreFactor), vectors.length);
+    if (wideK < 1) wideK = 1;
+    int nprobe = Math.min(request.nprobe(), partitions.length);
+    var route = buoyIndex.routeWithDistances(query, nprobe, request.gamma());
+    int[] clusterIds = route.clusterIds();
+
+    TopKHeap wide = new TopKHeap(wideK);
+    boolean euclidean = metric == SimilarityFunction.EUCLIDEAN;
+    boolean useDotTable = !euclidean; // dot/mip/cosine → dot ADC; L2 → sqL2 ADC
+    int dim = query.length;
+    int numSubspaces = pq.numSubspaces();
+
+    int clustersScanned = 0;
+    for (int i = 0; i < clusterIds.length; i++) {
+      int cid = clusterIds[i];
+      ClusterPartition partition = partitions[cid];
+      int[] ords = partition.ordinals();
+      if (ords.length == 0) {
+        clustersScanned++;
+        continue;
+      }
+      float[] centroid = partition.centroid();
+
+      float[][] table;
+      float baseScore; // per-cluster additive shift so scores are comparable across clusters
+      if (euclidean) {
+        float[] residualQuery = new float[dim];
+        for (int d = 0; d < dim; d++) residualQuery[d] = query[d] - centroid[d];
+        table = pq.buildADCTable(residualQuery, false);
+        baseScore = 0f; // score = -sum(table[m][code[m]])
+      } else {
+        // dot-style metrics: ADC over raw query gives q·v_residual; add q·centroid(c) for the
+        // full-vector dot. Cosine uses the same dot proxy (no normalisation on this path).
+        table = pq.buildADCTable(query, true);
+        baseScore =
+            metric == SimilarityFunction.COSINE ? 0f : VectorUtil.dotProduct(query, centroid);
+      }
+
+      for (int ord : ords) {
+        byte[] code = pqCodes[ord];
+        float sum = 0f;
+        for (int m = 0; m < numSubspaces; m++) sum += table[m][code[m] & 0xFF];
+        float score = euclidean ? -sum : baseScore + sum;
+        wide.offer(ord, score);
+      }
+      clustersScanned++;
+    }
+
+    // Rescore pass against full-precision vectors when requested.
+    float minScore = request.minScore();
+    TopKHeap.DrainResult wideDrain = wide.drainDescending();
+    int[] wideOrds = wideDrain.ordinals();
+    List<IvfHit> hits;
+    if (rescoreFactor == 1) {
+      hits = new ArrayList<>(wideOrds.length);
+      float[] wideScores = wideDrain.scores();
+      for (int i = 0; i < wideOrds.length; i++) {
+        if (wideScores[i] < minScore) continue;
+        int ord = wideOrds[i];
+        hits.add(new IvfHit(ord, ids != null ? ids[ord] : null, wideScores[i]));
+      }
+    } else {
+      TopKHeap finalHeap = new TopKHeap(k);
+      for (int ord : wideOrds) {
+        float score = score(query, vectors[ord]);
+        if (score < minScore) continue;
+        finalHeap.offer(ord, score);
+      }
+      TopKHeap.DrainResult drained = finalHeap.drainDescending();
+      hits = new ArrayList<>(drained.ordinals().length);
+      for (int i = 0; i < drained.ordinals().length; i++) {
+        int ord = drained.ordinals()[i];
+        hits.add(new IvfHit(ord, ids != null ? ids[ord] : null, drained.scores()[i]));
+      }
+    }
+    return new IvfSearchResult(hits, clustersScanned);
   }
 
   // --- internals ---

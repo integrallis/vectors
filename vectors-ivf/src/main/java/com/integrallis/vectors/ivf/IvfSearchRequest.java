@@ -8,8 +8,14 @@ package com.integrallis.vectors.ivf;
  * @param nprobe number of clusters to probe (higher = better recall, slower)
  * @param gamma SOAR boundary expansion at search time (0.0 = disabled)
  * @param minScore minimum score threshold; hits below this score are excluded
+ * @param rescoreFactor candidate-pool multiplier for PQ rescoring. Ignored when the index has no
+ *     product quantizer. Must be &ge; 1; a value of 1 disables rescore (top-k ADC scores are
+ *     returned as-is). Typical values: 2–8 for high recall. The approximate (ADC) stage collects
+ *     {@code k * rescoreFactor} candidates which are then re-ranked against full-precision vectors
+ *     to produce the final top-k.
  */
-public record IvfSearchRequest(float[] query, int k, int nprobe, float gamma, float minScore) {
+public record IvfSearchRequest(
+    float[] query, int k, int nprobe, float gamma, float minScore, int rescoreFactor) {
 
   /** Validates parameters at construction time. */
   public IvfSearchRequest {
@@ -17,10 +23,28 @@ public record IvfSearchRequest(float[] query, int k, int nprobe, float gamma, fl
     if (k < 1) throw new IllegalArgumentException("k must be >= 1, got " + k);
     if (nprobe < 1) throw new IllegalArgumentException("nprobe must be >= 1, got " + nprobe);
     if (gamma < 0f) throw new IllegalArgumentException("gamma must be >= 0, got " + gamma);
+    if (rescoreFactor < 1)
+      throw new IllegalArgumentException("rescoreFactor must be >= 1, got " + rescoreFactor);
   }
 
-  /** Convenience factory with SOAR disabled and no score threshold. */
+  /**
+   * Backward-compatible 5-arg constructor: rescore disabled ({@code rescoreFactor = 1}). Existing
+   * IVF-flat callers continue to compile unchanged.
+   */
+  public IvfSearchRequest(float[] query, int k, int nprobe, float gamma, float minScore) {
+    this(query, k, nprobe, gamma, minScore, 1);
+  }
+
+  /** Convenience factory with SOAR disabled, no score threshold, and rescore disabled. */
   public static IvfSearchRequest of(float[] query, int k, int nprobe) {
-    return new IvfSearchRequest(query, k, nprobe, 0f, -Float.MAX_VALUE);
+    return new IvfSearchRequest(query, k, nprobe, 0f, -Float.MAX_VALUE, 1);
+  }
+
+  /**
+   * Convenience factory with SOAR disabled, no score threshold, and the given rescore factor. Use
+   * this when searching a PQ-enabled {@link IvfIndex} to trade latency for recall.
+   */
+  public static IvfSearchRequest of(float[] query, int k, int nprobe, int rescoreFactor) {
+    return new IvfSearchRequest(query, k, nprobe, 0f, -Float.MAX_VALUE, rescoreFactor);
   }
 }
