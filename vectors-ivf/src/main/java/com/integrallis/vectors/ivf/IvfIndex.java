@@ -312,8 +312,11 @@ public final class IvfIndex implements Closeable {
    * Serialises this index to a compact byte array.
    *
    * <p>Format: {@code [buoyLen:4][buoyBytes][k:4]
-   * k×([ordCount:4][ordinals:4*n][keyDimCount:4][keyDims:4*m])} where {@code keyDimCount=0} means
-   * HARMONY pruning is disabled for that partition.
+   * k×([ordCount:4][ordinals:4*n][keyDimCount:4][keyDims:4*m])[pqFlag:1]} where {@code
+   * keyDimCount=0} means HARMONY pruning is disabled for that partition. The {@code pqFlag} byte is
+   * {@code 1} when product-quantisation state follows (see {@link #encodePqTrailer}); {@code 0} is
+   * IVF-flat. Older encoded byte arrays that terminate after the final partition are treated as
+   * {@code pqFlag=0} on {@link #decode} for backward compatibility.
    */
   public byte[] encode() {
     byte[] buoyBytes = buoyIndex.encode();
@@ -325,8 +328,13 @@ public final class IvfIndex implements Closeable {
       totalOrds += p.size();
       if (p.keyDimensions() != null) totalKeyDims += p.keyDimensions().length;
     }
-    // Each partition: ordCount(4) + ords(4*n) + keyDimCount(4) + keyDims(4*m)
-    int capacity = 4 + buoyBytes.length + 4 + k * 8 + totalOrds * 4 + totalKeyDims * 4;
+    // Each partition: ordCount(4) + ords(4*n) + keyDimCount(4) + keyDims(4*m); plus 1-byte pqFlag.
+    int capacity = 4 + buoyBytes.length + 4 + k * 8 + totalOrds * 4 + totalKeyDims * 4 + 1;
+    byte[] pqTrailer = null;
+    if (pq != null) {
+      pqTrailer = encodePqTrailer();
+      capacity += pqTrailer.length;
+    }
 
     ByteBuffer buf = ByteBuffer.allocate(capacity);
     buf.putInt(buoyBytes.length);
@@ -343,13 +351,17 @@ public final class IvfIndex implements Closeable {
         for (int d : kd) buf.putInt(d);
       }
     }
+    buf.put((byte) (pq == null ? 0 : 1));
+    if (pqTrailer != null) buf.put(pqTrailer);
     return buf.array();
   }
 
   /**
    * Deserialises a previously {@link #encode encoded} index, wiring it to {@code vectors} and
    * {@code metric} without re-running KMeans. HARMONY {@code keyDimensions} are restored so
-   * partial-distance pruning is active immediately after decode.
+   * partial-distance pruning is active immediately after decode. When the payload carries a PQ
+   * trailer, the {@link ProductQuantizer} and per-ordinal codes are reconstructed without
+   * retraining.
    */
   public static IvfIndex decode(byte[] bytes, float[][] vectors, SimilarityFunction metric) {
     ByteBuffer buf = ByteBuffer.wrap(bytes);
@@ -371,7 +383,88 @@ public final class IvfIndex implements Closeable {
       if (keyDims != null) for (int i = 0; i < kdLen; i++) keyDims[i] = buf.getInt();
       partitions[c] = new ClusterPartition(c, centroids[c], ordinals, size, keyDims);
     }
-    return new IvfIndex(buoyIndex, partitions, vectors, null, metric, null, null);
+    ProductQuantizer pq = null;
+    byte[][] pqCodes = null;
+    // pqFlag is absent on byte arrays written before IVF-PQ landed; treat EOF as flag=0.
+    if (buf.hasRemaining()) {
+      byte pqFlag = buf.get();
+      if (pqFlag == 1) {
+        PqTrailer trailer = decodePqTrailer(buf);
+        pq = trailer.pq();
+        pqCodes = trailer.codes();
+      } else if (pqFlag != 0) {
+        throw new IllegalArgumentException("Unknown IVF pqFlag byte: " + pqFlag);
+      }
+    }
+    return new IvfIndex(buoyIndex, partitions, vectors, null, metric, pq, pqCodes);
+  }
+
+  /**
+   * Writes the PQ trailer. Format: {@code [dimension:4][M:4][Ks:4][anisotropicThreshold:4]
+   * [centerFlag:1][centroid:4*dim?] M×([subSize:4][subOffset:4][codebook:4*Ks*subSize])
+   * [n:4][codes:n*M]}.
+   */
+  private byte[] encodePqTrailer() {
+    int dim = pq.dimension();
+    int m = pq.numSubspaces();
+    int ks = pq.numClusters();
+    float[] centroid = pq.globalCentroid();
+    int[][] subs = pq.subspaceSizesAndOffsets();
+    float[][] cbs = pq.codebooks();
+    int n = pqCodes.length;
+
+    int size = 4 + 4 + 4 + 4 + 1;
+    if (centroid != null) size += dim * 4;
+    for (int i = 0; i < m; i++) size += 4 + 4 + cbs[i].length * 4;
+    size += 4 + n * m;
+
+    ByteBuffer buf = ByteBuffer.allocate(size);
+    buf.putInt(dim);
+    buf.putInt(m);
+    buf.putInt(ks);
+    buf.putFloat(pq.anisotropicThreshold());
+    buf.put((byte) (centroid == null ? 0 : 1));
+    if (centroid != null) for (float v : centroid) buf.putFloat(v);
+    for (int i = 0; i < m; i++) {
+      buf.putInt(subs[i][0]);
+      buf.putInt(subs[i][1]);
+      float[] cb = cbs[i];
+      for (float v : cb) buf.putFloat(v);
+    }
+    buf.putInt(n);
+    for (byte[] code : pqCodes) buf.put(code);
+    return buf.array();
+  }
+
+  /** Inverse of {@link #encodePqTrailer}. Called from {@link #decode} when the flag byte is 1. */
+  private record PqTrailer(ProductQuantizer pq, byte[][] codes) {}
+
+  private static PqTrailer decodePqTrailer(ByteBuffer buf) {
+    int dim = buf.getInt();
+    int m = buf.getInt();
+    int ks = buf.getInt();
+    float anisotropicThreshold = buf.getFloat();
+    boolean hasCentroid = buf.get() == 1;
+    float[] centroid = null;
+    if (hasCentroid) {
+      centroid = new float[dim];
+      for (int i = 0; i < dim; i++) centroid[i] = buf.getFloat();
+    }
+    int[][] subs = new int[m][2];
+    float[][] cbs = new float[m][];
+    for (int i = 0; i < m; i++) {
+      subs[i][0] = buf.getInt();
+      subs[i][1] = buf.getInt();
+      float[] cb = new float[ks * subs[i][0]];
+      for (int j = 0; j < cb.length; j++) cb[j] = buf.getFloat();
+      cbs[i] = cb;
+    }
+    int n = buf.getInt();
+    byte[][] codes = new byte[n][m];
+    for (int i = 0; i < n; i++) buf.get(codes[i]);
+    ProductQuantizer pq =
+        ProductQuantizer.fromState(dim, m, ks, subs, cbs, centroid, anisotropicThreshold);
+    return new PqTrailer(pq, codes);
   }
 
   @Override

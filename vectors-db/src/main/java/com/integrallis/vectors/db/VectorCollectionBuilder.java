@@ -82,13 +82,22 @@ public final class VectorCollectionBuilder {
   private Long vamanaSeed; // lazily filled with System.nanoTime() at build() time if unset
   private int vamanaBuildThreads = DEFAULT_VAMANA_BUILD_THREADS;
 
-  // IVF-specific params
+  // IVF-specific params (shared across IVF_FLAT and IVF_PQ)
   private int ivfK = DEFAULT_IVF_K;
   private int ivfNprobe = DEFAULT_IVF_NPROBE;
   private int ivfMaxIter = DEFAULT_IVF_MAX_ITER;
   private float ivfGamma = 0f;
   private boolean ivfSoar = false;
   private long ivfSeed = DEFAULT_IVF_SEED;
+
+  // IVF_PQ-only params (null = use defaults derived from dimension at build() time)
+  private Integer ivfPqSubspaces;
+  private Integer ivfPqClusters;
+  private Float ivfPqAnisotropicThreshold;
+  private int ivfRescoreFactor = 1;
+
+  // cuVS-specific params (null = use defaults derived from indexType at build() time)
+  private VectorCollectionConfig.CuVsParams cuvsParams;
 
   // QvCache — 0 means disabled
   private int cacheSize = 0;
@@ -323,10 +332,73 @@ public final class VectorCollectionBuilder {
 
   /**
    * Sets the RNG seed for IVF KMeans++ initialisation. Ignored unless {@link #indexType(IndexType)}
-   * is {@link IndexType#IVF_FLAT}. Default: {@value #DEFAULT_IVF_SEED}.
+   * is {@link IndexType#IVF_FLAT} or {@link IndexType#IVF_PQ}. Default: {@value #DEFAULT_IVF_SEED}.
    */
   public VectorCollectionBuilder ivfSeed(long seed) {
     this.ivfSeed = seed;
+    return this;
+  }
+
+  /**
+   * Sets the IVF-PQ number of subspaces (M). Ignored unless {@link #indexType(IndexType)} is {@link
+   * IndexType#IVF_PQ}. Must be positive; the chosen M should divide the vector dimension. Default:
+   * {@code max(1, dimension / 8)}.
+   */
+  public VectorCollectionBuilder ivfPqSubspaces(int numSubspaces) {
+    if (numSubspaces <= 0) {
+      throw new IllegalArgumentException("ivfPqSubspaces must be positive: " + numSubspaces);
+    }
+    this.ivfPqSubspaces = numSubspaces;
+    return this;
+  }
+
+  /**
+   * Sets the IVF-PQ centroids per subspace (Ks). Ignored unless {@link #indexType(IndexType)} is
+   * {@link IndexType#IVF_PQ}. Must be in {@code [2, 256]}. Default: {@value #DEFAULT_PQ_CLUSTERS}.
+   */
+  public VectorCollectionBuilder ivfPqClusters(int numClusters) {
+    if (numClusters < 2 || numClusters > 256) {
+      throw new IllegalArgumentException("ivfPqClusters must be in [2, 256]: " + numClusters);
+    }
+    this.ivfPqClusters = numClusters;
+    return this;
+  }
+
+  /**
+   * Sets the IVF-PQ anisotropic threshold used by the coordinate-descent encoder. Pass {@code -1f}
+   * for standard (unweighted) PQ, or a value in {@code [0, 1]} to enable anisotropic encoding.
+   * Ignored unless {@link #indexType(IndexType)} is {@link IndexType#IVF_PQ}. Default: {@code -1f}.
+   */
+  public VectorCollectionBuilder ivfPqAnisotropicThreshold(float threshold) {
+    if (threshold != -1f && (threshold < 0f || threshold > 1f)) {
+      throw new IllegalArgumentException(
+          "ivfPqAnisotropicThreshold must be -1 or in [0, 1]: " + threshold);
+    }
+    this.ivfPqAnisotropicThreshold = threshold;
+    return this;
+  }
+
+  /**
+   * Sets the IVF-PQ search-time rescore factor — the wide heap sized {@code k × rescoreFactor} is
+   * re-ranked against full-precision vectors before the top-k is returned. Must be {@code >= 1};
+   * {@code 1} disables rescoring (raw ADC scores are returned). Ignored unless {@link
+   * #indexType(IndexType)} is {@link IndexType#IVF_PQ}. Default: {@code 1}.
+   */
+  public VectorCollectionBuilder ivfRescoreFactor(int rescoreFactor) {
+    if (rescoreFactor < 1) {
+      throw new IllegalArgumentException("ivfRescoreFactor must be >= 1: " + rescoreFactor);
+    }
+    this.ivfRescoreFactor = rescoreFactor;
+    return this;
+  }
+
+  /**
+   * Sets cuVS GPU index parameters. Ignored unless {@link #indexType(IndexType)} is {@link
+   * IndexType#CUVS_BRUTEFORCE} or {@link IndexType#CUVS_CAGRA}. When unset, defaults are derived
+   * from the chosen {@link IndexType} at {@link #build()} time.
+   */
+  public VectorCollectionBuilder cuvsParams(VectorCollectionConfig.CuVsParams params) {
+    this.cuvsParams = params;
     return this;
   }
 
@@ -507,6 +579,30 @@ public final class VectorCollectionBuilder {
             ? new VectorCollectionConfig.IvfParams(
                 ivfK, Math.min(ivfNprobe, ivfK), ivfMaxIter, ivfGamma, ivfSoar, ivfSeed)
             : null;
+    VectorCollectionConfig.IvfPqParams ivfPqParams =
+        (indexType == IndexType.IVF_PQ)
+            ? new VectorCollectionConfig.IvfPqParams(
+                ivfK,
+                Math.min(ivfNprobe, ivfK),
+                ivfMaxIter,
+                ivfGamma,
+                ivfSoar,
+                ivfSeed,
+                ivfPqSubspaces != null ? ivfPqSubspaces : Math.max(1, dimension / 8),
+                ivfPqClusters != null ? ivfPqClusters : DEFAULT_PQ_CLUSTERS,
+                ivfPqAnisotropicThreshold != null ? ivfPqAnisotropicThreshold : -1f,
+                ivfRescoreFactor)
+            : null;
+    VectorCollectionConfig.CuVsParams effectiveCuvsParams =
+        switch (indexType) {
+          case CUVS_BRUTEFORCE ->
+              cuvsParams != null
+                  ? cuvsParams
+                  : VectorCollectionConfig.CuVsParams.BruteForce.defaults();
+          case CUVS_CAGRA ->
+              cuvsParams != null ? cuvsParams : VectorCollectionConfig.CuVsParams.Cagra.defaults();
+          case FLAT, HNSW, VAMANA, IVF_FLAT, IVF_PQ -> null;
+        };
     QuantizerParams quantizerParams = buildQuantizerParams();
     var config =
         new VectorCollectionConfig(
@@ -519,7 +615,9 @@ public final class VectorCollectionBuilder {
             hnswParams,
             vamanaParams,
             quantizerParams,
-            ivfParams);
+            ivfParams,
+            effectiveCuvsParams,
+            ivfPqParams);
     QvCache cache = cacheSize > 0 ? new QvCache(cacheSize) : QvCache.DISABLED;
     return new VectorCollectionImpl(config, cache);
   }

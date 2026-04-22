@@ -152,6 +152,41 @@ class IvfPqTest {
   }
 
   @Test
+  void codecRoundTripPreservesPqSearchResults() {
+    float[][] data = randomVecs(400, 16, 11L);
+    IvfBuildParams params = new IvfBuildParams(16, 30, 0f, false, 42L, 0).withPq(4);
+    IvfIndex original = IvfIndex.build(data, null, SimilarityFunction.EUCLIDEAN, params);
+    byte[] bytes = original.encode();
+    IvfIndex decoded = IvfIndex.decode(bytes, data, SimilarityFunction.EUCLIDEAN);
+
+    assertThat(decoded.isQuantized()).isTrue();
+    assertThat(decoded.pqCodes()).hasDimensions(data.length, 4);
+
+    float[] q = randomVecs(1, 16, 12L)[0];
+    IvfSearchRequest req = new IvfSearchRequest(q, 5, 8, 0f, -Float.MAX_VALUE, 4);
+    IvfSearchResult orig = original.search(req);
+    IvfSearchResult rt = decoded.search(req);
+    assertThat(rt.hits()).hasSameSizeAs(orig.hits());
+    for (int i = 0; i < orig.hits().size(); i++) {
+      assertThat(rt.hits().get(i).ordinal()).isEqualTo(orig.hits().get(i).ordinal());
+      assertThat(rt.hits().get(i).score()).isEqualTo(orig.hits().get(i).score());
+    }
+  }
+
+  @Test
+  void codecRoundTripOnIvfFlatStillWorks() {
+    // Backward-compat: IVF-flat encode/decode round-trip must not regress after the PQ trailer
+    // was appended.
+    float[][] data = randomVecs(200, 8, 13L);
+    IvfBuildParams params = new IvfBuildParams(8, 20, 0f, false, 42L, 0);
+    IvfIndex original = IvfIndex.build(data, null, SimilarityFunction.EUCLIDEAN, params);
+    IvfIndex decoded = IvfIndex.decode(original.encode(), data, SimilarityFunction.EUCLIDEAN);
+    assertThat(decoded.isQuantized()).isFalse();
+    assertThat(decoded.pqCodes()).isNull();
+    assertThat(decoded.size()).isEqualTo(original.size());
+  }
+
+  @Test
   void buildParamsValidatesPqArguments() {
     IvfBuildParams base = IvfBuildParams.defaults(100);
     assertThatThrownBy(() -> base.withPq(0)).isInstanceOf(IllegalArgumentException.class);

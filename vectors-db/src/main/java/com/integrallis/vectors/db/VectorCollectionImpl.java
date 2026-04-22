@@ -11,6 +11,7 @@ import com.integrallis.vectors.db.index.FlatScanAdapter;
 import com.integrallis.vectors.db.index.HnswIndexAdapter;
 import com.integrallis.vectors.db.index.IndexSpi;
 import com.integrallis.vectors.db.index.IvfFlatAdapter;
+import com.integrallis.vectors.db.index.IvfPqAdapter;
 import com.integrallis.vectors.db.index.MappedFlatScanAdapter;
 import com.integrallis.vectors.db.index.VamanaIndexAdapter;
 import com.integrallis.vectors.db.internal.StagingBuffer;
@@ -24,6 +25,7 @@ import com.integrallis.vectors.db.storage.Manifest;
 import com.integrallis.vectors.db.storage.MappedHnswIndexAdapter;
 import com.integrallis.vectors.db.storage.MappedIdMapper;
 import com.integrallis.vectors.db.storage.MappedIvfFlatAdapter;
+import com.integrallis.vectors.db.storage.MappedIvfPqAdapter;
 import com.integrallis.vectors.db.storage.MappedMetadataStore;
 import com.integrallis.vectors.db.storage.MappedVamanaIndexAdapter;
 import com.integrallis.vectors.db.storage.MemorySegmentRandomAccessVectors;
@@ -345,6 +347,20 @@ final class VectorCollectionImpl implements VectorCollection {
         VectorCollectionConfig.IvfParams p = config.ivfParams();
         yield new IvfFlatAdapter(p.k(), p.nprobe(), p.maxIter(), p.gamma(), p.soar(), p.seed());
       }
+      case IVF_PQ -> {
+        VectorCollectionConfig.IvfPqParams p = config.ivfPqParams();
+        yield new IvfPqAdapter(
+            p.k(),
+            p.nprobe(),
+            p.maxIter(),
+            p.gamma(),
+            p.soar(),
+            p.seed(),
+            p.pqSubspaces(),
+            p.pqClusters(),
+            p.pqAnisotropicThreshold(),
+            p.rescoreFactor());
+      }
       case CUVS_BRUTEFORCE ->
           new CuVsBruteForceAdapter(
               (VectorCollectionConfig.CuVsParams.BruteForce) config.cuvsParams());
@@ -422,6 +438,10 @@ final class VectorCollectionImpl implements VectorCollection {
             case IVF_FLAT ->
                 manifest.graphBinLength() > 0L
                     ? openIvfFlatAdapter(genDir, manifest, mapped)
+                    : new MappedFlatScanAdapter(mapped, config.metric());
+            case IVF_PQ ->
+                manifest.graphBinLength() > 0L
+                    ? openIvfPqAdapter(genDir, manifest, mapped)
                     : new MappedFlatScanAdapter(mapped, config.metric());
             case CUVS_BRUTEFORCE, CUVS_CAGRA ->
                 throw new UnsupportedOperationException(
@@ -512,6 +532,25 @@ final class VectorCollectionImpl implements VectorCollection {
     IvfIndex ivfIndex = IvfIndex.decode(ivfBytes, matrix, config.metric());
     VectorCollectionConfig.IvfParams p = config.ivfParams();
     return new MappedIvfFlatAdapter(ivfIndex, p.nprobe(), p.gamma(), dim);
+  }
+
+  private IndexSpi openIvfPqAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
+      throws IOException {
+    if (manifest.graphBinLength() <= 0L) {
+      throw new IOException(
+          "IVF_PQ generation " + manifest.generationNumber() + " has no graph.bin recorded");
+    }
+    byte[] ivfBytes = java.nio.file.Files.readAllBytes(genDir.resolve(FileFormat.GRAPH_FILE));
+    int n = (int) (manifest.liveCount() + manifest.tombstoneCount());
+    int dim = config.dimension();
+    float[][] matrix = new float[n][dim];
+    for (int i = 0; i < n; i++) {
+      java.lang.foreign.MemorySegment.copy(
+          mapped.vectorSlice(i), java.lang.foreign.ValueLayout.JAVA_FLOAT, 0L, matrix[i], 0, dim);
+    }
+    IvfIndex ivfIndex = IvfIndex.decode(ivfBytes, matrix, config.metric());
+    VectorCollectionConfig.IvfPqParams p = config.ivfPqParams();
+    return new MappedIvfPqAdapter(ivfIndex, p.nprobe(), p.gamma(), p.rescoreFactor(), dim);
   }
 
   // ---------------------------------------------------------------------------
@@ -1267,6 +1306,19 @@ final class VectorCollectionImpl implements VectorCollection {
         VectorCollectionConfig.IvfParams p = config.ivfParams();
         int effectiveK = Math.min(p.k(), matrix.length);
         IvfBuildParams bp = new IvfBuildParams(effectiveK, p.maxIter(), 0f, p.soar(), p.seed(), 0);
+        IvfIndex idx = IvfIndex.build(matrix, null, config.metric(), bp);
+        yield idx.encode();
+      }
+      case IVF_PQ -> {
+        if (matrix == null || matrix.length == 0) {
+          yield null;
+        }
+        VectorCollectionConfig.IvfPqParams p = config.ivfPqParams();
+        int effectiveK = Math.min(p.k(), matrix.length);
+        IvfBuildParams base =
+            new IvfBuildParams(effectiveK, p.maxIter(), 0f, p.soar(), p.seed(), 0);
+        IvfBuildParams bp =
+            base.withPq(p.pqSubspaces(), p.pqClusters(), p.pqAnisotropicThreshold());
         IvfIndex idx = IvfIndex.build(matrix, null, config.metric(), bp);
         yield idx.encode();
       }

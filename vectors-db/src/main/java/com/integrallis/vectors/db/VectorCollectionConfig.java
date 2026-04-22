@@ -41,7 +41,9 @@ public record VectorCollectionConfig(
     HnswParams hnswParams,
     VamanaParams vamanaParams,
     QuantizerParams quantizerParams,
-    IvfParams ivfParams) {
+    IvfParams ivfParams,
+    CuVsParams cuvsParams,
+    IvfPqParams ivfPqParams) {
 
   public VectorCollectionConfig {
     if (dimension <= 0) {
@@ -84,6 +86,74 @@ public record VectorCollectionConfig(
               + (ivfParams == null ? "null" : "set")
               + ")");
     }
+    if ((indexType == IndexType.IVF_PQ) != (ivfPqParams != null)) {
+      throw new IllegalArgumentException(
+          "ivfPqParams must be non-null iff indexType == IVF_PQ (indexType="
+              + indexType
+              + ", ivfPqParams="
+              + (ivfPqParams == null ? "null" : "set")
+              + ")");
+    }
+    boolean isCuvs = indexType == IndexType.CUVS_BRUTEFORCE || indexType == IndexType.CUVS_CAGRA;
+    if (isCuvs != (cuvsParams != null)) {
+      throw new IllegalArgumentException(
+          "cuvsParams must be non-null iff indexType in {CUVS_BRUTEFORCE, CUVS_CAGRA} (indexType="
+              + indexType
+              + ", cuvsParams="
+              + (cuvsParams == null ? "null" : "set")
+              + ")");
+    }
+    if (indexType == IndexType.CUVS_BRUTEFORCE && !(cuvsParams instanceof CuVsParams.BruteForce)) {
+      throw new IllegalArgumentException(
+          "indexType CUVS_BRUTEFORCE requires CuVsParams.BruteForce, got "
+              + cuvsParams.getClass().getSimpleName());
+    }
+    if (indexType == IndexType.CUVS_CAGRA && !(cuvsParams instanceof CuVsParams.Cagra)) {
+      throw new IllegalArgumentException(
+          "indexType CUVS_CAGRA requires CuVsParams.Cagra, got "
+              + cuvsParams.getClass().getSimpleName());
+    }
+    if (isCuvs && storageRoot != null) {
+      throw new IllegalArgumentException(
+          "CUVS_* index types do not support persistent storage yet (storageRoot must be null)");
+    }
+    if (isCuvs && quantizerKind != QuantizerKind.NONE) {
+      throw new IllegalArgumentException(
+          "CUVS_* index types do not support quantization (quantizerKind must be NONE, got "
+              + quantizerKind
+              + ")");
+    }
+  }
+
+  /**
+   * 11-arg convenience constructor that defaults {@link #ivfPqParams()} to {@code null}. Preserves
+   * the pre-IVF_PQ canonical shape for call sites written before Session 2 of the IVF-PQ effort.
+   */
+  public VectorCollectionConfig(
+      int dimension,
+      SimilarityFunction metric,
+      IndexType indexType,
+      QuantizerKind quantizerKind,
+      int autoCommitThreshold,
+      Path storageRoot,
+      HnswParams hnswParams,
+      VamanaParams vamanaParams,
+      QuantizerParams quantizerParams,
+      IvfParams ivfParams,
+      CuVsParams cuvsParams) {
+    this(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        autoCommitThreshold,
+        storageRoot,
+        hnswParams,
+        vamanaParams,
+        quantizerParams,
+        ivfParams,
+        cuvsParams,
+        null);
   }
 
   /**
@@ -108,6 +178,8 @@ public record VectorCollectionConfig(
         storageRoot,
         hnswParams,
         vamanaParams,
+        null,
+        null,
         null,
         null);
   }
@@ -136,6 +208,8 @@ public record VectorCollectionConfig(
         hnswParams,
         null,
         null,
+        null,
+        null,
         null);
   }
 
@@ -162,14 +236,14 @@ public record VectorCollectionConfig(
         null,
         null,
         null,
+        null,
+        null,
         null);
   }
 
   /**
-   * 5-arg convenience constructor for in-memory, flat-scan collections. Equivalent to the 10-arg
-   * canonical constructor with {@code null} {@code storageRoot}, {@code null} {@code hnswParams},
-   * {@code null} {@code vamanaParams}, {@code null} {@code quantizerParams} and {@code null} {@code
-   * ivfParams}. Kept for test fixtures that pre-date the IVF_FLAT support.
+   * 5-arg convenience constructor for in-memory, flat-scan collections. Kept for test fixtures that
+   * pre-date the IVF_FLAT, CUVS, and IVF_PQ support.
    */
   public VectorCollectionConfig(
       int dimension,
@@ -183,6 +257,8 @@ public record VectorCollectionConfig(
         indexType,
         quantizerKind,
         autoCommitThreshold,
+        null,
+        null,
         null,
         null,
         null,
@@ -289,6 +365,113 @@ public record VectorCollectionConfig(
     /** Default: nprobe = max(1, k/4), maxIter = 30, no SOAR, seed = 42. */
     public static IvfParams defaults(int k) {
       return new IvfParams(k, Math.max(1, k / 4), 30, 0f, false, 42L);
+    }
+  }
+
+  /**
+   * IVF-PQ build and search parameters. Extends {@link IvfParams} with product-quantisation
+   * settings (subspaces, per-subspace clusters, anisotropic threshold) and a search-time {@code
+   * rescoreFactor} that controls the width of the wide candidate heap re-ranked against
+   * full-precision vectors.
+   *
+   * @param k number of IVF clusters (must be positive)
+   * @param nprobe number of clusters to probe during search (must be in {@code [1, k]})
+   * @param maxIter maximum K-Means iterations (must be positive)
+   * @param gamma SOAR spill ratio in {@code [0, 1]} (0 = no spill)
+   * @param soar enable SOAR-style cluster spill during IVF search
+   * @param seed RNG seed for K-Means++ initialisation
+   * @param pqSubspaces number of PQ sub-vectors M (must be positive; must divide dimension)
+   * @param pqClusters centroids per subspace Ks (must be in {@code [2, 256]})
+   * @param pqAnisotropicThreshold anisotropic threshold for the coordinate-descent encoder; use
+   *     {@code -1f} for unweighted (standard) PQ
+   * @param rescoreFactor multiplier applied to {@code k} to size the wide candidate heap before
+   *     full-precision rescoring (must be {@code >= 1}; {@code 1} disables rescoring)
+   */
+  public record IvfPqParams(
+      int k,
+      int nprobe,
+      int maxIter,
+      float gamma,
+      boolean soar,
+      long seed,
+      int pqSubspaces,
+      int pqClusters,
+      float pqAnisotropicThreshold,
+      int rescoreFactor) {
+    public IvfPqParams {
+      if (k <= 0) throw new IllegalArgumentException("k must be positive: " + k);
+      if (nprobe <= 0 || nprobe > k)
+        throw new IllegalArgumentException("nprobe must be in [1, k]: " + nprobe);
+      if (maxIter <= 0) throw new IllegalArgumentException("maxIter must be positive: " + maxIter);
+      if (gamma < 0f || gamma > 1f)
+        throw new IllegalArgumentException("gamma must be in [0, 1]: " + gamma);
+      if (pqSubspaces <= 0)
+        throw new IllegalArgumentException("pqSubspaces must be positive: " + pqSubspaces);
+      if (pqClusters < 2 || pqClusters > 256)
+        throw new IllegalArgumentException("pqClusters must be in [2, 256]: " + pqClusters);
+      if (pqAnisotropicThreshold != -1f
+          && (pqAnisotropicThreshold < 0f || pqAnisotropicThreshold > 1f))
+        throw new IllegalArgumentException(
+            "pqAnisotropicThreshold must be -1 (unweighted) or in [0, 1]: "
+                + pqAnisotropicThreshold);
+      if (rescoreFactor < 1)
+        throw new IllegalArgumentException("rescoreFactor must be >= 1: " + rescoreFactor);
+    }
+  }
+
+  /**
+   * NVIDIA cuVS index-build parameters. Sealed so {@link VectorCollectionConfig}'s compact
+   * constructor can enforce a one-to-one mapping between {@link IndexType#CUVS_BRUTEFORCE}/{@link
+   * IndexType#CUVS_CAGRA} and the variant carried here.
+   */
+  public sealed interface CuVsParams permits CuVsParams.BruteForce, CuVsParams.Cagra {
+
+    /**
+     * GPU brute-force parameters. {@link IndexType#CUVS_BRUTEFORCE} scores every query against
+     * every vector on the GPU; no tunables are needed today.
+     */
+    record BruteForce() implements CuVsParams {
+      public static BruteForce defaults() {
+        return new BruteForce();
+      }
+    }
+
+    /**
+     * CAGRA graph index parameters.
+     *
+     * @param graphDegree degree of the final graph (must be positive; FAISS-equivalent to M)
+     * @param intermediateGraphDegree degree of the intermediate graph used during build (must be
+     *     {@code >= graphDegree})
+     * @param itopkSize candidate-list size during search (must be positive; FAISS-equivalent to
+     *     efSearch)
+     * @param maxIterations max refinement iterations during search (0 = library default)
+     */
+    record Cagra(int graphDegree, int intermediateGraphDegree, int itopkSize, int maxIterations)
+        implements CuVsParams {
+      public Cagra {
+        if (graphDegree <= 0) {
+          throw new IllegalArgumentException("graphDegree must be positive: " + graphDegree);
+        }
+        if (intermediateGraphDegree < graphDegree) {
+          throw new IllegalArgumentException(
+              "intermediateGraphDegree ("
+                  + intermediateGraphDegree
+                  + ") must be >= graphDegree ("
+                  + graphDegree
+                  + ")");
+        }
+        if (itopkSize <= 0) {
+          throw new IllegalArgumentException("itopkSize must be positive: " + itopkSize);
+        }
+        if (maxIterations < 0) {
+          throw new IllegalArgumentException("maxIterations must be >= 0: " + maxIterations);
+        }
+      }
+
+      /** Default: graphDegree=32, intermediateGraphDegree=64, itopkSize=64, maxIterations=0. */
+      public static Cagra defaults() {
+        return new Cagra(32, 64, 64, 0);
+      }
     }
   }
 }
