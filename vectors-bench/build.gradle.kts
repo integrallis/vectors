@@ -169,7 +169,8 @@ tasks.register<JavaExec>("hnswScalingProbe") {
 
     jvmArgs(
         "--add-modules", "jdk.incubator.vector",
-        "-Xmx6g", "-Xms2g",
+        "-Xmx6g", "-Xms6g",
+        "-XX:+AlwaysPreTouch",
         "-XX:+UseG1GC"
     )
 

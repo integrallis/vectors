@@ -5,6 +5,7 @@ import com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder;
 import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.hnsw.HnswGraphBuilder;
 import com.integrallis.vectors.hnsw.InMemoryVectors;
+import java.util.Arrays;
 import java.util.Random;
 
 /**
@@ -25,8 +26,8 @@ public final class HnswThreadScalingProbe {
     int m = Integer.getInteger("bench.hnsw.m", 16);
     int efC = Integer.getInteger("bench.hnsw.ef", 100);
     int[] threads = parseInts(System.getProperty("bench.threads"), new int[] {1, 2, 4, 6, 8});
-    int warmup = Integer.getInteger("bench.warmup", 1);
-    int iters = Integer.getInteger("bench.iters", 2);
+    int warmup = Integer.getInteger("bench.warmup", 10);
+    int iters = Integer.getInteger("bench.iters", 5);
 
     float[][] corpus = synthetic(n, dim, 42L);
     InMemoryVectors vec = new InMemoryVectors(corpus);
@@ -66,15 +67,18 @@ public final class HnswThreadScalingProbe {
       HnswGraph g = op.run();
       if (g == null) throw new IllegalStateException("null graph");
     }
-    long best = Long.MAX_VALUE;
+    // Use the median across iterations. min() would mask lock-contention overhead by rewarding
+    // the best-case run (no lock waits, warm caches) — not representative of production.
+    long[] samples = new long[iters];
     for (int i = 0; i < iters; i++) {
       long t0 = System.nanoTime();
       HnswGraph g = op.run();
       long dt = System.nanoTime() - t0;
       if (g == null) throw new IllegalStateException("null graph");
-      if (dt < best) best = dt;
+      samples[i] = dt;
     }
-    return best;
+    Arrays.sort(samples);
+    return samples[samples.length / 2];
   }
 
   private static float[][] synthetic(int n, int dim, long seed) {
