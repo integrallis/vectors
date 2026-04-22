@@ -15,6 +15,9 @@ dependencies {
     implementation(project(":vectors-hnsw"))
     implementation(project(":vectors-vamana"))
     implementation(project(":vectors-ivf"))
+    // Optional GPU backend. api-scope so downstream modules can directly reference
+    // com.nvidia.cuvs types exposed transitively by vectors-gpu.
+    api(project(":vectors-gpu"))
 
     // Apache Arrow IPC — batch ingestion / export (G6)
     implementation("org.apache.arrow:arrow-vector:19.0.0")
