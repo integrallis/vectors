@@ -81,6 +81,84 @@ public final class FlatScanAdapter implements IndexSpi {
     return new SearchOutcome(sortedIds, sortedScores);
   }
 
+  /**
+   * Batched brute-force scan. Performs a single pass over the corpus, updating a per-query bounded
+   * min-heap as each stored vector is visited. Compared to running {@link #search} sequentially,
+   * this amortises the outer loop over vectors and keeps each row hot in cache while every query
+   * scores against it — a material speedup for cache-bound brute-force scans with several queries.
+   */
+  @Override
+  public SearchOutcome[] searchBatch(
+      float[][] queries, int k, int searchListSize, float overQueryFactor) {
+    Objects.requireNonNull(queries, "queries must not be null");
+    if (queries.length == 0) {
+      throw new IllegalArgumentException("queries must not be empty");
+    }
+    if (k <= 0) {
+      throw new IllegalArgumentException("k must be positive: " + k);
+    }
+    int q = queries.length;
+    SearchOutcome[] out = new SearchOutcome[q];
+    if (vectors.length == 0) {
+      for (int i = 0; i < q; i++) {
+        out[i] = new SearchOutcome(new int[0], new float[0]);
+      }
+      return out;
+    }
+    // Validate dimensions up front so a late failure cannot corrupt partial results.
+    for (int i = 0; i < q; i++) {
+      Objects.requireNonNull(queries[i], "queries[" + i + "] must not be null");
+      if (queries[i].length != dimension) {
+        throw new IllegalArgumentException(
+            "Query "
+                + i
+                + " dimension "
+                + queries[i].length
+                + " does not match index dimension "
+                + dimension);
+      }
+    }
+    int actualK = Math.min(k, vectors.length);
+    int[][] heapIds = new int[q][actualK];
+    float[][] heapScores = new float[q][actualK];
+    int[] heapSizes = new int[q];
+    for (int v = 0; v < vectors.length; v++) {
+      float[] stored = vectors[v];
+      for (int qi = 0; qi < q; qi++) {
+        float score = metric.compare(queries[qi], stored);
+        int sz = heapSizes[qi];
+        int[] ids = heapIds[qi];
+        float[] scores = heapScores[qi];
+        if (sz < actualK) {
+          ids[sz] = v;
+          scores[sz] = score;
+          heapSizes[qi] = sz + 1;
+          siftUp(ids, scores, sz);
+        } else if (score > scores[0]) {
+          ids[0] = v;
+          scores[0] = score;
+          siftDown(ids, scores, 0, sz);
+        }
+      }
+    }
+    for (int qi = 0; qi < q; qi++) {
+      int sz = heapSizes[qi];
+      int[] sortedIds = new int[sz];
+      float[] sortedScores = new float[sz];
+      int[] ids = heapIds[qi];
+      float[] scores = heapScores[qi];
+      for (int i = sz - 1; i >= 0; i--) {
+        sortedIds[i] = ids[0];
+        sortedScores[i] = scores[0];
+        ids[0] = ids[i];
+        scores[0] = scores[i];
+        siftDown(ids, scores, 0, i);
+      }
+      out[qi] = new SearchOutcome(sortedIds, sortedScores);
+    }
+    return out;
+  }
+
   @Override
   public int size() {
     return vectors.length;

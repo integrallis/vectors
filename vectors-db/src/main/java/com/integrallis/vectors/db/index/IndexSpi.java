@@ -1,6 +1,12 @@
 package com.integrallis.vectors.db.index;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.IntPredicate;
 
 /**
@@ -84,6 +90,51 @@ public interface IndexSpi extends AutoCloseable {
       float[] query, int k, int searchListSize, float overQueryFactor, IntPredicate predicate) {
     // Default: fall back to standard search; post-filter is applied by the caller.
     return search(query, k, searchListSize, overQueryFactor);
+  }
+
+  /**
+   * Batched search variant: processes {@code queries.length} query vectors and returns one {@link
+   * SearchOutcome} per query, preserving input order.
+   *
+   * <p><b>Default behaviour.</b> Dispatches each query through {@link #search(float[], int, int,
+   * float)} on a dedicated virtual thread; all dispatches happen concurrently and the method blocks
+   * until every query has completed or thrown. Backends that can amortise work across queries
+   * ({@link FlatScanAdapter} fuses distance computation across the corpus) override this to produce
+   * real per-batch speedups; backends that cannot inherit the fan-out default unchanged.
+   *
+   * @param queries non-null, non-empty array of query vectors (all rows must share dimension)
+   * @param k number of final results per query
+   * @param searchListSize coarse-pass beam width (may be ignored by brute-force backends)
+   * @param overQueryFactor multiplier for coarse-pass k (may be ignored by brute-force backends)
+   * @return array of length {@code queries.length}; {@code out[i]} corresponds to {@code
+   *     queries[i]}
+   * @throws IllegalArgumentException if {@code queries} is null or empty
+   */
+  default SearchOutcome[] searchBatch(
+      float[][] queries, int k, int searchListSize, float overQueryFactor) {
+    Objects.requireNonNull(queries, "queries must not be null");
+    if (queries.length == 0) {
+      throw new IllegalArgumentException("queries must not be empty");
+    }
+    if (queries.length == 1) {
+      return new SearchOutcome[] {search(queries[0], k, searchListSize, overQueryFactor)};
+    }
+    SearchOutcome[] out = new SearchOutcome[queries.length];
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      List<Future<SearchOutcome>> futs = new ArrayList<>(queries.length);
+      for (float[] q : queries) {
+        futs.add(executor.submit(() -> search(q, k, searchListSize, overQueryFactor)));
+      }
+      for (int i = 0; i < futs.size(); i++) {
+        out[i] = futs.get(i).get();
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("searchBatch interrupted", e);
+    } catch (ExecutionException e) {
+      throw new RuntimeException("searchBatch query failed", e.getCause());
+    }
+    return out;
   }
 
   /** Returns the number of vectors currently in the index. */
