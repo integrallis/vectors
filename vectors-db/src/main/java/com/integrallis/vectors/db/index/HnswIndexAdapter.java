@@ -149,6 +149,38 @@ public final class HnswIndexAdapter implements IndexSpi {
   }
 
   /**
+   * Multi-start parallel variant: routes through {@link HnswIndex#searchMultiStart} when {@code
+   * searchMultiStart > 1}. Falls back to the single-start 4-arg {@link #search} path when {@code
+   * searchMultiStart <= 1} or when quantized two-pass is active (Phase 1 does not combine two-pass
+   * + multi-start).
+   */
+  @Override
+  public SearchOutcome search(
+      float[] query, int k, int searchListSize, float overQueryFactor, int searchMultiStart) {
+    Objects.requireNonNull(query, "query must not be null");
+    if (k <= 0) {
+      throw new IllegalArgumentException("k must be positive: " + k);
+    }
+    if (searchMultiStart <= 1) {
+      return search(query, k, searchListSize, overQueryFactor);
+    }
+    if (size == 0 || index == null) {
+      return new SearchOutcome(new int[0], new float[0]);
+    }
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Query dimension " + query.length + " does not match index dimension " + dimension);
+    }
+    if (overQueryFactor > 1.0f && index.isQuantizationEnabled()) {
+      // Phase 1 does not combine two-pass rescore + multi-start; fall back to single-start.
+      return search(query, k, searchListSize, overQueryFactor);
+    }
+    int efSearch = Math.max(searchListSize, k);
+    SearchResult result = index.searchMultiStart(query, k, efSearch, searchMultiStart);
+    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+  }
+
+  /**
    * ACORN-style pre-filtered search: delegates to {@link HnswIndex#searchFiltered} so the beam
    * search navigates non-matching nodes but only collects matching results.
    */

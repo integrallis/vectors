@@ -2,7 +2,12 @@ package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
+import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
 
@@ -162,6 +167,138 @@ public final class HnswSearcher {
   /** Searches with default efSearch = max(k, 100). */
   public SearchResult search(float[] query, int k) {
     return search(query, k, Math.max(k, 100));
+  }
+
+  /**
+   * Multi-start parallel beam search at layer 0. Runs {@code nStarts} independent beam searches
+   * from diverse seed nodes on virtual threads and merges their outputs into a single top-{@code k}
+   * result.
+   *
+   * <p>Phase 1 greedy descent (maxLevel..1) runs single-threaded on this searcher. Seeds are
+   * selected by a bounded layer-1 beam search with {@code ef = 2 * nStarts} whose top-{@code
+   * nStarts} node ids become the parallel workers' entry points. When {@code nStarts <= 1} or the
+   * graph has only layer 0 (no diverse seeds available), this delegates to {@link #search} and is
+   * bit-identical to the single-start path.
+   *
+   * <p>Each worker allocates its own {@link HnswSearcher} so that {@code visited}, {@code
+   * candidates}, and {@code results} scratch is per-thread. The merge step runs on the caller.
+   *
+   * <p><b>Determinism.</b> {@code nStarts == 1} is deterministic. {@code nStarts > 1} is NOT
+   * deterministic across runs — the merge order depends on virtual-thread completion timing.
+   *
+   * @param query the query vector
+   * @param k number of results to return
+   * @param efSearch beam width per worker at layer 0 (must be >= k)
+   * @param nStarts number of parallel seeds (values <= 1 delegate to single-start search)
+   * @return the top-k results sorted by score descending
+   */
+  public SearchResult searchMultiStart(float[] query, int k, int efSearch, int nStarts) {
+    if (nStarts <= 1) {
+      return search(query, k, efSearch);
+    }
+    if (efSearch < k) {
+      throw new IllegalArgumentException("efSearch (" + efSearch + ") must be >= k (" + k + ")");
+    }
+    if (graph.size() == 0) {
+      throw new IllegalStateException("Cannot search an empty graph");
+    }
+
+    NodeScorer scorer = scorerFactory.scorer(query);
+
+    // Phase 1: greedy descent maxLevel..1 on this searcher's scratch.
+    int currentBest = graph.entryNode();
+    for (int layer = graph.maxLevel(); layer >= 1; layer--) {
+      currentBest = greedyDescend(currentBest, layer, scorer);
+    }
+
+    // Phase 2: seed selection via bounded layer-1 beam search. If the graph has only layer 0
+    // there are no long-range hop edges to diversify seeds — fall back to single-start.
+    int[] seeds = pickSeeds(currentBest, scorer, nStarts);
+    if (seeds.length <= 1) {
+      return search(query, k, efSearch);
+    }
+
+    // Phase 3: spawn one worker per seed on a scoped virtual-thread executor.
+    return runParallelBeams(query, k, efSearch, seeds);
+  }
+
+  /**
+   * Selects up to {@code nStarts} diverse seed node ids by running a bounded layer-1 beam search
+   * with {@code ef = 2 * nStarts} from {@code entry}. Returns the top-{@code min(nStarts, results)}
+   * node ids in descending score order. Returns {@code {entry}} when the graph has only layer 0 (no
+   * layer-1 neighbors exist to diversify from).
+   */
+  int[] pickSeeds(int entry, NodeScorer scorer, int nStarts) {
+    if (graph.maxLevel() < 1) {
+      return new int[] {entry};
+    }
+    int seedEf = Math.max(2, 2 * nStarts);
+    NeighborArray seedResults = beamSearch(new int[] {entry}, seedEf, 1, scorer);
+    int count = Math.min(nStarts, seedResults.size());
+    if (count <= 0) {
+      return new int[] {entry};
+    }
+    int[] seeds = new int[count];
+    for (int i = 0; i < count; i++) {
+      seeds[i] = seedResults.node(i);
+    }
+    return seeds;
+  }
+
+  /**
+   * Spawns one virtual-thread worker per seed, each running a fresh {@link HnswSearcher}'s layer-0
+   * beam search, then merges their {@link NeighborArray} outputs into a single top-{@code k} {@link
+   * SearchResult} using a size-bounded min-heap and a de-dup {@link BitSet}.
+   */
+  private SearchResult runParallelBeams(float[] query, int k, int efSearch, int[] seeds) {
+    List<NeighborArray> perWorker = new ArrayList<>(seeds.length);
+    try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+      List<Future<NeighborArray>> futures = new ArrayList<>(seeds.length);
+      for (int seed : seeds) {
+        final int s = seed;
+        futures.add(
+            exec.submit(
+                () -> {
+                  HnswSearcher worker =
+                      new HnswSearcher(graph, vectors, similarityFunction, scorerFactory);
+                  NodeScorer ws = scorerFactory.scorer(query);
+                  return worker.beamSearch(new int[] {s}, efSearch, 0, ws);
+                }));
+      }
+      for (Future<NeighborArray> f : futures) {
+        try {
+          perWorker.add(f.get());
+        } catch (ExecutionException e) {
+          throw new RuntimeException("searchMultiStart worker failed", e.getCause());
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new RuntimeException("searchMultiStart interrupted", e);
+        }
+      }
+    }
+
+    // Merge: size-bounded min-heap + BitSet de-dup. NodeQueue requires non-negative scores, so we
+    // use insertWithOverflow which already guards the bound; duplicates across workers are skipped.
+    NodeQueue resultHeap = new NodeQueue(Math.max(1, k), true);
+    BitSet sink = new BitSet(graph.size());
+    for (NeighborArray na : perWorker) {
+      for (int i = 0; i < na.size(); i++) {
+        int id = na.node(i);
+        if (sink.get(id)) continue;
+        sink.set(id);
+        resultHeap.insertWithOverflow(id, na.score(i), k);
+      }
+    }
+
+    int resultSize = resultHeap.size();
+    int[] nodeIds = new int[resultSize];
+    float[] scores = new float[resultSize];
+    for (int i = resultSize - 1; i >= 0; i--) {
+      long entry = resultHeap.poll();
+      nodeIds[i] = NodeQueue.nodeId(entry);
+      scores[i] = NodeQueue.score(entry);
+    }
+    return new SearchResult(nodeIds, scores);
   }
 
   /**

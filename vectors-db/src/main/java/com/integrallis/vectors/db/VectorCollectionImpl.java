@@ -5,6 +5,8 @@ import com.integrallis.vectors.db.filter.Filter;
 import com.integrallis.vectors.db.filter.FilterExecutor;
 import com.integrallis.vectors.db.id.IdMapper;
 import com.integrallis.vectors.db.id.InMemoryIdMapper;
+import com.integrallis.vectors.db.index.CuVsBruteForceAdapter;
+import com.integrallis.vectors.db.index.CuVsCagraAdapter;
 import com.integrallis.vectors.db.index.FlatScanAdapter;
 import com.integrallis.vectors.db.index.HnswIndexAdapter;
 import com.integrallis.vectors.db.index.IndexSpi;
@@ -343,6 +345,11 @@ final class VectorCollectionImpl implements VectorCollection {
         VectorCollectionConfig.IvfParams p = config.ivfParams();
         yield new IvfFlatAdapter(p.k(), p.nprobe(), p.maxIter(), p.gamma(), p.soar(), p.seed());
       }
+      case CUVS_BRUTEFORCE ->
+          new CuVsBruteForceAdapter(
+              (VectorCollectionConfig.CuVsParams.BruteForce) config.cuvsParams());
+      case CUVS_CAGRA ->
+          new CuVsCagraAdapter((VectorCollectionConfig.CuVsParams.Cagra) config.cuvsParams());
     };
   }
 
@@ -416,6 +423,10 @@ final class VectorCollectionImpl implements VectorCollection {
                 manifest.graphBinLength() > 0L
                     ? openIvfFlatAdapter(genDir, manifest, mapped)
                     : new MappedFlatScanAdapter(mapped, config.metric());
+            case CUVS_BRUTEFORCE, CUVS_CAGRA ->
+                throw new UnsupportedOperationException(
+                    "CUVS_* index types do not support persistent storage yet: "
+                        + manifest.indexType());
           };
 
       if (manifest.quantizedBinLength() > 0L) {
@@ -1262,6 +1273,9 @@ final class VectorCollectionImpl implements VectorCollection {
       case FLAT ->
           throw new IllegalStateException(
               "encodeGraphBytes called with non-graph indexType " + config.indexType());
+      case CUVS_BRUTEFORCE, CUVS_CAGRA ->
+          throw new UnsupportedOperationException(
+              "CUVS_* index types do not support persistent storage yet: " + config.indexType());
     };
   }
 
@@ -1391,6 +1405,13 @@ final class VectorCollectionImpl implements VectorCollection {
               return FilterExecutor.matches(f, doc.metadata());
             };
         // No candidate expansion needed — the predicate enforces filter during traversal.
+        // Phase 1: filtered multi-start is deferred; ignore searchMultiStart here.
+        if (request.searchMultiStart() > 1) {
+          LOGGER.log(
+              java.util.logging.Level.FINE,
+              "searchMultiStart={0} ignored on ACORN pre-filter path (Phase 1 scope)",
+              request.searchMultiStart());
+        }
         outcome =
             gen.spi.searchWithPredicate(
                 request.query(),
@@ -1407,9 +1428,19 @@ final class VectorCollectionImpl implements VectorCollection {
                   Math.max(gen.liveCount(), request.k()));
           candidateSearchListSize = Math.max(candidateK, request.searchListSize());
         }
-        outcome =
-            gen.spi.search(
-                request.query(), candidateK, candidateSearchListSize, request.overQueryFactor());
+        if (request.searchMultiStart() > 1) {
+          outcome =
+              gen.spi.search(
+                  request.query(),
+                  candidateK,
+                  candidateSearchListSize,
+                  request.overQueryFactor(),
+                  request.searchMultiStart());
+        } else {
+          outcome =
+              gen.spi.search(
+                  request.query(), candidateK, candidateSearchListSize, request.overQueryFactor());
+        }
       }
 
       int[] ordinals = outcome.ordinals();

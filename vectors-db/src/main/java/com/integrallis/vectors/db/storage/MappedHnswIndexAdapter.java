@@ -115,6 +115,39 @@ public final class MappedHnswIndexAdapter implements IndexSpi {
   }
 
   /**
+   * Multi-start parallel variant: routes through {@link HnswIndex#searchMultiStart} when {@code
+   * searchMultiStart > 1}. {@link com.integrallis.vectors.hnsw.RandomAccessVectors} backed by
+   * {@code MemorySegmentRandomAccessVectors} uses per-thread scratch — safe for multi-start because
+   * each worker allocates a fresh {@link com.integrallis.vectors.hnsw.HnswSearcher} on its own
+   * virtual thread.
+   */
+  @Override
+  public SearchOutcome search(
+      float[] query, int k, int searchListSize, float overQueryFactor, int searchMultiStart) {
+    Objects.requireNonNull(query, "query must not be null");
+    if (k <= 0) {
+      throw new IllegalArgumentException("k must be positive: " + k);
+    }
+    if (searchMultiStart <= 1) {
+      return search(query, k, searchListSize, overQueryFactor);
+    }
+    if (index.size() == 0) {
+      return new SearchOutcome(new int[0], new float[0]);
+    }
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Query dimension " + query.length + " does not match index dimension " + dimension);
+    }
+    if (overQueryFactor > 1.0f && index.isQuantizationEnabled()) {
+      // Phase 1 does not combine two-pass rescore + multi-start; fall back to single-start.
+      return search(query, k, searchListSize, overQueryFactor);
+    }
+    int efSearch = Math.max(searchListSize, k);
+    SearchResult result = index.searchMultiStart(query, k, efSearch, searchMultiStart);
+    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+  }
+
+  /**
    * Attaches compressed vectors for quantized two-pass search. Once enabled, {@link
    * #search(float[], int, int, float)} will delegate to {@link HnswIndex#searchTwoPass} when {@code
    * overQueryFactor > 1.0f}.

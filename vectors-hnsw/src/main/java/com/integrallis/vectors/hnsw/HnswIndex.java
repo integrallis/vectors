@@ -141,6 +141,39 @@ public final class HnswIndex {
   }
 
   /**
+   * Multi-start parallel beam search at layer 0. Runs {@code nStarts} independent beam searches
+   * from diverse seed nodes on virtual threads and merges their outputs into a single top-{@code k}
+   * result. Composes with {@link com.integrallis.vectors.db.VectorCollection#searchBatch(
+   * java.util.List) searchBatch} for a batch × multi-start (N×M) parallelism product.
+   *
+   * <p>Thread safety: the orchestrator searcher is allocated fresh on every call rather than
+   * retrieved from {@link #threadLocalSearcher}, because a virtual thread can hop carriers between
+   * {@code get()} calls and the thread-local pool is keyed by carrier, not virtual thread. Workers
+   * each allocate their own {@link HnswSearcher}, so no scratch is shared across threads.
+   *
+   * <p>When {@code nStarts <= 1} this delegates to {@link #search} and is bit-identical to the
+   * single-start path.
+   *
+   * @param query the query vector
+   * @param k number of results to return
+   * @param efSearch beam width per worker at layer 0 (must be >= k)
+   * @param nStarts number of parallel seeds (values <= 1 delegate to single-start search)
+   * @return the top-k results sorted by score descending
+   */
+  public SearchResult searchMultiStart(float[] query, int k, int efSearch, int nStarts) {
+    if (nStarts <= 1) {
+      return search(query, k, efSearch);
+    }
+    HnswSearcher orchestrator = new HnswSearcher(graph, vectors, similarityFunction);
+    return orchestrator.searchMultiStart(query, k, efSearch, nStarts);
+  }
+
+  /** Multi-start parallel search with default efSearch = max(k, 100). Thread-safe. */
+  public SearchResult searchMultiStart(float[] query, int k, int nStarts) {
+    return searchMultiStart(query, k, Math.max(k, 100), nStarts);
+  }
+
+  /**
    * Two-pass search: fast quantized coarse pass followed by full-precision rescore.
    *
    * <p>If no quantization is enabled, falls back to the full-precision searcher running the same

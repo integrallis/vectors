@@ -16,6 +16,7 @@ import java.util.Objects;
  *   <li>{@code filter} = null (no filter; semantically equivalent to {@link
  *       com.integrallis.vectors.db.filter.Filters#all()})
  *   <li>{@code includeVector} = {@code includeText} = {@code includeMetadata} = true
+ *   <li>{@code searchMultiStart} = 1 (single-start beam search)
  * </ul>
  *
  * <p><b>Two independent multipliers.</b> {@code overQueryFactor} controls how many extra candidates
@@ -41,12 +42,16 @@ public record SearchRequest(
     Filter filter,
     boolean includeVector,
     boolean includeText,
-    boolean includeMetadata) {
+    boolean includeMetadata,
+    int searchMultiStart) {
 
   public SearchRequest {
     Objects.requireNonNull(query, "query must not be null");
     if (k <= 0) {
       throw new IllegalArgumentException("k must be positive: " + k);
+    }
+    if (searchMultiStart < 1) {
+      throw new IllegalArgumentException("searchMultiStart must be >= 1: " + searchMultiStart);
     }
   }
 
@@ -68,6 +73,7 @@ public record SearchRequest(
     private boolean includeVector = true;
     private boolean includeText = true;
     private boolean includeMetadata = true;
+    private Integer searchMultiStart;
 
     private Builder(float[] query, int k) {
       this.query = Objects.requireNonNull(query, "query must not be null");
@@ -142,14 +148,35 @@ public record SearchRequest(
       return this;
     }
 
+    /**
+     * Sets the number of parallel seed starts for multi-start beam search on graph-based backends.
+     * Default {@code 1} runs a single-start beam search (bit-identical to the legacy path). Values
+     * {@code > 1} dispatch {@code searchMultiStart} independent beam searches on virtual threads
+     * and merge their top-k outputs; composes with {@link VectorCollection#searchBatch} for a batch
+     * × multi-start (N×M) parallelism product.
+     *
+     * <p>Non-graph backends (flat scan, IVF) ignore this parameter. The ACORN pre-filter path also
+     * ignores this parameter in Phase 1 (filtered multi-start is deferred).
+     *
+     * @throws IllegalArgumentException if {@code searchMultiStart < 1}
+     */
+    public Builder searchMultiStart(int searchMultiStart) {
+      if (searchMultiStart < 1) {
+        throw new IllegalArgumentException("searchMultiStart must be >= 1: " + searchMultiStart);
+      }
+      this.searchMultiStart = searchMultiStart;
+      return this;
+    }
+
     /** Constructs the {@link SearchRequest} with defaults applied for any unset fields. */
     public SearchRequest build() {
       int l = searchListSize != null ? searchListSize : Math.max(k, 100);
       float oqf = overQueryFactor != null ? overQueryFactor : 4.0f;
       float fe = filterExpansion != null ? filterExpansion : 4.0f;
       float ms = minScore != null ? minScore : -Float.MAX_VALUE;
+      int sms = searchMultiStart != null ? searchMultiStart : 1;
       return new SearchRequest(
-          query, k, l, oqf, fe, ms, filter, includeVector, includeText, includeMetadata);
+          query, k, l, oqf, fe, ms, filter, includeVector, includeText, includeMetadata, sms);
     }
   }
 }

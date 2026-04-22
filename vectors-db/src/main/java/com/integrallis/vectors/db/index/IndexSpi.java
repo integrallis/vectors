@@ -42,6 +42,29 @@ public interface IndexSpi extends AutoCloseable {
   SearchOutcome search(float[] query, int k, int searchListSize, float overQueryFactor);
 
   /**
+   * Multi-start variant of {@link #search}: runs {@code searchMultiStart} independent beam searches
+   * from diverse seed nodes in parallel and merges their outputs.
+   *
+   * <p>Default implementation ignores {@code searchMultiStart} and delegates to the 4-arg {@link
+   * #search} — brute-force backends and any backend that does not support multi-start beam search
+   * inherit single-start behavior with no behavioural change. Graph-based implementations ({@code
+   * HnswIndexAdapter}, {@code MappedHnswIndexAdapter}) override this to route through {@link
+   * com.integrallis.vectors.hnsw.HnswIndex#searchMultiStart}.
+   *
+   * @param query the query vector
+   * @param k number of final results requested
+   * @param searchListSize coarse-pass beam width (may be ignored by brute-force backends)
+   * @param overQueryFactor multiplier applied to {@code k} for the coarse pass
+   * @param searchMultiStart number of parallel seed starts; values {@code <= 1} behave identically
+   *     to {@link #search}
+   * @return the top-k ordinals and scores (descending)
+   */
+  default SearchOutcome search(
+      float[] query, int k, int searchListSize, float overQueryFactor, int searchMultiStart) {
+    return search(query, k, searchListSize, overQueryFactor);
+  }
+
+  /**
    * ACORN-style pre-filtered search using an ordinal-level predicate.
    *
    * <p>Default implementation ignores the predicate and delegates to {@link #search}; the caller is
