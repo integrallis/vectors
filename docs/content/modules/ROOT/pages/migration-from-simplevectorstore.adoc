@@ -1,0 +1,130 @@
+= Migrating from Spring AI SimpleVectorStore
+:navtitle: Migrating from SimpleVectorStore
+
+`SimpleVectorStore` ships as the in-memory reference implementation of Spring AI's
+`VectorStore`. It loads every vector into a `ConcurrentHashMap` and scans the full map on
+every query. This page shows how to replace it with `VectorCollection` in roughly five
+lines of change while keeping the rest of your application untouched.
+
+== The five-line migration
+
+Replace the `SimpleVectorStore` construction with a `VectorCollection` builder:
+
+[source,java,subs="attributes+"]
+----
+// Before -- Spring AI SimpleVectorStore
+VectorStore store = SimpleVectorStore.builder(embeddingModel).build();
+
+// After -- Vectors
+VectorCollection store = VectorCollection.builder()
+    .dimension(embeddingModel.dimensions())
+    .indexType(IndexType.HNSW)
+    .metric(SimilarityFunction.COSINE)
+    .build();
+----
+
+The rest of your write and read paths translate line-for-line.
+
+== Writes
+
+Spring AI writes pass `org.springframework.ai.document.Document` instances through the
+configured `EmbeddingModel` before storage. Vectors takes the embedding directly, so you
+typically call the model yourself (or reuse your existing pipeline):
+
+[source,java]
+----
+// Before
+List<org.springframework.ai.document.Document> docs = List.of(
+    new org.springframework.ai.document.Document("hello"),
+    new org.springframework.ai.document.Document("world"));
+springStore.add(docs);
+
+// After
+List<com.integrallis.vectors.db.Document> docs = List.of(
+    Document.of("1", embeddingModel.embed("hello"), "hello"),
+    Document.of("2", embeddingModel.embed("world"), "world"));
+store.addAll(docs);
+----
+
+== Queries
+
+`SimpleVectorStore#similaritySearch` accepts either a text query (embedded internally) or
+a `SearchRequest`. The Vectors equivalent uses `SearchRequest.builder(query, k)`:
+
+[source,java]
+----
+// Before
+List<org.springframework.ai.document.Document> hits =
+    springStore.similaritySearch(SearchRequest.query("hello").withTopK(5));
+
+// After
+float[] query = embeddingModel.embed("hello");
+SearchResult result = store.search(
+    SearchRequest.builder(query, 5).build());
+List<Document> hits = result.documents();
+----
+
+Scores are available directly on `SearchResult#scores()`, one per returned document.
+
+== Metadata filters
+
+Spring AI expresses filters as an SpEL-like string evaluated at query time:
+
+[source,java]
+----
+// Before
+springStore.similaritySearch(
+    SearchRequest.query("q").withFilterExpression("author == 'alice'"));
+----
+
+Vectors uses a typed filter tree constructed fluently:
+
+[source,java]
+----
+// After
+SearchResult result = store.search(
+    SearchRequest.builder(query, 5)
+        .filter(Filters.eq("author", "alice"))
+        .build());
+----
+
+`Filters` exposes `eq`, `ne`, `in`, `gt`, `gte`, `lt`, `lte`, `and`, `or`, `not`,
+`exists`, and range predicates that compose to the same set of constraints SpEL provided.
+
+== Batched queries
+
+`SimpleVectorStore` has no public batching API -- callers wrap `similaritySearch` in
+threads themselves. Vectors exposes batched search directly, with per-query parallelism
+on virtual threads:
+
+[source,java]
+----
+List<SearchRequest> requests = List.of(
+    SearchRequest.builder(embed("q1"), 5).build(),
+    SearchRequest.builder(embed("q2"), 5).build(),
+    SearchRequest.builder(embed("q3"), 5).build());
+List<SearchResult> results = store.searchBatch(requests);
+----
+
+== Persistence
+
+`SimpleVectorStore` persists the map as JSON via `save(File)` / `load(File)`. Vectors
+provides segment-oriented persistence through the persistent collection variant; see the
+Getting Started guide for the full walkthrough.
+
+== What you gain
+
+* **Sublinear search** -- HNSW graph navigation replaces the full linear scan; typical
+  10--100× QPS improvement at the same recall on corpora above a few thousand vectors.
+* **Intra-query parallelism** -- `searchMultiStart` on `SearchRequest` fans out beam
+  searches across virtual threads, trading CPU for latency at high recall.
+* **Quantization** -- swap in `QuantizerKind.SQ8` or `QuantizerKind.RABITQ` on the builder
+  to shrink the footprint by 4×--32× with `IndexRefine` restoring recall when needed.
+* **Composition** -- wrap any backend with `IndexShards` (horizontal partitioning) or
+  `IndexReplicas` (concurrency fan-out) without code changes in the call sites.
+
+== What you keep
+
+* The same `Document`-style abstraction (id + vector + optional text + metadata).
+* The same "build once, query many" lifecycle.
+* Pure Java -- no native libraries, no JNI, no GPU backends required.

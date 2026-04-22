@@ -1,0 +1,141 @@
+= Sizing Guide
+:navtitle: Sizing Guide
+
+This page helps you estimate how many vectors fit in a given memory budget and pick an
+index / quantizer combination that matches your dataset and SLO.
+
+== Memory model
+
+Vectors uses two memory pools:
+
+* **Heap** -- Java objects, HNSW/Vamana graph nodes, in-memory vector arrays
+  (`float[][]`). Bounded by `-Xmx`.
+* **Off-heap (`MemorySegment`)** -- memory-mapped `vectors.bin` and `graph.bin` files used
+  by persistent collections. Bounded by RAM plus OS page-cache behaviour, not by `-Xmx`.
+
+All calculations below assume the **in-memory** (heap-resident) configuration unless
+noted. Persistent/mmap-backed collections lift the per-vector heap cost to roughly a few
+dozen bytes per node (graph adjacency) and push the float payload off-heap.
+
+== Per-vector cost by encoding
+
+The dominant cost is the vector payload. For dimension `dim`:
+
+[cols="2,2,3", options="header"]
+|===
+| Encoding | Bytes per vector | Notes
+| `FLOAT32`        | `4 × dim`       | Full precision; reference.
+| `INT8` (scalar)  | `1 × dim` + 8   | 1 byte per element + per-vector `{min, scale}`.
+| `BINARY` (BQ)    | `dim / 8`       | 1 bit per element, rounded up to the nearest byte.
+|===
+
+For rescore-style configurations (quantized navigator + full-precision retained for exact
+rescore via `IndexRefine`), add the `FLOAT32` cost on top of the navigator encoding.
+
+== Per-node index overhead
+
+Graph indexes add adjacency lists per node. Approximate overhead in bytes:
+
+[cols="2,3,3", options="header"]
+|===
+| Index     | Formula                            | Example
+| `FLAT`    | `0`                                | no graph
+| `HNSW`    | `≈ 12 × M`                         | M=16 → ~192 B; M=32 → ~384 B
+| `VAMANA`  | `≈ 4 × R`                          | R=32 → ~128 B; R=64 → ~256 B
+| `IVF_FLAT`| `≈ 4 × k` (centroid ids only)      | k=√n; tiny per vector
+|===
+
+The `12 × M` factor for HNSW reflects level-0 adjacency (`2 × M` neighbours × 4 bytes)
+plus upper-level contributions amortised across the node population. Vamana is single-layer.
+
+== Capacity tables (heap-resident)
+
+Usable heap is approximately `-Xmx × 0.75` after GC and JVM overhead. The tables below
+give the vector count at full utilisation for three common dimensions: `384`
+(MiniLM / E5-small), `768` (BERT / OpenAI ada-002-small), and `1536` (OpenAI ada-002).
+
+=== FLAT + FLOAT32
+
+[cols="1,1,1,1", options="header"]
+|===
+| dim | `-Xmx 4G` | `-Xmx 8G` | `-Xmx 16G`
+| 384  | ~2.0 M | ~4.0 M | ~8.0 M
+| 768  | ~1.0 M | ~2.0 M | ~4.0 M
+| 1536 | ~0.5 M | ~1.0 M | ~2.0 M
+|===
+
+=== HNSW (M=16) + FLOAT32
+
+Per vector: `4 × dim + 192` bytes.
+
+[cols="1,1,1,1", options="header"]
+|===
+| dim | `-Xmx 4G` | `-Xmx 8G` | `-Xmx 16G`
+| 384  | ~1.85 M | ~3.7 M | ~7.4 M
+| 768  | ~0.93 M | ~1.85 M | ~3.7 M
+| 1536 | ~0.48 M | ~0.97 M | ~1.95 M
+|===
+
+=== HNSW (M=16) + INT8 (quantized navigator, no rescore vectors)
+
+Per vector: `dim + 200` bytes.
+
+[cols="1,1,1,1", options="header"]
+|===
+| dim | `-Xmx 4G` | `-Xmx 8G` | `-Xmx 16G`
+| 384  | ~5.2 M  | ~10.4 M | ~20.8 M
+| 768  | ~3.1 M  | ~6.2 M  | ~12.4 M
+| 1536 | ~1.75 M | ~3.5 M  | ~7.0 M
+|===
+
+=== HNSW (M=16) + INT8 navigator + FLOAT32 rescore (`IndexRefine`)
+
+Per vector: `4 × dim + dim + 200` bytes ≈ `5 × dim + 200`.
+
+[cols="1,1,1,1", options="header"]
+|===
+| dim | `-Xmx 4G` | `-Xmx 8G` | `-Xmx 16G`
+| 384  | ~1.48 M | ~2.95 M | ~5.9 M
+| 768  | ~0.75 M | ~1.50 M | ~3.0 M
+| 1536 | ~0.38 M | ~0.76 M | ~1.52 M
+|===
+
+=== HNSW (M=16) + Binary (BQ) navigator + FLOAT32 rescore
+
+Per vector: `4 × dim + dim/8 + 200`.
+
+[cols="1,1,1,1", options="header"]
+|===
+| dim | `-Xmx 4G` | `-Xmx 8G` | `-Xmx 16G`
+| 384  | ~1.87 M | ~3.75 M | ~7.5 M
+| 768  | ~0.94 M | ~1.88 M | ~3.75 M
+| 1536 | ~0.48 M | ~0.96 M | ~1.92 M
+|===
+
+== Choosing a configuration
+
+[cols="2,3,3", options="header"]
+|===
+| Corpus size | In-memory choice                  | Persistent / mmap choice
+| `< 100K`    | `FLAT` (exact)                    | `FLAT`
+| `100K–10M`  | `HNSW` M=16 + FLOAT32             | `VAMANA` (mmap) or `HNSW` mmap
+| `10M–100M`  | `HNSW` + INT8 + rescore           | `VAMANA` + INT8 rescore
+| `> 100M`    | Shards (`IndexShards`) of the above or `IVF_FLAT` | `VAMANA` mmap + shards
+|===
+
+== Tuning knobs
+
+* **HNSW `M`** -- higher `M` increases recall but raises per-node overhead by `~12 × M`
+  bytes. Typical range: `16–48`.
+* **Vamana `R`** -- graph degree; similar effect to HNSW `M`. Typical range: `32–64`.
+* **`overQueryFactor`** -- coarse-pass over-fetch; recall tuning without rebuild.
+* **`searchMultiStart`** -- intra-query parallelism for HNSW via virtual threads; raises
+  QPS at high recall at the cost of extra CPU per query.
+* **IVF `nprobe`** -- number of clusters scanned; controls recall/latency trade.
+
+== Off-heap (mmap) note
+
+For persistent collections the `vectors.bin` payload is zero-copy via `MemorySegment`
+over mmap. Heap pressure drops to the graph adjacency lists plus per-document metadata;
+the OS page cache is the effective capacity ceiling. See the Getting Started guide for
+enabling `PersistentVectorCollection`.
