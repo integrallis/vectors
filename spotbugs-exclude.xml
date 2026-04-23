@@ -389,4 +389,31 @@
         </Or>
     </Match>
 
+    <!-- vectors-vcr-*: CassetteRecord subtypes, VCRContext, and wrapper classes intentionally
+         share float[] embedding references and framework-specific model instances by reference
+         (zero-copy recording path; wrapping must not clone the underlying model). -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.vcr.CassetteRecord$Embedding"/>
+            <Class name="com.integrallis.vectors.vcr.CassetteRecord$BatchEmbedding"/>
+            <Class name="com.integrallis.vectors.vcr.VCRContext"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.vcr.springai.VCRSpringAIEmbeddingModel"/>
+            <Class name="com.integrallis.vectors.vcr.springai.VCRSpringAIChatModel"/>
+            <Class name="com.integrallis.vectors.vcr.langchain4j.VCREmbeddingModel"/>
+            <Class name="com.integrallis.vectors.vcr.langchain4j.VCRChatModel"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
 </FindBugsFilter>
