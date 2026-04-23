@@ -93,7 +93,7 @@ public class IvfPqLargeScaleBenchmark {
     // Probe √k clusters — the textbook IVF operating point at which recall plateaus.
     this.nprobe = (int) Math.max(1, Math.ceil(Math.sqrt(k)));
     // maxIter=10: benchmark measures search scaling, not k-means convergence quality.
-    IvfBuildParams base = new IvfBuildParams(k, 10, 0f, false, 42L, 0, 0, 256, -1f);
+    IvfBuildParams base = new IvfBuildParams(k, 10, 0f, false, 42L, 0);
     IvfBuildParams params = base.withPq(pqSubspaces);
     index = IvfIndex.build(corpus, null, SimilarityFunction.EUCLIDEAN, params);
   }
