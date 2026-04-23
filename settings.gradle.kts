@@ -15,6 +15,7 @@ include("vectors-langchain4j")
 include("vectors-bench")
 // --- VCR test harness modules ---
 include("vectors-vcr-core")
+include("vectors-vcr-semantic-db")
 include("vectors-vcr-serde-avaje")
 include("vectors-vcr-serde-jackson")
 include("vectors-vcr-junit5")

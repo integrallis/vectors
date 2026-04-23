@@ -1,4 +1,4 @@
-package com.integrallis.vectors.vcr;
+package com.integrallis.vectors.vcr.semantic;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.Document;
@@ -8,6 +8,11 @@ import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.storage.backend.StorageBackend;
+import com.integrallis.vectors.vcr.CassetteKey;
+import com.integrallis.vectors.vcr.CassetteRecord;
+import com.integrallis.vectors.vcr.CassetteSerializer;
+import com.integrallis.vectors.vcr.CassetteStore;
+import com.integrallis.vectors.vcr.ExactCassetteStore;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;

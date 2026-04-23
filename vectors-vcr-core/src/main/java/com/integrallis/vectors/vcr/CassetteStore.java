@@ -9,8 +9,8 @@ import java.util.Optional;
  * <ul>
  *   <li>{@link ExactCassetteStore} — exact key lookup backed by a {@link
  *       com.integrallis.vectors.storage.backend.StorageBackend}
- *   <li>{@code SemanticCassetteStore} (in the {@code vectors-db}-backed module) — fuzzy lookup by
- *       vector similarity, with exact-key fallback
+ *   <li>{@code SemanticCassetteStore} (in the {@code vectors-vcr-semantic-db} module) — fuzzy
+ *       lookup by vector similarity, with exact-key fallback
  * </ul>
  *
  * <p>Implementations must be safe for concurrent use from a single test process.

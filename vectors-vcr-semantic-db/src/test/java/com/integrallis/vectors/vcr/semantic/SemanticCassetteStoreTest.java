@@ -1,4 +1,4 @@
-package com.integrallis.vectors.vcr;
+package com.integrallis.vectors.vcr.semantic;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.integrallis.vectors.storage.backend.HeapStorageBackend;
+import com.integrallis.vectors.vcr.CassetteKey;
+import com.integrallis.vectors.vcr.CassetteRecord;
 import java.io.IOException;
 import java.util.Optional;
 import org.junit.jupiter.api.Tag;
