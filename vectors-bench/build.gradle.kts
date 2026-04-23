@@ -87,7 +87,7 @@ tasks.register<JavaExec>("recallQps") {
 
     jvmArgs(
         "--add-modules", "jdk.incubator.vector",
-        "-Xmx12g", "-Xms4g",
+        "-Xmx12g", "-Xms12g",
         "-XX:+UseG1GC",
         "-XX:MaxGCPauseMillis=100"
     )
