@@ -22,13 +22,19 @@ dependencies {
 }
 
 jmh {
+    // -Pivfpq.largeScale=true un-gates IvfPqLargeScaleBenchmark (n=1M trial setup) and
+    // bumps the JVM heap to 16g to accommodate a 1M×768 float corpus (~3 GB live) plus
+    // the IVF-PQ codebook and K-Means intermediate state.
+    val largeScale = project.hasProperty("ivfpq.largeScale")
+    val xmx = if (largeScale) "16g" else "8g"
+
     // Vector API module required for SIMD kernels.
     // -Xmx/-Xms: large heap for 1M-vector datasets loaded into memory.
     // AlwaysPreTouch: eliminates OS page-fault noise during measurement.
     // G1GC with bounded pause target: keeps GC pauses out of latency tail.
     jvmArgs.addAll(listOf(
         "--add-modules", "jdk.incubator.vector",
-        "-Xmx8g", "-Xms8g",
+        "-Xmx$xmx", "-Xms$xmx",
         "-XX:+AlwaysPreTouch",
         "-XX:+UseG1GC",
         "-XX:MaxGCPauseMillis=100"
@@ -37,6 +43,11 @@ jmh {
     // Allow filtering via: ./gradlew :vectors-bench:jmh -Pjmh.includes="BenchmarkName"
     if (project.hasProperty("jmh.includes")) {
         includes.set(listOf(project.property("jmh.includes") as String))
+    }
+    // Exclude multi-hour large-scale benchmarks from the default run. Users opt in by
+    // setting -Pivfpq.largeScale=true (typically together with -Pjmh.includes=...).
+    if (!largeScale) {
+        excludes.addAll(listOf(".*LargeScale.*"))
     }
     // Time-box overrides for short/dev runs:
     //   -Pjmh.fork=1 -Pjmh.warmup=1 -Pjmh.iterations=2 -Pjmh.timeOnIteration=1s
