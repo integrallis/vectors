@@ -28,6 +28,10 @@ include("vectors-server")
 
 // --- Caching layer ---
 include("vectors-cache")
+include("vectors-cache-jcache")
+include("vectors-cache-semantic-db")
+include("vectors-cache-spring-ai")
+include("vectors-cache-langchain4j")
 
 include("docs")
 

@@ -427,6 +427,24 @@
         </Or>
     </Match>
 
+    <!-- vectors-cache-*: caching decorators intentionally expose the wrapped delegate model,
+         chat model, or embedding store reference via delegate(). The wrapped instance is
+         supplied by the caller, which retains full ownership; the decorator cannot clone an
+         interface reference. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.cache.springai.CachingEmbeddingModel"/>
+            <Class name="com.integrallis.vectors.cache.springai.CachingChatModel"/>
+            <Class name="com.integrallis.vectors.cache.langchain4j.CachingEmbeddingModel"/>
+            <Class name="com.integrallis.vectors.cache.langchain4j.CachingChatModel"/>
+            <Class name="com.integrallis.vectors.cache.langchain4j.CachingEmbeddingStore"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
     <!-- vectors-db: IndexReplicas.commonSize is written once in build() under the writer lock
          and read in size() without synchronization. The stale-read window is benign. -->
     <Match>
