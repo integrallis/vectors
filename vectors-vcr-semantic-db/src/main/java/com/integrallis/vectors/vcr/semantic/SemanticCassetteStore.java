@@ -67,6 +67,12 @@ public final class SemanticCassetteStore implements CassetteStore {
       CassetteSerializer serializer,
       int dimension,
       float defaultThreshold) {
+    if (dimension <= 0) {
+      throw new IllegalArgumentException("dimension must be positive: " + dimension);
+    }
+    if (defaultThreshold < 0f || defaultThreshold > 1f) {
+      throw new IllegalArgumentException("defaultThreshold must be in [0, 1]: " + defaultThreshold);
+    }
     this.exactStore =
         new ExactCassetteStore(Objects.requireNonNull(backend, "backend"), serializer);
     this.defaultThreshold = defaultThreshold;

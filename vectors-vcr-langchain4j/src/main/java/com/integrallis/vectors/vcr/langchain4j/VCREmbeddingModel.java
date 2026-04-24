@@ -83,7 +83,14 @@ public final class VCREmbeddingModel implements EmbeddingModel {
     if (mode.isPlaybackMode()) {
       Optional<CassetteRecord> hit = store.retrieve(key);
       if (hit.isPresent()) {
-        return ((CassetteRecord.Embedding) hit.get()).embedding();
+        if (hit.get() instanceof CassetteRecord.Embedding e) {
+          return e.embedding();
+        }
+        throw new IllegalStateException(
+            "Expected Embedding cassette for key "
+                + key.serializedKey()
+                + " but got "
+                + hit.get().getClass().getSimpleName());
       }
       if (mode == VCRMode.PLAYBACK) {
         throw new VCRCassetteMissingException(key.serializedKey(), testId);
@@ -103,7 +110,14 @@ public final class VCREmbeddingModel implements EmbeddingModel {
     if (mode.isPlaybackMode()) {
       Optional<CassetteRecord> hit = store.retrieve(key);
       if (hit.isPresent()) {
-        float[][] arr = ((CassetteRecord.BatchEmbedding) hit.get()).embeddings();
+        if (!(hit.get() instanceof CassetteRecord.BatchEmbedding b)) {
+          throw new IllegalStateException(
+              "Expected BatchEmbedding cassette for key "
+                  + key.serializedKey()
+                  + " but got "
+                  + hit.get().getClass().getSimpleName());
+        }
+        float[][] arr = b.embeddings();
         List<float[]> result = new ArrayList<>(arr.length);
         for (float[] v : arr) {
           result.add(v);

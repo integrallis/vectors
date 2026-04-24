@@ -67,6 +67,7 @@ public sealed interface CassetteRecord
     public Chat {
       Objects.requireNonNull(testId, "testId");
       Objects.requireNonNull(model, "model");
+      Objects.requireNonNull(prompt, "prompt");
       Objects.requireNonNull(response, "response");
       metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
     }

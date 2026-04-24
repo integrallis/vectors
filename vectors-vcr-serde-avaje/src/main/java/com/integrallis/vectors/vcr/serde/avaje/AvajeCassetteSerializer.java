@@ -63,7 +63,7 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
       tree.put("testId", c.testId());
       tree.put("model", c.model());
       tree.put("timestamp", c.timestamp());
-      tree.put("prompt", c.prompt() == null ? "" : c.prompt());
+      tree.put("prompt", c.prompt());
       tree.put("response", c.response());
       tree.put("metadata", new LinkedHashMap<>(c.metadata()));
     } else {
@@ -97,7 +97,7 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
             metadata.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
           }
         }
-        String prompt = (String) map.get("prompt");
+        String prompt = map.get("prompt") instanceof String p ? p : "";
         String response = (String) map.get("response");
         yield new CassetteRecord.Chat(testId, model, timestamp, prompt, response, metadata);
       }

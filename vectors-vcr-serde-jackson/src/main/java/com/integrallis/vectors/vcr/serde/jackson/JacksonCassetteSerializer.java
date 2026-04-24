@@ -50,7 +50,7 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
       } else if (record instanceof CassetteRecord.Chat c) {
         g.writeStringField("type", TYPE_CHAT);
         writeCommon(g, c.testId(), c.model(), c.timestamp());
-        g.writeStringField("prompt", c.prompt() == null ? "" : c.prompt());
+        g.writeStringField("prompt", c.prompt());
         g.writeStringField("response", c.response());
         g.writeObjectFieldStart("metadata");
         for (Map.Entry<String, String> entry : c.metadata().entrySet()) {
@@ -99,7 +99,8 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
         case TYPE_CHAT -> {
           @SuppressWarnings("unchecked")
           Map<String, String> metadata = (Map<String, String>) fields.get("metadata");
-          String prompt = (String) fields.get("prompt");
+          Object promptObj = fields.get("prompt");
+          String prompt = promptObj instanceof String s ? s : "";
           String response = (String) fields.get("response");
           yield new CassetteRecord.Chat(
               testId, model, timestamp, prompt, response, metadata == null ? Map.of() : metadata);

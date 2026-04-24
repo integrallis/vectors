@@ -76,7 +76,14 @@ public final class VCRSpringAIChatModel implements ChatModel {
     if (mode.isPlaybackMode()) {
       Optional<CassetteRecord> cached = store.retrieve(key);
       if (cached.isPresent()) {
-        return ((CassetteRecord.Chat) cached.get()).response();
+        if (cached.get() instanceof CassetteRecord.Chat c) {
+          return c.response();
+        }
+        throw new IllegalStateException(
+            "Expected Chat cassette for key "
+                + key.serializedKey()
+                + " but got "
+                + cached.get().getClass().getSimpleName());
       }
       if (mode == VCRMode.PLAYBACK) {
         throw new VCRCassetteMissingException(key.serializedKey(), testId);

@@ -69,9 +69,12 @@
         <Class name="com.integrallis.vectors.hnsw.RandomAccessVectorDataset"/>
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
-    <!-- HNSW: FusedAdcGraph stores graph/list arrays by reference for zero-copy ADC search -->
+    <!-- HNSW: FusedAdcGraph and FusedAdcNeighborList store arrays by reference for zero-copy ADC search -->
     <Match>
-        <Class name="com.integrallis.vectors.hnsw.FusedAdcGraph"/>
+        <Or>
+            <Class name="com.integrallis.vectors.hnsw.FusedAdcGraph"/>
+            <Class name="com.integrallis.vectors.hnsw.FusedAdcNeighborList"/>
+        </Or>
         <Or>
             <Bug pattern="EI_EXPOSE_REP"/>
             <Bug pattern="EI_EXPOSE_REP2"/>
@@ -226,7 +229,10 @@
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
     <Match>
-        <Class name="com.integrallis.vectors.core.cluster.CentroidIndex"/>
+        <Or>
+            <Class name="com.integrallis.vectors.core.cluster.CentroidIndex"/>
+            <Class name="com.integrallis.vectors.core.cluster.CentroidIndex$RouteResult"/>
+        </Or>
         <Or>
             <Bug pattern="EI_EXPOSE_REP2"/>
             <Bug pattern="EI_EXPOSE_REP"/>
@@ -308,6 +314,11 @@
             <Class name="com.integrallis.vectors.bench.IvfSearchBenchmark"/>
             <Class name="com.integrallis.vectors.bench.VectorDbBenchmark"/>
             <Class name="com.integrallis.vectors.bench.BuildScalabilityBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.IvfPqSearchBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.IvfPqMmapSearchBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.IvfPqLargeScaleBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.PqTrainProbe"/>
+            <Class name="com.integrallis.vectors.bench.HnswThreadScalingProbe"/>
         </Or>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
@@ -414,6 +425,28 @@
             <Bug pattern="EI_EXPOSE_REP"/>
             <Bug pattern="EI_EXPOSE_REP2"/>
         </Or>
+    </Match>
+
+    <!-- vectors-db: IndexReplicas.commonSize is written once in build() under the writer lock
+         and read in size() without synchronization. The stale-read window is benign. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.index.IndexReplicas"/>
+        <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+    </Match>
+    <!-- vectors-db: IndexRefine intentionally stores the raw float[][] reference for zero-copy
+         scoring. Defensive copy of the N×D matrix would multiply memory consumption. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.index.IndexRefine"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- vectors-db: CuVs adapters write dimension/size once at init and read without sync.
+         The stale-read window is benign (fields are effectively final after build()). -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.db.index.CuVsBruteForceAdapter"/>
+            <Class name="com.integrallis.vectors.db.index.CuVsCagraAdapter"/>
+        </Or>
+        <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
     </Match>
 
 </FindBugsFilter>

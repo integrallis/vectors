@@ -59,8 +59,14 @@ public final class VCRChatModel implements ChatLanguageModel {
     if (mode.isPlaybackMode()) {
       Optional<CassetteRecord> hit = store.retrieve(key);
       if (hit.isPresent()) {
-        String text = ((CassetteRecord.Chat) hit.get()).response();
-        return Response.from(AiMessage.from(text));
+        if (!(hit.get() instanceof CassetteRecord.Chat c)) {
+          throw new IllegalStateException(
+              "Expected Chat cassette for key "
+                  + key.serializedKey()
+                  + " but got "
+                  + hit.get().getClass().getSimpleName());
+        }
+        return Response.from(AiMessage.from(c.response()));
       }
       if (mode == VCRMode.PLAYBACK) {
         throw new VCRCassetteMissingException(key.serializedKey(), testId);
