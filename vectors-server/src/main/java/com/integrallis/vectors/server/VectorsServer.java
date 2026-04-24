@@ -91,7 +91,7 @@ public final class VectorsServer implements Callable<Integer> {
               .port(config.port())
               .maxTcpConnections(config.maxConnections())
               .shutdownGracePeriod(Duration.ofSeconds(config.shutdownTimeoutSeconds()))
-              .routing(builder -> new ApiRouting(registry).apply(builder))
+              .routing(builder -> new ApiRouting(registry, config).apply(builder))
               .build()
               .start();
       return new ServerHandle(server, registry);

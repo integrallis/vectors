@@ -1,6 +1,7 @@
 package com.integrallis.vectors.server;
 
 import com.integrallis.vectors.db.VectorCollection;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -29,6 +30,7 @@ public final class CollectionRegistry implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(CollectionRegistry.class);
 
   private final ConcurrentHashMap<String, VectorCollection> collections = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Instant> createdAt = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, ReentrantLock> nameLocks = new ConcurrentHashMap<>();
 
   /**
@@ -69,10 +71,19 @@ public final class CollectionRegistry implements AutoCloseable {
       VectorCollection created = factory.apply(name);
       Objects.requireNonNull(created, "factory returned null");
       collections.put(name, created);
+      createdAt.put(name, Instant.now());
       return created;
     } finally {
       lock.unlock();
     }
+  }
+
+  /**
+   * @param name collection name
+   * @return creation timestamp, or empty if the name is not registered
+   */
+  public Optional<Instant> createdAt(String name) {
+    return Optional.ofNullable(createdAt.get(Objects.requireNonNull(name, "name")));
   }
 
   /**
@@ -91,6 +102,7 @@ public final class CollectionRegistry implements AutoCloseable {
       if (removed == null) {
         return false;
       }
+      createdAt.remove(name);
       removed.close();
       // Lock intentionally NOT removed from nameLocks — see class Javadoc.
       return true;
@@ -123,6 +135,7 @@ public final class CollectionRegistry implements AutoCloseable {
       }
     }
     collections.clear();
+    createdAt.clear();
     nameLocks.clear();
   }
 }

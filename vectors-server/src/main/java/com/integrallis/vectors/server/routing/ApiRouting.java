@@ -1,24 +1,28 @@
 package com.integrallis.vectors.server.routing;
 
 import com.integrallis.vectors.server.CollectionRegistry;
+import com.integrallis.vectors.server.ServerConfig;
 import io.helidon.webserver.http.HttpRouting;
 import java.util.Objects;
 
 /**
  * Assembles the complete HTTP routing tree for the server.
  *
- * <p>Phase 1 wires only {@link AdminRoutes}. Subsequent phases attach {@code CollectionsRoutes},
- * {@code DocumentsRoutes}, and {@code SearchRoutes} here.
+ * <p>Phase 2 wires {@link AdminRoutes} and {@link CollectionsRoutes}. Subsequent phases attach
+ * {@code DocumentsRoutes} and {@code SearchRoutes} here.
  */
 public final class ApiRouting {
 
   private final CollectionRegistry registry;
+  private final ServerConfig config;
 
   /**
    * @param registry the collection registry backing the API
+   * @param config server configuration (used by collection-creation routes)
    */
-  public ApiRouting(CollectionRegistry registry) {
+  public ApiRouting(CollectionRegistry registry, ServerConfig config) {
     this.registry = Objects.requireNonNull(registry, "registry");
+    this.config = Objects.requireNonNull(config, "config");
   }
 
   /**
@@ -26,5 +30,6 @@ public final class ApiRouting {
    */
   public void apply(HttpRouting.Builder builder) {
     builder.register(new AdminRoutes(registry));
+    builder.register(new CollectionsRoutes(registry, config));
   }
 }
