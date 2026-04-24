@@ -26,6 +26,9 @@ include("vectors-vcr-langchain4j")
 // --- HTTP server (Helidon SE 4 / Níma) ---
 include("vectors-server")
 
+// --- Caching layer ---
+include("vectors-cache")
+
 include("docs")
 
 // --- Runnable demos (not published) ---
