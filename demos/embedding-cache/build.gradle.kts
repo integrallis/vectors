@@ -1,7 +1,9 @@
-description = "Embedding cache demo using mmap-persistent VectorCollection"
+description = "Embedding cache demo using CachingEmbeddingModel (vectors-cache-langchain4j) + Caffeine"
 
 dependencies {
-    implementation(project(":vectors-db"))
+    implementation(project(":vectors-cache-langchain4j"))
+    implementation(project(":vectors-cache"))
+    implementation("dev.langchain4j:langchain4j-core:1.0.0-beta1")
 }
 
 application {

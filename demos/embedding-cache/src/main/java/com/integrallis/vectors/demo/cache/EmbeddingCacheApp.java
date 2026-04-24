@@ -1,37 +1,39 @@
 package com.integrallis.vectors.demo.cache;
 
-import com.integrallis.vectors.core.SimilarityFunction;
-import com.integrallis.vectors.db.Document;
-import com.integrallis.vectors.db.IndexType;
-import com.integrallis.vectors.db.VectorCollection;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
-import java.util.HexFormat;
+import com.integrallis.vectors.cache.CacheStats;
+import com.integrallis.vectors.cache.CaffeineVectorCache;
+import com.integrallis.vectors.cache.VectorCache;
+import com.integrallis.vectors.cache.langchain4j.CachingEmbeddingModel;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.output.Response;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 
 /**
- * Persistent embedding-cache demo.
+ * Embedding-cache demo using {@link CachingEmbeddingModel}.
  *
- * <p>Every production LLM pipeline recomputes embeddings. A mmap-persistent {@link
- * VectorCollection} beside the app is a zero-infra embedding cache: {@code get-or-embed} on miss,
- * sub-millisecond recall on hit, survives restarts, and scales to tens of millions of cached
- * embeddings on a commodity box.
+ * <p>Wraps a LangChain4j {@link EmbeddingModel} with {@link CachingEmbeddingModel}, backed by a
+ * {@link CaffeineVectorCache}. The decorator is a drop-in replacement — any framework-visible call
+ * site that talks to {@code EmbeddingModel} automatically benefits from the cache without code
+ * changes elsewhere.
  *
- * <p>Each text is keyed by a SHA-256 hash of its content. The cache is a {@code FLAT}-indexed
- * collection persisted at {@code ~/.java-vectors-demo/embedding-cache}. The first run populates the
- * cache (all misses). Subsequent runs hit the cache (zero calls into the real embedder).
+ * <p>This demo shows:
  *
- * <p>Run twice to see the effect:
+ * <ol>
+ *   <li>Single-text and batch embed paths both consult the cache.
+ *   <li>All batch misses are coalesced into a single delegate {@code embedAll} round-trip.
+ *   <li>Re-embedding already-seen texts hits the cache without invoking the delegate.
+ * </ol>
+ *
+ * <p>Run:
  *
  * <pre>
- *   ./gradlew :demos:embedding-cache:run     # first run: all misses
- *   ./gradlew :demos:embedding-cache:run     # second run: all hits
+ *   ./gradlew :demos:embedding-cache:run
  * </pre>
  */
 public final class EmbeddingCacheApp {
@@ -41,101 +43,116 @@ public final class EmbeddingCacheApp {
   private EmbeddingCacheApp() {}
 
   public static void main(String[] args) {
-    Path storage =
-        Path.of(System.getProperty("user.home"), ".java-vectors-demo", "embedding-cache");
-    AtomicInteger realEmbedderCalls = new AtomicInteger();
-    Function<String, float[]> realEmbedder =
-        text -> {
-          realEmbedderCalls.incrementAndGet();
-          return trigramVector(text, DIMENSION);
-        };
+    AtomicInteger delegateCalls = new AtomicInteger();
+    EmbeddingModel realModel = new CountingEmbeddingModel(DIMENSION, delegateCalls);
 
-    List<String> texts =
-        List.of(
-            "What is HNSW?",
-            "Explain product quantization.",
-            "How does mmap persistence work?",
-            "What is HNSW?", // duplicate — should hit the cache even on first run
-            "Describe scalar quantization.",
-            "Explain product quantization."); // duplicate
-
-    try (VectorCollection cache =
-        VectorCollection.builder()
-            .dimension(DIMENSION)
-            .metric(SimilarityFunction.COSINE)
-            .indexType(IndexType.FLAT)
-            .storagePath(storage)
-            .autoCommitThreshold(1)
+    try (VectorCache<String, float[]> cache =
+        CaffeineVectorCache.<String, float[]>builder()
+            .maximumSize(10_000L)
+            .expireAfterWrite(Duration.ofHours(1))
             .build()) {
 
-      System.out.println("cache dir: " + storage);
-      System.out.println("entries on open: " + cache.size());
+      EmbeddingModel cached = new CachingEmbeddingModel(realModel, cache);
 
-      // Hydrate an in-memory id->vector lookup from the persisted collection. On a fresh run this
-      // is empty; after the first run the collection restores its content from mmap storage.
-      Map<String, float[]> inMemory = new HashMap<>(cache.size());
-      for (Document d : cache.documents()) {
-        inMemory.put(d.id(), d.vector());
-      }
+      List<String> phase1 =
+          List.of(
+              "What is HNSW?",
+              "Explain product quantization.",
+              "How does mmap persistence work?",
+              "What is HNSW?", // duplicate within this batch
+              "Describe scalar quantization.",
+              "Explain product quantization."); // duplicate
+      System.out.println("--- phase 1: batch embed with duplicates ---");
+      embedBatch(cached, phase1);
+      printStats("after phase 1", cache.stats(), delegateCalls.get());
 
-      int hits = 0;
-      int misses = 0;
-      for (String text : texts) {
-        String key = cacheKey(text);
-        float[] cached = inMemory.get(key);
-        if (cached != null) {
-          hits++;
-          System.out.printf("  HIT   %s  (vec[0]=%.4f)%n", text, cached[0]);
-        } else {
-          misses++;
-          float[] vec = realEmbedder.apply(text);
-          cache.add(Document.of(key, vec, text));
-          inMemory.put(key, vec);
-          System.out.printf("  MISS  %s%n", text);
-        }
-      }
-      cache.commit();
+      List<String> phase2 =
+          List.of(
+              "What is HNSW?", // hit
+              "Explain product quantization.", // hit
+              "What is ANN?"); // miss
+      System.out.println("\n--- phase 2: batch embed that is mostly hits ---");
+      embedBatch(cached, phase2);
+      printStats("after phase 2", cache.stats(), delegateCalls.get());
 
-      System.out.println();
+      System.out.println("\n--- phase 3: single-text embed on a hot key ---");
+      Response<Embedding> r = cached.embed("What is HNSW?");
       System.out.printf(
-          "hits: %d, misses: %d, real embedder calls: %d, cache entries after run: %d%n",
-          hits, misses, realEmbedderCalls.get(), cache.size());
-      System.out.println(
-          "Re-run ./gradlew :demos:embedding-cache:run to see the cache replay on the next"
-              + " process (all MISS become HIT, zero real embedder calls).");
+          "  embed(\"What is HNSW?\") -> dim=%d, first=%f%n",
+          r.content().vector().length, r.content().vector()[0]);
+      printStats("after phase 3", cache.stats(), delegateCalls.get());
     }
   }
 
-  private static String cacheKey(String text) {
-    try {
-      MessageDigest sha = MessageDigest.getInstance("SHA-256");
-      return HexFormat.of().formatHex(sha.digest(text.getBytes(StandardCharsets.UTF_8)));
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("SHA-256 unavailable", e);
+  private static void embedBatch(EmbeddingModel model, List<String> texts) {
+    List<TextSegment> segments = texts.stream().map(TextSegment::from).toList();
+    Response<List<Embedding>> response = model.embedAll(segments);
+    for (int i = 0; i < texts.size(); i++) {
+      float first = response.content().get(i).vector()[0];
+      System.out.printf("  %-40s  vec[0]=%.4f%n", texts.get(i), first);
     }
   }
 
-  private static float[] trigramVector(String text, int dimension) {
-    float[] out = new float[dimension];
-    String normalized = text.toLowerCase();
-    if (normalized.length() < 3) {
-      normalized = "  " + normalized + "  ";
+  private static void printStats(String label, CacheStats stats, int delegateCalls) {
+    System.out.printf(
+        "%s: hits=%d, misses=%d, entries=%d, hitRate=%.1f%%, delegate embed calls=%d%n",
+        label, stats.hits(), stats.misses(), stats.size(), 100.0 * stats.hitRate(), delegateCalls);
+  }
+
+  /**
+   * Zero-dependency {@link EmbeddingModel} that counts its invocations. Bag-of-character-trigrams
+   * vector, L2-normalized — similar texts produce similar vectors without requiring a model
+   * download. Not for production.
+   */
+  private static final class CountingEmbeddingModel implements EmbeddingModel {
+    private final int dimension;
+    private final AtomicInteger singleCalls;
+
+    CountingEmbeddingModel(int dimension, AtomicInteger singleCalls) {
+      this.dimension = dimension;
+      this.singleCalls = singleCalls;
     }
-    for (int i = 0; i <= normalized.length() - 3; i++) {
-      int h =
-          31 * (31 * normalized.charAt(i) + normalized.charAt(i + 1)) + normalized.charAt(i + 2);
-      out[Math.floorMod(h, dimension)] += 1.0f;
+
+    @Override
+    public int dimension() {
+      return dimension;
     }
-    float norm = 0f;
-    for (float v : out) {
-      norm += v * v;
+
+    @Override
+    public Response<Embedding> embed(String text) {
+      singleCalls.incrementAndGet();
+      return Response.from(Embedding.from(trigramVector(Objects.requireNonNull(text))));
     }
-    norm = (float) Math.sqrt(norm);
-    if (norm > 0f) {
-      for (int i = 0; i < dimension; i++) {
-        out[i] /= norm;
+
+    @Override
+    public Response<Embedding> embed(TextSegment segment) {
+      return embed(segment.text());
+    }
+
+    @Override
+    public Response<List<Embedding>> embedAll(List<TextSegment> segments) {
+      List<Embedding> out = new ArrayList<>(segments.size());
+      for (TextSegment s : segments) {
+        singleCalls.incrementAndGet();
+        out.add(Embedding.from(trigramVector(s.text())));
       }
+      return Response.from(out);
     }
-    return out;
+
+    private float[] trigramVector(String text) {
+      float[] out = new float[dimension];
+      String normalized = text.toLowerCase();
+      if (normalized.length() < 3) normalized = "  " + normalized + "  ";
+      for (int i = 0; i <= normalized.length() - 3; i++) {
+        int h =
+            31 * (31 * normalized.charAt(i) + normalized.charAt(i + 1)) + normalized.charAt(i + 2);
+        out[Math.floorMod(h, dimension)] += 1.0f;
+      }
+      float norm = 0f;
+      for (float v : out) norm += v * v;
+      norm = (float) Math.sqrt(norm);
+      if (norm > 0f) for (int i = 0; i < dimension; i++) out[i] /= norm;
+      return out;
+    }
   }
 }

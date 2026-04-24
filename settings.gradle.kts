@@ -42,6 +42,8 @@ include("demos:langchain4j-rag")
 include("demos:embedding-cache")
 include("demos:rerank-after-retrieval")
 include("demos:vcr-e2e")
+include("demos:server-client")
+include("demos:semantic-cache")
 
 // Enable build cache
 buildCache {
