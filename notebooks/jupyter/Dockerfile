@@ -43,3 +43,7 @@ RUN chown -R ${NB_UID}:${NB_GID} /home/jovyan
 USER ${NB_UID}
 
 # Workspace is mounted in from docker-compose; working dir is set there.
+
+# Override the default command to disable token/password authentication
+# (mirrors the redisvl4j/notebooks reference setup — dev-only convenience).
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--ServerApp.token=", "--ServerApp.password=", "--ServerApp.allow_root=True"]

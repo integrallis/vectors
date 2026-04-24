@@ -15,7 +15,5 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - JUPYTER_ENABLE_LAB=yes
-      # Jupyter access token; empty disables the token prompt (dev only).
-      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-java-vectors}
     restart: unless-stopped
     working_dir: /home/jovyan/work/vectors/notebooks
