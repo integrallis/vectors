@@ -15,12 +15,16 @@ import io.helidon.webserver.http.HttpRules;
 import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -125,13 +129,50 @@ public final class CollectionsRoutes implements HttpService {
       sendProblem(res, Status.NOT_FOUND_404, "collection not found", name, req);
       return;
     }
+    if (config.isPersistent()) {
+      Path dir = config.dataDir().resolve(name);
+      try {
+        deleteRecursively(dir);
+      } catch (IOException e) {
+        LOG.warn("failed to delete storage dir for '{}': {}", name, e.getMessage());
+      }
+    }
     res.status(Status.NO_CONTENT_204).send();
   }
 
   private Path storageRootFor(String name) {
-    // Phase 2 keeps all collections in-memory. Phase 3 wires per-collection directories under
-    // config.dataDir(). Returning null here produces an in-memory VectorCollection.
-    return null;
+    if (!config.isPersistent()) {
+      return null;
+    }
+    Path root = config.dataDir().resolve(name).toAbsolutePath();
+    try {
+      Files.createDirectories(root);
+    } catch (IOException e) {
+      throw new IllegalStateException("failed to create storage dir for '" + name + "'", e);
+    }
+    return root;
+  }
+
+  private static void deleteRecursively(Path dir) throws IOException {
+    if (!Files.exists(dir)) {
+      return;
+    }
+    try (Stream<Path> walk = Files.walk(dir)) {
+      walk.sorted(Comparator.reverseOrder())
+          .forEach(
+              p -> {
+                try {
+                  Files.deleteIfExists(p);
+                } catch (IOException e) {
+                  throw new RuntimeException(e);
+                }
+              });
+    } catch (RuntimeException wrapped) {
+      if (wrapped.getCause() instanceof IOException ioe) {
+        throw ioe;
+      }
+      throw wrapped;
+    }
   }
 
   private void sendJson(ServerResponse res, Status status, Object body) {

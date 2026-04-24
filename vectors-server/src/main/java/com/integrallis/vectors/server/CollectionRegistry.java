@@ -79,6 +79,41 @@ public final class CollectionRegistry implements AutoCloseable {
   }
 
   /**
+   * Registers a previously-persisted collection under its existing name with the supplied creation
+   * timestamp. Intended for startup discovery of {@code dataDir} subdirectories — call sites that
+   * create a brand-new collection must use {@link #create(String, Function)} instead so the
+   * registry-owned {@code Instant.now()} is recorded.
+   *
+   * @param name collection name
+   * @param factory supplier that reopens the persisted collection via {@code
+   *     VectorCollection.builder().storagePath(...)...build()}
+   * @param createdAt creation timestamp to preserve (typically the filesystem creation time of the
+   *     collection directory)
+   * @return the reopened collection
+   * @throws IllegalStateException if a collection with this name already exists
+   */
+  public VectorCollection reopen(
+      String name, Function<String, VectorCollection> factory, Instant createdAt) {
+    Objects.requireNonNull(name, "name");
+    Objects.requireNonNull(factory, "factory");
+    Objects.requireNonNull(createdAt, "createdAt");
+    ReentrantLock lock = nameLocks.computeIfAbsent(name, k -> new ReentrantLock());
+    lock.lock();
+    try {
+      if (collections.containsKey(name)) {
+        throw new IllegalStateException("collection already exists: " + name);
+      }
+      VectorCollection reopened = factory.apply(name);
+      Objects.requireNonNull(reopened, "factory returned null");
+      collections.put(name, reopened);
+      this.createdAt.put(name, createdAt);
+      return reopened;
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  /**
    * @param name collection name
    * @return creation timestamp, or empty if the name is not registered
    */

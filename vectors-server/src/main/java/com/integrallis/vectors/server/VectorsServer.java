@@ -86,6 +86,12 @@ public final class VectorsServer implements Callable<Integer> {
     Objects.requireNonNull(config, "config");
     CollectionRegistry registry = new CollectionRegistry();
     try {
+      if (config.isPersistent()) {
+        int reopened = CollectionDiscovery.discoverAndOpen(registry, config.dataDir());
+        if (reopened > 0) {
+          LOG.info("reopened {} collection(s) from {}", reopened, config.dataDir());
+        }
+      }
       WebServer server =
           WebServer.builder()
               .port(config.port())
