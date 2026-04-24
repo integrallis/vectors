@@ -1,0 +1,17 @@
+{
+    "argv": [
+        "java",
+        "--add-modules", "jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED",
+        "-jar",
+        "{resource_dir}/jjava.jar",
+        "{connection_file}"
+    ],
+    "display_name": "Java (java-vectors, JDK 25)",
+    "language": "java",
+    "interrupt_mode": "message",
+    "env": {
+        "IJAVA_TIMEOUT": "-1",
+        "IJAVA_COMPILER_OPTS": "--add-modules jdk.incubator.vector"
+    }
+}

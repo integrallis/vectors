@@ -1,0 +1,21 @@
+services:
+  jupyter:
+    build:
+      context: .
+      dockerfile: jupyter/Dockerfile
+    image: java-vectors-jjava:latest
+    container_name: java-vectors-jjava
+    ports:
+      - "8888:8888"
+    volumes:
+      # Mount the repository root so notebooks can resolve /home/jovyan/work/vectors/*/build/libs
+      - ../..:/home/jovyan/work:cached
+    environment:
+      # Passthrough for demos that use external embedding APIs.
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - JUPYTER_ENABLE_LAB=yes
+      # Jupyter access token; empty disables the token prompt (dev only).
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-java-vectors}
+    restart: unless-stopped
+    working_dir: /home/jovyan/work/vectors/notebooks
