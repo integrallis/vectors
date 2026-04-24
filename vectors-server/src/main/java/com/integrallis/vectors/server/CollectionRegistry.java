@@ -8,7 +8,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +33,10 @@ public final class CollectionRegistry implements AutoCloseable {
 
   private final ConcurrentHashMap<String, VectorCollection> collections = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, Instant> createdAt = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, AtomicLong> epochs = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, ReentrantLock> nameLocks = new ConcurrentHashMap<>();
+  private final java.util.concurrent.CopyOnWriteArrayList<Consumer<EpochChange>> listeners =
+      new java.util.concurrent.CopyOnWriteArrayList<>();
 
   /**
    * @return a snapshot view of all currently-managed collection names (no lock held during
@@ -72,6 +77,7 @@ public final class CollectionRegistry implements AutoCloseable {
       Objects.requireNonNull(created, "factory returned null");
       collections.put(name, created);
       createdAt.put(name, Instant.now());
+      epochs.put(name, new AtomicLong(0));
       return created;
     } finally {
       lock.unlock();
@@ -93,7 +99,10 @@ public final class CollectionRegistry implements AutoCloseable {
    * @throws IllegalStateException if a collection with this name already exists
    */
   public VectorCollection reopen(
-      String name, Function<String, VectorCollection> factory, Instant createdAt) {
+      String name,
+      Function<String, VectorCollection> factory,
+      Instant createdAt,
+      long initialEpoch) {
     Objects.requireNonNull(name, "name");
     Objects.requireNonNull(factory, "factory");
     Objects.requireNonNull(createdAt, "createdAt");
@@ -107,6 +116,7 @@ public final class CollectionRegistry implements AutoCloseable {
       Objects.requireNonNull(reopened, "factory returned null");
       collections.put(name, reopened);
       this.createdAt.put(name, createdAt);
+      epochs.put(name, new AtomicLong(initialEpoch));
       return reopened;
     } finally {
       lock.unlock();
@@ -120,6 +130,49 @@ public final class CollectionRegistry implements AutoCloseable {
   public Optional<Instant> createdAt(String name) {
     return Optional.ofNullable(createdAt.get(Objects.requireNonNull(name, "name")));
   }
+
+  /**
+   * @param name collection name
+   * @return current epoch for this collection, or -1 if unknown
+   */
+  public long epoch(String name) {
+    AtomicLong e = epochs.get(Objects.requireNonNull(name, "name"));
+    return e == null ? -1L : e.get();
+  }
+
+  /**
+   * Bumps the epoch of {@code name} and notifies every registered listener synchronously. Callers
+   * invoke this after a successful commit on the underlying {@link VectorCollection}. No-op when
+   * the collection is unknown (drop races).
+   *
+   * @return the new epoch, or -1 if the collection was not found
+   */
+  public long bumpEpoch(String name) {
+    AtomicLong e = epochs.get(Objects.requireNonNull(name, "name"));
+    if (e == null) {
+      return -1L;
+    }
+    long next = e.incrementAndGet();
+    EpochChange event = new EpochChange(name, next);
+    for (Consumer<EpochChange> l : listeners) {
+      try {
+        l.accept(event);
+      } catch (RuntimeException ex) {
+        LOG.warn("epoch listener threw: {}", ex.getMessage());
+      }
+    }
+    return next;
+  }
+
+  /** Registers a listener for epoch-change events. Returns a handle for removal. */
+  public Runnable addEpochListener(Consumer<EpochChange> listener) {
+    Objects.requireNonNull(listener, "listener");
+    listeners.add(listener);
+    return () -> listeners.remove(listener);
+  }
+
+  /** Immutable epoch-change notification. */
+  public record EpochChange(String name, long epoch) {}
 
   /**
    * Drops a collection and closes its underlying resources. Idempotent: returns {@code false} if
@@ -138,6 +191,7 @@ public final class CollectionRegistry implements AutoCloseable {
         return false;
       }
       createdAt.remove(name);
+      epochs.remove(name);
       removed.close();
       // Lock intentionally NOT removed from nameLocks — see class Javadoc.
       return true;
@@ -171,6 +225,8 @@ public final class CollectionRegistry implements AutoCloseable {
     }
     collections.clear();
     createdAt.clear();
+    epochs.clear();
     nameLocks.clear();
+    listeners.clear();
   }
 }

@@ -33,5 +33,6 @@ public final class ApiRouting {
     builder.register(new CollectionsRoutes(registry, config));
     builder.register(new DocumentsRoutes(registry));
     builder.register(new SearchRoutes(registry));
+    builder.register(new EventsRoutes(registry));
   }
 }

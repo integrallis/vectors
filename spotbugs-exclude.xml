@@ -457,6 +457,14 @@
         <Bug pattern="MS_EXPOSE_REP"/>
     </Match>
 
+    <!-- vectors-server: VectorsServer.ServerHandle deliberately exposes the internal
+         CollectionRegistry so advanced embedders can register epoch listeners or drive
+         custom lifecycle hooks while the server is running. -->
+    <Match>
+        <Class name="com.integrallis.vectors.server.VectorsServer$ServerHandle"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
     <!-- vectors-server: DTO records expose float[] vectors by reference so Jackson can marshal
          without copying 384+ floats per request/hit. The wire boundary already returns fresh
          instances constructed from the live Document / SearchResult.Hit per request. -->

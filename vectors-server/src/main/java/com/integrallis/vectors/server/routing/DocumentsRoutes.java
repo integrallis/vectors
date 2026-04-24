@@ -88,6 +88,7 @@ public final class DocumentsRoutes implements HttpService {
           res, Status.BAD_REQUEST_400, "invalid document batch", e.getMessage(), req);
       return;
     }
+    registry.bumpEpoch(name);
     RouteSupport.sendJson(res, Status.OK_200, new UpsertDocumentsResponse(docs.size(), c.size()));
   }
 
@@ -107,6 +108,7 @@ public final class DocumentsRoutes implements HttpService {
     boolean deleted = c.delete(id);
     if (deleted) {
       c.commit();
+      registry.bumpEpoch(name);
     }
     res.status(Status.NO_CONTENT_204).send();
   }
@@ -119,6 +121,7 @@ public final class DocumentsRoutes implements HttpService {
       return;
     }
     col.get().commit();
+    registry.bumpEpoch(name);
     res.status(Status.NO_CONTENT_204).send();
   }
 }

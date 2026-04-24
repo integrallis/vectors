@@ -13,6 +13,7 @@ dependencies {
 
     implementation(platform("io.helidon:helidon-dependencies:$helidonVersion"))
     implementation("io.helidon.webserver:helidon-webserver")
+    implementation("io.helidon.webserver:helidon-webserver-sse")
     implementation("io.helidon.http.media:helidon-http-media-jackson")
 
     implementation(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))

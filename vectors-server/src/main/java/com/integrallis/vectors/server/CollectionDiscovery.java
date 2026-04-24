@@ -87,7 +87,11 @@ public final class CollectionDiscovery {
       }
       Manifest manifest = Manifest.readFrom(manifestFile);
       Instant createdAt = readCreationInstant(storageRoot, manifest);
-      registry.reopen(name, n -> buildFromManifest(manifest, storageRoot), createdAt);
+      registry.reopen(
+          name,
+          n -> buildFromManifest(manifest, storageRoot),
+          createdAt,
+          manifest.generationNumber());
       LOG.info(
           "reopened collection '{}' dim={} metric={} index={} size={}",
           name,
