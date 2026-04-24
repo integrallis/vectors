@@ -22,10 +22,11 @@ dependencies {
 
     implementation("info.picocli:picocli:4.7.6")
 
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.15")
+
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testImplementation("org.assertj:assertj-core:3.27.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testRuntimeOnly("ch.qos.logback:logback-classic:1.5.15")
 }
 
 application {

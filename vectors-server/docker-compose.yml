@@ -1,0 +1,23 @@
+services:
+  vectors-server:
+    image: vectors-server:local
+    container_name: vectors-server
+    build:
+      context: ..
+      dockerfile: vectors-server/Dockerfile
+    ports:
+      - "8287:8287"
+    volumes:
+      - vectors-data:/data
+    environment:
+      JAVA_OPTS: "-Xmx512m"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8287/v1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  vectors-data:
