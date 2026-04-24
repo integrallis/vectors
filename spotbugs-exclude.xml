@@ -449,4 +449,12 @@
         <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
     </Match>
 
+    <!-- vectors-server: ObjectMapperHolder intentionally returns the shared, thread-safe
+         Jackson mapper by reference; constructing a copy per call would multiply server
+         allocation by orders of magnitude. -->
+    <Match>
+        <Class name="com.integrallis.vectors.server.ObjectMapperHolder"/>
+        <Bug pattern="MS_EXPOSE_REP"/>
+    </Match>
+
 </FindBugsFilter>

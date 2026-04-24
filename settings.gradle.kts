@@ -22,6 +22,10 @@ include("vectors-vcr-junit5")
 include("vectors-vcr-testng")
 include("vectors-vcr-spring-ai")
 include("vectors-vcr-langchain4j")
+
+// --- HTTP server (Helidon SE 4 / Níma) ---
+include("vectors-server")
+
 include("docs")
 
 // --- Runnable demos (not published) ---
