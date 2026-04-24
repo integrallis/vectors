@@ -24,6 +24,14 @@ include("vectors-vcr-spring-ai")
 include("vectors-vcr-langchain4j")
 include("docs")
 
+// --- Runnable demos (not published) ---
+include("demos:quickstart")
+include("demos:spring-ai-rag")
+include("demos:langchain4j-rag")
+include("demos:embedding-cache")
+include("demos:rerank-after-retrieval")
+include("demos:vcr-e2e")
+
 // Enable build cache
 buildCache {
     local {

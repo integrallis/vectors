@@ -15,8 +15,11 @@ allprojects {
     }
 }
 
-// Library subprojects (excludes docs)
-val libraryProjects = subprojects.filter { it.name != "docs" }
+// Library subprojects (excludes docs and runnable demos)
+val libraryProjects = subprojects.filter {
+    it.name != "docs" && !it.path.startsWith(":demos:")
+}
+val demoProjects = subprojects.filter { it.path.startsWith(":demos:") }
 
 configure(libraryProjects) {
     apply(plugin = "java")
@@ -172,6 +175,56 @@ configure(libraryProjects) {
         testImplementation("org.mockito:mockito-junit-jupiter:5.15.2")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
         testRuntimeOnly("ch.qos.logback:logback-classic:1.5.15")
+    }
+}
+
+// Runnable demo subprojects — same toolchain and Vector API flags as the libraries,
+// but not published as Maven artifacts and not subject to the library coverage gate.
+configure(demoProjects) {
+    apply(plugin = "java")
+    apply(plugin = "application")
+    apply(plugin = "com.diffplug.spotless")
+
+    extensions.configure<JavaPluginExtension> {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+
+    tasks.withType<JavaCompile> {
+        options.encoding = "UTF-8"
+        options.compilerArgs.addAll(listOf(
+            "-parameters",
+            "-Xlint:all",
+            "-Xlint:-processing",
+            "-Xlint:-incubating",
+            "-Xlint:-classfile",
+            "-Werror",
+            "--add-modules", "jdk.incubator.vector"
+        ))
+    }
+
+    tasks.withType<JavaExec> {
+        jvmArgs("--add-modules", "jdk.incubator.vector")
+    }
+
+    tasks.withType<Test> {
+        useJUnitPlatform()
+        jvmArgs("--add-modules", "jdk.incubator.vector")
+    }
+
+    configure<com.diffplug.gradle.spotless.SpotlessExtension> {
+        java {
+            googleJavaFormat("1.35.0")
+            removeUnusedImports()
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+    }
+
+    dependencies {
+        "implementation"("org.slf4j:slf4j-api:2.0.16")
+        "runtimeOnly"("ch.qos.logback:logback-classic:1.5.15")
     }
 }
 

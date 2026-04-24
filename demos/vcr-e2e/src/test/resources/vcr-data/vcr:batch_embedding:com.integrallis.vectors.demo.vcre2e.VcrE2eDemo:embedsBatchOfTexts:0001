@@ -1,0 +1,1 @@
+{"type":"batch_embedding","testId":"com.integrallis.vectors.demo.vcre2e.VcrE2eDemo:embedsBatchOfTexts","model":"embedder","timestamp":1776976455074,"embeddings":[[5.0,42.0,7.0,3.0],[5.0,42.0,7.0,3.0]]}

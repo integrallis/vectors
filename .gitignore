@@ -43,3 +43,9 @@ spotbugs-output.txt
 
 # Benchmark run artifacts (ad-hoc logs captured from ./gradlew invocations)
 *.log
+
+# VCR registry metadata — per-run state, not reproducible test output
+**/vcr-data/vcr:registry:*
+
+# Embedding-cache demo artifacts (created at ~/.java-vectors-demo; harmless here)
+**/.java-vectors-demo/
