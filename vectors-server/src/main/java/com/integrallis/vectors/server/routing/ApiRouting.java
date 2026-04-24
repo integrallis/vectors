@@ -8,8 +8,8 @@ import java.util.Objects;
 /**
  * Assembles the complete HTTP routing tree for the server.
  *
- * <p>Phase 2 wires {@link AdminRoutes} and {@link CollectionsRoutes}. Subsequent phases attach
- * {@code DocumentsRoutes} and {@code SearchRoutes} here.
+ * <p>Phase 4 wires {@link AdminRoutes}, {@link CollectionsRoutes}, {@link DocumentsRoutes}, and
+ * {@link SearchRoutes}.
  */
 public final class ApiRouting {
 
@@ -31,5 +31,7 @@ public final class ApiRouting {
   public void apply(HttpRouting.Builder builder) {
     builder.register(new AdminRoutes(registry));
     builder.register(new CollectionsRoutes(registry, config));
+    builder.register(new DocumentsRoutes(registry));
+    builder.register(new SearchRoutes(registry));
   }
 }

@@ -457,4 +457,20 @@
         <Bug pattern="MS_EXPOSE_REP"/>
     </Match>
 
+    <!-- vectors-server: DTO records expose float[] vectors by reference so Jackson can marshal
+         without copying 384+ floats per request/hit. The wire boundary already returns fresh
+         instances constructed from the live Document / SearchResult.Hit per request. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.server.dto.DocumentDto"/>
+            <Class name="com.integrallis.vectors.server.dto.SearchQuery"/>
+            <Class name="com.integrallis.vectors.server.dto.SearchHitDto"/>
+            <Class name="com.integrallis.vectors.server.dto.UpsertDocumentsRequest"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
 </FindBugsFilter>
