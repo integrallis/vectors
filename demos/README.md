@@ -18,7 +18,7 @@ From `vectors/`:
 
 ```bash
 ./gradlew :demos:quickstart:run
-./gradlew :demos:spring-ai-rag:bootRun          # requires OPENAI_API_KEY or uses a local embedding model
+./gradlew :demos:spring-ai-rag:run               # requires OPENAI_API_KEY or uses a local embedding model
 ./gradlew :demos:langchain4j-rag:run
 ./gradlew :demos:embedding-cache:run
 ./gradlew :demos:rerank-after-retrieval:run

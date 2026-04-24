@@ -1,8 +1,8 @@
 package com.integrallis.vectors.demo.rerank;
 
+import com.integrallis.vectors.core.TopK;
 import com.integrallis.vectors.core.VectorUtil;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Random;
 
 /**
@@ -17,11 +17,18 @@ import java.util.Random;
  * <ol>
  *   <li>Fabricates 1000 "remote candidates" (id + vector) ranked by a noisy dot-product
  *   <li>Rescrores them with {@link VectorUtil#batchDotProduct} in a single SIMD sweep
- *   <li>Times the operation and prints the top-10 rerank winners
+ *   <li>Picks the top-{@value #TOP_K} with {@link TopK#select}
+ *   <li>Reports a cold first-call latency and a steady-state (median-of-N) latency
  * </ol>
  *
- * <p>On a laptop class CPU, rescoring 1000 × 384-dim candidates typically completes in well under a
- * millisecond through the Panama Vector API.
+ * <p><b>About the numbers.</b> The Panama Vector API kernel needs several thousand invocations
+ * before the JIT promotes it to C2 steady state; the "cold" sample measured on the very first call
+ * runs in the interpreter or at C1 and is typically 50–100× slower than the warm sample. This demo
+ * reports both so that cost is visible. For rigorous, publication-grade numbers, run the JMH suite:
+ *
+ * <pre>
+ *   ./gradlew :vectors-bench:jmh -Pjmh.includes=MatVecBenchmark
+ * </pre>
  *
  * <p>Run:
  *
@@ -34,6 +41,12 @@ public final class RerankApp {
   private static final int DIMENSION = 384;
   private static final int CANDIDATES = 1000;
   private static final int TOP_K = 10;
+
+  /** Invocations executed before the timed window to reach JIT steady state. */
+  private static final int WARMUP_INVOCATIONS = 2_000;
+
+  /** Odd so the median is a single sample, not the average of two. */
+  private static final int MEASUREMENT_SAMPLES = 31;
 
   private RerankApp() {}
 
@@ -53,30 +66,50 @@ public final class RerankApp {
           VectorUtil.dotProduct(query, candidateVectors[i]) + (rnd.nextFloat() - 0.5f) * 0.1f;
     }
 
-    // Warm up the SIMD kernel.
+    // Cold-path sample: very first call, before any warmup. Runs in the interpreter or at C1 and
+    // captures the "first-invocation" latency users pay once per JVM.
+    float[] coldScores = new float[CANDIDATES];
+    long coldStart = System.nanoTime();
+    VectorUtil.batchDotProduct(query, candidateVectors, coldScores);
+    long coldNanos = System.nanoTime() - coldStart;
+
+    // Warm up until the fused GEMV kernel reaches C2 steady state. Three calls are not enough — the
+    // Panama Vector API inner loop contains a species-sized main body, a 4-row unrolled kernel, and
+    // a scalar tail; each needs profiling data before it is compiled and inlined.
     float[] warm = new float[CANDIDATES];
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < WARMUP_INVOCATIONS; i++) {
       VectorUtil.batchDotProduct(query, candidateVectors, warm);
     }
 
+    // Steady-state sample: report the median of N runs. A single sample is sensitive to a GC
+    // young-pause, a safepoint, or OS scheduling; the median is resistant to all three.
     float[] exactScores = new float[CANDIDATES];
-    long start = System.nanoTime();
-    VectorUtil.batchDotProduct(query, candidateVectors, exactScores);
-    long elapsedNanos = System.nanoTime() - start;
-
-    Integer[] order = new Integer[CANDIDATES];
-    for (int i = 0; i < CANDIDATES; i++) {
-      order[i] = i;
+    long[] runs = new long[MEASUREMENT_SAMPLES];
+    for (int i = 0; i < MEASUREMENT_SAMPLES; i++) {
+      long t0 = System.nanoTime();
+      VectorUtil.batchDotProduct(query, candidateVectors, exactScores);
+      runs[i] = System.nanoTime() - t0;
     }
-    Arrays.sort(order, Comparator.comparingDouble((Integer i) -> exactScores[i]).reversed());
+    Arrays.sort(runs);
+    long medianNanos = runs[MEASUREMENT_SAMPLES / 2];
+
+    int[] topOrder = TopK.select(exactScores, TOP_K);
 
     System.out.printf(
-        "rescored %d x %d-dim candidates in %.3f ms (%.1f ns/candidate)%n",
-        CANDIDATES, DIMENSION, elapsedNanos / 1_000_000.0, (double) elapsedNanos / CANDIDATES);
+        "rescored %d x %d-dim candidates:%n"
+            + "  cold  (1st call)       = %8.3f ms (%7.1f ns/candidate)%n"
+            + "  warm  (median of %2d)   = %8.3f ms (%7.1f ns/candidate)%n",
+        CANDIDATES,
+        DIMENSION,
+        coldNanos / 1_000_000.0,
+        (double) coldNanos / CANDIDATES,
+        MEASUREMENT_SAMPLES,
+        medianNanos / 1_000_000.0,
+        (double) medianNanos / CANDIDATES);
 
     System.out.println("top-" + TOP_K + " by precise in-VM rescore:");
     for (int r = 0; r < TOP_K; r++) {
-      int i = order[r];
+      int i = topOrder[r];
       System.out.printf(
           "  rank=%2d  id=%-10s  exact=%.4f  noisy=%.4f%n",
           r + 1, candidateIds[i], exactScores[i], noisyRemoteScores[i]);
@@ -106,18 +139,11 @@ public final class RerankApp {
   }
 
   private static long countRankingSwaps(float[] noisyScores, float[] exactScores, int k) {
-    int n = noisyScores.length;
-    Integer[] noisyOrder = new Integer[n];
-    Integer[] exactOrder = new Integer[n];
-    for (int i = 0; i < n; i++) {
-      noisyOrder[i] = i;
-      exactOrder[i] = i;
-    }
-    Arrays.sort(noisyOrder, Comparator.comparingDouble((Integer i) -> noisyScores[i]).reversed());
-    Arrays.sort(exactOrder, Comparator.comparingDouble((Integer i) -> exactScores[i]).reversed());
+    int[] noisyTop = TopK.select(noisyScores, k);
+    int[] exactTop = TopK.select(exactScores, k);
     long differ = 0;
     for (int r = 0; r < k; r++) {
-      if (!noisyOrder[r].equals(exactOrder[r])) {
+      if (noisyTop[r] != exactTop[r]) {
         differ++;
       }
     }
