@@ -17,22 +17,28 @@ RUN apt-get update && \
         > /etc/apt/sources.list.d/adoptium.list && \
     apt-get update && \
     apt-get install --no-install-recommends -y temurin-25-jdk && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    ln -s "$(ls -d /usr/lib/jvm/temurin-25-jdk-* | head -n1)" /usr/lib/jvm/temurin-25-jdk
 
-ENV JAVA_HOME=/usr/lib/jvm/temurin-25-jdk-amd64
+ENV JAVA_HOME=/usr/lib/jvm/temurin-25-jdk
 ENV PATH="$JAVA_HOME/bin:$PATH"
 
 # --- JJava kernel -------------------------------------------------------------
 ARG JJAVA_VERSION=1.0-a7
 RUN cd /tmp && \
-    wget -q "https://github.com/dflib/jjava/releases/download/v${JJAVA_VERSION}/jjava-${JJAVA_VERSION}-kernelspec.zip" && \
+    wget -q "https://github.com/dflib/jjava/releases/download/${JJAVA_VERSION}/jjava-${JJAVA_VERSION}-kernelspec.zip" && \
     unzip -q "jjava-${JJAVA_VERSION}-kernelspec.zip" -d jjava-kernel && \
-    jupyter kernelspec install "jjava-kernel/jjava-${JJAVA_VERSION}-kernelspec" --name=java --prefix=/opt/conda && \
+    jupyter kernelspec install jjava-kernel --name=java --prefix=/opt/conda && \
     rm -rf /tmp/jjava-kernel "/tmp/jjava-${JJAVA_VERSION}-kernelspec.zip"
 
 # Replace the installed kernel.json with our customized version that adds the
 # Vector API incubator and native access flags to the JShell JVM.
 COPY jupyter/kernel.json /opt/conda/share/jupyter/kernels/java/kernel.json
+
+# `jupyter kernelspec install` (run as root) leaves /home/jovyan/.local and
+# /home/jovyan/.ipython owned by root, which breaks JUPYTER_RUNTIME_DIR on
+# first launch. Repair the ownership before dropping to NB_UID.
+RUN chown -R ${NB_UID}:${NB_GID} /home/jovyan
 
 USER ${NB_UID}
 
