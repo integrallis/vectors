@@ -49,3 +49,6 @@ spotbugs-output.txt
 
 # Embedding-cache demo artifacts (created at ~/.java-vectors-demo; harmless here)
 **/.java-vectors-demo/
+
+# Jupyter notebook auto-save checkpoints
+**/.ipynb_checkpoints/
