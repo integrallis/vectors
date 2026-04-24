@@ -7,6 +7,7 @@ import io.helidon.http.HeaderNames;
 import io.helidon.http.Status;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,7 +22,27 @@ final class RouteSupport {
   static final String PROBLEM = "application/problem+json";
   static final ObjectMapper MAPPER = ObjectMapperHolder.shared();
 
+  /** URL-safe name charset: letters, digits, hyphen, underscore. 1..128 characters. */
+  static final Pattern NAME_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{1,128}$");
+
   private RouteSupport() {}
+
+  /**
+   * Validates a collection name path parameter. Returns {@code true} if the name is valid. If
+   * invalid, sends a 400 problem response and returns {@code false}.
+   */
+  static boolean validateName(String name, ServerRequest req, ServerResponse res) {
+    if (name == null || !NAME_PATTERN.matcher(name).matches()) {
+      sendProblem(
+          res,
+          Status.BAD_REQUEST_400,
+          "invalid collection name",
+          "name must match " + NAME_PATTERN.pattern(),
+          req);
+      return false;
+    }
+    return true;
+  }
 
   static void sendJson(ServerResponse res, Status status, Object body) {
     try {

@@ -73,12 +73,18 @@ public final class FilterParser {
     return out;
   }
 
+  private static final int MAX_FIELD_NAME_LENGTH = 256;
+
   private static Filter parseFieldPredicate(JsonNode node) {
     JsonNode f = node.get("field");
     if (f == null || !f.isTextual() || f.asText().isEmpty()) {
       throw new FilterParseException("predicate missing required 'field' string");
     }
     String field = f.asText();
+    if (field.length() > MAX_FIELD_NAME_LENGTH) {
+      throw new FilterParseException(
+          "field name exceeds maximum length of " + MAX_FIELD_NAME_LENGTH + " characters");
+    }
 
     if (node.has("eq")) {
       return new Filter.Eq(field, scalar(node.get("eq"), "eq"));

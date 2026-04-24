@@ -2,6 +2,7 @@ package com.integrallis.vectors.server.routing;
 
 import com.integrallis.vectors.server.CollectionRegistry;
 import com.integrallis.vectors.server.CollectionRegistry.EpochChange;
+import com.integrallis.vectors.server.ObjectMapperHolder;
 import io.helidon.http.HeaderNames;
 import io.helidon.http.Status;
 import io.helidon.http.sse.SseEvent;
@@ -10,7 +11,9 @@ import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
 import io.helidon.webserver.sse.SseSink;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Route for {@code GET /v1/events} — a Server-Sent Events stream that emits one event per
@@ -46,21 +49,24 @@ public final class EventsRoutes implements HttpService {
     res.status(Status.OK_200);
     SseSink sink = res.sink(SseSink.TYPE);
     sink.emit(SseEvent.builder().name("hello").data("{}").build());
+    CountDownLatch done = new CountDownLatch(1);
     Runnable remove =
         registry.addEpochListener(
             (EpochChange change) -> {
               try {
                 String payload =
-                    "{\"name\":\"" + escape(change.name()) + "\",\"epoch\":" + change.epoch() + "}";
+                    ObjectMapperHolder.shared()
+                        .writeValueAsString(Map.of("name", change.name(), "epoch", change.epoch()));
                 sink.emit(SseEvent.builder().name("epoch").data(payload).build());
-              } catch (RuntimeException ex) {
-                // Client disconnected or sink closed — the close() hook below removes us.
+              } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+                // Client disconnected, sink closed, or serialization error — clean up below.
+                done.countDown();
               }
             });
     try {
       // Block the virtual thread until the sink closes (client disconnect or server shutdown).
-      // Helidon closes the sink when the underlying TCP connection goes away.
-      Thread.currentThread().join();
+      // The latch is counted down when the sink reports an error (client disconnect).
+      done.await();
     } catch (InterruptedException ignored) {
       Thread.currentThread().interrupt();
     } finally {
@@ -71,9 +77,5 @@ public final class EventsRoutes implements HttpService {
         // sink may already be closed if the client disconnected.
       }
     }
-  }
-
-  private static String escape(String s) {
-    return s.replace("\\", "\\\\").replace("\"", "\\\"");
   }
 }

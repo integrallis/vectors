@@ -53,6 +53,7 @@ public final class SearchRoutes implements HttpService {
 
   private void search(ServerRequest req, ServerResponse res) {
     String name = req.path().pathParameters().get("name");
+    if (!RouteSupport.validateName(name, req, res)) return;
     Optional<VectorCollection> col = registry.get(name);
     if (col.isEmpty()) {
       RouteSupport.sendProblem(res, Status.NOT_FOUND_404, "collection not found", name, req);
@@ -70,6 +71,19 @@ public final class SearchRoutes implements HttpService {
     if (validation != null) {
       RouteSupport.sendProblem(
           res, Status.BAD_REQUEST_400, "invalid search request", validation, req);
+      return;
+    }
+    int expectedDim = col.get().config().dimension();
+    if (body.queryVector().length != expectedDim) {
+      RouteSupport.sendProblem(
+          res,
+          Status.BAD_REQUEST_400,
+          "invalid search request",
+          "queryVector dimension mismatch: expected "
+              + expectedDim
+              + ", got "
+              + body.queryVector().length,
+          req);
       return;
     }
     Filter filter;

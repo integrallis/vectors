@@ -111,6 +111,7 @@ public final class CollectionsRoutes implements HttpService {
 
   private void describe(ServerRequest req, ServerResponse res) {
     String name = req.path().pathParameters().get("name");
+    if (!RouteSupport.validateName(name, req, res)) return;
     Optional<VectorCollection> col = registry.get(name);
     Optional<Instant> ts = registry.createdAt(name);
     if (col.isEmpty() || ts.isEmpty()) {
@@ -122,6 +123,7 @@ public final class CollectionsRoutes implements HttpService {
 
   private void drop(ServerRequest req, ServerResponse res) {
     String name = req.path().pathParameters().get("name");
+    if (!RouteSupport.validateName(name, req, res)) return;
     boolean removed = registry.drop(name);
     if (!removed) {
       RouteSupport.sendProblem(res, Status.NOT_FOUND_404, "collection not found", name, req);

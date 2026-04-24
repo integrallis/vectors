@@ -46,8 +46,12 @@ public final class DocumentsRoutes implements HttpService {
         .post("/v1/collections/{name}/commit", this::commit);
   }
 
+  /** Maximum documents per upsert batch. Prevents unbounded memory allocation from user input. */
+  private static final int MAX_BATCH_SIZE = 10_000;
+
   private void upsert(ServerRequest req, ServerResponse res) {
     String name = req.path().pathParameters().get("name");
+    if (!RouteSupport.validateName(name, req, res)) return;
     Optional<VectorCollection> col = registry.get(name);
     if (col.isEmpty()) {
       RouteSupport.sendProblem(res, Status.NOT_FOUND_404, "collection not found", name, req);
@@ -66,17 +70,37 @@ public final class DocumentsRoutes implements HttpService {
       RouteSupport.sendJson(res, Status.OK_200, new UpsertDocumentsResponse(0, col.get().size()));
       return;
     }
+    if (body.documents().size() > MAX_BATCH_SIZE) {
+      RouteSupport.sendProblem(
+          res,
+          Status.BAD_REQUEST_400,
+          "batch too large",
+          "max " + MAX_BATCH_SIZE + " documents per request, got " + body.documents().size(),
+          req);
+      return;
+    }
+    VectorCollection c = col.get();
+    int expectedDim = c.config().dimension();
     List<Document> docs = new ArrayList<>(body.documents().size());
     try {
       for (DocumentDto dto : body.documents()) {
-        docs.add(dto.toDocument());
+        Document d = dto.toDocument();
+        if (d.vector().length != expectedDim) {
+          throw new IllegalArgumentException(
+              "vector dimension mismatch for id='"
+                  + d.id()
+                  + "': expected "
+                  + expectedDim
+                  + ", got "
+                  + d.vector().length);
+        }
+        docs.add(d);
       }
     } catch (IllegalArgumentException e) {
       RouteSupport.sendProblem(
           res, Status.BAD_REQUEST_400, "invalid document", e.getMessage(), req);
       return;
     }
-    VectorCollection c = col.get();
     try {
       for (Document d : docs) {
         c.upsert(d);
@@ -87,6 +111,15 @@ public final class DocumentsRoutes implements HttpService {
       RouteSupport.sendProblem(
           res, Status.BAD_REQUEST_400, "invalid document batch", e.getMessage(), req);
       return;
+    } catch (RuntimeException e) {
+      LOG.error("commit failed for '{}': {}", name, e.getMessage(), e);
+      RouteSupport.sendProblem(
+          res,
+          Status.INTERNAL_SERVER_ERROR_500,
+          "commit failed",
+          "upsert may not have been persisted",
+          req);
+      return;
     }
     registry.bumpEpoch(name);
     RouteSupport.sendJson(res, Status.OK_200, new UpsertDocumentsResponse(docs.size(), c.size()));
@@ -94,6 +127,7 @@ public final class DocumentsRoutes implements HttpService {
 
   private void delete(ServerRequest req, ServerResponse res) {
     String name = req.path().pathParameters().get("name");
+    if (!RouteSupport.validateName(name, req, res)) return;
     String id = req.path().pathParameters().get("id");
     Optional<VectorCollection> col = registry.get(name);
     if (col.isEmpty()) {
@@ -115,6 +149,7 @@ public final class DocumentsRoutes implements HttpService {
 
   private void commit(ServerRequest req, ServerResponse res) {
     String name = req.path().pathParameters().get("name");
+    if (!RouteSupport.validateName(name, req, res)) return;
     Optional<VectorCollection> col = registry.get(name);
     if (col.isEmpty()) {
       RouteSupport.sendProblem(res, Status.NOT_FOUND_404, "collection not found", name, req);

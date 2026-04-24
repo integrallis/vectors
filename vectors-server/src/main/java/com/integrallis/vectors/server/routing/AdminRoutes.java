@@ -63,6 +63,7 @@ public final class AdminRoutes implements HttpService {
 
   private void epoch(ServerRequest req, ServerResponse res) {
     String name = req.path().pathParameters().get("name");
+    if (!RouteSupport.validateName(name, req, res)) return;
     Optional<VectorCollection> col = registry.get(name);
     if (col.isEmpty()) {
       RouteSupport.sendProblem(res, Status.NOT_FOUND_404, "collection not found", name, req);
@@ -78,7 +79,12 @@ public final class AdminRoutes implements HttpService {
     }
     res.headers().set(HeaderNames.ETAG, etag);
     res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
-    res.send("{\"name\":\"" + name + "\",\"epoch\":" + epoch + "}");
+    try {
+      res.send(
+          ObjectMapperHolder.shared().writeValueAsString(Map.of("name", name, "epoch", epoch)));
+    } catch (Exception e) {
+      res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+    }
   }
 
   private void metrics(ServerRequest req, ServerResponse res) {
@@ -142,6 +148,11 @@ public final class AdminRoutes implements HttpService {
     return Double.toString(v);
   }
 
+  /**
+   * Escapes a string for use inside a Prometheus label value (double-quoted). Collection names are
+   * validated against {@code [A-Za-z0-9_-]{1,128}} so in practice this is a no-op, but we escape
+   * defensively in case the validation is ever relaxed.
+   */
   private static String escape(String s) {
     return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
   }
