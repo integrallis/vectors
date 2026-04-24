@@ -3,10 +3,12 @@ package com.integrallis.vectors.server.routing;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
+import com.integrallis.vectors.db.filter.Filter;
 import com.integrallis.vectors.server.CollectionRegistry;
 import com.integrallis.vectors.server.dto.SearchHitDto;
 import com.integrallis.vectors.server.dto.SearchQuery;
 import com.integrallis.vectors.server.dto.SearchResponse;
+import com.integrallis.vectors.server.filter.FilterParseException;
 import com.integrallis.vectors.server.filter.FilterParser;
 import io.helidon.http.Status;
 import io.helidon.webserver.http.HttpRules;
@@ -70,11 +72,11 @@ public final class SearchRoutes implements HttpService {
           res, Status.BAD_REQUEST_400, "invalid search request", validation, req);
       return;
     }
+    Filter filter;
     try {
-      FilterParser.parse(body.filter()); // phase 5 stub; throws on non-null filter
-    } catch (UnsupportedOperationException e) {
-      RouteSupport.sendProblem(
-          res, Status.BAD_REQUEST_400, "unsupported filter", e.getMessage(), req);
+      filter = FilterParser.parse(body.filter());
+    } catch (FilterParseException e) {
+      RouteSupport.sendProblem(res, Status.BAD_REQUEST_400, "invalid filter", e.getMessage(), req);
       return;
     }
 
@@ -84,6 +86,7 @@ public final class SearchRoutes implements HttpService {
 
     SearchRequest.Builder builder =
         SearchRequest.builder(body.queryVector(), body.k())
+            .filter(filter)
             .includeVector(includeVector)
             .includeText(includeText)
             .includeMetadata(includeMetadata);

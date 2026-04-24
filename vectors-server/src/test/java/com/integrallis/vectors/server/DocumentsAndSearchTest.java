@@ -131,13 +131,13 @@ class DocumentsAndSearchTest {
   }
 
   @Test
-  void filterNotYetSupportedReturns400() throws Exception {
+  void malformedFilterReturns400() throws Exception {
     HttpResponse<String> r =
         postJson(
             "/v1/collections/docs/search",
-            "{\"queryVector\":[1,0,0,0],\"k\":3,\"filter\":{\"field\":\"cat\",\"eq\":\"x\"}}");
+            "{\"queryVector\":[1,0,0,0],\"k\":3,\"filter\":{\"field\":\"cat\",\"foo\":\"x\"}}");
     assertThat(r.statusCode()).isEqualTo(400);
-    assertThat(r.body()).contains("unsupported filter");
+    assertThat(r.body()).contains("invalid filter");
   }
 
   @Test
@@ -162,5 +162,35 @@ class DocumentsAndSearchTest {
     assertThat(tags.isArray()).isTrue();
     assertThat(tags.size()).isEqualTo(2);
     assertThat(tags.get(0).asText()).isEqualTo("ai");
+  }
+
+  @Test
+  void filteredSearchOnlyReturnsMatchingDocs() throws Exception {
+    postJson(
+        "/v1/collections/docs/documents",
+        "{\"documents\":[{\"id\":\"x1\",\"vector\":[1.0,0.0,0.0,0.0],\"metadata\":{\"cat\":\"x\",\"rank\":1}},"
+            + "{\"id\":\"y1\",\"vector\":[1.0,0.0,0.0,0.0],\"metadata\":{\"cat\":\"y\",\"rank\":2}},"
+            + "{\"id\":\"x2\",\"vector\":[0.9,0.1,0.0,0.0],\"metadata\":{\"cat\":\"x\",\"rank\":5}}]}");
+
+    HttpResponse<String> sr =
+        postJson(
+            "/v1/collections/docs/search",
+            "{\"queryVector\":[1.0,0.0,0.0,0.0],\"k\":10,"
+                + "\"filter\":{\"field\":\"cat\",\"eq\":\"x\"}}");
+    assertThat(sr.statusCode()).isEqualTo(200);
+    JsonNode hits = JSON.readTree(sr.body()).get("hits");
+    assertThat(hits.size()).isEqualTo(2);
+    for (JsonNode h : hits) {
+      assertThat(h.get("id").asText()).startsWith("x");
+    }
+
+    HttpResponse<String> sr2 =
+        postJson(
+            "/v1/collections/docs/search",
+            "{\"queryVector\":[1.0,0.0,0.0,0.0],\"k\":10,"
+                + "\"filter\":{\"and\":[{\"field\":\"cat\",\"eq\":\"x\"},{\"field\":\"rank\",\"gte\":3}]}}");
+    JsonNode hits2 = JSON.readTree(sr2.body()).get("hits");
+    assertThat(hits2.size()).isEqualTo(1);
+    assertThat(hits2.get(0).get("id").asText()).isEqualTo("x2");
   }
 }
