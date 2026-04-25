@@ -1,0 +1,159 @@
+= HTTP Server
+:navtitle: HTTP Server
+
+The `vectors-server` module provides a standalone HTTP server for vector operations.
+Built on Helidon SE 4 (Nima virtual-thread runtime) with a JSON REST API.
+
+== Starting the Server
+
+[source,bash]
+----
+cd vectors
+./gradlew :vectors-server:run
+----
+
+The server starts on port 8287 by default.
+
+=== Configuration
+
+Pass options via CLI arguments:
+
+[source,bash]
+----
+java -jar vectors-server.jar --port 9090 --data-dir /var/lib/vectors
+----
+
+Or configure programmatically:
+
+[source,java]
+----
+ServerConfig config = ServerConfig.withPort(9090)
+    .withDataDir(Path.of("/var/lib/vectors"));
+ServerHandle handle = VectorsServer.start(config);
+----
+
+== REST API
+
+=== Admin
+
+[cols="1,3,2", options="header"]
+|===
+| Method | Path | Description
+
+| `GET`  | `/health`    | Health check (returns 200)
+| `POST` | `/shutdown`  | Graceful shutdown
+|===
+
+=== Collections
+
+[cols="1,3,2", options="header"]
+|===
+| Method | Path | Description
+
+| `POST`   | `/collections`                | Create a new collection
+| `GET`    | `/collections`                | List all collections
+| `GET`    | `/collections/\{name\}`         | Describe a collection
+| `DELETE` | `/collections/\{name\}`         | Delete a collection
+|===
+
+==== Create a Collection
+
+[source,bash]
+----
+curl -X POST http://localhost:8287/collections \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-collection",
+    "dimension": 384,
+    "metric": "COSINE",
+    "indexType": "HNSW",
+    "quantizer": "SQ8",
+    "hnswM": 16,
+    "hnswEfConstruction": 200
+  }'
+----
+
+=== Documents
+
+[cols="1,3,2", options="header"]
+|===
+| Method | Path | Description
+
+| `POST`   | `/collections/\{name\}/documents`      | Upsert documents
+| `GET`    | `/collections/\{name\}/documents/\{id\}` | Get a document by ID
+| `DELETE` | `/collections/\{name\}/documents/\{id\}` | Delete a document
+|===
+
+==== Upsert Documents
+
+[source,bash]
+----
+curl -X POST http://localhost:8287/collections/my-collection/documents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documents": [
+      {
+        "id": "doc-1",
+        "vector": [0.1, 0.2, 0.3, ...],
+        "text": "hello world",
+        "metadata": {"author": "alice", "year": 2024}
+      }
+    ]
+  }'
+----
+
+=== Search
+
+[cols="1,3,2", options="header"]
+|===
+| Method | Path | Description
+
+| `POST` | `/collections/\{name\}/search`  | Search for nearest neighbors
+|===
+
+==== Search Example
+
+[source,bash]
+----
+curl -X POST http://localhost:8287/collections/my-collection/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vector": [0.1, 0.2, 0.3, ...],
+    "k": 10,
+    "filter": {
+      "type": "eq",
+      "field": "author",
+      "value": "alice"
+    }
+  }'
+----
+
+=== Events
+
+[cols="1,3,2", options="header"]
+|===
+| Method | Path | Description
+
+| `GET` | `/events` | SSE event stream for collection changes
+|===
+
+The SSE endpoint streams real-time notifications for collection creation, deletion, and document changes.
+
+== Persistence
+
+When started with a `--data-dir`, the server persists collections to disk.
+On startup, `CollectionDiscovery` scans the data directory and reopens all existing collections.
+
+Collections created without a data directory are ephemeral and lost on shutdown.
+
+== Embedded Usage
+
+For testing, start the server in-process:
+
+[source,java]
+----
+ServerHandle handle = VectorsServer.start(ServerConfig.forTesting());
+int port = handle.port();
+// ... run tests against http://localhost:<port> ...
+handle.stop();
+----

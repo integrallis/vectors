@@ -1,0 +1,169 @@
+= Architecture
+:navtitle: Architecture
+
+This page describes the module layout, dependency graph, and key architectural decisions in the Vectors library.
+
+== Module Overview
+
+Vectors is a multi-module Gradle project.
+Each module has a single responsibility and exposes its API via `api` dependencies so that downstream modules can compose them.
+
+[cols="2,4", options="header"]
+|===
+| Module | Description
+
+| `vectors-core`
+| SIMD distance kernels (dot product, L2, cosine), vector type abstractions, similarity functions.
+Foundation module with no internal dependencies.
+
+| `vectors-storage`
+| Off-heap memory management via `MemorySegment` and `Arena`.
+Arena-scoped allocation, mmap file I/O, storage backend abstraction.
+
+| `vectors-quantization`
+| Scalar (int8/int4), product (PQ), binary (BQ/BBQ), RaBitQ, extended RaBitQ, TurboQuant, and NVQ quantizers.
+Training, encoding, and asymmetric distance estimation.
+
+| `vectors-hnsw`
+| HNSW graph index.
+Multi-layer navigable small world graph with diversity-based neighbor selection and two-pass quantized search.
+
+| `vectors-vamana`
+| Vamana/DiskANN graph index.
+Single-layer graph with graduated alpha pruning, medoid entry point, and two-pass quantized search.
+
+| `vectors-ivf`
+| IVF family indexes (IVF_FLAT, IVF_PQ).
+Inverted file with k-means clustering, ADC lookup tables, and optional rescore.
+
+| `vectors-db`
+| Embedded vector database facade.
+Unified `VectorCollection` API over all backends with metadata filtering, persistence, deletion, and compaction.
+
+| `vectors-distributed`
+| Scatter-gather distributed search.
+Broadcasts queries across cluster nodes and merges results.
+Status: in progress.
+
+| `vectors-server`
+| HTTP server (Helidon SE 4).
+REST API for collections, documents, search, and SSE event streaming.
+
+| `vectors-bench`
+| JMH benchmarks and ANN-Benchmarks-compatible harness.
+Dataset loading, checkpoint/resume, recall/QPS measurement.
+
+| `vectors-gpu`
+| cuVS GPU backend integration.
+Status: planned.
+|===
+
+== Module Dependency Graph
+
+[source]
+----
+vectors-core
+└── vectors-storage
+    └── vectors-quantization
+        ├── vectors-hnsw
+        ├── vectors-vamana
+        └── vectors-ivf
+            └── vectors-db
+                ├── vectors-distributed
+                ├── vectors-server
+                ├── vectors-spring-ai
+                │   └── vectors-spring-boot-starter
+                ├── vectors-langchain4j
+                └── vectors-cache-semantic-db
+----
+
+Pick the module you need and transitive dependencies are resolved automatically.
+For most applications, `vectors-db` is the entry point.
+
+== Dual-Mode Operation
+
+Every `VectorCollection` can run in one of two modes:
+
+* **In-memory** -- all data lives on the Java heap.
+No persistence, no disk I/O.
+Suitable for testing, ephemeral workloads, and small datasets.
+
+* **Persistent (mmap)** -- vectors and graph structures are memory-mapped from disk via `MemorySegment`.
+Writes produce a new generation directory; a single atomic pointer flip (`CURRENT` file) makes the generation visible.
+The OS page cache manages what stays in RAM.
+
+Switch between modes by providing a `storagePath` to the builder:
+
+[source,java]
+----
+// In-memory
+VectorCollection inmem = VectorCollection.builder()
+    .dimension(384)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .build();
+
+// Persistent
+VectorCollection persistent = VectorCollection.builder()
+    .dimension(384)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .storagePath(Path.of("/var/lib/vectors/my-collection"))
+    .build();
+----
+
+== Index Type Comparison
+
+[cols="1,2,2,2,2", options="header"]
+|===
+| Index | Search complexity | Build complexity | Memory overhead | Best for
+
+| FLAT
+| O(n) linear scan
+| O(n)
+| None
+| Small datasets (< 100K), exact results
+
+| HNSW
+| O(log n) per query
+| O(n log n)
+| ~12 x M bytes/node
+| General purpose, low-latency recall > 0.95
+
+| Vamana
+| O(log n) per query
+| O(n log n), 2-pass
+| ~4 x R bytes/node
+| Disk-oriented workloads, mmap-persistent indexes
+
+| IVF_FLAT
+| O(n / k x nprobe)
+| O(n x k-means iterations)
+| ~4 bytes/vector (cluster id)
+| Large datasets with moderate recall requirements
+
+| IVF_PQ
+| O(n / k x nprobe), ADC
+| O(n x k-means) + PQ training
+| M bytes/vector (PQ codes)
+| Maximum compression, 100M+ vectors
+|===
+
+See the xref:sizing.adoc[Sizing Guide] for capacity planning and tuning parameters.
+
+== SIMD Strategy
+
+Distance kernels use the Java Vector API (`jdk.incubator.vector`):
+
+* **`SPECIES_PREFERRED`** for portability across hardware (128-bit, 256-bit, 512-bit lanes)
+* **4x unrolled FMA accumulators** for dot product and L2 distance to saturate execution ports
+* **Conditional FMA** -- `a.fma(b, c)` when the hardware has fast FMA, `a.mul(b).add(c)` otherwise
+* **Scalar tail** for dimensions not divisible by the lane width
+* A pure-scalar fallback (`ScalarVectorUtilSupport`) is always available
+
+== Memory Model
+
+* **Vectors** are stored off-heap via `MemorySegment` in persistent mode, or as `float[][]` on the heap in memory mode.
+* **Graph adjacency** (HNSW layers, Vamana neighbor lists) is always on-heap.
+* **Quantized codes** (PQ, BQ, SQ) are stored in compact `byte[]` arrays with per-vector correction factors.
+* **Arenas** scope the lifetime of mmap segments to a generation; closing a generation unmaps its files.

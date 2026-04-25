@@ -1,0 +1,167 @@
+= VCR Test Harness
+:navtitle: VCR Test Harness
+
+The VCR (Video Cassette Recorder) modules provide record/replay infrastructure for AI model API calls.
+Record responses from embedding and chat models during development, then replay them in CI without network access or API keys.
+
+== Concepts
+
+* **Cassette** -- a stored request/response pair, identified by test class, test method, and call index.
+* **Mode** -- controls VCR behavior:
+** `PLAYBACK` -- serve from cassettes only; fail if missing.
+** `RECORD` -- always call the real model and store the response.
+** `RECORD_NEW` -- record only if no cassette exists; replay otherwise.
+** `RECORD_FAILED` -- re-record only for tests that previously failed.
+** `PLAYBACK_OR_RECORD` -- try playback first; fall back to recording if no cassette exists.
+** `OFF` -- bypass VCR entirely; all calls go to the real model.
+* **Registry** -- tracks per-test status (RECORDED, FAILED, MISSING) across test runs.
+* **Serializer** -- encodes cassettes to JSON. Two implementations: Avaje Jsonb (default) and Jackson.
+
+== JUnit 5 Setup
+
+Add the dependency:
+
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    testImplementation("com.integrallis:vectors-vcr-junit5:{vectors-version}")
+    testImplementation("com.integrallis:vectors-vcr-serde-avaje:{vectors-version}")
+    // or: vectors-vcr-serde-jackson
+
+    // Framework-specific wrappers (pick one or both):
+    testImplementation("com.integrallis:vectors-vcr-spring-ai:{vectors-version}")
+    testImplementation("com.integrallis:vectors-vcr-langchain4j:{vectors-version}")
+}
+----
+
+Annotate your test class:
+
+[source,java]
+----
+@VCRTest(mode = VCRMode.PLAYBACK_OR_RECORD,
+         dataDir = "src/test/resources/cassettes")
+@ExtendWith(VCRExtension.class)
+class EmbeddingTest {
+
+    @VCRModel
+    EmbeddingModel model = new OpenAiEmbeddingModel(apiKey);
+
+    @Test
+    void testEmbed() {
+        float[] embedding = model.embed("hello world");
+        assertThat(embedding).hasSize(1536);
+    }
+
+    @VCRRecord   // force re-record for this test
+    @Test
+    void testReRecord() {
+        // ...
+    }
+
+    @VCRDisabled  // bypass VCR entirely
+    @Test
+    void testLive() {
+        // ...
+    }
+}
+----
+
+On the first run, the real model is called and responses are saved to cassette files under `dataDir`.
+On subsequent runs, responses are replayed from cassettes -- no API key or network needed.
+
+== TestNG Setup
+
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    testImplementation("com.integrallis:vectors-vcr-testng:{vectors-version}")
+    testImplementation("com.integrallis:vectors-vcr-serde-avaje:{vectors-version}")
+}
+----
+
+[source,java]
+----
+@VCRTestNG(mode = VCRMode.PLAYBACK_OR_RECORD,
+           dataDir = "src/test/resources/cassettes")
+@Listeners(VCRListener.class)
+public class EmbeddingTest {
+
+    @VCRModel
+    EmbeddingModel model = new OpenAiEmbeddingModel(apiKey);
+
+    @Test
+    public void testEmbed() {
+        // ...
+    }
+}
+----
+
+== Spring AI Integration
+
+Wrap Spring AI models with VCR-aware decorators:
+
+[source,java]
+----
+@VCRModel
+EmbeddingModel embeddingModel = new OpenAiEmbeddingModel(apiKey);
+
+@VCRModel
+ChatModel chatModel = new OpenAiChatModel(apiKey);
+----
+
+The `vectors-vcr-spring-ai` module provides `VCRSpringAIEmbeddingModel` and `VCRSpringAIChatModel` wrappers.
+Field wrapping happens automatically when `@VCRModel` is used with the JUnit 5 or TestNG extension.
+
+== LangChain4j Integration
+
+[source,java]
+----
+@VCRModel
+dev.langchain4j.model.embedding.EmbeddingModel model =
+    new AllMiniLmL6V2EmbeddingModel();
+
+@VCRModel
+ChatLanguageModel chatModel = OpenAiChatModel.builder()
+    .apiKey(apiKey).build();
+----
+
+The `vectors-vcr-langchain4j` module provides `VCREmbeddingModel` and `VCRChatModel` wrappers.
+
+== Cassette Storage Options
+
+=== File-Based (Default)
+
+Cassettes are stored as JSON files on disk under the configured `dataDir`.
+
+=== Semantic Store
+
+Use `vectors-vcr-semantic-db` for fuzzy matching of prompts via vector similarity:
+
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    testImplementation("com.integrallis:vectors-vcr-semantic-db:{vectors-version}")
+}
+----
+
+The semantic store finds cassettes for prompts that are semantically similar (not byte-identical), which handles non-deterministic prompt formatting or minor prompt variations.
+Configure the similarity threshold (default: 0.95) to control matching strictness.
+
+== Serializer Choice
+
+Two cassette serializers are available:
+
+[cols="1,2,2", options="header"]
+|===
+| Serializer | Dependency | Notes
+
+| Avaje Jsonb
+| `vectors-vcr-serde-avaje`
+| Default. Zero-annotation tree API. No annotation processor needed.
+
+| Jackson
+| `vectors-vcr-serde-jackson`
+| Streaming API (JsonGenerator/JsonParser). Lower memory for large cassettes.
+|===
+
+Both produce identical JSON, so cassettes are interchangeable between serializers.

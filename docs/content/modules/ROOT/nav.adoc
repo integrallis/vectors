@@ -1,13 +1,23 @@
 .Overview
 * xref:index.adoc[Vectors]
+* xref:architecture.adoc[Architecture]
 
 .User Guides
 * xref:getting-started.adoc[Getting Started]
-* xref:sizing.adoc[Sizing Guide]
+* xref:quantization.adoc[Quantization]
+* xref:filtering.adoc[Filtering]
+* xref:persistence.adoc[Persistence]
+* xref:sizing.adoc[Sizing & Tuning]
 * xref:migration-from-simplevectorstore.adoc[Migrating from SimpleVectorStore]
 
+.Integrations
+* xref:spring-ai.adoc[Spring AI]
+* xref:langchain4j.adoc[LangChain4j]
+* xref:server.adoc[HTTP Server]
+* xref:testing.adoc[VCR Test Harness]
+
 .API Reference
-* xref:api-reference.adoc[Javadoc API Reference]
+* xref:api-reference.adoc[Javadoc]
 
 .Resources
 * {url-vectors-github}[GitHub^]

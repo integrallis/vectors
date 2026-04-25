@@ -1,0 +1,127 @@
+= LangChain4j Integration
+:navtitle: LangChain4j
+
+Vectors provides a LangChain4j `EmbeddingStore` adapter for using java-vectors as the storage backend in LangChain4j applications.
+
+== Dependency Setup
+
+[tabs]
+====
+Gradle::
++
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors-langchain4j:{vectors-version}")
+    implementation("dev.langchain4j:langchain4j-core:1.0.0-beta1")
+}
+----
+
+Maven::
++
+[source,xml,subs="attributes+"]
+----
+<dependency>
+    <groupId>com.integrallis</groupId>
+    <artifactId>vectors-langchain4j</artifactId>
+    <version>{vectors-version}</version>
+</dependency>
+----
+====
+
+== Using JavaVectorsEmbeddingStore
+
+`JavaVectorsEmbeddingStore` implements LangChain4j's `EmbeddingStore<TextSegment>`:
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(384)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .build();
+
+EmbeddingStore<TextSegment> store = JavaVectorsEmbeddingStore.builder()
+    .vectorCollection(collection)
+    .build();
+----
+
+=== Adding Embeddings
+
+Embeddings are pre-computed by a LangChain4j `EmbeddingModel` and passed to the store:
+
+[source,java]
+----
+EmbeddingModel model = new AllMiniLmL6V2EmbeddingModel();
+
+TextSegment segment = TextSegment.from("hello world",
+    Metadata.from("author", "alice"));
+Embedding embedding = model.embed(segment).content();
+
+String id = store.add(embedding, segment);
+----
+
+=== Searching
+
+[source,java]
+----
+Embedding queryEmbedding = model.embed("hello").content();
+
+List<EmbeddingMatch<TextSegment>> matches = store.search(
+    EmbeddingSearchRequest.builder()
+        .queryEmbedding(queryEmbedding)
+        .maxResults(10)
+        .build())
+    .matches();
+----
+
+=== Deleting
+
+[source,java]
+----
+store.remove(id);              // by id
+store.removeAll();             // all documents
+store.removeAll(isEqualTo("author", "alice"));  // by filter
+----
+
+== Metadata Mapping
+
+LangChain4j `Metadata` values are converted to java-vectors `MetadataValue`:
+
+[cols="1,1", options="header"]
+|===
+| LangChain4j type | MetadataValue type
+
+| `String`  | `MetadataValue.StringValue`
+| `Integer` / `Long` | `MetadataValue.LongValue`
+| `Float` / `Double` | `MetadataValue.DoubleValue`
+| `Boolean` | `MetadataValue.BooleanValue`
+|===
+
+== Filter Translation
+
+LangChain4j filter predicates are translated to the java-vectors `Filter` AST.
+All standard LangChain4j filter operators are supported.
+
+== Embedding Cache
+
+Combine with `vectors-cache-langchain4j` to cache embedding model calls:
+
+[source,java]
+----
+VectorCache<String, Response<Embedding>> cache =
+    CaffeineVectorCache.<String, Response<Embedding>>builder()
+        .maximumSize(10_000)
+        .build();
+
+EmbeddingModel cached = new CachingEmbeddingModel(embeddingModel, cache);
+----
+
+The decorator also wraps `EmbeddingStore` search results:
+
+[source,java]
+----
+EmbeddingStore<TextSegment> cachedStore = new CachingEmbeddingStore<>(store, searchCache);
+----
+
+Write-through semantics: mutations (`add`, `remove`) invalidate the search cache automatically.

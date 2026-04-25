@@ -1,0 +1,142 @@
+= Quantization
+:navtitle: Quantization
+
+Vector quantization reduces memory per vector while preserving approximate distance ordering.
+Vectors provides several quantizer implementations, each with different compression ratios and recall characteristics.
+
+== Quantizer Comparison
+
+[cols="2,1,1,3", options="header"]
+|===
+| Quantizer | Bits/dim | Compression | Use case
+
+| Scalar int8 (SQ8)
+| 8
+| 4x
+| General purpose. Low training cost, good recall.
+
+| Scalar int4 (SQ4)
+| 4
+| 8x
+| Higher compression with moderate recall loss.
+
+| Product Quantization (PQ)
+| ~1 (M subspaces)
+| 16-32x
+| Maximum compression for large datasets. Requires subspace structure in data.
+
+| Binary Quantization (BQ)
+| 1
+| 32x
+| Sign-bit encoding. Fast Hamming distance.
+
+| BBQ (Better Binary)
+| 1 + corrections
+| ~32x
+| Improved BQ with int4 asymmetric scoring and bit-plane corrections.
+
+| RaBitQ
+| 1
+| 32x
+| Rotation-based sign-bit quantization (SIGMOD 2024). Pluggable rotation strategy.
+
+| Extended RaBitQ
+| 2-8
+| 4-16x
+| Multi-bit extension of RaBitQ (SIGMOD 2025). Greedy magnitude quantization.
+
+| TurboQuant
+| 1-8
+| 4-32x
+| Per-coordinate Lloyd-Max quantization with rotation. Configurable bit-width.
+
+| NVQ
+| 8
+| 4x + metadata
+| Per-vector nonlinear quantization via logistic transform. Per-subvector alpha optimization.
+|===
+
+== Using Quantizers with VectorCollection
+
+Attach a quantizer to any graph index (HNSW, Vamana) or IVF index via the builder:
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(768)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .quantizer(QuantizerKind.SQ8)
+    .build();
+----
+
+Available `QuantizerKind` values: `NONE`, `SQ8`, `SQ4`, `PQ`, `BQ`, `RABITQ`, `NVQ`.
+
+== Two-Pass Search
+
+When a quantizer is enabled, search uses a two-pass strategy:
+
+1. **Coarse pass** -- traverse the graph using quantized distance estimates. Over-fetch candidates by `overQueryFactor` (default: tuned per quantizer).
+2. **Rescore pass** -- re-rank the top candidates using full-precision vectors for accurate final ordering.
+
+This gives near-full-precision recall at a fraction of the memory cost.
+
+[source,java]
+----
+SearchResult result = collection.search(
+    SearchRequest.builder(queryVector, 10)
+        .searchListSize(200)     // beam width for graph traversal
+        .build());
+----
+
+== Scalar Quantization (SQ8 / SQ4)
+
+Maps each float coordinate to an 8-bit or 4-bit integer using per-dataset quantile boundaries.
+Training samples a reservoir of vectors and computes `[min, max]` per coordinate with a configurable confidence interval.
+Each encoded vector stores `dim` bytes plus two float corrections (min, scale).
+
+Best for: general-purpose compression with minimal recall loss.
+
+== Product Quantization (PQ)
+
+Splits each vector into `M` subspaces and clusters each subspace independently using k-means++.
+Each vector is encoded as `M` bytes (one centroid index per subspace).
+At query time, an asymmetric distance table (ADC) is precomputed for the query, and distances are estimated via table lookups.
+
+Configuration:
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(768)
+    .metric(SimilarityFunction.DOT_PRODUCT)
+    .indexType(IndexType.HNSW)
+    .quantizer(QuantizerKind.PQ)
+    .pqSubspaces(96)       // M: number of subspaces (default: dim / 8)
+    .pqClusters(256)        // Ks: centroids per subspace (default: 256)
+    .build();
+----
+
+Best for: maximum compression on large datasets (10M+ vectors) where data has exploitable subspace structure.
+
+== RaBitQ
+
+Rotation-based sign-bit quantization from the SIGMOD 2024 paper.
+Applies a random orthogonal rotation to decorrelate coordinates, then encodes each dimension as a single bit (sign of the rotated value).
+Per-vector correction factors compensate for the quantization error during scoring.
+
+The rotation strategy is pluggable:
+
+* `RandomRotation` -- dense d x d orthogonal matrix (QR decomposition). O(d^2^) per vector.
+* `GivensRotation` -- 2D pair rotations. O(d) per vector. Fastest.
+* `QuaternionRotation` -- 4D block rotations via Hamilton products. O(d) per vector. Best quality.
+
+Best for: memory-constrained workloads where 1-bit precision is acceptable with corrections.
+
+== Choosing a Quantizer
+
+* Start with **SQ8** -- it works well across most datasets and has minimal training overhead.
+* Use **PQ** when you need extreme compression (32x) and can tolerate the training cost.
+* Use **RaBitQ** or **BQ** for 1-bit compression with fast Hamming-based coarse scoring.
+* Use **NVQ** when per-vector nonlinear correction matters (heterogeneous magnitude distributions).
+* Always benchmark recall on your data -- quantizer quality depends on the dataset's structure.

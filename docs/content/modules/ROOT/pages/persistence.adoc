@@ -1,0 +1,139 @@
+= Persistence
+:navtitle: Persistence
+
+Vectors supports two storage modes: in-memory (heap-resident) and persistent (mmap-backed).
+This page covers the persistent mode, its commit model, crash recovery, and compaction.
+
+== Enabling Persistence
+
+Provide a `storagePath` to the builder:
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(768)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .storagePath(Path.of("/var/lib/vectors/my-collection"))
+    .build();
+----
+
+Without `storagePath`, the collection operates entirely in-memory.
+
+== Generation-Based Commits
+
+Each `commit()` produces a new **generation** -- a self-contained directory holding all data for that snapshot:
+
+----
+my-collection/
+├── CURRENT          <-- atomic pointer to active generation
+├── generation-0001/
+│   ├── manifest.bin
+│   ├── vectors.bin
+│   ├── graph.bin
+│   ├── metadata.bin
+│   ├── ids.bin
+│   ├── quantized.bin (if quantizer enabled)
+│   └── tombstones.bin (if deletions exist)
+└── generation-0002/
+    └── ...
+----
+
+The `CURRENT` file is an atomic pointer flip -- it names the active generation directory.
+Readers see a consistent snapshot via a single volatile read of the current generation.
+
+[source,java]
+----
+collection.add(doc1);
+collection.add(doc2);
+collection.commit();  // writes generation-0001, flips CURRENT
+----
+
+== Auto-Commit
+
+Set `autoCommitThreshold` to commit automatically after a fixed number of writes:
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(768)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .storagePath(Path.of("/var/lib/vectors/data"))
+    .autoCommitThreshold(1000)  // commit every 1000 documents
+    .build();
+----
+
+== Crash Recovery
+
+On startup, the library performs walk-back recovery:
+
+1. Read the `CURRENT` pointer.
+2. Verify the generation directory exists and the manifest CRC is valid.
+3. Verify all file payload CRCs (vectors.bin, graph.bin, metadata.bin, ids.bin, quantized.bin, tombstones.bin).
+4. If any verification fails, walk back to the previous generation.
+5. If no valid generation is found, start fresh.
+
+This ensures that a crash during `commit()` never leaves the collection in an inconsistent state.
+
+== Deletion and Tombstones
+
+Deletes mark documents as tombstoned -- a bit is flipped in a `BitSet`, but the physical data remains:
+
+[source,java]
+----
+collection.delete("doc-42");                         // by id
+collection.deleteWhere(Filters.eq("draft", true));   // by filter
+collection.commit();                                  // persists tombstones
+----
+
+Tombstoned documents are skipped during search (the check is a single bit test, the cheapest possible skip).
+
+== Compaction
+
+After many deletions, call `compact()` to physically reclaim space:
+
+[source,java]
+----
+collection.compact();
+----
+
+Compaction rebuilds the collection with dense ordinals:
+
+1. Copies only live (non-tombstoned) vectors.
+2. Rebuilds the graph index from scratch.
+3. Retrains the quantizer on live vectors only.
+4. Produces a new generation; the old generation can be garbage collected.
+
+Compaction is a blocking operation.
+Run it during maintenance windows or when the tombstone ratio exceeds an acceptable threshold.
+
+== Reopening a Collection
+
+To reopen a persistent collection, build with the same `storagePath`:
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(768)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .storagePath(Path.of("/var/lib/vectors/my-collection"))
+    .build();
+// Automatically opens the latest valid generation
+----
+
+The builder detects existing generations on disk, runs crash recovery, and opens the latest valid snapshot.
+
+== Memory-Mapped I/O
+
+In persistent mode, `vectors.bin` and `graph.bin` are zero-copy via `MemorySegment` over mmap.
+The JVM heap holds only graph adjacency lists and per-document metadata; the OS page cache manages which vector pages stay in RAM.
+
+This means:
+
+* Heap pressure is roughly proportional to the graph overhead (~12 x M bytes per node for HNSW), not the vector payload size.
+* Datasets larger than available RAM work correctly -- the OS evicts cold pages as needed.
+* `Arena` scoping ensures mmap segments are unmapped when a generation is closed.
+
+See the xref:sizing.adoc[Sizing Guide] for capacity estimates under both in-memory and persistent configurations.

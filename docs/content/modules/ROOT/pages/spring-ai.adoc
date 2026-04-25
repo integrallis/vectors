@@ -1,0 +1,157 @@
+= Spring AI Integration
+:navtitle: Spring AI
+
+Vectors provides a Spring AI `VectorStore` adapter and a Spring Boot starter for zero-code configuration.
+
+== Dependency Setup
+
+=== Direct Adapter
+
+Add `vectors-spring-ai` to use `JavaVectorsVectorStore` directly:
+
+[tabs]
+====
+Gradle::
++
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors-spring-ai:{vectors-version}")
+    implementation("org.springframework.ai:spring-ai-vector-store:1.1.4")
+}
+----
+
+Maven::
++
+[source,xml,subs="attributes+"]
+----
+<dependency>
+    <groupId>com.integrallis</groupId>
+    <artifactId>vectors-spring-ai</artifactId>
+    <version>{vectors-version}</version>
+</dependency>
+----
+====
+
+=== Spring Boot Starter
+
+For auto-configuration, add the starter instead:
+
+[tabs]
+====
+Gradle::
++
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors-spring-boot-starter:{vectors-version}")
+}
+----
+
+Maven::
++
+[source,xml,subs="attributes+"]
+----
+<dependency>
+    <groupId>com.integrallis</groupId>
+    <artifactId>vectors-spring-boot-starter</artifactId>
+    <version>{vectors-version}</version>
+</dependency>
+----
+====
+
+== Using JavaVectorsVectorStore
+
+`JavaVectorsVectorStore` implements Spring AI's `VectorStore` interface:
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(embeddingModel.dimensions())
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .build();
+
+VectorStore vectorStore = JavaVectorsVectorStore.builder()
+    .vectorCollection(collection)
+    .embeddingModel(embeddingModel)
+    .build();
+
+// Use standard Spring AI API
+vectorStore.add(List.of(
+    new Document("hello world"),
+    new Document("goodbye world")));
+
+List<Document> results = vectorStore.similaritySearch(
+    SearchRequest.query("hello").withTopK(5));
+----
+
+== Spring Boot Properties
+
+When using the starter, configure via `application.yml`:
+
+[source,yaml]
+----
+java-vectors:
+  dimension: 1536
+  metric: COSINE
+  index-type: HNSW
+  quantizer: SQ8
+  storage-path: /var/lib/vectors/my-collection
+  auto-commit-threshold: 1
+  hnsw:
+    m: 16
+    ef-construction: 200
+  vamana:
+    max-degree: 64
+    search-list-size: 128
+    alpha: 1.2
+----
+
+The starter auto-configures:
+
+* A `VectorCollection` bean from the properties above.
+* A `JavaVectorsVectorStore` bean (conditional on an `EmbeddingModel` bean being present).
+
+Both beans are `@ConditionalOnMissingBean`, so you can override them with custom `@Bean` definitions.
+
+== Filter Translation
+
+Spring AI filter expressions are translated to the java-vectors `Filter` AST.
+All standard operators are supported:
+
+[cols="1,1", options="header"]
+|===
+| Spring AI | java-vectors
+
+| `EQ`   | `Filters.eq()`
+| `NE`   | `Filters.not(Filters.eq())`
+| `GT`   | `Filters.gt()`
+| `GTE`  | `Filters.gte()`
+| `LT`   | `Filters.lt()`
+| `LTE`  | `Filters.lte()`
+| `IN`   | `Filters.inStr()` / `Filters.inNum()`
+| `NIN`  | `Filters.not(Filters.inStr())`
+| `AND`  | `Filters.and()`
+| `OR`   | `Filters.or()`
+| `NOT`  | `Filters.not()`
+|===
+
+== Embedding Cache
+
+Combine with `vectors-cache-spring-ai` to cache embedding model calls:
+
+[source,java]
+----
+VectorCache<String, float[]> cache = CaffeineVectorCache.<String, float[]>builder()
+    .maximumSize(10_000)
+    .build();
+
+EmbeddingModel cached = new CachingEmbeddingModel(embeddingModel, cache);
+----
+
+The caching decorator intercepts `embed()` and `embedAll()` calls, serving cached results for previously seen text inputs and batching only the cache misses into a single delegate call.
+
+== Migration from SimpleVectorStore
+
+See xref:migration-from-simplevectorstore.adoc[Migrating from SimpleVectorStore] for a step-by-step guide.

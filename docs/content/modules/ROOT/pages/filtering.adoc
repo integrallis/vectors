@@ -1,0 +1,137 @@
+= Filtering
+:navtitle: Filtering
+
+Vectors supports metadata filtering on search results.
+Filters are expressed as a composable AST built via the `Filters` factory class.
+
+== Filter Types
+
+The `Filter` sealed interface has seven implementations:
+
+[cols="2,3,2", options="header"]
+|===
+| Filter | Description | Example
+
+| `Eq`
+| Exact equality on a metadata field.
+| `Filters.eq("author", "alice")`
+
+| `NumericRange`
+| Bounded numeric range with inclusive/exclusive bounds.
+| `Filters.between("price", 10.0, 50.0)`
+
+| `In`
+| Set membership (string or numeric).
+| `Filters.inStr("tag", "java", "python")`
+
+| `And`
+| Logical conjunction of child filters.
+| `Filters.and(f1, f2)`
+
+| `Or`
+| Logical disjunction of child filters.
+| `Filters.or(f1, f2)`
+
+| `Not`
+| Logical negation of a child filter.
+| `Filters.not(f1)`
+
+| `All`
+| Matches every document (no filtering).
+| `Filters.all()`
+|===
+
+== Factory Methods
+
+The `Filters` class provides static factory methods:
+
+[source,java]
+----
+// Equality
+Filters.eq("author", "alice")       // String
+Filters.eq("year", 2024L)           // long
+Filters.eq("score", 0.95)           // double
+Filters.eq("active", true)          // boolean
+
+// Numeric ranges
+Filters.gt("price", 10.0)           // price > 10
+Filters.gte("price", 10.0)          // price >= 10
+Filters.lt("price", 50.0)           // price < 50
+Filters.lte("price", 50.0)          // price <= 50
+Filters.between("price", 10.0, 50.0) // 10 <= price <= 50
+
+// Set membership
+Filters.inStr("lang", "java", "python", "rust")
+Filters.inNum("version", 1.0, 2.0, 3.0)
+
+// Logical composition
+Filters.and(
+    Filters.eq("author", "alice"),
+    Filters.gt("year", 2020))
+
+Filters.or(
+    Filters.eq("lang", "java"),
+    Filters.eq("lang", "python"))
+
+Filters.not(Filters.eq("draft", true))
+----
+
+== Using Filters in Search
+
+Attach a filter to a `SearchRequest`:
+
+[source,java]
+----
+SearchResult result = collection.search(
+    SearchRequest.builder(queryVector, 10)
+        .filter(Filters.and(
+            Filters.eq("category", "research"),
+            Filters.gte("year", 2023)))
+        .build());
+----
+
+== Filter Evaluation
+
+Filters are evaluated as a post-filter step after the index returns candidates.
+The graph traversal (HNSW, Vamana) or cluster scan (IVF) produces a candidate set, and each candidate's metadata is checked against the filter predicate.
+
+For highly selective filters, increase `searchListSize` (HNSW/Vamana) or `nprobe` (IVF) to ensure enough candidates pass filtering:
+
+[source,java]
+----
+SearchResult result = collection.search(
+    SearchRequest.builder(queryVector, 10)
+        .searchListSize(500)   // wider beam to compensate for filtering
+        .filter(Filters.eq("rare_field", "rare_value"))
+        .build());
+----
+
+== Storing Metadata
+
+Add metadata to documents at insertion time via `MetadataValue`:
+
+[source,java]
+----
+Document doc = Document.of("doc-1", vector, "Some text",
+    Map.of(
+        "author", MetadataValue.of("alice"),
+        "year", MetadataValue.of(2024L),
+        "score", MetadataValue.of(0.95),
+        "active", MetadataValue.of(true)));
+collection.add(doc);
+----
+
+`MetadataValue` is a sealed type supporting `String`, `Long`, `Double`, and `Boolean` values.
+
+== Deleting by Filter
+
+Use `deleteWhere` to remove all documents matching a filter:
+
+[source,java]
+----
+int deleted = collection.deleteWhere(Filters.eq("draft", true));
+collection.commit();
+----
+
+Deleted documents are tombstoned (not physically removed).
+Call `compact()` to reclaim space.
