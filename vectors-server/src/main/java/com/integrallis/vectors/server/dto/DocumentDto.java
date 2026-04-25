@@ -21,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.integrallis.vectors.db.Document;
+import com.integrallis.vectors.core.Document;
 
 /**
  * Wire-format document for {@code POST /v1/collections/\u007Bname\u007D/documents} (inbound) and

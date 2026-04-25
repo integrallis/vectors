@@ -18,7 +18,7 @@ package com.integrallis.vectors.db.event;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.MetadataValue;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;

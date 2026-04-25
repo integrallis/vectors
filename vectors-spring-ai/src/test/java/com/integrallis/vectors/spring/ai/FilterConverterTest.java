@@ -17,7 +17,7 @@ package com.integrallis.vectors.spring.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.integrallis.vectors.db.filter.Filter;
+import com.integrallis.vectors.core.filter.Filter;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;

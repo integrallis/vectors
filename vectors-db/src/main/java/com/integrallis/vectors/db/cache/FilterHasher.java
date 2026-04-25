@@ -15,7 +15,7 @@
  */
 package com.integrallis.vectors.db.cache;
 
-import com.integrallis.vectors.db.filter.Filter;
+import com.integrallis.vectors.core.filter.Filter;
 import java.util.List;
 import java.util.Objects;
 

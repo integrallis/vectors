@@ -17,8 +17,8 @@
 package com.integrallis.vectors.server.filter;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.integrallis.vectors.db.filter.Filter;
-import com.integrallis.vectors.db.filter.Filters;
+import com.integrallis.vectors.core.filter.Filter;
+import com.integrallis.vectors.core.filter.Filters;
 import java.util.ArrayList;
 import java.util.List;
 

@@ -13,14 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.integrallis.vectors.db.filter;
+package com.integrallis.vectors.core.filter;
 
 import java.util.List;
 
 /**
- * Static factory for {@link Filter} nodes. All filter types are evaluated by {@link
- * FilterExecutor#matches(Filter, java.util.Map)} during post-filter search in the {@link
- * com.integrallis.vectors.db.VectorCollection} facade.
+ * Static factory for {@link Filter} nodes. All filter types are evaluated by filter executors
+ * during post-filter search in collection facades.
  */
 public final class Filters {
 

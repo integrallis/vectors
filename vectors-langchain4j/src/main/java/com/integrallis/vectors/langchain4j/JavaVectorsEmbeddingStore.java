@@ -15,7 +15,7 @@
  */
 package com.integrallis.vectors.langchain4j;
 
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.VectorCollection;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;

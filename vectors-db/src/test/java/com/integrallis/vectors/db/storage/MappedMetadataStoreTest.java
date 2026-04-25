@@ -19,8 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIOException;
 
-import com.integrallis.vectors.db.Document;
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.metadata.MetadataStore;
 import java.io.IOException;
 import java.lang.foreign.Arena;

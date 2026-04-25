@@ -18,7 +18,7 @@ package com.integrallis.vectors.db.metadata;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
-import com.integrallis.vectors.db.Document;
+import com.integrallis.vectors.core.Document;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 

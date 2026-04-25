@@ -15,7 +15,7 @@
  */
 package com.integrallis.vectors.db.event;
 
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.MetadataValue;
 import java.util.Map;
 import java.util.Objects;
 

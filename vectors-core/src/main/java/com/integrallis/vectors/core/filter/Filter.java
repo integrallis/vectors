@@ -13,19 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.integrallis.vectors.db.filter;
+package com.integrallis.vectors.core.filter;
 
 import java.util.List;
 import java.util.Objects;
 
 /**
- * Predicate AST for metadata filtering. Sealed to enable exhaustive pattern matching in {@link
- * FilterExecutor}.
+ * Predicate AST for metadata filtering. Sealed to enable exhaustive pattern matching in filter
+ * executors.
  *
- * <p>The sealed hierarchy allows the compiler to enforce exhaustive pattern matching over all
- * filter types. {@link FilterExecutor#matches(Filter, java.util.Map)} evaluates a filter against a
- * document's metadata; the {@link com.integrallis.vectors.db.VectorCollection} facade applies this
- * as a post-filter on ANN search candidates.
+ * <p>The sealed hierarchy allows the compiler to enforce exhaustive pattern matching over all filter
+ * types. Filter executors evaluate a filter against a document's metadata; collection facades apply
+ * this as a post-filter on ANN search candidates.
  */
 public sealed interface Filter
     permits Filter.All,

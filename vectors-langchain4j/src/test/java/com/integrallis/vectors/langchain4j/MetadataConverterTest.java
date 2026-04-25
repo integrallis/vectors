@@ -17,7 +17,7 @@ package com.integrallis.vectors.langchain4j;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.MetadataValue;
 import dev.langchain4j.data.document.Metadata;
 import java.util.Map;
 import java.util.UUID;

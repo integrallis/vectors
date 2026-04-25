@@ -17,7 +17,7 @@ package com.integrallis.vectors.spring.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.MetadataValue;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

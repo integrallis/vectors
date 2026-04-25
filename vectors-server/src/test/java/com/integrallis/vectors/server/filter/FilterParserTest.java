@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.integrallis.vectors.db.filter.Filter;
+import com.integrallis.vectors.core.filter.Filter;
 import com.integrallis.vectors.server.ObjectMapperHolder;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;

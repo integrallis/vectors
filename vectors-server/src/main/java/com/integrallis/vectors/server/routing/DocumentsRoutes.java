@@ -16,7 +16,7 @@
  */
 package com.integrallis.vectors.server.routing;
 
-import com.integrallis.vectors.db.Document;
+import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.server.CollectionRegistry;
 import com.integrallis.vectors.server.dto.DocumentDto;

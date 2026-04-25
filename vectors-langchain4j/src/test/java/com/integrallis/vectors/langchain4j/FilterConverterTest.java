@@ -18,7 +18,7 @@ package com.integrallis.vectors.langchain4j;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.integrallis.vectors.db.filter.Filter;
+import com.integrallis.vectors.core.filter.Filter;
 import dev.langchain4j.store.embedding.filter.comparison.ContainsString;
 import dev.langchain4j.store.embedding.filter.comparison.IsEqualTo;
 import dev.langchain4j.store.embedding.filter.comparison.IsGreaterThan;

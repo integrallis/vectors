@@ -15,7 +15,7 @@
  */
 package com.integrallis.vectors.spring.ai;
 
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.MetadataValue;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

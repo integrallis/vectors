@@ -15,7 +15,7 @@
  */
 package com.integrallis.vectors.langchain4j;
 
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.MetadataValue;
 import dev.langchain4j.data.document.Metadata;
 import java.util.LinkedHashMap;
 import java.util.Map;

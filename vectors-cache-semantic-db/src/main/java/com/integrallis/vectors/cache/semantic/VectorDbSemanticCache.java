@@ -17,8 +17,8 @@ package com.integrallis.vectors.cache.semantic;
 
 import com.integrallis.vectors.cache.CacheStats;
 import com.integrallis.vectors.cache.SemanticCache;
-import com.integrallis.vectors.db.Document;
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;

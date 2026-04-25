@@ -15,7 +15,7 @@
  */
 package com.integrallis.vectors.db.internal;
 
-import com.integrallis.vectors.db.Document;
+import com.integrallis.vectors.core.Document;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;

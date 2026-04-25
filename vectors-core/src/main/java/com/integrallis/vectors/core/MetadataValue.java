@@ -13,14 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.integrallis.vectors.db;
+package com.integrallis.vectors.core;
 
 import java.util.List;
 import java.util.Objects;
 
 /**
  * Typed metadata value attached to a {@link Document}. Sealed to enforce exhaustive pattern
- * matching by the filter executor (Step 5) and the metadata store.
+ * matching by filter executors and metadata stores.
  *
  * <p>Supported variants:
  *

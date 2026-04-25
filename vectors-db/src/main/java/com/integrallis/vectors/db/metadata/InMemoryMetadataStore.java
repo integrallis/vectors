@@ -15,7 +15,7 @@
  */
 package com.integrallis.vectors.db.metadata;
 
-import com.integrallis.vectors.db.Document;
+import com.integrallis.vectors.core.Document;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;

@@ -15,7 +15,7 @@
  */
 package com.integrallis.vectors.spring.ai;
 
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.VectorCollection;
 import java.util.ArrayList;
 import java.util.List;

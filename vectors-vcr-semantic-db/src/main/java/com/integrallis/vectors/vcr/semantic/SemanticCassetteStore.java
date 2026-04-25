@@ -16,9 +16,9 @@
 package com.integrallis.vectors.vcr.semantic;
 
 import com.integrallis.vectors.core.SimilarityFunction;
-import com.integrallis.vectors.db.Document;
+import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.db.IndexType;
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;

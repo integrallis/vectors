@@ -15,7 +15,7 @@
  */
 package com.integrallis.vectors.db.metadata;
 
-import com.integrallis.vectors.db.Document;
+import com.integrallis.vectors.core.Document;
 
 /**
  * Internal store mapping ordinals to full {@link Document} records.

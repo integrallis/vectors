@@ -15,8 +15,8 @@
  */
 package com.integrallis.vectors.spring.ai;
 
-import com.integrallis.vectors.db.filter.Filter;
-import com.integrallis.vectors.db.filter.Filters;
+import com.integrallis.vectors.core.filter.Filter;
+import com.integrallis.vectors.core.filter.Filters;
 import java.util.List;
 import org.springframework.ai.vectorstore.filter.Filter.Expression;
 import org.springframework.ai.vectorstore.filter.Filter.Group;

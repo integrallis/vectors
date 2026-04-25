@@ -15,8 +15,8 @@
  */
 package com.integrallis.vectors.db.storage;
 
-import com.integrallis.vectors.db.Document;
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.metadata.MetadataStore;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

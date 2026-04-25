@@ -17,8 +17,8 @@ package com.integrallis.vectors.db.arrow;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.integrallis.vectors.db.Document;
-import com.integrallis.vectors.db.MetadataValue;
+import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.VectorCollection;
 import java.io.IOException;
 import java.io.InputStream;

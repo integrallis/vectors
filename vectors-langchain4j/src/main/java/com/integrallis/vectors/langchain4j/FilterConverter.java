@@ -15,8 +15,8 @@
  */
 package com.integrallis.vectors.langchain4j;
 
-import com.integrallis.vectors.db.filter.Filter;
-import com.integrallis.vectors.db.filter.Filters;
+import com.integrallis.vectors.core.filter.Filter;
+import com.integrallis.vectors.core.filter.Filters;
 import dev.langchain4j.store.embedding.filter.comparison.IsEqualTo;
 import dev.langchain4j.store.embedding.filter.comparison.IsGreaterThan;
 import dev.langchain4j.store.embedding.filter.comparison.IsGreaterThanOrEqualTo;

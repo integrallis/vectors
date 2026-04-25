@@ -21,7 +21,7 @@ import com.integrallis.vectors.bench.dataset.Hdf5Loader;
 import com.integrallis.vectors.bench.report.BenchmarkReporter;
 import com.integrallis.vectors.bench.report.BenchmarkResult;
 import com.integrallis.vectors.core.SimilarityFunction;
-import com.integrallis.vectors.db.Document;
+import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.VectorCollection;
 import java.lang.management.GarbageCollectorMXBean;
