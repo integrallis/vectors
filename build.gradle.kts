@@ -152,10 +152,59 @@ configure(libraryProjects) {
         maxParallelForks = 1
     }
 
-    // Default 'test' task must NOT run integration tests.
+    // Distributed tests: multi-node clusters over real HTTP transport (Docker required).
+    tasks.register<Test>("distributedTest") {
+        description = "Run distributed cluster tests (requires Docker)"
+        group = "verification"
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
+        useJUnitPlatform {
+            includeTags("distributed")
+        }
+        maxParallelForks = 1
+    }
+
+    // Kubernetes deployment tests: K3s via TestContainers (Docker required).
+    tasks.register<Test>("k8sTest") {
+        description = "Run Kubernetes deployment tests (requires Docker)"
+        group = "verification"
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
+        useJUnitPlatform {
+            includeTags("k8s")
+        }
+        maxParallelForks = 1
+    }
+
+    // Chaos engineering tests: fault injection during operations (Docker required).
+    tasks.register<Test>("chaosTest") {
+        description = "Run chaos engineering tests (requires Docker)"
+        group = "verification"
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
+        useJUnitPlatform {
+            includeTags("chaos")
+        }
+        maxParallelForks = 1
+    }
+
+    // Large-scale scalability tests (Docker required, long-running).
+    tasks.register<Test>("scaleTest") {
+        description = "Run scalability tests (requires Docker, long-running)"
+        group = "verification"
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
+        useJUnitPlatform {
+            includeTags("scale")
+        }
+        maxParallelForks = 1
+        systemProperty("junit.jupiter.execution.timeout.default", "30m")
+    }
+
+    // Default 'test' task excludes all infrastructure-heavy tags.
     tasks.named<Test>("test") {
         useJUnitPlatform {
-            excludeTags("slow", "benchmark", "integration")
+            excludeTags("slow", "benchmark", "integration", "distributed", "k8s", "chaos", "scale")
         }
     }
 
