@@ -15,8 +15,9 @@
  */
 package com.integrallis.vectors.db;
 
-import com.integrallis.vectors.db.cache.QvCache;
+import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.filter.Filter;
+import com.integrallis.vectors.db.cache.QvCache;
 import com.integrallis.vectors.db.filter.FilterExecutor;
 import com.integrallis.vectors.db.id.IdMapper;
 import com.integrallis.vectors.db.id.InMemoryIdMapper;

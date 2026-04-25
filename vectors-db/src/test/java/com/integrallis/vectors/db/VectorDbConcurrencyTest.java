@@ -18,6 +18,7 @@ package com.integrallis.vectors.db;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
+import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.nio.file.Path;
 import java.time.Duration;

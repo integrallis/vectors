@@ -17,6 +17,7 @@ package com.integrallis.vectors.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.cache.QvCache;
 import java.util.Arrays;

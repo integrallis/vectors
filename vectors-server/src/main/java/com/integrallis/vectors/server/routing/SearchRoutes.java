@@ -16,10 +16,10 @@
  */
 package com.integrallis.vectors.server.routing;
 
+import com.integrallis.vectors.core.filter.Filter;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
-import com.integrallis.vectors.core.filter.Filter;
 import com.integrallis.vectors.server.CollectionRegistry;
 import com.integrallis.vectors.server.dto.SearchHitDto;
 import com.integrallis.vectors.server.dto.SearchQuery;

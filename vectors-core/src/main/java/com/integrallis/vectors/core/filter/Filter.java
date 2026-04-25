@@ -22,9 +22,9 @@ import java.util.Objects;
  * Predicate AST for metadata filtering. Sealed to enable exhaustive pattern matching in filter
  * executors.
  *
- * <p>The sealed hierarchy allows the compiler to enforce exhaustive pattern matching over all filter
- * types. Filter executors evaluate a filter against a document's metadata; collection facades apply
- * this as a post-filter on ANN search candidates.
+ * <p>The sealed hierarchy allows the compiler to enforce exhaustive pattern matching over all
+ * filter types. Filter executors evaluate a filter against a document's metadata; collection
+ * facades apply this as a post-filter on ANN search candidates.
  */
 public sealed interface Filter
     permits Filter.All,

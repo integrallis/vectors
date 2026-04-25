@@ -84,12 +84,12 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
       return;
     }
 
-    List<com.integrallis.vectors.db.Document> jvDocs = new ArrayList<>(documents.size());
+    List<com.integrallis.vectors.core.Document> jvDocs = new ArrayList<>(documents.size());
     for (Document doc : documents) {
       float[] embedding = this.embeddingModel.embed(doc);
       Map<String, MetadataValue> jvMetadata = MetadataConverter.toJavaVectors(doc.getMetadata());
       jvDocs.add(
-          new com.integrallis.vectors.db.Document(
+          new com.integrallis.vectors.core.Document(
               doc.getId(), embedding, doc.getText(), jvMetadata));
     }
     collection.addAll(jvDocs);
@@ -131,7 +131,7 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
 
     List<Document> results = new ArrayList<>(jvResult.hits().size());
     for (com.integrallis.vectors.db.SearchResult.Hit hit : jvResult.hits()) {
-      com.integrallis.vectors.db.Document jvDoc = hit.document();
+      com.integrallis.vectors.core.Document jvDoc = hit.document();
       Map<String, Object> springMetadata = MetadataConverter.toSpringAi(jvDoc.metadata());
 
       Document springDoc =

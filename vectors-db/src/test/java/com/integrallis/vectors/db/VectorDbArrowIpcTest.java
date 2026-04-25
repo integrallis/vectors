@@ -18,6 +18,8 @@ package com.integrallis.vectors.db;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.offset;
 
+import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.arrow.ArrowIpcExporter;
 import com.integrallis.vectors.db.arrow.ArrowIpcIngester;

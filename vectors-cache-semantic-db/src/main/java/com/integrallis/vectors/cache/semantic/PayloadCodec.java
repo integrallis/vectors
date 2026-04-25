@@ -17,7 +17,7 @@ package com.integrallis.vectors.cache.semantic;
 
 /**
  * Bidirectional codec between cache payload {@code V} and a String representation stored in a
- * {@link com.integrallis.vectors.db.MetadataValue.Str} on the cached document.
+ * {@link com.integrallis.vectors.core.MetadataValue.Str} on the cached document.
  *
  * <p>Simple and format-agnostic. Callers pick their own serialization (raw string, JSON, Base64 of
  * a binary protocol, Avro, etc.). For {@code String} payloads use {@link #identity()}.

@@ -18,8 +18,8 @@ package com.integrallis.vectors.distributed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;

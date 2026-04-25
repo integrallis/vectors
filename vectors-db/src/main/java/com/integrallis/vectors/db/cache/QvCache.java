@@ -15,8 +15,8 @@
  */
 package com.integrallis.vectors.db.cache;
 
-import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.core.filter.Filter;
+import com.integrallis.vectors.db.SearchResult;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;

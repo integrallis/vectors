@@ -18,6 +18,8 @@ package com.integrallis.vectors.db.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.integrallis.vectors.core.MetadataValue;
+import com.integrallis.vectors.core.filter.Filter;
+import com.integrallis.vectors.core.filter.Filters;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Nested;

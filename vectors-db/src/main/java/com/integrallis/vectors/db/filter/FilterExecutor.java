@@ -16,6 +16,7 @@
 package com.integrallis.vectors.db.filter;
 
 import com.integrallis.vectors.core.MetadataValue;
+import com.integrallis.vectors.core.filter.Filter;
 import java.util.Map;
 
 /**

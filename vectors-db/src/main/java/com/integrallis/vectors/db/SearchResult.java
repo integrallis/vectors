@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.db;
 
+import com.integrallis.vectors.core.Document;
 import java.util.List;
 import java.util.Objects;
 

@@ -17,11 +17,11 @@
 package com.integrallis.vectors.distributed;
 
 import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.filter.Filter;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.db.VectorCollectionConfig;
-import com.integrallis.vectors.core.filter.Filter;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;

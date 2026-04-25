@@ -159,7 +159,7 @@
     </Match>
     <!-- vectors-db: public records intentionally expose internal array references -->
     <Match>
-        <Class name="com.integrallis.vectors.db.Document"/>
+        <Class name="com.integrallis.vectors.core.Document"/>
         <Or>
             <Bug pattern="EI_EXPOSE_REP"/>
             <Bug pattern="EI_EXPOSE_REP2"/>

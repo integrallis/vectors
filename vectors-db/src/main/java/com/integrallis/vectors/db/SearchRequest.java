@@ -29,7 +29,7 @@ import java.util.Objects;
  *   <li>{@code filterExpansion} = 4.0f
  *   <li>{@code minScore} = {@code -Float.MAX_VALUE} (no minimum)
  *   <li>{@code filter} = null (no filter; semantically equivalent to {@link
- *       com.integrallis.vectors.db.filter.Filters#all()})
+ *       com.integrallis.vectors.core.filter.Filters#all()})
  *   <li>{@code includeVector} = {@code includeText} = {@code includeMetadata} = true
  *   <li>{@code searchMultiStart} = 1 (single-start beam search)
  * </ul>

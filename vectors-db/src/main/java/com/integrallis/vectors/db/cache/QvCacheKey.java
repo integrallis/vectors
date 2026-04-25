@@ -29,7 +29,7 @@ import java.util.Arrays;
  *       "semantic" grouping property.
  *   <li>{@link #k} — number of results requested.
  *   <li>{@link #filterHash} — stable hash of the filter expression, as computed by {@link
- *       FilterHasher#hash(com.integrallis.vectors.db.filter.Filter)}.
+ *       FilterHasher#hash(com.integrallis.vectors.core.filter.Filter)}.
  * </ol>
  *
  * <p>{@code equals} and {@code hashCode} use {@link Arrays#equals} / {@link Arrays#hashCode} for

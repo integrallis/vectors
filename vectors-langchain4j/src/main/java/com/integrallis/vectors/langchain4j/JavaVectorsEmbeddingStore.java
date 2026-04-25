@@ -86,7 +86,8 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
 
   @Override
   public void add(String id, Embedding embedding) {
-    collection.add(new com.integrallis.vectors.db.Document(id, embedding.vector(), null, Map.of()));
+    collection.add(
+        new com.integrallis.vectors.core.Document(id, embedding.vector(), null, Map.of()));
     commitIfNeeded();
   }
 
@@ -96,7 +97,8 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
     Map<String, MetadataValue> metadata =
         textSegment != null ? MetadataConverter.toJavaVectors(textSegment.metadata()) : Map.of();
     String text = textSegment != null ? textSegment.text() : null;
-    collection.add(new com.integrallis.vectors.db.Document(id, embedding.vector(), text, metadata));
+    collection.add(
+        new com.integrallis.vectors.core.Document(id, embedding.vector(), text, metadata));
     commitIfNeeded();
     return id;
   }
@@ -104,10 +106,10 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
   @Override
   public List<String> addAll(List<Embedding> embeddings) {
     List<String> ids = newIds(embeddings.size());
-    List<com.integrallis.vectors.db.Document> docs = new ArrayList<>(embeddings.size());
+    List<com.integrallis.vectors.core.Document> docs = new ArrayList<>(embeddings.size());
     for (int i = 0; i < embeddings.size(); i++) {
       docs.add(
-          new com.integrallis.vectors.db.Document(
+          new com.integrallis.vectors.core.Document(
               ids.get(i), embeddings.get(i).vector(), null, Map.of()));
     }
     collection.addAll(docs);
@@ -124,14 +126,14 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
 
   @Override
   public void addAll(List<String> ids, List<Embedding> embeddings, List<TextSegment> segments) {
-    List<com.integrallis.vectors.db.Document> docs = new ArrayList<>(ids.size());
+    List<com.integrallis.vectors.core.Document> docs = new ArrayList<>(ids.size());
     for (int i = 0; i < ids.size(); i++) {
       TextSegment segment = segments != null && i < segments.size() ? segments.get(i) : null;
       String text = segment != null ? segment.text() : null;
       Map<String, MetadataValue> metadata =
           segment != null ? MetadataConverter.toJavaVectors(segment.metadata()) : Map.of();
       docs.add(
-          new com.integrallis.vectors.db.Document(
+          new com.integrallis.vectors.core.Document(
               ids.get(i), embeddings.get(i).vector(), text, metadata));
     }
     collection.addAll(docs);
@@ -160,7 +162,7 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
 
   @Override
   public void removeAll() {
-    collection.deleteWhere(new com.integrallis.vectors.db.filter.Filter.All());
+    collection.deleteWhere(new com.integrallis.vectors.core.filter.Filter.All());
     commitIfNeeded();
   }
 
@@ -182,7 +184,7 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
 
     List<EmbeddingMatch<TextSegment>> matches = new ArrayList<>(jvResult.hits().size());
     for (com.integrallis.vectors.db.SearchResult.Hit hit : jvResult.hits()) {
-      com.integrallis.vectors.db.Document jvDoc = hit.document();
+      com.integrallis.vectors.core.Document jvDoc = hit.document();
 
       TextSegment segment = null;
       if (jvDoc.text() != null) {

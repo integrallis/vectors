@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.db;
 
+import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.filter.Filter;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -116,9 +117,10 @@ public interface VectorCollection extends AutoCloseable {
    * Searches the currently-committed generation for multiple queries in parallel.
    *
    * <p>Each query in {@code requests} is dispatched as an independent virtual-thread task using
-   * {@link StructuredTaskScope}. All tasks run concurrently; this method blocks until every query
-   * has returned or thrown. If any query throws, the first exception is rethrown (wrapped in {@link
-   * RuntimeException}) and all other tasks are cancelled.
+   * {@link java.util.concurrent.StructuredTaskScope StructuredTaskScope}. All tasks run
+   * concurrently; this method blocks until every query has returned or thrown. If any query throws,
+   * the first exception is rethrown (wrapped in {@link RuntimeException}) and all other tasks are
+   * cancelled.
    *
    * <p>The result list has the same size as {@code requests} and preserves request order: {@code
    * results.get(i)} corresponds to {@code requests.get(i)}.

@@ -15,8 +15,8 @@
  */
 package com.integrallis.vectors.bench;
 
-import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.distributed.InProcessNodeDirectory;

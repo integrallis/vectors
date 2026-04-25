@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
+import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.storage.FileFormat;
 import java.io.IOException;
