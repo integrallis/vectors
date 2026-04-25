@@ -1,11 +1,21 @@
 # java-vectors
 
+```
+      ██╗   ██╗███████╗ ██████╗████████╗ ██████╗ ██████╗ ███████╗     ██╗
+      ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗██╔════╝     ╚██╗
+█████╗██║   ██║█████╗  ██║        ██║   ██║   ██║██████╔╝███████╗█████╗╚██╗
+╚════╝╚██╗ ██╔╝██╔══╝  ██║        ██║   ██║   ██║██╔══██╗╚════██║╚════╝██╔╝
+       ╚████╔╝ ███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║███████║     ██╔╝
+        ╚═══╝  ╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝     ╚═╝
+```
+
 > **The Java-native vector database that scales from a single JAR to a distributed cluster — and beyond to GPU — without ever leaving the JVM.**
 >
 > Pure Java. Zero JNI. JDK 25+.
 > SIMD-native kernels, HNSW + Vamana indexing, 8 quantizers (SIGMOD 2024/2025 state of the art), portable mmap persistence, drop-in adapters for **Spring AI** and **LangChain4j**, and a defined path to embedded clustering and cuVS-powered GPU search.
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![License: FSL-1.1-ALv2](https://img.shields.io/badge/License-FSL--1.1--ALv2-purple.svg)](LICENSE-FSL)
 [![JDK 25+](https://img.shields.io/badge/JDK-25%2B-orange.svg)](https://openjdk.org/projects/jdk/25/)
 [![Pure Java](https://img.shields.io/badge/Pure%20Java-no%20JNI-brightgreen.svg)]()
 
@@ -362,4 +372,6 @@ cd vectors
 
 ## License
 
-Apache License 2.0.
+The core libraries, adapters, caching, benchmarks, and demos are licensed under the [Apache License 2.0](LICENSE). The `vectors-distributed`, `vectors-server`, and `vectors-gpu` modules are licensed under the [Functional Source License 1.1 (FSL-1.1-ALv2)](LICENSE-FSL), which automatically converts to Apache 2.0 on April 25, 2028.
+
+See [LICENSING.md](LICENSING.md) for the full module classification and details.

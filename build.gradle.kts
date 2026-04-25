@@ -21,6 +21,46 @@ val libraryProjects = subprojects.filter {
 }
 val demoProjects = subprojects.filter { it.path.startsWith(":demos:") }
 
+// FSL-1.1-ALv2 modules — all others are Apache 2.0
+val fslModules = setOf("vectors-distributed", "vectors-server", "vectors-gpu")
+
+val apacheLicenseHeader = """
+    /*
+     * Copyright 2025-2026 Integrallis Software, LLC
+     *
+     * Licensed under the Apache License, Version 2.0 (the "License");
+     * you may not use this file except in compliance with the License.
+     * You may obtain a copy of the License at
+     *
+     *     https://www.apache.org/licenses/LICENSE-2.0
+     *
+     * Unless required by applicable law or agreed to in writing, software
+     * distributed under the License is distributed on an "AS IS" BASIS,
+     * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     * See the License for the specific language governing permissions and
+     * limitations under the License.
+     */
+""".trimIndent()
+
+val fslLicenseHeader = """
+    /*
+     * Copyright 2025-2026 Integrallis Software, LLC
+     *
+     * Licensed under the Functional Source License, Version 1.1, Apache 2.0 Future License
+     * (the "License"); you may not use this file except in compliance with the License.
+     *
+     *     https://fsl.software/FSL-1.1-ALv2.txt
+     *
+     * Unless required by applicable law or agreed to in writing, software distributed under
+     * the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+     * ANY KIND, either express or implied. See the License for the specific language
+     * governing permissions and limitations under the License.
+     *
+     * Change Date: April 25, 2028
+     * Change License: Apache License, Version 2.0
+     */
+""".trimIndent()
+
 configure(libraryProjects) {
     apply(plugin = "java")
     apply(plugin = "java-library")
@@ -133,6 +173,7 @@ configure(libraryProjects) {
             removeUnusedImports()
             trimTrailingWhitespace()
             endWithNewline()
+            licenseHeader(if (project.name in fslModules) fslLicenseHeader else apacheLicenseHeader)
         }
     }
 
@@ -219,6 +260,7 @@ configure(demoProjects) {
             removeUnusedImports()
             trimTrailingWhitespace()
             endWithNewline()
+            licenseHeader(apacheLicenseHeader)
         }
     }
 
