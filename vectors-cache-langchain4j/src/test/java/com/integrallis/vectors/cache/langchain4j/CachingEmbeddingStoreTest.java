@@ -114,13 +114,4 @@ class CachingEmbeddingStoreTest {
 
     assertThat(fake.searchCalls.get()).isEqualTo(2);
   }
-
-  @Test
-  void findRelevantUsesSearchCache() {
-    Embedding q = Embedding.from(new float[] {1f, 0f, 0f});
-    store.findRelevant(q, 1);
-    store.findRelevant(q, 1);
-
-    assertThat(fake.searchCalls.get()).isEqualTo(1);
-  }
 }

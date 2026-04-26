@@ -2,9 +2,9 @@ description = "LangChain4j decorator that wraps an EmbeddingModel with vectors-c
 
 dependencies {
     api(project(":vectors-cache"))
-    compileOnly("dev.langchain4j:langchain4j-core:1.0.0-beta1")
+    compileOnly("dev.langchain4j:langchain4j-core:1.13.1")
 
-    testImplementation("dev.langchain4j:langchain4j-core:1.0.0-beta1")
+    testImplementation("dev.langchain4j:langchain4j-core:1.13.1")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testImplementation("org.assertj:assertj-core:3.27.2")

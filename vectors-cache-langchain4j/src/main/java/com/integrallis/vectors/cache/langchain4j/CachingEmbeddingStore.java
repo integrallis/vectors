@@ -17,7 +17,6 @@ package com.integrallis.vectors.cache.langchain4j;
 
 import com.integrallis.vectors.cache.VectorCache;
 import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
@@ -39,7 +38,6 @@ import java.util.Objects;
  *
  * @param <T> the embedded payload type (typically {@code TextSegment})
  */
-@SuppressWarnings("removal")
 public class CachingEmbeddingStore<T> implements EmbeddingStore<T> {
 
   private final EmbeddingStore<T> delegate;
@@ -131,32 +129,6 @@ public class CachingEmbeddingStore<T> implements EmbeddingStore<T> {
   public EmbeddingSearchResult<T> search(EmbeddingSearchRequest request) {
     Objects.requireNonNull(request, "request");
     return searchCache.getOrCompute(request, delegate::search);
-  }
-
-  /**
-   * Convenience passthrough to the cached {@link #search(EmbeddingSearchRequest)} path; overrides
-   * the legacy default so callers using the older API still benefit from caching.
-   */
-  @Override
-  public List<EmbeddingMatch<T>> findRelevant(Embedding referenceEmbedding, int maxResults) {
-    return search(
-            EmbeddingSearchRequest.builder()
-                .queryEmbedding(referenceEmbedding)
-                .maxResults(maxResults)
-                .build())
-        .matches();
-  }
-
-  @Override
-  public List<EmbeddingMatch<T>> findRelevant(
-      Embedding referenceEmbedding, int maxResults, double minScore) {
-    return search(
-            EmbeddingSearchRequest.builder()
-                .queryEmbedding(referenceEmbedding)
-                .maxResults(maxResults)
-                .minScore(minScore)
-                .build())
-        .matches();
   }
 
   private void invalidate() {

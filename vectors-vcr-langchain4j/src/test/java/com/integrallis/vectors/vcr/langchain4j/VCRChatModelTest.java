@@ -29,11 +29,10 @@ import com.integrallis.vectors.vcr.ExactCassetteStore;
 import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
 import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.output.Response;
-import java.util.List;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -43,10 +42,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
-@SuppressWarnings("removal")
 class VCRChatModelTest {
 
-  @Mock ChatLanguageModel delegate;
+  @Mock ChatModel delegate;
 
   CassetteStore store;
 
@@ -56,27 +54,29 @@ class VCRChatModelTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   void recordsAndReplaysChatResponse() {
-    when(delegate.generate((List<ChatMessage>) any(List.class)))
-        .thenReturn(Response.from(AiMessage.from("42")));
+    when(delegate.doChat(any(ChatRequest.class)))
+        .thenReturn(ChatResponse.builder().aiMessage(AiMessage.from("42")).build());
+
+    ChatRequest request = ChatRequest.builder().messages(UserMessage.from("meaning?")).build();
 
     VCRChatModel recorder = new VCRChatModel(delegate, "T:c", VCRMode.RECORD, "m", store);
-    Response<AiMessage> recorded = recorder.generate(List.of(UserMessage.from("meaning?")));
-    assertThat(recorded.content().text()).isEqualTo("42");
+    ChatResponse recorded = recorder.doChat(request);
+    assertThat(recorded.aiMessage().text()).isEqualTo("42");
 
     VCRChatModel player = new VCRChatModel(delegate, "T:c", VCRMode.PLAYBACK, "m", store);
-    Response<AiMessage> played = player.generate(List.of(UserMessage.from("meaning?")));
-    assertThat(played.content().text()).isEqualTo("42");
-    verify(delegate, times(1)).generate((List<ChatMessage>) any(List.class));
+    ChatResponse played = player.doChat(request);
+    assertThat(played.aiMessage().text()).isEqualTo("42");
+    verify(delegate, times(1)).doChat(any(ChatRequest.class));
   }
 
   @Test
-  @SuppressWarnings("unchecked")
   void playbackThrowsWhenMissing() {
+    ChatRequest request = ChatRequest.builder().messages(UserMessage.from("x")).build();
+
     VCRChatModel player = new VCRChatModel(delegate, "T:miss", VCRMode.PLAYBACK, "m", store);
-    assertThatThrownBy(() -> player.generate(List.of(UserMessage.from("x"))))
+    assertThatThrownBy(() -> player.doChat(request))
         .isInstanceOf(VCRCassetteMissingException.class);
-    verify(delegate, never()).generate((List<ChatMessage>) any(List.class));
+    verify(delegate, never()).doChat(any(ChatRequest.class));
   }
 }

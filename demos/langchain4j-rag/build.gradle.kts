@@ -3,7 +3,7 @@ description = "LangChain4j RAG demo using JavaVectorsEmbeddingStore (drop-in for
 dependencies {
     implementation(project(":vectors-langchain4j"))
     implementation(project(":vectors-db"))
-    implementation("dev.langchain4j:langchain4j-core:1.0.0-beta1")
+    implementation("dev.langchain4j:langchain4j-core:1.13.1")
 }
 
 application {

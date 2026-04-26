@@ -31,7 +31,7 @@ import java.lang.annotation.Target;
  *
  * <ul>
  *   <li>LangChain4j: {@code dev.langchain4j.model.embedding.EmbeddingModel}, {@code
- *       dev.langchain4j.model.chat.ChatLanguageModel}
+ *       dev.langchain4j.model.chat.ChatModel}
  *   <li>Spring AI: {@code org.springframework.ai.embedding.EmbeddingModel}, {@code
  *       org.springframework.ai.chat.model.ChatModel}
  * </ul>

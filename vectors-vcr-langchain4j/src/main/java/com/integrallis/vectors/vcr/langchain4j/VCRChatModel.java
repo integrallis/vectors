@@ -21,24 +21,22 @@ import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
 import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.output.Response;
-import java.util.List;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * LangChain4j {@link ChatLanguageModel} wrapper that records/replays chat responses through a
- * {@link CassetteStore}.
+ * LangChain4j {@link ChatModel} wrapper that records/replays chat responses through a {@link
+ * CassetteStore}.
  */
-@SuppressWarnings("removal")
-public final class VCRChatModel implements ChatLanguageModel {
+public final class VCRChatModel implements ChatModel {
 
   private static final String TYPE_CHAT = "chat";
 
-  private final ChatLanguageModel delegate;
+  private final ChatModel delegate;
   private final CassetteStore store;
   private final String testId;
   private final String modelName;
@@ -53,11 +51,7 @@ public final class VCRChatModel implements ChatLanguageModel {
    * @param store cassette store
    */
   public VCRChatModel(
-      ChatLanguageModel delegate,
-      String testId,
-      VCRMode mode,
-      String modelName,
-      CassetteStore store) {
+      ChatModel delegate, String testId, VCRMode mode, String modelName, CassetteStore store) {
     this.delegate = delegate;
     this.testId = testId;
     this.mode = mode;
@@ -66,9 +60,9 @@ public final class VCRChatModel implements ChatLanguageModel {
   }
 
   @Override
-  public Response<AiMessage> generate(List<ChatMessage> messages) {
+  public ChatResponse doChat(ChatRequest request) {
     if (mode == VCRMode.OFF) {
-      return delegate.generate(messages);
+      return delegate.doChat(request);
     }
     CassetteKey key = new CassetteKey(TYPE_CHAT, testId, callCounter.incrementAndGet());
     if (mode.isPlaybackMode()) {
@@ -81,15 +75,16 @@ public final class VCRChatModel implements ChatLanguageModel {
                   + " but got "
                   + hit.get().getClass().getSimpleName());
         }
-        return Response.from(AiMessage.from(c.response()));
+        return ChatResponse.builder().aiMessage(AiMessage.from(c.response())).build();
       }
       if (mode == VCRMode.PLAYBACK) {
         throw new VCRCassetteMissingException(key.serializedKey(), testId);
       }
     }
-    Response<AiMessage> response = delegate.generate(messages);
-    String prompt = String.valueOf(messages);
-    String text = response.content() == null ? "" : response.content().text();
+    ChatResponse response = delegate.doChat(request);
+    String prompt = String.valueOf(request.messages());
+    AiMessage ai = response.aiMessage();
+    String text = ai == null ? "" : ai.text();
     store.store(
         key,
         new CassetteRecord.Chat(
@@ -100,7 +95,7 @@ public final class VCRChatModel implements ChatLanguageModel {
   /**
    * @return the underlying delegate
    */
-  public ChatLanguageModel getDelegate() {
+  public ChatModel getDelegate() {
     return delegate;
   }
 }

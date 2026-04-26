@@ -22,7 +22,7 @@ import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
 import com.integrallis.vectors.vcr.VCRMode;
 import com.integrallis.vectors.vcr.VCRModelWrapper;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -35,7 +35,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class LangChain4jModelWrapperProviderTest {
 
   @Mock EmbeddingModel embeddingDelegate;
-  @Mock ChatLanguageModel chatDelegate;
+  @Mock ChatModel chatDelegate;
 
   private final CassetteStore store = new ExactCassetteStore(new HeapStorageBackend());
 
