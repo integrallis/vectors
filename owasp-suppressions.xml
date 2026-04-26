@@ -102,4 +102,18 @@
         <cve>CVE-2025-48924</cve>
     </suppress>
 
+    <!--
+        False positive: CVE-2026-34070 is a Python langchain-core path traversal bug.
+        The OWASP scanner incorrectly matches it against Java langchain4j via the
+        broad CPE cpe:2.3:a:langchain:langchain:*. langchain4j is a separate project
+        written in Java and is not affected by this Python-specific vulnerability.
+        See: https://nvd.nist.gov/vuln/detail/CVE-2026-34070
+    -->
+    <suppress>
+        <notes>False positive: CVE-2026-34070 affects Python langchain-core, not Java langchain4j.
+            CPE mismatch — different projects, different languages.</notes>
+        <gav regex="true">^dev\.langchain4j:.*$</gav>
+        <cve>CVE-2026-34070</cve>
+    </suppress>
+
 </suppressions>
