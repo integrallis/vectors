@@ -20,9 +20,9 @@ allprojects {
 
 // Library subprojects (excludes docs and runnable demos)
 val libraryProjects = subprojects.filter {
-    it.name != "docs" && !it.path.startsWith(":demos:")
+    it.name != "docs" && it.path != ":demos" && !it.path.startsWith(":demos:")
 }
-val demoProjects = subprojects.filter { it.path.startsWith(":demos:") }
+val demoProjects = subprojects.filter { it.path == ":demos" || it.path.startsWith(":demos:") }
 
 // FSL-1.1-ALv2 modules — all others are Apache 2.0
 val fslModules = setOf("vectors-distributed", "vectors-server", "vectors-gpu")
@@ -270,6 +270,7 @@ configure(libraryProjects) {
         failBuildOnCVSS = 7.0f
         formats.set(listOf("HTML", "JSON", "SARIF"))
         outputDirectory.set(layout.buildDirectory.dir("reports/dependency-check"))
+        suppressionFile = "${rootProject.projectDir}/owasp-suppressions.xml"
         nvd.apiKey = System.getenv("NVD_API_KEY") ?: ""
     }
 
