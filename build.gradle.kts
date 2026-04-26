@@ -4,6 +4,9 @@ plugins {
     `maven-publish`
     id("com.github.spotbugs") version "6.4.4" apply false
     id("com.diffplug.spotless") version "6.25.0" apply false
+    id("org.cyclonedx.bom") version "3.2.4" apply false
+    id("org.owasp.dependencycheck") version "12.2.1" apply false
+    id("dev.sigstore.sign") version "2.0.0" apply false
     jacoco
 }
 
@@ -68,6 +71,14 @@ configure(libraryProjects) {
     apply(plugin = "com.github.spotbugs")
     apply(plugin = "com.diffplug.spotless")
     apply(plugin = "jacoco")
+    apply(plugin = "org.cyclonedx.bom")
+    apply(plugin = "org.owasp.dependencycheck")
+    apply(plugin = "dev.sigstore.sign")
+
+    // Dependency locking — enforced when lockfiles exist, lenient otherwise
+    dependencyLocking {
+        lockAllConfigurations()
+    }
 
     java {
         toolchain {
@@ -254,6 +265,24 @@ configure(libraryProjects) {
         }
     }
 
+    // OWASP Dependency-Check — runs only when explicitly invoked
+    configure<org.owasp.dependencycheck.gradle.extension.DependencyCheckExtension> {
+        failBuildOnCVSS = 7.0f
+        formats.set(listOf("HTML", "JSON", "SARIF"))
+        outputDirectory.set(layout.buildDirectory.dir("reports/dependency-check"))
+        nvd.apiKey = System.getenv("NVD_API_KEY") ?: ""
+    }
+
+    // Reproducible JAR manifest attributes
+    tasks.withType<Jar>().configureEach {
+        manifest {
+            attributes(
+                "Build-Jdk-Spec" to "25",
+                "Created-By" to "Gradle ${gradle.gradleVersion}"
+            )
+        }
+    }
+
     dependencies {
         // Logging
         implementation("org.slf4j:slf4j-api:2.0.16")
@@ -317,6 +346,141 @@ configure(demoProjects) {
         "implementation"("org.slf4j:slf4j-api:2.0.16")
         "runtimeOnly"("ch.qos.logback:logback-classic:1.5.15")
     }
+}
+
+// ---------------------------------------------------------------------------
+// Compliance verification tasks
+// ---------------------------------------------------------------------------
+
+tasks.register("verifySbom") {
+    group = "verification"
+    description = "Verify CycloneDX SBOM generation for all library modules"
+    dependsOn(libraryProjects.map { "${it.path}:cyclonedxDirectBom" })
+    doLast {
+        libraryProjects.forEach { proj ->
+            val file = proj.layout.buildDirectory.file("reports/cyclonedx-direct/bom.json").get().asFile
+            require(file.exists()) { "SBOM not found: ${file.absolutePath}" }
+            @Suppress("UNCHECKED_CAST")
+            val json = groovy.json.JsonSlurper().parseText(file.readText()) as Map<String, Any?>
+            require(json["bomFormat"] == "CycloneDX") {
+                "Invalid bomFormat in ${proj.name}: ${json["bomFormat"]}"
+            }
+            val specVersion = json["specVersion"] as? String
+            require(specVersion != null && specVersion.startsWith("1.")) {
+                "Invalid specVersion in ${proj.name}: $specVersion"
+            }
+            @Suppress("UNCHECKED_CAST")
+            val metadata = json["metadata"] as? Map<String, Any?>
+            require(metadata != null) { "Missing metadata in ${proj.name}" }
+            println("  SBOM valid: ${proj.name} (CycloneDX $specVersion)")
+        }
+    }
+}
+
+tasks.register("verifyGovernanceFiles") {
+    group = "verification"
+    description = "Verify SECURITY.md and CONTRIBUTING.md exist"
+    doLast {
+        listOf("SECURITY.md", "CONTRIBUTING.md").forEach { name ->
+            val f = file(name)
+            require(f.exists()) { "$name not found in ${projectDir.absolutePath}" }
+            require(f.length() > 0) { "$name is empty" }
+            println("  $name exists (${f.length()} bytes)")
+        }
+    }
+}
+
+tasks.register("resolveAndLockAll") {
+    group = "verification"
+    description = "Resolve all dependencies and write lockfiles (run with --write-locks)"
+    notCompatibleWithConfigurationCache("Resolves and locks configurations")
+    doFirst {
+        require(gradle.startParameter.isWriteDependencyLocks) {
+            "${path} must be run with the --write-locks flag"
+        }
+    }
+    doLast {
+        libraryProjects.forEach { proj ->
+            proj.configurations.filter { it.isCanBeResolved }.forEach { config ->
+                try {
+                    config.resolve()
+                } catch (_: Exception) {
+                    // Some configurations may not be resolvable — skip them
+                }
+            }
+        }
+    }
+}
+
+tasks.register("verifyLockfiles") {
+    group = "verification"
+    description = "Verify dependency lockfiles exist for all library modules"
+    doLast {
+        libraryProjects.forEach { proj ->
+            val lockfile = proj.file("gradle.lockfile")
+            require(lockfile.exists()) { "Missing lockfile: ${lockfile.absolutePath}" }
+            println("  Lockfile: ${proj.name}")
+        }
+    }
+}
+
+tasks.register("verifySigningConfigured") {
+    group = "verification"
+    description = "Verify Sigstore signing plugin is applied to all library modules"
+    doLast {
+        libraryProjects.forEach { proj ->
+            require(proj.plugins.hasPlugin("dev.sigstore.sign")) {
+                "Sigstore plugin not applied to ${proj.name}"
+            }
+            println("  Sigstore configured: ${proj.name}")
+        }
+    }
+}
+
+tasks.register("verifyReproducibleBuild") {
+    group = "verification"
+    description = "Verify JAR tasks are configured for reproducible builds"
+    // No dependsOn(:jar) — we only inspect task configuration, not outputs.
+    // This avoids a Gradle 9 lifecycle conflict with CycloneDX task creation.
+    doLast {
+        libraryProjects.forEach { proj ->
+            proj.tasks.withType<Jar>().forEach { jar ->
+                require(!jar.isPreserveFileTimestamps) {
+                    "preserveFileTimestamps must be false for ${proj.name}:${jar.name}"
+                }
+                require(jar.isReproducibleFileOrder) {
+                    "reproducibleFileOrder must be true for ${proj.name}:${jar.name}"
+                }
+            }
+            println("  Reproducible JARs: ${proj.name}")
+        }
+    }
+}
+
+tasks.register("verifyGithubWorkflows") {
+    group = "verification"
+    description = "Verify GitHub Actions workflow files exist"
+    doLast {
+        val workflowDir = rootProject.file(".github/workflows")
+        listOf("ci.yml", "scorecard.yml", "codeql.yml").forEach { name ->
+            val f = workflowDir.resolve(name)
+            require(f.exists()) { "Missing workflow: ${f.absolutePath}" }
+            val content = f.readText()
+            require(content.contains("jobs:")) { "$name missing 'jobs:' section" }
+            println("  Workflow: $name")
+        }
+    }
+}
+
+tasks.register("complianceCheck") {
+    group = "verification"
+    description = "Run all compliance verification tasks"
+    dependsOn(
+        "verifySbom",
+        "verifyGovernanceFiles",
+        "verifySigningConfigured",
+        "verifyReproducibleBuild"
+    )
 }
 
 tasks.wrapper {

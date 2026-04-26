@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build + Test
+        working-directory: vectors
+        run: ./gradlew build -x :docs:build
+
+      - name: Generate SBOM
+        working-directory: vectors
+        run: ./gradlew cyclonedxDirectBom
+
+      - name: Compliance Check
+        working-directory: vectors
+        run: ./gradlew complianceCheck
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: vectors/*/build/reports/cyclonedx-direct/bom.json
+          retention-days: 90
+
+      - name: Upload Test Reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: vectors/*/build/reports/tests/
+          retention-days: 30
