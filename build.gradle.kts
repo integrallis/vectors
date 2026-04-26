@@ -272,6 +272,9 @@ configure(libraryProjects) {
         outputDirectory.set(layout.buildDirectory.dir("reports/dependency-check"))
         suppressionFile = "${rootProject.projectDir}/owasp-suppressions.xml"
         nvd.apiKey = System.getenv("NVD_API_KEY") ?: ""
+        analyzers.ossIndex.enabled = true
+        analyzers.ossIndex.username = System.getenv("OSS_INDEX_USERNAME") ?: ""
+        analyzers.ossIndex.password = System.getenv("OSS_INDEX_TOKEN") ?: ""
     }
 
     // Reproducible JAR manifest attributes

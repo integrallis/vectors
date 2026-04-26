@@ -103,6 +103,50 @@
     </suppress>
 
     <!--
+        Spring Framework 6.2.16 / Spring Boot 3.4.5 CVEs:
+        These libraries are compileOnly dependencies — the published java-vectors JARs
+        do not bundle Spring.  Consuming applications supply their own Spring version
+        via the Spring Boot BOM.
+
+        CVE-2026-22731 / CVE-2026-22733 (HIGH 8.2): Authentication bypass through
+        Actuator Health-group and CloudFoundry endpoints.  java-vectors does not expose
+        any Actuator endpoints — it is a vector-search library, not a web application.
+
+        CVE-2026-22737 (MEDIUM): Info disclosure via Java scripting-engine template views.
+        java-vectors does not use script-based view templates (JRuby, Jython, etc.).
+
+        CVE-2026-22735 (LOW): SSE stream corruption.  java-vectors does not emit
+        Server-Sent Events.
+
+        Spring Boot 3.4.x is EOL; fixes are only available in 3.5.12+ / 4.0.4+.
+        Spring AI 1.1.4 still targets 3.4.x.  Will be resolved when upgrading to
+        Spring AI 2.0 (requires Spring Boot 4.0).
+    -->
+    <suppress>
+        <notes>Spring Boot Actuator auth bypass — java-vectors is a library, not a web app;
+            no Actuator endpoints are configured. compileOnly dependency.</notes>
+        <cpe>cpe:2.3:a:vmware:spring_boot:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2026-22731</cve>
+    </suppress>
+    <suppress>
+        <notes>Spring Boot Actuator CloudFoundry auth bypass — same rationale as CVE-2026-22731.</notes>
+        <cpe>cpe:2.3:a:vmware:spring_boot:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2026-22733</cve>
+    </suppress>
+    <suppress>
+        <notes>Spring Framework script-template info disclosure — java-vectors does not use
+            script-engine view templates. compileOnly dependency.</notes>
+        <cpe>cpe:2.3:a:*:spring_framework:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2026-22737</cve>
+    </suppress>
+    <suppress>
+        <notes>Spring Framework SSE stream corruption — java-vectors does not emit
+            Server-Sent Events. compileOnly dependency.</notes>
+        <cpe>cpe:2.3:a:*:spring_framework:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2026-22735</cve>
+    </suppress>
+
+    <!--
         False positive: CVE-2026-34070 is a Python langchain-core path traversal bug.
         The OWASP scanner incorrectly matches it against Java langchain4j via the
         broad CPE cpe:2.3:a:langchain:langchain:*. langchain4j is a separate project
