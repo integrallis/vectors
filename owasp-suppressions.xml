@@ -37,4 +37,69 @@
         <cve>CVE-2026-34481</cve>
     </suppress>
 
+    <!--
+        Benchmark-only dependencies (vectors-bench): used by JMH harness and dataset loaders.
+        vectors-bench is not a published library artifact.
+    -->
+
+    <!-- Netty 4.1.115: transitive from vectors-distributed (Helidon/gRPC transport) -->
+    <suppress>
+        <notes>Netty is a transitive dependency in vectors-bench via vectors-distributed.
+            vectors-bench is a benchmark harness, not a published artifact.
+            TODO: upgrade Netty when upstream (Helidon) releases a patched version.</notes>
+        <cpe>cpe:2.3:a:netty:netty:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2026-33871</cve>
+    </suppress>
+    <suppress>
+        <notes>Netty (benchmark-only, vectors-bench)</notes>
+        <cpe>cpe:2.3:a:netty:netty:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2025-55163</cve>
+    </suppress>
+    <suppress>
+        <notes>Netty (benchmark-only, vectors-bench)</notes>
+        <cpe>cpe:2.3:a:netty:netty:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2025-24970</cve>
+    </suppress>
+    <suppress>
+        <notes>Netty (benchmark-only, vectors-bench)</notes>
+        <cpe>cpe:2.3:a:netty:netty:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2026-33870</cve>
+    </suppress>
+    <suppress>
+        <notes>Netty (benchmark-only, vectors-bench)</notes>
+        <cpe>cpe:2.3:a:netty:netty:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2025-58057</cve>
+    </suppress>
+    <suppress>
+        <notes>Netty (benchmark-only, vectors-bench)</notes>
+        <cpe>cpe:2.3:a:netty:netty:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2025-67735</cve>
+    </suppress>
+    <suppress>
+        <notes>Netty (benchmark-only, vectors-bench)</notes>
+        <cpe>cpe:2.3:a:netty:netty:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2025-25193</cve>
+    </suppress>
+    <suppress>
+        <notes>Netty (benchmark-only, vectors-bench)</notes>
+        <cpe>cpe:2.3:a:netty:netty:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2025-58056</cve>
+    </suppress>
+
+    <!-- Apache Arrow 19.0.0: transitive from io.jhdf:jhdf (HDF5 dataset reader) -->
+    <suppress>
+        <notes>Apache Arrow is a transitive dependency of jhdf (HDF5 reader) in vectors-bench.
+            vectors-bench is a benchmark harness, not a published artifact.</notes>
+        <cpe>cpe:2.3:a:apache:arrow:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2026-25087</cve>
+    </suppress>
+
+    <!-- commons-lang3 3.17.0: transitive in vectors-bench -->
+    <suppress>
+        <notes>commons-lang3 is a transitive dependency in vectors-bench.
+            vectors-bench is a benchmark harness, not a published artifact.</notes>
+        <cpe>cpe:2.3:a:apache:commons_lang:*:*:*:*:*:*:*:*</cpe>
+        <cve>CVE-2025-48924</cve>
+    </suppress>
+
 </suppressions>
