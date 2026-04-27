@@ -1,0 +1,20 @@
+<header class="navbar">
+  <div class="navbar-brand">
+    <a class="navbar-item" href="{{or site.url (relUrl '/')}}">
+      <img src="{{uiRootPath}}/img/java-vectors-logo.png" alt="java-vectors" style="height: 36px; margin-right: 8px;">
+      <span class="has-text-weight-bold">{{site.title}}</span>
+    </a>
+    <button class="navbar-burger" data-target="topbar-nav">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </div>
+  <div id="topbar-nav" class="navbar-menu">
+    {{#if site.homeUrl}}
+    <div class="navbar-end">
+      <a class="navbar-item" href="{{site.homeUrl}}">Home</a>
+    </div>
+    {{/if}}
+  </div>
+</header>

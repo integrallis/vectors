@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="media/icons/logo-200.png" alt="java-vectors logo" width="200">
+</p>
+
 # java-vectors
 
 ```
