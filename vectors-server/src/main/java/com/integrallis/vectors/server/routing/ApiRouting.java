@@ -50,5 +50,6 @@ public final class ApiRouting {
     builder.register(new DocumentsRoutes(registry));
     builder.register(new SearchRoutes(registry));
     builder.register(new EventsRoutes(registry));
+    builder.register(new BulkRoutes(registry));
   }
 }
