@@ -33,6 +33,10 @@ include("vectors-cache-semantic-db")
 include("vectors-cache-spring-ai")
 include("vectors-cache-langchain4j")
 
+// --- Studio (exploration & DR workbench) ---
+include("vectors-studio-core")
+include("vectors-studio-web")
+
 include("docs")
 
 // --- Runnable demos (not published) ---

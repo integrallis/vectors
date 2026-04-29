@@ -1,0 +1,18 @@
+:root { --fg: #222; --muted: #888; --link: #0a66c2; --border: #ddd; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--fg); margin: 0; }
+header { display: flex; align-items: center; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid var(--border); }
+header a { color: var(--fg); text-decoration: none; font-weight: 600; }
+header nav a { font-weight: 400; margin-left: 1rem; color: var(--link); }
+main { padding: 1rem 1.5rem; max-width: 1200px; }
+h1 { margin: 0 0 .5rem 0; }
+.muted { color: var(--muted); font-size: .9rem; }
+.collection-list { list-style: none; padding: 0; }
+.collection-list li { padding: .4rem 0; border-bottom: 1px solid var(--border); }
+.collection-table, .doc-list, .hits { border-collapse: collapse; width: 100%; }
+.collection-table th, .collection-table td, .doc-list th, .doc-list td, .hits th, .hits td {
+  text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--border);
+}
+.actions a { display: inline-block; margin-right: 1rem; color: var(--link); }
+.pager button { margin-right: .5rem; }
+.llm-explanation pre { white-space: pre-wrap; background: #f6f8fa; padding: .75rem; border-radius: 4px; }
+form label { display: inline-block; margin-right: 1rem; }
