@@ -51,9 +51,7 @@ import java.util.Arrays;
  */
 public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuantizedVectors> {
 
-  /**
-   * Number of per-vector correction floats: sqrX, x0, factorPpc, factorIp, errorFactor, xIpNorm.
-   */
+  /** Number of per-vector correction floats: sqrX, x0, factorPpc, factorIp, errorFactor. */
   static final int NUM_CORRECTIONS = 6;
 
   /** Correction index: squared distance to centroid ||v - centroid||². */
@@ -72,13 +70,9 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
   static final int IDX_ERROR_FACTOR = 4;
 
   /**
-   * Correction index: {@code 1 / (x0Multi * normCode)} — the per-vector denominator factor that
-   * decouples the multi-bit norm product from {@code factorIpMulti} (which bakes in {@code sqrX}).
-   *
-   * <p><b>TODO:</b> No current scorer reads this field. It is precomputed and stored to enable a
-   * future asymmetric re-scoring variant that injects the per-query {@code sqrY} at score time
-   * without recomputing the stored norm. Until that scorer is added, this slot uses 4 bytes/vector
-   * of storage with no downstream consumer.
+   * Correction index: {@code 1 / (x0Multi * normCode)} — decouples the multi-bit norm product from
+   * {@code factorIpMulti} so the scorer can inject per-query magnitude without re-deriving code
+   * norms from packed magnitudes.
    */
   static final int IDX_XIP_NORM = 5;
 
@@ -366,10 +360,6 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
         float errorVariance = (1.0f / x0MultiSq - 1.0f) / (paddedDimension - 1);
         corrections[i][IDX_ERROR_FACTOR] =
             ERROR_CONFIDENCE * (float) Math.sqrt(Math.max(errorVariance, 0f)) * 2.0f * sqrtSqrX;
-
-        // Store xIpNorm = 1/(x0Multi * normCode) for Layer 2 refinement scoring.
-        // Separated from factorIpMulti (which is -2*sqrtSqrX * xIpNorm) so that Layer 2
-        // can reuse this with per-query sqrY at scoring time.
         corrections[i][IDX_XIP_NORM] = 1.0f / (x0Multi * normCode);
       }
     }

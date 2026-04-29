@@ -145,19 +145,20 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
     return switch (similarityFunction) {
       case EUCLIDEAN ->
           ordinal -> {
-            float dist =
-                estimateL2Multi(
-                    signCodes[ordinal],
-                    magCodes[ordinal],
-                    corrections[ordinal],
-                    pq.queryBytes(),
-                    pq.vl(),
-                    pq.widthOver255(),
-                    pq.sumQ(),
-                    pq.sqrY(),
-                    bits);
-            return 1f / (1f + Math.max(dist, 0f));
-          };
+        float dist =
+            estimateL2Multi(
+                signCodes[ordinal],
+                magCodes[ordinal],
+                corrections[ordinal],
+                pq.queryBytes(),
+                pq.vl(),
+                pq.widthOver255(),
+                pq.sumQ(),
+                pq.sqrY(),
+                pq.queryNorm(),
+                bits);
+        return 1f / (1f + Math.max(dist, 0f));
+      };
       case DOT_PRODUCT ->
           ordinal -> {
             float dist =
@@ -170,6 +171,7 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
                     pq.widthOver255(),
                     pq.sumQ(),
                     pq.sqrY(),
+                    pq.queryNorm(),
                     bits);
             float sqrX = corrections[ordinal][ExtendedRaBitQuantizer.IDX_SQR_X];
             float approxDot = (pq.sqrY() + sqrX - dist) / 2f;
@@ -187,6 +189,7 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
                     pq.widthOver255(),
                     pq.sumQ(),
                     pq.sqrY(),
+                    pq.queryNorm(),
                     bits);
             float sqrX = corrections[ordinal][ExtendedRaBitQuantizer.IDX_SQR_X];
             float vecNorm = (float) Math.sqrt(sqrX);
@@ -207,6 +210,7 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
                     pq.widthOver255(),
                     pq.sumQ(),
                     pq.sqrY(),
+                    pq.queryNorm(),
                     bits);
             float sqrX = corrections[ordinal][ExtendedRaBitQuantizer.IDX_SQR_X];
             float approxDot = (pq.sqrY() + sqrX - dist) / 2f;
@@ -380,6 +384,7 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
    * @param widthOver255 quantization step size (max - min) / 255
    * @param sumQ sum of all quantized query values
    * @param sqrY query's squared distance to centroid
+   * @param queryNorm norm of the centered query
    * @param bits magnitude bit-width
    * @return estimated squared L2 distance
    */
@@ -392,10 +397,18 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
       float widthOver255,
       int sumQ,
       float sqrY,
+      float queryNorm,
       int bits) {
     float sqrX = corrections[ExtendedRaBitQuantizer.IDX_SQR_X];
-    float factorPpc = corrections[ExtendedRaBitQuantizer.IDX_FACTOR_PPC];
-    float factorIp = corrections[ExtendedRaBitQuantizer.IDX_FACTOR_IP];
+    float factorPpcStored = corrections[ExtendedRaBitQuantizer.IDX_FACTOR_PPC];
+    float factorIpStored = corrections[ExtendedRaBitQuantizer.IDX_FACTOR_IP];
+
+    float sqrtSqrX = (float) Math.sqrt(sqrX);
+    boolean canRescore = queryNorm > 0f && sqrtSqrX > 0f;
+    // Fold query magnitude relative to vector magnitude; when degenerate, use stored factors.
+    float factorScale = canRescore ? (queryNorm / sqrtSqrX) : 1.0f;
+    float factorIp = factorIpStored * factorScale;
+    float factorPpc = factorPpcStored * factorScale;
 
     // Signed multi-bit IP: sum_d(q_byte[d] * (2*sign[d]-1) * mag[d])
     int signedMagIp =
@@ -408,7 +421,9 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
     // The +0.5 accounts for the offset in the greedy quantize code: code[d] = (mag+0.5)/rescale
     float bFull = signedMagIp + 0.5f * (2 * ip1bit - sumQ);
 
-    return sqrX + sqrY + factorPpc * vl + factorIp * widthOver255 * bFull;
+    float baseDist = sqrX + sqrY + factorPpcStored * vl + factorIpStored * widthOver255 * bFull;
+    float rescoredDist = sqrX + sqrY + factorPpc * vl + factorIp * widthOver255 * bFull;
+    return canRescore ? Math.min(rescoredDist, baseDist) : baseDist;
   }
 
   /**

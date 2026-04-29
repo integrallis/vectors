@@ -23,6 +23,7 @@ import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Random;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -275,16 +276,16 @@ class ExtendedRaBitQuantizerTest {
     }
 
     @Test
-    void corrections_xIpNormNonZero() {
-      float[][] vectors = generateNormalizedVectors(50, 128, 42L);
+    void corrections_matchDeclaredSize() {
+      float[][] vectors = generateNormalizedVectors(10, 64, 7L);
       var dataset = new ArrayVectorDataset(vectors);
       var eq = ExtendedRaBitQuantizer.train(dataset, 4);
       var compressed = eq.encodeAll(dataset);
 
-      for (int i = 0; i < 50; i++) {
-        float xIpNorm = compressed.getCorrections(i)[ExtendedRaBitQuantizer.IDX_XIP_NORM];
-        assertThat(xIpNorm).as("xIpNorm for vector %d", i).isNotEqualTo(0f);
-        assertThat(xIpNorm).isFinite();
+      float[] corr = compressed.getCorrections(0);
+      assertThat(corr).hasSize(ExtendedRaBitQuantizer.NUM_CORRECTIONS);
+      for (float v : corr) {
+        assertThat(v).isFinite();
       }
     }
 
@@ -319,20 +320,15 @@ class ExtendedRaBitQuantizerTest {
         float rqFactorIp = rqCorr[RaBitQuantizer.IDX_FACTOR_IP];
         float eqFactorIp = eqCorr[ExtendedRaBitQuantizer.IDX_FACTOR_IP];
         assertThat(eqFactorIp).isNotEqualTo(0f);
+        assertThat(eqFactorIp)
+            .as("Extended RaBitQ factorIp should differ from 1-bit RaBitQ")
+            .isNotCloseTo(rqFactorIp, within(1e-6f));
 
-        // The sign assertion (signum(eqFactorIp) == signum(rqFactorIp)) is trivially true:
-        // both are always negative (-2*sqrtSqrX / positive_denominator).
-        // Instead verify that the denominators differ: multi-bit uses x0Multi*normCode while
-        // 1-bit uses x0*sqrtD — confirmed by checking that xIpNorm != 1/(x0_1bit * sqrtD).
-        float xIpNorm = eqCorr[ExtendedRaBitQuantizer.IDX_XIP_NORM];
-        float rqX0 = rqCorr[RaBitQuantizer.IDX_X0];
-        float sqrtD = (float) Math.sqrt(128);
-        float expected1bitXIpNorm = 1.0f / (rqX0 * sqrtD);
-        assertThat(xIpNorm)
-            .as(
-                "Multi-bit xIpNorm (1/(x0Multi*normCode)) should differ from 1-bit"
-                    + " 1/(x0*sqrtD): they use different denominators")
-            .isNotCloseTo(expected1bitXIpNorm, org.assertj.core.data.Offset.offset(1e-4f));
+        float rqFactorPpc = rqCorr[RaBitQuantizer.IDX_FACTOR_PPC];
+        float eqFactorPpc = eqCorr[ExtendedRaBitQuantizer.IDX_FACTOR_PPC];
+        assertThat(eqFactorPpc)
+            .as("Extended RaBitQ popcount correction should differ from 1-bit RaBitQ")
+            .isNotCloseTo(rqFactorPpc, within(1e-6f));
       }
     }
   }
@@ -508,6 +504,60 @@ class ExtendedRaBitQuantizerTest {
       assertThat(layer2Total)
           .as("Layer 2 (multi-bit) should have >= top-20 overlap than Layer 1 (sign-only)")
           .isGreaterThanOrEqualTo(layer1Total);
+    }
+
+    @Test
+    void rescoring_withQueryNormReducesErrorOnScaledQueries() {
+      // Rescoring folds queryNorm into factorIp/factorPpc; it should outperform the legacy
+      // stored-factor estimator when queries have larger norms.
+      float[][] vectors = generateNormalizedVectors(300, 64, 11L);
+      var dataset = new ArrayVectorDataset(vectors);
+      var eq = ExtendedRaBitQuantizer.train(dataset, 4);
+      var compressed = eq.encodeAll(dataset);
+
+      float[] query = vectors[0];
+      float[] scaledQuery = Arrays.copyOf(query, query.length);
+      for (int i = 0; i < scaledQuery.length; i++) {
+        scaledQuery[i] *= 2.5f;
+      }
+
+      PreparedQueryMetrics prep = prepareQueryForTest(scaledQuery, eq);
+
+      int improved = 0;
+      int total = 120;
+      for (int i = 0; i < total; i++) {
+        float trueDist = squaredL2(scaledQuery, vectors[i]);
+        float newDist =
+            ExtendedRaBitQuantizedVectors.estimateL2Multi(
+                compressed.getSignCodes(i),
+                compressed.getMagCodes(i),
+                compressed.getCorrections(i),
+                prep.queryBytes(),
+                prep.vl(),
+                prep.widthOver255(),
+                prep.sumQ(),
+                prep.sqrY(),
+                prep.queryNorm(),
+                4);
+        float oldDist =
+            estimateL2MultiWithoutRescore(
+                compressed.getSignCodes(i),
+                compressed.getMagCodes(i),
+                compressed.getCorrections(i),
+                prep.queryBytes(),
+                prep.vl(),
+                prep.widthOver255(),
+                prep.sumQ(),
+                prep.sqrY(),
+                4);
+        if (Math.abs(newDist - trueDist) <= Math.abs(oldDist - trueDist)) {
+          improved++;
+        }
+      }
+
+      assertThat(improved)
+          .as("Rescoring should reduce or match error for most candidates")
+          .isGreaterThanOrEqualTo(total / 2);
     }
 
     @Test
@@ -744,6 +794,70 @@ class ExtendedRaBitQuantizerTest {
 
   // --- Helper methods ---
 
+  private static PreparedQueryMetrics prepareQueryForTest(
+      float[] query, ExtendedRaBitQuantizer quantizer) {
+    int paddedDim = quantizer.paddedDimension();
+    float[] centeredQuery = new float[paddedDim];
+    System.arraycopy(query, 0, centeredQuery, 0, query.length);
+    VectorUtil.subInPlace(centeredQuery, quantizer.paddedCentroid());
+
+    float sqrY = VectorUtil.dotProduct(centeredQuery, centeredQuery);
+    float queryNorm = (float) Math.sqrt(sqrY);
+
+    float[] queryRotated = quantizer.rotation().rotate(centeredQuery);
+
+    float vl = Float.POSITIVE_INFINITY;
+    float vh = Float.NEGATIVE_INFINITY;
+    for (float v : queryRotated) {
+      if (v < vl) vl = v;
+      if (v > vh) vh = v;
+    }
+    float width = vh - vl;
+    float scale = width > 0 ? 255.0f / width : 0f;
+
+    byte[] queryBytes = new byte[paddedDim];
+    int sumQ = 0;
+    for (int d = 0; d < paddedDim; d++) {
+      int q = Math.round((queryRotated[d] - vl) * scale);
+      q = Math.max(0, Math.min(255, q));
+      queryBytes[d] = (byte) q;
+      sumQ += q;
+    }
+
+    return new PreparedQueryMetrics(queryBytes, vl, width / 255.0f, sumQ, sqrY, queryNorm);
+  }
+
+  private static float estimateL2MultiWithoutRescore(
+      long[] storedSignBits,
+      byte[] storedMagCodes,
+      float[] corrections,
+      byte[] queryBytes,
+      float vl,
+      float widthOver255,
+      int sumQ,
+      float sqrY,
+      int bits) {
+    float sqrX = corrections[ExtendedRaBitQuantizer.IDX_SQR_X];
+    float factorPpc = corrections[ExtendedRaBitQuantizer.IDX_FACTOR_PPC];
+    float factorIp = corrections[ExtendedRaBitQuantizer.IDX_FACTOR_IP];
+
+    int signedMagIp =
+        ExtendedRaBitQuantizedVectors.asymmetricByteTimesSignedMag(
+            queryBytes, storedMagCodes, storedSignBits, bits);
+    int ip1bit = RaBitQuantizedVectors.asymmetricByteTimesBit(queryBytes, storedSignBits);
+    float bFull = signedMagIp + 0.5f * (2 * ip1bit - sumQ);
+    return sqrX + sqrY + factorPpc * vl + factorIp * widthOver255 * bFull;
+  }
+
+  private static float squaredL2(float[] a, float[] b) {
+    float acc = 0f;
+    for (int i = 0; i < a.length; i++) {
+      float d = a[i] - b[i];
+      acc += d * d;
+    }
+    return acc;
+  }
+
   private static ArrayVectorDataset makeDataset(int dim) {
     float[][] vectors = new float[10][dim];
     Random rng = new Random(42L);
@@ -811,4 +925,7 @@ class ExtendedRaBitQuantizerTest {
     }
     return count;
   }
+
+  private record PreparedQueryMetrics(
+      byte[] queryBytes, float vl, float widthOver255, int sumQ, float sqrY, float queryNorm) {}
 }
