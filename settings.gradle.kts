@@ -6,6 +6,9 @@ include("vectors-quantization")
 include("vectors-hnsw")
 include("vectors-vamana")
 include("vectors-ivf")
+include("vectors-hybrid")
+include("vectors-router")
+include("vectors-text-h2")
 include("vectors-db")
 include("vectors-distributed")
 include("vectors-gpu")
@@ -25,6 +28,7 @@ include("vectors-vcr-langchain4j")
 
 // --- HTTP server (Helidon SE 4 / Níma) ---
 include("vectors-server")
+include("vectors-server-client")
 
 // --- Caching layer ---
 include("vectors-cache")
@@ -48,6 +52,7 @@ include("demos:rerank-after-retrieval")
 include("demos:vcr-e2e")
 include("demos:server-client")
 include("demos:semantic-cache")
+include("demos:rag-multimodal")
 
 // Enable build cache
 buildCache {

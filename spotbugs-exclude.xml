@@ -467,6 +467,33 @@
         <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
     </Match>
 
+    <!-- vectors-server-client: DTO records expose float[]/Map by reference for zero-copy
+         Jackson serialization. Fresh instances are constructed per request. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.server.client.DocumentPayload"/>
+            <Class name="com.integrallis.vectors.server.client.SearchHit"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-hybrid: SPI records expose arrays/maps by reference for zero-copy across the
+         text index boundary. Defensive copies would add allocation overhead on every index/search. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.hybrid.text.TextSearchOutcome"/>
+            <Class name="com.integrallis.vectors.hybrid.text.TextIndexSpi$TextDocument"/>
+            <Class name="com.integrallis.vectors.hybrid.text.TextIndexSpi$StoredContent"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
     <!-- vectors-server: ObjectMapperHolder intentionally returns the shared, thread-safe
          Jackson mapper by reference; constructing a copy per call would multiply server
          allocation by orders of magnitude. -->
@@ -481,6 +508,12 @@
     <Match>
         <Class name="com.integrallis.vectors.server.VectorsServer$ServerHandle"/>
         <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <!-- vectors-router: Route.Builder stores caller list transiently; build() does List.copyOf(). -->
+    <Match>
+        <Class name="com.integrallis.vectors.router.Route$Builder"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
 
     <!-- vectors-server: DTO records expose float[] vectors by reference so Jackson can marshal
