@@ -34,8 +34,19 @@ COPY vectors-ivf ./vectors-ivf
 COPY vectors-db ./vectors-db
 COPY vectors-gpu ./vectors-gpu
 COPY vectors-distributed ./vectors-distributed
+COPY vectors-hybrid ./vectors-hybrid
+COPY vectors-router ./vectors-router
+COPY vectors-text-h2 ./vectors-text-h2
+COPY vectors-spring-ai ./vectors-spring-ai
 COPY vectors-spring-boot-starter ./vectors-spring-boot-starter
+COPY vectors-langchain4j ./vectors-langchain4j
 COPY vectors-bench ./vectors-bench
+COPY vectors-server-client ./vectors-server-client
+COPY vectors-cache ./vectors-cache
+COPY vectors-cache-jcache ./vectors-cache-jcache
+COPY vectors-cache-semantic-db ./vectors-cache-semantic-db
+COPY vectors-cache-spring-ai ./vectors-cache-spring-ai
+COPY vectors-cache-langchain4j ./vectors-cache-langchain4j
 COPY vectors-vcr-core ./vectors-vcr-core
 COPY vectors-vcr-semantic-db ./vectors-vcr-semantic-db
 COPY vectors-vcr-serde-avaje ./vectors-vcr-serde-avaje
@@ -61,7 +72,7 @@ FROM eclipse-temurin:25-jdk
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --uid 1000 --user-group vectors \
+    && useradd --system --uid 10001 --user-group vectors \
     && mkdir -p /data \
     && chown vectors:vectors /data
 
