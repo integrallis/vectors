@@ -34,6 +34,7 @@ com.google.oauth-client:google-oauth-client:1.39.0=sigstoreClientClasspath
 com.google.protobuf:protobuf-bom:4.30.2=sigstoreClientClasspath
 com.google.protobuf:protobuf-java-util:4.30.2=sigstoreClientClasspath
 com.google.protobuf:protobuf-java:4.30.2=sigstoreClientClasspath
+com.h2database:h2:2.4.240=runtimeClasspath,testRuntimeClasspath
 com.nvidia.cuvs:cuvs-java:25.10.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 commons-codec:commons-codec:1.18.0=sigstoreClientClasspath
 commons-codec:commons-codec:1.21.0=runtimeClasspath,testRuntimeClasspath

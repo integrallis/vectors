@@ -10,6 +10,8 @@ val jacksonVersion = "2.18.2"
 dependencies {
     api(project(":vectors-db"))
     api(project(":vectors-core"))
+    api(project(":vectors-hybrid"))
+    runtimeOnly(project(":vectors-text-h2"))
 
     implementation(platform("io.helidon:helidon-dependencies:$helidonVersion"))
     implementation("io.helidon.webserver:helidon-webserver")

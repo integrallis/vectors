@@ -18,6 +18,8 @@ package com.integrallis.vectors.server.routing;
 
 import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.db.VectorCollection;
+import com.integrallis.vectors.hybrid.text.TextIndexSpi;
+import com.integrallis.vectors.hybrid.text.TextIndexSpi.TextDocument;
 import com.integrallis.vectors.server.CollectionRegistry;
 import com.integrallis.vectors.server.dto.DocumentDto;
 import com.integrallis.vectors.server.dto.UpsertDocumentsRequest;
@@ -28,7 +30,11 @@ import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -137,6 +143,24 @@ public final class DocumentsRoutes implements HttpService {
           req);
       return;
     }
+
+    // Dual-write to text index if available
+    Optional<TextIndexSpi> textIndex = registry.getTextIndex(name);
+    if (textIndex.isPresent()) {
+      try {
+        List<TextDocument> textDocs = new ArrayList<>(body.documents().size());
+        for (DocumentDto dto : body.documents()) {
+          byte[] blobBytes = dto.blob() != null ? Base64.getDecoder().decode(dto.blob()) : null;
+          Map<String, String> meta = jsonNodeToStringMap(dto.metadata());
+          textDocs.add(
+              new TextDocument(dto.id(), dto.text() != null ? dto.text() : "", meta, blobBytes));
+        }
+        textIndex.get().index(textDocs);
+      } catch (RuntimeException e) {
+        LOG.warn("text index write failed for '{}': {}", name, e.getMessage());
+      }
+    }
+
     registry.bumpEpoch(name);
     RouteSupport.sendJson(res, Status.OK_200, new UpsertDocumentsResponse(docs.size(), c.size()));
   }
@@ -158,6 +182,7 @@ public final class DocumentsRoutes implements HttpService {
     boolean deleted = c.delete(id);
     if (deleted) {
       c.commit();
+      registry.getTextIndex(name).ifPresent(ti -> ti.remove(id));
       registry.bumpEpoch(name);
     }
     res.status(Status.NO_CONTENT_204).send();
@@ -174,5 +199,19 @@ public final class DocumentsRoutes implements HttpService {
     col.get().commit();
     registry.bumpEpoch(name);
     res.status(Status.NO_CONTENT_204).send();
+  }
+
+  @SuppressWarnings("deprecation")
+  private static Map<String, String> jsonNodeToStringMap(
+      com.fasterxml.jackson.databind.JsonNode node) {
+    Map<String, String> map = new HashMap<>();
+    if (node != null && node.isObject()) {
+      Iterator<Map.Entry<String, com.fasterxml.jackson.databind.JsonNode>> it = node.fields();
+      while (it.hasNext()) {
+        Map.Entry<String, com.fasterxml.jackson.databind.JsonNode> entry = it.next();
+        map.put(entry.getKey(), entry.getValue().asText());
+      }
+    }
+    return map;
   }
 }

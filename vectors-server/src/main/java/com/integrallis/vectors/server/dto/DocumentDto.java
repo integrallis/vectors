@@ -36,20 +36,23 @@ import com.integrallis.vectors.core.Document;
  * @param text optional raw text; nullable
  * @param metadata plain JSON object of scalar values or string arrays; nullable or missing means
  *     empty
+ * @param blob optional Base64-encoded binary data (e.g. image bytes); nullable
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record DocumentDto(String id, float[] vector, String text, JsonNode metadata) {
+public record DocumentDto(String id, float[] vector, String text, JsonNode metadata, String blob) {
 
   @JsonCreator
   public DocumentDto(
       @JsonProperty("id") String id,
       @JsonProperty("vector") float[] vector,
       @JsonProperty("text") String text,
-      @JsonProperty("metadata") JsonNode metadata) {
+      @JsonProperty("metadata") JsonNode metadata,
+      @JsonProperty("blob") String blob) {
     this.id = id;
     this.vector = vector;
     this.text = text;
     this.metadata = metadata;
+    this.blob = blob;
   }
 
   /** Validates the minimal fields required to stage an insert and builds a {@link Document}. */
@@ -73,6 +76,6 @@ public record DocumentDto(String id, float[] vector, String text, JsonNode metad
     float[] v = includeVector ? doc.vector() : null;
     String t = includeText ? doc.text() : null;
     ObjectNode md = includeMetadata ? MetadataCodec.toJson(doc.metadata()) : null;
-    return new DocumentDto(doc.id(), v, t, md);
+    return new DocumentDto(doc.id(), v, t, md, null);
   }
 }

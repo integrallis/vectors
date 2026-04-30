@@ -101,6 +101,7 @@ public final class VectorsServer implements Callable<Integer> {
   public static ServerHandle start(ServerConfig config) {
     Objects.requireNonNull(config, "config");
     CollectionRegistry registry = new CollectionRegistry();
+    registry.setDataDir(config.dataDir());
     try {
       if (config.isPersistent()) {
         int reopened = CollectionDiscovery.discoverAndOpen(registry, config.dataDir());

@@ -34,6 +34,8 @@ import com.fasterxml.jackson.databind.JsonNode;
  * @param includeText whether to emit the stored text on each hit
  * @param includeMetadata whether to emit the stored metadata on each hit
  * @param filter optional filter AST; Phase 5 grammar, Phase 4 only accepts null
+ * @param queryText optional text for hybrid search (combined with vector via fusion)
+ * @param hybridMode optional fusion mode: "RRF" (default) or "WEIGHTED"
  */
 public record SearchQuery(
     float[] queryVector,
@@ -43,7 +45,9 @@ public record SearchQuery(
     Boolean includeVector,
     Boolean includeText,
     Boolean includeMetadata,
-    JsonNode filter) {
+    JsonNode filter,
+    String queryText,
+    String hybridMode) {
 
   @JsonCreator
   public SearchQuery(
@@ -54,7 +58,9 @@ public record SearchQuery(
       @JsonProperty("includeVector") Boolean includeVector,
       @JsonProperty("includeText") Boolean includeText,
       @JsonProperty("includeMetadata") Boolean includeMetadata,
-      @JsonProperty("filter") JsonNode filter) {
+      @JsonProperty("filter") JsonNode filter,
+      @JsonProperty("queryText") String queryText,
+      @JsonProperty("hybridMode") String hybridMode) {
     this.queryVector = queryVector;
     this.k = k;
     this.efSearch = efSearch;
@@ -63,6 +69,8 @@ public record SearchQuery(
     this.includeText = includeText;
     this.includeMetadata = includeMetadata;
     this.filter = filter;
+    this.queryText = queryText;
+    this.hybridMode = hybridMode;
   }
 
   /** First-field-level validation error, or {@code null} if the request is well-formed. */

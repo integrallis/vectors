@@ -17,12 +17,16 @@
 package com.integrallis.vectors.server;
 
 import com.integrallis.vectors.db.VectorCollection;
+import com.integrallis.vectors.hybrid.text.TextIndexSpi;
+import com.integrallis.vectors.hybrid.text.TextIndexSpiFactory;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
@@ -48,11 +52,27 @@ public final class CollectionRegistry implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(CollectionRegistry.class);
 
   private final ConcurrentHashMap<String, VectorCollection> collections = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, TextIndexSpi> textIndexes = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, Instant> createdAt = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, AtomicLong> epochs = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, ReentrantLock> nameLocks = new ConcurrentHashMap<>();
   private final java.util.concurrent.CopyOnWriteArrayList<Consumer<EpochChange>> listeners =
       new java.util.concurrent.CopyOnWriteArrayList<>();
+  private final TextIndexSpiFactory textIndexFactory;
+  private volatile Path dataDir;
+
+  /**
+   * Creates a registry, discovering a {@link TextIndexSpiFactory} via ServiceLoader if available.
+   */
+  public CollectionRegistry() {
+    TextIndexSpiFactory factory = null;
+    for (TextIndexSpiFactory f : ServiceLoader.load(TextIndexSpiFactory.class)) {
+      factory = f;
+      LOG.info("discovered TextIndexSpiFactory: {}", f.getClass().getName());
+      break;
+    }
+    this.textIndexFactory = factory;
+  }
 
   /**
    * @return a snapshot view of all currently-managed collection names (no lock held during
@@ -94,6 +114,7 @@ public final class CollectionRegistry implements AutoCloseable {
       collections.put(name, created);
       createdAt.put(name, Instant.now());
       epochs.put(name, new AtomicLong(0));
+      createTextIndex(name);
       return created;
     } finally {
       lock.unlock();
@@ -133,6 +154,7 @@ public final class CollectionRegistry implements AutoCloseable {
       collections.put(name, reopened);
       this.createdAt.put(name, createdAt);
       epochs.put(name, new AtomicLong(initialEpoch));
+      createTextIndex(name);
       return reopened;
     } finally {
       lock.unlock();
@@ -191,6 +213,38 @@ public final class CollectionRegistry implements AutoCloseable {
   public record EpochChange(String name, long epoch) {}
 
   /**
+   * Sets the base data directory for persistent text indexes. When set, text indexes are stored on
+   * disk inside each collection's subdirectory. Must be called before any {@link #create} or {@link
+   * #reopen} calls.
+   *
+   * @param dataDir base data directory, or {@code null} for in-memory text indexes
+   */
+  public void setDataDir(Path dataDir) {
+    this.dataDir = dataDir;
+  }
+
+  /**
+   * @param name collection name
+   * @return the text index for this collection, or empty if no TextIndexSpiFactory was discovered
+   */
+  public Optional<TextIndexSpi> getTextIndex(String name) {
+    return Optional.ofNullable(textIndexes.get(Objects.requireNonNull(name, "name")));
+  }
+
+  private void createTextIndex(String name) {
+    if (textIndexFactory != null) {
+      try {
+        Path collectionDir = dataDir != null ? dataDir.resolve(name) : null;
+        TextIndexSpi index = textIndexFactory.create(name, collectionDir);
+        textIndexes.put(name, index);
+        LOG.debug("created text index for collection '{}'", name);
+      } catch (RuntimeException e) {
+        LOG.warn("failed to create text index for '{}': {}", name, e.getMessage());
+      }
+    }
+  }
+
+  /**
    * Drops a collection and closes its underlying resources. Idempotent: returns {@code false} if
    * the name is not registered.
    *
@@ -208,6 +262,14 @@ public final class CollectionRegistry implements AutoCloseable {
       }
       createdAt.remove(name);
       epochs.remove(name);
+      TextIndexSpi ti = textIndexes.remove(name);
+      if (ti != null) {
+        try {
+          ti.close();
+        } catch (RuntimeException e) {
+          LOG.warn("failed to close text index for '{}': {}", name, e.getMessage());
+        }
+      }
       removed.close();
       // Lock intentionally NOT removed from nameLocks — see class Javadoc.
       return true;
@@ -232,6 +294,14 @@ public final class CollectionRegistry implements AutoCloseable {
 
   @Override
   public void close() {
+    for (Map.Entry<String, TextIndexSpi> e : textIndexes.entrySet()) {
+      try {
+        e.getValue().close();
+      } catch (RuntimeException ex) {
+        LOG.warn("Failed to close text index '{}': {}", e.getKey(), ex.getMessage(), ex);
+      }
+    }
+    textIndexes.clear();
     for (Map.Entry<String, VectorCollection> e : collections.entrySet()) {
       try {
         e.getValue().close();
