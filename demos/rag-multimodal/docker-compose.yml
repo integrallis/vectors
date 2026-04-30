@@ -1,0 +1,38 @@
+# docker-compose.yml for rag-multimodal demo
+#
+# Starts vectors-server for the JavaFX demo to connect to.
+#
+# Recommended — single command:
+#   cd vectors/demos/rag-multimodal
+#   ./run.sh
+#
+# Manual (two terminals):
+#   cd vectors/demos/rag-multimodal
+#   docker compose up -d
+#   # Wait for healthy, then from vectors/:
+#   ./gradlew :demos:rag-multimodal:run
+
+services:
+  vectors-server:
+    build:
+      context: ../..              # vectors/ directory (Gradle multi-project root)
+      dockerfile: vectors-server/Dockerfile
+    image: vectors-server:local
+    container_name: vectors-server-demo
+    ports:
+      - "8287:8287"
+    volumes:
+      - vectors-data:/data
+    environment:
+      JAVA_OPTS: "-Xmx512m"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8287/v1/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  vectors-data:
+    driver: local
