@@ -64,6 +64,6 @@ public final class NoOpVectorCache<K, V> implements VectorCache<K, V> {
 
   @Override
   public CacheStats stats() {
-    return new CacheStats(0L, misses.sum(), 0L, 0L);
+    return new CacheStats(0L, misses.sum(), 0L, 0L, 0L);
   }
 }

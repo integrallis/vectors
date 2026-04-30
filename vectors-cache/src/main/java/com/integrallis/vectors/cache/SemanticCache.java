@@ -63,6 +63,9 @@ public interface SemanticCache<V> extends AutoCloseable {
   /** The cosine / dot / Euclidean similarity threshold above which a lookup is considered a hit. */
   double threshold();
 
+  /** The admission policy used to gate {@link #put} calls. */
+  CacheAdmissionPolicy<V> admissionPolicy();
+
   /** Closes any underlying resources; default is no-op. */
   @Override
   default void close() {

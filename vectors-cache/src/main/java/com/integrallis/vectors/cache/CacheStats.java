@@ -23,11 +23,12 @@ package com.integrallis.vectors.cache;
  * @param hits number of lookups that returned a cached value
  * @param misses number of lookups that did not find a cached value
  * @param evictions number of entries removed due to capacity / TTL / explicit invalidation
+ * @param rejections number of {@code put} calls rejected by the {@link CacheAdmissionPolicy}
  * @param size current entry count
  */
-public record CacheStats(long hits, long misses, long evictions, long size) {
+public record CacheStats(long hits, long misses, long evictions, long rejections, long size) {
 
-  public static final CacheStats ZERO = new CacheStats(0, 0, 0, 0);
+  public static final CacheStats ZERO = new CacheStats(0, 0, 0, 0, 0);
 
   /**
    * @return hits / (hits + misses); {@code 0.0} when there have been no requests

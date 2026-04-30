@@ -32,6 +32,7 @@ class NoOpVectorCacheTest {
     CacheStats s = cache.stats();
     assertThat(s.hits()).isZero();
     assertThat(s.misses()).isEqualTo(1);
+    assertThat(s.rejections()).isZero();
   }
 
   @Test

@@ -77,7 +77,8 @@ public final class CaffeineVectorCache<K, V> implements VectorCache<K, V> {
   @Override
   public CacheStats stats() {
     com.github.benmanes.caffeine.cache.stats.CacheStats cs = cache.stats();
-    return new CacheStats(cs.hitCount(), cs.missCount(), cs.evictionCount(), cache.estimatedSize());
+    return new CacheStats(
+        cs.hitCount(), cs.missCount(), cs.evictionCount(), 0L, cache.estimatedSize());
   }
 
   @Override

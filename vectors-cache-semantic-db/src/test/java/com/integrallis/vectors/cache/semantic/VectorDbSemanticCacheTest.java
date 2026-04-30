@@ -17,6 +17,8 @@ package com.integrallis.vectors.cache.semantic;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.integrallis.vectors.cache.CacheAdmissionPolicy;
+import com.integrallis.vectors.cache.LLMResponseFilters;
 import com.integrallis.vectors.cache.SemanticCache;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.IndexType;
@@ -24,6 +26,8 @@ import com.integrallis.vectors.db.VectorCollection;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 class VectorDbSemanticCacheTest {
@@ -103,5 +107,59 @@ class VectorDbSemanticCacheTest {
   @Test
   void lookupOnEmptyCacheReturnsMiss() {
     assertThat(cache.lookup(new float[] {1f, 0f, 0f, 0f})).isEmpty();
+  }
+
+  @Test
+  void admissionPolicyDefaultsToAllowAll() {
+    assertThat(cache.admissionPolicy()).isSameAs(CacheAdmissionPolicy.allowAll());
+  }
+
+  @Nested
+  @Tag("unit")
+  class AdmissionPolicyTests {
+
+    private VectorCollection filteredCollection;
+    private VectorDbSemanticCache<String> filteredCache;
+
+    @BeforeEach
+    void setUp() {
+      filteredCollection =
+          VectorCollection.builder()
+              .dimension(4)
+              .metric(SimilarityFunction.COSINE)
+              .indexType(IndexType.FLAT)
+              .build();
+      filteredCache =
+          VectorDbSemanticCache.builder(filteredCollection, PayloadCodec.identity())
+              .threshold(0.92)
+              .admissionPolicy(LLMResponseFilters.rejectRefusals())
+              .closeCollectionOnClose(true)
+              .build();
+    }
+
+    @AfterEach
+    void tearDown() {
+      filteredCache.close();
+    }
+
+    @Test
+    void putWithAdmissionPolicyRejectsRefusal() {
+      filteredCache.put("q1", new float[] {1f, 0f, 0f, 0f}, "I can't answer that.");
+      assertThat(filteredCache.get("q1")).isEmpty();
+      assertThat(filteredCache.stats().size()).isZero();
+    }
+
+    @Test
+    void putWithAdmissionPolicyAcceptsNormalResponse() {
+      filteredCache.put("q1", new float[] {1f, 0f, 0f, 0f}, "The capital of France is Paris.");
+      assertThat(filteredCache.get("q1")).hasValue("The capital of France is Paris.");
+    }
+
+    @Test
+    void rejectionCountTrackedInStats() {
+      filteredCache.put("q1", new float[] {1f, 0f, 0f, 0f}, "I can't answer that.");
+      filteredCache.put("q2", new float[] {0f, 1f, 0f, 0f}, "I cannot do that.");
+      assertThat(filteredCache.stats().rejections()).isEqualTo(2);
+    }
   }
 }

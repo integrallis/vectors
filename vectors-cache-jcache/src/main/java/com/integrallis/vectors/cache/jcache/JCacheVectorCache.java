@@ -100,7 +100,7 @@ public final class JCacheVectorCache<K, V> implements VectorCache<K, V> {
   @Override
   public CacheStats stats() {
     // Size -1 because JCache does not portably expose it; providers can extend this class.
-    return new CacheStats(hits.sum(), misses.sum(), 0L, -1L);
+    return new CacheStats(hits.sum(), misses.sum(), 0L, 0L, -1L);
   }
 
   @Override

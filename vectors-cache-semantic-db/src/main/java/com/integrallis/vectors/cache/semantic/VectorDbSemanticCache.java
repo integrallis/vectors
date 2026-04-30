@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.cache.semantic;
 
+import com.integrallis.vectors.cache.CacheAdmissionPolicy;
 import com.integrallis.vectors.cache.CacheStats;
 import com.integrallis.vectors.cache.SemanticCache;
 import com.integrallis.vectors.core.Document;
@@ -52,21 +53,25 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
   private final double threshold;
   private final boolean higherIsBetter;
   private final boolean closeCollection;
+  private final CacheAdmissionPolicy<V> admissionPolicy;
 
   private final LongAdder hits = new LongAdder();
   private final LongAdder misses = new LongAdder();
+  private final LongAdder rejections = new LongAdder();
 
   VectorDbSemanticCache(
       VectorCollection collection,
       PayloadCodec<V> codec,
       double threshold,
       boolean higherIsBetter,
-      boolean closeCollection) {
+      boolean closeCollection,
+      CacheAdmissionPolicy<V> admissionPolicy) {
     this.collection = Objects.requireNonNull(collection, "collection");
     this.codec = Objects.requireNonNull(codec, "codec");
     this.threshold = threshold;
     this.higherIsBetter = higherIsBetter;
     this.closeCollection = closeCollection;
+    this.admissionPolicy = Objects.requireNonNull(admissionPolicy, "admissionPolicy");
   }
 
   /** Fluent builder. See {@link Builder}. */
@@ -85,6 +90,10 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
     Objects.requireNonNull(key, "key");
     Objects.requireNonNull(embedding, "embedding");
     Objects.requireNonNull(value, "value");
+    if (!admissionPolicy.test(value)) {
+      rejections.increment();
+      return;
+    }
     Map<String, MetadataValue> md =
         Map.of(PAYLOAD_FIELD, new MetadataValue.Str(codec.encode(value)));
     Document doc = new Document(key, embedding, null, md);
@@ -133,12 +142,17 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
 
   @Override
   public CacheStats stats() {
-    return new CacheStats(hits.sum(), misses.sum(), 0L, collection.size());
+    return new CacheStats(hits.sum(), misses.sum(), 0L, rejections.sum(), collection.size());
   }
 
   @Override
   public double threshold() {
     return threshold;
+  }
+
+  @Override
+  public CacheAdmissionPolicy<V> admissionPolicy() {
+    return admissionPolicy;
   }
 
   @Override
@@ -174,6 +188,7 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
     private double threshold = 0.92;
     private boolean higherIsBetter = true;
     private boolean closeCollection = false;
+    private CacheAdmissionPolicy<V> admissionPolicy = CacheAdmissionPolicy.allowAll();
 
     Builder(VectorCollection collection, PayloadCodec<V> codec) {
       this.collection = Objects.requireNonNull(collection, "collection");
@@ -203,9 +218,18 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
       return this;
     }
 
+    /**
+     * Sets the admission policy that gates {@link #put} calls. Default is {@link
+     * CacheAdmissionPolicy#allowAll()}.
+     */
+    public Builder<V> admissionPolicy(CacheAdmissionPolicy<V> policy) {
+      this.admissionPolicy = Objects.requireNonNull(policy, "admissionPolicy");
+      return this;
+    }
+
     public VectorDbSemanticCache<V> build() {
       return new VectorDbSemanticCache<>(
-          collection, codec, threshold, higherIsBetter, closeCollection);
+          collection, codec, threshold, higherIsBetter, closeCollection, admissionPolicy);
     }
   }
 }

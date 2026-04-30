@@ -70,6 +70,7 @@ class CaffeineVectorCacheTest {
       CacheStats s = cache.stats();
       assertThat(s.hits()).isEqualTo(1);
       assertThat(s.misses()).isEqualTo(2);
+      assertThat(s.rejections()).isZero();
       assertThat(s.hitRate()).isCloseTo(1.0 / 3.0, org.assertj.core.api.Assertions.within(1e-6));
     }
   }
