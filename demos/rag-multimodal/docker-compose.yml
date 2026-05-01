@@ -1,6 +1,7 @@
 # docker-compose.yml for rag-multimodal demo
 #
-# Starts vectors-server for the JavaFX demo to connect to.
+# Starts vectors-server and vectors-studio-web for the JavaFX demo to connect to.
+# Studio UI is available at http://localhost:8288 to browse collections and data.
 #
 # Recommended — single command:
 #   cd vectors/demos/rag-multimodal
@@ -27,6 +28,27 @@ services:
       JAVA_OPTS: "-Xmx512m"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8287/v1/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 15s
+      retries: 5
+    restart: unless-stopped
+
+  vectors-studio:
+    build:
+      context: ../..              # vectors/ directory (Gradle multi-project root)
+      dockerfile: vectors-studio-web/Dockerfile
+    image: vectors-studio-web:local
+    container_name: vectors-studio-demo
+    ports:
+      - "8288:8288"
+    environment:
+      JAVA_OPTS: "-Xmx256m"
+    depends_on:
+      vectors-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8288/health"]
       interval: 10s
       timeout: 3s
       start_period: 15s

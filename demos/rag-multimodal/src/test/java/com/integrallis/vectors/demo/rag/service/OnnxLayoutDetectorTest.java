@@ -361,6 +361,40 @@ class OnnxLayoutDetectorTest {
     }
 
     @Test
+    void moderateOverlapAboveThresholdIsSuppressed() {
+      // Two 100x100 boxes with ~35% IoU (overlap 35x100).
+      // IoU = 3500 / (10000+10000-3500) = 3500/16500 ≈ 0.212 — too low.
+      // Use two 200x200 boxes offset by 130 in x: overlap = 70x200 = 14000,
+      // union = 40000+40000-14000 = 66000, IoU ≈ 0.212 — still too low.
+      // Two 200x200 boxes offset by 100 in x: overlap = 100x200 = 20000,
+      // union = 40000+40000-20000 = 60000, IoU = 0.333 — above 0.3.
+      var a = det(0, 0, 200, 200, 0.9f, OnnxLayoutDetector.CLASS_FIGURE);
+      var b = det(100, 0, 200, 200, 0.7f, OnnxLayoutDetector.CLASS_FIGURE);
+      float iou = OnnxLayoutDetector.computeIoU(a, b);
+      assertThat(iou).isGreaterThan(OnnxLayoutDetector.IOU_THRESHOLD);
+      assertThat(iou).isCloseTo(1.0f / 3, Offset.offset(0.01f));
+
+      List<OnnxLayoutDetector.Detection> result =
+          OnnxLayoutDetector.suppressOverlaps(List.of(a, b));
+      assertThat(result).hasSize(1);
+      assertThat(result.getFirst().confidence()).isEqualTo(0.9f);
+    }
+
+    @Test
+    void moderateOverlapBelowThresholdIsKept() {
+      // Two 200x200 boxes offset by 150 in x: overlap = 50x200 = 10000,
+      // union = 40000+40000-10000 = 70000, IoU ≈ 0.143 — well below 0.3.
+      var a = det(0, 0, 200, 200, 0.9f, OnnxLayoutDetector.CLASS_FIGURE);
+      var b = det(150, 0, 200, 200, 0.7f, OnnxLayoutDetector.CLASS_FIGURE);
+      float iou = OnnxLayoutDetector.computeIoU(a, b);
+      assertThat(iou).isLessThan(OnnxLayoutDetector.IOU_THRESHOLD);
+
+      List<OnnxLayoutDetector.Detection> result =
+          OnnxLayoutDetector.suppressOverlaps(List.of(a, b));
+      assertThat(result).hasSize(2);
+    }
+
+    @Test
     void nonOverlappingDetectionsAreAllKept() {
       var a = det(0, 0, 100, 100, 0.9f, OnnxLayoutDetector.CLASS_FIGURE);
       var b = det(200, 0, 100, 100, 0.8f, OnnxLayoutDetector.CLASS_TABLE);

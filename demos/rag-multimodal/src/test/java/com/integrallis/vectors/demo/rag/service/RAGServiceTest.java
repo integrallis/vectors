@@ -20,15 +20,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.integrallis.vectors.demo.rag.model.CacheType;
 import com.integrallis.vectors.demo.rag.model.ChatMessage;
 import com.integrallis.vectors.demo.rag.model.LLMConfig;
+import com.integrallis.vectors.server.client.DocumentPage;
 import com.integrallis.vectors.server.client.SearchHit;
 import com.integrallis.vectors.server.client.VectorsServerClient;
 import dev.langchain4j.data.embedding.Embedding;
@@ -79,7 +81,8 @@ class RAGServiceTest {
           .thenReturn(new Response<>(Embedding.from(dummyVector)));
 
       SearchHit textHit =
-          new SearchHit("txt-1", 0.85f, null, "Some text content", Map.of("type", "TEXT", "page", 1));
+          new SearchHit(
+              "txt-1", 0.85f, null, "Some text content", Map.of("type", "TEXT", "page", 1));
       when(client.hybridSearch(
               eq("test-collection"), any(float[].class), anyString(), eq(40), eq("RRF")))
           .thenReturn(List.of(textHit));
@@ -110,7 +113,8 @@ class RAGServiceTest {
           .thenReturn(new Response<>(Embedding.from(dummyVector)));
 
       SearchHit textHit =
-          new SearchHit("txt-1", 0.85f, null, "Some text content", Map.of("type", "TEXT", "page", 1));
+          new SearchHit(
+              "txt-1", 0.85f, null, "Some text content", Map.of("type", "TEXT", "page", 1));
       when(client.hybridSearch(
               eq("test-collection"), any(float[].class), anyString(), eq(40), eq("RRF")))
           .thenReturn(List.of(textHit));
@@ -157,34 +161,16 @@ class RAGServiceTest {
       ChatResponse chatResponse = ChatResponse.builder().aiMessage(aiMessage).build();
       when(chatModel.chat(any(ChatRequest.class))).thenReturn(chatResponse);
 
-      // list_images tool searches for IMAGE chunks
-      SearchHit img1 =
-          new SearchHit(
-              "img-1",
-              0.95f,
-              null,
-              "Revenue pie chart — page 1 (800x600 PNG)",
-              Map.of("type", "IMAGE", "page", 1));
-      SearchHit img2 =
-          new SearchHit(
-              "img-2",
-              0.90f,
-              null,
-              "Stock price chart — page 2 (900x500 PNG)",
-              Map.of("type", "IMAGE", "page", 2));
-      when(client.search(
-              eq("test-collection"),
-              any(float[].class),
-              eq(200),
-              isNull(),
-              eq(Map.of("field", "type", "eq", "IMAGE"))))
-          .thenReturn(List.of(img1, img2));
-
-      // Blob availability check — both images have blobs
-      when(client.getBlob("test-collection", "img-1"))
-          .thenReturn(java.util.Optional.of("fake-blob-1".getBytes()));
-      when(client.getBlob("test-collection", "img-2"))
-          .thenReturn(java.util.Optional.of("fake-blob-2".getBytes()));
+      // list_images tool pages through all documents, filtering for IMAGE type
+      ObjectMapper mapper = new ObjectMapper();
+      ObjectNode meta1 = mapper.createObjectNode().put("type", "IMAGE").put("page", 1);
+      ObjectNode meta2 = mapper.createObjectNode().put("type", "IMAGE").put("page", 2);
+      DocumentPage.Item item1 =
+          new DocumentPage.Item("img-1", null, "Revenue pie chart — page 1 (800x600 PNG)", meta1);
+      DocumentPage.Item item2 =
+          new DocumentPage.Item("img-2", null, "Stock price chart — page 2 (900x500 PNG)", meta2);
+      when(client.previewDocuments(eq("test-collection"), eq(0), eq(500), eq(false)))
+          .thenReturn(new DocumentPage(List.of(item1, item2), 2));
 
       when(costTracker.countTokens(anyString())).thenReturn(10);
 
@@ -196,6 +182,179 @@ class RAGServiceTest {
       assertThat(result.content()).contains("Revenue pie chart");
       assertThat(result.content()).contains("Stock price chart");
       assertThat(result.costUsd()).isEqualTo(0.0);
+      // Assert: getBlob is NOT called for list_images (blobs not needed for listing)
+      verify(client, never()).getBlob(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("list_images — works when blobs are missing (404)")
+    void listImagesWorksWithoutBlobs() {
+      // Arrange
+      float[] dummyVector = new float[] {0.1f, 0.2f, 0.3f};
+      when(embeddingModel.embed(anyString()))
+          .thenReturn(new Response<>(Embedding.from(dummyVector)));
+
+      when(client.hybridSearch(
+              eq("test-collection"), any(float[].class), anyString(), eq(40), eq("RRF")))
+          .thenReturn(List.of());
+
+      dev.langchain4j.agent.tool.ToolExecutionRequest toolCall =
+          dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
+              .name("list_images")
+              .arguments("{}")
+              .build();
+      dev.langchain4j.data.message.AiMessage aiMessage =
+          dev.langchain4j.data.message.AiMessage.from(toolCall);
+      ChatResponse chatResponse = ChatResponse.builder().aiMessage(aiMessage).build();
+      when(chatModel.chat(any(ChatRequest.class))).thenReturn(chatResponse);
+
+      // Images exist in previewDocuments but NO blobs are available
+      ObjectMapper mapper = new ObjectMapper();
+      ObjectNode meta1 = mapper.createObjectNode().put("type", "IMAGE").put("page", 1);
+      ObjectNode meta2 = mapper.createObjectNode().put("type", "IMAGE").put("page", 3);
+      DocumentPage.Item item1 =
+          new DocumentPage.Item("img-1", null, "Chart on page 1 (400x300 PNG)", meta1);
+      DocumentPage.Item item2 =
+          new DocumentPage.Item("img-2", null, "Table on page 3 (600x200 PNG)", meta2);
+      when(client.previewDocuments(eq("test-collection"), eq(0), eq(500), eq(false)))
+          .thenReturn(new DocumentPage(List.of(item1, item2), 2));
+
+      when(costTracker.countTokens(anyString())).thenReturn(10);
+
+      // Act
+      ChatMessage result = ragService.query("list images", CacheType.NONE);
+
+      // Assert: images are listed even without blobs
+      assertThat(result.content()).contains("2 image(s)");
+      assertThat(result.content()).contains("Chart on page 1");
+      assertThat(result.content()).contains("Table on page 3");
+    }
+
+    @Test
+    @DisplayName("list_images — filters TEXT and PAGE_RENDER documents")
+    void listImagesFiltersNonImageTypes() {
+      // Arrange
+      float[] dummyVector = new float[] {0.1f, 0.2f, 0.3f};
+      when(embeddingModel.embed(anyString()))
+          .thenReturn(new Response<>(Embedding.from(dummyVector)));
+
+      when(client.hybridSearch(
+              eq("test-collection"), any(float[].class), anyString(), eq(40), eq("RRF")))
+          .thenReturn(List.of());
+
+      dev.langchain4j.agent.tool.ToolExecutionRequest toolCall =
+          dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
+              .name("list_images")
+              .arguments("{}")
+              .build();
+      dev.langchain4j.data.message.AiMessage aiMessage =
+          dev.langchain4j.data.message.AiMessage.from(toolCall);
+      ChatResponse chatResponse = ChatResponse.builder().aiMessage(aiMessage).build();
+      when(chatModel.chat(any(ChatRequest.class))).thenReturn(chatResponse);
+
+      // Mix of TEXT, IMAGE, and PAGE_RENDER documents
+      ObjectMapper mapper = new ObjectMapper();
+      ObjectNode textMeta = mapper.createObjectNode().put("type", "TEXT").put("page", 1);
+      ObjectNode imgMeta = mapper.createObjectNode().put("type", "IMAGE").put("page", 2);
+      ObjectNode renderMeta = mapper.createObjectNode().put("type", "PAGE_RENDER").put("page", 3);
+      DocumentPage.Item textItem =
+          new DocumentPage.Item("text-1", null, "Some text content", textMeta);
+      DocumentPage.Item imgItem =
+          new DocumentPage.Item("img-1", null, "A chart (500x400 PNG)", imgMeta);
+      DocumentPage.Item renderItem =
+          new DocumentPage.Item("render-1", null, "Page 3 render", renderMeta);
+      when(client.previewDocuments(eq("test-collection"), eq(0), eq(500), eq(false)))
+          .thenReturn(new DocumentPage(List.of(textItem, imgItem, renderItem), 3));
+
+      when(costTracker.countTokens(anyString())).thenReturn(10);
+
+      // Act
+      ChatMessage result = ragService.query("show images", CacheType.NONE);
+
+      // Assert: only the IMAGE document is listed
+      assertThat(result.content()).contains("1 image(s)");
+      assertThat(result.content()).contains("A chart");
+      assertThat(result.content()).doesNotContain("Some text content");
+      assertThat(result.content()).doesNotContain("Page 3 render");
+    }
+
+    @Test
+    @DisplayName("display_image — fetches blob and returns image message")
+    void displayImageFetchesBlobSuccessfully() {
+      // Arrange
+      float[] dummyVector = new float[] {0.1f, 0.2f, 0.3f};
+      when(embeddingModel.embed(anyString()))
+          .thenReturn(new Response<>(Embedding.from(dummyVector)));
+
+      when(client.hybridSearch(
+              eq("test-collection"), any(float[].class), anyString(), eq(40), eq("RRF")))
+          .thenReturn(List.of());
+
+      dev.langchain4j.agent.tool.ToolExecutionRequest toolCall =
+          dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
+              .name("display_image")
+              .arguments("{\"image_number\": 1}")
+              .build();
+      dev.langchain4j.data.message.AiMessage aiMessage =
+          dev.langchain4j.data.message.AiMessage.from(toolCall);
+      ChatResponse chatResponse = ChatResponse.builder().aiMessage(aiMessage).build();
+      when(chatModel.chat(any(ChatRequest.class))).thenReturn(chatResponse);
+
+      ObjectMapper mapper = new ObjectMapper();
+      ObjectNode meta1 = mapper.createObjectNode().put("type", "IMAGE").put("page", 1);
+      DocumentPage.Item item1 =
+          new DocumentPage.Item("img-1", null, "Revenue pie chart (800x600 PNG)", meta1);
+      when(client.previewDocuments(eq("test-collection"), eq(0), eq(500), eq(false)))
+          .thenReturn(new DocumentPage(List.of(item1), 1));
+
+      byte[] fakeBlob = "fake-image-data".getBytes();
+      when(client.getBlob("test-collection", "img-1")).thenReturn(java.util.Optional.of(fakeBlob));
+
+      // Act
+      ChatMessage result = ragService.query("show image 1", CacheType.NONE);
+
+      // Assert: blob was fetched and image message returned
+      verify(client).getBlob("test-collection", "img-1");
+      assertThat(result.imageBytes()).isNotNull();
+      assertThat(result.imageBytes()).isEqualTo(fakeBlob);
+    }
+
+    @Test
+    @DisplayName("display_image — handles missing blob gracefully")
+    void displayImageHandlesMissingBlob() {
+      // Arrange
+      float[] dummyVector = new float[] {0.1f, 0.2f, 0.3f};
+      when(embeddingModel.embed(anyString()))
+          .thenReturn(new Response<>(Embedding.from(dummyVector)));
+
+      when(client.hybridSearch(
+              eq("test-collection"), any(float[].class), anyString(), eq(40), eq("RRF")))
+          .thenReturn(List.of());
+
+      dev.langchain4j.agent.tool.ToolExecutionRequest toolCall =
+          dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
+              .name("display_image")
+              .arguments("{\"image_number\": 1}")
+              .build();
+      dev.langchain4j.data.message.AiMessage aiMessage =
+          dev.langchain4j.data.message.AiMessage.from(toolCall);
+      ChatResponse chatResponse = ChatResponse.builder().aiMessage(aiMessage).build();
+      when(chatModel.chat(any(ChatRequest.class))).thenReturn(chatResponse);
+
+      ObjectMapper mapper = new ObjectMapper();
+      ObjectNode meta1 = mapper.createObjectNode().put("type", "IMAGE").put("page", 1);
+      DocumentPage.Item item1 = new DocumentPage.Item("img-1", null, "Chart (500x300 PNG)", meta1);
+      when(client.previewDocuments(eq("test-collection"), eq(0), eq(500), eq(false)))
+          .thenReturn(new DocumentPage(List.of(item1), 1));
+
+      // Blob not available (404)
+      when(client.getBlob("test-collection", "img-1")).thenReturn(java.util.Optional.empty());
+
+      // Act
+      ChatMessage result = ragService.query("display image 1", CacheType.NONE);
+
+      // Assert: graceful error message, not a crash
+      assertThat(result.content()).contains("not available");
     }
   }
 
@@ -228,7 +387,8 @@ class RAGServiceTest {
     /** Stubs only the search + LLM parts (caller provides embed stubs separately). */
     private void stubSearchAndLlm() {
       SearchHit textHit =
-          new SearchHit("txt-1", 0.85f, null, "Some text content", Map.of("type", "TEXT", "page", 1));
+          new SearchHit(
+              "txt-1", 0.85f, null, "Some text content", Map.of("type", "TEXT", "page", 1));
       when(client.hybridSearch(
               eq("test-collection"), any(float[].class), anyString(), eq(40), eq("RRF")))
           .thenReturn(List.of(textHit));

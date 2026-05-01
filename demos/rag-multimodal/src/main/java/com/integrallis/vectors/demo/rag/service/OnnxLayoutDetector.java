@@ -312,7 +312,7 @@ public class OnnxLayoutDetector implements AutoCloseable {
     }
 
     // Greedy IoU-based overlap suppression: when two detections overlap significantly
-    // (IoU > 0.5), keep only the higher-confidence one. This handles both containment
+    // (IoU > 0.3), keep only the higher-confidence one. This handles both containment
     // overlaps (aggregate box containing individual charts) and near-duplicate detections.
     List<Detection> suppressed = suppressOverlaps(results);
 
@@ -325,7 +325,7 @@ public class OnnxLayoutDetector implements AutoCloseable {
   }
 
   /** IoU threshold above which the lower-confidence detection is suppressed. */
-  static final float IOU_THRESHOLD = 0.5f;
+  static final float IOU_THRESHOLD = 0.3f;
 
   /**
    * Containment threshold: if the intersection covers this fraction of the smaller detection's
@@ -340,7 +340,7 @@ public class OnnxLayoutDetector implements AutoCloseable {
    * is not overlapping or contained by an already-kept detection. Two overlap criteria:
    *
    * <ul>
-   *   <li><b>IoU &gt; 0.5</b> — near-duplicates (same object detected twice with slight bbox shift)
+   *   <li><b>IoU &gt; 0.3</b> — near-duplicates (same object detected twice with slight bbox shift)
    *   <li><b>IoMin &gt; 0.8</b> — containment (small specific chart inside a large aggregate box)
    * </ul>
    *

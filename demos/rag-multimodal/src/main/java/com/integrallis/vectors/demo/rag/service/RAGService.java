@@ -23,6 +23,7 @@ import com.integrallis.vectors.demo.rag.model.CacheType;
 import com.integrallis.vectors.demo.rag.model.ChatMessage;
 import com.integrallis.vectors.demo.rag.model.LLMConfig;
 import com.integrallis.vectors.demo.rag.model.Reference;
+import com.integrallis.vectors.server.client.DocumentPage;
 import com.integrallis.vectors.server.client.SearchHit;
 import com.integrallis.vectors.server.client.VectorsServerClient;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -36,6 +37,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -100,8 +102,7 @@ public class RAGService {
                   + "Use this when the user wants to see, view, show, or display an image. "
                   + "Provide EITHER image_number (from list_images) OR image_query "
                   + "(a description to search for, e.g. 'Financial Sonar pie chart'). "
-                  + "Do NOT use this when the user asks to describe or analyze "
-                  + "an image's content — for those, answer with text instead.")
+                  + "For describing or analyzing image content, use describe_image instead.")
           .parameters(
               JsonObjectSchema.builder()
                   .addIntegerProperty(
@@ -116,23 +117,51 @@ public class RAGService {
                   .build())
           .build();
 
+  /**
+   * Tool: describes an image's content using the vision model. The LLM calls this when the user
+   * asks to describe, analyze, explain, or interpret what is shown in an image.
+   */
+  private static final ToolSpecification DESCRIBE_IMAGE_TOOL =
+      ToolSpecification.builder()
+          .name("describe_image")
+          .description(
+              "Describes the content of a specific image using AI vision. "
+                  + "Use this when the user asks to describe, analyze, explain, "
+                  + "or interpret what is shown in an image. "
+                  + "Provide EITHER image_number (from list_images) OR image_query.")
+          .parameters(
+              JsonObjectSchema.builder()
+                  .addIntegerProperty(
+                      "image_number",
+                      "The 1-based image number to describe (matches the numbering "
+                          + "from the list_images tool or image metadata list)")
+                  .addStringProperty(
+                      "image_query",
+                      "A text description to search for (e.g. 'Financial Sonar', "
+                          + "'revenue pie chart'). Used when the user refers to an image "
+                          + "by description rather than number.")
+                  .build())
+          .build();
+
   private static final List<ToolSpecification> TOOLS =
-      List.of(LIST_IMAGES_TOOL, DISPLAY_IMAGE_TOOL);
+      List.of(LIST_IMAGES_TOOL, DISPLAY_IMAGE_TOOL, DESCRIBE_IMAGE_TOOL);
 
   private static final String SYSTEM_PROMPT =
       """
       You are a helpful assistant that answers questions based on the provided context \
       from a PDF document. The context includes text and image metadata.
 
-      You have two tools available:
+      You have three tools available:
       - list_images: Call this when the user wants to list, enumerate, or count images/charts.
       - display_image: Call this when the user wants to see/view/display a specific image.
+      - describe_image: Call this when the user asks to describe, analyze, or explain \
+        what is shown in an image. This sends the image to vision AI for analysis.
 
       Guidelines:
       - For text questions, answer directly from the text context.
       - For image listing questions, call the list_images tool.
       - For "show me image N" requests, call the display_image tool.
-      - For questions ABOUT image content, answer from the image metadata in the context.
+      - For "describe image N" or "what is in image N" requests, call the describe_image tool.
       - If the context doesn't contain relevant information, politely say so.
       - Always cite source pages when possible.
       """;
@@ -241,11 +270,24 @@ public class RAGService {
       for (ToolExecutionRequest toolCall : aiMessage.toolExecutionRequests()) {
         String toolName = toolCall.name();
         System.out.println("[TOOL CALL] " + toolName + ": " + toolCall.arguments());
+        ChatMessage toolResult = null;
         if ("list_images".equals(toolName)) {
-          return executeListImages();
+          toolResult = executeListImages();
+        } else if ("display_image".equals(toolName)) {
+          toolResult = executeDisplayImage(toolCall);
+        } else if ("describe_image".equals(toolName)) {
+          toolResult = executeDescribeImage(toolCall);
         }
-        if ("display_image".equals(toolName)) {
-          return executeDisplayImage(toolCall);
+        if (toolResult != null) {
+          // Cache tool-call responses so repeated requests are served from cache
+          if (cacheType == CacheType.LOCAL
+              && toolResult.content() != null
+              && admissionPolicy.test(toolResult.content())) {
+            semanticCache.add(
+                new CacheEntry(queryVector.clone(), toolResult.content(), references));
+            System.out.println("Cached tool response for query: " + userQuery);
+          }
+          return toolResult;
         }
       }
     }
@@ -391,12 +433,11 @@ public class RAGService {
 
   /**
    * Executes the list_images tool call. Fetches all IMAGE chunks from vectors-server, filters to
-   * only those with available blobs (consistent with display_image numbering), and returns a
-   * deterministic, formatted listing. No LLM involvement — no hallucination risk.
+   * and returns a deterministic, formatted listing. No LLM involvement — no hallucination risk.
    */
   private ChatMessage executeListImages() {
     try {
-      List<SearchHit> available = fetchDisplayableImages();
+      List<SearchHit> available = fetchAllImages();
 
       if (available.isEmpty()) {
         return ChatMessage.assistant(
@@ -442,7 +483,7 @@ public class RAGService {
    */
   private ChatMessage executeDisplayImage(ToolExecutionRequest toolCall) {
     try {
-      List<SearchHit> available = fetchDisplayableImages();
+      List<SearchHit> available = fetchAllImages();
 
       if (available.isEmpty()) {
         return ChatMessage.assistant(
@@ -477,6 +518,97 @@ public class RAGService {
       return ChatMessage.assistant(
           "Failed to display image: " + e.getMessage(), 0, 0.0, config.model(), false);
     }
+  }
+
+  /**
+   * Executes the describe_image tool call by fetching the image blob from vectors-server and
+   * sending it to the vision model for analysis.
+   *
+   * @param toolCall the LLM's tool execution request containing image_number or image_query
+   * @return a ChatMessage with the vision model's description of the image
+   */
+  private ChatMessage executeDescribeImage(ToolExecutionRequest toolCall) {
+    try {
+      List<SearchHit> available = fetchAllImages();
+
+      if (available.isEmpty()) {
+        return ChatMessage.assistant(
+            "No images are available in this document.", 0, 0.0, config.model(), false);
+      }
+
+      int imageNumber = resolveImageNumber(toolCall.arguments(), available);
+
+      if (imageNumber < 1 || imageNumber > available.size()) {
+        return ChatMessage.assistant(
+            "Image not found. There are "
+                + available.size()
+                + " images available. Use \"list images\" to see them.",
+            0,
+            0.0,
+            config.model(),
+            false);
+      }
+
+      SearchHit target = available.get(imageNumber - 1);
+      Optional<byte[]> blobOpt = client.getBlob(collectionName, target.id());
+      if (blobOpt.isEmpty()) {
+        return ChatMessage.assistant(
+            "Image " + imageNumber + " data is not available for analysis.",
+            0,
+            0.0,
+            config.model(),
+            false);
+      }
+
+      // Send image to vision model for description
+      byte[] imageData = blobOpt.get();
+      String base64 = java.util.Base64.getEncoder().encodeToString(imageData);
+      String mimeType = detectMimeType(target);
+
+      dev.langchain4j.data.message.ImageContent imageContent =
+          dev.langchain4j.data.message.ImageContent.from(base64, mimeType);
+      dev.langchain4j.data.message.TextContent textContent =
+          dev.langchain4j.data.message.TextContent.from(
+              "Describe this image in detail. What does it show? "
+                  + "If it contains a chart, table, or diagram, explain the data and key takeaways.");
+
+      ChatRequest visionRequest =
+          ChatRequest.builder()
+              .messages(List.of(UserMessage.from(textContent, imageContent)))
+              .build();
+      ChatResponse visionResponse = chatModel.chat(visionRequest);
+      String description = visionResponse.aiMessage().text();
+
+      int tokens =
+          (visionResponse.tokenUsage() != null
+                  && visionResponse.tokenUsage().totalTokenCount() != null)
+              ? visionResponse.tokenUsage().totalTokenCount()
+              : 0;
+      double cost = costTracker.calculateCost(config.provider(), config.model(), tokens);
+
+      String header =
+          "**Image "
+              + imageNumber
+              + "** ("
+              + (target.text() != null ? target.text() : "")
+              + "):\n\n";
+      return ChatMessage.assistant(header + description, tokens, cost, config.model(), false);
+
+    } catch (Exception e) {
+      return ChatMessage.assistant(
+          "Failed to describe image: " + e.getMessage(), 0, 0.0, config.model(), false);
+    }
+  }
+
+  /** Detects the MIME type for an image from its metadata. Falls back to "image/png". */
+  private static String detectMimeType(SearchHit hit) {
+    if (hit.text() != null) {
+      String lower = hit.text().toLowerCase();
+      if (lower.contains("jpg") || lower.contains("jpeg")) return "image/jpeg";
+      if (lower.contains("gif")) return "image/gif";
+      if (lower.contains("webp")) return "image/webp";
+    }
+    return "image/png";
   }
 
   /**
@@ -524,15 +656,26 @@ public class RAGService {
   }
 
   /**
-   * Fetches all IMAGE chunks that have available blobs, sorted by page number then ID. Used by both
-   * list_images and display_image tools to ensure consistent numbering.
+   * Fetches all IMAGE chunks sorted by page number then ID. Uses document pagination (not vector
+   * search) to guarantee all IMAGE chunks are found regardless of how their summaries embed. Used
+   * by both list_images and display_image tools to ensure consistent numbering. Does NOT filter by
+   * blob availability — that check is deferred to display_image when a specific blob is needed.
    */
-  private List<SearchHit> fetchDisplayableImages() {
-    float[] queryVector = embeddingModel.embed("images").content().vector();
-    List<SearchHit> imageHits =
-        new ArrayList<>(
-            client.search(
-                collectionName, queryVector, 200, null, Map.of("field", "type", "eq", "IMAGE")));
+  private List<SearchHit> fetchAllImages() {
+    List<SearchHit> imageHits = new ArrayList<>();
+    int offset = 0;
+    int pageSize = 500;
+    while (true) {
+      DocumentPage page = client.previewDocuments(collectionName, offset, pageSize, false);
+      for (DocumentPage.Item item : page.items()) {
+        if (isImageType(item)) {
+          Map<String, Object> meta = jsonNodeToMap(item.metadata());
+          imageHits.add(new SearchHit(item.id(), 0f, null, item.text(), meta));
+        }
+      }
+      if (page.items().size() < pageSize) break;
+      offset += pageSize;
+    }
 
     // Sort by page number then ID for deterministic ordering
     imageHits.sort(
@@ -543,19 +686,35 @@ public class RAGService {
           return a.id().compareTo(b.id());
         });
 
-    // Filter to only images with available blobs
-    List<SearchHit> displayable = new ArrayList<>();
-    for (SearchHit hit : imageHits) {
-      try {
-        Optional<byte[]> blobOpt = client.getBlob(collectionName, hit.id());
-        if (blobOpt.isPresent() && blobOpt.get().length > 0) {
-          displayable.add(hit);
-        }
-      } catch (Exception e) {
-        // Skip images whose blobs can't be fetched
+    return imageHits;
+  }
+
+  /** Returns true if the document item has metadata type "IMAGE". */
+  private static boolean isImageType(DocumentPage.Item item) {
+    JsonNode metadata = item.metadata();
+    if (metadata == null || !metadata.has("type")) return false;
+    return "IMAGE".equals(metadata.get("type").asText());
+  }
+
+  /** Converts a Jackson JsonNode to a Map for SearchHit compatibility. */
+  private static Map<String, Object> jsonNodeToMap(JsonNode node) {
+    if (node == null || node.isNull()) return Map.of();
+    Map<String, Object> map = new HashMap<>();
+    for (Map.Entry<String, JsonNode> entry : node.properties()) {
+      JsonNode value = entry.getValue();
+      if (value.isInt()) {
+        map.put(entry.getKey(), value.intValue());
+      } else if (value.isLong()) {
+        map.put(entry.getKey(), value.longValue());
+      } else if (value.isDouble() || value.isFloat()) {
+        map.put(entry.getKey(), value.doubleValue());
+      } else if (value.isBoolean()) {
+        map.put(entry.getKey(), value.booleanValue());
+      } else {
+        map.put(entry.getKey(), value.asText());
       }
     }
-    return displayable;
+    return map;
   }
 
   /**
