@@ -16,7 +16,7 @@
 package com.integrallis.vectors.studio.web.routing;
 
 import com.integrallis.vectors.studio.core.StudioSession;
-import com.integrallis.vectors.studio.core.search.DocumentView;
+import com.integrallis.vectors.studio.core.search.DocumentPageView;
 import com.integrallis.vectors.studio.web.view.ViewRenderer;
 import io.helidon.http.Status;
 import io.helidon.webserver.http.HttpRules;
@@ -24,7 +24,6 @@ import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /** Per-collection overview + paginated preview fragment. */
@@ -49,10 +48,8 @@ public final class CollectionRoutes implements HttpService {
     String name = req.path().pathParameters().get("name");
     try {
       var summary = session.backend().describe(name);
-      List<DocumentView> sample = session.backend().previewDocuments(name, 0, 25);
       Map<String, Object> ctx = new HashMap<>();
       ctx.put("summary", summary);
-      ctx.put("sample", sample);
       renderer.render(res, "collection.jte", ctx);
     } catch (IllegalArgumentException e) {
       res.status(Status.NOT_FOUND_404).send("collection not found: " + name);
@@ -63,8 +60,17 @@ public final class CollectionRoutes implements HttpService {
     String name = req.path().pathParameters().get("name");
     int offset = req.query().first("offset").asOptional().map(Integer::parseInt).orElse(0);
     int limit = req.query().first("limit").asOptional().map(Integer::parseInt).orElse(25);
-    List<DocumentView> page = session.backend().previewDocuments(name, offset, limit);
-    Map<String, Object> ctx = Map.of("name", name, "page", page, "offset", offset, "limit", limit);
+    if (limit < 1) limit = 1;
+    if (limit > 200) limit = 200;
+    if (offset < 0) offset = 0;
+    DocumentPageView page = session.backend().documentPage(name, offset, limit);
+    Map<String, Object> ctx =
+        Map.of(
+            "name", name,
+            "page", page.items(),
+            "offset", offset,
+            "limit", limit,
+            "total", page.total());
     renderer.renderFragment(res, Status.OK_200, "partials/documentList.jte", ctx);
   }
 }

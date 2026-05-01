@@ -11,6 +11,7 @@ val langchain4jVersion = "1.13.1"
 
 dependencies {
     implementation(project(":vectors-studio-core"))
+    implementation(project(":vectors-studio-sidecart"))
     implementation(project(":vectors-db"))
     implementation(project(":vectors-server-client"))
 

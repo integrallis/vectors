@@ -82,7 +82,7 @@ public final class StudioServer implements Callable<Integer> {
   public static StudioServerHandle start(StudioConfig config) {
     Objects.requireNonNull(config, "config");
     ProjectionJobManager jobs = new ProjectionJobManager();
-    StudioRouting routing = new StudioRouting(config.session(), jobs);
+    StudioRouting routing = new StudioRouting(config.session(), jobs, config.sidecart());
     WebServer server =
         WebServer.builder().port(config.port()).routing(routing::apply).build().start();
     return new StudioServerHandle(server, config.session(), jobs);

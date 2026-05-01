@@ -17,11 +17,13 @@ UI-agnostic domain core for **Vectors Studio** — backend SPI, dimensionality-r
 
 ## Key Types
 
-- `StudioBackend` (sealed): `listCollections()`, `describe(name)`, `search(name, SearchSpec)`, `getDocument(name, id)`, `previewDocuments(name, offset, limit)`, `vectorBatch(name, ids)`, `streamAllVectors(name, sink, progress)`, `commit(name)`, `close()`
+- `StudioBackend` (sealed): `listCollections()`, `describe(name)`, `search(name, SearchSpec)`, `getDocument(name, id)`, `getBlob(name, id)`, `previewDocuments(name, offset, limit)`, `documentPage(name, offset, limit)`, `vectorBatch(name, ids)`, `streamAllVectors(name, sink, progress)`, `commit(name)`, `deleteCollection(name)`, `close()`
 - `EmbeddedStudioBackend.open(Path dataDir)` / `RemoteStudioBackend.open(ConnectionConfig.Remote)`
 - `ConnectionConfig` (sealed): `Embedded(Path dataDir)`, `Remote(URI baseUrl, String token, Duration timeout)`
 - `CollectionSummary` — name, dimension, metric, indexType, size, indexParams
 - `SearchSpec`, `SearchHit`, `DocumentView` — transport-agnostic search records
+- `DocumentPageView(items, total)` — atomic page + total returned by `documentPage`
+- `ContentKind` — enum `TEXT / JSON / IMAGE / AUDIO / BINARY / EMPTY` with `detect(DocumentView)` for type-aware viewer dispatch
 - `Projection` — `run(float[][] data, ProgressListener listener)` returning `ProjectionResult`
 - `ProjectionAlgorithm` — enum `PCA`, `TSNE`, `UMAP`
 - `ProjectionParams` (sealed): `PcaParams(components, center, whiten)`, `TsneParams(perplexity, learningRate, iterations, seed)`, `UmapParams(neighbors, minDist, iterations, seed)`

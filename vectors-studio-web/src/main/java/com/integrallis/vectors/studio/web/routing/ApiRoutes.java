@@ -32,6 +32,8 @@ import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
 import io.helidon.webserver.sse.SseSink;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +57,10 @@ public final class ApiRoutes implements HttpService {
     rules
         .post("/api/projections", this::submit)
         .get("/api/projections/{id}/events", this::events)
-        .delete("/api/projections/{id}", this::cancel);
+        .delete("/api/projections/{id}", this::cancel)
+        .get("/api/collections/{name}/tensors.bytes", this::tensors)
+        .get("/api/collections/{name}/metadata.tsv", this::metadata)
+        .get("/api/collections/{name}/projector-config", this::projectorConfig);
   }
 
   private void submit(ServerRequest req, ServerResponse res) {
@@ -159,6 +164,83 @@ public final class ApiRoutes implements HttpService {
     String id = req.path().pathParameters().get("id");
     boolean ok = jobs.cancel(id);
     res.status(ok ? Status.OK_200 : Status.NOT_FOUND_404).send();
+  }
+
+  /**
+   * Streams all vectors as raw little-endian Float32 binary for the TensorFlow Embedding Projector.
+   */
+  private void tensors(ServerRequest req, ServerResponse res) {
+    try {
+      String name = req.path().pathParameters().get("name");
+      var summary = session.backend().describe(name);
+      int dim = summary.dimension();
+      List<float[]> rows = new ArrayList<>();
+      session.backend().streamAllVectors(name, (id, v) -> rows.add(v), null);
+      ByteBuffer buf = ByteBuffer.allocate(rows.size() * dim * Float.BYTES);
+      buf.order(ByteOrder.LITTLE_ENDIAN);
+      for (float[] vec : rows) {
+        for (float v : vec) {
+          buf.putFloat(v);
+        }
+      }
+      res.headers().set(HeaderNames.CONTENT_TYPE, "application/octet-stream");
+      res.send(buf.array());
+    } catch (Exception e) {
+      res.status(Status.INTERNAL_SERVER_ERROR_500).send(String.valueOf(e.getMessage()));
+    }
+  }
+
+  /** Streams document IDs and text snippets as TSV for the TensorFlow Embedding Projector. */
+  private void metadata(ServerRequest req, ServerResponse res) {
+    try {
+      String name = req.path().pathParameters().get("name");
+      List<String> ids = new ArrayList<>();
+      session.backend().streamAllVectors(name, (id, v) -> ids.add(id), null);
+      StringBuilder tsv = new StringBuilder();
+      tsv.append("id\ttext\n");
+      for (String id : ids) {
+        var doc = session.backend().getDocument(name, id);
+        String text = "";
+        if (doc != null && doc.text() != null && !doc.text().isBlank()) {
+          text = doc.text().replaceAll("[\\t\\n\\r]", " ");
+          if (text.length() > 120) {
+            text = text.substring(0, 120) + "…";
+          }
+        }
+        tsv.append(id).append('\t').append(text).append('\n');
+      }
+      res.headers().set(HeaderNames.CONTENT_TYPE, "text/tab-separated-values; charset=utf-8");
+      res.send(tsv.toString());
+    } catch (Exception e) {
+      res.status(Status.INTERNAL_SERVER_ERROR_500).send(String.valueOf(e.getMessage()));
+    }
+  }
+
+  /** Returns the TensorFlow Embedding Projector config JSON for a collection. */
+  private void projectorConfig(ServerRequest req, ServerResponse res) {
+    try {
+      String name = req.path().pathParameters().get("name");
+      var summary = session.backend().describe(name);
+      Map<String, Object> config =
+          Map.of(
+              "embeddings",
+              List.of(
+                  Map.of(
+                      "tensorName",
+                      name,
+                      "tensorShape",
+                      List.of(summary.size(), summary.dimension()),
+                      "tensorPath",
+                      "/api/collections/" + name + "/tensors.bytes",
+                      "metadataPath",
+                      "/api/collections/" + name + "/metadata.tsv")),
+              "modelCheckpointPath",
+              "vectors-studio");
+      res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
+      res.send(MAPPER.writeValueAsBytes(config));
+    } catch (Exception e) {
+      res.status(Status.INTERNAL_SERVER_ERROR_500).send(String.valueOf(e.getMessage()));
+    }
   }
 
   private static ProjectionParams defaultParams(ProjectionAlgorithm a, int dims) {

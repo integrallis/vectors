@@ -18,6 +18,7 @@ package com.integrallis.vectors.studio.web.routing;
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.core.connection.CollectionSummary;
 import com.integrallis.vectors.studio.web.view.ViewRenderer;
+import io.helidon.http.Status;
 import io.helidon.webserver.http.HttpRules;
 import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
@@ -25,7 +26,7 @@ import io.helidon.webserver.http.ServerResponse;
 import java.util.List;
 import java.util.Map;
 
-/** Home/collections-list landing page. */
+/** Home/collections-list landing page plus collection-level destructive actions. */
 public final class HomeRoutes implements HttpService {
 
   private final StudioSession session;
@@ -38,7 +39,10 @@ public final class HomeRoutes implements HttpService {
 
   @Override
   public void routing(HttpRules rules) {
-    rules.get("/", this::home).get("/collections", this::collections);
+    rules
+        .get("/", this::home)
+        .get("/collections", this::collections)
+        .delete("/collections/{name}", this::deleteCollection);
   }
 
   private void home(ServerRequest req, ServerResponse res) {
@@ -49,5 +53,20 @@ public final class HomeRoutes implements HttpService {
   private void collections(ServerRequest req, ServerResponse res) {
     List<CollectionSummary> all = session.backend().listCollections();
     renderer.render(res, "collections.jte", Map.of("collections", all));
+  }
+
+  private void deleteCollection(ServerRequest req, ServerResponse res) {
+    String name = req.path().pathParameters().get("name");
+    try {
+      session.backend().deleteCollection(name);
+    } catch (IllegalArgumentException e) {
+      res.status(Status.NOT_FOUND_404).send("collection not found: " + name);
+      return;
+    } catch (RuntimeException e) {
+      res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+      return;
+    }
+    // HTMX swap-outerHTML on the row: empty body removes the <tr>.
+    res.status(Status.OK_200).header("Content-Type", "text/html; charset=utf-8").send("");
   }
 }

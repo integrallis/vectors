@@ -24,12 +24,14 @@ CLI flags: `--connection` (required, `embedded:/path` or `http(s)://host:port`),
 | Method | Path                                              | Source              | Purpose                                                |
 | ------ | ------------------------------------------------- | ------------------- | ------------------------------------------------------ |
 | GET    | `/`                                               | `HomeRoutes`        | Home page (collection cards)                           |
-| GET    | `/collections`                                    | `HomeRoutes`        | Full collections list                                  |
+| GET    | `/collections`                                    | `HomeRoutes`        | Full collections list (with delete-collection actions) |
+| DELETE | `/collections/{name}`                             | `HomeRoutes`        | Delete a collection (HTMX-driven, returns empty body)  |
 | GET    | `/collections/{name}`                             | `CollectionRoutes`  | Collection overview + first preview page               |
-| GET    | `/collections/{name}/preview?offset&limit`        | `CollectionRoutes`  | Paginated preview fragment (HTMX)                      |
+| GET    | `/collections/{name}/preview?offset&limit`        | `CollectionRoutes`  | Paginated preview fragment (HTMX) with total + page-size selector |
 | GET    | `/collections/{name}/search`                      | `SearchRoutes`      | Search form                                            |
 | POST   | `/collections/{name}/search`                      | `SearchRoutes`      | Run search (form-encoded; HTMX-aware fragment vs page) |
-| GET    | `/collections/{name}/documents/{id}`              | `DocumentRoutes`    | Document inspector                                     |
+| GET    | `/collections/{name}/documents/{id}`              | `DocumentRoutes`    | Document inspector with kind-aware viewer              |
+| GET    | `/collections/{name}/blobs/{id}`                  | `BlobRoutes`        | Streams document blob (sidecart-first, then backend); content-type sniffed |
 | GET    | `/collections/{name}/projector`                   | `ProjectorRoutes`   | 3D projector page (Three.js island)                    |
 | GET    | `/collections/{name}/recommend`                   | `RecommenderRoutes` | Heuristic recommendation page                          |
 | GET    | `/collections/{name}/recommend/explain`           | `RecommenderRoutes` | LLM-enriched explanation fragment (HTMX)               |
@@ -42,7 +44,9 @@ CLI flags: `--connection` (required, `embedded:/path` or `http(s)://host:port`),
 ## Key Types
 
 - `StudioServer` — PicoCLI command and programmatic entry (`start(StudioConfig)` returns `StudioServerHandle`)
-- `StudioConfig(int port, StudioSession session)` — record; `DEFAULT_PORT = 8288`
+- `StudioConfig(int port, StudioSession session, SidecartRegistry sidecart)` — record; `DEFAULT_PORT = 8288`. A 2-arg constructor defaults the registry to empty.
+- `BlobRoutes` — sidecart-first blob serving with magic-byte content-type sniffing and metadata-driven MIME hints
+- `TemplateSupport` — JTE-callable helpers (`truncate`, `prettyJson`, `pageCount`, `currentPage`)
 - `StudioServerHandle` — `port()`, `stop()`
 - `StudioRouting` — assembles every route, the JTE engine, and the static-content service
 - `JteEngineFactory` — runtime JTE engine over `templates/` on the classpath (no precompilation)
@@ -58,7 +62,8 @@ CLI flags: `--connection` (required, `embedded:/path` or `http(s)://host:port`),
 - `templates/layout.jte` — page shell (HTMX + Alpine via CDN)
 - `templates/{home,collections,collection,search,document,projector,recommender}.jte`
 - `templates/partials/` — HTMX fragments (`documentList`, `hitsList`, `llmExplanation`, …)
-- `static/studio.css` — minimal stylesheet
+- `static/studio.css` — themed stylesheet (clean-line tokens distilled from the Brex web app, Inter type ramp, brand-green accent)
+- `static/img/{logo.png, favicon*.png, favicon.ico}` — java-vectors brand assets
 - `static/projector.js` — hand-written ES module that imports `three` from a CDN, opens the SSE stream, and renders the projection
 
 ## Testing
@@ -72,7 +77,7 @@ CLI flags: `--connection` (required, `embedded:/path` or `http(s)://host:port`),
 
 ## Dependencies
 
-- `vectors-studio-core`, `vectors-db`, `vectors-server-client`
+- `vectors-studio-core`, `vectors-studio-sidecart`, `vectors-db`, `vectors-server-client`
 - Helidon 4.3.4 — `helidon-webserver`, `helidon-webserver-sse`, `helidon-webserver-static-content`, `helidon-http-media-jackson`
 - Jackson 2.18.2 — `jackson-databind`, `jackson-datatype-jsr310`
 - JTE 3.2.3 — `jte`, `jte-runtime` (runtime template parsing, no Gradle precompilation)

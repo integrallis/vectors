@@ -15,10 +15,12 @@
  */
 package com.integrallis.vectors.studio.core.connection;
 
+import com.integrallis.vectors.studio.core.search.DocumentPageView;
 import com.integrallis.vectors.studio.core.search.DocumentView;
 import com.integrallis.vectors.studio.core.search.SearchHit;
 import com.integrallis.vectors.studio.core.search.SearchSpec;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
 
@@ -42,8 +44,23 @@ public sealed interface StudioBackend extends AutoCloseable
   /** Returns a single document, or {@code null} if unknown. */
   DocumentView getDocument(String name, String id);
 
+  /**
+   * Returns the binary blob associated with a document (e.g. an extracted image), or {@link
+   * Optional#empty()} if no blob is registered for that id. The embedded backend always returns
+   * empty because it does not own the text/blob index; the remote backend proxies to the server's
+   * {@code GET /v1/collections/{name}/blobs/{id}} endpoint.
+   */
+  Optional<byte[]> getBlob(String name, String id);
+
   /** Returns a paginated preview of live documents. */
   List<DocumentView> previewDocuments(String name, int offset, int limit);
+
+  /**
+   * Returns one page of live documents <i>and</i> the collection's live document count, in a single
+   * call. Implementations should resolve both atomically when their underlying transport supports
+   * it (the remote backend's {@code GET /documents} returns both).
+   */
+  DocumentPageView documentPage(String name, int offset, int limit);
 
   /** Bulk fetches raw vectors by id. The returned matrix excludes ids that did not resolve. */
   float[][] vectorBatch(String name, List<String> ids);
@@ -56,6 +73,14 @@ public sealed interface StudioBackend extends AutoCloseable
 
   /** Forces any pending writes to be made visible (no-op for read-only remote backends). */
   void commit(String name);
+
+  /**
+   * Deletes a collection. For remote backends this proxies to the server's {@code DELETE
+   * /v1/collections/{name}} endpoint; for embedded backends it closes the collection and removes it
+   * from the in-process map. The on-disk storage directory is not removed by either implementation
+   * (the embedded backend does not own the directory layout).
+   */
+  void deleteCollection(String name);
 
   @Override
   void close();

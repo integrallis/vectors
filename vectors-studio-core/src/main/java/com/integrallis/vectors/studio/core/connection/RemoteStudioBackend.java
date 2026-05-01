@@ -20,12 +20,14 @@ import com.integrallis.vectors.server.client.DocumentPage;
 import com.integrallis.vectors.server.client.SampleResponse;
 import com.integrallis.vectors.server.client.VectorsBatchResponse;
 import com.integrallis.vectors.server.client.VectorsServerClient;
+import com.integrallis.vectors.studio.core.search.DocumentPageView;
 import com.integrallis.vectors.studio.core.search.DocumentView;
 import com.integrallis.vectors.studio.core.search.SearchHit;
 import com.integrallis.vectors.studio.core.search.SearchSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
 
@@ -85,19 +87,31 @@ public final class RemoteStudioBackend implements StudioBackend {
   }
 
   @Override
+  public void deleteCollection(String name) {
+    client.deleteCollection(name);
+  }
+
+  @Override
   public DocumentView getDocument(String name, String id) {
-    DocumentPage page = client.previewDocuments(name, 0, 1, true);
-    for (DocumentPage.Item it : page.items()) {
-      if (id.equals(it.id())) {
-        return new DocumentView(
-            it.id(), it.vector(), it.text(), MetadataAdapter.fromJsonNode(it.metadata()));
-      }
-    }
-    return null;
+    Optional<DocumentPage.Item> opt = client.getDocument(name, id);
+    if (opt.isEmpty()) return null;
+    DocumentPage.Item it = opt.get();
+    return new DocumentView(
+        it.id(), it.vector(), it.text(), MetadataAdapter.fromJsonNode(it.metadata()));
+  }
+
+  @Override
+  public Optional<byte[]> getBlob(String name, String id) {
+    return client.getBlob(name, id);
   }
 
   @Override
   public List<DocumentView> previewDocuments(String name, int offset, int limit) {
+    return documentPage(name, offset, limit).items();
+  }
+
+  @Override
+  public DocumentPageView documentPage(String name, int offset, int limit) {
     DocumentPage page = client.previewDocuments(name, offset, limit, true);
     List<DocumentView> out = new ArrayList<>(page.items().size());
     for (DocumentPage.Item it : page.items()) {
@@ -105,7 +119,7 @@ public final class RemoteStudioBackend implements StudioBackend {
           new DocumentView(
               it.id(), it.vector(), it.text(), MetadataAdapter.fromJsonNode(it.metadata())));
     }
-    return out;
+    return new DocumentPageView(out, page.total());
   }
 
   @Override

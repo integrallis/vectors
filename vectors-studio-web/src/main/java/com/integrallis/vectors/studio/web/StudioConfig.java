@@ -16,10 +16,21 @@
 package com.integrallis.vectors.studio.web;
 
 import com.integrallis.vectors.studio.core.StudioSession;
+import com.integrallis.vectors.studio.sidecart.SidecartRegistry;
 
-/** Per-instance configuration for the Studio web server. */
-public record StudioConfig(int port, StudioSession session) {
+/**
+ * Per-instance configuration for the Studio web server. {@code sidecart} may be empty; when set, it
+ * lets the web layer resolve image / text / binary payloads from external (sidecart) data sources
+ * keyed by document id, layered on top of whatever the active {@link StudioSession} backend can
+ * already serve.
+ */
+public record StudioConfig(int port, StudioSession session, SidecartRegistry sidecart) {
 
   /** Default listen port (8288, mirroring the {@code vectors-server} convention). */
   public static final int DEFAULT_PORT = 8288;
+
+  /** Convenience constructor — no sidecart bindings configured. */
+  public StudioConfig(int port, StudioSession session) {
+    this(port, session, SidecartRegistry.empty());
+  }
 }

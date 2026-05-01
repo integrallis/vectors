@@ -23,6 +23,7 @@ import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.db.storage.FileFormat;
 import com.integrallis.vectors.db.storage.GenerationDirectory;
 import com.integrallis.vectors.db.storage.Manifest;
+import com.integrallis.vectors.studio.core.search.DocumentPageView;
 import com.integrallis.vectors.studio.core.search.DocumentView;
 import com.integrallis.vectors.studio.core.search.SearchHit;
 import com.integrallis.vectors.studio.core.search.SearchSpec;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
@@ -183,7 +185,18 @@ public final class EmbeddedStudioBackend implements StudioBackend {
   }
 
   @Override
+  public Optional<byte[]> getBlob(String name, String id) {
+    require(name);
+    return Optional.empty();
+  }
+
+  @Override
   public List<DocumentView> previewDocuments(String name, int offset, int limit) {
+    return documentPage(name, offset, limit).items();
+  }
+
+  @Override
+  public DocumentPageView documentPage(String name, int offset, int limit) {
     VectorCollection c = require(name);
     if (offset < 0 || limit <= 0) {
       throw new IllegalArgumentException("offset>=0, limit>0");
@@ -193,7 +206,7 @@ public final class EmbeddedStudioBackend implements StudioBackend {
     int to = Math.min(from + limit, all.size());
     List<DocumentView> out = new ArrayList<>(to - from);
     for (int i = from; i < to; i++) out.add(toView(all.get(i)));
-    return out;
+    return new DocumentPageView(out, all.size());
   }
 
   @Override
@@ -225,6 +238,18 @@ public final class EmbeddedStudioBackend implements StudioBackend {
   @Override
   public void commit(String name) {
     require(name).commit();
+  }
+
+  @Override
+  public void deleteCollection(String name) {
+    VectorCollection c = open.remove(name);
+    createdAt.remove(name);
+    if (c == null) throw new IllegalArgumentException("unknown collection: " + name);
+    try {
+      c.close();
+    } catch (RuntimeException e) {
+      LOG.warn("studio: failed to close removed collection {}: {}", name, e.getMessage());
+    }
   }
 
   @Override
