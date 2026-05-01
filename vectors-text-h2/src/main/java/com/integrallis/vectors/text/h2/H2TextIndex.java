@@ -17,6 +17,8 @@ package com.integrallis.vectors.text.h2;
 
 import com.integrallis.vectors.hybrid.text.TextIndexSpi;
 import com.integrallis.vectors.hybrid.text.TextSearchOutcome;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -68,6 +70,9 @@ public final class H2TextIndex implements TextIndexSpi {
       String jdbcUrl;
       if (dataDir != null) {
         Path dbFile = dataDir.resolve("text-index");
+        // Clean up stale H2 lock/trace files left behind by a prior unclean shutdown.
+        // Without this, H2 may refuse to connect with "connection was not closed" errors.
+        cleanStaleFiles(dbFile);
         jdbcUrl = "jdbc:h2:file:" + dbFile.toAbsolutePath();
         LOG.debug("H2 text index persistent at {}", dbFile);
       } else {
@@ -77,6 +82,26 @@ public final class H2TextIndex implements TextIndexSpi {
       initSchema();
     } catch (SQLException e) {
       throw new IllegalStateException("failed to initialize H2 text index", e);
+    }
+  }
+
+  /**
+   * Removes stale H2 lock and trace files that can prevent reconnection after an unclean shutdown
+   * (e.g. container kill without graceful close). Only deletes these auxiliary files — never the
+   * {@code .mv.db} data file itself.
+   */
+  private static void cleanStaleFiles(Path dbFile) {
+    Path parent = dbFile.getParent();
+    String baseName = dbFile.getFileName().toString();
+    for (String suffix : List.of(".lock.db", ".trace.db")) {
+      Path stale = parent.resolve(baseName + suffix);
+      try {
+        if (Files.deleteIfExists(stale)) {
+          LOG.info("removed stale H2 file: {}", stale);
+        }
+      } catch (IOException e) {
+        LOG.warn("could not remove stale H2 file {}: {}", stale, e.getMessage());
+      }
     }
   }
 
@@ -238,6 +263,17 @@ public final class H2TextIndex implements TextIndexSpi {
       connection.close();
     } catch (SQLException e) {
       LOG.warn("error closing H2 connection", e);
+    }
+  }
+
+  @Override
+  public void drop() {
+    try (Statement stmt = connection.createStatement()) {
+      stmt.execute("DROP ALL OBJECTS DELETE FILES");
+    } catch (SQLException e) {
+      LOG.warn("error dropping H2 database objects", e);
+    } finally {
+      close();
     }
   }
 
