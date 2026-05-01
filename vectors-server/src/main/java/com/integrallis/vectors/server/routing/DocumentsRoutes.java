@@ -22,6 +22,7 @@ import com.integrallis.vectors.hybrid.text.TextIndexSpi;
 import com.integrallis.vectors.hybrid.text.TextIndexSpi.TextDocument;
 import com.integrallis.vectors.server.CollectionRegistry;
 import com.integrallis.vectors.server.dto.DocumentDto;
+import com.integrallis.vectors.server.dto.MetadataCodec;
 import com.integrallis.vectors.server.dto.UpsertDocumentsRequest;
 import com.integrallis.vectors.server.dto.UpsertDocumentsResponse;
 import io.helidon.http.Status;
@@ -41,11 +42,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * HTTP routes for document ingestion and deletion on a collection.
+ * HTTP routes for document ingestion, single-document fetch, and deletion on a collection.
  *
  * <p>{@code POST /v1/collections/{name}/documents} upserts every document in the batch under the
- * collection's per-name write lock and commits a single new generation. {@code DELETE
- * /v1/collections/{name}/documents/{id}} stages a tombstone and commits.
+ * collection's per-name write lock and commits a single new generation. {@code GET
+ * /v1/collections/{name}/documents/{id}} returns the live document by external id (404 if absent).
+ * {@code DELETE /v1/collections/{name}/documents/{id}} stages a tombstone and commits.
  */
 public final class DocumentsRoutes implements HttpService {
 
@@ -64,8 +66,28 @@ public final class DocumentsRoutes implements HttpService {
   public void routing(HttpRules rules) {
     rules
         .post("/v1/collections/{name}/documents", this::upsert)
+        .get("/v1/collections/{name}/documents/{id}", this::getOne)
         .delete("/v1/collections/{name}/documents/{id}", this::delete)
         .post("/v1/collections/{name}/commit", this::commit);
+  }
+
+  private void getOne(ServerRequest req, ServerResponse res) {
+    String name = req.path().pathParameters().get("name");
+    if (!RouteSupport.validateName(name, req, res)) return;
+    String id = req.path().pathParameters().get("id");
+    Optional<VectorCollection> col = registry.get(name);
+    if (col.isEmpty()) {
+      RouteSupport.sendProblem(res, Status.NOT_FOUND_404, "collection not found", name, req);
+      return;
+    }
+    Document d = col.get().get(id);
+    if (d == null) {
+      RouteSupport.sendProblem(res, Status.NOT_FOUND_404, "document not found", id, req);
+      return;
+    }
+    DocumentDto dto =
+        new DocumentDto(d.id(), d.vector(), d.text(), MetadataCodec.toJson(d.metadata()), null);
+    RouteSupport.sendJson(res, Status.OK_200, dto);
   }
 
   /** Maximum documents per upsert batch. Prevents unbounded memory allocation from user input. */

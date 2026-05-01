@@ -176,6 +176,23 @@ public final class VectorsServerClient implements AutoCloseable {
   // --- Document operations ---
 
   /**
+   * Fetch a single live document by id.
+   *
+   * @return the document, or {@link Optional#empty()} if no document with that id exists
+   */
+  public Optional<DocumentPage.Item> getDocument(String collection, String id) {
+    try {
+      HttpResponse<String> res = get("/v1/collections/" + collection + "/documents/" + id);
+      return Optional.of(parseJson(res.body(), DocumentPage.Item.class));
+    } catch (VectorsServerException e) {
+      if (e.statusCode() == 404) {
+        return Optional.empty();
+      }
+      throw e;
+    }
+  }
+
+  /**
    * Upsert documents into a collection.
    *
    * @return number of documents upserted

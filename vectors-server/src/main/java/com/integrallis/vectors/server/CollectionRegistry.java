@@ -265,9 +265,9 @@ public final class CollectionRegistry implements AutoCloseable {
       TextIndexSpi ti = textIndexes.remove(name);
       if (ti != null) {
         try {
-          ti.close();
+          ti.drop();
         } catch (RuntimeException e) {
-          LOG.warn("failed to close text index for '{}': {}", name, e.getMessage());
+          LOG.warn("failed to drop text index for '{}': {}", name, e.getMessage());
         }
       }
       removed.close();

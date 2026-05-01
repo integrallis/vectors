@@ -145,20 +145,20 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
     return switch (similarityFunction) {
       case EUCLIDEAN ->
           ordinal -> {
-        float dist =
-            estimateL2Multi(
-                signCodes[ordinal],
-                magCodes[ordinal],
-                corrections[ordinal],
-                pq.queryBytes(),
-                pq.vl(),
-                pq.widthOver255(),
-                pq.sumQ(),
-                pq.sqrY(),
-                pq.queryNorm(),
-                bits);
-        return 1f / (1f + Math.max(dist, 0f));
-      };
+            float dist =
+                estimateL2Multi(
+                    signCodes[ordinal],
+                    magCodes[ordinal],
+                    corrections[ordinal],
+                    pq.queryBytes(),
+                    pq.vl(),
+                    pq.widthOver255(),
+                    pq.sumQ(),
+                    pq.sqrY(),
+                    pq.queryNorm(),
+                    bits);
+            return 1f / (1f + Math.max(dist, 0f));
+          };
       case DOT_PRODUCT ->
           ordinal -> {
             float dist =

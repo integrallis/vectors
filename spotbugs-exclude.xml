@@ -471,8 +471,12 @@
          Jackson serialization. Fresh instances are constructed per request. -->
     <Match>
         <Or>
+            <Class name="com.integrallis.vectors.server.client.DocumentPage"/>
+            <Class name="com.integrallis.vectors.server.client.DocumentPage$Item"/>
             <Class name="com.integrallis.vectors.server.client.DocumentPayload"/>
+            <Class name="com.integrallis.vectors.server.client.SampleResponse"/>
             <Class name="com.integrallis.vectors.server.client.SearchHit"/>
+            <Class name="com.integrallis.vectors.server.client.VectorsBatchResponse"/>
         </Or>
         <Or>
             <Bug pattern="EI_EXPOSE_REP"/>
@@ -522,9 +526,96 @@
     <Match>
         <Or>
             <Class name="com.integrallis.vectors.server.dto.DocumentDto"/>
+            <Class name="com.integrallis.vectors.server.dto.DocumentPageDto"/>
+            <Class name="com.integrallis.vectors.server.dto.SampleResponseDto"/>
             <Class name="com.integrallis.vectors.server.dto.SearchQuery"/>
             <Class name="com.integrallis.vectors.server.dto.SearchHitDto"/>
             <Class name="com.integrallis.vectors.server.dto.UpsertDocumentsRequest"/>
+            <Class name="com.integrallis.vectors.server.dto.VectorsBatchRequestDto"/>
+            <Class name="com.integrallis.vectors.server.dto.VectorsBatchResponseDto"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-studio-core: DTO/view records expose float[]/Map/List/double[] by reference for
+         zero-copy across the search/projection/metadata boundary. Fresh instances are constructed
+         per query/projection run. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.studio.core.StudioSession"/>
+            <Class name="com.integrallis.vectors.studio.core.search.DocumentPageView"/>
+            <Class name="com.integrallis.vectors.studio.core.search.SearchSpec"/>
+            <Class name="com.integrallis.vectors.studio.core.search.SearchHit"/>
+            <Class name="com.integrallis.vectors.studio.core.search.DocumentView"/>
+            <Class name="com.integrallis.vectors.studio.core.metadata.MetadataSchema"/>
+            <Class name="com.integrallis.vectors.studio.core.projection.ProjectionResult"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-studio-core: LlmRecommender uses a text block with .formatted(); SpotBugs
+         incorrectly flags the text block's embedded newlines as "should use %n". The string is
+         an LLM prompt, not console output — platform line separators are irrelevant. -->
+    <Match>
+        <Class name="com.integrallis.vectors.studio.core.recommender.LlmRecommender"/>
+        <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+    </Match>
+
+    <!-- vectors-studio-web: Records and route handlers store session/config references by
+         reference for zero-copy. Routes are singletons built once at startup; projection
+         events expose float[][] coordinates for SSE serialization without copying. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.studio.web.StudioConfig"/>
+            <Class name="com.integrallis.vectors.studio.web.projection.ProjectionEvent$Progress"/>
+            <Class name="com.integrallis.vectors.studio.web.projection.ProjectionJob"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.ApiRoutes"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.BlobRoutes"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.CollectionRoutes"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.DocumentRoutes"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.HomeRoutes"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.ProjectorRoutes"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.RecommenderRoutes"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.SearchRoutes"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.StudioRouting"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-studio-web: ApiRoutes.submit() uses a seeded Random(0xC0FFEE) for
+         deterministic Fisher-Yates shuffle of sampled vectors — not a security context. -->
+    <Match>
+        <Class name="com.integrallis.vectors.studio.web.routing.ApiRoutes"/>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+
+    <!-- vectors-studio-web: ApiRoutes catch-all Exception in HTTP handlers is standard for
+         web frameworks — converts unexpected errors to 400/500 responses gracefully.
+         The ignored exception in SSE close is harmless (client disconnected). -->
+    <Match>
+        <Class name="com.integrallis.vectors.studio.web.routing.ApiRoutes"/>
+        <Or>
+            <Bug pattern="DE_MIGHT_IGNORE"/>
+            <Bug pattern="REC_CATCH_EXCEPTION"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-studio-sidecart: DTO records expose byte[]/Map by reference for zero-copy.
+         SidecartRecord holds image blobs; SidecartConfig.Http holds header maps.
+         Fresh instances are constructed per request. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.studio.sidecart.SidecartRecord"/>
+            <Class name="com.integrallis.vectors.studio.sidecart.SidecartConfig$Http"/>
         </Or>
         <Or>
             <Bug pattern="EI_EXPOSE_REP"/>

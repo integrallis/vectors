@@ -55,6 +55,9 @@ COPY vectors-vcr-junit5 ./vectors-vcr-junit5
 COPY vectors-vcr-testng ./vectors-vcr-testng
 COPY vectors-vcr-spring-ai ./vectors-vcr-spring-ai
 COPY vectors-vcr-langchain4j ./vectors-vcr-langchain4j
+COPY vectors-studio-core ./vectors-studio-core
+COPY vectors-studio-sidecart ./vectors-studio-sidecart
+COPY vectors-studio-web ./vectors-studio-web
 COPY vectors-server ./vectors-server
 COPY demos ./demos
 COPY docs ./docs

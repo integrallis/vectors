@@ -68,6 +68,15 @@ public interface TextIndexSpi extends AutoCloseable {
   void close();
 
   /**
+   * Permanently destroys this text index, closing the connection and deleting all on-disk files.
+   * After calling this method, the index cannot be reopened. The default implementation delegates
+   * to {@link #close()}.
+   */
+  default void drop() {
+    close();
+  }
+
+  /**
    * A document to index.
    *
    * @param id the document identifier
