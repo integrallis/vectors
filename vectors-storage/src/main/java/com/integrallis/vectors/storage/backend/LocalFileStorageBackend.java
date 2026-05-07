@@ -16,9 +16,12 @@
 package com.integrallis.vectors.storage.backend;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.CRC32;
@@ -55,6 +58,31 @@ public final class LocalFileStorageBackend implements StorageBackend {
     Path target = resolve(key);
     if (!Files.exists(target)) return null;
     return Files.readAllBytes(target);
+  }
+
+  @Override
+  public byte[] getRange(String key, long offset, int length) throws IOException {
+    Path target = resolve(key);
+    if (!Files.exists(target)) return null;
+    long size = Files.size(target);
+    if (offset < 0 || length < 0 || offset + length > size) {
+      throw new IndexOutOfBoundsException(
+          "getRange(" + key + ", offset=" + offset + ", length=" + length + ") size=" + size);
+    }
+    if (length == 0) return new byte[0];
+    byte[] out = new byte[length];
+    ByteBuffer buf = ByteBuffer.wrap(out);
+    try (FileChannel ch = FileChannel.open(target, StandardOpenOption.READ)) {
+      int total = 0;
+      while (total < length) {
+        int n = ch.read(buf, offset + total);
+        if (n < 0) {
+          throw new IOException("unexpected EOF reading " + key + " at offset " + (offset + total));
+        }
+        total += n;
+      }
+    }
+    return out;
   }
 
   @Override

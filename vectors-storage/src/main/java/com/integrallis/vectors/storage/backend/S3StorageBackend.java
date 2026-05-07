@@ -131,6 +131,59 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
   }
 
   @Override
+  public byte[] getRange(String key, long offset, int length) throws IOException {
+    if (offset < 0 || length < 0) {
+      throw new IndexOutOfBoundsException(
+          "getRange(" + key + ", offset=" + offset + ", length=" + length + ")");
+    }
+    if (length == 0) {
+      // Avoid issuing a zero-byte Range request (some S3 implementations reject it).
+      // Still verify the key exists so missing keys return null per the contract.
+      try {
+        s3.headObject(b -> b.bucket(bucket).key(key));
+      } catch (NoSuchKeyException e) {
+        return null;
+      } catch (SdkException e) {
+        throw new IOException("S3 head failed for key: " + key, e);
+      }
+      return new byte[0];
+    }
+    long endInclusive = offset + length - 1L;
+    String range = "bytes=" + offset + "-" + endInclusive;
+    try {
+      byte[] data =
+          s3.getObjectAsBytes(
+                  GetObjectRequest.builder().bucket(bucket).key(key).range(range).build())
+              .asByteArray();
+      if (data.length != length) {
+        // S3 returned fewer bytes than requested → range extended past EOF.
+        throw new IndexOutOfBoundsException(
+            "getRange("
+                + key
+                + ", offset="
+                + offset
+                + ", length="
+                + length
+                + ") returned "
+                + data.length
+                + " bytes (past EOF)");
+      }
+      return data;
+    } catch (NoSuchKeyException e) {
+      return null;
+    } catch (S3Exception e) {
+      if (e.statusCode() == 416) {
+        // 416 Range Not Satisfiable: offset is at or beyond the object size.
+        throw new IndexOutOfBoundsException(
+            "getRange(" + key + ", offset=" + offset + ", length=" + length + ") past EOF");
+      }
+      throw new IOException("S3 getRange failed for key: " + key, e);
+    } catch (SdkException e) {
+      throw new IOException("S3 getRange failed for key: " + key, e);
+    }
+  }
+
+  @Override
   public List<String> list(String prefix) throws IOException {
     try {
       List<String> keys = new ArrayList<>();

@@ -47,6 +47,24 @@ public interface StorageBackend {
   byte[] get(String key) throws IOException;
 
   /**
+   * Returns exactly {@code length} bytes from the value stored under {@code key}, starting at byte
+   * {@code offset}. Used to fetch a single vector ordinal or a sub-slice of a WAL segment without
+   * downloading the full object — the S3 implementation issues an HTTP {@code Range} header so only
+   * the requested bytes traverse the network.
+   *
+   * <ul>
+   *   <li>Returns {@code null} if {@code key} does not exist (mirrors {@link #get}).
+   *   <li>Returns an empty array when {@code length == 0}.
+   *   <li>Throws {@link IndexOutOfBoundsException} if {@code offset < 0}, {@code length < 0}, or
+   *       {@code offset + length} exceeds the stored value size.
+   * </ul>
+   *
+   * @throws IOException on storage failure
+   * @throws IndexOutOfBoundsException if the requested range is invalid for the stored value
+   */
+  byte[] getRange(String key, long offset, int length) throws IOException;
+
+  /**
    * Returns all keys whose string representation starts with {@code prefix}, in undefined order.
    *
    * @throws IOException on storage failure

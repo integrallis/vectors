@@ -49,6 +49,18 @@ public final class HeapStorageBackend implements StorageBackend {
   }
 
   @Override
+  public byte[] getRange(String key, long offset, int length) {
+    byte[] v = store.get(key);
+    if (v == null) return null;
+    if (offset < 0 || length < 0 || offset + length > v.length) {
+      throw new IndexOutOfBoundsException(
+          "getRange(" + key + ", offset=" + offset + ", length=" + length + ") size=" + v.length);
+    }
+    int from = Math.toIntExact(offset);
+    return Arrays.copyOfRange(v, from, from + length);
+  }
+
+  @Override
   public List<String> list(String prefix) {
     List<String> result = new ArrayList<>();
     for (String key : store.keySet()) {

@@ -16,10 +16,12 @@
 package com.integrallis.vectors.storage.backend;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
@@ -150,5 +152,75 @@ class StorageBackendContractTest {
     b.put("key", new byte[] {1, 2, 3});
     b.put("key", new byte[] {9});
     assertThat(b.get("key")).isEqualTo(new byte[] {9});
+  }
+
+  // ─── getRange (§6.1) ──────────────────────────────────────────────────────
+
+  @ParameterizedTest
+  @MethodSource("implementations")
+  void getRange_partialFetchMatchesFullSlice(String type) throws IOException {
+    StorageBackend b = backend(type);
+    byte[] full = new byte[1024];
+    for (int i = 0; i < full.length; i++) full[i] = (byte) (i & 0xFF);
+    b.put("blob", full);
+
+    byte[] slice = b.getRange("blob", 100, 256);
+
+    assertThat(slice).hasSize(256).isEqualTo(Arrays.copyOfRange(full, 100, 356));
+  }
+
+  @ParameterizedTest
+  @MethodSource("implementations")
+  void getRange_offsetZeroLengthEqualsSize_returnsFullValue(String type) throws IOException {
+    StorageBackend b = backend(type);
+    byte[] full = "the quick brown fox".getBytes();
+    b.put("k", full);
+
+    assertThat(b.getRange("k", 0, full.length)).isEqualTo(full);
+  }
+
+  @ParameterizedTest
+  @MethodSource("implementations")
+  void getRange_zeroLengthReturnsEmpty(String type) throws IOException {
+    StorageBackend b = backend(type);
+    b.put("k", new byte[] {1, 2, 3});
+
+    assertThat(b.getRange("k", 1, 0)).isEmpty();
+  }
+
+  @ParameterizedTest
+  @MethodSource("implementations")
+  void getRange_missingKeyReturnsNull(String type) throws IOException {
+    assertThat(backend(type).getRange("ghost", 0, 4)).isNull();
+  }
+
+  @ParameterizedTest
+  @MethodSource("implementations")
+  void getRange_pastEofThrows(String type) throws IOException {
+    StorageBackend b = backend(type);
+    b.put("k", new byte[] {1, 2, 3, 4});
+
+    assertThatThrownBy(() -> b.getRange("k", 2, 5))
+        .isInstanceOf(IndexOutOfBoundsException.class);
+  }
+
+  @ParameterizedTest
+  @MethodSource("implementations")
+  void getRange_negativeOffsetThrows(String type) throws IOException {
+    StorageBackend b = backend(type);
+    b.put("k", new byte[] {1, 2, 3, 4});
+
+    assertThatThrownBy(() -> b.getRange("k", -1, 2))
+        .isInstanceOf(IndexOutOfBoundsException.class);
+  }
+
+  @ParameterizedTest
+  @MethodSource("implementations")
+  void getRange_negativeLengthThrows(String type) throws IOException {
+    StorageBackend b = backend(type);
+    b.put("k", new byte[] {1, 2, 3, 4});
+
+    assertThatThrownBy(() -> b.getRange("k", 0, -1))
+        .isInstanceOf(IndexOutOfBoundsException.class);
   }
 }
