@@ -1,8 +1,13 @@
 # Distributed Vector Database: Design and Development Plan
 
-**Status**: Design Draft (April 2026, revised after competitive-analysis.md §11)
+**Status**: Design Draft (May 2026, revised after Turbopuffer ANN v3 deep-dive — see §16)
 **Author**: java-vectors project
-**Inputs**: `tiered-buoy-architecture.md`, `distributed-vector-search-analysis.md`, `design-strategy.md`, `competitive-analysis.md` §11 (enterprise-pattern adoption) and §12 (GPU roadmap)
+**Inputs**: `tiered-buoy-architecture.md`, `distributed-vector-search-analysis.md`, `design-strategy.md`, `competitive-analysis.md` §11 (enterprise-pattern adoption) and §12 (GPU roadmap), Turbopuffer `docs/architecture` and `blog/ann-v3` (May 2026)
+
+> **Reading order**: §16 is the canonical Turbopuffer mapping and is **authoritative when it
+> conflicts with earlier sections**. The interleaved revisions in §3.1, §6.1, §6.2, §8.5,
+> §8.7, §8.8, and §12 already reflect §16; the rest of the doc is unchanged from the
+> April 2026 draft.
 
 ---
 
@@ -111,13 +116,30 @@ server.
 
 ### 3.1 The Three Algorithmic Layers
 
-**Layer 1 — Global Buoy Index** (always-hot, JVM heap)
+> **§16 alignment note**: Layers 1 and 2 are jointly the "ANN v3 hierarchical centroid
+> tree" of Turbopuffer's design — a single tree with branching factor **100** between
+> levels and **~100 vectors per leaf cluster**. Layer 1 (`BuoyIndex`) is the root of
+> that tree; Layer 2 (`SubBuoyTree`) is the rest of it. They are separate types in the
+> codebase only because Layer 1 has different residency rules (replicated to every node)
+> and a SIMD-optimised single-step routing path. Conceptually they are one structure.
 
-A flat array of K centroids that partitions the entire vector space into Voronoi cells.
-Routes every query to the top-nprobe clusters via a single SIMD batch dot-product.
-At K=1024 and D=128, the full index — centroids + spill map + cluster metadata — is
-**~524 KB**, fitting entirely in L2 cache. SOAR spilling handles Voronoi boundary cases
-with only 5–20% memory overhead.
+**Layer 1 — Global Buoy Index** (always-hot, JVM heap, **root of the centroid tree**)
+
+A flat array of up to K root centroids that partitions the entire vector space into
+Voronoi cells. Routes every query to the top-nprobe clusters via a single SIMD batch
+dot-product. SOAR spilling handles Voronoi boundary cases with only 5–20% memory overhead.
+
+K is chosen so the root level fits in L2 cache. For collections small enough that the
+whole index fits in one level (N ≤ 10K with leaf=100), Layer 2 is a no-op and `BuoyIndex`
+*is* the entire centroid tree. For larger N the tree extends downward through Layer 2
+with the same branching factor of 100. Examples:
+
+| N (vectors) | Tree depth | Leaves | Vectors/leaf | Root size (D=128, RaBitQ) |
+|---|---|---|---|---|
+| 10K | 2 (just BuoyIndex with K=100) | 100 | 100 | 1.6 KB |
+| 1M | 3 (BuoyIndex K=100 + 1 Layer-2 level) | 10K | 100 | 1.6 KB |
+| 100M | 4 (BuoyIndex + 2 Layer-2 levels) | 1M | 100 | 1.6 KB |
+| 10B | 5 (BuoyIndex + 3 Layer-2 levels) | 100M | 100 | 1.6 KB |
 
 > **The T0 global-replication advantage**: Because 1-bit RaBitQ codes (T0) are tiny —
 > 16 MB for 1M 128-dim vectors, 1.6 GB for 1B — they are replicated to **every node**.
@@ -126,7 +148,17 @@ with only 5–20% memory overhead.
 > search latency stays below 20 ms even at 100M+ vectors — the expensive computation
 > never leaves the node that holds the data.
 
-**Layer 2 — Hierarchical Sub-Cluster Tree** (JVM heap, per-cluster sub-buoys)
+> **Compute-bound, not bandwidth-bound** (Turbopuffer ANN v3, May 2026): once T0 is
+> 1-bit-quantised the inner loop reuses each fetched bit ~4× (RaBitQ §3.3.2 of the
+> paper), giving ~64× higher arithmetic intensity than `f16` distance kernels. The
+> bottleneck shifts from DRAM bandwidth to CPU. The JDK-25 Vector API
+> `LongVector.bitCount()` lowers to AVX-512 `VPOPCNTDQ` (1 instruction/cycle pipelined,
+> 3-cycle latency), which is what makes the JVM kernel competitive with native AVX-512.
+> Verification protocol: a JMH microbenchmark and `-XX:+PrintAssembly` confirm the
+> emitted code uses `VPOPCNTDQ`; degraded fallback (AVX2, no popcount) must be detected
+> at startup and surfaced as a metric.
+
+**Layer 2 — Hierarchical Sub-Cluster Tree** (JVM heap, per-cluster sub-buoys, branching=100)
 
 Large clusters are recursively subdivided by `ClusterSplitter` using the Quake cost model:
 
@@ -136,13 +168,25 @@ C_i = A_i × λ(s_i)
 
 where `A_i` is the cluster's measured access frequency and `λ(s_i)` is the profiled median
 scan latency for its size. A cluster splits when `C_i > C_left + C_right + τ` (τ = 250 ns
-default); merges when `C_i + C_j < C_merged + τ`. Splitting uses balanced 2-means; a
-three-phase estimate→verify→commit/rollback cycle prevents premature splits.
+default); merges when `C_i + C_j < C_merged + τ`. Splitting uses balanced k-means with
+k=100; a three-phase estimate→verify→commit/rollback cycle prevents premature splits.
 
-The resulting `SubBuoyTree` is a recursive tree of sub-buoys. At an average branching
-factor of 4 and depth 2, a 1K-cluster root produces ~16K leaf sub-clusters — under 8 MB
-at 128 dims — still fitting in heap. The tree refines the Layer 1 routing from cluster
-granularity down to leaf sub-cluster granularity before dispatching to storage.
+The resulting `SubBuoyTree` is a recursive tree of sub-buoys with **branching factor 100**
+and a leaf-size target of **~100 vectors**. The branching factor matches the ratio between
+adjacent memory tiers (DRAM≈10×–50× larger than L3, SSD≈10×–50× larger than DRAM), which
+keeps each level resident in the cache it can afford to occupy:
+
+```
+Level 0 (root, BuoyIndex)         100 centroids   →  L1/L2 cache
+Level 1                           10K centroids   →  L3 cache (~128 KiB at D=128 RaBitQ)
+Level 2                           1M centroids    →  DRAM    (~16 MiB at D=128 RaBitQ)
+Level 3 (leaves, ~100 vecs each)  100M leaves     →  SSD     (full-precision, paged)
+```
+
+The tree refines Layer 1 routing from root-cluster granularity down to leaf granularity
+before dispatching to storage. Probe budget is **~500 leaves per query** to hit recall
+target (Turbopuffer ANN v3 measured value), which sets the inner-loop bandwidth
+requirement at ~6 MB/level when codes are 1-bit-quantised (vs. ~100 MB/level at f16).
 
 **Layer 3 — Per-Cluster Tiered Storage** (the novel contribution)
 
@@ -177,6 +221,12 @@ that 15% needs T1 and T2 materialised; the other 85% are served from T0 for rout
 T3 for rare full-resolution queries.
 
 ### 3.2 Physical Layout
+
+> The diagram below depicts the **legacy single-level** sizing (`K=1024 @ D=128`,
+> ~524 KB) preserved for the existing `BuoyIndexBenchmark.route_K1024_D128_nprobe32`
+> test fixture. Production deployments use the hierarchical centroid tree from §16.3
+> with branching factor 100 between levels; root level shrinks to ~1.6 KB (RaBitQ-
+> quantised) and additional levels live in `SubBuoyTree` (§8.5).
 
 ```
                          Query
@@ -448,6 +498,21 @@ public interface StorageBackend extends Closeable {
     List<String> list(String prefix) throws IOException;
 
     /**
+     * Partial-object fetch. Returns the byte slice {@code [offset, offset+length)}
+     * of the object at {@code key}. The implementation must use HTTP {@code Range:
+     * bytes=offset-offset+length-1} for S3-class backends so no full object is
+     * downloaded. Required by {@link HyperDoor} t3 reads and by the RaBitQ
+     * confidence-interval rerank loop, which fetches small per-vector slices
+     * scattered across large index objects.
+     *
+     * @throws IOException             on transport error
+     * @throws IndexOutOfBoundsException if {@code offset < 0}, {@code length < 0},
+     *         or {@code offset + length} exceeds the object size
+     * @throws java.util.NoSuchElementException if {@code key} is absent
+     */
+    byte[] getRange(String key, long offset, int length) throws IOException;
+
+    /**
      * Atomic conditional put (compare-and-swap on etag). Returns succeeded=true
      * and newEtag when the stored etag matches expectedEtag (or key is absent and
      * expectedEtag is null). Returns succeeded=false on mismatch.
@@ -461,9 +526,12 @@ public interface StorageBackend extends Closeable {
 ```
 
 Implementations (Phase 1):
-- `HeapStorageBackend` — `ConcurrentHashMap<String,byte[]>`, CRC-less, for tests
-- `LocalFileStorageBackend` — wraps the existing file layout (file path = key)
-- `S3StorageBackend` — lives in `vectors-distributed` (Phase 3, requires AWS SDK)
+- `HeapStorageBackend` — `ConcurrentHashMap<String,byte[]>`, CRC-less, for tests;
+  `getRange` returns `Arrays.copyOfRange`
+- `LocalFileStorageBackend` — wraps the existing file layout (file path = key);
+  `getRange` uses `FileChannel.read(ByteBuffer, position)`
+- `S3StorageBackend` — lives in `vectors-distributed` (Phase 3, requires AWS SDK);
+  `getRange` issues a `GetObjectRequest` with `range("bytes=" + offset + "-" + (offset+length-1))`
 
 **Test class**: `StorageBackendContractTest` (new, `@ParameterizedTest` over `HeapStorageBackend`
 and `LocalFileStorageBackend`, `@Tag("unit")`)
@@ -476,33 +544,92 @@ Acceptance tests (same body for all in-JVM implementations):
 - `conditionalPut_succeedsWhenKeyAbsent` — expectedEtag=null
 - `conditionalPut_failsOnStaleEtag` — returns succeeded=false, data unchanged
 - `conditionalPut_succeedsWithCurrentEtag` — sequential chain of CAS succeeds
+- `getRange_partialFetchMatchesFullSlice` — random offsets/lengths against a 4 MB blob,
+  every slice byte-equal to `Arrays.copyOfRange(get(key), offset, offset+length)`
+- `getRange_zeroLengthReturnsEmpty`
+- `getRange_pastEofThrows` — `offset+length > objectSize` → `IndexOutOfBoundsException`
+- `getRange_missingKeyThrows` — `NoSuchElementException`
 
 **Test class**: `S3StorageBackendTest` (new, `@Tag("integration")` — requires Docker)
 
 Uses a static `LocalStackContainer` (Section 10 pattern). Runs the same contract tests
 against `S3StorageBackend` pointing at LocalStack, plus:
-- `rangedGetObject` — partial byte-range fetch matching `HyperDoor.t3ObjectOffset`
+- `getRange_usesHttpRangeHeader` — captures the actual HTTP request via LocalStack's
+  request log and asserts the `Range: bytes=…` header is present (no full GET fallback)
+- `getRange_concurrent_500requests` — 500 random ranges against a 64 MB blob; every
+  response correct; total bytes transferred < 1 % of full-GET cost
 - `concurrentPuts_noDataloss` — 10 threads × 100 PutObject, all keys readable after
 - `conditionalPut_acrossContainerRestart` — simulates crash + replay; stale ETag rejected
 
-### 6.2 `WriteAheadLog` — sequence-numbered durable journal
+### 6.2 `WriteAheadLog` — sequence-numbered durable journal with namespace prefix layout
 
 Package: `com.integrallis.vectors.storage.wal`
 
+**Per-namespace S3 prefix layout** (Turbopuffer-aligned; canonical reference is §16.2):
+
+```
+{root}/{namespace_id}/
+    wal/
+        000000000001.log        ← closed, indexed (■)
+        000000000002.log        ← closed, indexed (■)
+        000000000003.log        ← closed, NOT YET indexed (◈)
+        000000000004.log        ← active, group-commit buffer; flushed every 1 s
+    index/
+        000000000001.idx        ← immutable run produced by the Indexer for wal/0001
+        000000000002.idx
+        ...
+    manifest.json               ← which wal/* are ■ vs ◈; current index epoch
+```
+
+A query node scans the **unindexed tail** (◈ files) exhaustively for strong consistency,
+and uses `index/*` for everything older (eventual consistency over the indexed prefix).
+This is the same compute-storage split Turbopuffer documents in `docs/architecture`.
+
 ```java
 public interface WriteAheadLog extends Closeable {
+    /**
+     * Append an entry. The call returns the assigned sequence number once the
+     * entry is durable (its enclosing WAL object has been PutObject'd successfully
+     * — at-most-once semantics for the caller). Concurrent {@code append} calls
+     * within the configured group-commit interval are coalesced into a single
+     * WAL object to amortise S3 PUT cost; see {@link #groupCommitInterval()}.
+     */
     long append(byte[] entry) throws IOException;          // returns seq number
     Stream<WalEntry> readFrom(long fromSeqInclusive) throws IOException;
     long lastSequenceNumber();                             // -1 if empty
+
+    /** The unindexed-tail seq numbers (◈). A query node must scan these for strong consistency. */
+    long[] unindexedTailSeqs();
+
+    /** Mark a closed WAL object as indexed (■). Called by the Indexer after publishing the run. */
+    void markIndexed(long seqStartInclusive, long seqEndInclusive) throws IOException;
+
     void flush() throws IOException;
+    Duration groupCommitInterval();                        // default 1 s
 
     record WalEntry(long sequenceNumber, byte[] data) {}
 }
 ```
 
-Implementation: `SegmentedWriteAheadLog` — entries stored in fixed-size segment files
-(default 64 MB) on any `StorageBackend`. Each entry has a 4-byte length prefix + 4-byte
-CRC32. A closed segment is immutable. Active segment accepts appends.
+Implementation: `SegmentedWriteAheadLog` — entries are buffered in memory and the active
+segment is flushed to the backend exactly once per **group-commit interval** (default 1 s,
+matching Turbopuffer's per-namespace WAL cadence). Each closed segment is **capped at
+512 MB** (Turbopuffer's documented per-write batch limit); writes that would overflow
+trigger an early flush and start a new segment. Each entry has a 4-byte length prefix +
+4-byte CRC32. A closed segment is immutable.
+
+Constructor parameters:
+- `groupCommitInterval` (default `Duration.ofSeconds(1)`) — sets the maximum write-side
+  latency; smaller values give faster durability acks at higher PUT cost.
+- `maxSegmentBytes` (default `512 * 1024 * 1024` = 512 MB)
+- `maxEntriesPerSegment` (default `Integer.MAX_VALUE`)
+
+Group-commit semantics: a single `Thread.sleep(groupCommitInterval)` worker drains the
+in-memory queue, builds one WAL object, calls `StorageBackend.put`, and only then
+releases the awaiting `append` callers. With one writer per namespace and 1 s cadence
+this matches Turbopuffer's documented **10k writes/s/namespace ceiling**: each appended
+entry is small (≤ a few KB), so 10k entries fit in one ~1–10 MB WAL object well below
+the 512 MB cap.
 
 **Test class**: `WriteAheadLogTest` (new, `@Tag("unit")`)
 
@@ -511,17 +638,28 @@ Acceptance tests:
 - `sequenceNumbersStrictlyMonotonic`
 - `readFromZeroReturnsAll`
 - `readFromMidSeqSkipsEarlierEntries`
-- `segmentRolloverCreatesNewSegment` — write > 64 MB, verify two segment files appear
+- `segmentRolloverCreatesNewSegment` — write > 512 MB, verify two segment files appear
 - `crcCorruptionDetectedOnRead` — flip a byte in a closed segment → IOException
 - `emptyLogReturnsMinusOneSequence`
+- `groupCommit_concurrent10kAppendsCoalesceIntoOneObject` — 10 000 vthreads all calling
+  `append` within a 1 s window → exactly one PUT against the underlying `StorageBackend`
+- `groupCommit_overflowingBatchTriggersEarlyFlush` — entries summing to > 512 MB within
+  one interval → two PUTs, both within their 512 MB caps
+- `unindexedTailSeqs_includesActiveAndUnmarked` — initial state lists all closed-but-
+  unmarked segments + the active segment's seq range
+- `markIndexed_movesSegmentOutOfTail` — after `markIndexed(1,1000)`, those seqs no
+  longer appear in `unindexedTailSeqs`
 
 **Benchmark class**: `WriteAheadLogBenchmark` (`vectors-bench`)
 
 | Benchmark | Entry size | Backend | Target |
 |-----------|-----------|---------|--------|
-| `append_1KB` | 1 KB | LocalFile | ≥ 50K appends/s |
-| `append_64KB` | 64 KB | LocalFile | ≥ 5K appends/s |
-| `scan_100K_entries` | 1 KB | LocalFile | ≥ 500K entries/s |
+| `append_1KB_p50_1node_1ns` | 1 KB | LocalFile | p50 ≤ 5 ms (sub-1-s commit) |
+| `append_500KB_p50_1node_1ns` | 500 KB | LocalFile | p50 ≤ 50 ms |
+| `append_500KB_p50_1node_1ns_S3` | 500 KB | LocalStack S3 | p50 ≤ 285 ms (Turbopuffer parity) |
+| `throughput_10k_appends_1ns` | 1 KB | LocalFile, vthreads | ≥ 10 000 appends/s/namespace |
+| `throughput_10k_appends_1ns_S3` | 1 KB | LocalStack S3, vthreads | ≥ 10 000 appends/s/namespace |
+| `scan_100K_entries` | 1 KB | LocalFile | ≥ 500 000 entries/s |
 
 ---
 
@@ -794,17 +932,37 @@ public final class ClusterSplitter {
 ```java
 /**
  * Recursive tree of sub-buoys produced by ClusterSplitter. The root is the global
- * BuoyIndex (K clusters). Each cluster may be subdivided into sub-clusters, each
- * with its own sub-buoy, forming a tree of depth up to MAX_DEPTH (default 3).
+ * BuoyIndex (its centroids are the level-0 nodes of this tree). Each interior
+ * node may be subdivided into up to BRANCHING_FACTOR children, forming a tree of
+ * depth up to MAX_DEPTH (default 4). The tree IS the centroid hierarchy; see
+ * §3.1 and §16 for the rationale.
  *
- * Memory: at branching factor 4, depth 2, K=1024 → ~16K sub-buoys → ~8 MB at D=128.
- * Always resident in JVM heap. Thread-safe for concurrent reads; writes lock the tree.
+ * Default shape (Turbopuffer ANN v3 alignment):
+ *   BRANCHING_FACTOR = 100  — matches the DRAM/SSD size ratio (10×–50×) so each
+ *                              level naturally lives in the next memory tier
+ *   LEAF_TARGET_VECS = 100  — leaf clusters hold ~100 vectors each
+ *   MAX_DEPTH        = 4    — max 100^4 = 100M leaves → 10B vectors
  *
- * Gossip note: the full tree is encoded to ~8 MB and gossip'd among nodes.
- * Only the diff (new/removed nodes) is gossiped after each split/merge.
+ * Memory at D=128, RaBitQ-quantised centroids (1 bit/dim → 16 B/centroid):
+ *   level 0: 100        centroids → 1.6 KB    (L1 cache)
+ *   level 1: 10 000     centroids → 160 KB    (L3 cache)
+ *   level 2: 1 000 000  centroids → 16 MB     (DRAM)
+ *   level 3: 100M       leaves    → SSD-resident only when materialised at T1
+ *
+ * Always resident in JVM heap up through the deepest level that fits. Thread-safe
+ * for concurrent reads; writes lock the affected sub-tree only (not the root).
+ *
+ * Gossip note: the full tree is encoded as a structural skeleton (parent/child
+ * pointers + centroid bytes) and gossip'd among nodes; for a 100M-leaf tree this
+ * is ~16 MB. Only the diff (new/removed nodes) is gossip'd after each split/merge.
  */
 public final class SubBuoyTree {
+    public static final int   DEFAULT_BRANCHING_FACTOR = 100;
+    public static final int   DEFAULT_LEAF_TARGET_VECS = 100;
+    public static final int   DEFAULT_MAX_DEPTH        = 4;
+
     public BuoyIndex globalBuoyIndex();
+    public int branchingFactor();
     public int leafCount();
     public int depth();              // current max depth
 
@@ -812,15 +970,18 @@ public final class SubBuoyTree {
      * Refine an initial set of cluster ids (from BuoyIndex.route) to leaf
      * sub-cluster ids by descending the sub-buoy tree. Returns at most maxLeaves
      * leaf ids, still sorted by ascending distance to query.
+     *
+     * Default probe budget: ~500 leaves (Turbopuffer ANN v3 measured value
+     * for 90–95 % recall@10 across {@code D=1024} workloads; smaller D can
+     * use proportionally fewer probes).
      */
     public int[] refineToLeaves(int[] clusterIds, float[] query, int maxLeaves);
 
-    /** Register a split. Adds left/right as children of clusterId; removes clusterId leaf. */
-    public void split(int clusterId, ClusterPartition left, ClusterPartition right,
-                      float[] subBuoy);
+    /** Register a k-way split. Adds {@code children} as children of clusterId; removes clusterId leaf. */
+    public void split(int clusterId, List<ClusterPartition> children, float[][] subBuoys);
 
-    /** Register a merge. Removes clusterIdA and clusterIdB; adds merged as a new leaf. */
-    public void merge(int clusterIdA, int clusterIdB, ClusterPartition merged);
+    /** Register a merge. Removes the listed clusterIds; adds {@code merged} as a new leaf. */
+    public void merge(int[] clusterIds, ClusterPartition merged);
 
     /** Encode the full tree (global buoy index + all sub-buoy nodes) for gossip/persistence. */
     public byte[] encode();
@@ -830,11 +991,14 @@ public final class SubBuoyTree {
 
 **Test class**: `SubBuoyTreeTest` (`@Tag("unit")`)
 - `flatTreeRoutesIdenticallyToBuoyIndex` — no splits, `refineToLeaves` == `BuoyIndex.route`
-- `splitThenRefine_routesToCorrectSubCluster`
+- `splitThenRefine_routesToCorrectSubCluster` — split with k=100 children (not 2)
 - `mergeThenRefine_treatedAsSingleLeaf`
 - `depthLimitEnforced` — split attempt beyond MAX_DEPTH throws `IllegalStateException`
 - `encodeDecodeRoundTrip` — all sub-buoy nodes and global index bit-identical after decode
 - `concurrentReadsDuringWrite` — reads return consistent snapshot; no ConcurrentModificationException
+- `levelMemoryBudget_atDepth4_undersizedForL3` — at D=128 RaBitQ, levels 0–1 fit ≤ 200 KB
+  (must remain L3-resident); level 2 ≤ 20 MB (DRAM); the test hard-fails if a future
+  tweak inflates these past their tier budgets
 
 ### 8.6 `HyperDoor` — cross-tier link record
 
@@ -878,17 +1042,38 @@ public record HyperDoor(
 ```java
 /**
  * Per-cluster tiered storage with four quantization tiers linked by HyperDoor
- * ordinal arithmetic. The search cascade falls back gracefully:
- *   T0 always available (1-bit, heap)
- *   T0 → T1 if T1 materialised, else T0 → T2
- *   T0 → T1 → T2 if T2 mmap'd, else T1 → T3 (S3 on-demand fetch)
+ * ordinal arithmetic. The search cascade is driven by RaBitQ confidence-interval
+ * rerank (Turbopuffer ANN v3, May 2026; canonical reference §16.3):
  *
- * Data reduction example (50K-vector cluster, D=128):
- *   Brute-force:   50K * 128 * 4 =  25.6 MB
- *   T0 pass:       50K * 128 / 8 =   800 KB  → retain top-1000
- *   T1 pass:       1K  * 128     =   128 KB  → retain top-100
- *   T2 pass:       100 * 128 * 4 =    51 KB  → return top-k
- *   Total read:                  =  ~980 KB  (26x reduction)
+ *   T0  : score every ordinal with the RaBitQ 1-bit kernel; for each ordinal i
+ *         this returns NOT a scalar but an interval [lo_i, hi_i] bounding the
+ *         true distance d_i. Costs ~D/8 bytes of bandwidth per ordinal.
+ *   Cut : maintain a running top-k threshold τ_k = the k-th smallest hi seen
+ *         so far. Any ordinal whose lo_i > τ_k is dropped: it cannot belong
+ *         to the true top-k.
+ *   T1/T2/T3 rerank: ONLY ordinals whose interval [lo_i, hi_i] straddles τ_k
+ *         are reranked at higher precision. Empirically on Turbopuffer's
+ *         workloads this is < 1 % of the original candidates.
+ *
+ *   T0 → (T1 if materialised) → (T2 if materialised) → (T3 via getRange)
+ *
+ * Inner-loop note (compute-bound; see §3.1): the T0 kernel is implemented with
+ * jdk.incubator.vector.LongVector and LongVector.bitCount(), which on AVX-512
+ * lowers to VPOPCNTDQ (1 ins/cycle pipelined). On AVX2 hardware it falls back
+ * to a 4-bit-table popcount and the throughput drops ~2x. The fallback is
+ * detected at startup and surfaced via the {@code vectors.simd.popcount}
+ * metric so deployments can size accordingly.
+ *
+ * Data-read example (50K-vector cluster, D=128, k=10, rerank-ratio = 0.01):
+ *   Brute-force float32:           50K * 128 * 4 =  25.6 MB
+ *   T0 (RaBitQ) intervals:         50K * 128 / 8 =   800 KB  → ~500 candidates straddle τ_k
+ *   T1 (SQ8) rerank, 1 % of T0:    500 * 128     =    64 KB  → ~50 still ambiguous
+ *   T2 (float32) rerank, top-50:   50  * 128 * 4 =    25 KB  → return top-10
+ *   Total read:                                  =   ~890 KB  (29x reduction)
+ *
+ * The "1 %" rerank ratio is the contract with TieredClusterTest; if the kernel
+ * becomes loose-bounded enough that more candidates straddle τ_k, the workload
+ * regresses toward the bandwidth-bound regime and the budget is blown.
  */
 public final class TieredCluster {
     public int clusterId();
@@ -897,8 +1082,13 @@ public final class TieredCluster {
     public boolean hasT2();          // float32 vectors mmap'd from SSD
 
     /**
-     * Multi-pass cascade search. Tier selection is automatic based on materialisation.
-     * Falls back gracefully when higher tiers are not present.
+     * Confidence-interval cascade search. Tier selection is automatic based on
+     * materialisation. Falls back gracefully when higher tiers are not present:
+     * if T1 is absent the rerank goes straight to T2; if T2 is absent it goes
+     * straight to T3 (range-GET). The {@code rerankRatioCap} parameter gates
+     * how many candidates are eligible for rerank — exceeding it forces a
+     * widening of τ_k (recall-preserving) rather than blowing the bandwidth
+     * budget.
      */
     public SearchResult search(float[] query, int k, CascadeParams params);
 
@@ -908,7 +1098,17 @@ public final class TieredCluster {
     /** Memory-map T2 (float32) from a local cluster vectors.bin file. */
     public void materializeT2(Path clusterVectorsFile);
 
-    /** Fetch T2 from T3 (S3) when not locally available; writes to localPath then mmaps. */
+    /**
+     * Fetch a per-ordinal slice from T3 (S3) on demand using
+     * {@link StorageBackend#getRange}. This is the inner loop of cold reranks:
+     * for each rerank-eligible ordinal compute its byte offset
+     * (HyperDoor.t3ObjectOffset + ordinal * D * Float.BYTES) and issue
+     * one range-GET. Concurrent vthreads issue these in parallel.
+     */
+    public float[] fetchOrdinalFromT3(StorageBackend s3, String objectKey, int ordinal)
+        throws IOException;
+
+    /** Bulk-fetch T2 from T3 (used at materialisation time, not per-query). */
     public void fetchFromT3(StorageBackend s3, String objectKey, Path localPath)
         throws IOException;
 
@@ -928,9 +1128,10 @@ public final class TieredCluster {
     public long medianScanLatencyNs();
 
     record CascadeParams(
-        int   t0Candidates,  // survivors from T0 (default: max(100, k*10))
-        int   t1Candidates,  // survivors from T1 (default: max(10,  k*2))
-        float gamma          // SOAR boundary tolerance passed through from routing
+        int   t0Candidates,    // initial T0 candidate cap (default: max(1000, k*100))
+        float rerankRatioCap,  // hard ceiling on (rerank candidates / t0Candidates),
+                               // default 0.01 → < 1 % rerank ratio
+        float gamma            // SOAR boundary tolerance passed through from routing
     ) {}
 }
 ```
@@ -940,11 +1141,19 @@ public final class TieredCluster {
 - `t0OnlySearch_returnsApproxResults` — only T0 materialised, recall@10 ≥ 0.70
 - `t0T2Search_returnsHighRecall` — T0 + T2, recall@10 ≥ 0.95 (Phase 1 gate)
 - `t0T1T2Cascade_returnsHighRecall` — full cascade, recall@10 ≥ 0.98 (Phase 2 gate)
-- `cascadeDataReadBelow1MB_50KCluster` — measure bytes read ≤ 980 KB for 50K cluster
+- `confidenceIntervalCascade_rerankRatioBelowOnePercent` — across 1 000 random queries
+  on a 50K-vector cluster, every query reranks ≤ 0.01 × t0Candidates ordinals
+- `confidenceIntervalCascade_widensTauWhenRatioExceeded` — synthetic cluster with very
+  loose [lo, hi] bounds; the algorithm must widen τ_k rather than rerank > 1 %
+- `cascadeDataReadBelow1MB_50KCluster` — measure bytes read ≤ 900 KB for 50K cluster
+- `fetchOrdinalFromT3_singleRange` — **mocked** `StorageBackend.getRange` returns the
+  exact slice; arithmetic for a chosen ordinal verified byte-for-byte
 - `fetchFromT3ThenSearch` — **mocked** `StorageBackend` (no Docker), T2 fetched and mmap'd
 - `evictT1ThenSearch_fallsBackToT0T2` — after eviction, search still returns results
 - `accessFrequencyUpdatesCorrectly` — 10 accesses, window=100 → frequency ≈ 0.10
 - `hyperDoorOffsetArithmetic_correctForAllTiers`
+- `t0Kernel_usesVectorPopcount_orFailsLoudly` — `assumeTrue` on AVX-512 capability;
+  `-XX:+PrintAssembly` snapshot asserted to contain `VPOPCNTDQ` (CI annotation)
 
 **Test class**: `TieredClusterFetchT3Test` (`@Tag("integration")`) — requires Docker
 
@@ -972,24 +1181,54 @@ after download:
 ```java
 /**
  * Drives automatic T1/T2 materialisation and eviction based on cluster
- * access frequency measured by TieredCluster.accessFrequency().
+ * access frequency measured by TieredCluster.accessFrequency(), with an
+ * explicit operator-controlled pin override (Turbopuffer "pinning" pattern;
+ * see §16.5).
  *
  * Formal model (FaTRQ, 2026):
  *   T1 materialised when: A_i > theta_1   (default 0.01)
  *   T2 materialised when: A_i > theta_2   (default 0.05)
  *   T0 and T3 always present.
  *
+ * Pin override: pin(clusterId, tier) forces the cluster to remain materialised
+ * at {@code tier} or higher, bypassing the θ thresholds and ineligible for
+ * eviction. Used by latency-sensitive tenants who do not want EMA-driven
+ * cold-starts.
+ *
  * Working set insight: ~15% of clusters are accessed in a full day (CatapultDB).
  * Configuring theta_2 = 0.05 materialises T2 for the hottest ~15% of clusters
  * and keeps T1 for the next ~10%, total warm set = ~25%.
+ *
+ * Pinning cap (per Turbopuffer parity): no more than 256 pinned clusters per
+ * collection; exceeding this throws {@link IllegalStateException} from
+ * {@link #pin}. The cap is configurable via the Builder.
  */
 public final class TierPolicy {
-    public static TierPolicy auto();   // theta_1=0.01, theta_2=0.05
+    public static final int DEFAULT_MAX_PINS = 256;
+
+    public static TierPolicy auto();   // theta_1=0.01, theta_2=0.05, max 256 pins
 
     public enum Decision { MATERIALISE, EVICT, NO_CHANGE }
+    public enum Tier { T0, T1, T2, T3 }
 
     public Decision evaluateT1(TieredCluster cluster, int windowSize);
     public Decision evaluateT2(TieredCluster cluster, int windowSize);
+
+    /**
+     * Pin a cluster at {@code tier} (or higher). The cluster will be force-
+     * materialised on the next applyAll cycle and protected from eviction
+     * until {@link #unpin} is called. Idempotent: pinning at a higher tier
+     * upgrades the existing pin; pinning at a lower tier is a no-op.
+     *
+     * @throws IllegalStateException if the per-collection pin cap is exceeded
+     */
+    public void pin(int clusterId, Tier tier);
+
+    /** Remove the pin for a cluster. Subsequent applyAll calls re-evaluate via θ. */
+    public void unpin(int clusterId);
+
+    /** Snapshot of currently pinned cluster ids and their pinned tier. */
+    public Map<Integer, Tier> pins();
 
     /** Apply policy to all clusters in a collection. Call periodically (e.g., every 60 s). */
     public void applyAll(Collection<TieredCluster> clusters, int windowSize,
@@ -1000,6 +1239,7 @@ public final class TierPolicy {
         public Builder t1Threshold(double theta1);
         public Builder t2Threshold(double theta2);
         public Builder windowSize(int queries);
+        public Builder maxPins(int maxPins);     // default 256
         public TierPolicy build();
     }
 }
@@ -1010,6 +1250,14 @@ public final class TierPolicy {
 - `warmCluster_materialisesT1Only` — A_i=0.03 > theta_1 but < theta_2 → T1 only
 - `coldCluster_evictsBoth` — A_i=0.001 < theta_1 → evict T1 and T2
 - `applyAll_materialisesCorrectFraction` — 100 clusters, 15 hot → 15 with T2
+- `pinnedCluster_remainsMaterialised_evenWhenCold` — pin(c, T2) then drop A_c to 0;
+  applyAll must NOT evict T1/T2 for `c`
+- `pinUpgrade_isIdempotent` — pin(c, T1) then pin(c, T2) → effective tier = T2; pin
+  count remains 1
+- `unpin_restoresEMABehaviour` — after unpin(c) and one applyAll cycle with A_c=0,
+  T1 and T2 are evicted as expected
+- `pinCap_enforced_throwsAt257thPin` — `IllegalStateException` from the 257th pin
+  with default `maxPins=256`
 
 ### 8.9 `IvfIndex` — flat IVF (Phase 1 search target)
 
@@ -1705,30 +1953,51 @@ Step P10  IvfIndexIntegrationTest       (vectors-ivf)         ★ PHASE 1 GATE
           Gate: recall@10 ≥ 0.95 (N=100K, K=316, nprobe=32)
           Gate: IvfIndexBenchmark.search_N1M_K1024_D128_nprobe32 < 5 ms p99
 
-──── Phase 2a: Adaptive Cluster Splitting ───────────────────────────────────────
-Step P11  ClusterSplitterTest           (vectors-ivf)         must pass before SubBuoyTree
-          Gate: splitReducesCost, splitRollbackOnVerifyFail, accessFrequencyEMA
-Step P12  SubBuoyTreeTest               (vectors-ivf)         ★ PHASE 2a GATE
+──── Phase 2a: Hierarchical Centroid Tree (branching=100, leaf=100) ─────────────
+Step P11  HierarchicalKMeansBuilderTest  (vectors-ivf)         must pass before SubBuoyTree
+          Gate: recursive k=100 build terminates at leaf-size cap 100
+Step P12  SubBuoyTreeTest                (vectors-ivf)         ★ PHASE 2a GATE
           Gate: concurrentReadsDuringWrite, encodeDecodeRoundTrip
+          Gate: levelMemoryBudget_atDepth4_undersizedForL3
           Gate: flatTree routes identically to BuoyIndex (no regression)
 
-──── Phase 2b: Tiered Cascade ───────────────────────────────────────────────────
-Step P13  TieredClusterTest             (vectors-ivf)         must pass before TierPolicy
-          Gate: t0T2Search recall@10 ≥ 0.95; cascadeDataRead ≤ 980 KB (50K cluster)
-Step P14  TierPolicyTest                (vectors-ivf)         ★ PHASE 2b GATE
+──── Phase 2b: Adaptive Cluster Splitting ───────────────────────────────────────
+Step P13  ClusterSplitterTest            (vectors-ivf)         ★ PHASE 2b GATE
+          Gate: splitReducesCost, splitRollbackOnVerifyFail, accessFrequencyEMA
+          Gate: k=100 split + merge round-trip preserves SubBuoyTree invariants
+
+──── Phase 2c: WAL-on-S3 + Indexer/Query Role Split ─────────────────────────────
+Step P14a IndexerNodeTest                (vectors-distributed) must pass before QueryNode
+          Gate: consumesWalProducesIndex, manifestUpdatedViaConditionalPut
+Step P14b QueryNodeTest                  (vectors-distributed) ★ PHASE 2c GATE (@Tag("unit"))
+          Gate: scanUnindexedTail_returnsRecentWrites_strongConsistency
+          Gate: WriteAheadLogBenchmark.throughput_10k_appends_1ns_S3 ≥ 10K a/s/ns
+Step P14c WalIndexerEndToEndTest         (vectors-distributed) ★ PHASE 2c INTEGRATION GATE (@Tag("integration"))
+          Gate: 10K writes, 100 indexer cycles, recall@10 unchanged
+
+──── Phase 2d: Tiered Cascade with Confidence-Interval Rerank ───────────────────
+Step P15a TieredClusterTest              (vectors-ivf)         must pass before TierPolicy
+          Gate: confidenceIntervalCascade_rerankRatioBelowOnePercent
+          Gate: t0T1T2Cascade recall@10 ≥ 0.98; cascadeDataRead ≤ 900 KB (50K cluster)
+          Gate: t0Kernel_usesVectorPopcount_orFailsLoudly (AVX-512 CI runner)
+Step P15b TierPolicyTest                 (vectors-ivf)         ★ PHASE 2d GATE
           Gate: applyAll materialises correct hot fraction (15% at θ₂=0.05)
+          Gate: pinnedCluster_remainsMaterialised_evenWhenCold
+          Gate: pinCap_enforced_throwsAt257thPin
           Gate: TieredClusterBenchmark.t0T1T2_N50K_D128 < 2 ms p99
 
 ──── Phase 3: Distributed Execution ─────────────────────────────────────────────
-Step P15  ScatterGatherExecutorTest     (vectors-distributed) must pass before DistVC
+Step P16  ScatterGatherExecutorTest      (vectors-distributed) must pass before DistVC
           Gate: scatterGather_10nodes_FLAT < 10 ms p99
-Step P16  DistributedVectorCollectionTest (vectors-distributed) ★ PHASE 3 GATE (@Tag("unit"))
+Step P17  DistributedVectorCollectionTest (vectors-distributed) ★ PHASE 3 GATE (@Tag("unit"))
           Gate: addSearchConsistency, deletePropagatesToSearchResults
           Gate: scatterGatherRecall_3nodes_1M_total recall@10 ≥ 0.90
-Step P17  DistributedVectorCollectionIT  (vectors-distributed) ★ PHASE 3 DURABILITY GATE (@Tag("integration"))
+          Gate: warm p50 ≤ 8 ms, cold p50 ≤ 343 ms (1M D=1024) — Turbopuffer parity
+Step P18  DistributedVectorCollectionIT  (vectors-distributed) ★ PHASE 3 DURABILITY GATE (@Tag("integration"))
           Gate: walAppend_persistsToS3_survivesColdStart
           Gate: conditionalPut_preventsDoubleCommit
           Gate: coldClusterFetch_searchAfterT2Eviction
+          Gate: getRange_usesHttpRangeHeader (verified in LocalStack request log)
           (Runs in CI only when Docker is available; blocks release not default build)
 ```
 
@@ -1736,79 +2005,139 @@ Step P17  DistributedVectorCollectionIT  (vectors-distributed) ★ PHASE 3 DURAB
 
 ## 12. Phased Implementation Roadmap
 
+> **§16 alignment**: this roadmap was reordered after the May 2026 Turbopuffer review.
+> The hierarchical centroid tree (Phase 2a) precedes adaptive splitting (Phase 2b);
+> a new Phase 2c lands the WAL-on-S3 layout and Indexer/Query role split BEFORE the
+> tiered cascade, because the cascade's range-GET reads depend on the published
+> `index/` runs being addressable.
+
 ### Phase 1 — IVF Foundation (vectors-core + vectors-storage + vectors-ivf)
 
-**Goal**: Single-node IVF-flat search with SOAR boundary spilling, on a flat (non-adaptive) buoy index.
+**Goal**: Single-node IVF-flat search with SOAR boundary spilling, on a flat (non-adaptive)
+single-level buoy index. Establishes the routing primitive and storage SPI; not yet
+hierarchical and not yet tiered.
 
-**Entry criteria**: All of P1–P9 pass (batch SIMD, KMeans, CentroidIndex, StorageBackend, WAL, VectorEvent/Codec, SegmentTransfer, BuoyIndex, HyperDoor).
+**Entry criteria**: All of P1–P9 pass (batch SIMD, KMeans, CentroidIndex, StorageBackend
+including `getRange`, WAL with group commit, VectorEvent/Codec, SegmentTransfer, BuoyIndex,
+HyperDoor).
 
-**Exit gate (P10)**: `IvfIndexIntegrationTest` all pass; `IvfIndexBenchmark.search_N1M_K1024_D128_nprobe32` < 5 ms p99; `BuoyIndexBenchmark.route_K1024_D128_nprobe32` < 10 µs.
+**Exit gate (P10)**: `IvfIndexIntegrationTest` all pass; `IvfIndexBenchmark.search_N1M_K1024_D128_nprobe32` < 5 ms p99; `BuoyIndexBenchmark.route_K1024_D128_nprobe32` < 10 µs; `StorageBackendContractTest.getRange_*` green; `WriteAheadLogBenchmark.append_500KB_p50_S3` ≤ 285 ms (Turbopuffer parity).
 
 | Component | Module | New files |
 |-----------|--------|-----------|
 | `batchDotProduct` / `batchSquaredL2` | `vectors-core` | `VectorUtil` additions |
 | `KMeans` (k-means++ seeding, virtual-thread averaging) | `vectors-core` | `cluster/KMeans.java` |
 | `CentroidIndex` (multi-probe + SOAR spill) | `vectors-core` | `cluster/CentroidIndex.java` |
-| `StorageBackend` + `HeapStorageBackend` + `LocalFileStorageBackend` | `vectors-storage` | `backend/*.java` |
-| `SegmentedWriteAheadLog` (CRC'd, rolling segments) | `vectors-storage` | `wal/*.java` |
+| `StorageBackend` + `getRange` + `HeapStorageBackend` + `LocalFileStorageBackend` | `vectors-storage` | `backend/*.java` |
+| `SegmentedWriteAheadLog` (CRC'd, group-commit, 512 MB cap, ◈/■ markers) | `vectors-storage` | `wal/*.java` |
 | `VectorEvent` sealed hierarchy + `VectorEventCodec` | `vectors-db` | `event/*.java` |
 | `SegmentExporter` / `SegmentImporter` | `vectors-db` | `transfer/*.java` |
-| `BuoyIndex` (wraps CentroidIndex, adds SOAR spill map + metadata) | `vectors-ivf` | module scaffold + `BuoyIndex.java` |
+| `BuoyIndex` (single-level root of the centroid tree, K up to 100) | `vectors-ivf` | module scaffold + `BuoyIndex.java` |
 | `HyperDoor` (cross-tier O(1) ordinal link record) | `vectors-ivf` | `HyperDoor.java` |
 | `ClusterPartition`, `IvfIndex` (flat IVF) | `vectors-ivf` | `ClusterPartition.java`, `IvfIndex.java` |
 
-### Phase 2a — Adaptive Cluster Splitting (vectors-ivf)
+### Phase 2a — Hierarchical Centroid Tree (vectors-ivf)
 
-**Goal**: The flat buoy index becomes a hierarchical `SubBuoyTree` that splits and merges
-clusters at runtime using the Quake cost model. Recall improves for skewed workloads without
-retraining the global index.
+**Goal**: The single-level `BuoyIndex` is generalised into a multi-level `SubBuoyTree`
+with **branching factor 100** and **leaf target ~100 vectors**. Routing for collections
+beyond N≈10K descends through the tree instead of doing a flat scan over the root.
+The tree is built deterministically by recursive k-means at build time (no adaptive
+behaviour yet — that's Phase 2b).
 
 **Entry criteria**: Phase 1 exit gate passes; P10 (IvfIndexIntegrationTest) all green.
 
-**Exit gate (P12)**: `ClusterSplitterTest` all pass; `SubBuoyTreeTest` all pass including
-`concurrentReadsDuringWrite`; `SubBuoyTree.flatTree` routes identically to `BuoyIndex`
-(no regression on IvfIndexIntegrationTest).
+**Exit gate (P12)**: `SubBuoyTreeTest` all pass; `levelMemoryBudget_atDepth4_undersizedForL3`
+green; `IvfIndexBenchmark.search_N100M_branching100_depth3` recall@10 ≥ 0.90 and p99 ≤ 50 ms
+single-node.
 
 | Component | Module | New files |
 |-----------|--------|-----------|
-| `ClusterSplitter` (Quake cost model, 3-phase split, merge) | `vectors-ivf` | `cluster/ClusterSplitter.java` |
-| `SubBuoyTree` (recursive tree, gossip-serialisable) | `vectors-ivf` | `cluster/SubBuoyTree.java` |
+| `SubBuoyTree` (recursive tree, branching=100, gossip-serialisable) | `vectors-ivf` | `cluster/SubBuoyTree.java` |
+| `HierarchicalKMeansBuilder` (recursive k=100 build, leaf-size cap 100) | `vectors-ivf` | `cluster/HierarchicalKMeansBuilder.java` |
 
-### Phase 2b — Tiered Cascade (vectors-ivf)
+### Phase 2b — Adaptive Cluster Splitting (vectors-ivf)
 
-**Goal**: Per-cluster four-tier cascade (T0=1-bit/heap, T1=SQ8/off-heap, T2=float32/mmap,
-T3=float32/S3) driven by `TierPolicy`. I/O reads shrink ≥26× vs brute-force for a 50K-vector
-cluster. Recall@10 ≥ 0.98 with the full T0→T1→T2 cascade.
+**Goal**: The hierarchical tree gains the runtime split/merge behaviour driven by the Quake
+cost model. Recall improves for skewed workloads without rebuilding the tree from scratch.
 
 **Entry criteria**: Phase 2a exit gate passes.
 
-**Exit gate (P14)**: `TieredClusterTest` all pass; `TierPolicyTest.applyAll` correct;
-`TieredClusterBenchmark.t0T1T2_N50K_D128` < 2 ms p99; `cascadeDataReadBelow1MB_50KCluster`
-≤ 980 KB.
+**Exit gate (P13)**: `ClusterSplitterTest` all pass; `SubBuoyTreeTest.concurrentReadsDuringWrite`
+green; no regression on `IvfIndexIntegrationTest`.
 
 | Component | Module | New files |
 |-----------|--------|-----------|
-| `TieredCluster` (T0+T1+T2+T3 cascade, HyperDoor arithmetic, recordAccess) | `vectors-ivf` | `tier/TieredCluster.java` |
-| `TierPolicy` (θ₁/θ₂ access-frequency materialisation + eviction) | `vectors-ivf` | `tier/TierPolicy.java` |
+| `ClusterSplitter` (Quake cost model, k=100 split, merge) | `vectors-ivf` | `cluster/ClusterSplitter.java` |
+
+### Phase 2c — WAL-on-S3 + Indexer/Query Role Split (vectors-distributed)
+
+**Goal**: Implement the Turbopuffer write contract end-to-end: writes append to
+`s3://{bucket}/{ns}/wal/NNN.log` via group commit; a background `IndexerNode` consumes
+closed `wal/` objects and produces immutable runs in `s3://{bucket}/{ns}/index/`; a
+`QueryNode` reads `index/` and scans the unindexed `wal/` tail for strong-consistency
+queries. Both roles can run in the same JVM (embedded mode) or separate processes.
+
+**Entry criteria**: Phase 2a exit gate passes (Phase 2b is parallel; not a hard prereq).
+
+**Exit gate (P14b)**: `IndexerNodeTest.consumesWalProducesIndex` green;
+`QueryNodeTest.scanUnindexedTail_returnsRecentWrites_strongConsistency` green;
+`WalIndexerEndToEndTest` (P14c, LocalStack: 10 000 writes, 100 indexer cycles,
+recall@10 unchanged) green; `WriteAheadLogBenchmark.throughput_10k_appends_1ns_S3`
+≥ 10 000 a/s/ns.
+
+| Component | Module | New files |
+|-----------|--------|-----------|
+| `IndexerNode` (background daemon: WAL → index runs) | `vectors-distributed` | `indexer/IndexerNode.java` |
+| `QueryNode` role (scans `index/` + ◈ tail) | `vectors-distributed` | `query/QueryNode.java` |
+| `NamespaceLayout` (resolves `{ns}/wal/`, `{ns}/index/`, `manifest.json`) | `vectors-storage` | `wal/NamespaceLayout.java` |
+| `S3StorageBackend` (with `getRange` via `Range:` header) | `vectors-distributed` | `backend/S3StorageBackend.java` |
+
+### Phase 2d — Tiered Cascade with Confidence-Interval Rerank (vectors-ivf)
+
+**Goal**: Per-cluster four-tier cascade (T0=1-bit/heap, T1=SQ8/off-heap, T2=float32/mmap,
+T3=float32/S3) driven by `TierPolicy` with **RaBitQ confidence-interval rerank**. Rerank
+ratio < 1 % at recall@10 ≥ 0.95 (Phase 1 gate); ≥ 0.98 with full T0→T1→T2 (Phase 2 gate).
+Pinning override exposed via `TierPolicy.pin(clusterId, tier)`.
+
+**Entry criteria**: Phase 2c exit gate passes (range-GET available end-to-end).
+
+**Exit gate (P15b)**: `TieredClusterTest` (P15a) all pass including
+`confidenceIntervalCascade_rerankRatioBelowOnePercent`; `TierPolicyTest.applyAll` correct;
+`TierPolicyTest.pinnedCluster_remainsMaterialised_evenWhenCold` green;
+`TierPolicyTest.pinCap_enforced_throwsAt257thPin` green;
+`TieredClusterBenchmark.t0T1T2_N50K_D128` < 2 ms p99; `cascadeDataReadBelow1MB_50KCluster`
+≤ 900 KB.
+
+| Component | Module | New files |
+|-----------|--------|-----------|
+| `TieredCluster` (confidence-interval cascade, fetchOrdinalFromT3) | `vectors-ivf` | `tier/TieredCluster.java` |
+| `TierPolicy` (θ₁/θ₂ + pin/unpin, max 256 pins) | `vectors-ivf` | `tier/TierPolicy.java` |
 | `IvfHnswIndex` (graph per cluster, `IndexType.IVF_HNSW`) | `vectors-ivf` | `IvfHnswIndex.java` |
 
 ### Phase 3 — In-Process Distributed Execution (vectors-distributed)
 
-**Goal**: Multi-node in-process cluster using `InProcessNodeDirectory`; all `DistributedVectorCollectionTest`
-pass. No real network or S3 required. Production wiring (gRPC, real S3) is Phase 4.
+**Goal**: Multi-node in-process cluster using `InProcessNodeDirectory`; all
+`DistributedVectorCollectionTest` pass. Distribution above 2 TB / 500M vectors per
+namespace uses **random sharding** (vector → shard via `id % N`), **broadcast** of the
+ANN query to all shards, and **global top-k merge** (Turbopuffer §16.6). No real network
+required. Production wiring (gRPC, real S3) is Phase 4.
 
-**Entry criteria**: Phase 2b exit gate passes.
+**Entry criteria**: Phase 2d exit gate passes.
 
-**Exit gate (P16)**: `ScatterGatherBenchmark.scatterGather_10nodes_FLAT` < 10 ms p99;
-`DistributedVectorCollectionTest.scatterGatherRecall_3nodes_1M_total` recall@10 ≥ 0.90.
+**Exit gate (P17)**: `ScatterGatherExecutorTest` (P16) green;
+`DistributedVectorCollectionTest.scatterGatherRecall_3nodes_1M_total` recall@10 ≥ 0.90;
+`ScatterGatherBenchmark.scatterGather_10nodes_FLAT` < 10 ms p99;
+**warm latency target**: p50 ≤ 8 ms / p90 ≤ 10 ms for 1M D=1024 vectors (Turbopuffer parity);
+**cold latency target**: p50 ≤ 343 ms / p90 ≤ 444 ms;
+**P18 (integration)**: `DistributedVectorCollectionIT` durability tests green
+(see §11 step P18).
 
 | Component | Module | New files |
 |-----------|--------|-----------|
-| `NodeId`, `ShardOwnership` (consistent hash), `ShardRouter` | `vectors-distributed` | module scaffold |
+| `NodeId`, `ShardOwnership` (random hash for >2 TB namespaces, consistent hash for ≤ 2 TB), `ShardRouter` | `vectors-distributed` | module scaffold |
 | `ScatterGatherExecutor` (virtual threads) + `InProcessNodeDirectory` | `vectors-distributed` | `ScatterGatherExecutor.java` |
 | `StaticClusterMembership` + `GossipMembership` | `vectors-distributed` | `membership/*.java` |
 | `DistributedVectorCollection` (implements `VectorCollection`) | `vectors-distributed` | `DistributedVectorCollection.java` |
-| `S3StorageBackend` (optional, compile-only AWS SDK v2) | `vectors-distributed` | `backend/S3StorageBackend.java` |
 
 ### Phase 4 — Network Transport (Future)
 
@@ -1946,3 +2275,219 @@ component either:
 
 This keeps the two documents in sync as the design evolves and ensures every cluster-layer
 decision is anchored to a pattern that has shipped at scale.
+
+---
+
+## 16. Turbopuffer alignment (May 2026 revision)
+
+This section is the canonical mapping between Turbopuffer's published architecture
+(`turbopuffer.com/docs/architecture`, `turbopuffer.com/blog/ann-v3`, `docs/limits`,
+`docs/performance`, May 2026) and the `vectors-distributed` design. It supersedes any
+conflicting text in earlier sections — the interleaved revisions in §3.1, §6.1, §6.2,
+§8.5, §8.7, §8.8, and §12 already reflect what is here.
+
+The mapping is presented as a sequence of **invariants we adopt verbatim**, each with the
+specific numeric contract and the section/class in this design that owns it.
+
+### 16.1 Production scale and latency contract
+
+| Metric | Turbopuffer (production, May 2026) | This design — target | Owning section |
+|---|---|---|---|
+| Vectors per namespace | 500M @ 2 TB (hard cap) | 500M @ 2 TB before split | §16.6 |
+| Writes per namespace | 10 000/s @ 32 MB/s | 10 000 appends/s/namespace | §6.2 group commit |
+| Queries per namespace | 1 000+/s | 1 000+/s with NVMe-warm | §3.3 query path |
+| Pinned namespaces / account | 256 | 256 (`TierPolicy.maxPins`) | §8.8 |
+| Cold latency, 1M D=1024 vectors | p50 ≈ 343 ms, p90 ≈ 444 ms | p50 ≤ 343 ms, p90 ≤ 444 ms | §12 P17 gate |
+| Warm latency, 1M D=1024 vectors | p50 ≈ 8 ms, p90 ≈ 10 ms | p50 ≤ 8 ms, p90 ≤ 10 ms | §12 P17 gate |
+| Cold latency, 1M docs BM25 | p90 ≈ 285 ms | (full-text out of scope; see Non-Goals) | n/a |
+| WAL group-commit p50, 500 kB | ≈ 285 ms | ≤ 285 ms (§6.2 benchmark) | §6.2 |
+| Recall@10 | 90–95 % | ≥ 0.90 (Phase 1), ≥ 0.95 (Phase 2d) | §12 |
+
+These numbers are the **acceptance contract** for the distributed implementation. JMH
+targets in §6.2, §8.5, §8.7 are pinned to them; regressions block phase exits.
+
+### 16.2 S3 namespace layout and write contract
+
+```
+s3://{bucket}/{namespace_id}/
+    wal/
+        000000000001.log     ■ closed, indexed
+        000000000002.log     ■ closed, indexed
+        000000000003.log     ◈ closed, NOT YET indexed (query nodes scan this)
+        000000000004.log        active group-commit buffer (flushed every 1 s)
+    index/
+        000000000001.idx     immutable run produced by IndexerNode
+        000000000002.idx
+    manifest.json            JSON: list of ■ vs ◈ wal/* + current index epoch
+```
+
+**Write contract** (`§6.2 WriteAheadLog`):
+
+1. Every `append(entry)` is buffered in memory by the per-namespace writer.
+2. A 1-second tick flushes the buffer to a single `wal/NNNNNNNNNN.log` object via
+   `StorageBackend.put` (group commit). Concurrent `append` callers awaiting the flush
+   are released only after the PUT acks.
+3. Each WAL object is capped at **512 MB**; an append that would overflow forces an
+   early flush + new object.
+4. The new object is a ◈ entry until `IndexerNode` consumes it and calls
+   `markIndexed`, after which `manifest.json` is rewritten via `conditionalPut`.
+5. Query consistency:
+   - **Strong consistency** (default): query scans `index/` ∪ ◈-tail of `wal/`.
+   - **Eventual consistency** (opt-in, ≤ 1 hour staleness): query scans only `index/`.
+
+This contract is what makes the durability story "object storage is the only stateful
+dependency" — there is no broker, no Raft on the data path. CMG (§9.6) covers
+**metadata** consensus only.
+
+### 16.3 ANN v3 hierarchical centroid tree
+
+Adopted verbatim from Turbopuffer ANN v3 (May 2026 blog):
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| Branching factor | **100** between adjacent levels | matches DRAM/SSD size ratio (10×–50×) |
+| Leaf cluster size | **~100 vectors** | balances tree depth with per-leaf scan cost |
+| Probe budget per query | **~500 leaves** | empirical 90–95 % recall@10 for D=1024 |
+| Centroid level residency | L1 → L2 → L3 → DRAM (top-down) | tree shape mirrors memory hierarchy |
+| Bandwidth per level (RaBitQ) | ~6 MB/level | 16× compression vs. f16 (100 MB/level) |
+
+Concrete shapes for collections of various sizes (D=1024, 1-bit RaBitQ centroids):
+
+| N (vectors) | Tree depth | Levels | Leaves | Total centroid bytes |
+|---|---|---|---|---|
+| 10K | 2 | root only | 100 | 12.8 KB |
+| 1M | 3 | root + 1 | 10K | 1.28 MB |
+| 100M | 4 | root + 2 | 1M | 128 MB |
+| 10B | 5 | root + 3 | 100M | 12.8 GB |
+
+The tree is owned by `BuoyIndex` (root level only — replicated to every node) plus
+`SubBuoyTree` (deeper levels — heap-resident on each node where the underlying leaves
+are owned). Build is hierarchical k-means with k=100 at every level; runtime split/merge
+is the `ClusterSplitter` Quake cost model (§8.4).
+
+### 16.4 RaBitQ with confidence-interval rerank
+
+Adopted verbatim. The T0 1-bit kernel returns a distance **interval** `[lo, hi]` per
+ordinal; only ordinals whose interval straddles the running top-k threshold τ_k are
+reranked at higher precision. The empirical contract:
+
+- **Rerank ratio: < 1 %** of T0 candidates ever reach T1/T2/T3.
+- **Recall@10 ≥ 0.95** with full T0→T1→T2 cascade (Phase 2 gate).
+- **Inner-loop bandwidth:** ~6 MB at T0 + ~64 KB at T1 + ~25 KB at T2 per cluster
+  (50K-vector cluster, D=128) → ~890 KB total, vs. 25.6 MB brute-force float32
+  (29× reduction).
+
+The implementation is owned by `TieredCluster.search` (§8.7). The `rerankRatioCap`
+parameter on `CascadeParams` is the policy knob: exceeding the cap triggers a
+recall-preserving widening of τ_k rather than a bandwidth blowout.
+
+### 16.5 Pinning
+
+`TierPolicy.pin(clusterId, Tier)` (§8.8) is the explicit override on top of the
+EMA-driven θ₁/θ₂ thresholds. Pinned clusters are force-materialised and protected from
+eviction. The cap is **256 pins per collection** (Turbopuffer parity). This is the
+operator-facing knob for latency-sensitive tenants who do not want a cold start after
+inactivity.
+
+
+### 16.6 Distribution above the per-namespace cap
+
+Single-namespace cap: **2 TB / 500M vectors**. Above that, follow Turbopuffer's
+explicit recommendation: **random sharding + broadcast + global merge**.
+
+```
+write(id, vec):
+    shard_id = hash(id) % N
+    route to namespace shard_id
+
+query(q, k):
+    fanout = scatter q to all N namespace shards (virtual threads)
+    per-shard top-k = local ANN search on that shard
+    global top-k = merge of N shard results (heap merge, O(N · k · log k))
+```
+
+This is intentionally boring: no smart partitioning, no consistent hashing of vectors,
+no co-locating "similar" vectors. The justification (Turbopuffer ANN v3 blog):
+
+> "It is crucial to maximize the efficiency of a single machine before turning to
+> distribution. Moving in the other direction leads to an unnecessarily expensive
+> system."
+
+This also means a single-namespace deployment is the optimisation target up to 500M
+vectors, and the distributed shell only kicks in above that. The `CacheMode.DISTRIBUTED`
+builder flag (§3.4) selects this mode; routing is owned by `ShardRouter` (§9.14) with
+random hashing for namespaces above the cap.
+
+### 16.7 Compute-bound inner loop and JDK-25 SIMD plan
+
+Once T0 is 1-bit-quantised, the workload is **compute-bound**, not bandwidth-bound. Each
+fetched bit is reused ~4× by the RaBitQ kernel (RaBitQ paper §3.3.2 — distance estimation
+reuses `BIT(d_i, q_i) ⊕ BIT(d_i, q_{i+1})` etc.), giving a 64× higher arithmetic intensity
+than `f16` distance kernels.
+
+| Hardware capability | T0 kernel target | Java path |
+|---|---|---|
+| AVX-512 with `VPOPCNTDQ` | 1 instruction/cycle pipelined | `LongVector.bitCount()` lowers to `VPOPCNTDQ` on JDK-25 |
+| AVX-512 without `VPOPCNTDQ` | ~3× slower (bit-shift + popcnt) | C2 falls back automatically; metric flagged |
+| AVX2 only | ~2× slower (4-bit-table popcount) | C2 falls back; metric flagged |
+| ARMv8 NEON | competitive (`CNT` instruction available) | `LongVector.bitCount()` lowers to `CNT` |
+
+Verification protocol:
+
+1. JMH microbenchmark `BitDistanceKernelBenchmark.popcount_throughput` measures
+   gigabits/sec achieved against a 100M 1-bit-vector blob.
+2. `-XX:+UnlockDiagnosticVMOptions -XX:+PrintAssembly` snapshot is captured in CI on
+   AVX-512 hardware; the assertion is "the inner loop contains `VPOPCNTDQ` (or `CNT`
+   on ARM) and not the table-based fallback."
+3. Startup detects the SIMD capability and exposes it as the
+   `vectors.simd.popcount.path` metric (`avx512_vpopcntdq` / `avx512_fallback` /
+   `avx2_fallback` / `neon_cnt` / `scalar`). Production deployments alarm on the
+   non-`vpopcntdq` paths.
+4. The `t0Kernel_usesVectorPopcount_orFailsLoudly` test in `TieredClusterTest` is the
+   regression guard: it only runs (`assumeTrue`) on AVX-512 hardware but is mandatory
+   in CI on a labelled runner.
+
+This is the contract that lets the JVM kernel approach Turbopuffer's reported
+~10 000 qps/node ceiling on production hardware. Falling off the `VPOPCNTDQ` path is
+a cliff, not a slope — sizing decisions assume the fast path.
+
+### 16.8 Cost waterfall
+
+For documentation parity, the storage-cost waterfall Turbopuffer publishes (and which
+this design preserves):
+
+| Architecture | $ / TB / month |
+|---|---|
+| RAM + 3× SSD (incumbent vector DBs) | $3,600 |
+| RAM cache + 3× SSD (relational DBs) | $1,600 |
+| 3× SSD only | $600 |
+| **S3 + SSD cache (this design at `CacheMode.DISTRIBUTED`)** | **~$70** |
+| S3 only (cold-only / archival) | $20 |
+
+The §13 cost analysis estimates ~$3.56/month for a 100M-vector D=128 deployment, which
+is consistent with the $70/TB/month line item once you fold in NVMe cache cost. The
+relevant point is the ~50× delta vs. in-memory vector DBs and the ~9× delta vs. 3×SSD —
+this is the value proposition that justifies the entire architecture.
+
+### 16.9 Cross-references and conflict-resolution rules
+
+When earlier sections of this document conflict with §16, **§16 wins**. The interleaved
+revisions below are already aligned; this list is for future authors who add or change
+text in the affected sections.
+
+| Topic | §16 sub-section | Aligned section(s) | Symbol/file |
+|---|---|---|---|
+| Hierarchical centroid tree, branching=100, leaf=100 | §16.3 | §3.1, §8.5 | `BuoyIndex`, `SubBuoyTree` |
+| Range-GET on `StorageBackend` | §16.2 | §6.1 | `StorageBackend.getRange` |
+| WAL group commit + namespace prefix layout | §16.2 | §6.2, §3.4 | `SegmentedWriteAheadLog`, `NamespaceLayout` |
+| RaBitQ confidence-interval rerank, < 1 % rerank ratio | §16.4 | §3.1, §8.7 | `TieredCluster.search`, `CascadeParams.rerankRatioCap` |
+| Pinning override on `TierPolicy` | §16.5 | §8.8 | `TierPolicy.pin/unpin/maxPins` |
+| Random-shard + broadcast above 500M/2 TB | §16.6 | §3.4, §9.14, §12 P17 | `ShardRouter`, `CacheMode.DISTRIBUTED` |
+| Compute-bound T0 + `VPOPCNTDQ` lowering | §16.7 | §3.1, §8.7 | `BitDistanceKernel`, `vectors.simd.popcount.path` metric |
+| 500M/2 TB hard caps, 256 pins, 10k w/s, 1k q/s | §16.1 | §12 phase exit gates | JMH `*Benchmark` targets |
+
+**Validation rule** (companion to §15.2): a PR that touches §3.1, §6.1, §6.2, §8.5, §8.7,
+§8.8, or §12 must either preserve the §16 contract or update §16 in the same PR. CI
+parses the §16.1 latency table and refuses a phase-exit-gate change that loosens any
+target without an accompanying §16 entry.
+
