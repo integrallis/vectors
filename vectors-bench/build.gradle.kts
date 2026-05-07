@@ -17,6 +17,11 @@ dependencies {
     // HDF5 reader for ANN-Benchmarks datasets (MIT, pure Java, no native code)
     implementation("io.jhdf:jhdf:0.9.4")
 
+    // AWS SDK v2 S3: required by WriteAheadLogS3Benchmark to construct the S3 client that
+    // fronts S3StorageBackend. vectors-storage keeps it as `implementation` so it is not on
+    // public consumers' compile classpath; benchmarks declare it directly.
+    implementation("software.amazon.awssdk:s3:2.29.52")
+
     implementation("org.openjdk.jmh:jmh-core:1.37")
     annotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
 }
@@ -48,6 +53,15 @@ jmh {
     // setting -Pivfpq.largeScale=true (typically together with -Pjmh.includes=...).
     if (!largeScale) {
         excludes.addAll(listOf(".*LargeScale.*"))
+    }
+    // WriteAheadLogS3Benchmark requires an external S3 endpoint (LocalStack or real S3) and
+    // is gated by -Pwal.s3.bucket=...; exclude it from the default run otherwise.
+    if (!project.hasProperty("wal.s3.bucket")) {
+        excludes.addAll(listOf(".*WriteAheadLogS3Benchmark.*"))
+    }
+    // Forward -Pwal.s3.* properties as -Dwal.s3.* JVM args read by WriteAheadLogS3Benchmark.
+    listOf("wal.s3.bucket", "wal.s3.region", "wal.s3.endpoint").forEach { key ->
+        (project.findProperty(key) as String?)?.let { jvmArgs.add("-D$key=$it") }
     }
     // Time-box overrides for short/dev runs:
     //   -Pjmh.fork=1 -Pjmh.warmup=1 -Pjmh.iterations=2 -Pjmh.timeOnIteration=1s
