@@ -19,4 +19,9 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers:$testcontainersVersion")
     testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
     testImplementation("org.testcontainers:localstack:$testcontainersVersion")
+
+    // Integration tests against external S3-compatible endpoints (Cloudflare R2, AWS,
+    // MinIO) load credentials from a gitignored .env file at the repo root. dotenv-java
+    // is dependency-free and only used in test scope.
+    testImplementation("io.github.cdimascio:dotenv-java:3.2.0")
 }

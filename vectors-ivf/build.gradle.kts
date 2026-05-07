@@ -17,4 +17,13 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
     testImplementation("org.testcontainers:localstack:$testcontainersVersion")
     testImplementation("software.amazon.awssdk:s3:$awsSdkVersion")
+
+    // DistributedVectorCollectionR2IT: real end-user flow against Cloudflare R2 with
+    // real text embeddings produced by an in-process ONNX sentence-transformer.
+    // Credentials are loaded from a gitignored .env at the repo root (.env.example
+    // documents the keys); the IT auto-skips when the variables are missing.
+    val langchain4jVersion = "1.13.1"
+    testImplementation("io.github.cdimascio:dotenv-java:3.2.0")
+    testImplementation("dev.langchain4j:langchain4j:$langchain4jVersion")
+    testImplementation("dev.langchain4j:langchain4j-embeddings-all-minilm-l6-v2:$langchain4jVersion-beta23")
 }
