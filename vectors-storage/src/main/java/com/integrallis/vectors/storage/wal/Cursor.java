@@ -41,7 +41,8 @@ final class Cursor {
 
   void expect(char c) {
     char got = next();
-    if (got != c) throw new RuntimeException("expected '" + c + "' got '" + got + "' at " + (p - 1));
+    if (got != c)
+      throw new RuntimeException("expected '" + c + "' got '" + got + "' at " + (p - 1));
   }
 
   void skipWs() {

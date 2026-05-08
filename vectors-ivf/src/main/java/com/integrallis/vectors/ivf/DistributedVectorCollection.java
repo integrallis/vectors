@@ -364,6 +364,57 @@ public final class DistributedVectorCollection implements AutoCloseable {
     }
   }
 
+  /**
+   * Returns the document id at ordinal {@code i} in stable iteration order, where {@code
+   * 0..allVectors.size()-1} are committed entries and the tail is the staging buffer appended in
+   * insertion order.
+   */
+  public String idAt(int i) {
+    rwLock.readLock().lock();
+    try {
+      int committed = allIds.size();
+      if (i < 0 || i >= committed + stagingIds.size()) {
+        throw new IndexOutOfBoundsException(
+            "idAt: " + i + " of " + (committed + stagingIds.size()));
+      }
+      return i < committed ? allIds.get(i) : stagingIds.get(i - committed);
+    } finally {
+      rwLock.readLock().unlock();
+    }
+  }
+
+  /** Returns a defensive copy of the vector at ordinal {@code i} (committed or staged). */
+  public float[] vectorAt(int i) {
+    rwLock.readLock().lock();
+    try {
+      int committed = allVectors.size();
+      if (i < 0 || i >= committed + staging.size()) {
+        throw new IndexOutOfBoundsException(
+            "vectorAt: " + i + " of " + (committed + staging.size()));
+      }
+      float[] src = i < committed ? allVectors.get(i) : staging.get(i - committed);
+      return Arrays.copyOf(src, src.length);
+    } finally {
+      rwLock.readLock().unlock();
+    }
+  }
+
+  /**
+   * Returns an immutable snapshot of every live document id in stable ordinal order: committed ids
+   * first, staging ids appended. The list does not reflect later mutations.
+   */
+  public List<String> allIdsView() {
+    rwLock.readLock().lock();
+    try {
+      List<String> out = new ArrayList<>(allIds.size() + stagingIds.size());
+      out.addAll(allIds);
+      out.addAll(stagingIds);
+      return List.copyOf(out);
+    } finally {
+      rwLock.readLock().unlock();
+    }
+  }
+
   /** Number of staged (uncommitted) vectors. */
   public int stagingSize() {
     rwLock.readLock().lock();
@@ -389,6 +440,20 @@ public final class DistributedVectorCollection implements AutoCloseable {
   /** Current WAL generation (incremented on each commit). */
   public long generation() {
     return generation;
+  }
+
+  /**
+   * Seals the active WAL segment and starts a new one. Bulk ingestors call this between large
+   * batches to bound segment file size and to make crash-recovery {@code replay()} cost
+   * predictable. No-ops when the active segment is empty.
+   */
+  public void rotateWalSegment() throws IOException {
+    rwLock.writeLock().lock();
+    try {
+      wal.seal();
+    } finally {
+      rwLock.writeLock().unlock();
+    }
   }
 
   @Override

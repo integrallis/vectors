@@ -260,6 +260,25 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
 
+    <!-- vectors-storage: BackendWriteAheadLog stores the caller-provided StorageBackend by
+         reference. StorageBackend is an SPI interface and cannot be defensively copied;
+         the WAL piggybacks on the backend's lifecycle. -->
+    <Match>
+        <Class name="com.integrallis.vectors.storage.wal.BackendWriteAheadLog"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- vectors-storage: WalEntry record exposes the payload byte[] by reference for
+         zero-copy producer/consumer handoff. The append/replay APIs document that the
+         caller must not mutate the buffer once handed to the WAL. -->
+    <Match>
+        <Class name="com.integrallis.vectors.storage.wal.WriteAheadLog$WalEntry"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
     <!-- vectors-storage: LocalFileStorageBackend resolves keys relative to a non-root root
          directory, so Path.getParent() and Path.getFileName() are never null for any path
          produced by root.resolve(key). SpotBugs cannot verify this from the return types alone. -->
@@ -318,6 +337,8 @@
             <Class name="com.integrallis.vectors.bench.IvfPqMmapSearchBenchmark"/>
             <Class name="com.integrallis.vectors.bench.IvfPqLargeScaleBenchmark"/>
             <Class name="com.integrallis.vectors.bench.PqTrainProbe"/>
+            <Class name="com.integrallis.vectors.bench.WriteAheadLogBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.WriteAheadLogS3Benchmark"/>
             <Class name="com.integrallis.vectors.bench.HnswThreadScalingProbe"/>
         </Or>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
@@ -622,5 +643,42 @@
             <Bug pattern="EI_EXPOSE_REP2"/>
         </Or>
     </Match>
+
+
+    <!-- vectors-ingest: IngestDoc.attrs() returns an unmodifiableMap built in the compact
+         constructor, so the underlying map cannot be mutated by callers. EmbeddedDoc is an
+         internal pairing record that stores the float[] vector by reference for zero-copy
+         hand-off between embedder and sink — defensive copy on every doc would defeat the
+         streaming-pipeline allocation budget. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.ingest.IngestDoc"/>
+            <Class name="com.integrallis.vectors.ingest.EmbeddedDoc"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-ingest: ErrorHandler.IngestErrorContext intentionally retains the original
+         Throwable by reference so error handlers can rethrow or chain it without losing the
+         cause stack. Throwable is effectively immutable for this purpose. -->
+    <Match>
+        <Class name="com.integrallis.vectors.ingest.ErrorHandler$IngestErrorContext"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+    <!-- vectors-ingest: DistributedVectorSink.collection() exposes the underlying live
+         collection for post-ingest assertions and search probes in tests; the sink owns the
+         lifecycle and closes it on close(). -->
+    <Match>
+        <Class name="com.integrallis.vectors.ingest.sinks.DistributedVectorSink"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
 
 </FindBugsFilter>

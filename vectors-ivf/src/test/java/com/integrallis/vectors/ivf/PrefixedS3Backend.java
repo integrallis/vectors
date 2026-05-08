@@ -6,6 +6,12 @@
  * You may obtain a copy of the License at
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package com.integrallis.vectors.ivf;
 
@@ -17,13 +23,13 @@ import java.util.List;
 import software.amazon.awssdk.services.s3.S3Client;
 
 /**
- * Test-only {@link StorageBackend} that namespaces all keys under a fixed prefix on top of a
- * shared bucket. Used by {@link DistributedVectorCollectionR2IT} so multiple invocations against
- * the same Cloudflare R2 bucket — and any unrelated objects the user has placed in that bucket —
- * never collide with each other.
+ * Test-only {@link StorageBackend} that namespaces all keys under a fixed prefix on top of a shared
+ * bucket. Used by {@link DistributedVectorCollectionR2IT} so multiple invocations against the same
+ * Cloudflare R2 bucket — and any unrelated objects the user has placed in that bucket — never
+ * collide with each other.
  *
- * <p>Every call rewrites the user-supplied key as {@code prefix + key} on the way down, and
- * strips {@code prefix} from any returned keys on the way back up.
+ * <p>Every call rewrites the user-supplied key as {@code prefix + key} on the way down, and strips
+ * {@code prefix} from any returned keys on the way back up.
  */
 final class PrefixedS3Backend implements StorageBackend {
 

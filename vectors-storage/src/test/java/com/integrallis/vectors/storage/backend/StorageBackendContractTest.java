@@ -200,8 +200,7 @@ class StorageBackendContractTest {
     StorageBackend b = backend(type);
     b.put("k", new byte[] {1, 2, 3, 4});
 
-    assertThatThrownBy(() -> b.getRange("k", 2, 5))
-        .isInstanceOf(IndexOutOfBoundsException.class);
+    assertThatThrownBy(() -> b.getRange("k", 2, 5)).isInstanceOf(IndexOutOfBoundsException.class);
   }
 
   @ParameterizedTest
@@ -210,8 +209,7 @@ class StorageBackendContractTest {
     StorageBackend b = backend(type);
     b.put("k", new byte[] {1, 2, 3, 4});
 
-    assertThatThrownBy(() -> b.getRange("k", -1, 2))
-        .isInstanceOf(IndexOutOfBoundsException.class);
+    assertThatThrownBy(() -> b.getRange("k", -1, 2)).isInstanceOf(IndexOutOfBoundsException.class);
   }
 
   @ParameterizedTest
@@ -220,7 +218,6 @@ class StorageBackendContractTest {
     StorageBackend b = backend(type);
     b.put("k", new byte[] {1, 2, 3, 4});
 
-    assertThatThrownBy(() -> b.getRange("k", 0, -1))
-        .isInstanceOf(IndexOutOfBoundsException.class);
+    assertThatThrownBy(() -> b.getRange("k", 0, -1)).isInstanceOf(IndexOutOfBoundsException.class);
   }
 }

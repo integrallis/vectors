@@ -81,9 +81,9 @@ public interface WriteAheadLog extends Closeable {
   long[] unindexedTailSeqs();
 
   /**
-   * Marks all closed segments whose sequence range is fully contained in {@code
-   * [seqStartInclusive, seqEndInclusive]} as indexed (■). Called by the Indexer after publishing
-   * the corresponding {@code index/NNN.idx} run.
+   * Marks all closed segments whose sequence range is fully contained in {@code [seqStartInclusive,
+   * seqEndInclusive]} as indexed (■). Called by the Indexer after publishing the corresponding
+   * {@code index/NNN.idx} run.
    *
    * @throws IOException on storage / manifest-write failure
    */

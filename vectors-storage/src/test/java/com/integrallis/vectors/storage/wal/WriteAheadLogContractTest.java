@@ -38,8 +38,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 /**
  * Contract test for {@link BackendWriteAheadLog} parameterised across {@link HeapStorageBackend}
  * and {@link LocalFileStorageBackend}. Validates the §6.2 / §16.2 invariants from {@code
- * vectors-distributed-design.md}: monotone seq numbers, group commit, segment rollover,
- * CRC-checked replay, indexed/unindexed tail tracking.
+ * vectors-distributed-design.md}: monotone seq numbers, group commit, segment rollover, CRC-checked
+ * replay, indexed/unindexed tail tracking.
  */
 @Tag("unit")
 class WriteAheadLogContractTest {
@@ -133,9 +133,7 @@ class WriteAheadLogContractTest {
       long seq = w.append("c".getBytes());
       assertThat(seq).isEqualTo(2L);
       try (Stream<WriteAheadLog.WalEntry> s = w.readFrom(0)) {
-        assertThat(s.toList())
-            .extracting(e -> new String(e.data()))
-            .containsExactly("a", "b", "c");
+        assertThat(s.toList()).extracting(e -> new String(e.data())).containsExactly("a", "b", "c");
       }
     }
   }
@@ -148,8 +146,7 @@ class WriteAheadLogContractTest {
     StorageBackend b = backend(type);
     // Each frame is 4 + payloadLen + 4 = 12 bytes for a 4-byte payload; cap at 32 forces
     // ≤ 2 frames per segment, so 5 appends produce ≥ 3 segments.
-    try (BackendWriteAheadLog w =
-        new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 32)) {
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 32)) {
       for (int i = 0; i < 5; i++) {
         byte[] payload = new byte[] {(byte) i, (byte) i, (byte) i, (byte) i};
         w.append(payload);
@@ -164,8 +161,7 @@ class WriteAheadLogContractTest {
   void crcCorruptionDetectedOnRead(String type) throws IOException {
     StorageBackend b = backend(type);
     // Force the entry into a closed segment by capping each segment at one frame.
-    try (BackendWriteAheadLog w =
-        new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
       w.append("payload-1".getBytes());
       w.append("payload-2".getBytes());
     }
@@ -175,8 +171,7 @@ class WriteAheadLogContractTest {
     data[data.length - 1] ^= (byte) 0xFF;
     b.put(firstSegKey, data);
 
-    try (BackendWriteAheadLog w =
-        new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
       assertThatThrownBy(
               () -> {
                 try (Stream<WriteAheadLog.WalEntry> s = w.readFrom(0)) {
@@ -227,8 +222,7 @@ class WriteAheadLogContractTest {
   void groupCommit_overflowingBatchTriggersEarlyFlush(String type) throws IOException {
     StorageBackend b = backend(type);
     // 32-byte cap, 4-byte payload → 12-byte frames → 2 frames/segment.
-    try (BackendWriteAheadLog w =
-        new BackendWriteAheadLog(b, "ns", Duration.ofMillis(200), 32)) {
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, "ns", Duration.ofMillis(200), 32)) {
       for (int i = 0; i < 6; i++) w.append(new byte[] {(byte) i, 0, 0, 0});
     }
     // 6 appends × 12-byte frames = 72 bytes total → ≥ 3 segments under the 32-byte cap.
@@ -241,8 +235,7 @@ class WriteAheadLogContractTest {
   @MethodSource("backends")
   void unindexedTailSeqs_includesActiveAndClosedUnmarked(String type) throws IOException {
     StorageBackend b = backend(type);
-    try (BackendWriteAheadLog w =
-        new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
       // 12-byte frames, 16-byte cap → 1 frame per segment. Three appends → 2 closed + 1 active.
       w.append(new byte[] {1, 2, 3, 4});
       w.append(new byte[] {5, 6, 7, 8});
@@ -257,8 +250,7 @@ class WriteAheadLogContractTest {
   @MethodSource("backends")
   void markIndexed_movesSegmentOutOfTail(String type) throws IOException {
     StorageBackend b = backend(type);
-    try (BackendWriteAheadLog w =
-        new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
       w.append(new byte[] {1, 2, 3, 4});
       w.append(new byte[] {5, 6, 7, 8});
       w.append(new byte[] {9, 0, 1, 2});

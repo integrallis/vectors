@@ -6,6 +6,12 @@
  * You may obtain a copy of the License at
  *
  *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package com.integrallis.vectors.ivf;
 
@@ -16,12 +22,9 @@ import com.integrallis.vectors.storage.backend.StorageBackend;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel;
-import io.github.cdimascio.dotenv.Dotenv;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -49,17 +52,17 @@ import software.amazon.awssdk.services.s3.S3Client;
  * R2 with product-quantization compression, run semantic similarity searches, add and commit a new
  * document, reopen the collection from R2 alone, and clean up.
  *
- * <p>Credentials are loaded from a gitignored {@code .env} at the repo root (see
- * {@code .env.example}). The whole class auto-skips when {@code VECTORS_R2_*} variables are
- * missing, so it is safe to leave on the default test classpath.
+ * <p>Credentials are loaded from a gitignored {@code .env} at the repo root (see {@code
+ * .env.example}). The whole class auto-skips when {@code VECTORS_R2_*} variables are missing, so it
+ * is safe to leave on the default test classpath.
  *
  * <p>Tagged {@code @Tag("integration")} — run via:
+ *
  * <pre>{@code ./gradlew :vectors-ivf:integrationTest --tests '*R2IT'}</pre>
  *
- * <p><b>Scope.</b> {@link DistributedVectorCollection} currently supports the
- * Create/Read/reopen subset of CRUD (build, add, commit, search, open). Row-level Update and
- * Delete are Phase-2 features in {@code vectors-distributed-design.md} and are not exercised
- * here.
+ * <p><b>Scope.</b> {@link DistributedVectorCollection} currently supports the Create/Read/reopen
+ * subset of CRUD (build, add, commit, search, open). Row-level Update and Delete are Phase-2
+ * features in {@code vectors-distributed-design.md} and are not exercised here.
  */
 @Tag("integration")
 @TestInstance(Lifecycle.PER_CLASS)
@@ -143,8 +146,7 @@ class DistributedVectorCollectionR2IT {
 
   private DistributedVectorCollection build(float[][] vecs, String[] ids) throws IOException {
     // PQ-16: 384 / 16 = 24-dim subspaces, 256 centroids → ~16 bytes/vector codes.
-    IvfBuildParams params =
-        new IvfBuildParams(8, 30, 0f, false, SEED, 0).withPq(16, 256, -1f);
+    IvfBuildParams params = new IvfBuildParams(8, 30, 0f, false, SEED, 0).withPq(16, 256, -1f);
     ClusterSplitter splitter = new ClusterSplitter(10_000, 30, SEED);
     TierPolicy policy = new TierPolicy(5, 2);
     return DistributedVectorCollection.build(
@@ -155,7 +157,8 @@ class DistributedVectorCollectionR2IT {
 
   @Test
   @Order(1)
-  @DisplayName("vectorize text → quantize with PQ-16 → store in R2 → semantic search returns same-topic docs")
+  @DisplayName(
+      "vectorize text → quantize with PQ-16 → store in R2 → semantic search returns same-topic docs")
   void create_and_search() throws IOException {
     float[][] embeddings = embedAll(corpus);
     String[] docIds = idsFrom(corpus);
@@ -172,8 +175,7 @@ class DistributedVectorCollectionR2IT {
       float[] q = embedOne("What sushi rolls do you recommend for dinner?");
       List<IvfHit> hits = col.search(q, 3, 4);
       assertThat(hits).isNotEmpty();
-      List<String> topTopics =
-          hits.stream().map(h -> Corpus.topicOf(h.id())).toList();
+      List<String> topTopics = hits.stream().map(h -> Corpus.topicOf(h.id())).toList();
       assertThat(topTopics).contains("food");
 
       // Programming query should return programming docs.

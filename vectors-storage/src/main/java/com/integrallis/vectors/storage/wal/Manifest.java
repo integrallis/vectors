@@ -20,12 +20,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Per-namespace WAL manifest serialised as JSON to {@code {namespace}/manifest.json}. Records
- * which closed segments are indexed (■) vs unindexed (◈) and the highest-assigned durable
- * sequence number.
+ * Per-namespace WAL manifest serialised as JSON to {@code {namespace}/manifest.json}. Records which
+ * closed segments are indexed (■) vs unindexed (◈) and the highest-assigned durable sequence
+ * number.
  *
- * <p>A bespoke parser is used rather than pulling in a JSON dependency: the schema is small,
- * fixed, and produced only by this class.
+ * <p>A bespoke parser is used rather than pulling in a JSON dependency: the schema is small, fixed,
+ * and produced only by this class.
  */
 final class Manifest {
 

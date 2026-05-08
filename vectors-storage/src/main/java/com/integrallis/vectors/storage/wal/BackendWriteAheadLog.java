@@ -84,10 +84,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
   }
 
   public BackendWriteAheadLog(
-      StorageBackend backend,
-      String namespace,
-      Duration groupCommitInterval,
-      int maxSegmentBytes)
+      StorageBackend backend, String namespace, Duration groupCommitInterval, int maxSegmentBytes)
       throws IOException {
     if (groupCommitInterval.isNegative() || groupCommitInterval.isZero()) {
       throw new IllegalArgumentException("groupCommitInterval must be positive");
@@ -122,9 +119,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
       if (scheduledFlush == null) {
         scheduledFlush =
             scheduler.schedule(
-                this::scheduledFlush,
-                groupCommitInterval.toNanos(),
-                TimeUnit.NANOSECONDS);
+                this::scheduledFlush, groupCommitInterval.toNanos(), TimeUnit.NANOSECONDS);
       }
       while (lastDurableSeq < seq) {
         durable.awaitUninterruptibly();
@@ -257,9 +252,9 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
   /**
    * Drains {@link #pending} and writes one or more segment objects covering all entries.
    *
-   * <p>Frames are processed one at a time so that the seq of the last frame written into the
-   * active segment is always known precisely; this is required to seal segments mid-commit with
-   * correct {@code [firstSeq..lastSeq]} ranges.
+   * <p>Frames are processed one at a time so that the seq of the last frame written into the active
+   * segment is always known precisely; this is required to seal segments mid-commit with correct
+   * {@code [firstSeq..lastSeq]} ranges.
    */
   private void doCommit() throws IOException {
     assert lock.isHeldByCurrentThread();
@@ -310,8 +305,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
   /** Closes the active segment (if non-empty) and advances to the next segment index. */
   private void sealActiveSegment() {
     if (activeBytes.length == 0) return;
-    closedSegments.add(
-        new SegmentMeta(activeSegmentIndex, activeFirstSeq, lastDurableSeq, false));
+    closedSegments.add(new SegmentMeta(activeSegmentIndex, activeFirstSeq, lastDurableSeq, false));
     activeSegmentIndex++;
     activeFirstSeq = lastDurableSeq + 1;
     activeBytes = new byte[0];
@@ -359,8 +353,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
     int off = 0;
     while (off < data.length && seq <= lastSeqInSegment) {
       if (off + 4 > data.length) throw new IOException("truncated WAL segment: " + key);
-      int len =
-          ByteBuffer.wrap(data, off, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+      int len = ByteBuffer.wrap(data, off, 4).order(ByteOrder.BIG_ENDIAN).getInt();
       off += 4;
       if (len < 0 || off + len + 4 > data.length) {
         throw new IOException("corrupt WAL frame in " + key + " at seq " + seq);
@@ -368,8 +361,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
       byte[] payload = new byte[len];
       System.arraycopy(data, off, payload, 0, len);
       off += len;
-      int storedCrc =
-          ByteBuffer.wrap(data, off, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+      int storedCrc = ByteBuffer.wrap(data, off, 4).order(ByteOrder.BIG_ENDIAN).getInt();
       off += 4;
       CRC32 crc = new CRC32();
       crc.update(payload);

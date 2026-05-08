@@ -1,0 +1,42 @@
+/*
+ * Copyright 2025-2026 Integrallis Software, LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.integrallis.vectors.ingest.sinks;
+
+import com.integrallis.vectors.ingest.Batch;
+import com.integrallis.vectors.ingest.VectorSink;
+import java.util.concurrent.atomic.AtomicLong;
+
+/** {@link VectorSink} that drops every batch. Useful for sidecart-only ingest and for tests. */
+public final class NoopVectorSink implements VectorSink {
+
+  private final AtomicLong committed = new AtomicLong();
+  private final AtomicLong staged = new AtomicLong();
+
+  @Override
+  public void addAll(Batch batch) {
+    staged.set(batch.size());
+  }
+
+  @Override
+  public void commit() {
+    committed.addAndGet(staged.getAndSet(0));
+  }
+
+  @Override
+  public long committedCount() {
+    return committed.get();
+  }
+}

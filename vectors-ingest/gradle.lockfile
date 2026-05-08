@@ -1,0 +1,25 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+com.fasterxml.jackson.core:jackson-annotations:2.21=compileClasspath,testCompileClasspath
+com.fasterxml.jackson.core:jackson-core:2.21.1=compileClasspath,testCompileClasspath
+com.fasterxml.jackson.core:jackson-databind:2.21.1=compileClasspath,testCompileClasspath
+com.fasterxml.jackson:jackson-bom:2.21.1=compileClasspath,testCompileClasspath
+dev.langchain4j:langchain4j-core:1.13.1=compileClasspath,testCompileClasspath
+dev.langchain4j:langchain4j:1.13.1=testCompileClasspath
+net.bytebuddy:byte-buddy-agent:1.15.11=testCompileClasspath
+net.bytebuddy:byte-buddy:1.15.11=testCompileClasspath
+org.apache.opennlp:opennlp-tools:2.5.4=testCompileClasspath
+org.apiguardian:apiguardian-api:1.1.2=testCompileClasspath
+org.assertj:assertj-core:3.27.2=testCompileClasspath
+org.jspecify:jspecify:1.0.0=compileClasspath,testCompileClasspath
+org.junit.jupiter:junit-jupiter-api:5.11.4=testCompileClasspath
+org.junit.jupiter:junit-jupiter-params:5.11.4=testCompileClasspath
+org.junit.jupiter:junit-jupiter:5.11.4=testCompileClasspath
+org.junit.platform:junit-platform-commons:1.11.4=testCompileClasspath
+org.junit:junit-bom:5.11.4=testCompileClasspath
+org.mockito:mockito-core:5.15.2=testCompileClasspath
+org.mockito:mockito-junit-jupiter:5.15.2=testCompileClasspath
+org.opentest4j:opentest4j:1.3.0=testCompileClasspath
+org.slf4j:slf4j-api:2.0.17=compileClasspath,testCompileClasspath
+empty=annotationProcessor,testAnnotationProcessor

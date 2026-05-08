@@ -117,9 +117,7 @@ class BackendWriteAheadLogIT {
       long seq = w.append("c".getBytes());
       assertThat(seq).isEqualTo(2L);
       try (Stream<WriteAheadLog.WalEntry> s = w.readFrom(0)) {
-        assertThat(s.toList())
-            .extracting(e -> new String(e.data()))
-            .containsExactly("a", "b", "c");
+        assertThat(s.toList()).extracting(e -> new String(e.data())).containsExactly("a", "b", "c");
       }
     }
   }

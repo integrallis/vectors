@@ -143,8 +143,7 @@ class S3StorageBackendIT {
     String key = "small-" + UUID.randomUUID();
     b.put(key, new byte[] {1, 2, 3, 4});
 
-    assertThatThrownBy(() -> b.getRange(key, 2, 5))
-        .isInstanceOf(IndexOutOfBoundsException.class);
+    assertThatThrownBy(() -> b.getRange(key, 2, 5)).isInstanceOf(IndexOutOfBoundsException.class);
   }
 
   @Test
