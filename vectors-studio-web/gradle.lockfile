@@ -55,6 +55,7 @@ gg.jte:jte-extension-api:3.2.3=compileClasspath,runtimeClasspath,testCompileClas
 gg.jte:jte-runtime:3.2.3=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 gg.jte:jte:3.2.3=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 info.picocli:picocli:4.7.6=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+io.github.cdimascio:dotenv-java:3.2.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.github.erdtman:java-json-canonicalization:1.1=sigstoreClientClasspath
 io.grpc:grpc-api:1.71.0=sigstoreClientClasspath
 io.grpc:grpc-bom:1.71.0=sigstoreClientClasspath

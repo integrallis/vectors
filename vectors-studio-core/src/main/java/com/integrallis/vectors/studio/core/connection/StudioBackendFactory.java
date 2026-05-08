@@ -15,16 +15,27 @@
  */
 package com.integrallis.vectors.studio.core.connection;
 
+import java.util.Optional;
+import java.util.ServiceLoader;
+
 /** Single entry point for opening a {@link StudioBackend} from a {@link ConnectionConfig}. */
 public final class StudioBackendFactory {
 
   private StudioBackendFactory() {}
 
-  /** Opens the appropriate backend for the supplied configuration. */
+  /**
+   * Opens the appropriate backend for the supplied configuration. The built-in {@link
+   * ConnectionConfig.Embedded} and {@link ConnectionConfig.Remote} cases are handled directly; any
+   * other type is dispatched to a {@link StudioBackendProvider} discovered via {@link
+   * ServiceLoader}.
+   */
   public static StudioBackend open(ConnectionConfig cfg) {
-    return switch (cfg) {
-      case ConnectionConfig.Embedded e -> EmbeddedStudioBackend.open(e.dataDir());
-      case ConnectionConfig.Remote r -> RemoteStudioBackend.open(r);
-    };
+    if (cfg instanceof ConnectionConfig.Embedded e) return EmbeddedStudioBackend.open(e.dataDir());
+    if (cfg instanceof ConnectionConfig.Remote r) return RemoteStudioBackend.open(r);
+    for (StudioBackendProvider p : ServiceLoader.load(StudioBackendProvider.class)) {
+      Optional<StudioBackend> opt = p.tryOpen(cfg);
+      if (opt.isPresent()) return opt.get();
+    }
+    throw new IllegalArgumentException("no StudioBackendProvider for " + cfg.getClass().getName());
   }
 }

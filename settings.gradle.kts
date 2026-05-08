@@ -41,6 +41,7 @@ include("vectors-cache-langchain4j")
 // --- Studio (exploration & DR workbench) ---
 include("vectors-studio-core")
 include("vectors-studio-sidecart")
+include("vectors-studio-distributed")
 include("vectors-studio-web")
 
 include("docs")

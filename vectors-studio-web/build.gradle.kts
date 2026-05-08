@@ -15,6 +15,9 @@ dependencies {
     implementation(project(":vectors-db"))
     implementation(project(":vectors-server-client"))
 
+    // Distributed/R2 backend SPI provider on the runtime classpath; compile-time stays clean.
+    runtimeOnly(project(":vectors-studio-distributed"))
+
     implementation(platform("io.helidon:helidon-dependencies:$helidonVersion"))
     implementation("io.helidon.webserver:helidon-webserver")
     implementation("io.helidon.webserver:helidon-webserver-sse")
@@ -29,6 +32,11 @@ dependencies {
     implementation("gg.jte:jte-runtime:$jteVersion")
 
     implementation("info.picocli:picocli:4.7.6")
+
+    // Lets `--connection r2://...` and `--sidecart=D1` resolve credentials from a
+    // gitignored .env at the repo root (see .env.example) without forcing users to
+    // export R2/D1 secrets in their shell. Process env still wins over .env.
+    implementation("io.github.cdimascio:dotenv-java:3.2.0")
 
     compileOnly("dev.langchain4j:langchain4j-core:$langchain4jVersion")
     testImplementation("dev.langchain4j:langchain4j-core:$langchain4jVersion")

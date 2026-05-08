@@ -20,10 +20,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 
 /**
- * Sealed configuration carrying everything {@link StudioBackendFactory#open(ConnectionConfig)}
- * needs.
+ * Configuration carrying everything {@link StudioBackendFactory#open(ConnectionConfig)} needs.
+ *
+ * <p>Open for extension via {@link StudioBackendProvider}: any module on the runtime classpath may
+ * register a provider that recognises its own {@code ConnectionConfig} subtype.
  */
-public sealed interface ConnectionConfig {
+public interface ConnectionConfig {
 
   /** Embedded backend rooted at {@code dataDir}. */
   record Embedded(Path dataDir) implements ConnectionConfig {}

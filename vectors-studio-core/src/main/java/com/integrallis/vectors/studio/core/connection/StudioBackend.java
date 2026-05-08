@@ -26,11 +26,11 @@ import java.util.function.IntConsumer;
 
 /**
  * UI-agnostic backend SPI exposed by Studio for any vector store: an embedded {@link
- * com.integrallis.vectors.db.VectorCollection} or a remote {@code vectors-server} reached over
- * HTTP. Implementations are obtained via {@link StudioBackendFactory}.
+ * com.integrallis.vectors.db.VectorCollection}, a remote {@code vectors-server} reached over HTTP,
+ * or any provider registered via {@link StudioBackendProvider}. Implementations are obtained
+ * through {@link StudioBackendFactory}.
  */
-public sealed interface StudioBackend extends AutoCloseable
-    permits EmbeddedStudioBackend, RemoteStudioBackend {
+public interface StudioBackend extends AutoCloseable {
 
   /** Returns metadata for every collection available through this backend. */
   List<CollectionSummary> listCollections();
