@@ -56,6 +56,7 @@ include("demos:vcr-e2e")
 include("demos:server-client")
 include("demos:semantic-cache")
 include("demos:rag-multimodal")
+include("demos:studio-r2-sidecart")
 
 // Enable build cache
 buildCache {

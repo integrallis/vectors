@@ -13,6 +13,7 @@ subproject under `demos/<name>`. Demos are not published as Maven artifacts.
 | `:demos:rerank-after-retrieval` | [rerank-after-retrieval/](rerank-after-retrieval/) | SIMD-accelerated in-VM rescore of candidates retrieved from a remote store. |
 | `:demos:server-client` | [server-client/](server-client/) | End-to-end HTTP round-trip against an embedded vectors-server on an ephemeral port. |
 | `:demos:vcr-e2e` | [vcr-e2e/](vcr-e2e/) | End-to-end tour of the VCR test harness (JUnit 5 + LangChain4j + Spring AI + manual interceptor). |
+| `:demos:studio-r2-sidecart` | [studio-r2-sidecart/](studio-r2-sidecart/) | CLI seeder built on `vectors-ingest`'s `BulkIngestor` — embeds a 24-doc corpus into Cloudflare R2 (vectors) plus an H2 or D1 sidecart (text). |
 
 ## Running
 
@@ -27,6 +28,7 @@ From `vectors/`:
 ./gradlew :demos:rerank-after-retrieval:run
 ./gradlew :demos:server-client:run
 ./gradlew :demos:vcr-e2e:test                    # vcr-e2e is a test-driven demo
+./gradlew :demos:studio-r2-sidecart:runSeed --args="--help"   # see the full flag list
 ```
 
 Every demo applies `--add-modules jdk.incubator.vector` and targets JDK 25.
