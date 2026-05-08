@@ -15,6 +15,10 @@
  */
 package com.integrallis.vectors.studio.sidecart;
 
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -36,6 +40,32 @@ public interface SidecartSource extends AutoCloseable {
    * {@link SidecartSourceException} only for transport / parse failures.
    */
   Optional<SidecartRecord> get(String id);
+
+  /**
+   * Batch read for {@code ids}. The default fans out to {@link #get(String)} per id; backends where
+   * round-trip latency dominates (D1, S3, REST) should override this with a single {@code WHERE id
+   * IN (…)} round-trip. Missing ids are simply absent from the returned map.
+   */
+  default Map<String, SidecartRecord> getAll(Collection<String> ids) {
+    Map<String, SidecartRecord> out = new HashMap<>(ids.size());
+    for (String id : ids) {
+      get(id).ifPresent(r -> out.put(id, r));
+    }
+    return out;
+  }
+
+  /**
+   * Lexical / full-text search over the sidecart's text payload. The default returns an empty list,
+   * meaning "this sidecart does not provide FTS"; backends that wrap a SQL engine with FTS (H2
+   * native fulltext, SQLite FTS5 over D1) override this. Hits are returned in score-descending
+   * order.
+   *
+   * @param query free-text query in the engine-native syntax
+   * @param k maximum hits to return
+   */
+  default List<TextSearchHit> textSearch(String query, int k) {
+    return List.of();
+  }
 
   /** Releases any handles held by the source. The default is a no-op. */
   @Override

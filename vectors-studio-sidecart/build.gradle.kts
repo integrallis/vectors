@@ -2,6 +2,7 @@ description = "Vectors Studio sidecart sources — pluggable text/blob backends 
 
 dependencies {
     api(project(":vectors-studio-core"))
+    api(project(":vectors-ingest"))
 
     implementation("com.h2database:h2:2.3.232")
 

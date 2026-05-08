@@ -631,12 +631,14 @@
     </Match>
 
     <!-- vectors-studio-sidecart: DTO records expose byte[]/Map by reference for zero-copy.
-         SidecartRecord holds image blobs; SidecartConfig.Http holds header maps.
-         Fresh instances are constructed per request. -->
+         SidecartRecord holds image blobs; SidecartConfig.Http holds header maps;
+         SidecartUpsert mirrors SidecartRecord for the writer side of the SPI. Fresh
+         instances are constructed per request / per row. -->
     <Match>
         <Or>
             <Class name="com.integrallis.vectors.studio.sidecart.SidecartRecord"/>
             <Class name="com.integrallis.vectors.studio.sidecart.SidecartConfig$Http"/>
+            <Class name="com.integrallis.vectors.studio.sidecart.sources.SidecartUpsert"/>
         </Or>
         <Or>
             <Bug pattern="EI_EXPOSE_REP"/>
@@ -644,6 +646,19 @@
         </Or>
     </Match>
 
+    <!-- vectors-studio-sidecart: H2SidecartWriter and H2SidecartSource interpolate
+         table/column identifiers into DDL/DML. Identifiers are validated against the
+         strict regex [A-Za-z_][A-Za-z0-9_]{0,63} before being concatenated, so SQL
+         injection through identifiers is impossible. The dynamic IN(?,?,…) clause in
+         getAll/putAll only concatenates literal "?" placeholders and parameterises every
+         user-supplied value via PreparedStatement. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.studio.sidecart.sources.H2SidecartWriter"/>
+            <Class name="com.integrallis.vectors.studio.sidecart.sources.H2SidecartSource"/>
+        </Or>
+        <Bug pattern="SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE,SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING"/>
+    </Match>
 
     <!-- vectors-ingest: IngestDoc.attrs() returns an unmodifiableMap built in the compact
          constructor, so the underlying map cannot be mutated by callers. EmbeddedDoc is an

@@ -20,9 +20,14 @@ Pluggable sidecart sources for **Vectors Studio**: text, image, audio, and arbit
 
 The web layer accepts an optional `SidecartRegistry` on `StudioConfig`. `BlobRoutes` consults the registry first, then falls back to the active `StudioBackend.getBlob(name, id)` (which proxies to `vectors-server`'s `/v1/collections/{name}/blobs/{id}` for the remote backend). Empty registry → today's behaviour preserved.
 
+## Bulk ingest bridge
+
+`SidecartWriterSink` adapts an `H2SidecartWriter` or `D1SidecartWriter` to the `vectors-ingest` `SidecartSink` SPI, so a `BulkIngestor` pipeline can populate the sidecart text/blob rows alongside the vector backend in lock-step with each batch commit. See `:demos:studio-r2-sidecart` for an end-to-end CLI that drives a corpus into R2 + a sidecart in one pass.
+
 ## Dependencies
 
 - `vectors-studio-core`
+- `vectors-ingest`
 - `com.h2database:h2:2.3.232`
 
 ## Roadmap
