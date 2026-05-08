@@ -148,6 +148,37 @@ h2 { font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.01em; margin:
 .kind-binary { color: var(--kind-binary); }
 .kind-empty  { color: var(--kind-empty);  }
 
+/* Generic pill — same visual language as .kind-badge but used for non-kind tags
+   (e.g. collection metric / index). Modifiers tint with palette accents.
+   Inline-flex so an optional inline SVG icon aligns on the text baseline. */
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
+  border-radius: 999px; line-height: 1.5;
+  background: var(--color-surface-2); color: var(--color-fg-muted);
+  border: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+}
+.pill > svg { width: 12px; height: 12px; flex: 0 0 auto; }
+/* Quantitative pills — numeric facts; preserve case, don't uppercase. */
+.pill-dim,
+.pill-docs   { text-transform: none; letter-spacing: 0; }
+.pill-dim    { color: var(--color-brand); border-color: rgba(18, 110, 34, .25);  background: var(--color-brand-soft); }
+.pill-docs   { color: var(--kind-audio);  border-color: rgba(181, 101, 29, .25); background: rgba(181, 101, 29, .06); }
+/* Categorical pills — enum tokens; uppercase via the base .pill rule. */
+.pill-metric { color: var(--kind-json);   border-color: rgba(31, 111, 235, .25); background: rgba(31, 111, 235, .06); }
+.pill-index  { color: var(--kind-image);  border-color: rgba(111, 79, 203, .25); background: rgba(111, 79, 203, .06); }
+
+/* Collection meta line (under <h1>) — keeps numeric facts as muted text and
+   surfaces metric/index as pills on the same baseline. */
+.collection-meta {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-sm);
+}
+
 /* Document detail */
 .doc-header { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-2); }
 .doc-header h1 { font-size: var(--fs-xl); margin: 0; }
