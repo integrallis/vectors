@@ -92,7 +92,11 @@ public final class H2TextIndex implements TextIndexSpi {
    */
   private static void cleanStaleFiles(Path dbFile) {
     Path parent = dbFile.getParent();
-    String baseName = dbFile.getFileName().toString();
+    Path fileName = dbFile.getFileName();
+    if (parent == null || fileName == null) {
+      return;
+    }
+    String baseName = fileName.toString();
     for (String suffix : List.of(".lock.db", ".trace.db")) {
       Path stale = parent.resolve(baseName + suffix);
       try {

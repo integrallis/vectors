@@ -44,8 +44,8 @@ import org.openjdk.jmh.annotations.Warmup;
  *
  * <p>Tracks the §6.2 / §16.2 contract from {@code vectors-distributed-design.md}. The local-backend
  * numbers are an upper bound on what the WAL framing + group-commit machinery can sustain when
- * object-PUT latency is near zero — they isolate the implementation overhead from any
- * S3-specific cost.
+ * object-PUT latency is near zero — they isolate the implementation overhead from any S3-specific
+ * cost.
  *
  * <p>Run:
  *
@@ -53,7 +53,8 @@ import org.openjdk.jmh.annotations.Warmup;
  * ./gradlew :vectors-bench:jmh -Pjmh.includes=WriteAheadLogBenchmark
  * }</pre>
  *
- * <p>For S3 numbers see {@code WriteAheadLogS3Benchmark} (opt-in via {@code -Pwal.s3.endpoint=...}).
+ * <p>For S3 numbers see {@code WriteAheadLogS3Benchmark} (opt-in via {@code
+ * -Pwal.s3.endpoint=...}).
  */
 @BenchmarkMode({Mode.SampleTime, Mode.Throughput})
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -82,10 +83,7 @@ public class WriteAheadLogBenchmark {
     backend = new LocalFileStorageBackend(tmpDir);
     wal =
         new BackendWriteAheadLog(
-            backend,
-            "bench",
-            Duration.ofMillis(groupCommitMillis),
-            512 * 1024 * 1024);
+            backend, "bench", Duration.ofMillis(groupCommitMillis), 512 * 1024 * 1024);
     payload = new byte[payloadBytes];
     new Random(42L).nextBytes(payload);
   }
@@ -111,8 +109,8 @@ public class WriteAheadLogBenchmark {
   /**
    * Single-threaded append latency. With a 1 s group-commit interval the first append in each
    * window pays the full commit-cycle wait; subsequent appends within the window coalesce. JMH
-   * {@link Mode#SampleTime} reports p50/p90/p99 directly so the §16.2 {@code p50 ≤ 285 ms}
-   * latency gate can be read from the histogram.
+   * {@link Mode#SampleTime} reports p50/p90/p99 directly so the §16.2 {@code p50 ≤ 285 ms} latency
+   * gate can be read from the histogram.
    */
   @Benchmark
   @Threads(1)

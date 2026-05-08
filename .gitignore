@@ -41,6 +41,9 @@ spotbugs-output.txt
 # JMH
 *.jmh
 
+# JTE on-demand classfile cache (regenerated at runtime)
+**/jte-classes/
+
 # Benchmark run artifacts (ad-hoc logs captured from ./gradlew invocations)
 *.log
 

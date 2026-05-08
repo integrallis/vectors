@@ -97,11 +97,11 @@ public class WriteAheadLogS3Benchmark {
     var b = S3Client.builder().region(Region.of(region));
     if (endpoint != null) {
       // LocalStack / MinIO path: static creds + path-style addressing.
-      b = b.endpointOverride(URI.create(endpoint))
-          .forcePathStyle(true)
-          .credentialsProvider(
-              StaticCredentialsProvider.create(
-                  AwsBasicCredentials.create("test", "test")));
+      b =
+          b.endpointOverride(URI.create(endpoint))
+              .forcePathStyle(true)
+              .credentialsProvider(
+                  StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")));
     } else {
       b = b.credentialsProvider(DefaultCredentialsProvider.create());
     }
@@ -110,10 +110,7 @@ public class WriteAheadLogS3Benchmark {
     namespace = "wal-bench-" + UUID.randomUUID();
     wal =
         new BackendWriteAheadLog(
-            backend,
-            namespace,
-            Duration.ofMillis(groupCommitMillis),
-            512 * 1024 * 1024);
+            backend, namespace, Duration.ofMillis(groupCommitMillis), 512 * 1024 * 1024);
     payload = new byte[payloadBytes];
     new Random(42L).nextBytes(payload);
   }
