@@ -221,6 +221,17 @@ form button[type="submit"] {
 }
 form button[type="submit"]:hover { background: var(--color-brand-2); border-color: var(--color-brand-2); }
 
+/* Search form: query expands to fill the row width that the hits table sits under;
+   k is constrained so it doesn't inherit the generic input min-width. Explicit
+   flex-wrap:nowrap and flex:1 1 0 on the query field defeat the generic
+   `form { flex-wrap: wrap }` and `form input { min-width: 220px }` rules above. */
+form.search-form { width: 100%; flex-wrap: nowrap; }
+form.search-form > .field-query { flex: 1 1 0; min-width: 0; }
+form.search-form > .field-query > input[type="text"] { width: 100%; min-width: 0; }
+form.search-form > .field-k { flex: 0 0 auto; }
+form.search-form > .field-k > input[type="number"] { width: 96px; min-width: 0; }
+form.search-form > button[type="submit"] { flex: 0 0 auto; }
+
 /* LLM explanation */
 .llm-explanation pre { white-space: pre-wrap; background: var(--color-surface); padding: var(--sp-4); border-radius: var(--radius-md); border: 1px solid var(--color-border); box-shadow: var(--shadow-1); }
 
@@ -253,3 +264,16 @@ form button[type="submit"]:hover { background: var(--color-brand-2); border-colo
 
 /* Hits table inherits from .doc-list / .hits already; tighten text column */
 .hits td:last-child { color: var(--color-fg-muted); max-width: 600px; }
+.hits .col-score { width: 96px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Empty state shown when a list/table query returns zero rows */
+.empty-state {
+  margin: var(--sp-3) 0;
+  padding: var(--sp-5);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border-2);
+  border-radius: var(--radius-md);
+  color: var(--color-fg-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}

@@ -48,10 +48,12 @@
         @endif
       </section>
 
-      <section>
-        <h2>Metadata</h2>
-        <pre class="code-viewer json"><code>${TemplateSupport.prettyJson(doc.metadata())}</code></pre>
-      </section>
+      @if(doc.metadata() != null && !doc.metadata().isEmpty())
+        <section>
+          <h2>Metadata</h2>
+          <pre class="code-viewer json"><code>${TemplateSupport.prettyJson(doc.metadata())}</code></pre>
+        </section>
+      @endif
 
       <section>
         <h2>Vector</h2>
