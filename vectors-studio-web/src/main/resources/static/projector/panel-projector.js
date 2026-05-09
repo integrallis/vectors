@@ -1,23 +1,30 @@
-// Right-rail Projector panel. Iter 1 ships the PCA tab only; t-SNE and UMAP
-// arrive in Iter 2. POSTs to /api/projections, subscribes to the SSE event
-// stream, and forwards coordinates to the scene through onPoints().
+// Right-rail Projector panel. Hosts the PCA / t-SNE / UMAP tabs, drives the
+// run / pause / re-run lifecycle, and forwards SSE coordinates to the scene.
+// Server-side parameter keys live in ApiRoutes.paramsFrom.
 
-const ALGOS = {
-  pca: "PCA",
-  tsne: "TSNE",
-  umap: "UMAP",
-};
+const ALGOS = { pca: "PCA", tsne: "TSNE", umap: "UMAP" };
 
 export function createProjectorPanel({ root, collection, onPoints, onStatus }) {
   const tabs = root.querySelectorAll(".projector-tab");
   const tabPanels = root.querySelectorAll(".projector-tab-panel");
   const dimRadios = root.querySelectorAll('input[name="proj-dim"]');
   const runBtn = root.querySelector("#proj-run");
+  const pauseBtn = root.querySelector("#proj-pause");
   const rerunBtn = root.querySelector("#proj-rerun");
-  const cancelBtn = root.querySelector("#proj-cancel");
   const iterEl = root.querySelector("#proj-iter");
 
+  const num = (sel, dflt) => {
+    const el = root.querySelector(sel);
+    const v = parseFloat(el?.value);
+    return Number.isFinite(v) ? v : dflt;
+  };
+  const intNum = (sel, dflt) => {
+    const v = num(sel, dflt);
+    return Math.trunc(v);
+  };
+
   let activeTab = "pca";
+  let state = "idle"; // idle | running | paused
   let activeJob = null;
   let activeStream = null;
   let lastSubmit = null;
@@ -35,37 +42,51 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus }) {
 
   function paramsFor(tab) {
     if (tab === "pca") return { center: true, whiten: false };
+    if (tab === "tsne") return {
+      perplexity: intNum("#tsne-perplexity", 15),
+      learningRate: num("#tsne-learning-rate", 200),
+      iterations: intNum("#tsne-iterations", 1000),
+      seed: intNum("#tsne-seed", 42),
+    };
+    if (tab === "umap") return {
+      neighbors: intNum("#umap-neighbors", 15),
+      minDist: num("#umap-min-dist", 0.1),
+      iterations: intNum("#umap-iterations", 200),
+      seed: intNum("#umap-seed", 42),
+    };
     return {};
   }
 
-  function setIter(i, total) {
-    iterEl.textContent = `iter ${i ?? 0} / ${total ?? 0}`;
+  function setIter(i, total) { iterEl.textContent = `iter ${i ?? 0} / ${total ?? 0}`; }
+
+  function applyState(s) {
+    state = s;
+    runBtn.disabled = s !== "idle";
+    pauseBtn.disabled = s === "idle";
+    pauseBtn.textContent = s === "paused" ? "Resume" : "Pause";
+    rerunBtn.disabled = lastSubmit == null;
   }
 
   function closeStream() {
-    if (activeStream) {
-      activeStream.close();
-      activeStream = null;
-    }
+    if (activeStream) { activeStream.close(); activeStream = null; }
   }
 
-  async function run() {
-    closeStream();
-    const dim = selectedDim();
-    const algorithm = ALGOS[activeTab];
-    const body = {
+  function buildBody() {
+    return {
       collection,
-      algorithm,
-      dimensions: dim,
+      algorithm: ALGOS[activeTab],
+      dimensions: selectedDim(),
       sampleSize: 0,
       params: paramsFor(activeTab),
       sphereize: false,
     };
+  }
+
+  async function submit(body) {
+    closeStream();
     lastSubmit = body;
-    runBtn.disabled = true;
-    rerunBtn.disabled = true;
-    cancelBtn.disabled = false;
-    onStatus(`submitting ${algorithm}…`);
+    applyState("running");
+    onStatus(`submitting ${body.algorithm}…`);
     setIter(0, 0);
     let resp;
     try {
@@ -74,29 +95,15 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-    } catch (e) {
-      onStatus(`network error: ${e.message}`);
-      runBtn.disabled = false;
-      cancelBtn.disabled = true;
-      return;
-    }
-    if (!resp.ok) {
-      onStatus(`submit failed: ${resp.status}`);
-      runBtn.disabled = false;
-      cancelBtn.disabled = true;
-      return;
-    }
+    } catch (e) { onStatus(`network error: ${e.message}`); applyState("idle"); return; }
+    if (!resp.ok) { onStatus(`submit failed: ${resp.status}`); applyState("idle"); return; }
     const { jobId, n } = await resp.json();
     activeJob = jobId;
-    onStatus(`running ${algorithm} on ${n} points…`);
+    onStatus(`running ${body.algorithm} on ${n} points…`);
     activeStream = new EventSource(`/api/projections/${jobId}/events`);
     activeStream.onmessage = (e) => {
-      let ev;
-      try {
-        ev = JSON.parse(e.data);
-      } catch {
-        return;
-      }
+      let ev; try { ev = JSON.parse(e.data); } catch { return; }
+      const dim = body.dimensions;
       if (ev.coords) {
         onPoints(ev.coords, dim);
         setIter(ev.iter, ev.total);
@@ -104,53 +111,40 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus }) {
       } else if (ev.result) {
         onPoints(ev.result.coords, dim);
         onStatus(`done · ${ev.result.durationMs} ms`);
-        setIter(ev.result.coords.length ? ev.result.coords[0].length : 0, 0);
         finish();
       } else if (ev.message) {
-        onStatus(`error: ${ev.message}`);
-        finish();
+        onStatus(`error: ${ev.message}`); finish();
       }
     };
-    activeStream.onerror = () => {
-      onStatus("stream closed");
-      finish();
-    };
+    activeStream.onerror = () => { onStatus("stream closed"); finish(); };
   }
 
-  function finish() {
-    closeStream();
-    activeJob = null;
-    runBtn.disabled = false;
-    rerunBtn.disabled = lastSubmit == null;
-    cancelBtn.disabled = true;
-  }
+  function finish() { closeStream(); activeJob = null; applyState("idle"); }
 
-  async function cancel() {
+  async function cancelJob() {
     if (!activeJob) return;
-    const id = activeJob;
-    closeStream();
-    onStatus("cancelling…");
-    try {
-      await fetch(`/api/projections/${id}`, { method: "DELETE" });
-    } catch {
-      // ignore
-    }
-    finish();
-    onStatus("cancelled");
+    const id = activeJob; activeJob = null; closeStream();
+    try { await fetch(`/api/projections/${id}`, { method: "DELETE" }); } catch { /* ignore */ }
+  }
+
+  async function onPause() {
+    if (state === "running") { await cancelJob(); applyState("paused"); onStatus("paused"); }
+    else if (state === "paused" && lastSubmit) { await submit(lastSubmit); }
+  }
+
+  async function onRerun() {
+    if (state === "running") await cancelJob();
+    await submit(buildBody());
   }
 
   function mount() {
-    tabs.forEach((t) =>
-      t.addEventListener("click", () => {
-        if (t.disabled) return;
-        selectTab(t.dataset.tab);
-      }),
-    );
-    runBtn.addEventListener("click", run);
-    rerunBtn.addEventListener("click", run);
-    cancelBtn.addEventListener("click", cancel);
+    tabs.forEach((t) => t.addEventListener("click", () => { if (!t.disabled) selectTab(t.dataset.tab); }));
+    runBtn.addEventListener("click", () => submit(buildBody()));
+    pauseBtn.addEventListener("click", onPause);
+    rerunBtn.addEventListener("click", onRerun);
     selectTab("pca");
     setIter(0, 0);
+    applyState("idle");
   }
 
   return { mount };

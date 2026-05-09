@@ -129,5 +129,11 @@ class StudioServerSmokeIT {
     assertThat(res.statusCode()).isEqualTo(200);
     assertThat(res.body()).contains("/static/projector/app.js");
     assertThat(res.body()).contains("projector-shell");
+    assertThat(res.body()).contains("data-tab=\"pca\"");
+    assertThat(res.body()).contains("data-tab=\"tsne\"");
+    assertThat(res.body()).contains("data-tab=\"umap\"");
+    assertThat(res.body()).contains("id=\"tsne-perplexity\"");
+    assertThat(res.body()).contains("id=\"umap-neighbors\"");
+    assertThat(res.body()).contains("id=\"proj-pause\"");
   }
 }

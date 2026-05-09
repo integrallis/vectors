@@ -53,23 +53,61 @@
             <div class="projector-panel-body">
               <nav class="projector-tabs" role="tablist">
                 <button class="projector-tab is-active" data-tab="pca" role="tab">PCA</button>
-                <button class="projector-tab" data-tab="tsne" role="tab" disabled>t-SNE</button>
-                <button class="projector-tab" data-tab="umap" role="tab" disabled>UMAP</button>
+                <button class="projector-tab" data-tab="tsne" role="tab">t-SNE</button>
+                <button class="projector-tab" data-tab="umap" role="tab">UMAP</button>
               </nav>
               <div class="projector-tab-panels">
                 <div class="projector-tab-panel is-active" data-tab="pca">
-                  <fieldset class="projector-dim">
-                    <legend>Dimensions</legend>
-                    <label><input type="radio" name="proj-dim" value="2"> 2D</label>
-                    <label><input type="radio" name="proj-dim" value="3" checked> 3D</label>
-                  </fieldset>
                   <p class="projector-hint">PCA reduces using the top components by variance.</p>
                 </div>
+                <div class="projector-tab-panel" data-tab="tsne">
+                  <label class="projector-field projector-field--inline">
+                    <span>Perplexity</span>
+                    <input type="number" id="tsne-perplexity" min="2" max="100" step="1" value="15">
+                  </label>
+                  <label class="projector-field projector-field--inline">
+                    <span>Learning rate</span>
+                    <input type="number" id="tsne-learning-rate" min="1" step="1" value="200">
+                  </label>
+                  <label class="projector-field projector-field--inline">
+                    <span>Max iterations</span>
+                    <input type="number" id="tsne-iterations" min="50" step="50" value="1000">
+                  </label>
+                  <label class="projector-field projector-field--inline">
+                    <span>Random seed</span>
+                    <input type="number" id="tsne-seed" step="1" value="42">
+                  </label>
+                  <p class="projector-hint">t-SNE preserves local neighborhoods; results vary by seed.</p>
+                </div>
+                <div class="projector-tab-panel" data-tab="umap">
+                  <label class="projector-field projector-field--inline">
+                    <span>Neighbors</span>
+                    <input type="number" id="umap-neighbors" min="2" max="200" step="1" value="15">
+                  </label>
+                  <label class="projector-field projector-field--inline">
+                    <span>Min distance</span>
+                    <input type="number" id="umap-min-dist" min="0" max="1" step="0.05" value="0.1">
+                  </label>
+                  <label class="projector-field projector-field--inline">
+                    <span>Epochs</span>
+                    <input type="number" id="umap-iterations" min="50" step="50" value="200">
+                  </label>
+                  <label class="projector-field projector-field--inline">
+                    <span>Random seed</span>
+                    <input type="number" id="umap-seed" step="1" value="42">
+                  </label>
+                  <p class="projector-hint">UMAP balances local and global structure.</p>
+                </div>
               </div>
+              <fieldset class="projector-dim">
+                <legend>Dimensions</legend>
+                <label><input type="radio" name="proj-dim" value="2"> 2D</label>
+                <label><input type="radio" name="proj-dim" value="3" checked> 3D</label>
+              </fieldset>
               <div class="projector-actions">
                 <button type="button" class="btn btn-primary" id="proj-run">Run</button>
+                <button type="button" class="btn" id="proj-pause" disabled>Pause</button>
                 <button type="button" class="btn" id="proj-rerun" disabled>Re-run</button>
-                <button type="button" class="btn btn-danger" id="proj-cancel" disabled>Stop</button>
               </div>
               <div class="projector-iter" id="proj-iter">iter 0 / 0</div>
             </div>

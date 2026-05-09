@@ -326,6 +326,9 @@ form.search-form > button[type="submit"] { flex: 0 0 auto; }
   padding: var(--sp-3) var(--sp-4);
 }
 .projector-field { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-xs); color: var(--color-fg-muted); }
+.projector-field--inline { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.projector-field--inline > span { color: var(--color-fg-muted); }
+.projector-field--inline input[type="number"] { width: 6.5rem; text-align: right; font-variant-numeric: tabular-nums; }
 .projector-field select,
 .projector-field input[type="text"],
 .projector-field input[type="number"] {
