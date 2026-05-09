@@ -35,6 +35,7 @@ import io.helidon.webserver.sse.SseSink;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Flow;
@@ -192,30 +193,63 @@ public final class ApiRoutes implements HttpService {
     }
   }
 
-  /** Streams document IDs and text snippets as TSV for the TensorFlow Embedding Projector. */
+  /**
+   * Emits id + text + every metadata column in a single TSV. Column order follows the first-seen
+   * insertion order across documents; missing values are blank cells.
+   */
   private void metadata(ServerRequest req, ServerResponse res) {
     try {
       String name = req.path().pathParameters().get("name");
       List<String> ids = new ArrayList<>();
       session.backend().streamAllVectors(name, (id, v) -> ids.add(id), null);
-      StringBuilder tsv = new StringBuilder();
-      tsv.append("id\ttext\n");
+      List<com.integrallis.vectors.studio.core.search.DocumentView> docs = new ArrayList<>(ids.size());
+      LinkedHashSet<String> columns = new LinkedHashSet<>();
       for (String id : ids) {
         var doc = session.backend().getDocument(name, id);
+        docs.add(doc);
+        if (doc != null && doc.metadata() != null) columns.addAll(doc.metadata().keySet());
+      }
+      StringBuilder tsv = new StringBuilder();
+      tsv.append("id\ttext");
+      for (String col : columns) tsv.append('\t').append(safeCell(col));
+      tsv.append('\n');
+      for (int i = 0; i < ids.size(); i++) {
+        String id = ids.get(i);
+        var doc = docs.get(i);
         String text = "";
         if (doc != null && doc.text() != null && !doc.text().isBlank()) {
           text = doc.text().replaceAll("[\\t\\n\\r]", " ");
-          if (text.length() > 120) {
-            text = text.substring(0, 120) + "…";
-          }
+          if (text.length() > 120) text = text.substring(0, 120) + "…";
         }
-        tsv.append(id).append('\t').append(text).append('\n');
+        tsv.append(id).append('\t').append(text);
+        for (String col : columns) {
+          Object v = doc != null && doc.metadata() != null ? doc.metadata().get(col) : null;
+          tsv.append('\t').append(stringifyMeta(v));
+        }
+        tsv.append('\n');
       }
       res.headers().set(HeaderNames.CONTENT_TYPE, "text/tab-separated-values; charset=utf-8");
       res.send(tsv.toString());
     } catch (Exception e) {
       res.status(Status.INTERNAL_SERVER_ERROR_500).send(String.valueOf(e.getMessage()));
     }
+  }
+
+  private static String safeCell(String s) {
+    return s == null ? "" : s.replaceAll("[\\t\\n\\r]", " ");
+  }
+
+  private static String stringifyMeta(Object v) {
+    if (v == null) return "";
+    if (v instanceof List<?> list) {
+      StringBuilder b = new StringBuilder();
+      for (int i = 0; i < list.size(); i++) {
+        if (i > 0) b.append(',');
+        b.append(safeCell(String.valueOf(list.get(i))));
+      }
+      return b.toString();
+    }
+    return safeCell(String.valueOf(v));
   }
 
   /** L2-normalises each row in place (TF Embedding Projector "Sphereize data"). */

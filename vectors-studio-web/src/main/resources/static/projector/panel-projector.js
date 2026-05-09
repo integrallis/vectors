@@ -4,7 +4,7 @@
 
 const ALGOS = { pca: "PCA", tsne: "TSNE", umap: "UMAP" };
 
-export function createProjectorPanel({ root, collection, onPoints, onStatus }) {
+export function createProjectorPanel({ root, collection, onPoints, onStatus, getSphereize }) {
   const tabs = root.querySelectorAll(".projector-tab");
   const tabPanels = root.querySelectorAll(".projector-tab-panel");
   const dimRadios = root.querySelectorAll('input[name="proj-dim"]');
@@ -78,7 +78,7 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus }) {
       dimensions: selectedDim(),
       sampleSize: 0,
       params: paramsFor(activeTab),
-      sphereize: false,
+      sphereize: getSphereize ? !!getSphereize() : false,
     };
   }
 

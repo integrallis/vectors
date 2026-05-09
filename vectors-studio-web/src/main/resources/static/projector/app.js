@@ -4,6 +4,8 @@
 // docs/projector-native plan for the porting decisions.
 import { createScene } from "./scene.js";
 import { createProjectorPanel } from "./panel-projector.js";
+import { createDataPanel } from "./panel-data.js";
+import { colorsForColumn } from "./colors.js";
 
 const shell = document.querySelector(".projector-shell");
 if (!shell) {
@@ -13,19 +15,55 @@ if (!shell) {
 const collection = shell.dataset.collection;
 const canvasHost = shell.querySelector(".projector-canvas");
 const statusEl = shell.querySelector(".projector-status");
+const tooltipEl = document.createElement("div");
+tooltipEl.className = "projector-tooltip";
+canvasHost.appendChild(tooltipEl);
 
-const setStatus = (msg) => {
-  statusEl.textContent = msg;
-};
+const setStatus = (msg) => { statusEl.textContent = msg; };
 
-const scene = createScene(canvasHost);
+let lastDim = 3;
+
+function showTooltip(idx, x, y) {
+  if (idx < 0) { tooltipEl.style.display = "none"; return; }
+  const id = dataPanel.idAt(idx);
+  const label = dataPanel.labelAt(idx);
+  if (id == null) { tooltipEl.style.display = "none"; return; }
+  const display = label != null && label !== "" ? `${id} · ${label}` : id;
+  tooltipEl.textContent = display;
+  const rect = canvasHost.getBoundingClientRect();
+  tooltipEl.style.left = `${x - rect.left + 12}px`;
+  tooltipEl.style.top = `${y - rect.top + 12}px`;
+  tooltipEl.style.display = "block";
+}
+
+const scene = createScene(canvasHost, { onHover: showTooltip });
+
+function applyColors() {
+  const values = dataPanel.columnValues();
+  if (!values) { scene.setColors(null); return; }
+  scene.setColors(colorsForColumn(values));
+}
+
+const dataPanel = createDataPanel({
+  root: shell.querySelector("#panel-data"),
+  collection,
+  onChange: ({ reason }) => {
+    if (reason === "color" || reason === "loaded") applyColors();
+  },
+});
 
 const projectorPanel = createProjectorPanel({
   root: shell.querySelector("#panel-projector"),
   collection,
-  onPoints: (coords, dim) => scene.setPositions(coords, dim),
+  onPoints: (coords, dim) => {
+    lastDim = dim;
+    scene.setPositions(coords, dim);
+    applyColors();
+  },
   onStatus: setStatus,
+  getSphereize: () => dataPanel.getSphereize(),
 });
 
+dataPanel.mount();
 projectorPanel.mount();
 setStatus("idle · " + (shell.dataset.size ?? "?") + " docs");

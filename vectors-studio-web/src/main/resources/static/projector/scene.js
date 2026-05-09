@@ -10,7 +10,7 @@ const POINT_COLOR = 0x126e22;
 const POINT_SIZE_2D = 0.04;
 const POINT_SIZE_3D = 0.05;
 
-export function createScene(host) {
+export function createScene(host, { onHover } = {}) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setClearColor(BG, 1);
@@ -39,6 +39,33 @@ export function createScene(host) {
   });
   const points = new THREE.Points(geometry, material);
   scene.add(points);
+
+  const raycaster = new THREE.Raycaster();
+  raycaster.params.Points = { threshold: POINT_SIZE_3D * 0.6 };
+  const ndc = new THREE.Vector2();
+  let hoverIndex = -1;
+  let pointCount = 0;
+  function onPointerMove(ev) {
+    if (!onHover || !pointCount) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+    ndc.y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObject(points, false);
+    const idx = hits.length ? hits[0].index : -1;
+    if (idx !== hoverIndex) {
+      hoverIndex = idx;
+      onHover(idx, ev.clientX, ev.clientY);
+    } else if (idx !== -1) {
+      onHover(idx, ev.clientX, ev.clientY);
+    }
+  }
+  function onPointerLeave() {
+    if (!onHover) return;
+    if (hoverIndex !== -1) { hoverIndex = -1; onHover(-1, 0, 0); }
+  }
+  renderer.domElement.addEventListener("pointermove", onPointerMove);
+  renderer.domElement.addEventListener("pointerleave", onPointerLeave);
 
   function resize() {
     const w = host.clientWidth || 1;
@@ -93,15 +120,30 @@ export function createScene(host) {
     }
     geometry.setAttribute("position", new THREE.BufferAttribute(flat, 3));
     geometry.computeBoundingSphere();
+    pointCount = n;
     const is2d = dim !== 3;
     material.size = is2d ? POINT_SIZE_2D : POINT_SIZE_3D;
+    raycaster.params.Points.threshold = material.size * 0.6;
     controls.enableRotate = !is2d;
     frameTo(flat);
+  }
+
+  function setColors(colors) {
+    if (colors && colors.length === pointCount * 3) {
+      geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      material.vertexColors = true;
+    } else {
+      geometry.deleteAttribute("color");
+      material.vertexColors = false;
+    }
+    material.needsUpdate = true;
   }
 
   function dispose() {
     running = false;
     ro.disconnect();
+    renderer.domElement.removeEventListener("pointermove", onPointerMove);
+    renderer.domElement.removeEventListener("pointerleave", onPointerLeave);
     controls.dispose();
     geometry.dispose();
     material.dispose();
@@ -111,5 +153,5 @@ export function createScene(host) {
     }
   }
 
-  return { setPositions, dispose };
+  return { setPositions, setColors, dispose };
 }

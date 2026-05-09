@@ -136,4 +136,14 @@ class StudioServerSmokeIT {
     assertThat(res.body()).contains("id=\"umap-neighbors\"");
     assertThat(res.body()).contains("id=\"proj-pause\"");
   }
+
+  @Test
+  void metadataTsvIncludesMetadataColumns() throws Exception {
+    HttpResponse<String> res = get("/api/collections/docs/metadata.tsv");
+    assertThat(res.statusCode()).isEqualTo(200);
+    String[] lines = res.body().split("\n");
+    assertThat(lines[0]).isEqualTo("id\ttext\tidx");
+    assertThat(lines).hasSizeGreaterThanOrEqualTo(2);
+    assertThat(lines[1].split("\t")).hasSize(3);
+  }
 }
