@@ -1,5 +1,6 @@
 @param String title
 @param gg.jte.Content body
+@param gg.jte.Content head = null
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,6 +15,9 @@
   <link rel="stylesheet" href="/static/studio.css">
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://unpkg.com/alpinejs@3.x.x" defer></script>
+  @if(head != null)
+    ${head}
+  @endif
 </head>
 <body>
   <header class="app-header">

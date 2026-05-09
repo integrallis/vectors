@@ -17,8 +17,22 @@ package com.integrallis.vectors.studio.web.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.integrallis.vectors.studio.core.projection.ProjectionAlgorithm;
+import java.util.Map;
 
-/** JSON wire form of {@link com.integrallis.vectors.studio.core.projection.ProjectionRequest}. */
+/**
+ * JSON wire form of {@link com.integrallis.vectors.studio.core.projection.ProjectionRequest}. The
+ * {@code params} map carries per-algorithm hyperparameters as a flat object whose keys mirror the
+ * fields of {@link com.integrallis.vectors.studio.core.projection.ProjectionParams.PcaParams},
+ * {@link com.integrallis.vectors.studio.core.projection.ProjectionParams.TsneParams}, or {@link
+ * com.integrallis.vectors.studio.core.projection.ProjectionParams.UmapParams} depending on {@link
+ * #algorithm()}; missing keys fall back to per-algorithm defaults. {@code sphereize} L2-normalises
+ * each input row before fitting (TF Embedding Projector "Sphereize data").
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ProjectionRequestDto(
-    String collection, ProjectionAlgorithm algorithm, int dimensions, int sampleSize) {}
+    String collection,
+    ProjectionAlgorithm algorithm,
+    int dimensions,
+    int sampleSize,
+    Map<String, Object> params,
+    Boolean sphereize) {}

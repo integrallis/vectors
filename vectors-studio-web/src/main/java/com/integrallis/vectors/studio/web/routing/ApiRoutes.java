@@ -59,8 +59,7 @@ public final class ApiRoutes implements HttpService {
         .get("/api/projections/{id}/events", this::events)
         .delete("/api/projections/{id}", this::cancel)
         .get("/api/collections/{name}/tensors.bytes", this::tensors)
-        .get("/api/collections/{name}/metadata.tsv", this::metadata)
-        .get("/api/collections/{name}/projector-config", this::projectorConfig);
+        .get("/api/collections/{name}/metadata.tsv", this::metadata);
   }
 
   private void submit(ServerRequest req, ServerResponse res) {
@@ -93,13 +92,16 @@ public final class ApiRoutes implements HttpService {
         rows.subList(dto.sampleSize(), rows.size()).clear();
       }
       float[][] data = rows.toArray(new float[0][]);
+      if (Boolean.TRUE.equals(dto.sphereize())) {
+        sphereize(data);
+      }
       ProjectionRequest pr =
           new ProjectionRequest(
               dto.collection(),
               dto.algorithm(),
               dto.dimensions(),
               dto.sampleSize(),
-              defaultParams(dto.algorithm(), dto.dimensions()));
+              paramsFrom(dto.algorithm(), dto.dimensions(), dto.params()));
       String jobId = jobs.submit(session, pr, data, ids.toArray(new String[0]));
       res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
       res.status(Status.ACCEPTED_202)
@@ -216,31 +218,87 @@ public final class ApiRoutes implements HttpService {
     }
   }
 
-  /** Returns the TensorFlow Embedding Projector config JSON for a collection. */
-  private void projectorConfig(ServerRequest req, ServerResponse res) {
-    try {
-      String name = req.path().pathParameters().get("name");
-      var summary = session.backend().describe(name);
-      Map<String, Object> config =
-          Map.of(
-              "embeddings",
-              List.of(
-                  Map.of(
-                      "tensorName",
-                      name,
-                      "tensorShape",
-                      List.of(summary.size(), summary.dimension()),
-                      "tensorPath",
-                      "/api/collections/" + name + "/tensors.bytes",
-                      "metadataPath",
-                      "/api/collections/" + name + "/metadata.tsv")),
-              "modelCheckpointPath",
-              "vectors-studio");
-      res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
-      res.send(MAPPER.writeValueAsBytes(config));
-    } catch (Exception e) {
-      res.status(Status.INTERNAL_SERVER_ERROR_500).send(String.valueOf(e.getMessage()));
+  /** L2-normalises each row in place (TF Embedding Projector "Sphereize data"). */
+  private static void sphereize(float[][] data) {
+    for (float[] row : data) {
+      double n = 0.0;
+      for (float f : row) n += (double) f * f;
+      n = Math.sqrt(n);
+      if (n == 0.0) continue;
+      float inv = (float) (1.0 / n);
+      for (int i = 0; i < row.length; i++) row[i] *= inv;
     }
+  }
+
+  /** Builds typed {@link ProjectionParams} from a flat JSON map, defaulting any missing keys. */
+  private static ProjectionParams paramsFrom(
+      ProjectionAlgorithm a, int dims, Map<String, Object> p) {
+    ProjectionParams d = defaultParams(a, dims);
+    if (p == null || p.isEmpty()) return d;
+    return switch (a) {
+      case PCA -> {
+        ProjectionParams.PcaParams base = (ProjectionParams.PcaParams) d;
+        yield new ProjectionParams.PcaParams(
+            asInt(p.get("components"), base.components()),
+            asBool(p.get("center"), base.center()),
+            asBool(p.get("whiten"), base.whiten()));
+      }
+      case TSNE -> {
+        ProjectionParams.TsneParams base = (ProjectionParams.TsneParams) d;
+        yield new ProjectionParams.TsneParams(
+            asInt(p.get("perplexity"), base.perplexity()),
+            asDouble(p.get("learningRate"), base.learningRate()),
+            asInt(p.get("iterations"), base.iterations()),
+            asLong(p.get("seed"), base.seed()));
+      }
+      case UMAP -> {
+        ProjectionParams.UmapParams base = (ProjectionParams.UmapParams) d;
+        yield new ProjectionParams.UmapParams(
+            asInt(p.get("neighbors"), base.neighbors()),
+            asDouble(p.get("minDist"), base.minDist()),
+            asInt(p.get("iterations"), base.iterations()),
+            asLong(p.get("seed"), base.seed()));
+      }
+    };
+  }
+
+  private static int asInt(Object v, int dflt) {
+    if (v instanceof Number n) return n.intValue();
+    if (v instanceof String s && !s.isEmpty()) {
+      try {
+        return Integer.parseInt(s);
+      } catch (NumberFormatException ignore) {
+      }
+    }
+    return dflt;
+  }
+
+  private static long asLong(Object v, long dflt) {
+    if (v instanceof Number n) return n.longValue();
+    if (v instanceof String s && !s.isEmpty()) {
+      try {
+        return Long.parseLong(s);
+      } catch (NumberFormatException ignore) {
+      }
+    }
+    return dflt;
+  }
+
+  private static double asDouble(Object v, double dflt) {
+    if (v instanceof Number n) return n.doubleValue();
+    if (v instanceof String s && !s.isEmpty()) {
+      try {
+        return Double.parseDouble(s);
+      } catch (NumberFormatException ignore) {
+      }
+    }
+    return dflt;
+  }
+
+  private static boolean asBool(Object v, boolean dflt) {
+    if (v instanceof Boolean b) return b;
+    if (v instanceof String s) return Boolean.parseBoolean(s);
+    return dflt;
   }
 
   private static ProjectionParams defaultParams(ProjectionAlgorithm a, int dims) {

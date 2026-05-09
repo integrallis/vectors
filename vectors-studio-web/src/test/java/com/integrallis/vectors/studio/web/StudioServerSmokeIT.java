@@ -127,6 +127,7 @@ class StudioServerSmokeIT {
   void projectorPageLoads() throws Exception {
     HttpResponse<String> res = get("/collections/docs/projector");
     assertThat(res.statusCode()).isEqualTo(200);
-    assertThat(res.body()).contains("projector.js");
+    assertThat(res.body()).contains("/static/projector/app.js");
+    assertThat(res.body()).contains("projector-shell");
   }
 }

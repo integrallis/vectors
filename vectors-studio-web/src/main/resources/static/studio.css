@@ -283,15 +283,92 @@ form.search-form > button[type="submit"] { flex: 0 0 auto; }
 .collection-list li a { font-weight: 600; color: var(--color-fg); }
 .collection-list li a:hover { color: var(--color-brand); text-decoration: none; }
 
-/* Projector canvas */
-#projector-canvas {
-  width: 100%; height: 540px;
+/* Projector — full-screen shell with right rail of panels (Data / Projector /
+   Inspector / Bookmarks), mirroring the TF Embedding Projector layout. */
+.projector-shell {
+  position: fixed; top: 56px; left: 0; right: 0; bottom: 0;
+  display: grid; grid-template-columns: 1fr 320px;
+  background: var(--color-surface-2);
+}
+.projector-viewport {
+  position: relative; overflow: hidden;
+  background: var(--color-surface);
+}
+.projector-canvas { position: absolute; inset: 0; }
+.projector-canvas canvas { display: block; }
+.projector-status {
+  position: absolute; left: var(--sp-3); bottom: var(--sp-3);
+  padding: 4px 10px;
+  font: 500 var(--fs-xs)/1 var(--font-mono);
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--color-fg-muted);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1);
+  border-radius: 999px;
 }
-#projector-status { font-size: var(--fs-sm); margin: var(--sp-2) 0; }
+.projector-rail {
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+}
+.projector-panel + .projector-panel { border-top: 1px solid var(--color-border); }
+.projector-panel-title {
+  padding: var(--sp-3) var(--sp-4);
+  font: 600 var(--fs-xs)/1 var(--font-sans);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--color-fg-muted);
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.projector-panel-body {
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+}
+.projector-field { display: flex; flex-direction: column; gap: var(--sp-1); font-size: var(--fs-xs); color: var(--color-fg-muted); }
+.projector-field select,
+.projector-field input[type="text"],
+.projector-field input[type="number"] {
+  font: inherit; font-size: var(--fs-sm); color: var(--color-fg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-2);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px; min-width: 0;
+}
+.projector-field select:focus,
+.projector-field input:focus {
+  outline: none; border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px rgba(18, 110, 34, 0.12);
+}
+.projector-checkbox { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--color-fg); }
+.projector-tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--color-border);
+  margin: 0 calc(var(--sp-4) * -1) var(--sp-2);
+  padding: 0 var(--sp-4);
+}
+.projector-tab {
+  background: transparent; border: none;
+  border-bottom: 2px solid transparent;
+  padding: var(--sp-2) var(--sp-3);
+  font: 500 var(--fs-sm) var(--font-sans);
+  color: var(--color-fg-muted); cursor: pointer;
+}
+.projector-tab:hover:not(:disabled) { color: var(--color-fg); }
+.projector-tab.is-active { color: var(--color-brand); border-bottom-color: var(--color-brand); }
+.projector-tab:disabled { opacity: .4; cursor: not-allowed; }
+.projector-tab-panel { display: none; flex-direction: column; gap: var(--sp-3); }
+.projector-tab-panel.is-active { display: flex; }
+.projector-dim {
+  display: flex; gap: var(--sp-3);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3); margin: 0;
+}
+.projector-dim legend { padding: 0 var(--sp-1); font-size: var(--fs-xs); color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.projector-dim label { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-sm); }
+.projector-actions { display: flex; gap: var(--sp-2); }
+.projector-iter { font: 500 var(--fs-xs) var(--font-mono); color: var(--color-fg-muted); }
+.projector-hint { font-size: var(--fs-xs); color: var(--color-fg-faint); margin: 0; }
 
 /* Hits table inherits from .doc-list / .hits already; tighten text column */
 .hits td:last-child { color: var(--color-fg-muted); max-width: 600px; }
