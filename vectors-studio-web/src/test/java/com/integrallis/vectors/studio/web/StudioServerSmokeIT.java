@@ -79,6 +79,16 @@ class StudioServerSmokeIT {
         BodyHandlers.ofString());
   }
 
+  private HttpResponse<String> postJson(String path, String json) throws Exception {
+    return client.send(
+        HttpRequest.newBuilder(URI.create("http://localhost:" + handle.port() + path))
+            .timeout(Duration.ofSeconds(5))
+            .header("content-type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json))
+            .build(),
+        BodyHandlers.ofString());
+  }
+
   @Test
   void healthEndpointResponds() throws Exception {
     HttpResponse<String> res = get("/health");
@@ -135,6 +145,8 @@ class StudioServerSmokeIT {
     assertThat(res.body()).contains("id=\"tsne-perplexity\"");
     assertThat(res.body()).contains("id=\"umap-neighbors\"");
     assertThat(res.body()).contains("id=\"proj-pause\"");
+    assertThat(res.body()).contains("id=\"ins-search\"");
+    assertThat(res.body()).contains("id=\"ins-lasso\"");
   }
 
   @Test
@@ -145,5 +157,19 @@ class StudioServerSmokeIT {
     assertThat(lines[0]).isEqualTo("id\ttext\tidx");
     assertThat(lines).hasSizeGreaterThanOrEqualTo(2);
     assertThat(lines[1].split("\t")).hasSize(3);
+  }
+
+  @Test
+  void searchByIdReturnsNeighbours() throws Exception {
+    HttpResponse<String> res = postJson("/api/collections/docs/search", "{\"id\":\"doc-0\",\"k\":3}");
+    assertThat(res.statusCode()).isEqualTo(200);
+    assertThat(res.body()).contains("\"hits\"");
+    assertThat(res.body()).doesNotContain("doc-0\"");
+  }
+
+  @Test
+  void searchByUnknownIdReturns404() throws Exception {
+    HttpResponse<String> res = postJson("/api/collections/docs/search", "{\"id\":\"nope\",\"k\":3}");
+    assertThat(res.statusCode()).isEqualTo(404);
   }
 }

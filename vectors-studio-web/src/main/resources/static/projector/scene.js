@@ -109,6 +109,12 @@ export function createScene(host, { onHover } = {}) {
     controls.update();
   }
 
+  let positions = new Float32Array(0);
+  let baseColors = null;            // pristine column-derived colors
+  let selection = new Set();        // indices currently selected
+  let isolated = false;             // when true, only selected points render
+  const DIM_FACTOR = 0.18;          // non-selected color blend toward bg
+
   function setPositions(coords, dim) {
     const n = coords.length;
     const flat = new Float32Array(n * 3);
@@ -120,24 +126,77 @@ export function createScene(host, { onHover } = {}) {
     }
     geometry.setAttribute("position", new THREE.BufferAttribute(flat, 3));
     geometry.computeBoundingSphere();
+    positions = flat;
     pointCount = n;
     const is2d = dim !== 3;
     material.size = is2d ? POINT_SIZE_2D : POINT_SIZE_3D;
     raycaster.params.Points.threshold = material.size * 0.6;
     controls.enableRotate = !is2d;
+    applyDisplay();
     frameTo(flat);
   }
 
   function setColors(colors) {
-    if (colors && colors.length === pointCount * 3) {
-      geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    baseColors = colors && colors.length === pointCount * 3 ? colors : null;
+    applyDisplay();
+  }
+
+  function applyDisplay() {
+    if (!pointCount) return;
+    if (baseColors) {
+      const out = new Float32Array(pointCount * 3);
+      const hasSel = selection.size > 0;
+      const bg = ((BG >> 16) & 0xff) / 255;
+      const bgg = ((BG >> 8) & 0xff) / 255;
+      const bgb = (BG & 0xff) / 255;
+      for (let i = 0; i < pointCount; i++) {
+        const sel = selection.has(i);
+        const dim = hasSel && !sel;
+        const f = dim ? DIM_FACTOR : 1.0;
+        out[i * 3 + 0] = baseColors[i * 3 + 0] * f + bg * (1 - f);
+        out[i * 3 + 1] = baseColors[i * 3 + 1] * f + bgg * (1 - f);
+        out[i * 3 + 2] = baseColors[i * 3 + 2] * f + bgb * (1 - f);
+      }
+      geometry.setAttribute("color", new THREE.BufferAttribute(out, 3));
       material.vertexColors = true;
     } else {
       geometry.deleteAttribute("color");
       material.vertexColors = false;
     }
+    if (isolated && selection.size > 0) {
+      const idx = new Uint32Array(selection.size);
+      let k = 0;
+      for (const i of selection) idx[k++] = i;
+      geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+    } else {
+      geometry.setIndex(null);
+    }
     material.needsUpdate = true;
   }
+
+  function setSelection(indices) {
+    selection = new Set(indices);
+    if (isolated && selection.size === 0) isolated = false;
+    applyDisplay();
+  }
+
+  function setIsolated(v) { isolated = !!v; applyDisplay(); }
+
+  function projectAll(targetXY) {
+    // Fills targetXY with NDC-ish pixel coords; callers should pass a
+    // Float32Array of length pointCount*2.
+    const m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    const v = new THREE.Vector3();
+    const w = renderer.domElement.clientWidth;
+    const h = renderer.domElement.clientHeight;
+    for (let i = 0; i < pointCount; i++) {
+      v.set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]).applyMatrix4(m);
+      targetXY[i * 2] = (v.x * 0.5 + 0.5) * w;
+      targetXY[i * 2 + 1] = (-v.y * 0.5 + 0.5) * h;
+    }
+  }
+
+  function setControlsEnabled(v) { controls.enabled = !!v; }
 
   function dispose() {
     running = false;
@@ -153,5 +212,11 @@ export function createScene(host, { onHover } = {}) {
     }
   }
 
-  return { setPositions, setColors, dispose };
+  return {
+    setPositions, setColors, setSelection, setIsolated,
+    projectAll, setControlsEnabled,
+    get pointCount() { return pointCount; },
+    canvas: renderer.domElement,
+    dispose,
+  };
 }

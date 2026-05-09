@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.studio.web.routing;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.core.projection.ProjectionAlgorithm;
@@ -60,7 +61,8 @@ public final class ApiRoutes implements HttpService {
         .get("/api/projections/{id}/events", this::events)
         .delete("/api/projections/{id}", this::cancel)
         .get("/api/collections/{name}/tensors.bytes", this::tensors)
-        .get("/api/collections/{name}/metadata.tsv", this::metadata);
+        .get("/api/collections/{name}/metadata.tsv", this::metadata)
+        .post("/api/collections/{name}/search", this::knnSearch);
   }
 
   private void submit(ServerRequest req, ServerResponse res) {
@@ -190,6 +192,47 @@ public final class ApiRoutes implements HttpService {
       res.send(buf.array());
     } catch (Exception e) {
       res.status(Status.INTERNAL_SERVER_ERROR_500).send(String.valueOf(e.getMessage()));
+    }
+  }
+
+  /**
+   * k-NN search by id. Body: {@code { "id": "doc-1", "k": 10 }}. Looks up the document's vector and
+   * returns the nearest neighbours as {@code { "hits": [{ "id", "score" }, ...] }}. The Inspector
+   * panel uses this; richer queries (raw vectors, filters) can be layered on later.
+   */
+  private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+
+  private void knnSearch(ServerRequest req, ServerResponse res) {
+    try {
+      String name = req.path().pathParameters().get("name");
+      Map<String, Object> body = MAPPER.readValue(req.content().inputStream(), MAP_TYPE);
+      String id = (String) body.get("id");
+      int k = asInt(body.get("k"), 10);
+      if (id == null || id.isEmpty()) {
+        res.status(Status.BAD_REQUEST_400).send("missing id");
+        return;
+      }
+      var doc = session.backend().getDocument(name, id);
+      if (doc == null || doc.vector() == null) {
+        res.status(Status.NOT_FOUND_404).send("unknown id: " + id);
+        return;
+      }
+      var spec =
+          new com.integrallis.vectors.studio.core.search.SearchSpec(
+              doc.vector(), null, Math.max(1, k) + 1, null, false, false, false);
+      var hits = session.backend().search(name, spec);
+      List<Map<String, Object>> out = new ArrayList<>(hits.size());
+      for (var h : hits) {
+        if (h.id().equals(id)) continue; // skip the query point itself
+        out.add(Map.of("id", h.id(), "score", h.score()));
+        if (out.size() >= k) break;
+      }
+      res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
+      res.send(MAPPER.writeValueAsBytes(Map.of("hits", out)));
+    } catch (IllegalArgumentException e) {
+      res.status(Status.NOT_FOUND_404).send(String.valueOf(e.getMessage()));
+    } catch (Exception e) {
+      res.status(Status.BAD_REQUEST_400).send(String.valueOf(e.getMessage()));
     }
   }
 

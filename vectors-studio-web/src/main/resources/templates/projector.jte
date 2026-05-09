@@ -115,7 +115,25 @@
           <section class="projector-panel" id="panel-inspector">
             <header class="projector-panel-title">Inspector</header>
             <div class="projector-panel-body">
-              <p class="projector-hint">Search and selection arrive in a later iteration.</p>
+              <label class="projector-field">
+                <span>Search by id</span>
+                <input type="text" id="ins-query" placeholder="doc-0" autocomplete="off">
+              </label>
+              <label class="projector-field projector-field--inline">
+                <span>Neighbors</span>
+                <input type="number" id="ins-k" min="1" max="200" step="1" value="10">
+              </label>
+              <div class="projector-actions">
+                <button type="button" class="btn btn-primary" id="ins-search">Search</button>
+                <button type="button" class="btn" id="ins-lasso" aria-pressed="false">Lasso</button>
+              </div>
+              <ul class="projector-hits" id="ins-hits"></ul>
+              <div class="projector-actions">
+                <button type="button" class="btn" id="ins-isolate" disabled>Isolate</button>
+                <button type="button" class="btn" id="ins-clear" disabled>Clear</button>
+                <button type="button" class="btn" id="ins-show-all" disabled>Show All</button>
+              </div>
+              <div class="projector-iter" id="ins-status"></div>
             </div>
           </section>
           <section class="projector-panel" id="panel-bookmarks">

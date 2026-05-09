@@ -7,18 +7,20 @@ const NONE = "(none)";
 function parseTsv(text) {
   const lines = text.split(/\r?\n/);
   while (lines.length && !lines[lines.length - 1]) lines.pop();
-  if (!lines.length) return { columns: [], rows: [], byId: new Map() };
+  if (!lines.length) return { columns: [], rows: [], byId: new Map(), idToIndex: new Map() };
   const header = lines[0].split("\t");
   const rows = new Array(lines.length - 1);
   const byId = new Map();
+  const idToIndex = new Map();
   for (let i = 1; i < lines.length; i++) {
     const cells = lines[i].split("\t");
     const row = {};
     for (let c = 0; c < header.length; c++) row[header[c]] = cells[c] ?? "";
     rows[i - 1] = row;
     byId.set(row.id, row);
+    idToIndex.set(row.id, i - 1);
   }
-  return { columns: header, rows, byId };
+  return { columns: header, rows, byId, idToIndex };
 }
 
 export function createDataPanel({ root, collection, onChange }) {
@@ -27,7 +29,7 @@ export function createDataPanel({ root, collection, onChange }) {
   const editSel = root.querySelector("#data-edit-by");
   const sphereizeEl = root.querySelector("#data-sphereize");
 
-  let dataset = { columns: [], rows: [], byId: new Map() };
+  let dataset = { columns: [], rows: [], byId: new Map(), idToIndex: new Map() };
   let colorBy = NONE;
   let labelBy = NONE;
   let sphereize = false;
@@ -73,7 +75,7 @@ export function createDataPanel({ root, collection, onChange }) {
       if (!res.ok) throw new Error(`metadata fetch failed: ${res.status}`);
       dataset = parseTsv(await res.text());
     } catch (e) {
-      dataset = { columns: ["id"], rows: [], byId: new Map() };
+      dataset = { columns: ["id"], rows: [], byId: new Map(), idToIndex: new Map() };
       console.warn("projector: metadata load failed", e);
     }
     const enabled = dataset.columns.length > 1;
@@ -109,5 +111,6 @@ export function createDataPanel({ root, collection, onChange }) {
     columnValues: (col) => values(col ?? colorBy),
     labelAt: (i) => valueAt(i, labelBy),
     idAt,
+    indexOfId: (id) => dataset.idToIndex.get(id),
   };
 }

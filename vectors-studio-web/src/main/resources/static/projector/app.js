@@ -5,6 +5,7 @@
 import { createScene } from "./scene.js";
 import { createProjectorPanel } from "./panel-projector.js";
 import { createDataPanel } from "./panel-data.js";
+import { createInspectorPanel } from "./panel-inspector.js";
 import { colorsForColumn } from "./colors.js";
 
 const shell = document.querySelector(".projector-shell");
@@ -64,6 +65,15 @@ const projectorPanel = createProjectorPanel({
   getSphereize: () => dataPanel.getSphereize(),
 });
 
+const inspectorPanel = createInspectorPanel({
+  root: shell.querySelector("#panel-inspector"),
+  collection,
+  scene,
+  dataPanel,
+  canvasHost,
+});
+
 dataPanel.mount();
 projectorPanel.mount();
+inspectorPanel.mount();
 setStatus("idle · " + (shell.dataset.size ?? "?") + " docs");
