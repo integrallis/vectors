@@ -97,8 +97,15 @@ class StudioServerSmokeIT {
   }
 
   @Test
-  void homePageListsCollection() throws Exception {
+  void rootRedirectsToCollections() throws Exception {
     HttpResponse<String> res = get("/");
+    assertThat(res.statusCode()).isEqualTo(301);
+    assertThat(res.headers().firstValue("location")).hasValue("/collections");
+  }
+
+  @Test
+  void collectionsPageListsCollection() throws Exception {
+    HttpResponse<String> res = get("/collections");
     assertThat(res.statusCode()).isEqualTo(200);
     assertThat(res.body()).contains("docs");
     assertThat(res.body()).contains("Vectors Studio");
@@ -110,7 +117,26 @@ class StudioServerSmokeIT {
     assertThat(res.statusCode()).isEqualTo(200);
     assertThat(res.body()).contains("docs");
     assertThat(res.body()).contains("Search");
-    assertThat(res.body()).contains("Projector");
+    assertThat(res.body()).contains("Visualize");
+    assertThat(res.body()).contains("/collections/docs/projector");
+    // Search form is now inlined on the overview page.
+    assertThat(res.body()).contains("hx-post=\"/collections/docs/search\"");
+    assertThat(res.body()).contains("name=\"query\"");
+  }
+
+  @Test
+  void searchPostReturnsHitsFragment() throws Exception {
+    HttpResponse<String> res =
+        client.send(
+            HttpRequest.newBuilder(URI.create("http://localhost:" + handle.port() + "/collections/docs/search"))
+                .timeout(Duration.ofSeconds(5))
+                .header("content-type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("query=text&k=3"))
+                .build(),
+            BodyHandlers.ofString());
+    assertThat(res.statusCode()).isEqualTo(200);
+    // Returns the partial fragment (no full layout chrome).
+    assertThat(res.body()).doesNotContain("<html");
   }
 
   @Test
@@ -127,13 +153,6 @@ class StudioServerSmokeIT {
   }
 
   @Test
-  void recommenderEndpointReturnsHeuristic() throws Exception {
-    HttpResponse<String> res = get("/collections/docs/recommend");
-    assertThat(res.statusCode()).isEqualTo(200);
-    assertThat(res.body()).containsAnyOf("PCA", "TSNE", "UMAP");
-  }
-
-  @Test
   void projectorPageLoads() throws Exception {
     HttpResponse<String> res = get("/collections/docs/projector");
     assertThat(res.statusCode()).isEqualTo(200);
@@ -144,7 +163,6 @@ class StudioServerSmokeIT {
     assertThat(res.body()).contains("data-tab=\"umap\"");
     assertThat(res.body()).contains("id=\"tsne-perplexity\"");
     assertThat(res.body()).contains("id=\"umap-neighbors\"");
-    assertThat(res.body()).contains("id=\"proj-pause\"");
     assertThat(res.body()).contains("id=\"ins-search\"");
     assertThat(res.body()).contains("id=\"ins-lasso\"");
   }
@@ -171,5 +189,13 @@ class StudioServerSmokeIT {
   void searchByUnknownIdReturns404() throws Exception {
     HttpResponse<String> res = postJson("/api/collections/docs/search", "{\"id\":\"nope\",\"k\":3}");
     assertThat(res.statusCode()).isEqualTo(404);
+  }
+
+  @Test
+  void searchByQueryReturnsHits() throws Exception {
+    HttpResponse<String> res =
+        postJson("/api/collections/docs/search", "{\"query\":\"text 0\",\"k\":3}");
+    assertThat(res.statusCode()).isEqualTo(200);
+    assertThat(res.body()).contains("\"hits\"");
   }
 }

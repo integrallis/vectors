@@ -1,6 +1,6 @@
-// Right-rail Data panel. Loads metadata.tsv once, populates the Color by /
-// Label by selects from its columns, owns the Sphereize toggle, and exposes
-// per-point lookups for the rest of the UI (color/label hover).
+// Right-rail Data panel. Loads metadata.tsv once, owns the Sphereize toggle,
+// and exposes per-point lookups for the rest of the UI (label hover, etc.).
+// Label-by defaults to the "text" column when present so tooltips stay useful.
 
 const NONE = "(none)";
 
@@ -24,29 +24,12 @@ function parseTsv(text) {
 }
 
 export function createDataPanel({ root, collection, onChange }) {
-  const colorSel = root.querySelector("#data-color-by");
-  const labelSel = root.querySelector("#data-label-by");
-  const editSel = root.querySelector("#data-edit-by");
   const sphereizeEl = root.querySelector("#data-sphereize");
 
   let dataset = { columns: [], rows: [], byId: new Map(), idToIndex: new Map() };
   let colorBy = NONE;
   let labelBy = NONE;
   let sphereize = false;
-
-  function fillSelect(sel, value) {
-    sel.innerHTML = "";
-    const optNone = document.createElement("option");
-    optNone.value = NONE; optNone.textContent = NONE;
-    sel.appendChild(optNone);
-    for (const col of dataset.columns) {
-      if (col === "id") continue;
-      const o = document.createElement("option");
-      o.value = col; o.textContent = col;
-      sel.appendChild(o);
-    }
-    sel.value = dataset.columns.includes(value) || value === NONE ? value : NONE;
-  }
 
   function values(column) {
     if (column === NONE || !dataset.rows.length) return null;
@@ -78,33 +61,29 @@ export function createDataPanel({ root, collection, onChange }) {
       dataset = { columns: ["id"], rows: [], byId: new Map(), idToIndex: new Map() };
       console.warn("projector: metadata load failed", e);
     }
-    const enabled = dataset.columns.length > 1;
-    fillSelect(colorSel, colorBy);
-    fillSelect(labelSel, labelBy);
-    if (editSel) {
-      fillSelect(editSel, NONE);
-      editSel.disabled = !enabled;
-    }
-    colorSel.disabled = !enabled;
-    labelSel.disabled = !enabled;
-    sphereizeEl.disabled = false;
+    if (sphereizeEl) sphereizeEl.disabled = false;
     // Default Label by to "text" when present so hovers are useful out of the box.
-    if (labelBy === NONE && dataset.columns.includes("text")) {
-      labelBy = "text";
-      labelSel.value = "text";
-    }
+    if (labelBy === NONE && dataset.columns.includes("text")) labelBy = "text";
     emit("loaded");
   }
 
   function mount() {
-    colorSel.addEventListener("change", () => { colorBy = colorSel.value || NONE; emit("color"); });
-    labelSel.addEventListener("change", () => { labelBy = labelSel.value || NONE; emit("label"); });
     sphereizeEl.addEventListener("change", () => { sphereize = !!sphereizeEl.checked; emit("sphereize"); });
     load();
   }
 
+  // Reset to the page-load defaults without firing onChange — the caller is
+  // responsible for re-running projection / colors after a coordinated reset.
+  function reset() {
+    colorBy = NONE;
+    labelBy = dataset.columns.includes("text") ? "text" : NONE;
+    sphereize = false;
+    if (sphereizeEl) sphereizeEl.checked = false;
+  }
+
   return {
     mount,
+    reset,
     getColorBy: () => colorBy,
     getLabelBy: () => labelBy,
     getSphereize: () => sphereize,

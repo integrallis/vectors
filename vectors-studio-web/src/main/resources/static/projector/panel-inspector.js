@@ -16,7 +16,7 @@ function pointInPolygon(x, y, poly) {
   return inside;
 }
 
-export function createInspectorPanel({ root, collection, scene, dataPanel, canvasHost }) {
+export function createInspectorPanel({ root, collection, scene, dataPanel, canvasHost, onReset }) {
   const queryEl = root.querySelector("#ins-query");
   const kEl = root.querySelector("#ins-k");
   const searchBtn = root.querySelector("#ins-search");
@@ -42,8 +42,8 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
   function refreshButtons() {
     const hasSel = selection.size > 0;
     isolateBtn.disabled = !hasSel;
-    clearBtn.disabled = !hasSel;
     showAllBtn.disabled = !hasSel;
+    // Clear is always available — it doubles as "reset to initial state".
   }
 
   function renderHits() {
@@ -67,36 +67,91 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
     if (h.index == null) return;
     if (e.shiftKey) {
       if (selection.has(h.index)) selection.delete(h.index); else selection.add(h.index);
+      scene.setSelection(selection);
     } else {
-      selection = new Set([h.index]);
+      // Single-click in the hit list re-pivots: pick this hit as the new query.
+      selectByIndex(h.index);
+      return;
     }
-    scene.setSelection(selection);
     refreshButtons();
     renderHits();
   }
 
-  async function doSearch() {
-    const id = queryEl.value.trim();
-    if (!id) { statusEl.textContent = "enter an id"; return; }
-    const k = Math.max(1, parseInt(kEl.value, 10) || 10);
+  // Posts the given JSON payload to the search API and applies the result to
+  // the scene + hit list. queryIndex is the optional pivot index (set when
+  // searching by doc id) to render a primary label.
+  async function postSearch(payload, queryIndex) {
     statusEl.textContent = `searching…`;
     try {
       const res = await fetch(`/api/collections/${encodeURIComponent(collection)}/search`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, k }),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) { statusEl.textContent = `error ${res.status}`; return; }
+      if (!res.ok) { statusEl.textContent = `error ${res.status}`; return null; }
       const { hits } = await res.json();
       lastHits = hits.map((h) => ({ ...h, index: dataPanel.indexOfId?.(h.id) ?? null }));
-      const queryIndex = dataPanel.indexOfId?.(id);
       selection = new Set(queryIndex != null ? [queryIndex] : []);
       for (const h of lastHits) if (h.index != null) selection.add(h.index);
       scene.setSelection(selection);
+      applyLabels(queryIndex);
       refreshButtons();
       renderHits();
-      statusEl.textContent = `${hits.length} neighbours`;
-    } catch (e) { statusEl.textContent = `network error`; }
+      statusEl.textContent = hits.length === 0 ? "no results" : `${hits.length} hits`;
+      return { queryIndex, hits: lastHits };
+    } catch (e) { statusEl.textContent = `network error`; return null; }
+  }
+
+  async function searchById(id, k) {
+    return postSearch({ id, k }, dataPanel.indexOfId?.(id));
+  }
+
+  async function searchByQuery(query, k) {
+    return postSearch({ query, k }, null);
+  }
+
+  function applyLabels(primaryIndex) {
+    if (!scene.setLabels) return;
+    const items = [];
+    if (primaryIndex != null) {
+      const txt = dataPanel.labelAt(primaryIndex) ?? dataPanel.idAt(primaryIndex);
+      if (txt != null) items.push({ index: primaryIndex, text: String(txt), primary: true });
+    }
+    for (const h of lastHits) {
+      if (h.index == null || h.index === primaryIndex) continue;
+      const txt = dataPanel.labelAt(h.index) ?? h.id;
+      if (txt != null) items.push({ index: h.index, text: String(txt) });
+    }
+    scene.setLabels(items);
+  }
+
+  async function doSearch() {
+    const q = queryEl.value.trim();
+    if (!q) { statusEl.textContent = "enter a query"; return; }
+    const k = Math.max(1, parseInt(kEl.value, 10) || 10);
+    // If the query exactly matches a known doc id, pivot kNN around that point;
+    // otherwise fall through to text-based hybrid search.
+    const idx = dataPanel.indexOfId?.(q);
+    if (idx != null) await searchById(q, k);
+    else await searchByQuery(q, k);
+  }
+
+  async function selectByIndex(idx) {
+    if (idx == null || idx < 0) {
+      selection = new Set();
+      lastHits = [];
+      scene.setSelection(selection);
+      scene.setLabels?.([]);
+      refreshButtons();
+      renderHits();
+      statusEl.textContent = "";
+      return;
+    }
+    const id = dataPanel.idAt(idx);
+    if (id == null) return;
+    queryEl.value = id;
+    const k = Math.max(1, parseInt(kEl.value, 10) || 10);
+    await searchById(id, k);
   }
 
   function setLasso(on) {
@@ -147,8 +202,17 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
     isolateBtn.addEventListener("click", () => scene.setIsolated(true));
     showAllBtn.addEventListener("click", () => scene.setIsolated(false));
     clearBtn.addEventListener("click", () => {
-      selection = new Set(); scene.setSelection(selection); scene.setIsolated(false);
+      // Inspector-local reset.
+      selection = new Set(); lastHits = [];
+      scene.setSelection(selection); scene.setIsolated(false);
+      scene.setLabels?.([]);
+      queryEl.value = "";
+      if (kEl.defaultValue !== "") kEl.value = kEl.defaultValue;
+      if (lassoOn) setLasso(false);
       refreshButtons(); renderHits(); statusEl.textContent = "";
+      // Restart auto-rotation and let the host reset the rest of the page.
+      scene.setAutoRotate?.(true);
+      onReset?.();
     });
     svg.addEventListener("pointerdown", onDown);
     svg.addEventListener("pointermove", onMove);
@@ -156,5 +220,5 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
     svg.addEventListener("pointerleave", onUp);
   }
 
-  return { mount };
+  return { mount, selectByIndex };
 }

@@ -1,54 +1,47 @@
-// Right-rail Projector panel. Hosts the PCA / t-SNE / UMAP tabs, drives the
-// run / pause / re-run lifecycle, and forwards SSE coordinates to the scene.
-// Server-side parameter keys live in ApiRoutes.paramsFrom.
+// Right-rail Projector panel. Hosts the PCA / t-SNE / UMAP segmented toggle and
+// the 2D/3D toggle, and auto-submits a new projection whenever any input
+// changes. Server-side parameter keys live in ApiRoutes.paramsFrom.
 
 const ALGOS = { pca: "PCA", tsne: "TSNE", umap: "UMAP" };
+const DEBOUNCE_MS = 350;
 
 export function createProjectorPanel({ root, collection, onPoints, onStatus, getSphereize }) {
-  const tabs = root.querySelectorAll(".projector-tab");
-  const tabPanels = root.querySelectorAll(".projector-tab-panel");
-  const dimRadios = root.querySelectorAll('input[name="proj-dim"]');
-  const runBtn = root.querySelector("#proj-run");
-  const pauseBtn = root.querySelector("#proj-pause");
-  const rerunBtn = root.querySelector("#proj-rerun");
-  const iterEl = root.querySelector("#proj-iter");
+  const algoBtns = root.querySelectorAll(".seg-toggle [data-algo]");
+  const algoPanels = root.querySelectorAll(".projector-tab-panel");
+  const dimBtns = root.querySelectorAll(".seg-toggle [data-dim]");
 
   const num = (sel, dflt) => {
     const el = root.querySelector(sel);
     const v = parseFloat(el?.value);
     return Number.isFinite(v) ? v : dflt;
   };
-  const intNum = (sel, dflt) => {
-    const v = num(sel, dflt);
-    return Math.trunc(v);
-  };
+  const intNum = (sel, dflt) => Math.trunc(num(sel, dflt));
 
-  let activeTab = "pca";
-  let state = "idle"; // idle | running | paused
+  let activeAlgo = "pca";
+  let activeDim = 3;
   let activeJob = null;
   let activeStream = null;
-  let lastSubmit = null;
+  let pending = null; // setTimeout handle for debounced submit
 
-  function selectTab(tab) {
-    activeTab = tab;
-    tabs.forEach((t) => t.classList.toggle("is-active", t.dataset.tab === tab));
-    tabPanels.forEach((p) => p.classList.toggle("is-active", p.dataset.tab === tab));
+  function selectAlgo(algo) {
+    activeAlgo = algo;
+    algoBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.algo === algo));
+    algoPanels.forEach((p) => p.classList.toggle("is-active", p.dataset.tab === algo));
+  }
+  function selectDim(dim) {
+    activeDim = dim;
+    dimBtns.forEach((b) => b.classList.toggle("is-active", parseInt(b.dataset.dim, 10) === dim));
   }
 
-  function selectedDim() {
-    for (const r of dimRadios) if (r.checked) return parseInt(r.value, 10);
-    return 3;
-  }
-
-  function paramsFor(tab) {
-    if (tab === "pca") return { center: true, whiten: false };
-    if (tab === "tsne") return {
+  function paramsFor(algo) {
+    if (algo === "pca") return { center: true, whiten: false };
+    if (algo === "tsne") return {
       perplexity: intNum("#tsne-perplexity", 15),
       learningRate: num("#tsne-learning-rate", 200),
       iterations: intNum("#tsne-iterations", 1000),
       seed: intNum("#tsne-seed", 42),
     };
-    if (tab === "umap") return {
+    if (algo === "umap") return {
       neighbors: intNum("#umap-neighbors", 15),
       minDist: num("#umap-min-dist", 0.1),
       iterations: intNum("#umap-iterations", 200),
@@ -57,37 +50,30 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus, get
     return {};
   }
 
-  function setIter(i, total) { iterEl.textContent = `iter ${i ?? 0} / ${total ?? 0}`; }
-
-  function applyState(s) {
-    state = s;
-    runBtn.disabled = s !== "idle";
-    pauseBtn.disabled = s === "idle";
-    pauseBtn.textContent = s === "paused" ? "Resume" : "Pause";
-    rerunBtn.disabled = lastSubmit == null;
-  }
-
   function closeStream() {
     if (activeStream) { activeStream.close(); activeStream = null; }
+  }
+
+  async function cancelJob() {
+    if (!activeJob) return;
+    const id = activeJob; activeJob = null; closeStream();
+    try { await fetch(`/api/projections/${id}`, { method: "DELETE" }); } catch { /* ignore */ }
   }
 
   function buildBody() {
     return {
       collection,
-      algorithm: ALGOS[activeTab],
-      dimensions: selectedDim(),
+      algorithm: ALGOS[activeAlgo],
+      dimensions: activeDim,
       sampleSize: 0,
-      params: paramsFor(activeTab),
+      params: paramsFor(activeAlgo),
       sphereize: getSphereize ? !!getSphereize() : false,
     };
   }
 
   async function submit(body) {
-    closeStream();
-    lastSubmit = body;
-    applyState("running");
+    await cancelJob();
     onStatus(`submitting ${body.algorithm}…`);
-    setIter(0, 0);
     let resp;
     try {
       resp = await fetch("/api/projections", {
@@ -95,8 +81,8 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus, get
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-    } catch (e) { onStatus(`network error: ${e.message}`); applyState("idle"); return; }
-    if (!resp.ok) { onStatus(`submit failed: ${resp.status}`); applyState("idle"); return; }
+    } catch (e) { onStatus(`network error: ${e.message}`); return; }
+    if (!resp.ok) { onStatus(`submit failed: ${resp.status}`); return; }
     const { jobId, n } = await resp.json();
     activeJob = jobId;
     onStatus(`running ${body.algorithm} on ${n} points…`);
@@ -106,7 +92,6 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus, get
       const dim = body.dimensions;
       if (ev.coords) {
         onPoints(ev.coords, dim);
-        setIter(ev.iter, ev.total);
         onStatus(`iter ${ev.iter} / ${ev.total}`);
       } else if (ev.result) {
         onPoints(ev.result.coords, dim);
@@ -119,33 +104,37 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus, get
     activeStream.onerror = () => { onStatus("stream closed"); finish(); };
   }
 
-  function finish() { closeStream(); activeJob = null; applyState("idle"); }
+  function finish() { closeStream(); activeJob = null; }
 
-  async function cancelJob() {
-    if (!activeJob) return;
-    const id = activeJob; activeJob = null; closeStream();
-    try { await fetch(`/api/projections/${id}`, { method: "DELETE" }); } catch { /* ignore */ }
-  }
-
-  async function onPause() {
-    if (state === "running") { await cancelJob(); applyState("paused"); onStatus("paused"); }
-    else if (state === "paused" && lastSubmit) { await submit(lastSubmit); }
-  }
-
-  async function onRerun() {
-    if (state === "running") await cancelJob();
-    await submit(buildBody());
+  function schedule() {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => { pending = null; submit(buildBody()); }, DEBOUNCE_MS);
   }
 
   function mount() {
-    tabs.forEach((t) => t.addEventListener("click", () => { if (!t.disabled) selectTab(t.dataset.tab); }));
-    runBtn.addEventListener("click", () => submit(buildBody()));
-    pauseBtn.addEventListener("click", onPause);
-    rerunBtn.addEventListener("click", onRerun);
-    selectTab("pca");
-    setIter(0, 0);
-    applyState("idle");
+    algoBtns.forEach((b) =>
+      b.addEventListener("click", () => { selectAlgo(b.dataset.algo); schedule(); }));
+    dimBtns.forEach((b) =>
+      b.addEventListener("click", () => { selectDim(parseInt(b.dataset.dim, 10)); schedule(); }));
+    // Hyperparameter inputs: debounced auto-rerun on change.
+    root.querySelectorAll(".projector-tab-panel input[type=number]").forEach((el) =>
+      el.addEventListener("change", schedule));
+    selectAlgo("pca");
+    selectDim(3);
   }
 
-  return { mount };
+  function run() { return submit(buildBody()); }
+
+  // Reset algorithm + dim to PCA / 3D and restore numeric input defaults from
+  // their HTML defaultValue. Schedules a fresh projection.
+  function reset() {
+    selectAlgo("pca");
+    selectDim(3);
+    root.querySelectorAll(".projector-tab-panel input[type=number]").forEach((el) => {
+      if (el.defaultValue !== "") el.value = el.defaultValue;
+    });
+    schedule();
+  }
+
+  return { mount, run, schedule, reset };
 }

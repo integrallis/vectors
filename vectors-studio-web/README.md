@@ -6,9 +6,8 @@ Helidon SE 4 web frontend for **Vectors Studio** — an interactive exploration 
 
 - PicoCLI launcher (`StudioServer`) and programmatic entry point (`StudioServer.start(StudioConfig)`)
 - HTTP routing, JTE rendering, and static asset serving
-- HTMX-driven pages for collection browse, search, document inspection, projector, and recommender
+- HTMX-driven pages for collection browse, search, document inspection, and projector
 - JSON + SSE API for long-running projection jobs (run on virtual threads via `ProjectionJobManager`)
-- Optional langchain4j `ChatModel` discovery via `ChatModelFactory` for recommender enrichment
 
 ## Run
 
@@ -23,18 +22,15 @@ CLI flags: `--connection` (required, `embedded:/path` or `http(s)://host:port`),
 
 | Method | Path                                              | Source              | Purpose                                                |
 | ------ | ------------------------------------------------- | ------------------- | ------------------------------------------------------ |
-| GET    | `/`                                               | `HomeRoutes`        | Home page (collection cards)                           |
+| GET    | `/`                                               | `HomeRoutes`        | 301 redirect to `/collections`                         |
 | GET    | `/collections`                                    | `HomeRoutes`        | Full collections list (with delete-collection actions) |
 | DELETE | `/collections/{name}`                             | `HomeRoutes`        | Delete a collection (HTMX-driven, returns empty body)  |
 | GET    | `/collections/{name}`                             | `CollectionRoutes`  | Collection overview + first preview page               |
 | GET    | `/collections/{name}/preview?offset&limit`        | `CollectionRoutes`  | Paginated preview fragment (HTMX) with total + page-size selector |
-| GET    | `/collections/{name}/search`                      | `SearchRoutes`      | Search form                                            |
-| POST   | `/collections/{name}/search`                      | `SearchRoutes`      | Run search (form-encoded; HTMX-aware fragment vs page) |
+| POST   | `/collections/{name}/search`                      | `SearchRoutes`      | Run hybrid search (form-encoded); returns hits-list HTMX fragment |
 | GET    | `/collections/{name}/documents/{id}`              | `DocumentRoutes`    | Document inspector with kind-aware viewer              |
 | GET    | `/collections/{name}/blobs/{id}`                  | `BlobRoutes`        | Streams document blob (sidecart-first, then backend); content-type sniffed |
 | GET    | `/collections/{name}/projector`                   | `ProjectorRoutes`   | 3D projector page (Three.js island)                    |
-| GET    | `/collections/{name}/recommend`                   | `RecommenderRoutes` | Heuristic recommendation page                          |
-| GET    | `/collections/{name}/recommend/explain`           | `RecommenderRoutes` | LLM-enriched explanation fragment (HTMX)               |
 | POST   | `/api/projections`                                | `ApiRoutes`         | Submit a projection job (JSON)                         |
 | GET    | `/api/projections/{id}/events`                    | `ApiRoutes`         | SSE stream of `ProjectionEvent`s; replays terminal state for completed jobs |
 | DELETE | `/api/projections/{id}`                           | `ApiRoutes`         | Cancel a running projection                            |
@@ -55,13 +51,12 @@ CLI flags: `--connection` (required, `embedded:/path` or `http(s)://host:port`),
 - `ProjectionJob` — holds state (`PENDING`/`RUNNING`/`DONE`/`ERROR`) and a `Flow.Publisher<ProjectionEvent>`
 - `ProjectionEvent` (sealed): `Started`, `Progress`, `Done`, `Error`
 - `ProjectionRequestDto` — wire shape posted to `/api/projections`
-- `ChatModelFactory.create(Object chatModelOrNull)` — returns `Optional<LlmRecommender>` only when the supplied object is a langchain4j `ChatModel`; logs and returns empty otherwise
 
 ## Templates and assets
 
 - `templates/layout.jte` — page shell (HTMX + Alpine via CDN)
-- `templates/{home,collections,collection,search,document,projector,recommender}.jte`
-- `templates/partials/` — HTMX fragments (`documentList`, `hitsList`, `llmExplanation`, …)
+- `templates/{collections,collection,document,projector}.jte`
+- `templates/partials/` — HTMX fragments (`documentList`, `hitsList`, …)
 - `static/studio.css` — themed stylesheet (clean-line tokens distilled from the Brex web app, Inter type ramp, brand-green accent)
 - `static/img/{logo.png, favicon*.png, favicon.ico}` — java-vectors brand assets
 - `static/projector.js` — hand-written ES module that imports `three` from a CDN, opens the SSE stream, and renders the projection

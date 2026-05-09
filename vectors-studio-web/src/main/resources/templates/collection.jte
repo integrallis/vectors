@@ -39,10 +39,22 @@
         </span>
       </div>
       <nav class="actions">
-        <a class="btn" href="/collections/${summary.name()}/search">Search</a>
-        <a class="btn" href="/collections/${summary.name()}/projector">Projector</a>
-        <a class="btn" href="/collections/${summary.name()}/recommend">Recommend projection</a>
+        <a class="btn btn-icon" href="/collections/${summary.name()}/projector" title="Visualize as a 3D point cloud">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+            <line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+          <span>Visualize</span>
+        </a>
       </nav>
+      <h2>Search</h2>
+      <form class="search-form" hx-post="/collections/${summary.name()}/search" hx-target="#hits-pane">
+        <label class="field-query">Query <input type="text" name="query" placeholder="search…" required></label>
+        <label class="field-k">k <input name="k" type="number" value="10" min="1" max="100"></label>
+        <button type="submit">Search</button>
+      </form>
+      <div id="hits-pane"></div>
       <h2>Documents</h2>
       <div id="preview-pane" hx-get="/collections/${summary.name()}/preview?offset=0&limit=25" hx-trigger="load">
         <p class="muted">loading…</p>

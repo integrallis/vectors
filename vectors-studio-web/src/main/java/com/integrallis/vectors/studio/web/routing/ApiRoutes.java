@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 
 /** JSON + SSE API consumed by the projector island. */
@@ -121,48 +122,55 @@ public final class ApiRoutes implements HttpService {
       res.status(Status.NOT_FOUND_404).send();
       return;
     }
-    SseSink sink = res.sink(SseSink.TYPE);
-    if (job.state() == ProjectionJob.State.DONE && job.result() != null) {
-      try {
-        sink.emit(
-            SseEvent.builder()
-                .data(MAPPER.writeValueAsString(new ProjectionEvent.Done(id, job.result())))
-                .build());
-      } catch (Exception ignore) {
+    try (SseSink sink = res.sink(SseSink.TYPE)) {
+      if (job.state() == ProjectionJob.State.DONE && job.result() != null) {
+        try {
+          sink.emit(
+              SseEvent.builder()
+                  .data(MAPPER.writeValueAsString(new ProjectionEvent.Done(id, job.result())))
+                  .build());
+        } catch (Exception ignore) {
+        }
+        return;
       }
-      sink.close();
-      return;
-    }
-    job.publisher()
-        .subscribe(
-            new Flow.Subscriber<>() {
-              private Flow.Subscription sub;
+      CountDownLatch done = new CountDownLatch(1);
+      job.publisher()
+          .subscribe(
+              new Flow.Subscriber<>() {
+                private Flow.Subscription sub;
 
-              @Override
-              public void onSubscribe(Flow.Subscription s) {
-                this.sub = s;
-                s.request(Long.MAX_VALUE);
-              }
-
-              @Override
-              public void onNext(ProjectionEvent ev) {
-                try {
-                  sink.emit(SseEvent.builder().data(MAPPER.writeValueAsString(ev)).build());
-                } catch (Exception ignore) {
-                  sub.cancel();
+                @Override
+                public void onSubscribe(Flow.Subscription s) {
+                  this.sub = s;
+                  s.request(Long.MAX_VALUE);
                 }
-              }
 
-              @Override
-              public void onError(Throwable t) {
-                sink.close();
-              }
+                @Override
+                public void onNext(ProjectionEvent ev) {
+                  try {
+                    sink.emit(SseEvent.builder().data(MAPPER.writeValueAsString(ev)).build());
+                  } catch (Exception ignore) {
+                    sub.cancel();
+                    done.countDown();
+                  }
+                }
 
-              @Override
-              public void onComplete() {
-                sink.close();
-              }
-            });
+                @Override
+                public void onError(Throwable t) {
+                  done.countDown();
+                }
+
+                @Override
+                public void onComplete() {
+                  done.countDown();
+                }
+              });
+      try {
+        done.await();
+      } catch (InterruptedException ie) {
+        Thread.currentThread().interrupt();
+      }
+    }
   }
 
   private void cancel(ServerRequest req, ServerResponse res) {
@@ -207,25 +215,16 @@ public final class ApiRoutes implements HttpService {
       String name = req.path().pathParameters().get("name");
       Map<String, Object> body = MAPPER.readValue(req.content().inputStream(), MAP_TYPE);
       String id = (String) body.get("id");
+      String query = (String) body.get("query");
       int k = asInt(body.get("k"), 10);
-      if (id == null || id.isEmpty()) {
-        res.status(Status.BAD_REQUEST_400).send("missing id");
+      List<Map<String, Object>> out;
+      if (id != null && !id.isEmpty()) {
+        out = searchByVector(name, id, k);
+      } else if (query != null && !query.isEmpty()) {
+        out = searchByText(name, query, k);
+      } else {
+        res.status(Status.BAD_REQUEST_400).send("missing id or query");
         return;
-      }
-      var doc = session.backend().getDocument(name, id);
-      if (doc == null || doc.vector() == null) {
-        res.status(Status.NOT_FOUND_404).send("unknown id: " + id);
-        return;
-      }
-      var spec =
-          new com.integrallis.vectors.studio.core.search.SearchSpec(
-              doc.vector(), null, Math.max(1, k) + 1, null, false, false, false);
-      var hits = session.backend().search(name, spec);
-      List<Map<String, Object>> out = new ArrayList<>(hits.size());
-      for (var h : hits) {
-        if (h.id().equals(id)) continue; // skip the query point itself
-        out.add(Map.of("id", h.id(), "score", h.score()));
-        if (out.size() >= k) break;
       }
       res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
       res.send(MAPPER.writeValueAsBytes(Map.of("hits", out)));
@@ -234,6 +233,59 @@ public final class ApiRoutes implements HttpService {
     } catch (Exception e) {
       res.status(Status.BAD_REQUEST_400).send(String.valueOf(e.getMessage()));
     }
+  }
+
+  private List<Map<String, Object>> searchByVector(String name, String id, int k) {
+    var doc = session.backend().getDocument(name, id);
+    if (doc == null || doc.vector() == null) {
+      throw new IllegalArgumentException("unknown id: " + id);
+    }
+    var spec =
+        new com.integrallis.vectors.studio.core.search.SearchSpec(
+            doc.vector(), null, Math.max(1, k) + 1, null, false, false, false);
+    var hits = session.backend().search(name, spec);
+    List<Map<String, Object>> out = new ArrayList<>(hits.size());
+    for (var h : hits) {
+      if (h.id().equals(id)) continue; // skip the query point itself
+      out.add(Map.of("id", h.id(), "score", h.score()));
+      if (out.size() >= k) break;
+    }
+    return out;
+  }
+
+  private List<Map<String, Object>> searchByText(String name, String query, int k) {
+    var summary = session.backend().describe(name);
+    var spec =
+        new com.integrallis.vectors.studio.core.search.SearchSpec(
+            zeroVector(summary.dimension(), query),
+            query,
+            Math.max(1, k),
+            null,
+            false,
+            true,
+            true);
+    var hits = session.backend().search(name, spec);
+    List<Map<String, Object>> out = new ArrayList<>(hits.size());
+    for (var h : hits) {
+      out.add(Map.of("id", h.id(), "score", h.score()));
+      if (out.size() >= k) break;
+    }
+    return out;
+  }
+
+  private static float[] zeroVector(int dim, String seed) {
+    float[] v = new float[dim];
+    if (seed == null || seed.isEmpty()) return v;
+    int h = seed.hashCode();
+    for (int i = 0; i < dim; i++) {
+      v[i] = ((h >>> (i % 32)) & 1) == 0 ? -1.0f : 1.0f;
+    }
+    double n = 0.0;
+    for (float f : v) n += f * f;
+    n = Math.sqrt(n);
+    float scale = (float) (n == 0 ? 1.0 : 1.0 / n);
+    for (int i = 0; i < dim; i++) v[i] *= scale;
+    return v;
   }
 
   /**

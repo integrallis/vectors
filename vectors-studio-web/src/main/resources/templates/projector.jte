@@ -26,36 +26,40 @@
           <section class="projector-panel" id="panel-data">
             <header class="projector-panel-title">Data</header>
             <div class="projector-panel-body">
-              <label class="projector-field">
-                <span>Tensor</span>
-                <select disabled><option>${summary.name()}</option></select>
-              </label>
+              <div class="projector-field">
+                <span>Collection</span>
+                <div class="projector-tensor-name">${summary.name()}</div>
+              </div>
               <label class="projector-checkbox">
                 <input type="checkbox" id="data-sphereize" disabled>
                 <span>Sphereize data</span>
-              </label>
-              <label class="projector-field">
-                <span>Color by</span>
-                <select id="data-color-by" disabled><option>(none)</option></select>
-              </label>
-              <label class="projector-field">
-                <span>Label by</span>
-                <select id="data-label-by" disabled><option>(none)</option></select>
-              </label>
-              <label class="projector-field">
-                <span>Edit by</span>
-                <select id="data-edit-by" disabled><option>(none)</option></select>
               </label>
             </div>
           </section>
           <section class="projector-panel" id="panel-projector">
             <header class="projector-panel-title">Projector</header>
             <div class="projector-panel-body">
-              <nav class="projector-tabs" role="tablist">
-                <button class="projector-tab is-active" data-tab="pca" role="tab">PCA</button>
-                <button class="projector-tab" data-tab="tsne" role="tab">t-SNE</button>
-                <button class="projector-tab" data-tab="umap" role="tab">UMAP</button>
-              </nav>
+              <div class="seg-toggle seg-toggle--algo" role="tablist" aria-label="Projection algorithm">
+                <button type="button" class="seg-btn is-active" data-algo="pca" role="tab">PCA</button>
+                <button type="button" class="seg-btn" data-algo="tsne" role="tab">t-SNE</button>
+                <button type="button" class="seg-btn" data-algo="umap" role="tab">UMAP</button>
+              </div>
+              <div class="seg-toggle seg-toggle--dim" role="radiogroup" aria-label="Output dimensions">
+                <button type="button" class="seg-btn" data-dim="2" role="radio" aria-label="2D">
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="2.5" y="2.5" width="11" height="11" rx="1"/>
+                  </svg>
+                  <span>2D</span>
+                </button>
+                <button type="button" class="seg-btn is-active" data-dim="3" role="radio" aria-label="3D">
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M2.5 5 L8 2 L13.5 5 L8 8 Z"/>
+                    <path d="M2.5 5 L2.5 11 L8 14 L8 8"/>
+                    <path d="M13.5 5 L13.5 11 L8 14"/>
+                  </svg>
+                  <span>3D</span>
+                </button>
+              </div>
               <div class="projector-tab-panels">
                 <div class="projector-tab-panel is-active" data-tab="pca">
                   <p class="projector-hint">PCA reduces using the top components by variance.</p>
@@ -99,25 +103,14 @@
                   <p class="projector-hint">UMAP balances local and global structure.</p>
                 </div>
               </div>
-              <fieldset class="projector-dim">
-                <legend>Dimensions</legend>
-                <label><input type="radio" name="proj-dim" value="2"> 2D</label>
-                <label><input type="radio" name="proj-dim" value="3" checked> 3D</label>
-              </fieldset>
-              <div class="projector-actions">
-                <button type="button" class="btn btn-primary" id="proj-run">Run</button>
-                <button type="button" class="btn" id="proj-pause" disabled>Pause</button>
-                <button type="button" class="btn" id="proj-rerun" disabled>Re-run</button>
-              </div>
-              <div class="projector-iter" id="proj-iter">iter 0 / 0</div>
             </div>
           </section>
           <section class="projector-panel" id="panel-inspector">
             <header class="projector-panel-title">Inspector</header>
             <div class="projector-panel-body">
               <label class="projector-field">
-                <span>Search by id</span>
-                <input type="text" id="ins-query" placeholder="doc-0" autocomplete="off">
+                <span>Search</span>
+                <input type="text" id="ins-query" placeholder="search…" autocomplete="off">
               </label>
               <label class="projector-field projector-field--inline">
                 <span>Neighbors</span>
@@ -130,16 +123,10 @@
               <ul class="projector-hits" id="ins-hits"></ul>
               <div class="projector-actions">
                 <button type="button" class="btn" id="ins-isolate" disabled>Isolate</button>
-                <button type="button" class="btn" id="ins-clear" disabled>Clear</button>
+                <button type="button" class="btn" id="ins-clear">Clear</button>
                 <button type="button" class="btn" id="ins-show-all" disabled>Show All</button>
               </div>
               <div class="projector-iter" id="ins-status"></div>
-            </div>
-          </section>
-          <section class="projector-panel" id="panel-bookmarks">
-            <header class="projector-panel-title">Bookmarks</header>
-            <div class="projector-panel-body">
-              <p class="projector-hint">Saved views arrive in a later iteration.</p>
             </div>
           </section>
         </aside>

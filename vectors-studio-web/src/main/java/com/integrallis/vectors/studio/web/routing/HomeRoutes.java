@@ -26,7 +26,7 @@ import io.helidon.webserver.http.ServerResponse;
 import java.util.List;
 import java.util.Map;
 
-/** Home/collections-list landing page plus collection-level destructive actions. */
+/** Collections-list landing page plus collection-level destructive actions. */
 public final class HomeRoutes implements HttpService {
 
   private final StudioSession session;
@@ -40,14 +40,13 @@ public final class HomeRoutes implements HttpService {
   @Override
   public void routing(HttpRules rules) {
     rules
-        .get("/", this::home)
+        .get("/", this::redirectToCollections)
         .get("/collections", this::collections)
         .delete("/collections/{name}", this::deleteCollection);
   }
 
-  private void home(ServerRequest req, ServerResponse res) {
-    List<CollectionSummary> collections = session.backend().listCollections();
-    renderer.render(res, "home.jte", Map.of("collections", collections));
+  private void redirectToCollections(ServerRequest req, ServerResponse res) {
+    res.status(Status.MOVED_PERMANENTLY_301).header("Location", "/collections").send();
   }
 
   private void collections(ServerRequest req, ServerResponse res) {

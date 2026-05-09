@@ -56,7 +56,6 @@ public final class StudioRouting {
         .register(new DocumentRoutes(session, renderer))
         .register(new BlobRoutes(session, sidecart))
         .register(new ProjectorRoutes(session, jobs, renderer))
-        .register(new RecommenderRoutes(session, renderer))
         .register(new ApiRoutes(session, jobs))
         .register(new HealthRoutes());
   }

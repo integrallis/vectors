@@ -37,7 +37,12 @@ function showTooltip(idx, x, y) {
   tooltipEl.style.display = "block";
 }
 
-const scene = createScene(canvasHost, { onHover: showTooltip });
+function onPointClick(idx) {
+  // -1 means click on empty space — clear selection + labels.
+  inspectorPanel?.selectByIndex(idx < 0 ? null : idx);
+}
+
+const scene = createScene(canvasHost, { onHover: showTooltip, onClick: onPointClick });
 
 function applyColors() {
   const values = dataPanel.columnValues();
@@ -50,6 +55,7 @@ const dataPanel = createDataPanel({
   collection,
   onChange: ({ reason }) => {
     if (reason === "color" || reason === "loaded") applyColors();
+    if (reason === "sphereize") projectorPanel.schedule();
   },
 });
 
@@ -71,9 +77,15 @@ const inspectorPanel = createInspectorPanel({
   scene,
   dataPanel,
   canvasHost,
+  onReset: () => {
+    dataPanel.reset();
+    applyColors();
+    projectorPanel.reset();
+  },
 });
 
 dataPanel.mount();
 projectorPanel.mount();
 inspectorPanel.mount();
 setStatus("idle · " + (shell.dataset.size ?? "?") + " docs");
+projectorPanel.run();

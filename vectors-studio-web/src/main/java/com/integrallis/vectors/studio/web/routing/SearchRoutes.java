@@ -27,7 +27,7 @@ import io.helidon.webserver.http.ServerResponse;
 import java.util.List;
 import java.util.Map;
 
-/** Vector / hybrid search HTMX routes that return either a full page or a result fragment. */
+/** Vector / hybrid search HTMX route — POST returns a hits-list fragment. */
 public final class SearchRoutes implements HttpService {
 
   private final StudioSession session;
@@ -40,15 +40,7 @@ public final class SearchRoutes implements HttpService {
 
   @Override
   public void routing(HttpRules rules) {
-    rules
-        .get("/collections/{name}/search", this::form)
-        .post("/collections/{name}/search", this::execute);
-  }
-
-  private void form(ServerRequest req, ServerResponse res) {
-    String name = req.path().pathParameters().get("name");
-    var summary = session.backend().describe(name);
-    renderer.render(res, "search.jte", Map.of("summary", summary, "hits", List.of()));
+    rules.post("/collections/{name}/search", this::execute);
   }
 
   private void execute(ServerRequest req, ServerResponse res) {
@@ -66,13 +58,7 @@ public final class SearchRoutes implements HttpService {
     } catch (RuntimeException e) {
       hits = List.of();
     }
-    if ("true"
-        .equals(
-            req.headers().first(io.helidon.http.HeaderNames.create("HX-Request")).orElse(null))) {
-      renderer.renderFragment(res, Status.OK_200, "partials/hitsList.jte", Map.of("hits", hits));
-    } else {
-      renderer.render(res, "search.jte", Map.of("summary", summary, "hits", hits, "query", text));
-    }
+    renderer.renderFragment(res, Status.OK_200, "partials/hitsList.jte", Map.of("hits", hits));
   }
 
   private static float[] zeroVector(int dim, String seed) {
