@@ -16,6 +16,7 @@
 package com.integrallis.vectors.studio.web;
 
 import com.integrallis.vectors.studio.core.StudioSession;
+import com.integrallis.vectors.studio.web.optimize.OptimizeJobManager;
 import com.integrallis.vectors.studio.web.projection.ProjectionJobManager;
 import io.helidon.webserver.WebServer;
 
@@ -25,11 +26,17 @@ public final class StudioServerHandle implements AutoCloseable {
   private final WebServer server;
   private final StudioSession session;
   private final ProjectionJobManager jobs;
+  private final OptimizeJobManager optimizeJobs;
 
-  StudioServerHandle(WebServer server, StudioSession session, ProjectionJobManager jobs) {
+  StudioServerHandle(
+      WebServer server,
+      StudioSession session,
+      ProjectionJobManager jobs,
+      OptimizeJobManager optimizeJobs) {
     this.server = server;
     this.session = session;
     this.jobs = jobs;
+    this.optimizeJobs = optimizeJobs;
   }
 
   /** The listen port (resolved after {@link WebServer#start() start} for ephemeral-port setups). */
@@ -43,9 +50,13 @@ public final class StudioServerHandle implements AutoCloseable {
       server.stop();
     } finally {
       try {
-        jobs.close();
+        optimizeJobs.close();
       } finally {
-        session.close();
+        try {
+          jobs.close();
+        } finally {
+          session.close();
+        }
       }
     }
   }

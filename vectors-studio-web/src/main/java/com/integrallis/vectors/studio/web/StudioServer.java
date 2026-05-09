@@ -23,6 +23,7 @@ import com.integrallis.vectors.studio.sidecart.SidecartRegistry;
 import com.integrallis.vectors.studio.sidecart.SidecartSource;
 import com.integrallis.vectors.studio.sidecart.sources.D1SidecartSource;
 import com.integrallis.vectors.studio.sidecart.sources.H2SidecartSource;
+import com.integrallis.vectors.studio.web.optimize.OptimizeJobManager;
 import com.integrallis.vectors.studio.web.projection.ProjectionJobManager;
 import com.integrallis.vectors.studio.web.routing.StudioRouting;
 import io.helidon.webserver.WebServer;
@@ -159,10 +160,12 @@ public final class StudioServer implements Callable<Integer> {
   public static StudioServerHandle start(StudioConfig config) {
     Objects.requireNonNull(config, "config");
     ProjectionJobManager jobs = new ProjectionJobManager();
-    StudioRouting routing = new StudioRouting(config.session(), jobs, config.sidecart());
+    OptimizeJobManager optimizeJobs = new OptimizeJobManager();
+    StudioRouting routing =
+        new StudioRouting(config.session(), jobs, optimizeJobs, config.sidecart());
     WebServer server =
         WebServer.builder().port(config.port()).routing(routing::apply).build().start();
-    return new StudioServerHandle(server, config.session(), jobs);
+    return new StudioServerHandle(server, config.session(), jobs, optimizeJobs);
   }
 
   /**

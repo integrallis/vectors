@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":vectors-studio-sidecart"))
     implementation(project(":vectors-db"))
     implementation(project(":vectors-server-client"))
+    implementation(project(":vectors-optimizer"))
 
     // Distributed/R2 backend SPI provider on the runtime classpath; compile-time stays clean.
     runtimeOnly(project(":vectors-studio-distributed"))

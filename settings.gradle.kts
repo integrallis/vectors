@@ -9,6 +9,7 @@ include("vectors-ivf")
 include("vectors-ingest")
 include("vectors-hybrid")
 include("vectors-router")
+include("vectors-optimizer")
 include("vectors-text-h2")
 include("vectors-db")
 include("vectors-distributed")
@@ -57,6 +58,7 @@ include("demos:server-client")
 include("demos:semantic-cache")
 include("demos:rag-multimodal")
 include("demos:studio-r2-sidecart")
+include("demos:optimizer-tutorial")
 
 // Enable build cache
 buildCache {

@@ -17,6 +17,7 @@ package com.integrallis.vectors.studio.web.routing;
 
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.sidecart.SidecartRegistry;
+import com.integrallis.vectors.studio.web.optimize.OptimizeJobManager;
 import com.integrallis.vectors.studio.web.projection.ProjectionJobManager;
 import com.integrallis.vectors.studio.web.view.JteEngineFactory;
 import com.integrallis.vectors.studio.web.view.ViewRenderer;
@@ -29,17 +30,23 @@ public final class StudioRouting {
 
   private final StudioSession session;
   private final ProjectionJobManager jobs;
+  private final OptimizeJobManager optimizeJobs;
   private final SidecartRegistry sidecart;
   private final ViewRenderer renderer;
 
-  public StudioRouting(StudioSession session, ProjectionJobManager jobs) {
-    this(session, jobs, SidecartRegistry.empty());
+  public StudioRouting(
+      StudioSession session, ProjectionJobManager jobs, OptimizeJobManager optimizeJobs) {
+    this(session, jobs, optimizeJobs, SidecartRegistry.empty());
   }
 
   public StudioRouting(
-      StudioSession session, ProjectionJobManager jobs, SidecartRegistry sidecart) {
+      StudioSession session,
+      ProjectionJobManager jobs,
+      OptimizeJobManager optimizeJobs,
+      SidecartRegistry sidecart) {
     this.session = session;
     this.jobs = jobs;
+    this.optimizeJobs = optimizeJobs;
     this.sidecart = sidecart == null ? SidecartRegistry.empty() : sidecart;
     TemplateEngine engine = JteEngineFactory.create();
     this.renderer = new ViewRenderer(engine);
@@ -56,6 +63,7 @@ public final class StudioRouting {
         .register(new DocumentRoutes(session, renderer))
         .register(new BlobRoutes(session, sidecart))
         .register(new ProjectorRoutes(session, jobs, renderer))
+        .register(new OptimizeRoutes(session, optimizeJobs, renderer))
         .register(new ApiRoutes(session, jobs))
         .register(new HealthRoutes());
   }
