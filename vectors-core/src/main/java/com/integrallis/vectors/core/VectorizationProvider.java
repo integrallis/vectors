@@ -24,8 +24,8 @@ import java.util.logging.Logger;
  * <p>Selection order:
  *
  * <ol>
- *   <li>{@link PanamaVectorUtilSupport} -- requires JDK 22+ with {@code jdk.incubator.vector}
- *   <li>{@link ScalarVectorUtilSupport} -- pure scalar fallback
+ *   <li>Panama Vector API SIMD implementation -- requires JDK 22+ with {@code jdk.incubator.vector}
+ *   <li>Scalar fallback
  * </ol>
  */
 public final class VectorizationProvider {

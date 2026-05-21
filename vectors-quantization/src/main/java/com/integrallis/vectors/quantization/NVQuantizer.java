@@ -91,7 +91,7 @@ public final class NVQuantizer implements Quantizer<NVQuantizedVectors> {
    * training.
    *
    * @param dataset the training data
-   * @param numSubvectors number of subvectors (M); must be >= 1 and <= dimension
+   * @param numSubvectors number of subvectors (M); must be {@code >= 1} and {@code <= dimension}
    * @return a trained NVQ quantizer
    * @throws IllegalArgumentException if numSubvectors is invalid
    */
