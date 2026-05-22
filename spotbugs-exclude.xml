@@ -144,6 +144,17 @@
         <Class name="com.integrallis.vectors.quantization.QuantizationPipeline$Builder"/>
         <Bug pattern="URF_UNREAD_FIELD"/>
     </Match>
+    <!-- vectors-bench: CommitPipelineBenchmark.stagedIds/stagedDocs are JMH @State fields
+         written in @Setup and read in the @Benchmark methods (copyOfAndStage,
+         copyOfStageAndRead). The reads are present in the bytecode (getfield stagedIds at
+         the start of those methods), but SpotBugs' UrF detector misses reads that occur only
+         inside @Benchmark methods which have no static caller (JMH invokes them via generated
+         code that does not exist at spotbugs-analysis time). Same class of JMH false positive
+         as the DMI_RANDOM_USED_ONLY_ONCE exclusions below. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.CommitPipelineBenchmark"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
     <Match>
         <Or>
             <Class name="com.integrallis.vectors.quantization.ScalarQuantizedVectors"/>
@@ -160,6 +171,15 @@
     <!-- vectors-db: public records intentionally expose internal array references -->
     <Match>
         <Class name="com.integrallis.vectors.core.Document"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+    <!-- vectors-optimizer: LabeledQuery is a public record holding a pre-computed embedding
+         float[] for zero-copy use across study trials — same intentional exposure as Document. -->
+    <Match>
+        <Class name="com.integrallis.vectors.optimizer.study.LabeledQuery"/>
         <Or>
             <Bug pattern="EI_EXPOSE_REP"/>
             <Bug pattern="EI_EXPOSE_REP2"/>
@@ -693,6 +713,20 @@
     <Match>
         <Class name="com.integrallis.vectors.ingest.sinks.DistributedVectorSink"/>
         <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
+    <!-- vectors-studio-web: OptimizeJobManager and OptimizeRoutes store injected service
+         collaborators (StudyStore, OptimizeJobManager, StudioSession, ViewRenderer) by
+         reference. These are long-lived services, not mutable data — dependency injection,
+         not internal-representation exposure. They cannot and should not be cloned; their
+         lifecycle is owned by the composition root. Same rationale as the
+         DistributedVectorCollection$Builder exclusion above. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.studio.web.optimize.OptimizeJobManager"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.OptimizeRoutes"/>
+        </Or>
+        <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
 
 
