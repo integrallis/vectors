@@ -26,14 +26,13 @@ import java.util.Optional;
 
 /**
  * Sweeps a single similarity threshold for a {@link SemanticCache}. Each trial creates a fresh
- * cache via the supplied {@link CacheFactory}, seeds it with the caller-provided
- * {@code (key, embedding)} pairs, then probes every labelled query and computes accuracy
- * (per-query: a hit returning {@code expectedLabel} is correct; a miss is correct iff
- * {@code expectedLabel == null}).
+ * cache via the supplied {@link CacheFactory}, seeds it with the caller-provided {@code (key,
+ * embedding)} pairs, then probes every labelled query and computes accuracy (per-query: a hit
+ * returning {@code expectedLabel} is correct; a miss is correct iff {@code expectedLabel == null}).
  *
- * <p>Pair with {@link com.integrallis.vectors.optimizer.sampler.GridSampler} on a single
- * {@code DoubleRange("threshold", lo, hi)} axis, or wrap a discrete grid via
- * {@link com.integrallis.vectors.optimizer.space.ParamSpec.Discrete}.
+ * <p>Pair with {@link com.integrallis.vectors.optimizer.sampler.GridSampler} on a single {@code
+ * DoubleRange("threshold", lo, hi)} axis, or wrap a discrete grid via {@link
+ * com.integrallis.vectors.optimizer.space.ParamSpec.Discrete}.
  */
 public final class CacheThresholdStudy<V> {
 
@@ -52,10 +51,7 @@ public final class CacheThresholdStudy<V> {
   private final V seedValue;
 
   public CacheThresholdStudy(
-      CacheFactory<V> factory,
-      Map<String, float[]> seeds,
-      List<LabeledQuery> probes,
-      V seedValue) {
+      CacheFactory<V> factory, Map<String, float[]> seeds, List<LabeledQuery> probes, V seedValue) {
     this.factory = Objects.requireNonNull(factory, "factory");
     Objects.requireNonNull(seeds, "seeds");
     Objects.requireNonNull(probes, "probes");
@@ -71,7 +67,10 @@ public final class CacheThresholdStudy<V> {
     Object raw = trial.params().get(THRESHOLD_AXIS);
     if (raw == null) {
       throw new IllegalArgumentException(
-          "Trial is missing the required '" + THRESHOLD_AXIS + "' axis; got: " + trial.params().keySet());
+          "Trial is missing the required '"
+              + THRESHOLD_AXIS
+              + "' axis; got: "
+              + trial.params().keySet());
     }
     double threshold = ((Number) raw).doubleValue();
     Instant startedAt = Instant.now();
@@ -106,9 +105,16 @@ public final class CacheThresholdStudy<V> {
           trial,
           startedAt,
           Instant.now(),
-          accuracy, accuracy, accuracy, accuracy, 0.0,
-          lc.p50Us(), lc.p95Us(), lc.p99Us(),
-          buildTimeMs, 0L,
+          accuracy,
+          accuracy,
+          accuracy,
+          accuracy,
+          0.0,
+          lc.p50Us(),
+          lc.p95Us(),
+          lc.p99Us(),
+          buildTimeMs,
+          0L,
           accuracy);
     }
   }

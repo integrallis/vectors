@@ -30,10 +30,10 @@ import java.util.concurrent.Flow;
 import java.util.concurrent.SubmissionPublisher;
 
 /**
- * Runs a study sequentially: pulls a {@link Trial} from the configured sampler, hands it to
- * {@link IndexStudy}, persists the resulting {@link TrialResult} via {@link StudyStore}, and
- * publishes a {@link TrialEvent} stream so live-progress subscribers (Studio SSE, CLI loggers)
- * see the run unfold.
+ * Runs a study sequentially: pulls a {@link Trial} from the configured sampler, hands it to {@link
+ * IndexStudy}, persists the resulting {@link TrialResult} via {@link StudyStore}, and publishes a
+ * {@link TrialEvent} stream so live-progress subscribers (Studio SSE, CLI loggers) see the run
+ * unfold.
  *
  * <p>Sequential by design — concurrent trials would compete for memory and JVM warmup, biasing
  * latency measurements. Multi-trial parallelism is a v2 follow-up.

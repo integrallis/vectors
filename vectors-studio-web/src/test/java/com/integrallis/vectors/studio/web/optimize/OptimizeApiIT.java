@@ -133,8 +133,7 @@ class OptimizeApiIT {
             HttpResponse<String> r = get("/api/optimize/studies/" + studyId + "/trials");
             if (r.statusCode() != 200) return false;
             JsonNode tree = JSON.readTree(r.body());
-            return "COMPLETED".equals(tree.get("state").asText())
-                && tree.get("trials").size() == 3;
+            return "COMPLETED".equals(tree.get("state").asText()) && tree.get("trials").size() == 3;
           } catch (Exception e) {
             return false;
           }

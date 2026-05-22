@@ -21,8 +21,8 @@ package com.integrallis.vectors.optimizer.objective;
  * <p>The retrieval-quality axes ({@code recall}, {@code ndcg}, {@code precision}, {@code f1},
  * {@code mrr}) are already in [0, 1] and treated as MAXIMIZE. The cost axes — latency, build time
  * and memory — are normalized by the {@code *Reference} fields and treated as MINIMIZE: each
- * normalized cost is subtracted from the composite. Any axis whose weight is {@code 0} drops out
- * of the composite entirely.
+ * normalized cost is subtracted from the composite. Any axis whose weight is {@code 0} drops out of
+ * the composite entirely.
  *
  * @param kForMetrics k passed to the {@code @K} metrics
  * @param recallWeight weight for Recall@k (MAX)
@@ -99,18 +99,65 @@ public record ObjectiveWeights(
     private double memoryWeight;
     private double memoryReferenceBytes = 1024L * 1024L * 1024L;
 
-    public Builder kForMetrics(int v) { this.kForMetrics = v; return this; }
-    public Builder recallWeight(double v) { this.recallWeight = v; return this; }
-    public Builder ndcgWeight(double v) { this.ndcgWeight = v; return this; }
-    public Builder precisionWeight(double v) { this.precisionWeight = v; return this; }
-    public Builder f1Weight(double v) { this.f1Weight = v; return this; }
-    public Builder mrrWeight(double v) { this.mrrWeight = v; return this; }
-    public Builder latencyP95Weight(double v) { this.latencyP95Weight = v; return this; }
-    public Builder latencyP95ReferenceUs(double v) { this.latencyP95ReferenceUs = v; return this; }
-    public Builder buildTimeWeight(double v) { this.buildTimeWeight = v; return this; }
-    public Builder buildTimeReferenceMs(double v) { this.buildTimeReferenceMs = v; return this; }
-    public Builder memoryWeight(double v) { this.memoryWeight = v; return this; }
-    public Builder memoryReferenceBytes(double v) { this.memoryReferenceBytes = v; return this; }
+    public Builder kForMetrics(int v) {
+      this.kForMetrics = v;
+      return this;
+    }
+
+    public Builder recallWeight(double v) {
+      this.recallWeight = v;
+      return this;
+    }
+
+    public Builder ndcgWeight(double v) {
+      this.ndcgWeight = v;
+      return this;
+    }
+
+    public Builder precisionWeight(double v) {
+      this.precisionWeight = v;
+      return this;
+    }
+
+    public Builder f1Weight(double v) {
+      this.f1Weight = v;
+      return this;
+    }
+
+    public Builder mrrWeight(double v) {
+      this.mrrWeight = v;
+      return this;
+    }
+
+    public Builder latencyP95Weight(double v) {
+      this.latencyP95Weight = v;
+      return this;
+    }
+
+    public Builder latencyP95ReferenceUs(double v) {
+      this.latencyP95ReferenceUs = v;
+      return this;
+    }
+
+    public Builder buildTimeWeight(double v) {
+      this.buildTimeWeight = v;
+      return this;
+    }
+
+    public Builder buildTimeReferenceMs(double v) {
+      this.buildTimeReferenceMs = v;
+      return this;
+    }
+
+    public Builder memoryWeight(double v) {
+      this.memoryWeight = v;
+      return this;
+    }
+
+    public Builder memoryReferenceBytes(double v) {
+      this.memoryReferenceBytes = v;
+      return this;
+    }
 
     public ObjectiveWeights build() {
       return new ObjectiveWeights(

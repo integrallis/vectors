@@ -59,7 +59,8 @@ class RandomSamplerTest {
       if (v < 10.0) below10++;
     }
     // Log-uniform over [1, 1000]: P(v < 10) = log(10)/log(1000) = 1/3.
-    assertThat((double) below10 / total).isCloseTo(1.0 / 3.0, org.assertj.core.data.Offset.offset(0.05));
+    assertThat((double) below10 / total)
+        .isCloseTo(1.0 / 3.0, org.assertj.core.data.Offset.offset(0.05));
   }
 
   @Test
@@ -79,8 +80,7 @@ class RandomSamplerTest {
   @Test
   void convergesOnSyntheticQuadratic() {
     // Large-budget random search on a tiny landscape converges to the optimum.
-    SearchSpace space =
-        new SearchSpace(List.of(new ParamSpec.IntRange("x", -10, 10, false)));
+    SearchSpace space = new SearchSpace(List.of(new ParamSpec.IntRange("x", -10, 10, false)));
     RandomSampler s = new RandomSampler(space, 1L);
     int bestX = Integer.MAX_VALUE;
     for (int i = 0; i < 200; i++) {

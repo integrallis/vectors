@@ -26,8 +26,8 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Derives "same metadata label = relevant" qrels from a document collection. Useful when a
- * dataset has a category/intent column but lacks explicit relevance judgements.
+ * Derives "same metadata label = relevant" qrels from a document collection. Useful when a dataset
+ * has a category/intent column but lacks explicit relevance judgements.
  *
  * <p>{@link MetadataValue.Str} fields contribute one label per doc; {@link MetadataValue.Tags}
  * fields contribute the doc to every tag in the list. Other {@link MetadataValue} subtypes are

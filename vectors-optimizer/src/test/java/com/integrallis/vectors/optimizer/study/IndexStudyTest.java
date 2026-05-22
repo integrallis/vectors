@@ -43,8 +43,7 @@ class IndexStudyTest {
     StudyConfig cfg =
         StudyConfig.builder()
             .searchSpace(space)
-            .objectiveWeights(
-                ObjectiveWeights.builder().recallWeight(1.0).ndcgWeight(0.5).build())
+            .objectiveWeights(ObjectiveWeights.builder().recallWeight(1.0).ndcgWeight(0.5).build())
             .samplerKind(StudyConfig.SamplerKind.RANDOM)
             .corpusSource(() -> StudyTestFixtures.corpus(42L))
             .qrelsSource(StudyTestFixtures::qrels)
@@ -65,8 +64,7 @@ class IndexStudyTest {
     List<TrialResult> trials = store.loadAll("study-recall");
     assertThat(trials).hasSize(6);
 
-    double bestRecall =
-        trials.stream().mapToDouble(TrialResult::recallAtK).max().orElseThrow();
+    double bestRecall = trials.stream().mapToDouble(TrialResult::recallAtK).max().orElseThrow();
     // Cluster centroids are well-separated; HNSW with any reasonable (m, efConstruction) on this
     // dataset should retrieve all 10 relevant peers in the top-10.
     assertThat(bestRecall).isGreaterThanOrEqualTo(0.7);

@@ -20,11 +20,11 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * A retrieval run: per-query ranked lists of {@code (docId, score)} pairs. Mirrors
- * {@code redis-retrieval-optimizer.schema.SearchMethodOutput}.
+ * A retrieval run: per-query ranked lists of {@code (docId, score)} pairs. Mirrors {@code
+ * redis-retrieval-optimizer.schema.SearchMethodOutput}.
  *
- * <p>Inner maps preserve insertion order (highest-scoring doc first by convention) so that
- * {@code Metrics.recallAtK} et al. can iterate them as ranked lists.
+ * <p>Inner maps preserve insertion order (highest-scoring doc first by convention) so that {@code
+ * Metrics.recallAtK} et al. can iterate them as ranked lists.
  */
 public record Run(Map<String, LinkedHashMap<String, Double>> ranking) {
 

@@ -64,8 +64,7 @@ public final class GridSampler implements ParamSampler {
   @Override
   public Trial next(List<? extends ScoredTrial> history) {
     if (cursor >= total) {
-      throw new NoMoreTrialsException(
-          "GridSampler exhausted after " + total + " trials");
+      throw new NoMoreTrialsException("GridSampler exhausted after " + total + " trials");
     }
     long c = cursor++;
     Map<String, Object> params = new LinkedHashMap<>();

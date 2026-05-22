@@ -49,8 +49,8 @@ import java.util.Set;
  *   <li>If a metadata field is supplied, derive qrels via {@link MetadataQrelsDeriver}; otherwise
  *       compute a "self-similarity" gold standard by FLAT-searching the original corpus for each
  *       query's top-k neighbours.
- *   <li>Pin the search space to HNSW with caller-controlled bounds on {@code m} and
- *       {@code efConstruction}.
+ *   <li>Pin the search space to HNSW with caller-controlled bounds on {@code m} and {@code
+ *       efConstruction}.
  * </ol>
  */
 public final class OptimizeStudyBuilder {
@@ -126,8 +126,7 @@ public final class OptimizeStudyBuilder {
     List<Document> corpus = new ArrayList<>();
     session
         .backend()
-        .streamAllVectors(
-            collectionName, (id, v) -> corpus.add(Document.of(id, v.clone())), null);
+        .streamAllVectors(collectionName, (id, v) -> corpus.add(Document.of(id, v.clone())), null);
     return corpus;
   }
 

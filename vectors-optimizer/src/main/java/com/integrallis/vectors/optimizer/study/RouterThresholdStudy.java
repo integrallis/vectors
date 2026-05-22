@@ -32,8 +32,8 @@ import java.util.Objects;
  * labelled probe set.
  *
  * <p>For single-label classification micro-precision == micro-recall == accuracy; the resulting
- * scalar is reported as {@code recall/ndcg/precision/f1} for downstream consumption by
- * {@link com.integrallis.vectors.optimizer.objective.Objective}.
+ * scalar is reported as {@code recall/ndcg/precision/f1} for downstream consumption by {@link
+ * com.integrallis.vectors.optimizer.objective.Objective}.
  */
 public final class RouterThresholdStudy {
 
@@ -43,7 +43,10 @@ public final class RouterThresholdStudy {
     SemanticRouter create(Map<String, Double> thresholdsByRoute);
   }
 
-  /** Trial parameter prefix; an axis named {@code "threshold_<route>"} carries that route's threshold. */
+  /**
+   * Trial parameter prefix; an axis named {@code "threshold_<route>"} carries that route's
+   * threshold.
+   */
   public static final String THRESHOLD_PREFIX = "threshold_";
 
   private final RouterFactory factory;
@@ -56,7 +59,9 @@ public final class RouterThresholdStudy {
     this.labeled = List.copyOf(labeled);
   }
 
-  /** Executes one trial: build the router with {@code trial}'s thresholds and score the probe set. */
+  /**
+   * Executes one trial: build the router with {@code trial}'s thresholds and score the probe set.
+   */
   public TrialResult runOne(Trial trial) {
     Objects.requireNonNull(trial, "trial");
     Instant startedAt = Instant.now();
@@ -79,9 +84,16 @@ public final class RouterThresholdStudy {
         trial,
         startedAt,
         Instant.now(),
-        accuracy, accuracy, accuracy, accuracy, 0.0,
-        lc.p50Us(), lc.p95Us(), lc.p99Us(),
-        buildTimeMs, 0L,
+        accuracy,
+        accuracy,
+        accuracy,
+        accuracy,
+        0.0,
+        lc.p50Us(),
+        lc.p95Us(),
+        lc.p99Us(),
+        buildTimeMs,
+        0L,
         accuracy);
   }
 

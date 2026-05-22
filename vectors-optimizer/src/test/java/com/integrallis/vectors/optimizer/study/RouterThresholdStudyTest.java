@@ -53,16 +53,28 @@ class RouterThresholdStudyTest {
 
   private static List<LabeledQuery> labeledProbes() {
     List<LabeledQuery> out = new ArrayList<>();
-    for (String t : List.of("football", "basketball", "soccer", "tennis", "hockey",
-                            "football", "basketball", "soccer", "tennis", "hockey")) {
+    for (String t :
+        List.of(
+            "football",
+            "basketball",
+            "soccer",
+            "tennis",
+            "hockey",
+            "football",
+            "basketball",
+            "soccer",
+            "tennis",
+            "hockey")) {
       out.add(LabeledQuery.routerProbe(t, "sports"));
     }
-    for (String t : List.of("pasta", "sushi", "bread", "salad", "pizza",
-                            "pasta", "sushi", "bread", "salad", "pizza")) {
+    for (String t :
+        List.of(
+            "pasta", "sushi", "bread", "salad", "pizza", "pasta", "sushi", "bread", "salad",
+            "pizza")) {
       out.add(LabeledQuery.routerProbe(t, "food"));
     }
-    for (String t : List.of("rain", "snow", "wind", "sun", "cloud",
-                            "rain", "snow", "wind", "sun", "cloud")) {
+    for (String t :
+        List.of("rain", "snow", "wind", "sun", "cloud", "rain", "snow", "wind", "sun", "cloud")) {
       out.add(LabeledQuery.routerProbe(t, "weather"));
     }
     // 30 expected-route + 0 expected-miss is a deliberate single-class-only setup; total=30.
@@ -71,11 +83,23 @@ class RouterThresholdStudyTest {
 
   private static RouterThresholdStudy.RouterFactory factoryWithRoutes() {
     Route sports =
-        Route.builder().name("sports").references(List.of("football", "basketball")).distanceThreshold(0.5).build();
+        Route.builder()
+            .name("sports")
+            .references(List.of("football", "basketball"))
+            .distanceThreshold(0.5)
+            .build();
     Route food =
-        Route.builder().name("food").references(List.of("pasta", "sushi")).distanceThreshold(0.5).build();
+        Route.builder()
+            .name("food")
+            .references(List.of("pasta", "sushi"))
+            .distanceThreshold(0.5)
+            .build();
     Route weather =
-        Route.builder().name("weather").references(List.of("rain", "snow")).distanceThreshold(0.5).build();
+        Route.builder()
+            .name("weather")
+            .references(List.of("rain", "snow"))
+            .distanceThreshold(0.5)
+            .build();
     return thresholds ->
         new SemanticRouter(
             EMBEDDER,

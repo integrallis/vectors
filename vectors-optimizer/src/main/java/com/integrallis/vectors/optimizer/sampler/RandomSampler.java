@@ -27,9 +27,8 @@ import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
 
 /**
- * Per-axis uniform sampler. Continuous axes with {@code logScale=true} are sampled in log-space
- * and exponentiated; integer ranges with {@code logScale} pick a real value in log-space and
- * round.
+ * Per-axis uniform sampler. Continuous axes with {@code logScale=true} are sampled in log-space and
+ * exponentiated; integer ranges with {@code logScale} pick a real value in log-space and round.
  */
 public final class RandomSampler implements ParamSampler {
 
@@ -41,7 +40,8 @@ public final class RandomSampler implements ParamSampler {
     this(space, seed, RandomGeneratorFactory.<RandomGenerator>of("L64X128MixRandom"));
   }
 
-  public RandomSampler(SearchSpace space, long seed, RandomGeneratorFactory<RandomGenerator> factory) {
+  public RandomSampler(
+      SearchSpace space, long seed, RandomGeneratorFactory<RandomGenerator> factory) {
     this.space = Objects.requireNonNull(space, "space");
     Objects.requireNonNull(factory, "factory");
     this.rng = factory.create(seed);

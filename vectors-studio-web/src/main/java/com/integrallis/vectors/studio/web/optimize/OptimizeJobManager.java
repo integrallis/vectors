@@ -138,8 +138,6 @@ public final class OptimizeJobManager implements AutoCloseable {
   // waiting on the 1-minute janitor cadence.
   void expireIdle() {
     long cutoff = System.currentTimeMillis() - idleTtl.toMillis();
-    jobs.values()
-        .removeIf(
-            j -> j.lastTouched() < cutoff && j.state() != OptimizeJob.State.RUNNING);
+    jobs.values().removeIf(j -> j.lastTouched() < cutoff && j.state() != OptimizeJob.State.RUNNING);
   }
 }

@@ -73,7 +73,8 @@ public final class IndexStudy {
     long buildStart = System.nanoTime();
     long buildTimeMs;
     long memoryBytes;
-    LatencyCollector lc = new LatencyCollector(Math.max(1, queries.size() * cfg.measurementRounds()));
+    LatencyCollector lc =
+        new LatencyCollector(Math.max(1, queries.size() * cfg.measurementRounds()));
     Run run;
 
     try (VectorCollection col = cb.build()) {
@@ -120,8 +121,14 @@ public final class IndexStudy {
     double mrr = Metrics.mrr(qrels, run);
     double obj =
         Objective.score(
-            recall, ndcg, precision, f1, mrr,
-            lc.p95Us(), buildTimeMs, memoryBytes,
+            recall,
+            ndcg,
+            precision,
+            f1,
+            mrr,
+            lc.p95Us(),
+            buildTimeMs,
+            memoryBytes,
             cfg.objectiveWeights());
     return new TrialResult(
         trial,
@@ -150,7 +157,8 @@ public final class IndexStudy {
 
   private VectorCollectionBuilder configureBuilder(Trial trial, int dim) {
     Map<String, Object> p = trial.params();
-    SimilarityFunction metric = enumOf(p, "metric", SimilarityFunction.class, SimilarityFunction.COSINE);
+    SimilarityFunction metric =
+        enumOf(p, "metric", SimilarityFunction.class, SimilarityFunction.COSINE);
     IndexType indexType = enumOf(p, "indexType", IndexType.class, IndexType.HNSW);
     QuantizerKind quantizer = enumOf(p, "quantizer", QuantizerKind.class, QuantizerKind.NONE);
 

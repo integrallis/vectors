@@ -63,9 +63,9 @@ class CacheThresholdStudyTest {
   }
 
   /**
-   * Probes split into 5 hits (cos ≈ 1.0, 0.99, 0.95, 0.92, 0.90) and 5 misses (cos ≈ 0.6, 0.5,
-   * 0.4, 0.3, 0.2). Score = (1+cos)/2 for COSINE, so the analytic optimum threshold lies between
-   * the worst hit (score ≈ 0.95) and the best miss (score ≈ 0.80) → ~0.875.
+   * Probes split into 5 hits (cos ≈ 1.0, 0.99, 0.95, 0.92, 0.90) and 5 misses (cos ≈ 0.6, 0.5, 0.4,
+   * 0.3, 0.2). Score = (1+cos)/2 for COSINE, so the analytic optimum threshold lies between the
+   * worst hit (score ≈ 0.95) and the best miss (score ≈ 0.80) → ~0.875.
    */
   private static List<LabeledQuery> probes() {
     List<LabeledQuery> p = new ArrayList<>();
@@ -89,12 +89,8 @@ class CacheThresholdStudyTest {
   @Test
   void sixtyPointGridFindsBestThreshold() {
     List<Double> grid =
-        IntStream.range(0, 60)
-            .mapToDouble(i -> 0.01 + (0.99 - 0.01) * i / 59.0)
-            .boxed()
-            .toList();
-    SearchSpace space =
-        new SearchSpace(List.of(new ParamSpec.Discrete<>("threshold", grid)));
+        IntStream.range(0, 60).mapToDouble(i -> 0.01 + (0.99 - 0.01) * i / 59.0).boxed().toList();
+    SearchSpace space = new SearchSpace(List.of(new ParamSpec.Discrete<>("threshold", grid)));
     GridSampler sampler = new GridSampler(space);
     CacheThresholdStudy<String> study =
         new CacheThresholdStudy<>(factory(), seeds(), probes(), "value");

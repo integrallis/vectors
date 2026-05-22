@@ -257,13 +257,7 @@ public final class ApiRoutes implements HttpService {
     var summary = session.backend().describe(name);
     var spec =
         new com.integrallis.vectors.studio.core.search.SearchSpec(
-            zeroVector(summary.dimension(), query),
-            query,
-            Math.max(1, k),
-            null,
-            false,
-            true,
-            true);
+            zeroVector(summary.dimension(), query), query, Math.max(1, k), null, false, true, true);
     var hits = session.backend().search(name, spec);
     List<Map<String, Object>> out = new ArrayList<>(hits.size());
     for (var h : hits) {
@@ -297,7 +291,8 @@ public final class ApiRoutes implements HttpService {
       String name = req.path().pathParameters().get("name");
       List<String> ids = new ArrayList<>();
       session.backend().streamAllVectors(name, (id, v) -> ids.add(id), null);
-      List<com.integrallis.vectors.studio.core.search.DocumentView> docs = new ArrayList<>(ids.size());
+      List<com.integrallis.vectors.studio.core.search.DocumentView> docs =
+          new ArrayList<>(ids.size());
       LinkedHashSet<String> columns = new LinkedHashSet<>();
       for (String id : ids) {
         var doc = session.backend().getDocument(name, id);

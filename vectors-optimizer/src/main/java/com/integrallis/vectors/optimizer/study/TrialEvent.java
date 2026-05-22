@@ -19,10 +19,10 @@ import com.integrallis.vectors.optimizer.space.Trial;
 import java.time.Instant;
 
 /**
- * Stream-of-events emitted by {@link StudyRunner} for live progress reporting. Mirrors the shape
- * of {@code ProjectionEvent} in {@code vectors-studio-web}: a sealed interface with a small set
- * of records, each carrying the {@code studyId} so subscribers can multiplex multiple studies on
- * a single channel.
+ * Stream-of-events emitted by {@link StudyRunner} for live progress reporting. Mirrors the shape of
+ * {@code ProjectionEvent} in {@code vectors-studio-web}: a sealed interface with a small set of
+ * records, each carrying the {@code studyId} so subscribers can multiplex multiple studies on a
+ * single channel.
  */
 public sealed interface TrialEvent {
 
@@ -38,7 +38,8 @@ public sealed interface TrialEvent {
   record TrialCompleted(String studyId, TrialResult result, int index) implements TrialEvent {}
 
   /** Emitted when a trial fails (the runner continues with the next trial). */
-  record TrialFailed(String studyId, Trial trial, int index, String message) implements TrialEvent {}
+  record TrialFailed(String studyId, Trial trial, int index, String message)
+      implements TrialEvent {}
 
   /** Emitted once when the runner finishes the trial budget. */
   record Completed(String studyId, int trialsCompleted, Instant at) implements TrialEvent {}

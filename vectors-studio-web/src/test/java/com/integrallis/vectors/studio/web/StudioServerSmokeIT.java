@@ -128,7 +128,8 @@ class StudioServerSmokeIT {
   void searchPostReturnsHitsFragment() throws Exception {
     HttpResponse<String> res =
         client.send(
-            HttpRequest.newBuilder(URI.create("http://localhost:" + handle.port() + "/collections/docs/search"))
+            HttpRequest.newBuilder(
+                    URI.create("http://localhost:" + handle.port() + "/collections/docs/search"))
                 .timeout(Duration.ofSeconds(5))
                 .header("content-type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString("query=text&k=3"))
@@ -179,7 +180,8 @@ class StudioServerSmokeIT {
 
   @Test
   void searchByIdReturnsNeighbours() throws Exception {
-    HttpResponse<String> res = postJson("/api/collections/docs/search", "{\"id\":\"doc-0\",\"k\":3}");
+    HttpResponse<String> res =
+        postJson("/api/collections/docs/search", "{\"id\":\"doc-0\",\"k\":3}");
     assertThat(res.statusCode()).isEqualTo(200);
     assertThat(res.body()).contains("\"hits\"");
     assertThat(res.body()).doesNotContain("doc-0\"");
@@ -187,7 +189,8 @@ class StudioServerSmokeIT {
 
   @Test
   void searchByUnknownIdReturns404() throws Exception {
-    HttpResponse<String> res = postJson("/api/collections/docs/search", "{\"id\":\"nope\",\"k\":3}");
+    HttpResponse<String> res =
+        postJson("/api/collections/docs/search", "{\"id\":\"nope\",\"k\":3}");
     assertThat(res.statusCode()).isEqualTo(404);
   }
 

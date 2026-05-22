@@ -78,10 +78,14 @@ final class StudyTestFixtures {
     return new Queries(q);
   }
 
-  /** How many cluster peers per query are marked relevant; recall@10 caps at 1.0 when this == 10. */
+  /**
+   * How many cluster peers per query are marked relevant; recall@10 caps at 1.0 when this == 10.
+   */
   static final int RELEVANT_PER_QUERY = 10;
 
-  /** Qrels: each query is relevant to {@link #RELEVANT_PER_QUERY} docs in its cluster (relevance=1). */
+  /**
+   * Qrels: each query is relevant to {@link #RELEVANT_PER_QUERY} docs in its cluster (relevance=1).
+   */
   static Qrels qrels() {
     Map<String, Map<String, Integer>> rel = new LinkedHashMap<>();
     for (int c = 0; c < N_CLUSTERS; c++) {

@@ -20,8 +20,8 @@ import java.util.Objects;
 /**
  * A single labelled probe used by {@link RouterThresholdStudy} and {@link CacheThresholdStudy}.
  *
- * <p>{@code expectedLabel == null} means "the system should produce no match" — for the router,
- * the route falls through; for the cache, the lookup misses.
+ * <p>{@code expectedLabel == null} means "the system should produce no match" — for the router, the
+ * route falls through; for the cache, the lookup misses.
  *
  * @param text the query string (router uses its own embedder)
  * @param embedding the pre-computed embedding (may be {@code null} for router-only flows)

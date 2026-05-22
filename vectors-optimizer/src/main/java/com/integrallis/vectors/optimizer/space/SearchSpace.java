@@ -25,8 +25,8 @@ import java.util.Set;
 /**
  * An ordered list of {@link ParamSpec} axes that defines the joint search space for a study.
  *
- * <p>Axis names must be unique. The total cardinality is the product of per-axis cardinalities;
- * if any axis is continuous (e.g. {@link ParamSpec.DoubleRange}) the total is reported as empty
+ * <p>Axis names must be unique. The total cardinality is the product of per-axis cardinalities; if
+ * any axis is continuous (e.g. {@link ParamSpec.DoubleRange}) the total is reported as empty
  * (infinite).
  */
 public record SearchSpace(List<ParamSpec<?>> axes) {

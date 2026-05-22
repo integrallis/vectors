@@ -153,8 +153,7 @@ class OptimizeJobManagerTest {
     waitFor(() -> mgr.get(studyId).history().size() >= 1, Duration.ofSeconds(10));
     boolean ok = mgr.cancel(studyId);
     assertThat(ok).isTrue();
-    waitFor(
-        () -> mgr.get(studyId).state() == OptimizeJob.State.CANCELLED, Duration.ofSeconds(15));
+    waitFor(() -> mgr.get(studyId).state() == OptimizeJob.State.CANCELLED, Duration.ofSeconds(15));
     assertThat(mgr.get(studyId).history().size()).isLessThan(500);
     mgr.close();
   }

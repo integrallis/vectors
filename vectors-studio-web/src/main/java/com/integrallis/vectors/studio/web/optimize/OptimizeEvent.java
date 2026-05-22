@@ -19,8 +19,8 @@ import com.integrallis.vectors.optimizer.study.TrialResult;
 
 /**
  * Wire-format SSE event for an optimization study. Mirrors the shape and naming convention of
- * {@code ProjectionEvent}: a sealed interface with a small set of records, each carrying the
- * {@code studyId} so subscribers can multiplex multiple studies on a single channel.
+ * {@code ProjectionEvent}: a sealed interface with a small set of records, each carrying the {@code
+ * studyId} so subscribers can multiplex multiple studies on a single channel.
  */
 public sealed interface OptimizeEvent {
 
@@ -33,14 +33,18 @@ public sealed interface OptimizeEvent {
   record TrialStartedEvt(String studyId, String trialId, int index) implements OptimizeEvent {}
 
   /** Emitted when a trial completes successfully. Carries the full {@link TrialResult}. */
-  record TrialCompletedEvt(String studyId, TrialResult result, int index) implements OptimizeEvent {}
+  record TrialCompletedEvt(String studyId, TrialResult result, int index)
+      implements OptimizeEvent {}
 
   /** Emitted when a trial fails (the study continues). */
   record TrialFailedEvt(String studyId, String trialId, int index, String message)
       implements OptimizeEvent {}
 
-  /** Periodic progress heartbeat (optional, for clients that want a "trials_completed/total" tick). */
-  record ProgressEvt(String studyId, int trialsCompleted, int trialsTotal) implements OptimizeEvent {}
+  /**
+   * Periodic progress heartbeat (optional, for clients that want a "trials_completed/total" tick).
+   */
+  record ProgressEvt(String studyId, int trialsCompleted, int trialsTotal)
+      implements OptimizeEvent {}
 
   /** Emitted once when the trial budget is exhausted. */
   record CompletedEvt(String studyId, int trialsCompleted) implements OptimizeEvent {}

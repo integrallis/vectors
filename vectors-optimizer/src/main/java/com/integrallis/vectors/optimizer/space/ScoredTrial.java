@@ -16,9 +16,9 @@
 package com.integrallis.vectors.optimizer.space;
 
 /**
- * Read-only view of a finished trial: its parameters and a single composite score to be
- * maximized. {@code TrialResult} (Phase 3) is the canonical implementation; samplers consume
- * histories via this narrow interface so they do not depend on the heavier {@code study} package.
+ * Read-only view of a finished trial: its parameters and a single composite score to be maximized.
+ * {@code TrialResult} (Phase 3) is the canonical implementation; samplers consume histories via
+ * this narrow interface so they do not depend on the heavier {@code study} package.
  */
 public interface ScoredTrial {
 

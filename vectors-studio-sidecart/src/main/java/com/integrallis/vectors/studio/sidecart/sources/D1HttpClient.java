@@ -76,9 +76,9 @@ final class D1HttpClient implements AutoCloseable {
   }
 
   /**
-   * Executes a list of parameterised statements in one HTTP round-trip. The Cloudflare D1
-   * {@code /query} endpoint accepts either a single {@code {sql, params}} object or a
-   * {@code {batch: [{sql, params}, …]}} envelope; this method uses the latter shape.
+   * Executes a list of parameterised statements in one HTTP round-trip. The Cloudflare D1 {@code
+   * /query} endpoint accepts either a single {@code {sql, params}} object or a {@code {batch:
+   * [{sql, params}, …]}} envelope; this method uses the latter shape.
    */
   void executeBatch(List<Map<String, Object>> statements) {
     Map<String, Object> envelope = new LinkedHashMap<>();

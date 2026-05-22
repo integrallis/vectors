@@ -86,19 +86,70 @@ public record StudyConfig(
     private int measurementRounds = 5;
     private boolean gcBetweenTrials = false;
 
-    public Builder searchSpace(SearchSpace s) { this.searchSpace = s; return this; }
-    public Builder objectiveWeights(ObjectiveWeights w) { this.objectiveWeights = w; return this; }
-    public Builder samplerKind(SamplerKind s) { this.samplerKind = s; return this; }
-    public Builder tpeHp(TpeSampler.Hyperparameters hp) { this.tpeHp = hp; return this; }
-    public Builder corpusSource(Supplier<List<Document>> s) { this.corpusSource = s; return this; }
-    public Builder qrelsSource(Supplier<Qrels> s) { this.qrelsSource = s; return this; }
-    public Builder queriesSource(Supplier<Queries> s) { this.queriesSource = s; return this; }
-    public Builder nTrials(int n) { this.nTrials = n; return this; }
-    public Builder kForMetrics(int k) { this.kForMetrics = k; return this; }
-    public Builder seed(long s) { this.seed = s; return this; }
-    public Builder warmupRounds(int r) { this.warmupRounds = r; return this; }
-    public Builder measurementRounds(int r) { this.measurementRounds = r; return this; }
-    public Builder gcBetweenTrials(boolean b) { this.gcBetweenTrials = b; return this; }
+    public Builder searchSpace(SearchSpace s) {
+      this.searchSpace = s;
+      return this;
+    }
+
+    public Builder objectiveWeights(ObjectiveWeights w) {
+      this.objectiveWeights = w;
+      return this;
+    }
+
+    public Builder samplerKind(SamplerKind s) {
+      this.samplerKind = s;
+      return this;
+    }
+
+    public Builder tpeHp(TpeSampler.Hyperparameters hp) {
+      this.tpeHp = hp;
+      return this;
+    }
+
+    public Builder corpusSource(Supplier<List<Document>> s) {
+      this.corpusSource = s;
+      return this;
+    }
+
+    public Builder qrelsSource(Supplier<Qrels> s) {
+      this.qrelsSource = s;
+      return this;
+    }
+
+    public Builder queriesSource(Supplier<Queries> s) {
+      this.queriesSource = s;
+      return this;
+    }
+
+    public Builder nTrials(int n) {
+      this.nTrials = n;
+      return this;
+    }
+
+    public Builder kForMetrics(int k) {
+      this.kForMetrics = k;
+      return this;
+    }
+
+    public Builder seed(long s) {
+      this.seed = s;
+      return this;
+    }
+
+    public Builder warmupRounds(int r) {
+      this.warmupRounds = r;
+      return this;
+    }
+
+    public Builder measurementRounds(int r) {
+      this.measurementRounds = r;
+      return this;
+    }
+
+    public Builder gcBetweenTrials(boolean b) {
+      this.gcBetweenTrials = b;
+      return this;
+    }
 
     public StudyConfig build() {
       return new StudyConfig(

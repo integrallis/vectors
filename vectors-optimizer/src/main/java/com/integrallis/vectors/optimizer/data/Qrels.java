@@ -28,8 +28,8 @@ import java.util.Objects;
 /**
  * Query-relevance judgements: {@code queryId -> docId -> integer relevance grade}.
  *
- * <p>Layout matches TREC-style qrels and the {@code redis-retrieval-optimizer} schema. A grade of
- * 0 (or absence from the inner map) means "not relevant"; positive grades indicate relevance with
+ * <p>Layout matches TREC-style qrels and the {@code redis-retrieval-optimizer} schema. A grade of 0
+ * (or absence from the inner map) means "not relevant"; positive grades indicate relevance with
  * higher numbers ranking better (used by NDCG).
  */
 public record Qrels(Map<String, Map<String, Integer>> relevance) {

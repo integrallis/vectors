@@ -83,13 +83,13 @@ public final class OptimizeRoutes implements HttpService {
     String name = req.path().pathParameters().get("name");
     String studyId = req.path().pathParameters().get("studyId");
     var summary = session.backend().describe(name);
-    renderer.render(
-        res, "optimize/progress.jte", Map.of("summary", summary, "studyId", studyId));
+    renderer.render(res, "optimize/progress.jte", Map.of("summary", summary, "studyId", studyId));
   }
 
   private void submit(ServerRequest req, ServerResponse res) {
     try {
-      OptimizeRequestDto raw = MAPPER.readValue(req.content().as(byte[].class), OptimizeRequestDto.class);
+      OptimizeRequestDto raw =
+          MAPPER.readValue(req.content().as(byte[].class), OptimizeRequestDto.class);
       OptimizeRequestDto dto = raw.withDefaults();
       if (dto.collection() == null || dto.collection().isBlank()) {
         res.status(Status.BAD_REQUEST_400).send("collection is required");
@@ -98,8 +98,7 @@ public final class OptimizeRoutes implements HttpService {
       OptimizeStudyBuilder.Built built = OptimizeStudyBuilder.build(session, dto);
       String studyId = jobs.submit(built.config(), built.embedder());
       res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
-      res.status(Status.ACCEPTED_202)
-          .send(MAPPER.writeValueAsBytes(Map.of("studyId", studyId)));
+      res.status(Status.ACCEPTED_202).send(MAPPER.writeValueAsBytes(Map.of("studyId", studyId)));
     } catch (Exception e) {
       res.status(Status.BAD_REQUEST_400).send(String.valueOf(e.getMessage()));
     }
@@ -177,8 +176,9 @@ public final class OptimizeRoutes implements HttpService {
           switch (job.state()) {
             case COMPLETED -> new OptimizeEvent.CompletedEvt(id, job.history().size());
             case CANCELLED -> new OptimizeEvent.CancelledEvt(id, job.history().size());
-            case FAILED -> new OptimizeEvent.ErrorEvt(
-                id, job.error() == null ? "unknown" : job.error().toString());
+            case FAILED ->
+                new OptimizeEvent.ErrorEvt(
+                    id, job.error() == null ? "unknown" : job.error().toString());
             default -> null;
           };
       if (ev != null) sink.emit(SseEvent.builder().data(MAPPER.writeValueAsString(ev)).build());

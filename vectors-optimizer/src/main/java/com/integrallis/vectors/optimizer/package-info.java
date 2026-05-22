@@ -25,7 +25,7 @@
  * memory and a composite scalar from {@link com.integrallis.vectors.optimizer.objective.Objective}.
  *
  * <p>Inspired by {@code redis-retrieval-optimizer} (Python, Optuna-backed) and the threshold
- * optimizer helper in {@code redis-vl-python}; this module re-implements the sampling stack in
- * Java with no external HPO dependency.
+ * optimizer helper in {@code redis-vl-python}; this module re-implements the sampling stack in Java
+ * with no external HPO dependency.
  */
 package com.integrallis.vectors.optimizer;

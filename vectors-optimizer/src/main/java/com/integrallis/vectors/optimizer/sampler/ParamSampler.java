@@ -31,8 +31,8 @@ public sealed interface ParamSampler permits GridSampler, RandomSampler, TpeSamp
    * @param history previously completed trials, in submission order; may be empty for the first
    *     call
    * @return the next trial to evaluate
-   * @throws NoMoreTrialsException if the sampler has exhausted its space (only thrown by
-   *     {@link GridSampler})
+   * @throws NoMoreTrialsException if the sampler has exhausted its space (only thrown by {@link
+   *     GridSampler})
    */
   Trial next(List<? extends ScoredTrial> history);
 }

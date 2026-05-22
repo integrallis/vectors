@@ -52,8 +52,7 @@ class GridSamplerTest {
 
   @Test
   void throwsWhenExhausted() {
-    SearchSpace space =
-        new SearchSpace(List.of(new ParamSpec.Categorical("x", List.of("a", "b"))));
+    SearchSpace space = new SearchSpace(List.of(new ParamSpec.Categorical("x", List.of("a", "b"))));
     GridSampler g = new GridSampler(space);
     g.next(List.of());
     g.next(List.of());

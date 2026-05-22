@@ -20,9 +20,9 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * A concrete sample drawn from a {@link SearchSpace}: a unique trial id plus the resolved value
- * for every axis. Values are stored as {@code Object} keyed by axis name; typed accessors below
- * cast back to the expected primitive / string type.
+ * A concrete sample drawn from a {@link SearchSpace}: a unique trial id plus the resolved value for
+ * every axis. Values are stored as {@code Object} keyed by axis name; typed accessors below cast
+ * back to the expected primitive / string type.
  */
 public record Trial(String trialId, Map<String, Object> params) {
 
@@ -46,16 +46,14 @@ public record Trial(String trialId, Map<String, Object> params) {
     if (v instanceof Double d) return d;
     if (v instanceof Float f) return f;
     if (v instanceof Number n) return n.doubleValue();
-    throw new IllegalStateException(
-        "Axis " + name + " is not a double (was " + v.getClass() + ")");
+    throw new IllegalStateException("Axis " + name + " is not a double (was " + v.getClass() + ")");
   }
 
   /** Reads a string-valued axis. Throws if absent or wrong type. */
   public String getString(String name) {
     Object v = require(name);
     if (v instanceof String s) return s;
-    throw new IllegalStateException(
-        "Axis " + name + " is not a string (was " + v.getClass() + ")");
+    throw new IllegalStateException("Axis " + name + " is not a string (was " + v.getClass() + ")");
   }
 
   /** Reads an enum-valued axis stored as the {@link Enum#name()}. */
@@ -67,8 +65,7 @@ public record Trial(String trialId, Map<String, Object> params) {
     if (v instanceof String s) {
       return Enum.valueOf(enumClass, s);
     }
-    throw new IllegalStateException(
-        "Axis " + name + " is not an enum (was " + v.getClass() + ")");
+    throw new IllegalStateException("Axis " + name + " is not an enum (was " + v.getClass() + ")");
   }
 
   private Object require(String name) {

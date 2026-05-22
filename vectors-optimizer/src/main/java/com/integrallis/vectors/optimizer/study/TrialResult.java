@@ -21,8 +21,8 @@ import java.time.Instant;
 
 /**
  * Outcome of a single trial: parameters, timing window, IR metrics, latency percentiles, build
- * cost, memory footprint, and the composite objective score (higher is better) used by samplers
- * to direct the search.
+ * cost, memory footprint, and the composite objective score (higher is better) used by samplers to
+ * direct the search.
  */
 public record TrialResult(
     Trial trial,

@@ -47,7 +47,8 @@ public final class Metrics {
     int counted = 0;
     for (var entry : q.relevance().entrySet()) {
       if (!hasPositive(entry.getValue())) continue;
-      LinkedHashMap<String, Double> ranked = r.ranking().getOrDefault(entry.getKey(), new LinkedHashMap<>());
+      LinkedHashMap<String, Double> ranked =
+          r.ranking().getOrDefault(entry.getKey(), new LinkedHashMap<>());
       double dcg = dcg(ranked, entry.getValue(), k);
       double idcg = idealDcg(entry.getValue(), k);
       sum += idcg == 0.0 ? 0.0 : dcg / idcg;
@@ -155,7 +156,8 @@ public final class Metrics {
     return idcg;
   }
 
-  private static int countHits(LinkedHashMap<String, Double> ranked, Map<String, Integer> rel, int k) {
+  private static int countHits(
+      LinkedHashMap<String, Double> ranked, Map<String, Integer> rel, int k) {
     if (ranked == null) return 0;
     int hits = 0;
     int rank = 0;

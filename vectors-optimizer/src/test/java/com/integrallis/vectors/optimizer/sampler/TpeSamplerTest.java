@@ -147,8 +147,9 @@ class TpeSamplerTest {
       assertThat(t.getString("metric")).isIn("COSINE", "DOT", "EUCLIDEAN");
       assertThat(t.getString("quantizer")).isIn("NONE", "SQ8", "PQ");
       // Synthetic score: COSINE+SQ8 is best.
-      double s2 = (t.getString("metric").equals("COSINE") ? 1.0 : 0.0)
-          + (t.getString("quantizer").equals("SQ8") ? 1.0 : 0.0);
+      double s2 =
+          (t.getString("metric").equals("COSINE") ? 1.0 : 0.0)
+              + (t.getString("quantizer").equals("SQ8") ? 1.0 : 0.0);
       history.add(new StubScoredTrial(t, s2));
     }
   }
