@@ -800,6 +800,14 @@ final class VectorCollectionImpl implements VectorCollection {
     // Tombstoned ordinals are excluded from search results by the tombstone check in search(),
     // not by zeroing out their vector content. This makes in-memory mode consistent with the
     // persistent path, which bulk-copies vectors.bin byte-for-byte (tombstoned bytes included).
+    //
+    // Vector arrays are shared by reference with the predecessor generation, matching the
+    // documented contract on {@link Document} ("the collection stores the reference directly for
+    // zero-copy ingestion, and the same reference is handed back through the metadata store and
+    // through the backend's vector matrix"). This makes commit O(newPhysicalCount) reference
+    // copies instead of O(newPhysicalCount × dim) deep clones — a 100×+ reduction in commit-path
+    // allocation for typical embedding dimensions. Without this, a write-heavy workload makes the
+    // young-gen GC churn dominate concurrent reader latency.
     float[][] next = new float[newPhysicalCount][];
     for (int i = 0; i < oldPhysicalCount; i++) {
       Document stored = oldGen.metadataStore.get(i);
@@ -807,7 +815,7 @@ final class VectorCollectionImpl implements VectorCollection {
         throw new IllegalStateException(
             "Missing document in metadata store for ordinal " + i + " during commit");
       }
-      next[i] = stored.vector().clone();
+      next[i] = stored.vector();
     }
     List<Document> stagedDocs = staging.documents();
     for (int i = 0; i < stagedCount; i++) {
@@ -821,7 +829,7 @@ final class VectorCollectionImpl implements VectorCollection {
             "Ordinal mismatch: expected " + expected + " but got " + ordinal);
       }
       newMeta.put(ordinal, doc);
-      next[ordinal] = doc.vector().clone();
+      next[ordinal] = doc.vector();
     }
 
     IndexSpi newSpi = newInMemoryAdapter();

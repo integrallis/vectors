@@ -55,13 +55,28 @@ public final class StagingBuffer {
   /**
    * Appends a document if its id is not already staged. Returns {@code true} on success, {@code
    * false} if the id was already present in the staging map.
+   *
+   * <p><b>Defensive copy of the vector.</b> The caller-supplied {@code float[]} is cloned at the
+   * staging boundary so that the collection's internal copy is decoupled from any reference the
+   * caller still holds. This pays the vector-clone cost <i>once</i> per insert, instead of paying
+   * it for every committed vector on every subsequent {@code commit()} (which is what the prior
+   * model did). Combined with shared-by-reference vectors in {@code VectorCollectionImpl.commit*},
+   * this makes the in-memory commit path O(staged) in allocations rather than O(live).
+   *
+   * <p>Metadata and other Document fields are immutable (the Document record's canonical
+   * constructor already defensively copies the metadata map), so cloning only the vector is
+   * sufficient to fully isolate the stored Document from caller-side mutation.
    */
   public boolean append(Document doc) {
     Objects.requireNonNull(doc, "doc must not be null");
     if (documentsMap.containsKey(doc.id())) {
       return false;
     }
-    documentsMap.put(doc.id(), doc);
+    Document defensive =
+        doc.vector() == null
+            ? doc
+            : new Document(doc.id(), doc.vector().clone(), doc.text(), doc.metadata());
+    documentsMap.put(doc.id(), defensive);
     return true;
   }
 

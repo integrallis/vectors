@@ -26,12 +26,13 @@ import java.util.Objects;
  * in search-result projections when {@code SearchRequest.includeVector} is false. {@code text} and
  * {@code metadata} may also be null — a null metadata map is normalised to an empty map.
  *
- * <p><b>Vector ownership.</b> The {@code vector} array is <i>not</i> defensively copied. The
- * collection stores the reference directly for zero-copy ingestion, and the same reference is
- * handed back through the metadata store and through the backend's vector matrix. Callers must
- * <b>not</b> modify the array after handing it to a collection — doing so corrupts the stored
- * vector and any subsequent search results. If you reuse a buffer in a batch-insert loop, clone it
- * before constructing each {@link Document}.
+ * <p><b>Vector ownership.</b> The {@code vector} array on a Document passed to a collection is
+ * defensively cloned at the staging boundary, so the caller may safely reuse and mutate their own
+ * buffer afterwards (e.g., to batch-insert from a reusable float[]). Conversely, the {@code vector}
+ * array on a Document <i>returned</i> by a collection (via {@code search} projections or {@code
+ * get}) references the collection's internally-held storage and <b>must not</b> be mutated — doing
+ * so corrupts the stored vector and subsequent search results. Treat returned vector arrays as
+ * immutable.
  *
  * @param id external identifier (must not be null)
  * @param vector embedding (required on insertion; may be null in projections; stored by reference,
