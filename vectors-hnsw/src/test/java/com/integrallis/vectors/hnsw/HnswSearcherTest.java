@@ -272,8 +272,21 @@ class HnswSearcherTest {
       var result1 = index1.search(vectors[0], 10);
       var result2 = index2.search(vectors[0], 10);
 
+      // Same seed => identical graph => identical neighbour ranking. This is the determinism
+      // guarantee that matters and it is asserted exactly.
       assertThat(result1.nodeIds()).isEqualTo(result2.nodeIds());
-      assertThat(result1.scores()).isEqualTo(result2.scores());
+
+      // Scores are computed via the fused-GEMV SIMD scoring path. SIMD lane reductions are not
+      // bit-identical across JIT tiers (C1 vs C2-intrinsified reduceLanes differ in the last
+      // ULP), so two searches separated by a JIT recompilation can yield scores that differ by
+      // ~1 ULP. That is inherent to vectorised floating point — not a determinism defect — so
+      // scores are compared with a tiny relative tolerance rather than bit-for-bit.
+      float[] s1 = result1.scores();
+      float[] s2 = result2.scores();
+      assertThat(s1).hasSameSizeAs(s2);
+      for (int i = 0; i < s1.length; i++) {
+        assertThat(s1[i]).isCloseTo(s2[i], withinPercentage(0.0001));
+      }
     }
   }
 
