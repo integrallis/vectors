@@ -2,6 +2,28 @@
 
 UI-agnostic domain core for **Vectors Studio** — backend SPI, dimensionality-reduction projections, dataset analysis, and algorithm recommender. Consumed by `vectors-studio-web` and any other Studio frontend.
 
+## System Requirements
+
+> **Native BLAS/LAPACK (`libopenblas`) is required.** The Smile-backed projections (PCA, and the
+> SVD steps inside t-SNE/UMAP initialisation) perform their linear algebra through native
+> LAPACK/BLAS.
+
+Install it before building or running anything that uses this module:
+
+| Platform | Command |
+|----------|---------|
+| Debian / Ubuntu | `sudo apt-get install -y libopenblas-dev` |
+| Fedora / RHEL | `sudo dnf install -y openblas-devel` |
+| macOS (Homebrew) | `brew install openblas` |
+| Arch | `sudo pacman -S openblas` |
+
+The `-dev` / `-devel` package is recommended because it installs the bare `libopenblas.so`
+symlink that Smile's loader looks for (the runtime-only package installs `libopenblas.so.0`).
+
+This is the one native dependency in the Vectors stack — it is confined to Studio's projection
+math. The core retrieval modules (`vectors-core`, `vectors-db`, indexes, quantization) remain
+pure-Java with no JNI.
+
 ## Responsibility
 
 - Sealed `StudioBackend` SPI with two implementations: in-process (`EmbeddedStudioBackend`, opens a directory of `vectors-db` collections) and HTTP (`RemoteStudioBackend`, layered on `VectorsServerClient`)
@@ -38,5 +60,5 @@ UI-agnostic domain core for **Vectors Studio** — backend SPI, dimensionality-r
 - `vectors-core`
 - `vectors-db`
 - `vectors-server-client`
-- `com.github.haifengl:smile-core:6.0.0`
+- `com.github.haifengl:smile-core:6.0.0` — **requires native `libopenblas` at runtime** (see [System Requirements](#system-requirements))
 - `dev.langchain4j:langchain4j-core:1.13.1` (compile-only)
