@@ -30,12 +30,11 @@ import java.util.random.RandomGeneratorFactory;
 
 /**
  * Univariate Tree-structured Parzen Estimator. Independent per-axis Parzen densities {@code l(x)}
- * (good observations) and {@code g(x)} (bad observations); proposals maximize {@code log l(x) -
- * log g(x)} per axis. References: Bergstra et al. 2011, Watanabe 2023 (arXiv:2304.11127v3),
- * Optuna v3 default {@code TPESampler} hyperparameters.
+ * (good observations) and {@code g(x)} (bad observations); proposals maximize {@code log l(x) - log
+ * g(x)} per axis. References: Bergstra et al. 2011, Watanabe 2023 (arXiv:2304.11127v3), Optuna v3
+ * default {@code TPESampler} hyperparameters.
  *
- * <p>Multivariate joint TPE is a v2 follow-up; this implementation samples each axis
- * independently.
+ * <p>Multivariate joint TPE is a v2 follow-up; this implementation samples each axis independently.
  */
 public final class TpeSampler implements ParamSampler {
 
@@ -108,9 +107,12 @@ public final class TpeSampler implements ParamSampler {
     return proposeContinuous(axis, good, bad);
   }
 
-  private Object proposeCategorical(ParamSpec<?> axis, List<ScoredTrial> good, List<ScoredTrial> bad) {
-    List<?> values = (axis instanceof ParamSpec.Categorical c) ? c.values() : ((ParamSpec.Discrete<?>) axis).values();
-    int k = values.size();
+  private Object proposeCategorical(
+      ParamSpec<?> axis, List<ScoredTrial> good, List<ScoredTrial> bad) {
+    List<?> values =
+        (axis instanceof ParamSpec.Categorical c)
+            ? c.values()
+            : ((ParamSpec.Discrete<?>) axis).values();
     double[] lPmf = categoricalPmf(axis, good, values);
     double[] gPmf = categoricalPmf(axis, bad, values);
 
@@ -118,8 +120,9 @@ public final class TpeSampler implements ParamSampler {
     double bestEi = Double.NEGATIVE_INFINITY;
     for (int n = 0; n < hp.nEiCandidates(); n++) {
       int idx = sampleCategorical(lPmf);
-      double ei = Math.log(Math.max(lPmf[idx], Double.MIN_NORMAL))
-          - Math.log(Math.max(gPmf[idx], Double.MIN_NORMAL));
+      double ei =
+          Math.log(Math.max(lPmf[idx], Double.MIN_NORMAL))
+              - Math.log(Math.max(gPmf[idx], Double.MIN_NORMAL));
       if (ei > bestEi) {
         bestEi = ei;
         best = values.get(idx);
@@ -152,7 +155,8 @@ public final class TpeSampler implements ParamSampler {
     return pmf.length - 1;
   }
 
-  private Object proposeContinuous(ParamSpec<?> axis, List<ScoredTrial> good, List<ScoredTrial> bad) {
+  private Object proposeContinuous(
+      ParamSpec<?> axis, List<ScoredTrial> good, List<ScoredTrial> bad) {
     Bounds b = boundsOf(axis);
     double[] goodObs = extractContinuous(axis, good, b);
     double[] badObs = extractContinuous(axis, bad, b);
@@ -163,8 +167,8 @@ public final class TpeSampler implements ParamSampler {
       double x = sampleParzen(goodObs, b);
       double lpdf = parzenPdf(x, goodObs, b);
       double gpdf = parzenPdf(x, badObs, b);
-      double ei = Math.log(Math.max(lpdf, Double.MIN_NORMAL))
-          - Math.log(Math.max(gpdf, Double.MIN_NORMAL));
+      double ei =
+          Math.log(Math.max(lpdf, Double.MIN_NORMAL)) - Math.log(Math.max(gpdf, Double.MIN_NORMAL));
       if (ei > bestEi || Double.isNaN(bestX)) {
         bestEi = ei;
         bestX = x;
@@ -179,8 +183,14 @@ public final class TpeSampler implements ParamSampler {
 
   private static Bounds boundsOf(ParamSpec<?> axis) {
     return switch (axis) {
-      case ParamSpec.IntRange r -> r.logScale() ? new Bounds(Math.log(r.min()), Math.log(r.max()), true) : new Bounds(r.min(), r.max(), false);
-      case ParamSpec.DoubleRange r -> r.logScale() ? new Bounds(Math.log(r.min()), Math.log(r.max()), true) : new Bounds(r.min(), r.max(), false);
+      case ParamSpec.IntRange r ->
+          r.logScale()
+              ? new Bounds(Math.log(r.min()), Math.log(r.max()), true)
+              : new Bounds(r.min(), r.max(), false);
+      case ParamSpec.DoubleRange r ->
+          r.logScale()
+              ? new Bounds(Math.log(r.min()), Math.log(r.max()), true)
+              : new Bounds(r.min(), r.max(), false);
       default -> throw new IllegalArgumentException("Not a continuous axis: " + axis.name());
     };
   }

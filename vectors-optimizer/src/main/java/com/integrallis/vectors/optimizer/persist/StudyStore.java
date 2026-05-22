@@ -40,8 +40,8 @@ import java.util.stream.Stream;
  * Append-only JSON-Lines persistence for study results. Each study writes to {@code
  * {root}/{studyId}.jsonl}; one line per {@link TrialResult}. Concurrent writers contend on a
  * per-file {@link ReentrantLock} so a single JVM can run several studies in parallel without
- * interleaving lines. Survives JVM restarts: trial files are flushed and durable on every
- * {@link #appendTrial} call.
+ * interleaving lines. Survives JVM restarts: trial files are flushed and durable on every {@link
+ * #appendTrial} call.
  */
 public final class StudyStore {
 
@@ -78,11 +78,7 @@ public final class StudyStore {
     try {
       String line = mapper.writeValueAsString(result) + "\n";
       Files.writeString(
-          file,
-          line,
-          StandardCharsets.UTF_8,
-          StandardOpenOption.CREATE,
-          StandardOpenOption.APPEND);
+          file, line, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     } catch (IOException ioe) {
       throw new UncheckedIOException("Failed to append trial to " + file, ioe);
     } finally {
@@ -117,9 +113,7 @@ public final class StudyStore {
     if (!Files.isDirectory(root)) return List.of();
     List<StudySummary> out = new ArrayList<>();
     try (Stream<Path> children = Files.list(root)) {
-      children
-          .filter(p -> p.toString().endsWith(".jsonl"))
-          .forEach(p -> out.add(summaryOf(p)));
+      children.filter(p -> p.toString().endsWith(".jsonl")).forEach(p -> out.add(summaryOf(p)));
     } catch (IOException ioe) {
       throw new UncheckedIOException("Failed to list studies in " + root, ioe);
     }
@@ -144,7 +138,11 @@ public final class StudyStore {
   }
 
   private StudySummary summaryOf(Path p) {
-    String name = p.getFileName().toString();
+    Path fileName = p.getFileName();
+    if (fileName == null) {
+      throw new IllegalArgumentException("study path has no file name: " + p);
+    }
+    String name = fileName.toString();
     String studyId = name.substring(0, name.length() - ".jsonl".length());
     int count = 0;
     try (var lines = Files.lines(p, StandardCharsets.UTF_8)) {
