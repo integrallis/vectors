@@ -16,6 +16,7 @@
 package com.integrallis.vectors.studio.web.optimize;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.Objects;
 
 /**
  * Wire-format JSON payload accepted by {@code POST /api/optimize/studies}. Only Index studies are
@@ -40,22 +41,29 @@ public record OptimizeRequestDto(
     Double ndcgWeight,
     Double latencyWeight) {
 
-  /** Defaults applied when a field is null on the wire. */
+  /**
+   * Defaults applied when a field is null on the wire.
+   *
+   * <p>Uses {@link Objects#requireNonNullElse} rather than {@code x == null ? literal : x}: in a
+   * ternary, a boxed field and a primitive literal force the boxed branch to unbox and the result
+   * to rebox ({@code BX_UNBOXING_IMMEDIATELY_REBOXED}). {@code requireNonNullElse} keeps both
+   * operands boxed, so the non-null field passes through with no unbox/rebox round-trip.
+   */
   public OptimizeRequestDto withDefaults() {
     return new OptimizeRequestDto(
         collection,
-        sampler == null ? "RANDOM" : sampler,
-        nTrials == null ? 12 : nTrials,
-        kForMetrics == null ? 10 : kForMetrics,
-        seed == null ? 0L : seed,
-        querySampleSize == null ? 20 : querySampleSize,
+        Objects.requireNonNullElse(sampler, "RANDOM"),
+        Objects.requireNonNullElse(nTrials, 12),
+        Objects.requireNonNullElse(kForMetrics, 10),
+        Objects.requireNonNullElse(seed, 0L),
+        Objects.requireNonNullElse(querySampleSize, 20),
         metadataField,
-        mMin == null ? 8 : mMin,
-        mMax == null ? 64 : mMax,
-        efMin == null ? 50 : efMin,
-        efMax == null ? 400 : efMax,
-        recallWeight == null ? 1.0 : recallWeight,
-        ndcgWeight == null ? 0.5 : ndcgWeight,
-        latencyWeight == null ? 0.0 : latencyWeight);
+        Objects.requireNonNullElse(mMin, 8),
+        Objects.requireNonNullElse(mMax, 64),
+        Objects.requireNonNullElse(efMin, 50),
+        Objects.requireNonNullElse(efMax, 400),
+        Objects.requireNonNullElse(recallWeight, 1.0),
+        Objects.requireNonNullElse(ndcgWeight, 0.5),
+        Objects.requireNonNullElse(latencyWeight, 0.0));
   }
 }

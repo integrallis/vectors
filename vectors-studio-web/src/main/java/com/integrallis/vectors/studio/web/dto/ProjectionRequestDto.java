@@ -35,4 +35,19 @@ public record ProjectionRequestDto(
     int dimensions,
     int sampleSize,
     Map<String, Object> params,
-    Boolean sphereize) {}
+    Boolean sphereize) {
+
+  /**
+   * Defensively copies {@code params} into an immutable map so the DTO is genuinely immutable: a
+   * caller cannot mutate the map after construction, and the {@link #params()} accessor cannot leak
+   * a mutable reference. A {@code null} map (field absent on the wire) is normalised to an empty
+   * map.
+   *
+   * <p>{@link Map#copyOf} rejects {@code null} values; that is intentional here. The wire contract
+   * is "omit a key to take its per-algorithm default" — a present key with a {@code null} value is
+   * a malformed request and is rejected at the boundary rather than silently mishandled later.
+   */
+  public ProjectionRequestDto {
+    params = params == null ? Map.of() : Map.copyOf(params);
+  }
+}
