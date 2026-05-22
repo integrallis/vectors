@@ -42,8 +42,11 @@ import java.util.zip.CRC32;
  * </pre>
  *
  * <p>Segment files are named {@code wal-<20-digit-seq>.seg} where {@code seq} is the sequence
- * number of the first entry in that segment. A new segment is created by {@link #seal()} or
- * automatically on open when no segment exists yet.
+ * number of the first entry in that segment. Segments are created <i>lazily</i>: a new segment file
+ * appears on disk only on the first {@link #append} after construction or after {@link #seal()}.
+ * This guarantees that every segment file on disk holds at least one entry — there are never
+ * zero-byte trailing segments left behind by a {@code seal()}-then-{@code close()} with no
+ * intervening append.
  *
  * <p>This class is thread-compatible: external synchronisation is required for concurrent appends.
  */
@@ -53,13 +56,19 @@ public final class SegmentedWriteAheadLog implements Closeable {
   private static final String SEGMENT_SUFFIX = ".seg";
 
   private final Path walDir;
+
+  /** The open segment's output stream, or {@code null} when no segment is currently open. */
   private OutputStream current;
+
+  /** First sequence number of {@link #current}. Meaningful only while {@code current != null}. */
   private long currentSegStart;
+
   private long nextSeq;
 
   /**
    * Opens (or creates) a WAL in {@code walDir}. Existing segment files are discovered and their
-   * sequence numbers are used to initialise {@link #nextSeq()}.
+   * sequence numbers are used to initialise {@link #nextSeq()}. No segment file is opened or
+   * created here — the first {@link #append} does that.
    */
   public SegmentedWriteAheadLog(Path walDir) throws IOException {
     this.walDir = walDir;
@@ -67,14 +76,19 @@ public final class SegmentedWriteAheadLog implements Closeable {
     List<Long> starts = existingSegmentStarts();
     nextSeq = starts.isEmpty() ? 0L : lastSeqOf(starts.get(starts.size() - 1));
     currentSegStart = nextSeq;
-    current = openSegment(currentSegStart);
+    current = null; // lazily opened on the first append
   }
 
   /**
    * Appends {@code entry} to the current segment and returns the sequence number assigned to this
-   * entry.
+   * entry. Lazily opens a new segment file if none is currently open (after construction or after
+   * {@link #seal()}).
    */
   public synchronized long append(byte[] entry) throws IOException {
+    if (current == null) {
+      currentSegStart = nextSeq;
+      current = openSegment(currentSegStart);
+    }
     long seq = nextSeq++;
     byte[] frame = buildFrame(entry);
     current.write(frame);
@@ -83,22 +97,28 @@ public final class SegmentedWriteAheadLog implements Closeable {
   }
 
   /**
-   * Closes the current segment file and starts a new one. The new segment's first sequence number
-   * is {@link #nextSeq()}.
+   * Closes the current segment file. The next {@link #append} lazily starts a new segment whose
+   * first sequence number is {@link #nextSeq()} at that time. Calling {@code seal()} with no open
+   * segment — twice in a row, or before any append — is a no-op, so no empty segment is created.
    */
   public synchronized void seal() throws IOException {
-    current.close();
-    currentSegStart = nextSeq;
-    current = openSegment(currentSegStart);
+    if (current != null) {
+      current.close();
+      current = null;
+    }
   }
 
   /**
-   * Replays all entries from all sealed segments (in order). The current open segment is not
-   * replayed — call {@link #seal()} first if needed.
+   * Replays all entries from all sealed segments (in order). The current open segment, if any, is
+   * not replayed — call {@link #seal()} first if its entries are needed.
+   *
+   * <p>Synchronized so that the reads of {@link #current}/{@link #currentSegStart} are consistent
+   * with the writes in {@link #append}/{@link #seal}. Replay is a recovery-time operation that is
+   * not expected to run concurrently with appends; holding the lock for its duration is harmless.
    */
-  public void replay(Consumer<byte[]> handler) throws IOException {
+  public synchronized void replay(Consumer<byte[]> handler) throws IOException {
     for (long start : existingSegmentStarts()) {
-      if (start == currentSegStart) continue; // skip the open segment
+      if (current != null && start == currentSegStart) continue; // skip the open segment
       replaySegment(segmentPath(start), handler);
     }
   }
@@ -110,7 +130,10 @@ public final class SegmentedWriteAheadLog implements Closeable {
 
   @Override
   public synchronized void close() throws IOException {
-    current.close();
+    if (current != null) {
+      current.close();
+      current = null;
+    }
   }
 
   // --- internals ---
