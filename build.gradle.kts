@@ -112,7 +112,12 @@ configure(libraryProjects) {
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
             showStandardStreams = false
         }
-        maxParallelForks = Runtime.getRuntime().availableProcessors()
+        // Per-module test fork count. With org.gradle.parallel=true several modules' test
+        // tasks run concurrently, so each module forking availableProcessors() JVMs would
+        // wildly oversubscribe the host (N modules x 32 forks) and starve timing-sensitive
+        // concurrency tests. A quarter of the cores per module keeps the total near the
+        // core count while still parallelising within a module.
+        maxParallelForks = (Runtime.getRuntime().availableProcessors() / 4).coerceAtLeast(1)
     }
 
     // Custom test tasks — must wire testClassesDirs and classpath so Gradle finds compiled tests
@@ -492,6 +497,23 @@ tasks.wrapper {
     distributionType = Wrapper.DistributionType.ALL
 }
 
+// Resolvable classpath for aggregateJavadoc. Declaring it as a root-project configuration that
+// depends on each library module routes classpath resolution through Gradle's normal dependency
+// machinery — which is configuration-cache safe. The prior approach (reading each subproject's
+// sourceSets.main.compileClasspath inside the task's configure block) resolved other projects'
+// configurations at configuration time without an exclusive lock, which the configuration cache
+// rejects with a serialization error.
+val aggregateJavadocClasspath: Configuration by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+dependencies {
+    libraryProjects
+        .filter { it.name != "vectors-bench" }
+        .forEach { aggregateJavadocClasspath(project(it.path)) }
+}
+
 // Aggregated Javadoc generation
 tasks.register<Javadoc>("aggregateJavadoc") {
     description = "Generate aggregated Javadoc for all library modules"
@@ -504,8 +526,8 @@ tasks.register<Javadoc>("aggregateJavadoc") {
     libProjects.forEach { proj ->
         dependsOn(proj.tasks.named("compileJava"))
         source(proj.the<SourceSetContainer>()["main"].allJava)
-        classpath += files(proj.the<SourceSetContainer>()["main"].compileClasspath)
     }
+    classpath = aggregateJavadocClasspath
     setDestinationDir(layout.buildDirectory.dir("docs/javadoc/aggregate").get().asFile)
 
     (options as StandardJavadocDocletOptions).apply {
@@ -524,22 +546,26 @@ tasks.register<Javadoc>("aggregateJavadoc") {
 }
 
 // Per-module Javadocs
+// Per-module Javadoc collection. Implemented as one standard Sync task per module rather than a
+// single doLast that loops over Project references and calls project.copy(...): a task action
+// may not capture Project objects or use the project copy API under the configuration cache.
+// Sync is a built-in, configuration-cache-compatible task type; wiring `from` to each module's
+// javadoc task carries the cross-project dependency without serializing a Project.
+val perModuleJavadocCopies =
+    libraryProjects
+        .filter { it.name != "vectors-bench" }
+        .map { proj ->
+            val moduleName = proj.name.removePrefix("vectors-")
+            tasks.register<Sync>("copyJavadoc_$moduleName") {
+                description = "Collects $moduleName Javadoc into the aggregate docs tree"
+                group = "documentation"
+                from(proj.tasks.named<Javadoc>("javadoc"))
+                into(layout.buildDirectory.dir("docs/javadoc/modules/$moduleName"))
+            }
+        }
+
 tasks.register("generateModuleJavadocs") {
     description = "Generate Javadoc for individual library modules"
     group = "documentation"
-
-    val libProjects = libraryProjects.filter { it.name != "vectors-bench" }
-    libProjects.forEach { proj ->
-        dependsOn(proj.tasks.named("javadoc"))
-    }
-
-    doLast {
-        libProjects.forEach { proj ->
-            val moduleName = proj.name.removePrefix("vectors-")
-            copy {
-                from(proj.tasks.named<Javadoc>("javadoc").get().destinationDir)
-                into(layout.buildDirectory.dir("docs/javadoc/modules/$moduleName").get().asFile)
-            }
-        }
-    }
+    dependsOn(perModuleJavadocCopies)
 }

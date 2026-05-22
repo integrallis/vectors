@@ -39,9 +39,9 @@ task copyJavadocs(type: Copy) {
 	from rootProject.layout.buildDirectory.dir('docs/javadoc')
 	into layout.projectDirectory.dir("content/modules/ROOT/attachments/javadoc")
 
+	// No mkdir here: the Copy task's `into` creates the destination directory and its parents.
+	// Referencing `layout` from a task-action closure is unsupported with the configuration cache.
 	doFirst {
-		mkdir layout.projectDirectory.dir("content/modules/ROOT/attachments").asFile
-		mkdir layout.projectDirectory.dir("content/modules/ROOT/attachments/javadoc").asFile
 		logger.lifecycle("Copying Javadoc documentation to Antora attachments...")
 	}
 }
@@ -60,8 +60,9 @@ task generateSite(type: NodeTask) {
 
 	outputs.dir(layout.buildDirectory.dir("site"))
 
+	// No mkdir here: Antora creates its --to-dir output directory itself. Referencing `layout`
+	// from a task-action closure is unsupported with the configuration cache.
 	doFirst {
-		mkdir layout.buildDirectory.dir("site").get().asFile
 		logger.lifecycle("Building documentation with Antora...")
 	}
 }
