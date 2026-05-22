@@ -1,5 +1,4 @@
 = Vectors
-:page-layout: home
 
 A Java SIMD-native vector search framework leveraging the Vector API (`jdk.incubator.vector`) for hardware-accelerated approximate nearest neighbor (ANN) search.
 

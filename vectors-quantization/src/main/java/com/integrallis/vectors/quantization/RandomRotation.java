@@ -167,7 +167,7 @@ public final class RandomRotation implements Rotation {
    * @param q the D×D orthogonal matrix (row-major)
    * @param qt the D×D transpose of q (row-major)
    * @return a reconstructed rotation
-   * @throws IllegalArgumentException if dimension < 1 or matrix shapes don't match
+   * @throws IllegalArgumentException if {@code dimension < 1} or matrix shapes don't match
    */
   public static RandomRotation fromMatrix(int dimension, float[][] q, float[][] qt) {
     if (dimension < 1) {

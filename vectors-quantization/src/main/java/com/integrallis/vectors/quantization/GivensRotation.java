@@ -134,7 +134,7 @@ public final class GivensRotation implements Rotation {
    * @param cos cosine values for each 2D pair (length must be dimension/2)
    * @param sin sine values for each 2D pair (length must be dimension/2)
    * @return a reconstructed Givens rotation
-   * @throws IllegalArgumentException if dimension < 2 or array lengths don't match
+   * @throws IllegalArgumentException if {@code dimension < 2} or array lengths don't match
    */
   public static GivensRotation fromCosSin(int dimension, float[] cos, float[] sin) {
     if (dimension < 2) {

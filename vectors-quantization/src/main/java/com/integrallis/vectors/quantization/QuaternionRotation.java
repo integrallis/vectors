@@ -170,7 +170,7 @@ public final class QuaternionRotation implements Rotation {
    * @param qL left quaternions, shape [numBlocks][4] where numBlocks = dimension/4
    * @param qR right quaternions, shape [numBlocks][4]
    * @return a reconstructed quaternion rotation
-   * @throws IllegalArgumentException if dimension < 4 or array shapes don't match
+   * @throws IllegalArgumentException if {@code dimension < 4} or array shapes don't match
    */
   public static QuaternionRotation fromQuaternions(int dimension, float[][] qL, float[][] qR) {
     if (dimension < 4) {

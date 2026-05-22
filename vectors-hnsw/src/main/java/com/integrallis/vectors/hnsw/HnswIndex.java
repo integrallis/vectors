@@ -172,7 +172,7 @@ public final class HnswIndex {
    * @param query the query vector
    * @param k number of results to return
    * @param efSearch beam width per worker at layer 0 (must be >= k)
-   * @param nStarts number of parallel seeds (values <= 1 delegate to single-start search)
+   * @param nStarts number of parallel seeds ({@code values <= 1} delegate to single-start search)
    * @return the top-k results sorted by score descending
    */
   public SearchResult searchMultiStart(float[] query, int k, int efSearch, int nStarts) {
