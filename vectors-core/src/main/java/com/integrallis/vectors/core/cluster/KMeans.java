@@ -19,6 +19,7 @@ import com.integrallis.vectors.core.VectorUtil;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -46,10 +47,10 @@ public final class KMeans {
    * @return float[k][dim] centroid matrix
    */
   public static float[][] train(float[][] dataset, int k, int maxIter, long seed) {
-    if (dataset.length == 0) throw new IllegalArgumentException("empty dataset");
+    int dim = validateMatrix(dataset, "dataset");
     if (k <= 0 || k > dataset.length) throw new IllegalArgumentException("invalid k: " + k);
+    if (maxIter < 0) throw new IllegalArgumentException("maxIter must be >= 0: " + maxIter);
     int n = dataset.length;
-    int dim = dataset[0].length;
     Random rng = new Random(seed);
 
     // k-means++ seeding
@@ -104,6 +105,7 @@ public final class KMeans {
 
   /** Assigns each vector in {@code dataset} to the index of its nearest centroid. */
   public static int[] assign(float[][] dataset, float[][] centroids) {
+    validateCompatibleMatrices(dataset, "dataset", centroids, "centroids");
     int[] out = new int[dataset.length];
     for (int i = 0; i < dataset.length; i++) out[i] = nearestCentroid(dataset[i], centroids);
     return out;
@@ -112,9 +114,23 @@ public final class KMeans {
   /** Mean squared distance from each vector to its assigned centroid — lower is better. */
   public static double quantizationError(
       float[][] dataset, float[][] centroids, int[] assignments) {
+    validateCompatibleMatrices(dataset, "dataset", centroids, "centroids");
+    Objects.requireNonNull(assignments, "assignments");
+    if (assignments.length != dataset.length) {
+      throw new IllegalArgumentException(
+          "assignments.length must equal dataset.length: "
+              + assignments.length
+              + " != "
+              + dataset.length);
+    }
     double total = 0.0;
-    for (int i = 0; i < dataset.length; i++)
+    for (int i = 0; i < dataset.length; i++) {
+      if (assignments[i] < 0 || assignments[i] >= centroids.length) {
+        throw new IllegalArgumentException(
+            "assignment out of range at row " + i + ": " + assignments[i]);
+      }
       total += VectorUtil.squareDistance(dataset[i], centroids[assignments[i]]);
+    }
     return total / dataset.length;
   }
 
@@ -188,5 +204,31 @@ public final class KMeans {
       }
       if (count > 0) for (int d = 0; d < dim; d++) centroids[c][d] = (float) (sum[d] / count);
     }
+  }
+
+  private static void validateCompatibleMatrices(
+      float[][] left, String leftName, float[][] right, String rightName) {
+    int leftDim = validateMatrix(left, leftName);
+    int rightDim = validateMatrix(right, rightName);
+    if (leftDim != rightDim) {
+      throw new IllegalArgumentException(
+          leftName + " dimension differs from " + rightName + ": " + leftDim + " != " + rightDim);
+    }
+  }
+
+  private static int validateMatrix(float[][] matrix, String name) {
+    Objects.requireNonNull(matrix, name);
+    if (matrix.length == 0) throw new IllegalArgumentException("empty " + name);
+    float[] first = Objects.requireNonNull(matrix[0], name + "[0]");
+    int dim = first.length;
+    if (dim == 0) throw new IllegalArgumentException(name + " dimension must be > 0");
+    for (int i = 1; i < matrix.length; i++) {
+      float[] row = Objects.requireNonNull(matrix[i], name + "[" + i + "]");
+      if (row.length != dim) {
+        throw new IllegalArgumentException(
+            name + " dimensions differ: row 0 has " + dim + " but row " + i + " has " + row.length);
+      }
+    }
+    return dim;
   }
 }

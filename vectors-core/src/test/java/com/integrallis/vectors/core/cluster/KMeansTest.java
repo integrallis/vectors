@@ -102,6 +102,32 @@ class KMeansTest {
   }
 
   @Test
+  void trainRejectsRaggedDataset() {
+    float[][] data = new float[][] {{1f, 2f}, {3f}};
+
+    assertThatThrownBy(() -> KMeans.train(data, 1, 10, 0L))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void assignRejectsMismatchedDimensions() {
+    float[][] data = new float[][] {{1f, 2f}};
+    float[][] centroids = new float[][] {{1f, 2f, 3f}};
+
+    assertThatThrownBy(() -> KMeans.assign(data, centroids))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void quantizationErrorRejectsInvalidAssignments() {
+    float[][] data = new float[][] {{1f, 2f}};
+    float[][] centroids = new float[][] {{1f, 2f}};
+
+    assertThatThrownBy(() -> KMeans.quantizationError(data, centroids, new int[] {1}))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
   void centroidsLieWithinDataDistribution() {
     float[][] data = randomVectors(400, 16, 5L);
     // find data range

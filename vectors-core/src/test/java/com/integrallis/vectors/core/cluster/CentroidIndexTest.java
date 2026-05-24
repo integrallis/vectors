@@ -16,6 +16,7 @@
 package com.integrallis.vectors.core.cluster;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
@@ -158,6 +159,54 @@ class CentroidIndexTest {
       float dot = VectorUtil.dotProduct(query, centroids[c]);
       assertThat(nearestDot).isGreaterThanOrEqualTo(dot - 1e-4f);
     }
+  }
+
+  @Test
+  void routeRejectsNonPositiveNprobe() {
+    float[][] centroids = randomMatrix(K, DIM, 9L);
+    CentroidIndex idx = new CentroidIndex(centroids, SimilarityFunction.EUCLIDEAN);
+    float[] query = randomMatrix(1, DIM, 106L)[0];
+
+    assertThatThrownBy(() -> idx.route(query, 0)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> idx.route(query, -1)).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void cosineMetricRoutesByDirectionNotMagnitude() {
+    float[][] centroids = new float[][] {{100f, 0f}, {0f, 1f}};
+    CentroidIndex idx = new CentroidIndex(centroids, SimilarityFunction.COSINE);
+
+    int nearest = idx.route(new float[] {0f, 2f}, 1)[0];
+
+    assertThat(nearest).isEqualTo(1);
+  }
+
+  @Test
+  void dotProductSpillUsesScoreSpaceBoundary() {
+    float[][] centroids = new float[][] {{10f, 0f}, {9f, 0f}, {1f, 0f}};
+    CentroidIndex idx = new CentroidIndex(centroids, SimilarityFunction.DOT_PRODUCT);
+    int[] spillTargets = new int[] {1, -1, -1};
+
+    int[] result = idx.routeWithSpill(new float[] {1f, 0f}, 1, 0.2f, spillTargets);
+
+    assertThat(result).containsExactly(0, 1);
+  }
+
+  @Test
+  void constructorRejectsRaggedCentroids() {
+    float[][] centroids = new float[][] {{1f, 2f}, {3f}};
+
+    assertThatThrownBy(() -> new CentroidIndex(centroids, SimilarityFunction.EUCLIDEAN))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void constructorDefensivelyCopiesCentroids() {
+    float[][] centroids = new float[][] {{0f, 0f}, {10f, 0f}};
+    CentroidIndex idx = new CentroidIndex(centroids, SimilarityFunction.EUCLIDEAN);
+    centroids[0][0] = 100f;
+
+    assertThat(idx.route(new float[] {0f, 0f}, 1)[0]).isEqualTo(0);
   }
 
   @Test

@@ -15,6 +15,8 @@
  */
 package com.integrallis.vectors.core;
 
+import java.util.Objects;
+
 /**
  * Shared fused-SIMD similarity scoring for batches of vectors. Each call loads the query SIMD chunk
  * once and applies it to four rows simultaneously via {@link VectorUtil#batchSquaredL2} / {@link
@@ -49,6 +51,23 @@ public final class FusedSimilarity {
       float[] scratch,
       float[] outScores,
       int count) {
+    Objects.requireNonNull(sim, "sim");
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(pool, "pool");
+    Objects.requireNonNull(scratch, "scratch");
+    Objects.requireNonNull(outScores, "outScores");
+    if (count < 0 || count > pool.length) {
+      throw new IllegalArgumentException(
+          "count must be in [0, pool.length]: " + count + " for " + pool.length);
+    }
+    if (scratch.length < count) {
+      throw new IllegalArgumentException(
+          "scratch.length must be >= count: " + scratch.length + " < " + count);
+    }
+    if (outScores.length < count) {
+      throw new IllegalArgumentException(
+          "outScores.length must be >= count: " + outScores.length + " < " + count);
+    }
     switch (sim) {
       case EUCLIDEAN -> {
         VectorUtil.batchSquaredL2(query, pool, scratch, count);

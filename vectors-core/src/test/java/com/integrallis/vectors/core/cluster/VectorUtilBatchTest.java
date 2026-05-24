@@ -16,6 +16,7 @@
 package com.integrallis.vectors.core.cluster;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import com.integrallis.vectors.core.VectorUtil;
@@ -102,6 +103,38 @@ class VectorUtilBatchTest {
     VectorUtil.batchDotProduct(query, matrix, out); // must not throw
 
     assertThat(out).isEmpty();
+  }
+
+  @Test
+  void batchDotProductRejectsInvalidArguments() {
+    float[] query = randomVector(4, 8L);
+    float[][] matrix = new float[][] {randomVector(4, 9L)};
+
+    assertThatThrownBy(() -> VectorUtil.batchDotProduct(query, matrix, new float[0]))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.batchDotProduct(query, matrix, new float[1], 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () ->
+                VectorUtil.batchDotProduct(
+                    query, new float[][] {randomVector(3, 10L)}, new float[1]))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void batchSquaredL2RejectsInvalidArguments() {
+    float[] query = randomVector(4, 11L);
+    float[][] matrix = new float[][] {randomVector(4, 12L)};
+
+    assertThatThrownBy(() -> VectorUtil.batchSquaredL2(query, matrix, new float[0]))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.batchSquaredL2(query, matrix, new float[1], -1))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () ->
+                VectorUtil.batchSquaredL2(
+                    query, new float[][] {randomVector(3, 13L)}, new float[1]))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   // --- GEMV edge-case tests (validate 4-row fused kernel corners) ---

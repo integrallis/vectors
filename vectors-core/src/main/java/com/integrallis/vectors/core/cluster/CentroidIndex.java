@@ -18,19 +18,24 @@ package com.integrallis.vectors.core.cluster;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * Centroid routing index: given a query, finds the {@code nprobe} nearest centroids.
  *
- * <p>Supports SOAR boundary expansion: when {@code gamma > 0}, any centroid whose distance to the
- * query is within {@code (1 + gamma) * nearestDistance} has its spill target appended to the result
- * (up to {@code maxResults} unique ids).
+ * <p>Supports SOAR boundary expansion: when {@code gamma > 0}, primary probes inside the metric's
+ * spill boundary have their spill targets appended to the result. Euclidean routing expands squared
+ * L2 distance by {@code (1 + gamma)}. Dot-style routing expands in score space.
+ *
+ * <p>The index owns a defensive copy of the centroid matrix. For cosine routing, copied centroids
+ * are L2-normalized at construction time and queries are normalized before scoring.
  *
  * <p>Distance semantics:
  *
  * <ul>
  *   <li>{@link SimilarityFunction#EUCLIDEAN} — squared L2 (ascending = nearest)
- *   <li>All others — negated dot product (ascending = highest dot = nearest centroid)
+ *   <li>{@link SimilarityFunction#COSINE} — negated cosine (ascending = highest cosine = nearest)
+ *   <li>Dot-style metrics — negated dot product (ascending = highest dot = nearest centroid)
  * </ul>
  */
 public final class CentroidIndex {
@@ -39,9 +44,8 @@ public final class CentroidIndex {
   private final SimilarityFunction metric;
 
   public CentroidIndex(float[][] centroids, SimilarityFunction metric) {
-    if (centroids.length == 0) throw new IllegalArgumentException("empty centroids");
-    this.centroids = centroids;
-    this.metric = metric;
+    this.metric = Objects.requireNonNull(metric, "metric");
+    this.centroids = copyAndValidateCentroids(centroids, metric);
   }
 
   /** Number of centroids. */
@@ -64,7 +68,7 @@ public final class CentroidIndex {
 
   /**
    * Returns centroid ids sorted by ascending distance, expanded by SOAR spill targets when {@code
-   * gamma > 0}. At most {@code Math.min(nprobe + spillExpansion, k)} unique ids are returned.
+   * gamma > 0}.
    *
    * @param query the query vector
    * @param nprobe number of primary probes
@@ -79,12 +83,13 @@ public final class CentroidIndex {
   /**
    * Route with per-cluster distances preserved. The returned arrays are parallel and sorted by
    * ascending distance for primary probes; spill targets (when {@code gamma > 0}) are appended
-   * after, in the order they were added, with their distances recomputed from {@code distances[]}.
-   * Distances are in the internal metric scale (squared L2 for EUCLIDEAN; negated dot otherwise).
+   * after, in the order they were added. Distances are in the internal metric scale: squared L2 for
+   * EUCLIDEAN, negated cosine for COSINE, and negated dot for dot-style metrics.
    */
   public RouteResult routeWithSpillDistances(
       float[] query, int nprobe, float gamma, int[] spillTargets) {
     int k = centroids.length;
+    validateRouteArguments(query, nprobe, gamma, spillTargets, k);
     int probes = Math.min(nprobe, k);
     float[] distances = new float[k];
     computeDistances(query, distances);
@@ -162,7 +167,7 @@ public final class CentroidIndex {
 
     if (gamma > 0f && spillTargets != null && count > 0) {
       float nearestDist = topDists[0];
-      float boundary = nearestDist * (1f + gamma);
+      float boundary = spillBoundary(nearestDist, gamma);
       for (int r = 0; r < heapSize; r++) {
         if (topDists[r] > boundary) break;
         int spill = spillTargets[topIds[r]];
@@ -193,10 +198,70 @@ public final class CentroidIndex {
   private void computeDistances(float[] query, float[] out) {
     if (metric == SimilarityFunction.EUCLIDEAN) {
       VectorUtil.batchSquaredL2(query, centroids, out);
+    } else if (metric == SimilarityFunction.COSINE) {
+      float[] normalizedQuery = Arrays.copyOf(query, query.length);
+      VectorUtil.l2normalize(normalizedQuery, true);
+      VectorUtil.batchDotProduct(normalizedQuery, centroids, out);
+      for (int i = 0; i < out.length; i++) out[i] = -out[i];
     } else {
-      // For DOT_PRODUCT, COSINE, MIP: higher dot = nearer centroid → negate for ascending sort
+      // For DOT_PRODUCT and MIP: higher dot = nearer centroid; negate for ascending sort.
       VectorUtil.batchDotProduct(query, centroids, out);
       for (int i = 0; i < out.length; i++) out[i] = -out[i];
+    }
+  }
+
+  private float spillBoundary(float nearestDist, float gamma) {
+    if (metric == SimilarityFunction.EUCLIDEAN) {
+      return nearestDist * (1f + gamma);
+    }
+    float nearestScore = -nearestDist;
+    float thresholdScore = nearestScore - Math.abs(nearestScore) * gamma;
+    return -thresholdScore;
+  }
+
+  private static float[][] copyAndValidateCentroids(float[][] source, SimilarityFunction metric) {
+    Objects.requireNonNull(source, "centroids");
+    if (source.length == 0) throw new IllegalArgumentException("empty centroids");
+    float[] first = Objects.requireNonNull(source[0], "centroids[0]");
+    int dim = first.length;
+    if (dim == 0) throw new IllegalArgumentException("centroid dimension must be > 0");
+
+    float[][] copy = new float[source.length][dim];
+    for (int i = 0; i < source.length; i++) {
+      float[] row = Objects.requireNonNull(source[i], "centroids[" + i + "]");
+      if (row.length != dim) {
+        throw new IllegalArgumentException(
+            "centroid dimensions differ: row 0 has "
+                + dim
+                + " but row "
+                + i
+                + " has "
+                + row.length);
+      }
+      copy[i] = Arrays.copyOf(row, dim);
+      if (metric == SimilarityFunction.COSINE) {
+        VectorUtil.l2normalize(copy[i], true);
+      }
+    }
+    return copy;
+  }
+
+  private void validateRouteArguments(
+      float[] query, int nprobe, float gamma, int[] spillTargets, int k) {
+    Objects.requireNonNull(query, "query");
+    if (query.length != dimension()) {
+      throw new IllegalArgumentException(
+          "query dimension differs from centroids: " + query.length + " != " + dimension());
+    }
+    if (nprobe <= 0) {
+      throw new IllegalArgumentException("nprobe must be > 0: " + nprobe);
+    }
+    if (!Float.isFinite(gamma) || gamma < 0f) {
+      throw new IllegalArgumentException("gamma must be finite and >= 0: " + gamma);
+    }
+    if (gamma > 0f && spillTargets != null && spillTargets.length < k) {
+      throw new IllegalArgumentException(
+          "spillTargets.length must be >= centroid count: " + spillTargets.length + " < " + k);
     }
   }
 }

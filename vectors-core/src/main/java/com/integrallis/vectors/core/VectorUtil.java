@@ -16,6 +16,7 @@
 package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Objects;
 
 /**
  * Public API facade for vector distance and similarity operations. Delegates to the best available
@@ -154,6 +155,7 @@ public final class VectorUtil {
    * simultaneously, reducing query memory traffic by 4×.
    */
   public static void batchDotProduct(float[] query, float[][] matrix, float[] out) {
+    checkBatchArguments(query, matrix, out, matrix.length);
     IMPL.matVecDot(query, matrix, out, matrix.length);
   }
 
@@ -163,6 +165,7 @@ public final class VectorUtil {
    * processes only a prefix.
    */
   public static void batchDotProduct(float[] query, float[][] matrix, float[] out, int numRows) {
+    checkBatchArguments(query, matrix, out, numRows);
     IMPL.matVecDot(query, matrix, out, numRows);
   }
 
@@ -174,6 +177,7 @@ public final class VectorUtil {
    * <p>Delegates to {@link VectorUtilSupport#matVecSquaredL2} with a fused 4-row SIMD kernel.
    */
   public static void batchSquaredL2(float[] query, float[][] matrix, float[] out) {
+    checkBatchArguments(query, matrix, out, matrix.length);
     IMPL.matVecSquaredL2(query, matrix, out, matrix.length);
   }
 
@@ -183,6 +187,7 @@ public final class VectorUtil {
    * only a prefix.
    */
   public static void batchSquaredL2(float[] query, float[][] matrix, float[] out, int numRows) {
+    checkBatchArguments(query, matrix, out, numRows);
     IMPL.matVecSquaredL2(query, matrix, out, numRows);
   }
 
@@ -232,6 +237,25 @@ public final class VectorUtil {
   private static void checkDimensions(int len1, int len2) {
     if (len1 != len2) {
       throw new IllegalArgumentException("Vector dimensions differ: " + len1 + " != " + len2);
+    }
+  }
+
+  private static void checkBatchArguments(
+      float[] query, float[][] matrix, float[] out, int numRows) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(matrix, "matrix");
+    Objects.requireNonNull(out, "out");
+    if (numRows < 0 || numRows > matrix.length) {
+      throw new IllegalArgumentException(
+          "numRows must be in [0, matrix.length]: " + numRows + " for " + matrix.length);
+    }
+    if (out.length < numRows) {
+      throw new IllegalArgumentException(
+          "out.length must be >= numRows: " + out.length + " < " + numRows);
+    }
+    for (int i = 0; i < numRows; i++) {
+      float[] row = Objects.requireNonNull(matrix[i], "matrix[" + i + "]");
+      checkDimensions(query.length, row.length);
     }
   }
 }
