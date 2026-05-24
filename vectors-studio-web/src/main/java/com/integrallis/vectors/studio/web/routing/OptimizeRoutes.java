@@ -19,7 +19,9 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.integrallis.vectors.optimizer.study.TrialResult;
 import com.integrallis.vectors.studio.core.StudioSession;
+import com.integrallis.vectors.studio.core.connection.ApplyTrialResult;
 import com.integrallis.vectors.studio.web.optimize.OptimizeEvent;
 import com.integrallis.vectors.studio.web.optimize.OptimizeJob;
 import com.integrallis.vectors.studio.web.optimize.OptimizeJobManager;
@@ -34,6 +36,7 @@ import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
 import io.helidon.webserver.sse.SseSink;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
@@ -213,17 +216,76 @@ public final class OptimizeRoutes implements HttpService {
   }
 
   private void applyTrial(ServerRequest req, ServerResponse res) {
+    String collection = req.path().pathParameters().get("name");
+    String studyId = req.path().pathParameters().get("studyId");
+    String trialId = req.path().pathParameters().get("trialId");
     String confirm = req.query().first("confirm").asOptional().orElse("");
     if (!"true".equals(confirm)) {
       res.status(Status.BAD_REQUEST_400)
           .send(
-              "Apply is destructive: it would replace the live collection's index with the "
-                  + "trial's parameters. Re-issue this request with ?confirm=true to proceed.");
+              "Apply is destructive: it rebuilds the live collection with the trial's index "
+                  + "parameters and copies all live documents into the new collection. Re-issue "
+                  + "this request with ?confirm=true to proceed.");
       return;
     }
-    // v1: applying parameters live requires backend reconfiguration which is not yet exposed;
-    // accept the confirmation but report deferred-application via a 202.
-    res.status(Status.ACCEPTED_202)
-        .send("Trial parameters captured; live re-indexing is deferred to a future release.");
+
+    OptimizeJob job = jobs.get(studyId);
+    if (job == null) {
+      res.status(Status.NOT_FOUND_404).send("unknown study: " + studyId);
+      return;
+    }
+    TrialResult target = null;
+    for (TrialResult tr : job.history()) {
+      if (tr.trial().trialId().equals(trialId)) {
+        target = tr;
+        break;
+      }
+    }
+    if (target == null) {
+      res.status(Status.NOT_FOUND_404)
+          .send("unknown trial '" + trialId + "' in study '" + studyId + "'");
+      return;
+    }
+
+    try {
+      // Validate the collection exists before we touch the backend — surfaces 404 instead of
+      // surfacing IllegalArgumentException as 500.
+      session.backend().describe(collection);
+    } catch (IllegalArgumentException e) {
+      res.status(Status.NOT_FOUND_404).send("unknown collection: " + collection);
+      return;
+    } catch (RuntimeException e) {
+      res.status(Status.INTERNAL_SERVER_ERROR_500).send("collection lookup failed: " + e);
+      return;
+    }
+
+    ApplyTrialResult result;
+    try {
+      result = session.backend().applyTrialParameters(collection, target.trial().params());
+    } catch (UnsupportedOperationException e) {
+      res.status(Status.NOT_IMPLEMENTED_501).send(e.getMessage());
+      return;
+    } catch (IllegalArgumentException e) {
+      res.status(Status.BAD_REQUEST_400).send(e.getMessage());
+      return;
+    } catch (RuntimeException e) {
+      res.status(Status.INTERNAL_SERVER_ERROR_500).send("apply failed: " + e);
+      return;
+    }
+
+    try {
+      Map<String, Object> body = new LinkedHashMap<>();
+      body.put("collection", collection);
+      body.put("studyId", studyId);
+      body.put("trialId", trialId);
+      body.put("appliedParams", result.appliedParams());
+      body.put("documentsCopied", result.documentsCopied());
+      body.put("rebuildMillis", result.rebuildMillis());
+      body.put("persistenceRefreshed", result.persistenceRefreshed());
+      res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
+      res.status(Status.OK_200).send(MAPPER.writeValueAsBytes(body));
+    } catch (Exception e) {
+      res.status(Status.INTERNAL_SERVER_ERROR_500).send("response serialization failed: " + e);
+    }
   }
 }

@@ -48,6 +48,7 @@ class OptimizeApiIT {
 
   private StudioServerHandle handle;
   private HttpClient client;
+  private EmbeddedStudioBackend backend;
 
   @BeforeEach
   void setUp() {
@@ -65,8 +66,8 @@ class OptimizeApiIT {
       }
     }
     c.commit();
-    EmbeddedStudioBackend b = EmbeddedStudioBackend.withCollections(Map.of("docs", c));
-    handle = StudioServer.start(new StudioConfig(0, new StudioSession(b)));
+    backend = EmbeddedStudioBackend.withCollections(Map.of("docs", c));
+    handle = StudioServer.start(new StudioConfig(0, new StudioSession(backend)));
     client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
   }
 
@@ -147,18 +148,111 @@ class OptimizeApiIT {
     assertThat(res.statusCode()).isEqualTo(404);
   }
 
+  // ---- apply tests ----
+  //
+  // The old applyWithConfirmReturns202 IT (audit §HIGH#5) asserted 202 against a fake study/trial.
+  // It was a passing test that disguised an unimplemented endpoint. The new tests below drive a
+  // real study to completion, pick a real trial, hit apply against the real collection, and check
+  // that the live collection's index was actually rebuilt with the trial's parameters.
+
   @Test
   void applyWithoutConfirmIsRejected() throws Exception {
     HttpResponse<String> res =
         postJson("/collections/docs/optimize/apply/study-fake/trial-fake", "");
     assertThat(res.statusCode()).isEqualTo(400);
-    assertThat(res.body()).contains("confirm");
+    assertThat(res.body()).containsIgnoringCase("confirm=true");
   }
 
   @Test
-  void applyWithConfirmReturns202() throws Exception {
+  void applyOnUnknownStudyReturns404() throws Exception {
     HttpResponse<String> res =
         postJson("/collections/docs/optimize/apply/study-fake/trial-fake?confirm=true", "");
-    assertThat(res.statusCode()).isEqualTo(202);
+    assertThat(res.statusCode()).isEqualTo(404);
+    assertThat(res.body()).contains("study-fake");
+  }
+
+  @Test
+  void applyRebuildsLiveCollectionWithTrialParameters() throws Exception {
+    String dto =
+        "{\"collection\":\"docs\",\"sampler\":\"RANDOM\",\"nTrials\":3,\"kForMetrics\":5,"
+            + "\"querySampleSize\":8,\"mMin\":8,\"mMax\":16,\"efMin\":50,\"efMax\":100}";
+    HttpResponse<String> submit = postJson("/api/optimize/studies", dto);
+    assertThat(submit.statusCode()).isEqualTo(202);
+    String studyId = JSON.readTree(submit.body()).get("studyId").asText();
+
+    waitFor(
+        () -> {
+          try {
+            HttpResponse<String> r = get("/api/optimize/studies/" + studyId + "/trials");
+            if (r.statusCode() != 200) return false;
+            JsonNode tree = JSON.readTree(r.body());
+            return "COMPLETED".equals(tree.get("state").asText()) && tree.get("trials").size() >= 1;
+          } catch (Exception e) {
+            return false;
+          }
+        },
+        Duration.ofSeconds(45));
+
+    HttpResponse<String> trialsRes = get("/api/optimize/studies/" + studyId + "/trials");
+    JsonNode trials = JSON.readTree(trialsRes.body()).get("trials");
+    assertThat(trials.size()).isPositive();
+    String firstTrialId = trials.get(0).get("trial").get("trialId").asText();
+
+    HttpResponse<String> applyRes =
+        postJson(
+            "/collections/docs/optimize/apply/" + studyId + "/" + firstTrialId + "?confirm=true",
+            "");
+    assertThat(applyRes.statusCode())
+        .as("apply against a real study/trial must succeed")
+        .isEqualTo(200);
+    JsonNode body = JSON.readTree(applyRes.body());
+    assertThat(body.get("collection").asText()).isEqualTo("docs");
+    assertThat(body.get("studyId").asText()).isEqualTo(studyId);
+    assertThat(body.get("trialId").asText()).isEqualTo(firstTrialId);
+    assertThat(body.get("documentsCopied").asInt())
+        .as("the rebuild must carry every live document into the new collection (we seeded 120)")
+        .isEqualTo(120);
+    JsonNode applied = body.get("appliedParams");
+    assertThat(applied).isNotNull();
+    assertThat(applied.get("indexType").asText())
+        .as("the random sampler's space is HNSW with m/efConstruction axes")
+        .isEqualTo("HNSW");
+    assertThat(applied.has("m")).isTrue();
+    assertThat(applied.has("efConstruction")).isTrue();
+
+    // And the live collection's *current* config must reflect the rebuild: a direct backend
+    // describe should now report HNSW (we seeded the collection as FLAT in @BeforeEach).
+    assertThat(backend.describe("docs").indexType())
+        .as("live collection must now be HNSW (was FLAT before apply)")
+        .isEqualTo("HNSW");
+    assertThat(backend.describe("docs").size())
+        .as("rebuild preserves every live document")
+        .isEqualTo(120);
+  }
+
+  @Test
+  void applyWithUnknownTrialReturns404() throws Exception {
+    String dto =
+        "{\"collection\":\"docs\",\"sampler\":\"RANDOM\",\"nTrials\":2,\"kForMetrics\":5,"
+            + "\"querySampleSize\":4,\"mMin\":8,\"mMax\":16,\"efMin\":50,\"efMax\":100}";
+    HttpResponse<String> submit = postJson("/api/optimize/studies", dto);
+    assertThat(submit.statusCode()).isEqualTo(202);
+    String studyId = JSON.readTree(submit.body()).get("studyId").asText();
+    waitFor(
+        () -> {
+          try {
+            HttpResponse<String> r = get("/api/optimize/studies/" + studyId + "/trials");
+            return r.statusCode() == 200
+                && "COMPLETED".equals(JSON.readTree(r.body()).get("state").asText());
+          } catch (Exception e) {
+            return false;
+          }
+        },
+        Duration.ofSeconds(45));
+    HttpResponse<String> res =
+        postJson(
+            "/collections/docs/optimize/apply/" + studyId + "/no-such-trial-id?confirm=true", "");
+    assertThat(res.statusCode()).isEqualTo(404);
+    assertThat(res.body()).contains("no-such-trial-id");
   }
 }

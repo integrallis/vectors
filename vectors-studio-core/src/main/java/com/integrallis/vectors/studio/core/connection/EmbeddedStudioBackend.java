@@ -16,10 +16,15 @@
 package com.integrallis.vectors.studio.core.connection;
 
 import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.filter.Filter;
+import com.integrallis.vectors.db.IndexType;
+import com.integrallis.vectors.db.QuantizerKind;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
+import com.integrallis.vectors.db.VectorCollectionBuilder;
+import com.integrallis.vectors.db.VectorCollectionConfig;
 import com.integrallis.vectors.db.storage.FileFormat;
 import com.integrallis.vectors.db.storage.GenerationDirectory;
 import com.integrallis.vectors.db.storage.Manifest;
@@ -33,7 +38,9 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -57,6 +64,10 @@ public final class EmbeddedStudioBackend implements StudioBackend {
 
   private final ConcurrentHashMap<String, VectorCollection> open;
   private final ConcurrentHashMap<String, Instant> createdAt;
+  // Names whose collection was originally opened from a persistent directory. Tracked so that a
+  // subsequent in-memory rebuild via applyTrialParameters can honestly report that the on-disk
+  // image has diverged from the live state.
+  private final java.util.Set<String> persistentNames = ConcurrentHashMap.newKeySet();
 
   private EmbeddedStudioBackend(
       ConcurrentHashMap<String, VectorCollection> open,
@@ -71,6 +82,7 @@ public final class EmbeddedStudioBackend implements StudioBackend {
   public static EmbeddedStudioBackend open(Path dataDir) {
     ConcurrentHashMap<String, VectorCollection> open = new ConcurrentHashMap<>();
     ConcurrentHashMap<String, Instant> ts = new ConcurrentHashMap<>();
+    java.util.Set<String> persistentNamesAtBoot = new java.util.HashSet<>();
     if (dataDir == null || !Files.isDirectory(dataDir)) {
       return new EmbeddedStudioBackend(open, ts);
     }
@@ -100,6 +112,9 @@ public final class EmbeddedStudioBackend implements StudioBackend {
                   .build();
           open.put(name, c);
           ts.put(name, readCreationInstant(candidate, m));
+          // Reopened-from-disk means originally persistent — tracked so applyTrialParameters can
+          // honestly report that a subsequent in-memory rebuild has diverged from disk.
+          persistentNamesAtBoot.add(name);
         } catch (RuntimeException | IOException e) {
           LOG.warn("studio: failed to reopen {}: {}", name, e.getMessage());
         }
@@ -107,7 +122,9 @@ public final class EmbeddedStudioBackend implements StudioBackend {
     } catch (IOException e) {
       LOG.warn("studio: failed to scan {}: {}", dataDir, e.getMessage());
     }
-    return new EmbeddedStudioBackend(open, ts);
+    EmbeddedStudioBackend backend = new EmbeddedStudioBackend(open, ts);
+    backend.persistentNames.addAll(persistentNamesAtBoot);
+    return backend;
   }
 
   /** Test/seam factory: wraps a pre-built map of collections. */
@@ -250,6 +267,137 @@ public final class EmbeddedStudioBackend implements StudioBackend {
     } catch (RuntimeException e) {
       LOG.warn("studio: failed to close removed collection {}: {}", name, e.getMessage());
     }
+  }
+
+  @Override
+  public ApplyTrialResult applyTrialParameters(String name, Map<String, Object> trialParams) {
+    Objects.requireNonNull(trialParams, "trialParams");
+    long start = System.nanoTime();
+    // computeIfPresent so the swap is atomic against concurrent reads/writes on the same name in
+    // the ConcurrentHashMap; competing applyTrialParameters / deleteCollection for the same name
+    // are serialised by ConcurrentHashMap's per-bin lock.
+    var swap = new java.util.concurrent.atomic.AtomicReference<ApplyTrialResult>();
+    VectorCollection updated =
+        open.computeIfPresent(
+            name,
+            (key, oldCol) -> {
+              VectorCollectionConfig oldCfg = oldCol.config();
+              List<Document> snapshot = oldCol.documents();
+              Map<String, Object> resolved = resolveTrialParams(oldCfg, trialParams);
+              VectorCollection rebuilt = buildFromResolved(oldCfg.dimension(), resolved);
+              try {
+                if (!snapshot.isEmpty()) {
+                  rebuilt.addAll(snapshot);
+                  rebuilt.commit();
+                }
+              } catch (RuntimeException e) {
+                try {
+                  rebuilt.close();
+                } catch (RuntimeException closeEx) {
+                  e.addSuppressed(closeEx);
+                }
+                throw e;
+              }
+              // Close old collection AFTER the new one is fully populated, so a build failure
+              // leaves the old collection installed.
+              try {
+                oldCol.close();
+              } catch (RuntimeException e) {
+                LOG.warn(
+                    "studio: failed to close old collection during applyTrialParameters({}): {}",
+                    name,
+                    e.getMessage());
+              }
+              long rebuildMs = (System.nanoTime() - start) / 1_000_000L;
+              boolean wasPersistent = persistentNames.remove(name);
+              swap.set(new ApplyTrialResult(resolved, snapshot.size(), rebuildMs, !wasPersistent));
+              return rebuilt;
+            });
+    if (updated == null) {
+      throw new IllegalArgumentException("unknown collection: " + name);
+    }
+    return swap.get();
+  }
+
+  /**
+   * Resolves a trial's param map into the concrete collection-config knobs that will actually be
+   * applied, falling back to the OLD collection's config for any axis the trial didn't sample.
+   * Mirrors the axis names {@code IndexStudy.configureBuilder} understands.
+   */
+  private static Map<String, Object> resolveTrialParams(
+      VectorCollectionConfig oldCfg, Map<String, Object> trialParams) {
+    Map<String, Object> resolved = new LinkedHashMap<>();
+    SimilarityFunction metric =
+        enumOf(trialParams, "metric", SimilarityFunction.class, oldCfg.metric());
+    IndexType indexType = enumOf(trialParams, "indexType", IndexType.class, oldCfg.indexType());
+    QuantizerKind quantizer =
+        enumOf(trialParams, "quantizer", QuantizerKind.class, oldCfg.quantizerKind());
+    resolved.put("metric", metric.name());
+    resolved.put("indexType", indexType.name());
+    resolved.put("quantizer", quantizer.name());
+    if (indexType == IndexType.HNSW) {
+      int m = optInt(trialParams, "m", VectorCollectionBuilder.DEFAULT_HNSW_M);
+      int efC =
+          optInt(
+              trialParams, "efConstruction", VectorCollectionBuilder.DEFAULT_HNSW_EF_CONSTRUCTION);
+      resolved.put("m", m);
+      resolved.put("efConstruction", efC);
+    } else if (indexType == IndexType.VAMANA) {
+      int r = optInt(trialParams, "vamanaR", VectorCollectionBuilder.DEFAULT_VAMANA_R);
+      int l = optInt(trialParams, "vamanaL", VectorCollectionBuilder.DEFAULT_VAMANA_L);
+      double alpha =
+          optDouble(trialParams, "vamanaAlpha", VectorCollectionBuilder.DEFAULT_VAMANA_ALPHA);
+      resolved.put("vamanaR", r);
+      resolved.put("vamanaL", l);
+      resolved.put("vamanaAlpha", alpha);
+    }
+    // Search-time-only axes are not used in rebuild but are echoed back in the result so the UI
+    // can surface them; record raw values without re-validating.
+    if (trialParams.containsKey("efSearch")) {
+      resolved.put("efSearch", trialParams.get("efSearch"));
+    }
+    return resolved;
+  }
+
+  private static VectorCollection buildFromResolved(int dim, Map<String, Object> resolved) {
+    SimilarityFunction metric = SimilarityFunction.valueOf((String) resolved.get("metric"));
+    IndexType indexType = IndexType.valueOf((String) resolved.get("indexType"));
+    QuantizerKind quantizer = QuantizerKind.valueOf((String) resolved.get("quantizer"));
+    VectorCollectionBuilder b =
+        VectorCollection.builder()
+            .dimension(dim)
+            .metric(metric)
+            .indexType(indexType)
+            .quantizer(quantizer);
+    if (indexType == IndexType.HNSW) {
+      b.hnswM((Integer) resolved.get("m"))
+          .hnswEfConstruction((Integer) resolved.get("efConstruction"));
+    } else if (indexType == IndexType.VAMANA) {
+      b.vamanaMaxDegree((Integer) resolved.get("vamanaR"))
+          .vamanaSearchListSize((Integer) resolved.get("vamanaL"))
+          .vamanaAlpha(((Number) resolved.get("vamanaAlpha")).floatValue());
+    }
+    return b.build();
+  }
+
+  private static int optInt(Map<String, Object> p, String key, int defaultValue) {
+    Object v = p.get(key);
+    if (v == null) return defaultValue;
+    return ((Number) v).intValue();
+  }
+
+  private static double optDouble(Map<String, Object> p, String key, double defaultValue) {
+    Object v = p.get(key);
+    if (v == null) return defaultValue;
+    return ((Number) v).doubleValue();
+  }
+
+  private static <E extends Enum<E>> E enumOf(
+      Map<String, Object> p, String key, Class<E> type, E defaultValue) {
+    Object v = p.get(key);
+    if (v == null) return defaultValue;
+    if (type.isInstance(v)) return type.cast(v);
+    return Enum.valueOf(type, v.toString().toUpperCase(Locale.ROOT));
   }
 
   @Override

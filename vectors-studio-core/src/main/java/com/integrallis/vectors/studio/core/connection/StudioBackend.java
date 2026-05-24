@@ -20,6 +20,7 @@ import com.integrallis.vectors.studio.core.search.DocumentView;
 import com.integrallis.vectors.studio.core.search.SearchHit;
 import com.integrallis.vectors.studio.core.search.SearchSpec;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
@@ -81,6 +82,38 @@ public interface StudioBackend extends AutoCloseable {
    * (the embedded backend does not own the directory layout).
    */
   void deleteCollection(String name);
+
+  /**
+   * Applies a trial's optimized index parameters to the live collection by rebuilding it.
+   *
+   * <p>The trial's {@code params} map uses the axis names defined by the optimizer's search space —
+   * the same names {@code IndexStudy} maps onto {@link
+   * com.integrallis.vectors.db.VectorCollectionBuilder}: {@code metric}, {@code indexType}, {@code
+   * quantizer}, and (for HNSW) {@code m}/{@code efConstruction}, or (for VAMANA) {@code
+   * vamanaR}/{@code vamanaL}/{@code vamanaAlpha}. The collection's dimension is preserved
+   * regardless of trial params. Search-time-only axes (e.g. {@code efSearch}) are accepted but do
+   * not influence the rebuild; they are echoed in {@link ApplyTrialResult#appliedParams()}.
+   *
+   * <p>Implementations rebuild the collection by reading the live document set, constructing a new
+   * collection from the merged config, ingesting every document, and atomically swapping the new
+   * collection into the registry in place of the old one. The old collection is then closed.
+   *
+   * <p>The default implementation throws {@link UnsupportedOperationException}: backends that
+   * cannot reconfigure a live collection (e.g. the remote backend, which would require a
+   * server-side rebuild endpoint) opt out by not overriding.
+   *
+   * @param name the collection to reconfigure
+   * @param trialParams the trial's parameter map
+   * @return a summary of what was applied
+   * @throws IllegalArgumentException if the collection is unknown
+   * @throws UnsupportedOperationException if this backend cannot reconfigure live collections
+   */
+  default ApplyTrialResult applyTrialParameters(String name, Map<String, Object> trialParams) {
+    throw new UnsupportedOperationException(
+        "applyTrialParameters is not supported by this backend ("
+            + getClass().getSimpleName()
+            + "); use an embedded backend to reconfigure a live collection.");
+  }
 
   @Override
   void close();
