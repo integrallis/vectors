@@ -35,6 +35,8 @@ import org.junit.jupiter.api.io.TempDir;
 class PersistenceTest {
 
   private static final ObjectMapper JSON = ObjectMapperHolder.shared();
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
   private static ServerConfig persistentConfig(Path dataDir) {
     return new ServerConfig(0, dataDir.toAbsolutePath(), 64, 5);
@@ -44,7 +46,7 @@ class PersistenceTest {
       HttpClient client, int port, String path, String body) throws Exception {
     HttpRequest req =
         HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-            .timeout(Duration.ofSeconds(10))
+            .timeout(REQUEST_TIMEOUT)
             .header("content-type", "application/json")
             .POST(BodyPublishers.ofString(body))
             .build();
@@ -55,7 +57,7 @@ class PersistenceTest {
       throws Exception {
     HttpRequest req =
         HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-            .timeout(Duration.ofSeconds(5))
+            .timeout(REQUEST_TIMEOUT)
             .GET()
             .build();
     return client.send(req, BodyHandlers.ofString());
@@ -65,7 +67,7 @@ class PersistenceTest {
       throws Exception {
     HttpRequest req =
         HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-            .timeout(Duration.ofSeconds(5))
+            .timeout(REQUEST_TIMEOUT)
             .DELETE()
             .build();
     return client.send(req, BodyHandlers.ofString());
@@ -73,7 +75,7 @@ class PersistenceTest {
 
   @Test
   void createSurvivesRestart(@TempDir Path dataDir) throws Exception {
-    HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    HttpClient client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     String body =
         """
         {"name":"persisted","dimension":4,"metric":"COSINE","indexType":"FLAT"}
@@ -104,7 +106,7 @@ class PersistenceTest {
 
   @Test
   void dropRemovesStorageDirectory(@TempDir Path dataDir) throws Exception {
-    HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    HttpClient client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     try (VectorsServer.ServerHandle h = VectorsServer.start(persistentConfig(dataDir))) {
       assertThat(
               postJson(
@@ -127,7 +129,7 @@ class PersistenceTest {
     Files.createDirectory(dataDir.resolve("empty-dir"));
     Files.createDirectory(dataDir.resolve("bad name with spaces"));
 
-    HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    HttpClient client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     try (VectorsServer.ServerHandle h = VectorsServer.start(persistentConfig(dataDir))) {
       HttpResponse<String> list = get(client, h.port(), "/v1/collections");
       assertThat(list.statusCode()).isEqualTo(200);

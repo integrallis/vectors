@@ -35,3 +35,7 @@ application {
     mainClass.set("com.integrallis.vectors.server.VectorsServer")
     applicationDefaultJvmArgs = listOf("--add-modules", "jdk.incubator.vector")
 }
+
+tasks.named<Test>("test") {
+    maxParallelForks = 1
+}

@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Test;
 class BulkRoutesTest {
 
   private static final ObjectMapper JSON = ObjectMapperHolder.shared();
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
   private VectorsServer.ServerHandle handle;
   private HttpClient client;
@@ -41,7 +43,7 @@ class BulkRoutesTest {
   @BeforeEach
   void setUp() throws Exception {
     handle = VectorsServer.start(ServerConfig.forTesting());
-    client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     postJson(
         "/v1/collections",
         "{\"name\":\"bulk\",\"dimension\":4,\"metric\":\"COSINE\",\"indexType\":\"FLAT\"}");
@@ -65,14 +67,14 @@ class BulkRoutesTest {
 
   private HttpResponse<String> get(String path) throws Exception {
     return client.send(
-        HttpRequest.newBuilder(uri(path)).timeout(Duration.ofSeconds(5)).GET().build(),
+        HttpRequest.newBuilder(uri(path)).timeout(REQUEST_TIMEOUT).GET().build(),
         BodyHandlers.ofString());
   }
 
   private HttpResponse<String> postJson(String path, String body) throws Exception {
     return client.send(
         HttpRequest.newBuilder(uri(path))
-            .timeout(Duration.ofSeconds(10))
+            .timeout(REQUEST_TIMEOUT)
             .header("content-type", "application/json")
             .POST(BodyPublishers.ofString(body))
             .build(),

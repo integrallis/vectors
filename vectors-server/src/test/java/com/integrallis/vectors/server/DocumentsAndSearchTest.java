@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Test;
 class DocumentsAndSearchTest {
 
   private static final ObjectMapper JSON = ObjectMapperHolder.shared();
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
   private VectorsServer.ServerHandle handle;
   private HttpClient client;
@@ -41,7 +43,7 @@ class DocumentsAndSearchTest {
   @BeforeEach
   void setUp() throws Exception {
     handle = VectorsServer.start(ServerConfig.forTesting());
-    client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+    client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     // Create a small 4-D COSINE FLAT collection up front.
     HttpResponse<String> r =
         postJson(
@@ -64,7 +66,7 @@ class DocumentsAndSearchTest {
   private HttpResponse<String> postJson(String path, String body) throws Exception {
     HttpRequest req =
         HttpRequest.newBuilder(uri(path))
-            .timeout(Duration.ofSeconds(10))
+            .timeout(REQUEST_TIMEOUT)
             .header("content-type", "application/json")
             .POST(BodyPublishers.ofString(body))
             .build();
@@ -73,7 +75,7 @@ class DocumentsAndSearchTest {
 
   private HttpResponse<String> delete(String path) throws Exception {
     return client.send(
-        HttpRequest.newBuilder(uri(path)).timeout(Duration.ofSeconds(5)).DELETE().build(),
+        HttpRequest.newBuilder(uri(path)).timeout(REQUEST_TIMEOUT).DELETE().build(),
         BodyHandlers.ofString());
   }
 
@@ -160,7 +162,7 @@ class DocumentsAndSearchTest {
   void commitEndpointIsIdempotent() throws Exception {
     HttpRequest req =
         HttpRequest.newBuilder(uri("/v1/collections/docs/commit"))
-            .timeout(Duration.ofSeconds(5))
+            .timeout(REQUEST_TIMEOUT)
             .POST(BodyPublishers.noBody())
             .build();
     assertThat(client.send(req, BodyHandlers.ofString()).statusCode()).isEqualTo(204);
