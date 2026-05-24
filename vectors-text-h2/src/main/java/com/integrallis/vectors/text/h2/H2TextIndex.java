@@ -17,8 +17,6 @@ package com.integrallis.vectors.text.h2;
 
 import com.integrallis.vectors.hybrid.text.TextIndexSpi;
 import com.integrallis.vectors.hybrid.text.TextSearchOutcome;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -38,8 +36,9 @@ import org.slf4j.LoggerFactory;
 /**
  * H2 embedded database implementation of {@link TextIndexSpi}.
  *
- * <p>Provides full-text search (via H2's built-in FTS), metadata storage (JSON-encoded in a VARCHAR
- * column), and blob storage (BLOB column for images).
+ * <p>Provides full-text search (via H2's built-in FTS), metadata storage (pipe-delimited {@code
+ * key=value} pairs in a VARCHAR column — see {@link #encodeMetadata} and the documented encoding
+ * caveats there), and blob storage (BLOB column for images).
  */
 public final class H2TextIndex implements TextIndexSpi {
 
@@ -70,9 +69,16 @@ public final class H2TextIndex implements TextIndexSpi {
       String jdbcUrl;
       if (dataDir != null) {
         Path dbFile = dataDir.resolve("text-index");
-        // Clean up stale H2 lock/trace files left behind by a prior unclean shutdown.
-        // Without this, H2 may refuse to connect with "connection was not closed" errors.
-        cleanStaleFiles(dbFile);
+        // Do NOT pre-delete H2's housekeeping files (.lock.db / .trace.db).
+        //
+        // .lock.db is exactly how H2 prevents two processes from opening the same database;
+        // unconditionally removing it lets a second server (or a crashed-but-still-running first
+        // one) silently stomp the first, causing data corruption. .trace.db carries diagnostics
+        // from a prior unclean shutdown that we want to be able to read after the fact.
+        //
+        // If a genuinely stale lock survives a crash, the right response is an operator-visible
+        // failure from DriverManager (which the surrounding try/catch surfaces), not a silent
+        // recovery that hides the prior process.
         jdbcUrl = "jdbc:h2:file:" + dbFile.toAbsolutePath();
         LOG.debug("H2 text index persistent at {}", dbFile);
       } else {
@@ -82,30 +88,6 @@ public final class H2TextIndex implements TextIndexSpi {
       initSchema();
     } catch (SQLException e) {
       throw new IllegalStateException("failed to initialize H2 text index", e);
-    }
-  }
-
-  /**
-   * Removes stale H2 lock and trace files that can prevent reconnection after an unclean shutdown
-   * (e.g. container kill without graceful close). Only deletes these auxiliary files — never the
-   * {@code .mv.db} data file itself.
-   */
-  private static void cleanStaleFiles(Path dbFile) {
-    Path parent = dbFile.getParent();
-    Path fileName = dbFile.getFileName();
-    if (parent == null || fileName == null) {
-      return;
-    }
-    String baseName = fileName.toString();
-    for (String suffix : List.of(".lock.db", ".trace.db")) {
-      Path stale = parent.resolve(baseName + suffix);
-      try {
-        if (Files.deleteIfExists(stale)) {
-          LOG.info("removed stale H2 file: {}", stale);
-        }
-      } catch (IOException e) {
-        LOG.warn("could not remove stale H2 file {}: {}", stale, e.getMessage());
-      }
     }
   }
 

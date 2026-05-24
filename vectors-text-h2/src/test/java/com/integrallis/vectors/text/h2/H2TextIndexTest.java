@@ -23,6 +23,8 @@ import com.integrallis.vectors.hybrid.text.TextIndexSpi.TextDocument;
 import com.integrallis.vectors.hybrid.text.TextIndexSpiFactory;
 import com.integrallis.vectors.hybrid.text.TextSearchOutcome;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class H2TextIndexTest {
 
@@ -187,6 +190,162 @@ class H2TextIndexTest {
         }
       }
       assertThat(found).as("H2TextIndexFactory should be discoverable via ServiceLoader").isTrue();
+    }
+  }
+
+  /**
+   * The H2 lock file ({@code <db>.lock.db}) is exactly how H2 prevents two processes from opening
+   * the same database. Deleting it on startup defeats that — a second server (or a crashed-but-
+   * still-running first one) gets silently stomped, leading to data corruption. The constructor
+   * must therefore not touch H2's housekeeping files. We use the {@code .trace.db} file as a
+   * deterministic witness because H2 never creates, modifies, or deletes it on its own (tracing is
+   * off by default), so its survival is solely a function of our own cleanup behaviour.
+   */
+  @Nested
+  @Tag("unit")
+  class HousekeepingFiles {
+
+    @Test
+    void constructorDoesNotDeleteTraceFile(@TempDir Path tempDir) throws Exception {
+      Path traceFile = tempDir.resolve("text-index.trace.db");
+      Files.writeString(traceFile, "diagnostic-from-prior-run");
+
+      try (var ix = new H2TextIndex("preserve-trace_" + System.nanoTime(), tempDir)) {
+        // Open the DB; the act of constructing must not touch unrelated files.
+        ix.index(java.util.List.of(new TextDocument("d", "x", java.util.Map.of(), null)));
+      }
+
+      assertThat(traceFile)
+          .as("H2TextIndex constructor must not delete pre-existing .trace.db")
+          .exists();
+      assertThat(Files.readString(traceFile))
+          .as(".trace.db content must be preserved (cleanup is a bug)")
+          .isEqualTo("diagnostic-from-prior-run");
+    }
+  }
+
+  /**
+   * The server invokes {@code index()}, {@code search()}, {@code get()}, {@code remove()} from
+   * Helidon virtual-thread handlers, so an H2 index that is not thread-safe corrupts results /
+   * loses writes under concurrent load. These tests pin that contract.
+   */
+  @Nested
+  @Tag("unit")
+  class Concurrency {
+
+    @Test
+    void concurrentIndexAcrossThreads_allWritesVisible() throws Exception {
+      int writers = 16;
+      int docsPerWriter = 25;
+      int total = writers * docsPerWriter;
+
+      try (var pool = java.util.concurrent.Executors.newFixedThreadPool(writers)) {
+        var ready = new java.util.concurrent.CountDownLatch(writers);
+        var go = new java.util.concurrent.CountDownLatch(1);
+        var done = new java.util.concurrent.CountDownLatch(writers);
+        var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+
+        for (int w = 0; w < writers; w++) {
+          final int wid = w;
+          pool.submit(
+              () -> {
+                ready.countDown();
+                try {
+                  go.await();
+                  for (int i = 0; i < docsPerWriter; i++) {
+                    String id = "w" + wid + "-d" + i;
+                    index.index(
+                        List.of(
+                            new TextDocument(
+                                id, "payload for " + id, Map.of("w", "" + wid), null)));
+                  }
+                } catch (Throwable t) {
+                  errors.add(t);
+                } finally {
+                  done.countDown();
+                }
+              });
+        }
+
+        ready.await();
+        go.countDown();
+        done.await();
+
+        assertThat(errors).as("no concurrent-write exceptions").isEmpty();
+        assertThat(index.size())
+            .as("every concurrent index() write must be visible afterwards")
+            .isEqualTo(total);
+        // Spot-check a sample survives — protects against silent overwrites.
+        for (int wid = 0; wid < writers; wid++) {
+          String id = "w" + wid + "-d0";
+          Optional<StoredContent> stored = index.get(id);
+          assertThat(stored)
+              .as("doc %s should be retrievable after concurrent writes", id)
+              .isPresent();
+        }
+      }
+    }
+
+    @Test
+    void concurrentReadersAndWriters_noExceptionsAndReadOwnWrites() throws Exception {
+      int writers = 8;
+      int readers = 8;
+      int opsPerThread = 30;
+
+      try (var pool = java.util.concurrent.Executors.newFixedThreadPool(writers + readers)) {
+        var ready = new java.util.concurrent.CountDownLatch(writers + readers);
+        var go = new java.util.concurrent.CountDownLatch(1);
+        var done = new java.util.concurrent.CountDownLatch(writers + readers);
+        var errors = new java.util.concurrent.ConcurrentLinkedQueue<Throwable>();
+
+        for (int w = 0; w < writers; w++) {
+          final int wid = w;
+          pool.submit(
+              () -> {
+                ready.countDown();
+                try {
+                  go.await();
+                  for (int i = 0; i < opsPerThread; i++) {
+                    String id = "rw-w" + wid + "-d" + i;
+                    index.index(List.of(new TextDocument(id, "text " + id, Map.of(), null)));
+                    // Read-your-writes: a thread-safe index must see this writer's own write.
+                    assertThat(index.get(id))
+                        .as("writer should observe its own just-completed write %s", id)
+                        .isPresent();
+                  }
+                } catch (Throwable t) {
+                  errors.add(t);
+                } finally {
+                  done.countDown();
+                }
+              });
+        }
+        for (int r = 0; r < readers; r++) {
+          pool.submit(
+              () -> {
+                ready.countDown();
+                try {
+                  go.await();
+                  for (int i = 0; i < opsPerThread; i++) {
+                    // Run search and size concurrently with writers; only assert no throw here.
+                    index.search("text", 5);
+                    index.size();
+                  }
+                } catch (Throwable t) {
+                  errors.add(t);
+                } finally {
+                  done.countDown();
+                }
+              });
+        }
+
+        ready.await();
+        go.countDown();
+        done.await();
+
+        assertThat(errors).as("no concurrent read/write exceptions").isEmpty();
+        assertThat(index.size()).isEqualTo(writers * opsPerThread);
+      }
     }
   }
 }
