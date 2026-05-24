@@ -16,10 +16,10 @@
 package com.integrallis.vectors.vcr;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -33,6 +33,14 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>The effective mode can be overridden at runtime via the {@code VCR_MODE} environment variable
  * (values: {@code PLAYBACK}, {@code PLAYBACK_OR_RECORD}, {@code RECORD}, {@code RECORD_NEW}, {@code
  * RECORD_FAILED}, {@code OFF}).
+ *
+ * <p><b>Thread-safety contract:</b> JUnit5 ({@code @Execution(CONCURRENT)}) and TestNG ({@code
+ * parallel="methods"}) invoke each test method on whichever framework-worker thread is free. A
+ * single {@code VCRContext} is shared per test class across all those methods, so the per-test
+ * mutable slots ({@code currentTestId}, the in-flight cassette-key list, the call counters) are
+ * kept in a {@link ThreadLocal} {@link TestState} — each worker thread sees only its own method's
+ * state. Cross-test aggregate counters ({@code cacheHits} / {@code cacheMisses} / {@code apiCalls})
+ * remain shared {@link AtomicLong}s.
  */
 public final class VCRContext {
 
@@ -43,9 +51,13 @@ public final class VCRContext {
   private final VCRRegistry registry;
   private VCRMode effectiveMode;
 
-  private volatile String currentTestId;
-  private final List<CassetteKey> currentCassetteKeys = new ArrayList<>();
-  private final Map<String, AtomicInteger> callCounters = new ConcurrentHashMap<>();
+  private static final class TestState {
+    String currentTestId;
+    final List<CassetteKey> cassetteKeys = new ArrayList<>();
+    final Map<String, AtomicInteger> callCounters = new HashMap<>();
+  }
+
+  private final ThreadLocal<TestState> threadState = ThreadLocal.withInitial(TestState::new);
 
   private final AtomicLong cacheHits = new AtomicLong();
   private final AtomicLong cacheMisses = new AtomicLong();
@@ -114,52 +126,59 @@ public final class VCRContext {
     this.effectiveMode = Objects.requireNonNull(mode, "mode");
   }
 
-  /** Clears per-test state; call between tests. */
+  /**
+   * Clears per-test state on the calling thread; call between tests. The current test id is
+   * preserved — the framework adapter follows this with {@link #setCurrentTest} to install the next
+   * test's id.
+   */
   public void resetCallCounters() {
-    callCounters.clear();
-    currentCassetteKeys.clear();
+    TestState s = threadState.get();
+    s.callCounters.clear();
+    s.cassetteKeys.clear();
   }
 
   /**
-   * Sets the current test identifier.
+   * Sets the current test identifier on the calling thread.
    *
    * @param testId the test identifier
    */
   public void setCurrentTest(String testId) {
-    this.currentTestId = testId;
+    threadState.get().currentTestId = testId;
   }
 
   /**
-   * @return the current test identifier (may be null between tests)
+   * @return the current test identifier on the calling thread (may be null between tests)
    */
   public String getCurrentTestId() {
-    return currentTestId;
+    return threadState.get().currentTestId;
   }
 
   /**
-   * Allocates the next cassette key for the given call type under the current test.
+   * Allocates the next cassette key for the given call type under the calling thread's current
+   * test.
    *
    * @param type the call type (e.g. {@code "embedding"}, {@code "batch_embedding"}, {@code "chat"})
    * @return the freshly allocated key
    */
   public CassetteKey generateCassetteKey(String type) {
     Objects.requireNonNull(type, "type");
-    if (currentTestId == null) {
+    TestState s = threadState.get();
+    String testId = s.currentTestId;
+    if (testId == null) {
       throw new IllegalStateException("No current test id set; call setCurrentTest() first");
     }
-    String counterKey = currentTestId + ":" + type;
     int callIndex =
-        callCounters.computeIfAbsent(counterKey, k -> new AtomicInteger()).incrementAndGet();
-    CassetteKey key = new CassetteKey(type, currentTestId, callIndex);
-    currentCassetteKeys.add(key);
+        s.callCounters.computeIfAbsent(type, k -> new AtomicInteger()).incrementAndGet();
+    CassetteKey key = new CassetteKey(type, testId, callIndex);
+    s.cassetteKeys.add(key);
     return key;
   }
 
   /**
-   * @return a defensive copy of the cassette keys produced during the current test
+   * @return a defensive copy of the cassette keys produced during the calling thread's current test
    */
   public List<CassetteKey> getCurrentCassetteKeys() {
-    return new ArrayList<>(currentCassetteKeys);
+    return new ArrayList<>(threadState.get().cassetteKeys);
   }
 
   /** Records a cache hit. */
