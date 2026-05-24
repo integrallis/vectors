@@ -16,7 +16,6 @@
 package com.integrallis.vectors.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.integrallis.vectors.core.Document;
@@ -513,39 +512,59 @@ class VectorDbQuantizationTest {
   }
 
   // ---------------------------------------------------------------------------
-  // FLAT + Quantization blocked
+  // FLAT + Quantization
   // ---------------------------------------------------------------------------
 
   @Nested
   @Tag("unit")
-  class FlatQuantizationBlocked {
+  class FlatQuantization {
 
     @Test
-    void flatWithSq8ThrowsUnsupported() {
-      assertThatThrownBy(
-              () ->
-                  VectorCollection.builder()
-                      .dimension(DIM)
-                      .metric(SimilarityFunction.EUCLIDEAN)
-                      .indexType(IndexType.FLAT)
-                      .quantizer(QuantizerKind.SQ8)
-                      .build())
-          .isInstanceOf(UnsupportedOperationException.class)
-          .hasMessageContaining("FLAT");
+    void flatWithSq8SearchesWithFullPrecisionRescore() {
+      List<Document> docs = generateDocs(300, SEED);
+      float[] query = randomVector(new Random(456L));
+      Set<String> gt = bruteForceTopKIds(docs, query, 10);
+
+      try (VectorCollection coll =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.FLAT)
+              .quantizer(QuantizerKind.SQ8)
+              .build()) {
+        coll.addAll(docs);
+        coll.commit();
+
+        SearchResult result =
+            coll.search(SearchRequest.builder(query, 10).overQueryFactor(8.0f).build());
+
+        assertThat(result.hits()).hasSize(10);
+        assertThat(recall(gt, result)).isGreaterThanOrEqualTo(0.8);
+      }
     }
 
     @Test
-    void flatWithPqThrowsUnsupported() {
-      assertThatThrownBy(
-              () ->
-                  VectorCollection.builder()
-                      .dimension(DIM)
-                      .metric(SimilarityFunction.EUCLIDEAN)
-                      .indexType(IndexType.FLAT)
-                      .quantizer(QuantizerKind.PQ)
-                      .build())
-          .isInstanceOf(UnsupportedOperationException.class)
-          .hasMessageContaining("FLAT");
+    void flatWithPqSearchesWithFullPrecisionRescore() {
+      List<Document> docs = generateDocs(300, SEED);
+      float[] query = randomVector(new Random(789L));
+
+      try (VectorCollection coll =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.FLAT)
+              .quantizer(QuantizerKind.PQ)
+              .pqSubspaces(8)
+              .pqClusters(16)
+              .build()) {
+        coll.addAll(docs);
+        coll.commit();
+
+        SearchResult result =
+            coll.search(SearchRequest.builder(query, 10).overQueryFactor(8.0f).build());
+
+        assertThat(result.hits()).hasSize(10);
+      }
     }
 
     @Test
@@ -559,6 +578,17 @@ class VectorDbQuantizationTest {
               .build();
       assertThat(coll.size()).isZero();
       coll.close();
+    }
+
+    @Test
+    void flatSq8RoundTrips(@TempDir Path dir) {
+      VectorCollectionBuilder b =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.FLAT)
+              .quantizer(QuantizerKind.SQ8);
+      assertQuantizedPersistentRoundTrip(dir, b);
     }
   }
 

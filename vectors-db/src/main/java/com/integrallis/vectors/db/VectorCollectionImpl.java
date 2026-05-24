@@ -29,6 +29,7 @@ import com.integrallis.vectors.db.index.IndexSpi;
 import com.integrallis.vectors.db.index.IvfFlatAdapter;
 import com.integrallis.vectors.db.index.IvfPqAdapter;
 import com.integrallis.vectors.db.index.MappedFlatScanAdapter;
+import com.integrallis.vectors.db.index.QuantizedFlatScanAdapter;
 import com.integrallis.vectors.db.index.VamanaIndexAdapter;
 import com.integrallis.vectors.db.internal.StagingBuffer;
 import com.integrallis.vectors.db.metadata.InMemoryMetadataStore;
@@ -88,8 +89,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Step 6 {@link VectorCollection} implementation with tombstone-based deletion, upsert, compact,
- * and a volatile-snapshot publication model with dual in-memory / mmap-backed persistence.
+ * {@link VectorCollection} implementation with tombstone-based deletion, upsert, compact, and a
+ * volatile-snapshot publication model with dual in-memory / mmap-backed persistence.
  *
  * <p><b>Concurrency model.</b> All live state is packed into an immutable {@link Generation} (plain
  * class, not record, so it can carry an {@link AtomicInteger} refcount). On every read path the
@@ -470,7 +471,9 @@ final class VectorCollectionImpl implements VectorCollection {
             java.nio.file.Files.readAllBytes(genDir.resolve(FileFormat.QUANTIZED_FILE));
         try {
           CompressedVectors compressed = QuantizedVectorsCodec.decode(quantizedBytes);
-          if (spi instanceof MappedHnswIndexAdapter ha) {
+          if (spi instanceof MappedFlatScanAdapter fa) {
+            spi = new QuantizedFlatScanAdapter(fa, fa, config.metric(), compressed);
+          } else if (spi instanceof MappedHnswIndexAdapter ha) {
             ha.enableQuantization(compressed);
           } else if (spi instanceof MappedVamanaIndexAdapter va) {
             va.enableQuantization(compressed);
@@ -843,7 +846,9 @@ final class VectorCollectionImpl implements VectorCollection {
       if (liveVectors.length > 0) {
         VectorDataset dataset = new ArrayVectorDataset(liveVectors);
         TrainedQuantization tq = trainQuantizer(dataset, config);
-        if (newSpi instanceof HnswIndexAdapter ha) {
+        if (newSpi instanceof FlatScanAdapter fa) {
+          newSpi = new QuantizedFlatScanAdapter(fa, fa, config.metric(), tq.compressed());
+        } else if (newSpi instanceof HnswIndexAdapter ha) {
           ha.enableQuantization(tq.compressed());
         } else if (newSpi instanceof VamanaIndexAdapter va) {
           va.enableQuantization(tq.compressed());
@@ -895,7 +900,9 @@ final class VectorCollectionImpl implements VectorCollection {
     boolean needMatrix =
         config.indexType() == IndexType.HNSW
             || config.indexType() == IndexType.VAMANA
-            || config.indexType() == IndexType.IVF_FLAT;
+            || config.indexType() == IndexType.FLAT && config.quantizerKind() != QuantizerKind.NONE
+            || config.indexType() == IndexType.IVF_FLAT
+            || config.indexType() == IndexType.IVF_PQ;
     Materialized materialized =
         materializeSuccessor(
             oldGen.mappedVectors, oldPhysicalCount, staging.documents(), dim, needMatrix);
@@ -913,7 +920,12 @@ final class VectorCollectionImpl implements VectorCollection {
     byte[] graphBin = null;
     long graphBinLength = 0L;
     long graphBinCrc = 0L;
-    if (needMatrix) {
+    boolean needGraph =
+        config.indexType() == IndexType.HNSW
+            || config.indexType() == IndexType.VAMANA
+            || config.indexType() == IndexType.IVF_FLAT
+            || config.indexType() == IndexType.IVF_PQ;
+    if (needGraph) {
       graphBin = encodeGraphBytes(materialized.matrix());
       if (graphBin != null) {
         graphBinLength = (long) graphBin.length;
@@ -1073,7 +1085,9 @@ final class VectorCollectionImpl implements VectorCollection {
     if (config.quantizerKind() != QuantizerKind.NONE && liveCount > 0) {
       VectorDataset dataset = new ArrayVectorDataset(next);
       TrainedQuantization tq = trainQuantizer(dataset, config);
-      if (newSpi instanceof HnswIndexAdapter ha) {
+      if (newSpi instanceof FlatScanAdapter fa) {
+        newSpi = new QuantizedFlatScanAdapter(fa, fa, config.metric(), tq.compressed());
+      } else if (newSpi instanceof HnswIndexAdapter ha) {
         ha.enableQuantization(tq.compressed());
       } else if (newSpi instanceof VamanaIndexAdapter va) {
         va.enableQuantization(tq.compressed());
@@ -1145,7 +1159,8 @@ final class VectorCollectionImpl implements VectorCollection {
     boolean needGraph =
         config.indexType() == IndexType.HNSW
             || config.indexType() == IndexType.VAMANA
-            || config.indexType() == IndexType.IVF_FLAT;
+            || config.indexType() == IndexType.IVF_FLAT
+            || config.indexType() == IndexType.IVF_PQ;
     if (needGraph && liveCount > 0) {
       // IGTM: for HNSW, merge the existing graph instead of rebuilding from scratch.
       if (config.indexType() == IndexType.HNSW

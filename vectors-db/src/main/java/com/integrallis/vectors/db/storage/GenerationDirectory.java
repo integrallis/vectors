@@ -50,8 +50,7 @@ import java.util.logging.Logger;
  * state worth caching. Making it a namespace keeps test setup dead simple.
  *
  * <p><b>Write protocol.</b> {@link #writeGeneration(Path, long, GenerationSource, Manifest)} runs
- * the full crash-safe commit pipeline documented in the Step 4a design doc §"Commit sequence
- * (persistent mode)":
+ * the crash-safe generation write protocol:
  *
  * <ol>
  *   <li>Create the in-flight tmp dir {@code .gen-NNNNNNNNNNNNNNNN.tmp/} under the collection root.
@@ -138,15 +137,15 @@ public final class GenerationDirectory {
    * of these, and the recovery pass verifies {@code graph.bin}'s length + CRC against the manifest
    * for these types (and only these types).
    *
-   * <p>Both HNSW (Step 4b) and Vamana (Step 4c) share the same {@code graph.bin} slot: the file
-   * byte layouts differ (see {@link HnswGraphCodec} vs {@link VamanaGraphCodec}), but from the
-   * generation-directory perspective they are interchangeable opaque payloads whose length + CRC
-   * are stored in the index-type-agnostic {@code graphBinLength}/{@code graphBinCrc32} manifest
-   * fields. The codec dispatch happens one level up in {@code VectorCollectionImpl.openGeneration},
-   * which inspects {@code manifest.indexType()} and routes the bytes to the correct decoder.
+   * <p>Graph-like indexes share the same {@code graph.bin} slot. The file byte layouts differ (see
+   * {@link HnswGraphCodec} and {@link VamanaGraphCodec}), but from the generation-directory
+   * perspective they are interchangeable opaque payloads whose length + CRC are stored in the
+   * index-type-agnostic {@code graphBinLength}/{@code graphBinCrc32} manifest fields. The codec
+   * dispatch happens one level up in {@code VectorCollectionImpl.openGeneration}, which inspects
+   * {@code manifest.indexType()} and routes the bytes to the correct decoder.
    */
   private static final Set<IndexType> GRAPH_INDEX_TYPES =
-      EnumSet.of(IndexType.HNSW, IndexType.VAMANA, IndexType.IVF_FLAT);
+      EnumSet.of(IndexType.HNSW, IndexType.VAMANA, IndexType.IVF_FLAT, IndexType.IVF_PQ);
 
   private GenerationDirectory() {}
 
@@ -169,20 +168,17 @@ public final class GenerationDirectory {
    * invoked unconditionally in a single call to {@link GenerationDirectory#writeGeneration(Path,
    * long, GenerationSource, Manifest)} in the order {@code vectors → idmap → metadata → graph →
    * quantized}. The optional {@code writeGraph} callback is only invoked when the manifest's {@link
-   * Manifest#indexType() indexType} is a graph index ({@link
-   * com.integrallis.vectors.db.IndexType#HNSW} or {@link
-   * com.integrallis.vectors.db.IndexType#VAMANA}); for flat-scan generations it is skipped entirely
-   * and no {@code graph.bin} file is written. The optional {@code writeQuantized} callback is only
-   * invoked when the manifest's {@link Manifest#quantizedBinLength()} is positive; non-quantized
-   * generations skip it and no {@code quantized.bin} file is written. If any callback throws, the
-   * tmp directory is cleaned up before the exception propagates.
+   * Manifest#indexType() indexType} stores a {@code graph.bin} payload; for flat-scan generations
+   * it is skipped entirely and no {@code graph.bin} file is written. The optional {@code
+   * writeQuantized} callback is only invoked when the manifest's {@link
+   * Manifest#quantizedBinLength()} is positive; non-quantized generations skip it and no {@code
+   * quantized.bin} file is written. If any callback throws, the tmp directory is cleaned up before
+   * the exception propagates.
    *
-   * <p>{@code writeGraph} and {@code writeQuantized} default to no-ops so that existing flat-scan
-   * sources and non-quantized sources compile unchanged after the Step 4b/4d interface extensions.
-   * A graph-backed source overrides {@code writeGraph} to emit the encoded adjacency bytes
-   * (typically via {@code HnswGraphCodec.encode} or {@code VamanaGraphCodec.encode}); a
-   * quantization-enabled source overrides {@code writeQuantized} to emit the encoded compressed
-   * vectors (via {@code QuantizedVectorsCodec.encode}).
+   * <p>{@code writeGraph} and {@code writeQuantized} default to no-ops so that flat-scan sources
+   * and non-quantized sources only implement the core files. A graph-backed source overrides {@code
+   * writeGraph} to emit encoded adjacency bytes; a quantization-enabled source overrides {@code
+   * writeQuantized} to emit encoded compressed vectors.
    */
   public interface GenerationSource {
     /** Writes {@code vectors.bin} into the tmp dir at the given absolute path. */

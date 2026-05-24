@@ -127,6 +127,34 @@ class VectorDbIvfPqTest {
   }
 
   @Test
+  void overQueryFactor_doesNotDegradeRecall() {
+    int n = 300;
+    float[][] data = randomVecs(n, DIM, 42L);
+    float[] query = randomVecs(1, DIM, 77L)[0];
+    int k = 5;
+
+    Set<Integer> gtSet = new HashSet<>();
+    for (int idx : bruteForceTopK(query, data, k)) gtSet.add(idx);
+
+    try (var col = buildIvfPq(10, 2, 8, 2, null)) {
+      for (int i = 0; i < n; i++) col.add(Document.of(String.valueOf(i), data[i]));
+      col.commit();
+
+      var single = col.search(SearchRequest.builder(query, k).overQueryFactor(1.0f).build()).hits();
+      var expanded =
+          col.search(SearchRequest.builder(query, k).overQueryFactor(4.0f).build()).hits();
+
+      long singleRecall =
+          single.stream().filter(h -> gtSet.contains(Integer.parseInt(h.id()))).count();
+      long expandedRecall =
+          expanded.stream().filter(h -> gtSet.contains(Integer.parseInt(h.id()))).count();
+
+      assertThat(expanded).hasSize(k);
+      assertThat(expandedRecall).isGreaterThanOrEqualTo(singleRecall);
+    }
+  }
+
+  @Test
   void commit_thenReopen_preservesVectorsAndPqState(@TempDir Path tmp) {
     float[][] data = randomVecs(200, DIM, 4L);
     float[] needle = new float[DIM];

@@ -33,8 +33,8 @@ import java.util.Objects;
  * <p><b>Rebuild-on-commit.</b> Every call to {@link #build(float[][], SimilarityFunction)}
  * reconstructs the graph from scratch. This mirrors {@link HnswIndexAdapter} and {@link
  * FlatScanAdapter#build}, keeping the commit pipeline uniform — there is no incremental insertion
- * path in Step 4c. The caller guarantees that concurrent searches never overlap with a rebuild
- * (enforced by {@link com.integrallis.vectors.db.VectorCollection} via its writer lock).
+ * path. The caller guarantees that concurrent searches never overlap with a rebuild (enforced by
+ * {@link com.integrallis.vectors.db.VectorCollection} via its writer lock).
  *
  * <p><b>Empty inputs.</b> {@link VamanaIndex} cannot be built from zero vectors. When {@link
  * #build(float[][], SimilarityFunction)} receives an empty array, the adapter records the empty

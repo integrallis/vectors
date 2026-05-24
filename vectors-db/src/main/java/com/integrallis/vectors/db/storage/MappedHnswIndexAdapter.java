@@ -28,23 +28,21 @@ import java.util.function.IntPredicate;
 /**
  * Read-only {@link IndexSpi} that serves HNSW search from a <b>pre-built</b> {@link HnswGraph}
  * wrapped around a {@link RandomAccessVectors} view of an mmap'd {@code vectors.bin}. This is the
- * persistent-HNSW analogue of {@link com.integrallis.vectors.db.index.HnswIndexAdapter} and the
- * Step 4b Phase 5 open-path terminus: {@code VectorCollectionImpl.openGeneration} decodes {@code
- * graph.bin} via {@link HnswGraphCodec#decode(byte[])}, wraps the per-generation {@link
- * MemorySegmentVectors} in a {@link MemorySegmentRandomAccessVectors}, and hands both to this
- * adapter's constructor.
+ * persistent-HNSW analogue of {@link com.integrallis.vectors.db.index.HnswIndexAdapter}: {@code
+ * VectorCollectionImpl.openGeneration} decodes {@code graph.bin} via {@link
+ * HnswGraphCodec#decode(byte[])}, wraps the per-generation {@link MemorySegmentVectors} in a {@link
+ * MemorySegmentRandomAccessVectors}, and hands both to this adapter's constructor.
  *
  * <p><b>Construction.</b> Unlike {@link com.integrallis.vectors.db.index.HnswIndexAdapter}, this
  * adapter does <b>not</b> support {@link IndexSpi#build(float[][], SimilarityFunction)} — its data
- * source is an already-built graph that came out of the Step 4b generation-write pipeline.
- * Construct one via {@link #MappedHnswIndexAdapter(HnswGraph, RandomAccessVectors,
- * SimilarityFunction)}; calling {@link #build} throws {@link UnsupportedOperationException}. This
- * invariant is load-bearing: {@link MemorySegmentRandomAccessVectors} returns a per-thread scratch
- * buffer from {@link RandomAccessVectors#getVector(int)}, and only the HNSW <i>search</i> path
- * (which holds at most one scratch reference per inner iteration) is safe with that contract. The
- * HNSW <i>build</i> path ({@code HnswGraphBuilder.insert}) holds a query vector across many {@code
- * getVector} calls and would corrupt under shared-scratch — so {@code build} must never reach this
- * adapter.
+ * source is an already-built graph from a committed generation. Construct one via {@link
+ * #MappedHnswIndexAdapter(HnswGraph, RandomAccessVectors, SimilarityFunction)}; calling {@link
+ * #build} throws {@link UnsupportedOperationException}. This invariant is load-bearing: {@link
+ * MemorySegmentRandomAccessVectors} returns a per-thread scratch buffer from {@link
+ * RandomAccessVectors#getVector(int)}, and only the HNSW <i>search</i> path (which holds at most
+ * one scratch reference per inner iteration) is safe with that contract. The HNSW <i>build</i> path
+ * ({@code HnswGraphBuilder.insert}) holds a query vector across many {@code getVector} calls and
+ * would corrupt under shared-scratch — so {@code build} must never reach this adapter.
  *
  * <p><b>Thread safety.</b> Safe for concurrent calls to {@link #search(float[], int, int, float)}
  * from any number of threads. The underlying {@link HnswIndex} owns a {@link ThreadLocal} pool of

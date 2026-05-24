@@ -27,22 +27,21 @@ import java.util.Objects;
 /**
  * Read-only {@link IndexSpi} that serves Vamana search from a <b>pre-built</b> {@link VamanaGraph}
  * wrapped around a {@link RandomAccessVectors} view of an mmap'd {@code vectors.bin}. This is the
- * persistent-Vamana analogue of {@link com.integrallis.vectors.db.index.VamanaIndexAdapter} and the
- * Step 4c open-path terminus: {@code VectorCollectionImpl.openGeneration} decodes {@code graph.bin}
- * via {@link VamanaGraphCodec#decode(byte[])}, wraps the per-generation {@link
- * MemorySegmentVectors} in a {@link MemorySegmentRandomAccessVectors}, and hands both to this
- * adapter's constructor.
+ * persistent-Vamana analogue of {@link com.integrallis.vectors.db.index.VamanaIndexAdapter}: {@code
+ * VectorCollectionImpl.openGeneration} decodes {@code graph.bin} via {@link
+ * VamanaGraphCodec#decode(byte[])}, wraps the per-generation {@link MemorySegmentVectors} in a
+ * {@link MemorySegmentRandomAccessVectors}, and hands both to this adapter's constructor.
  *
  * <p><b>Construction.</b> Unlike {@link com.integrallis.vectors.db.index.VamanaIndexAdapter}, this
  * adapter does <b>not</b> support {@link IndexSpi#build(float[][], SimilarityFunction)} — its data
- * source is an already-built graph that came out of the Step 4c generation-write pipeline.
- * Construct one via {@link #MappedVamanaIndexAdapter(VamanaGraph, RandomAccessVectors,
- * SimilarityFunction)}; calling {@link #build} throws {@link UnsupportedOperationException}. This
- * invariant is load-bearing: {@link MemorySegmentRandomAccessVectors} returns a per-thread scratch
- * buffer from {@link RandomAccessVectors#getVector(int)}, and only the Vamana <i>search</i> path
- * ({@code VamanaSearcher.search}, {@code VamanaSearcher.searchTwoPass}) holds at most one scratch
- * reference per inner iteration and is therefore safe with that contract. The Vamana <i>build</i>
- * path ({@code VamanaGraphBuilder.insert}/{@code link}) holds a query vector across many {@code
+ * source is an already-built graph from a committed generation. Construct one via {@link
+ * #MappedVamanaIndexAdapter(VamanaGraph, RandomAccessVectors, SimilarityFunction)}; calling {@link
+ * #build} throws {@link UnsupportedOperationException}. This invariant is load-bearing: {@link
+ * MemorySegmentRandomAccessVectors} returns a per-thread scratch buffer from {@link
+ * RandomAccessVectors#getVector(int)}, and only the Vamana <i>search</i> path ({@code
+ * VamanaSearcher.search}, {@code VamanaSearcher.searchTwoPass}) holds at most one scratch reference
+ * per inner iteration and is therefore safe with that contract. The Vamana <i>build</i> path
+ * ({@code VamanaGraphBuilder.insert}/{@code link}) holds a query vector across many {@code
  * getVector} calls and would corrupt under shared-scratch — so {@code build} must never reach this
  * adapter.
  *

@@ -20,8 +20,8 @@ import java.util.Objects;
 
 /**
  * Brute-force reference implementation of {@link IndexSpi}. Scores every stored vector against the
- * query and returns the top-{@code k}. Serves as the always-available backend (Step 2) and as the
- * ground-truth reference for the graph-based backends in later steps.
+ * query and returns the top-{@code k}. Serves as the always-available backend and as the
+ * ground-truth reference for graph-based backends.
  *
  * <p><b>Ignored parameters.</b> Because brute-force already examines every vector, both {@code
  * searchListSize} and {@code overQueryFactor} are <i>ignored</i>. Callers should not rely on them
@@ -32,7 +32,7 @@ import java.util.Objects;
  * {@link #search(float[], int, int, float)} are safe as long as no build is in flight (the {@link
  * com.integrallis.vectors.db.VectorCollection} facade enforces this with a read/write lock).
  */
-public final class FlatScanAdapter implements IndexSpi {
+public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
   private float[][] vectors = new float[0][];
   private SimilarityFunction metric;
@@ -177,6 +177,16 @@ public final class FlatScanAdapter implements IndexSpi {
   @Override
   public int size() {
     return vectors.length;
+  }
+
+  @Override
+  public OrdinalScorer exactScorerFor(float[] query) {
+    Objects.requireNonNull(query, "query must not be null");
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Query dimension " + query.length + " does not match index dimension " + dimension);
+    }
+    return ordinal -> metric.compare(query, vectors[ordinal]);
   }
 
   /** Sifts the element at {@code idx} up the min-heap to restore the heap invariant. */

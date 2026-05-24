@@ -19,16 +19,16 @@ package com.integrallis.vectors.db.id;
  * Bidirectional mapping between external string ids and dense integer ordinals.
  *
  * <p>Ordinals are assigned sequentially starting from 0. {@link #put(String)} is strict: duplicates
- * throw because the v0.1 {@code add} contract is insert-only. {@code upsert} lands in Step 6.
+ * throw because {@code add} is insert-only. {@code upsert} updates existing identifiers through the
+ * collection facade.
  *
  * <p><b>Thread safety.</b> Implementations are <i>not</i> required to be thread-safe on their own.
  * The facade ({@code VectorCollectionImpl}) protects a mapper instance by mutating it only under
  * the writer lock and publishing a fully-populated successor via a volatile {@code Generation}
  * record — readers capture one snapshot and never observe torn state.
  *
- * <p>Step 4a introduces a mapped implementation where {@link #put(String)} throws — persistent
- * generations are written whole-file via a static {@code Writer.writeTo(...)} helper, not by
- * per-entry insertion.
+ * <p>Mapped implementations throw from {@link #put(String)} because persistent generations are
+ * written whole-file via a static {@code Writer.writeTo(...)} helper, not by per-entry insertion.
  */
 public interface IdMapper extends AutoCloseable {
 

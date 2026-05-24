@@ -29,7 +29,7 @@ import java.util.Objects;
  * {@code vectors.bin}, {@code idmap.bin}, and {@code metadata.bin}; every generation open reads it
  * back in one shot and hands the decoded {@link HnswGraph} to {@code MappedHnswIndexAdapter}.
  *
- * <p>Layout (little-endian throughout; Step 4b version 1):
+ * <p>Layout (little-endian throughout; format version 1):
  *
  * <pre>
  * Offset  Size   Field                       Notes
@@ -61,8 +61,8 @@ import java.util.Objects;
  * <p><b>Why node IDs only, no scores.</b> {@link com.integrallis.vectors.hnsw.HnswSearcher} only
  * reads {@link NeighborArray#node(int)}, never {@link NeighborArray#score(int)} — scores are a
  * builder-only concern. Storing scores would double the file size without any search benefit, and
- * {@code Step 4b} uses rebuild-on-commit so the decoded graph is read-only (no incremental
- * insertion, which is when scores would matter).
+ * committed decoded graphs are read-only (no incremental insertion, which is when scores would
+ * matter).
  *
  * <p><b>How the decoded graph preserves order without scores.</b> {@link NeighborArray#insert}
  * maintains a descending-score sort. On decode, each neighbor ID is inserted with a synthetic score

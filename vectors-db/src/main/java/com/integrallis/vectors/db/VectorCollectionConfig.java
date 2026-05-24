@@ -20,8 +20,8 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 /**
- * Immutable collection configuration. Captured on {@code build()} and persisted as {@code
- * manifest.bin} in Step 4a.
+ * Immutable collection configuration. Captured on {@code build()} and persisted in {@code
+ * manifest.bin} for on-disk collections.
  *
  * @param dimension fixed vector dimension (must be positive)
  * @param metric similarity function (never null)
@@ -31,20 +31,17 @@ import java.util.Objects;
  *     add}/{@code addAll}, an implicit {@code commit()} runs before the write path returns. Must be
  *     positive. Use {@link Integer#MAX_VALUE} to disable auto-commit entirely (the default).
  * @param storageRoot absolute collection root for persistent mode. When {@code null} the collection
- *     operates as an in-memory-only collection (unchanged Step 3 behaviour for FLAT; Step 4b added
- *     in-memory HNSW support via {@link com.integrallis.vectors.db.index.HnswIndexAdapter} and Step
- *     4c added in-memory VAMANA support via {@link
- *     com.integrallis.vectors.db.index.VamanaIndexAdapter}). When non-null, every {@code commit()}
- *     writes a new generation directory under this path via {@link
+ *     operates as an in-memory-only collection. When non-null, every {@code commit()} writes a new
+ *     generation directory under this path via {@link
  *     com.integrallis.vectors.db.storage.GenerationDirectory} and mmaps the result for the next
  *     read snapshot.
  * @param hnswParams HNSW build-time parameters. Must be {@code non-null iff indexType == HNSW}; any
- *     other combination is rejected by the compact constructor. Added in Step 4b.
+ *     other combination is rejected by the compact constructor.
  * @param vamanaParams Vamana build-time parameters. Must be {@code non-null iff indexType ==
- *     VAMANA}; any other combination is rejected by the compact constructor. Added in Step 4c.
+ *     VAMANA}; any other combination is rejected by the compact constructor.
  * @param quantizerParams build-time quantizer parameters. Must be {@code null} when {@code
  *     quantizerKind == NONE}. When non-NONE, may be {@code null} to use defaults. When non-null,
- *     the record type must match the quantizer kind. Added in Step 4d.
+ *     the record type must match the quantizer kind.
  */
 public record VectorCollectionConfig(
     int dimension,
@@ -172,8 +169,8 @@ public record VectorCollectionConfig(
   }
 
   /**
-   * 8-arg convenience constructor that defaults {@link #quantizerParams()} to {@code null}.
-   * Preserves the Step 4c canonical shape for call sites that predate Step 4d.
+   * 8-arg convenience constructor that defaults {@link #quantizerParams()}, {@link #ivfParams()},
+   * {@link #cuvsParams()}, and {@link #ivfPqParams()} to {@code null}.
    */
   public VectorCollectionConfig(
       int dimension,
@@ -200,9 +197,9 @@ public record VectorCollectionConfig(
   }
 
   /**
-   * 7-arg convenience constructor that defaults {@link #vamanaParams()} and {@link
-   * #quantizerParams()} to {@code null}. Preserves the Step 4b canonical shape for call sites that
-   * predate Step 4c. Throws via the compact constructor if the caller asks for {@link
+   * 7-arg convenience constructor that defaults {@link #vamanaParams()}, {@link
+   * #quantizerParams()}, {@link #ivfParams()}, {@link #cuvsParams()}, and {@link #ivfPqParams()} to
+   * {@code null}. Throws via the compact constructor if the caller asks for {@link
    * IndexType#VAMANA} without supplying {@link VamanaParams}.
    */
   public VectorCollectionConfig(

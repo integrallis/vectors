@@ -35,7 +35,7 @@ import java.util.Objects;
  * {@code medoid} integer. The entire body is a straight sequence of {@code (degree, neighbors...)}
  * tuples, one per node.
  *
- * <p>Layout (little-endian throughout; Step 4c version 1):
+ * <p>Layout (little-endian throughout; format version 1):
  *
  * <pre>
  * Offset  Size   Field                       Notes
@@ -56,8 +56,8 @@ import java.util.Objects;
  * <p><b>Why node IDs only, no scores.</b> {@link com.integrallis.vectors.vamana.VamanaSearcher}
  * only reads {@link NeighborArray#node(int)}, never {@link NeighborArray#score(int)} — scores are a
  * builder-only concern (used by the robust pruner to measure diversity during construction).
- * Storing scores would nearly double the file size without any search benefit, and Step 4c uses
- * rebuild-on-commit so the decoded graph is read-only.
+ * Storing scores would nearly double the file size without any search benefit, and committed
+ * decoded graphs are read-only.
  *
  * <p><b>How the decoded graph preserves order without scores.</b> {@link NeighborArray#insert}
  * maintains a descending-score sort. On decode, each neighbor ID is inserted with a synthetic score

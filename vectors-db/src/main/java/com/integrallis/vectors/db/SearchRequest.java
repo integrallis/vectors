@@ -36,16 +36,17 @@ import java.util.Objects;
  *
  * <p><b>Two independent multipliers.</b> {@code overQueryFactor} controls how many extra candidates
  * the SPI's two-pass quantized search path retrieves for rescoring (it is passed through to the
- * graph index and has no effect on brute-force backends). {@code filterExpansion} controls how many
- * extra candidates the facade requests from the SPI when a metadata filter is active, so that
- * post-filtering still yields {@code k} results in most cases. The two do not compound: the SPI
- * always receives the original {@code k}, and the facade requests {@code k * filterExpansion}
- * candidates from the SPI only when a non-trivial filter is present.
+ * graph index; quantized flat scan also uses it to size the compressed preselection before exact
+ * rescoring). {@code filterExpansion} controls how many extra candidates the facade requests from
+ * the SPI when a metadata filter is active, so that post-filtering still yields {@code k} results
+ * in most cases. The two do not compound: the SPI always receives the original {@code k}, and the
+ * facade requests {@code k * filterExpansion} candidates from the SPI only when a non-trivial
+ * filter is present.
  *
  * <p>{@code overQueryFactor} and {@code filterExpansion} are both expressed as {@code float} so
- * non-integer factors like {@code 1.5f} or {@code 2.5f} are supported. Brute-force backends (e.g.,
- * {@link com.integrallis.vectors.db.index.FlatScanAdapter}) ignore both {@code overQueryFactor} and
- * {@code searchListSize}.
+ * non-integer factors like {@code 1.5f} or {@code 2.5f} are supported. Unquantized brute-force
+ * backends (e.g., {@link com.integrallis.vectors.db.index.FlatScanAdapter}) ignore both {@code
+ * overQueryFactor} and {@code searchListSize}.
  */
 public record SearchRequest(
     float[] query,
@@ -171,7 +172,7 @@ public record SearchRequest(
      * × multi-start (N×M) parallelism product.
      *
      * <p>Non-graph backends (flat scan, IVF) ignore this parameter. The ACORN pre-filter path also
-     * ignores this parameter in Phase 1 (filtered multi-start is deferred).
+     * ignores this parameter.
      *
      * @throws IllegalArgumentException if {@code searchMultiStart < 1}
      */

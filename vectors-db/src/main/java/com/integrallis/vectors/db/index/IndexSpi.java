@@ -29,8 +29,7 @@ import java.util.function.IntPredicate;
  * expose a uniform search API to the {@link com.integrallis.vectors.db.VectorCollection} facade.
  *
  * <p><b>Filter contract:</b> {@code search()} does <b>not</b> take a filter. The post-filter is
- * applied by the {@code VectorCollection} layer <i>after</i> the SPI returns candidates. This
- * matches the design doc §6.5 decision that filter execution is not part of the SPI in v0.1.
+ * applied by the {@code VectorCollection} layer <i>after</i> the SPI returns candidates.
  */
 public interface IndexSpi extends AutoCloseable {
 
@@ -47,10 +46,10 @@ public interface IndexSpi extends AutoCloseable {
    * Searches the index for the top-{@code k} nearest neighbours.
    *
    * <p><b>Parameter contract.</b> {@code searchListSize} and {@code overQueryFactor} are hints for
-   * graph-based backends (HNSW, Vamana) that do a coarse pass followed by a rescore. Brute- force
-   * implementations such as {@link FlatScanAdapter} already compare against every stored vector and
-   * <i>ignore</i> both parameters — they return identical results regardless of what is passed.
-   * Callers that mix backends should not rely on these parameters to vary flat-scan output.
+   * graph-based and quantized backends that do a coarse pass followed by a rescore. Unquantized
+   * brute-force implementations such as {@link FlatScanAdapter} already compare against every
+   * stored vector and <i>ignore</i> both parameters — they return identical results regardless of
+   * what is passed.
    *
    * @param query the query vector
    * @param k number of final results requested

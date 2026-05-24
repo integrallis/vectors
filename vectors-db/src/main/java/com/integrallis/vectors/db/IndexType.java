@@ -15,21 +15,18 @@
  */
 package com.integrallis.vectors.db;
 
-/**
- * Index backend selector. Step 2 only wires {@link #FLAT}; other values are reserved for subsequent
- * steps and throw {@link UnsupportedOperationException} at build time.
- */
+/** Index backend selector for vector collection storage and search. */
 public enum IndexType {
   /** Brute-force linear scan. Reference implementation, always available. */
   FLAT,
 
-  /** Hierarchical Navigable Small World (HNSW) graph index. Deferred to Step 4. */
+  /** Hierarchical Navigable Small World (HNSW) graph index. */
   HNSW,
 
-  /** Vamana/DiskANN graph index. Deferred to Step 6. */
+  /** Vamana/DiskANN graph index. */
   VAMANA,
 
-  /** Inverted-file (flat) clustering index. Deferred to a later step. */
+  /** Inverted-file clustering index with full-precision vectors in each posting list. */
   IVF_FLAT,
 
   /**
@@ -43,14 +40,14 @@ public enum IndexType {
   /**
    * GPU-accelerated brute-force search via NVIDIA cuVS. Requires {@code libcuvs.so} and a
    * compatible CUDA device at runtime; build fails with {@code GpuUnavailableException} otherwise.
-   * In-memory only; persistent mode is deferred.
+   * In-memory only.
    */
   CUVS_BRUTEFORCE,
 
   /**
    * GPU-accelerated CAGRA graph index via NVIDIA cuVS. Requires {@code libcuvs.so} and a compatible
    * CUDA device at runtime; build fails with {@code GpuUnavailableException} otherwise. In-memory
-   * only; persistent mode is deferred.
+   * only.
    */
   CUVS_CAGRA
 }

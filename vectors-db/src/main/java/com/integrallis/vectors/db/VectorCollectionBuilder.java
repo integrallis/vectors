@@ -25,11 +25,10 @@ import java.nio.file.Path;
  * <p>Required settings: {@link #dimension(int)} and {@link #metric(SimilarityFunction)}. {@link
  * #build()} throws {@link IllegalStateException} if either is unset.
  *
- * <p>Step 4d supports {@link IndexType#FLAT}, {@link IndexType#HNSW}, and {@link IndexType#VAMANA}
- * with all {@link QuantizerKind} values in either in-memory mode (no {@link #storagePath(Path)}) or
- * persistent mmap-backed mode (absolute {@code storagePath}). {@link IndexType#FLAT} combined with
- * a non-{@link QuantizerKind#NONE} quantizer throws {@link UnsupportedOperationException} because
- * quantization for flat-scan requires further design discussion.
+ * <p>Supports {@link IndexType#FLAT}, {@link IndexType#HNSW}, {@link IndexType#VAMANA}, {@link
+ * IndexType#IVF_FLAT}, and {@link IndexType#IVF_PQ} with supported quantizers in either in-memory
+ * mode (no {@link #storagePath(Path)}) or persistent mmap-backed mode (absolute {@code
+ * storagePath}).
  */
 public final class VectorCollectionBuilder {
 
@@ -146,10 +145,7 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
-  /**
-   * Selects the index backend. Step 4d supports {@link IndexType#FLAT}, {@link IndexType#HNSW}, and
-   * {@link IndexType#VAMANA}.
-   */
+  /** Selects the index backend. */
   public VectorCollectionBuilder indexType(IndexType indexType) {
     if (indexType == null) {
       throw new IllegalArgumentException("indexType must not be null");
@@ -158,7 +154,7 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
-  /** Selects the quantizer. Step 4d supports all {@link QuantizerKind} values. */
+  /** Selects the quantizer. */
   public VectorCollectionBuilder quantizer(QuantizerKind quantizerKind) {
     if (quantizerKind == null) {
       throw new IllegalArgumentException("quantizerKind must not be null");
@@ -552,7 +548,7 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
-  /** Builds the collection. Applies Step 4d restrictions on backend and quantizer. */
+  /** Builds the collection. */
   public VectorCollection build() {
     if (dimension == null) {
       throw new IllegalStateException("dimension is required, call builder.dimension(d)");
@@ -566,16 +562,6 @@ public final class VectorCollectionBuilder {
               + " working directory): "
               + storageRoot);
     }
-    // FLAT + quantization is blocked — quantization makes sense for graph traversal (coarse
-    // pruning then full-precision rescore), not brute-force scan. A future step may unblock this
-    // for the compressed-storage use case.
-    if (indexType == IndexType.FLAT && quantizerKind != QuantizerKind.NONE) {
-      throw new UnsupportedOperationException(
-          "FLAT index with quantizerKind "
-              + quantizerKind
-              + " is not supported — quantization requires a graph index (HNSW or VAMANA)");
-    }
-
     VectorCollectionConfig.HnswParams hnswParams =
         (indexType == IndexType.HNSW)
             ? new VectorCollectionConfig.HnswParams(hnswM, hnswEfConstruction, hnswBuildThreads)

@@ -98,7 +98,7 @@ public interface VectorCollection extends AutoCloseable {
    */
   void commit();
 
-  /** No-op in Step 3 (in-memory only). Step 4 adds fsync semantics over the persistence layer. */
+  /** Flushes durable state for persistent collections; in-memory collections have nothing to do. */
   default void flush() {
     // in-memory: nothing to flush
   }

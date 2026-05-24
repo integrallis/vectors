@@ -134,16 +134,17 @@ class VectorDbIntegrationTest {
     }
 
     @Test
-    void quantizerKindSq8_throwsUnsupported_inStep2() {
-      assertThatExceptionOfType(UnsupportedOperationException.class)
-          .isThrownBy(
-              () ->
-                  VectorCollection.builder()
-                      .dimension(8)
-                      .metric(SimilarityFunction.EUCLIDEAN)
-                      .quantizer(QuantizerKind.SQ8)
-                      .build())
-          .withMessageContaining("SQ8");
+    void flatWithQuantizer_buildsSuccessfully() {
+      try (var col =
+          VectorCollection.builder()
+              .dimension(8)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .quantizer(QuantizerKind.SQ8)
+              .build()) {
+        assertThat(col.size()).isZero();
+        assertThat(col.config().indexType()).isEqualTo(IndexType.FLAT);
+        assertThat(col.config().quantizerKind()).isEqualTo(QuantizerKind.SQ8);
+      }
     }
   }
 

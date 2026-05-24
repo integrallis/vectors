@@ -36,8 +36,8 @@ import java.util.function.IntPredicate;
  * <p><b>Rebuild-on-commit.</b> Every call to {@link #build(float[][], SimilarityFunction)}
  * reconstructs the graph from scratch. This mirrors the flat-scan precedent ({@link
  * FlatScanAdapter#build}) and keeps the commit pipeline uniform — there is no incremental insertion
- * path in Step 4b. The caller guarantees that concurrent searches never overlap with a rebuild
- * (enforced by {@link com.integrallis.vectors.db.VectorCollection} via its writer lock).
+ * path. The caller guarantees that concurrent searches never overlap with a rebuild (enforced by
+ * {@link com.integrallis.vectors.db.VectorCollection} via its writer lock).
  *
  * <p><b>Empty inputs.</b> {@link HnswIndex} cannot be built from zero vectors. When {@link
  * #build(float[][], SimilarityFunction)} receives an empty array, the adapter records the empty
@@ -166,8 +166,7 @@ public final class HnswIndexAdapter implements IndexSpi {
   /**
    * Multi-start parallel variant: routes through {@link HnswIndex#searchMultiStart} when {@code
    * searchMultiStart > 1}. Falls back to the single-start 4-arg {@link #search} path when {@code
-   * searchMultiStart <= 1} or when quantized two-pass is active (Phase 1 does not combine two-pass
-   * + multi-start).
+   * searchMultiStart <= 1} or when quantized two-pass is active.
    */
   @Override
   public SearchOutcome search(

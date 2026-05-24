@@ -13,28 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.integrallis.vectors.db;
+package com.integrallis.vectors.db.index;
 
-/** Quantizer backend selector. */
-public enum QuantizerKind {
-  /** No quantization — full-precision float vectors. */
-  NONE,
+/** Creates exact full-precision scorers for ordinal-based rescoring. */
+interface ExactOrdinalScorer {
 
-  /** Scalar quantization, 8-bit. */
-  SQ8,
+  /**
+   * Creates a scorer for one query. The returned scorer may keep per-query scratch state and is not
+   * required to be thread-safe.
+   *
+   * @param query full-precision query vector
+   * @return scorer for stored ordinals
+   */
+  OrdinalScorer exactScorerFor(float[] query);
 
-  /** Scalar quantization, 4-bit. */
-  SQ4,
-
-  /** Product quantization. */
-  PQ,
-
-  /** Binary quantization (sign-bit / BBQ). */
-  BQ,
-
-  /** RaBitQ rotation + sign-bit quantization. */
-  RABITQ,
-
-  /** Nonlinear per-vector quantization. */
-  NVQ
+  @FunctionalInterface
+  interface OrdinalScorer {
+    float score(int ordinal);
+  }
 }

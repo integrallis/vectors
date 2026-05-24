@@ -30,11 +30,11 @@ import java.util.Objects;
  * layout (raw packed {@code float32} values with 64-byte alignment per vector) but differs in one
  * important way: lifetime is owned by a <b>caller-provided</b> {@link Arena}.
  *
- * <p>This distinction matters because a Step 4a {@code Generation} shares a single {@link
- * Arena#ofShared()} across every mmap'd file in one generation — vectors, idmap, metadata, manifest
- * — so that retiring a generation unmaps all four files atomically in one operation. If we instead
- * used {@code MappedVectorStore.open(...)} here, each file would own its own arena and lifecycle
- * management would be tangled across four close() calls.
+ * <p>This distinction matters because a {@code Generation} shares a single {@link Arena#ofShared()}
+ * across every mmap'd file in one generation — vectors, idmap, metadata, manifest — so that
+ * retiring a generation unmaps all files atomically in one operation. If we instead used {@code
+ * MappedVectorStore.open(...)} here, each file would own its own arena and lifecycle management
+ * would be tangled across four close() calls.
  *
  * <p><b>File layout.</b> No header. Vectors are packed starting at byte offset 0, one per {@code
  * stride} bytes, where {@code stride = alignUp(dimension * 4, 64)}. For {@code dim=128} this is

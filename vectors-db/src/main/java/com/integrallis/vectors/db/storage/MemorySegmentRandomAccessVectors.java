@@ -21,9 +21,8 @@ import java.util.Objects;
 
 /**
  * Read-only adapter that copies a vector out of a memory-mapped {@link MemorySegmentVectors} into a
- * per-thread scratch {@code float[]} on every {@link #getVector(int)} call. Used by both the
- * persistent HNSW read path (Step 4b) and the persistent Vamana read path (Step 4c) to bridge the
- * mmap'd {@code vectors.bin} into the graph-index search APIs.
+ * per-thread scratch {@code float[]} on every {@link #getVector(int)} call. Used by persistent
+ * graph-index read paths to bridge mmap'd {@code vectors.bin} into graph-index search APIs.
  *
  * <p>This class simultaneously implements both {@link
  * com.integrallis.vectors.hnsw.RandomAccessVectors} and {@link
@@ -60,12 +59,11 @@ import java.util.Objects;
  * com.integrallis.vectors.vamana.VamanaGraphBuilder}.</b> Both builders have {@code insert}/{@code
  * link} paths that capture one {@code getVector(x)} result into a local variable and then call
  * {@code vectors.getVector(y)} while still reading the first result. Under the shared-scratch
- * contract that's a use-after-overwrite bug. The audit in Step 4b/4c confirmed that only the
- * <i>search</i> paths ({@code HnswSearcher.beamSearch}, {@code VamanaSearcher.search}, both rescore
- * methods) satisfy the single-call-per-iteration contract. {@link MappedHnswIndexAdapter} and
- * {@link MappedVamanaIndexAdapter} — the only users of this class — are constructed from
- * <i>pre-built</i> graphs and reject {@link
- * com.integrallis.vectors.db.index.IndexSpi#build(float[][],
+ * contract that's a use-after-overwrite bug. Only the <i>search</i> paths ({@code
+ * HnswSearcher.beamSearch}, {@code VamanaSearcher.search}, both rescore methods) satisfy the
+ * single-call-per-iteration contract. {@link MappedHnswIndexAdapter} and {@link
+ * MappedVamanaIndexAdapter} — the only users of this class — are constructed from <i>pre-built</i>
+ * graphs and reject {@link com.integrallis.vectors.db.index.IndexSpi#build(float[][],
  * com.integrallis.vectors.core.SimilarityFunction)} with {@link UnsupportedOperationException}, so
  * the unsafe builder path cannot reach this adapter.
  *

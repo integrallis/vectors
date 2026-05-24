@@ -26,7 +26,7 @@ import java.util.Objects;
 /**
  * Persistent brute-force {@link IndexSpi} that scores every stored vector against the query using
  * <b>zero-copy SIMD loads</b> directly from a memory-mapped {@code vectors.bin}. This is the
- * mmap-backed analogue of {@link FlatScanAdapter} and the headline Step 4a read path:
+ * mmap-backed analogue of {@link FlatScanAdapter}:
  *
  * <pre>
  *   mmap'd page → MemorySegment → FloatVector.fromMemorySegment → vmovups/ld1 → FMA
@@ -37,8 +37,8 @@ import java.util.Objects;
  *
  * <p><b>Construction.</b> Unlike {@link FlatScanAdapter}, this adapter does <b>not</b> support the
  * {@link IndexSpi#build(float[][], SimilarityFunction)} path — its data source is an already-built
- * {@link MemorySegmentVectors} that came out of the Step 4a generation-write pipeline. Construct
- * one via {@link #MappedFlatScanAdapter(MemorySegmentVectors, SimilarityFunction)}; calling {@link
+ * {@link MemorySegmentVectors} from a committed generation. Construct one via {@link
+ * #MappedFlatScanAdapter(MemorySegmentVectors, SimilarityFunction)}; calling {@link
  * #build(float[][], SimilarityFunction)} throws {@link UnsupportedOperationException}.
  *
  * <p><b>Scoring.</b> Results are bit-level compatible with {@link FlatScanAdapter} in the sense
@@ -73,7 +73,7 @@ import java.util.Objects;
  * arena), and calling close() here must not touch that arena. {@code VectorCollectionImpl} is
  * responsible for closing the shared arena exactly once per retired generation.
  */
-public final class MappedFlatScanAdapter implements IndexSpi {
+public final class MappedFlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
   private final MemorySegmentVectors store;
   private final SimilarityFunction metric;
@@ -184,6 +184,21 @@ public final class MappedFlatScanAdapter implements IndexSpi {
   @Override
   public int size() {
     return store.size();
+  }
+
+  @Override
+  public OrdinalScorer exactScorerFor(float[] query) {
+    Objects.requireNonNull(query, "query must not be null");
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Query dimension " + query.length + " does not match index dimension " + dimension);
+    }
+    float[] candidate = new float[dimension];
+    return ordinal -> {
+      MemorySegment.copy(
+          store.vectorSlice(ordinal), ValueLayout.JAVA_FLOAT, 0L, candidate, 0, dimension);
+      return metric.compare(query, candidate);
+    };
   }
 
   /**
