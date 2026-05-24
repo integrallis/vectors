@@ -209,6 +209,37 @@ public final class CollectionRegistry implements AutoCloseable {
     return () -> listeners.remove(listener);
   }
 
+  /**
+   * Runs {@code action} under the per-name write lock for {@code name}, so a sequence of mutating
+   * operations on the same collection (e.g. a batch of {@code upsert}s followed by {@code commit})
+   * is observably atomic with respect to other write paths against the same collection.
+   * Different-name actions do not block each other.
+   *
+   * <p>The same {@link ReentrantLock} map used by {@link #create} and {@link #drop} backs this
+   * method, so create/drop/write paths all serialise correctly against one another for the same
+   * collection name. The lock is reentrant: an action that calls back into {@code
+   * runUnderWriteLock} for the same name does not deadlock.
+   *
+   * <p>Exceptions thrown by {@code action} propagate; the lock is always released. The lock is
+   * <i>not</i> created for the collection's lifetime by this call alone — write operations may race
+   * with a never-created collection just as they may race with a dropped one; callers must still
+   * check {@link #get(String)} inside the action.
+   *
+   * @param name collection name (non-null)
+   * @param action body to run while holding the per-name lock (non-null)
+   */
+  public void runUnderWriteLock(String name, Runnable action) {
+    Objects.requireNonNull(name, "name");
+    Objects.requireNonNull(action, "action");
+    ReentrantLock lock = nameLocks.computeIfAbsent(name, k -> new ReentrantLock());
+    lock.lock();
+    try {
+      action.run();
+    } finally {
+      lock.unlock();
+    }
+  }
+
   /** Immutable epoch-change notification. */
   public record EpochChange(String name, long epoch) {}
 

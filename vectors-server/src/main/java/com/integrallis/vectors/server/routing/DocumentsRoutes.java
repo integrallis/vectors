@@ -146,10 +146,19 @@ public final class DocumentsRoutes implements HttpService {
       return;
     }
     try {
-      for (Document d : docs) {
-        c.upsert(d);
-      }
-      c.commit();
+      // Hold the per-name write lock so the batch's upsert+commit pair is observably atomic
+      // w.r.t. other write paths against the same collection — without it, a concurrent batch
+      // can stage into the shared buffer between this batch's first upsert and its commit, so
+      // this commit would publish the other batch's docs (and vice versa). See
+      // CollectionRegistryLockTest.
+      registry.runUnderWriteLock(
+          name,
+          () -> {
+            for (Document d : docs) {
+              c.upsert(d);
+            }
+            c.commit();
+          });
     } catch (IllegalArgumentException e) {
       LOG.debug("rejected upsert batch for '{}': {}", name, e.getMessage());
       RouteSupport.sendProblem(
@@ -201,9 +210,16 @@ public final class DocumentsRoutes implements HttpService {
       RouteSupport.sendProblem(res, Status.NOT_FOUND_404, "document not found", id, req);
       return;
     }
-    boolean deleted = c.delete(id);
-    if (deleted) {
-      c.commit();
+    boolean[] deletedHolder = {false};
+    registry.runUnderWriteLock(
+        name,
+        () -> {
+          if (c.delete(id)) {
+            c.commit();
+            deletedHolder[0] = true;
+          }
+        });
+    if (deletedHolder[0]) {
       registry.getTextIndex(name).ifPresent(ti -> ti.remove(id));
       registry.bumpEpoch(name);
     }
@@ -218,7 +234,7 @@ public final class DocumentsRoutes implements HttpService {
       RouteSupport.sendProblem(res, Status.NOT_FOUND_404, "collection not found", name, req);
       return;
     }
-    col.get().commit();
+    registry.runUnderWriteLock(name, () -> col.get().commit());
     registry.bumpEpoch(name);
     res.status(Status.NO_CONTENT_204).send();
   }
