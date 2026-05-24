@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -219,5 +220,34 @@ class StorageBackendContractTest {
     b.put("k", new byte[] {1, 2, 3, 4});
 
     assertThatThrownBy(() -> b.getRange("k", 0, -1)).isInstanceOf(IndexOutOfBoundsException.class);
+  }
+
+  @Test
+  void localFileRejectsPathTraversal() throws IOException {
+    StorageBackend b = new LocalFileStorageBackend(tmpDir);
+
+    assertThatThrownBy(() -> b.put("../escape", new byte[] {1})).isInstanceOf(IOException.class);
+    assertThatThrownBy(() -> b.put("a/../escape", new byte[] {1})).isInstanceOf(IOException.class);
+    assertThatThrownBy(() -> b.get("/absolute")).isInstanceOf(IOException.class);
+    assertThat(Files.exists(tmpDir.resolveSibling("escape"))).isFalse();
+  }
+
+  @Test
+  void localFileStoresEtagAndValueAtomicallyInOneFile() throws IOException {
+    StorageBackend b = new LocalFileStorageBackend(tmpDir);
+
+    StorageBackend.ConditionalPutResult first = b.conditionalPut("dir/k", new byte[] {1, 2}, null);
+    assertThat(first.succeeded()).isTrue();
+
+    assertThat(tmpDir.resolve("dir/k")).exists();
+    assertThat(tmpDir.resolve("dir/k.etag")).doesNotExist();
+    assertThat(b.get("dir/k")).isEqualTo(new byte[] {1, 2});
+
+    StorageBackend reopened = new LocalFileStorageBackend(tmpDir);
+    StorageBackend.ConditionalPutResult second =
+        reopened.conditionalPut("dir/k", new byte[] {3}, first.newEtag());
+
+    assertThat(second.succeeded()).isTrue();
+    assertThat(reopened.get("dir/k")).isEqualTo(new byte[] {3});
   }
 }
