@@ -40,7 +40,11 @@ class SseEventsTest {
   @Test
   void sseEmitsHelloAndEpochEvents() throws Exception {
     try (VectorsServer.ServerHandle handle = VectorsServer.start(ServerConfig.forTesting())) {
-      HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+      // 30s connect timeout (rather than the original 5s) to tolerate CPU starvation when the
+      // root `./gradlew clean build test` runs many test JVMs in parallel — server startup +
+      // first request can take more than 5s of wall-clock under that load even though the test is
+      // sub-second in isolation.
+      HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
       int port = handle.port();
 
       // Pre-create one collection so we can fire a commit against it later.
@@ -53,7 +57,7 @@ class SseEventsTest {
       // Open the SSE stream.
       HttpRequest sseReq =
           HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/events"))
-              .timeout(Duration.ofSeconds(10))
+              .timeout(Duration.ofSeconds(30))
               .header("accept", "text/event-stream")
               .GET()
               .build();
@@ -113,7 +117,7 @@ class SseEventsTest {
       HttpClient client, int port, String path, String body) throws Exception {
     return client.send(
         HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-            .timeout(Duration.ofSeconds(5))
+            .timeout(Duration.ofSeconds(30))
             .header("content-type", "application/json")
             .POST(BodyPublishers.ofString(body))
             .build(),
