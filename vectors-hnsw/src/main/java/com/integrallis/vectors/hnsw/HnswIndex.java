@@ -158,8 +158,8 @@ public final class HnswIndex {
   /**
    * Multi-start parallel beam search at layer 0. Runs {@code nStarts} independent beam searches
    * from diverse seed nodes on virtual threads and merges their outputs into a single top-{@code k}
-   * result. Composes with {@link com.integrallis.vectors.db.VectorCollection#searchBatch(
-   * java.util.List) searchBatch} for a batch × multi-start (N×M) parallelism product.
+   * result. Can be combined with batched collection search for a batch × multi-start (N×M)
+   * parallelism product.
    *
    * <p>Thread safety: the orchestrator searcher is allocated fresh on every call rather than
    * retrieved from {@link #threadLocalSearcher}, because a virtual thread can hop carriers between

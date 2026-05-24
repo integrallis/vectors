@@ -35,8 +35,8 @@ import com.integrallis.vectors.core.SimilarityFunction;
  * is significantly cheaper than a full O(N' · log N' · M · d) rebuild when the deletion fraction is
  * small.
  *
- * <p>Used by {@link com.integrallis.vectors.db.index.HnswIndexAdapter#mergeFrom} (in-memory compact
- * path) and directly by the persistent compact path in {@code VectorCollectionImpl}.
+ * <p>Used by the in-memory and persistent compact paths to preserve graph structure across
+ * compaction.
  */
 public final class HnswGraphMerger {
 

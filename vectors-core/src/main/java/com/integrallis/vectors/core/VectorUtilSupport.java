@@ -147,7 +147,7 @@ public interface VectorUtilSupport {
    * pattern used by JVector's {@code VectorUtil.assembleAndSum}.
    *
    * @param table precomputed table of shape {@code [numSubspaces][numClusters]}; typically produced
-   *     by {@link com.integrallis.vectors.quantization.ProductQuantizer#buildADCTable}
+   *     by a product-quantizer ADC table builder
    * @param codes byte buffer holding at least {@code numSubspaces} PQ codes starting at {@code
    *     codesOffset} (unsigned)
    * @param codesOffset starting offset in {@code codes}

@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
  * requiring a leader or consensus protocol. This is the in-process simulation of what in a real
  * distributed deployment would be UDP multicast or a gossip protocol (e.g. SWIM/SwimRing).
  *
- * <h3>BuoyIndex gossip protocol</h3>
+ * <h2>BuoyIndex gossip protocol</h2>
  *
  * <p>Each node holds a local copy of the BuoyIndex. When a node trains or receives a new index, it
  * calls {@link #announceVersion(String)} with the new version hash. {@code GossipClusterMembership}
@@ -43,13 +43,13 @@ import org.slf4j.LoggerFactory;
  * nodes. Listeners should reload the BuoyIndex from the shared store (S3 or coordinator) when they
  * receive this event.
  *
- * <h3>Node join / leave</h3>
+ * <h2>Node join / leave</h2>
  *
  * <p>Call {@link #join(NodeId)} and {@link #leave(NodeId)} to simulate nodes entering and leaving
  * the cluster. These fire {@link MembershipEvent.NodeJoined} / {@link MembershipEvent.NodeLeft}
  * events to all listeners.
  *
- * <h3>Thread safety</h3>
+ * <h2>Thread safety</h2>
  *
  * <p>All methods are thread-safe. Listeners are called on the calling thread (i.e. {@link
  * #announceVersion}, {@link #join}, {@link #leave}); they must be non-blocking.

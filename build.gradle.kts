@@ -512,6 +512,14 @@ dependencies {
     libraryProjects
         .filter { it.name != "vectors-bench" }
         .forEach { aggregateJavadocClasspath(project(it.path)) }
+    aggregateJavadocClasspath("dev.langchain4j:langchain4j-core:1.13.1")
+    aggregateJavadocClasspath("org.springframework.ai:spring-ai-vector-store:1.1.4")
+    aggregateJavadocClasspath("org.springframework.ai:spring-ai-model:1.1.4")
+    aggregateJavadocClasspath("org.springframework.boot:spring-boot-autoconfigure:3.4.5")
+    aggregateJavadocClasspath("io.projectreactor:reactor-core:3.7.9")
+    aggregateJavadocClasspath("org.junit.jupiter:junit-jupiter-api:5.11.4")
+    aggregateJavadocClasspath("org.apiguardian:apiguardian-api:1.1.2")
+    aggregateJavadocClasspath("org.testng:testng:7.10.2")
 }
 
 // Aggregated Javadoc generation

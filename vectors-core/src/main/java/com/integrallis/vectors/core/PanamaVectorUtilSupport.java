@@ -34,10 +34,10 @@ import jdk.incubator.vector.VectorSpecies;
  *
  * <ul>
  *   <li>4x unrolling for dot product and L2 (1 FMA per iteration)
- *   <li>2x unrolling for cosine (3 FMAs per iteration already saturates ports)
+ *   <li>4x unrolling for array cosine, 2x unrolling for MemorySegment cosine
  *   <li>Conditional FMA dispatch via {@link PanamaConstants#HAS_FAST_VECTOR_FMA}
  *   <li>{@code SPECIES_PREFERRED} for main loop with scalar tail
- *   <li>Byte operations use widening conversions (B2S, S2I) to avoid overflow
+ *   <li>Byte operations use widening conversions (B2S, S2I) and fixed-width tiers to avoid overflow
  * </ul>
  */
 final class PanamaVectorUtilSupport implements VectorUtilSupport {

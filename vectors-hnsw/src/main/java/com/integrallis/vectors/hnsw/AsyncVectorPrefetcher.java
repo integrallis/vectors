@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * Issues asynchronous touch-reads on a {@link RandomAccessVectors} source so that OS page-cache
  * population happens concurrently with graph traversal computation.
  *
- * <h3>Why this works for mmap-backed stores</h3>
+ * <h2>Why this works for mmap-backed stores</h2>
  *
  * <p>When {@link RandomAccessVectors} is backed by a {@code MemorySegment} (mmap), each {@code
  * getVector(ordinal)} call that touches a page not yet in the OS page cache triggers a synchronous
@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * to load the page before the main search thread needs it, turning a serialised I/O wait into
  * latency that overlaps with distance computation.
  *
- * <h3>Thread safety</h3>
+ * <h2>Thread safety</h2>
  *
  * <p>{@link RandomAccessVectors#getVector} is called from daemon threads in the pool. The returned
  * {@code float[]} reference is immediately discarded — the sole purpose of the call is to touch the
@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * allocated with a shared {@link java.lang.foreign.Arena} (the default for mmap-backed stores in
  * {@code vectors-storage}).
  *
- * <h3>For in-memory stores</h3>
+ * <h2>For in-memory stores</h2>
  *
  * <p>When the store is already in RAM (e.g., {@link InMemoryVectors}), the touch-read is a cheap
  * no-op array access. The thread-pool overhead is negligible and correctness is unaffected.

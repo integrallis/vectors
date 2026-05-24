@@ -23,6 +23,7 @@ package com.integrallis.vectors.quantization;
  * builder overrides:
  *
  * <table>
+ * <caption>Default quantizer parameters</caption>
  * <thead><tr><th>Type</th><th>Default bits/mode</th><th>Key builder override</th></tr></thead>
  * <tbody>
  * <tr><td>SCALAR_INT8</td><td>8-bit (INT8)</td><td>{@code .confidence(float)}</td></tr>

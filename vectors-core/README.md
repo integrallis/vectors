@@ -11,10 +11,11 @@ Foundation module for the Vectors library. No internal dependencies.
 
 ## Key Design Decisions
 
-- Uses `SPECIES_PREFERRED` for SIMD portability across hardware
-- Full-lane loop with scalar tail (no masked operations)
-- `fma()` for fused multiply-add in dot product kernels
-- Scalar fallback for platforms without SIMD support
+- Float kernels use `SPECIES_PREFERRED`; byte kernels use fixed-width widening tiers
+- Full-lane SIMD loops use scalar tails rather than masked tail loads
+- Dot product, L2, and cosine kernels use conditional FMA dispatch
+- Scalar implementation is available when the Panama Vector implementation is disabled or cannot
+  initialize
 
 ## Dependencies
 
