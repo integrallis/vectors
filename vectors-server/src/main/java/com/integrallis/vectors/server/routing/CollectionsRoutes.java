@@ -43,8 +43,8 @@ import org.slf4j.LoggerFactory;
 /**
  * HTTP routes for collection lifecycle: create, list, describe, drop.
  *
- * <p>Phase 2 wires an in-memory / mmap-backed {@link VectorCollection} per collection; Phase 3
- * reopens persisted collections under {@link ServerConfig#dataDir()} on startup.
+ * <p>The registry holds one in-memory or mmap-backed {@link VectorCollection} per collection.
+ * Persisted collections under {@link ServerConfig#dataDir()} are reopened on startup.
  *
  * <p>All error responses use RFC 7807 {@code application/problem+json} bodies.
  */

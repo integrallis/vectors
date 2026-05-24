@@ -24,8 +24,8 @@ import java.util.Objects;
 /**
  * Assembles the complete HTTP routing tree for the server.
  *
- * <p>Phase 4 wires {@link AdminRoutes}, {@link CollectionsRoutes}, {@link DocumentsRoutes}, and
- * {@link SearchRoutes}.
+ * <p>Routes include administration, collection lifecycle, document writes, search, blobs, events,
+ * and bulk operations.
  */
 public final class ApiRouting {
 
@@ -45,6 +45,9 @@ public final class ApiRouting {
    * @param builder the Helidon routing builder to augment
    */
   public void apply(HttpRouting.Builder builder) {
+    if (config.authEnabled()) {
+      builder.addFilter(new BearerAuthFilter(config.apiKey()));
+    }
     builder.register(new AdminRoutes(registry));
     builder.register(new CollectionsRoutes(registry, config));
     builder.register(new DocumentsRoutes(registry));

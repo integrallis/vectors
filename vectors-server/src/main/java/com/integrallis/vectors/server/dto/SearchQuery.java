@@ -33,7 +33,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  * @param includeVector whether to emit the stored vector on each hit
  * @param includeText whether to emit the stored text on each hit
  * @param includeMetadata whether to emit the stored metadata on each hit
- * @param filter optional filter AST; Phase 5 grammar, Phase 4 only accepts null
+ * @param filter optional metadata filter AST
  * @param queryText optional text for hybrid search (combined with vector via fusion)
  * @param hybridMode optional fusion mode: "RRF" (default) or "WEIGHTED"
  */

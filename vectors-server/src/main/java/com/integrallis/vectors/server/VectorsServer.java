@@ -68,6 +68,11 @@ public final class VectorsServer implements Callable<Integer> {
       description = "Grace period for inflight requests on shutdown")
   private int shutdownTimeoutSeconds = 30;
 
+  @Option(
+      names = "--api-key",
+      description = "Bearer token for protected API routes; defaults to VECTORS_API_KEY")
+  private String apiKey;
+
   public static void main(String[] args) {
     int exit = new CommandLine(new VectorsServer()).execute(args);
     System.exit(exit);
@@ -75,7 +80,8 @@ public final class VectorsServer implements Callable<Integer> {
 
   @Override
   public Integer call() throws InterruptedException {
-    ServerConfig config = new ServerConfig(port, dataDir, maxConnections, shutdownTimeoutSeconds);
+    ServerConfig config =
+        new ServerConfig(port, dataDir, maxConnections, shutdownTimeoutSeconds, configuredApiKey());
     ServerHandle handle = start(config);
     CountDownLatch shutdown = new CountDownLatch(1);
     Runtime.getRuntime()
@@ -89,6 +95,10 @@ public final class VectorsServer implements Callable<Integer> {
     LOG.info("vectors-server listening on port {}", handle.port());
     shutdown.await();
     return 0;
+  }
+
+  private String configuredApiKey() {
+    return apiKey != null ? apiKey : System.getenv("VECTORS_API_KEY");
   }
 
   /**

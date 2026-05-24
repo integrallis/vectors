@@ -51,9 +51,8 @@ import org.slf4j.LoggerFactory;
  * include flags and returns an ordered list of hits with scores, matching {@link
  * com.integrallis.vectors.db.VectorCollection#search(com.integrallis.vectors.db.SearchRequest)}.
  *
- * <p>Phase 4 accepts only a {@code null} or missing filter; any present filter node falls through
- * to the {@link FilterParser} stub which throws {@link UnsupportedOperationException}, returned to
- * the caller as {@code 400 Bad Request}. Phase 5 wires the full grammar.
+ * <p>Filters are parsed by {@link FilterParser}. Malformed filters are returned to the caller as
+ * {@code 400 Bad Request}.
  */
 public final class SearchRoutes implements HttpService {
 

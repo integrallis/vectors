@@ -31,8 +31,11 @@ import java.util.Objects;
  *     maxTcpConnections}
  * @param shutdownTimeoutSeconds grace period for inflight requests on SIGTERM; mapped to Helidon's
  *     {@code shutdownGracePeriod}
+ * @param apiKey bearer token required for protected API routes; {@code null} disables
+ *     authentication
  */
-public record ServerConfig(int port, Path dataDir, int maxConnections, int shutdownTimeoutSeconds) {
+public record ServerConfig(
+    int port, Path dataDir, int maxConnections, int shutdownTimeoutSeconds, String apiKey) {
 
   /** Default HTTP port. {@code 8287 == VCTR} on a phone keypad; prime; IANA-unassigned. */
   public static final int DEFAULT_PORT = 8287;
@@ -48,6 +51,16 @@ public record ServerConfig(int port, Path dataDir, int maxConnections, int shutd
       throw new IllegalArgumentException(
           "shutdownTimeoutSeconds must be non-negative: " + shutdownTimeoutSeconds);
     }
+    if (apiKey != null) {
+      apiKey = apiKey.trim();
+      if (apiKey.isEmpty()) {
+        throw new IllegalArgumentException("apiKey must not be blank");
+      }
+    }
+  }
+
+  public ServerConfig(int port, Path dataDir, int maxConnections, int shutdownTimeoutSeconds) {
+    this(port, dataDir, maxConnections, shutdownTimeoutSeconds, null);
   }
 
   /**
@@ -76,14 +89,28 @@ public record ServerConfig(int port, Path dataDir, int maxConnections, int shutd
    * @return a copy of this config with {@code dataDir} replaced by the supplied value
    */
   public ServerConfig withDataDir(Path dataDir) {
-    return new ServerConfig(port, dataDir, maxConnections, shutdownTimeoutSeconds);
+    return new ServerConfig(port, dataDir, maxConnections, shutdownTimeoutSeconds, apiKey);
   }
 
   /**
    * @return a copy of this config with {@code port} replaced by the supplied value
    */
   public ServerConfig withPortOverride(int newPort) {
-    return new ServerConfig(newPort, dataDir, maxConnections, shutdownTimeoutSeconds);
+    return new ServerConfig(newPort, dataDir, maxConnections, shutdownTimeoutSeconds, apiKey);
+  }
+
+  /**
+   * @return a copy of this config with bearer-token authentication enabled
+   */
+  public ServerConfig withApiKey(String apiKey) {
+    return new ServerConfig(port, dataDir, maxConnections, shutdownTimeoutSeconds, apiKey);
+  }
+
+  /**
+   * @return {@code true} when protected routes require a bearer token
+   */
+  public boolean authEnabled() {
+    return apiKey != null;
   }
 
   /**
