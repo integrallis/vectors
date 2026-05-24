@@ -23,8 +23,8 @@ import java.util.Objects;
 /**
  * Thread-safe Vamana index with builder pattern API.
  *
- * <p>Uses {@link ThreadLocal} searchers for lock-free concurrent search. Construction is
- * single-threaded.
+ * <p>Uses {@link ThreadLocal} searchers for lock-free concurrent search. The builder constructs the
+ * graph before publishing the index.
  *
  * <p>Supports optional quantization via {@link #enableQuantization(CompressedVectors)} for two-pass
  * search: a fast coarse pass using quantized scoring followed by full-precision rescoring.
@@ -239,8 +239,8 @@ public final class VamanaIndex {
    * {@code sim} are mutually consistent (same vector count, same metric used when the graph was
    * originally built, etc.).
    *
-   * <p>This factory exists exclusively for the persistence path in {@code vectors-db} Step 4c: a
-   * decoded graph from {@code VamanaGraphCodec.decode(byte[])} is paired with a {@code
+   * <p>This factory wraps a decoded graph for the persistence path in {@code vectors-db}: a decoded
+   * graph from {@code VamanaGraphCodec.decode(byte[])} is paired with a {@code
    * MemorySegmentRandomAccessVectors} view of the mmap'd {@code vectors.bin} file, and the
    * resulting index is wrapped in {@code MappedVamanaIndexAdapter} for read-only search. There is
    * no "rebuild-on-commit" concern here — the graph is loaded from disk and the index is never
