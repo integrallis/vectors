@@ -20,10 +20,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import javax.net.ssl.SSLSession;
 
 /**
  * HTTP client for the vectors-server REST API.
@@ -42,9 +46,14 @@ public final class VectorsServerClient implements AutoCloseable {
   private static final ObjectMapper MAPPER =
       new ObjectMapper().registerModule(new JavaTimeModule());
   private static final String CONTENT_TYPE = "application/json";
+  private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
+  private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);
+  private static final long DEFAULT_MAX_RESPONSE_BYTES = 16L * 1024L * 1024L;
 
   private final String baseUrl;
   private final HttpClient http;
+  private final Duration requestTimeout;
+  private final long maxResponseBytes;
 
   /**
    * Creates a client connecting to the given base URL (e.g. {@code http://localhost:8287}).
@@ -52,11 +61,34 @@ public final class VectorsServerClient implements AutoCloseable {
    * @param baseUrl the server base URL (no trailing slash)
    */
   public VectorsServerClient(String baseUrl) {
+    this(baseUrl, DEFAULT_REQUEST_TIMEOUT);
+  }
+
+  /**
+   * Creates a client with a per-request timeout.
+   *
+   * @param baseUrl the server base URL (no trailing slash)
+   * @param requestTimeout timeout applied to every HTTP request
+   */
+  public VectorsServerClient(String baseUrl, Duration requestTimeout) {
+    this(baseUrl, requestTimeout, DEFAULT_MAX_RESPONSE_BYTES);
+  }
+
+  VectorsServerClient(String baseUrl, Duration requestTimeout, long maxResponseBytes) {
     Objects.requireNonNull(baseUrl, "baseUrl");
+    Objects.requireNonNull(requestTimeout, "requestTimeout");
+    if (requestTimeout.isZero() || requestTimeout.isNegative()) {
+      throw new IllegalArgumentException("requestTimeout must be positive");
+    }
+    if (maxResponseBytes < 1) {
+      throw new IllegalArgumentException("maxResponseBytes must be positive");
+    }
     this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+    this.requestTimeout = requestTimeout;
+    this.maxResponseBytes = maxResponseBytes;
     this.http =
         HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
+            .connectTimeout(DEFAULT_CONNECT_TIMEOUT)
             .version(HttpClient.Version.HTTP_1_1)
             .build();
   }
@@ -272,9 +304,10 @@ public final class VectorsServerClient implements AutoCloseable {
       HttpRequest req =
           HttpRequest.newBuilder(
                   URI.create(baseUrl + "/v1/collections/" + collection + "/blobs/" + documentId))
+              .timeout(requestTimeout)
               .GET()
               .build();
-      HttpResponse<byte[]> res = http.send(req, HttpResponse.BodyHandlers.ofByteArray());
+      HttpResponse<byte[]> res = sendBytes(req);
       if (res.statusCode() == 200) {
         return Optional.of(res.body());
       } else if (res.statusCode() == 404) {
@@ -294,12 +327,8 @@ public final class VectorsServerClient implements AutoCloseable {
 
   /** Check server health. */
   public boolean isHealthy() {
-    try {
-      HttpResponse<String> res = get("/v1/health");
-      return res.statusCode() == 200;
-    } catch (Exception e) {
-      return false;
-    }
+    HttpResponse<String> res = get("/v1/health");
+    return res.statusCode() == 200;
   }
 
   @Override
@@ -311,8 +340,9 @@ public final class VectorsServerClient implements AutoCloseable {
 
   private HttpResponse<String> get(String path) {
     try {
-      HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + path)).GET().build();
-      HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+      HttpRequest req =
+          HttpRequest.newBuilder(URI.create(baseUrl + path)).timeout(requestTimeout).GET().build();
+      HttpResponse<String> res = sendString(req);
       if (res.statusCode() >= 400) {
         throw new VectorsServerException(res.statusCode(), res.body());
       }
@@ -331,10 +361,11 @@ public final class VectorsServerClient implements AutoCloseable {
     try {
       HttpRequest req =
           HttpRequest.newBuilder(URI.create(baseUrl + path))
+              .timeout(requestTimeout)
               .header("Content-Type", CONTENT_TYPE)
               .POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)))
               .build();
-      HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> res = sendString(req);
       if (res.statusCode() >= 400) {
         throw new VectorsServerException(res.statusCode(), res.body());
       }
@@ -351,8 +382,12 @@ public final class VectorsServerClient implements AutoCloseable {
 
   private HttpResponse<String> delete(String path) {
     try {
-      HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + path)).DELETE().build();
-      HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+      HttpRequest req =
+          HttpRequest.newBuilder(URI.create(baseUrl + path))
+              .timeout(requestTimeout)
+              .DELETE()
+              .build();
+      HttpResponse<String> res = sendString(req);
       if (res.statusCode() >= 400 && res.statusCode() != 404) {
         throw new VectorsServerException(res.statusCode(), res.body());
       }
@@ -364,6 +399,31 @@ public final class VectorsServerClient implements AutoCloseable {
         Thread.currentThread().interrupt();
       }
       throw new RuntimeException("HTTP DELETE failed: " + path, e);
+    }
+  }
+
+  private HttpResponse<String> sendString(HttpRequest request)
+      throws IOException, InterruptedException {
+    HttpResponse<byte[]> response = sendBytes(request);
+    return new BoundedStringResponse(response, new String(response.body(), StandardCharsets.UTF_8));
+  }
+
+  private HttpResponse<byte[]> sendBytes(HttpRequest request)
+      throws IOException, InterruptedException {
+    HttpResponse<InputStream> response =
+        http.send(request, HttpResponse.BodyHandlers.ofInputStream());
+    return new BoundedByteResponse(response, readBounded(response.body()));
+  }
+
+  private byte[] readBounded(InputStream in) throws IOException {
+    try (in) {
+      byte[] body = in.readNBytes(Math.toIntExact(maxResponseBytes + 1));
+      if (body.length > maxResponseBytes) {
+        throw new IOException("response body exceeds " + maxResponseBytes + " bytes");
+      }
+      return body;
+    } catch (ArithmeticException e) {
+      throw new IllegalStateException("maxResponseBytes is too large", e);
     }
   }
 
@@ -385,6 +445,94 @@ public final class VectorsServerClient implements AutoCloseable {
       return MAPPER.readValue(hits.traverse(), new TypeReference<List<SearchHit>>() {});
     } catch (IOException e) {
       throw new RuntimeException("failed to parse search response", e);
+    }
+  }
+
+  private record BoundedStringResponse(HttpResponse<?> delegate, String body)
+      implements HttpResponse<String> {
+
+    @Override
+    public int statusCode() {
+      return delegate.statusCode();
+    }
+
+    @Override
+    public HttpRequest request() {
+      return delegate.request();
+    }
+
+    @Override
+    public Optional<HttpResponse<String>> previousResponse() {
+      return Optional.empty();
+    }
+
+    @Override
+    public HttpHeaders headers() {
+      return delegate.headers();
+    }
+
+    @Override
+    public String body() {
+      return body;
+    }
+
+    @Override
+    public Optional<SSLSession> sslSession() {
+      return delegate.sslSession();
+    }
+
+    @Override
+    public URI uri() {
+      return delegate.uri();
+    }
+
+    @Override
+    public HttpClient.Version version() {
+      return delegate.version();
+    }
+  }
+
+  private record BoundedByteResponse(HttpResponse<?> delegate, byte[] body)
+      implements HttpResponse<byte[]> {
+
+    @Override
+    public int statusCode() {
+      return delegate.statusCode();
+    }
+
+    @Override
+    public HttpRequest request() {
+      return delegate.request();
+    }
+
+    @Override
+    public Optional<HttpResponse<byte[]>> previousResponse() {
+      return Optional.empty();
+    }
+
+    @Override
+    public HttpHeaders headers() {
+      return delegate.headers();
+    }
+
+    @Override
+    public byte[] body() {
+      return body;
+    }
+
+    @Override
+    public Optional<SSLSession> sslSession() {
+      return delegate.sslSession();
+    }
+
+    @Override
+    public URI uri() {
+      return delegate.uri();
+    }
+
+    @Override
+    public HttpClient.Version version() {
+      return delegate.version();
     }
   }
 }
