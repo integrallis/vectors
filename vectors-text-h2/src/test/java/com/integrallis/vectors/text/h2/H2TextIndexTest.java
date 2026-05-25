@@ -16,6 +16,7 @@
 package com.integrallis.vectors.text.h2;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.hybrid.text.TextIndexSpi;
 import com.integrallis.vectors.hybrid.text.TextIndexSpi.StoredContent;
@@ -25,6 +26,8 @@ import com.integrallis.vectors.hybrid.text.TextSearchOutcome;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -148,6 +151,49 @@ class H2TextIndexTest {
       assertThat(content).isPresent();
       assertThat(content.get().metadata()).containsEntry("source", "page-3");
       assertThat(content.get().metadata()).containsEntry("type", "text");
+    }
+
+    @Test
+    void metadataRoundTripPreservesDelimitersAndJsonCharacters() {
+      Map<String, String> meta =
+          Map.of(
+              "source|kind", "page=3|section=2",
+              "json", "{\"quoted\":true,\"list\":[1,2]}");
+      index.index(List.of(new TextDocument("meta-special", "content", meta, null)));
+
+      Optional<StoredContent> content = index.get("meta-special");
+
+      assertThat(content).isPresent();
+      assertThat(content.get().metadata()).isEqualTo(meta);
+    }
+
+    @Test
+    void indexBatchRollsBackWhenLaterDocumentFailsEncoding() {
+      Map<String, String> invalidMetadata = new HashMap<>();
+      invalidMetadata.put(null, "null keys cannot be represented as JSON object field names");
+      List<TextDocument> batch =
+          List.of(
+              new TextDocument("valid-before-invalid", "content", Map.of(), null),
+              new TextDocument("invalid-metadata", "content", invalidMetadata, null));
+
+      assertThatThrownBy(() -> index.index(batch))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("failed to index documents");
+      assertThat(index.get("valid-before-invalid")).isEmpty();
+      assertThat(index.size()).isZero();
+    }
+
+    @Test
+    void indexBatchRejectsInvalidDocumentBeforeWritingEarlierDocuments() {
+      List<TextDocument> batch = new ArrayList<>();
+      batch.add(new TextDocument("valid-before-null", "content", Map.of(), null));
+      batch.add(null);
+
+      assertThatThrownBy(() -> index.index(batch))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("documents must not contain null entries");
+      assertThat(index.get("valid-before-null")).isEmpty();
+      assertThat(index.size()).isZero();
     }
 
     @Test
