@@ -29,7 +29,9 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
@@ -234,6 +236,29 @@ class WriteAheadLogContractTest {
     assertThat(b.list("ns/wal/").size()).isGreaterThanOrEqualTo(3);
   }
 
+  @ParameterizedTest
+  @MethodSource("backends")
+  void scheduledCommitFailureReleasesWaitingAppender(String type) throws Exception {
+    StorageBackend b = new FailingWalSegmentPutBackend(backend(type));
+    BackendWriteAheadLog w =
+        new BackendWriteAheadLog(b, "ns", Duration.ofMillis(10), 512 * 1024 * 1024);
+    try (var pool = Executors.newSingleThreadExecutor()) {
+      Future<Long> append = pool.submit(() -> w.append(new byte[] {1, 2, 3}));
+
+      assertThatThrownBy(() -> append.get(5, TimeUnit.SECONDS))
+          .isInstanceOf(ExecutionException.class)
+          .hasCauseInstanceOf(IOException.class)
+          .hasRootCauseMessage("backend put failed: ns/wal/000000000001.log");
+
+      assertThatThrownBy(() -> w.append(new byte[] {4, 5, 6}))
+          .isInstanceOf(IOException.class)
+          .hasMessage("WAL commit failed")
+          .hasRootCauseMessage("backend put failed: ns/wal/000000000001.log");
+    } finally {
+      w.close();
+    }
+  }
+
   // ─── unindexed tail / markIndexed ─────────────────────────────────────────
 
   @ParameterizedTest
@@ -262,6 +287,48 @@ class WriteAheadLogContractTest {
       w.markIndexed(0, 1); // covers the first two closed segments
       long[] tail = w.unindexedTailSeqs();
       assertThat(tail).containsExactly(2L, 2L);
+    }
+  }
+
+  private static final class FailingWalSegmentPutBackend implements StorageBackend {
+    private final StorageBackend delegate;
+
+    FailingWalSegmentPutBackend(StorageBackend delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public void put(String key, byte[] value) throws IOException {
+      if (key.contains("/wal/")) {
+        throw new IOException("backend put failed: " + key);
+      }
+      delegate.put(key, value);
+    }
+
+    @Override
+    public byte[] get(String key) throws IOException {
+      return delegate.get(key);
+    }
+
+    @Override
+    public byte[] getRange(String key, long offset, int length) throws IOException {
+      return delegate.getRange(key, offset, length);
+    }
+
+    @Override
+    public List<String> list(String prefix) throws IOException {
+      return delegate.list(prefix);
+    }
+
+    @Override
+    public void delete(String key) throws IOException {
+      delegate.delete(key);
+    }
+
+    @Override
+    public ConditionalPutResult conditionalPut(String key, byte[] value, String expectedEtag)
+        throws IOException {
+      return delegate.conditionalPut(key, value, expectedEtag);
     }
   }
 }

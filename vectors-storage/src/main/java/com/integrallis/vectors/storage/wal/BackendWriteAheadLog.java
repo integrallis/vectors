@@ -70,6 +70,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
   private final ScheduledExecutorService scheduler;
   private ScheduledFuture<?> scheduledFlush;
   private boolean closed;
+  private IOException commitFailure;
 
   private final AtomicLong putCount = new AtomicLong();
 
@@ -116,6 +117,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
     lock.lock();
     try {
       if (closed) throw new IOException("WAL closed");
+      throwIfCommitFailed();
       seq = nextSeq++;
       pending.addLast(new Pending(seq, entry.clone()));
       if (scheduledFlush == null) {
@@ -125,6 +127,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
       }
       while (lastDurableSeq < seq) {
         durable.awaitUninterruptibly();
+        throwIfCommitFailed();
         if (closed && lastDurableSeq < seq) {
           throw new IOException("WAL closed before append durable; seq=" + seq);
         }
@@ -187,12 +190,18 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
   public void flush() throws IOException {
     lock.lock();
     try {
+      throwIfCommitFailed();
       if (pending.isEmpty()) return;
       if (scheduledFlush != null) {
         scheduledFlush.cancel(false);
         scheduledFlush = null;
       }
-      doCommit();
+      try {
+        doCommit();
+      } catch (IOException e) {
+        recordCommitFailure(e);
+        throw e;
+      }
     } finally {
       lock.unlock();
     }
@@ -205,28 +214,42 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
 
   @Override
   public void close() throws IOException {
+    boolean shutdownScheduler = false;
+    IOException closeFailure = null;
     lock.lock();
     try {
       if (closed) return;
-      if (!pending.isEmpty()) {
-        if (scheduledFlush != null) {
-          scheduledFlush.cancel(false);
-          scheduledFlush = null;
+      shutdownScheduler = true;
+      try {
+        if (!pending.isEmpty() && commitFailure == null) {
+          if (scheduledFlush != null) {
+            scheduledFlush.cancel(false);
+            scheduledFlush = null;
+          }
+          doCommit();
         }
-        doCommit();
+        // Seal the active segment if it has any entries so on reopen the next segment
+        // index advances and the previously active object is treated as a closed (◈) segment.
+        if (lastDurableSeq >= activeFirstSeq && commitFailure == null) {
+          sealActiveSegment();
+          writeManifest();
+        }
+      } catch (IOException e) {
+        recordCommitFailure(e);
+        closeFailure = e;
+      } finally {
+        closed = true;
+        durable.signalAll();
       }
-      // Seal the active segment if it has any entries so on reopen the next segment
-      // index advances and the previously active object is treated as a closed (◈) segment.
-      if (lastDurableSeq >= activeFirstSeq) {
-        sealActiveSegment();
-        writeManifest();
-      }
-      closed = true;
-      durable.signalAll();
     } finally {
       lock.unlock();
+      if (shutdownScheduler) {
+        scheduler.shutdownNow();
+      }
     }
-    scheduler.shutdownNow();
+    if (closeFailure != null) {
+      throw closeFailure;
+    }
   }
 
   /** Total number of {@link StorageBackend#put} calls issued for segment data; for tests only. */
@@ -243,12 +266,26 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
       if (pending.isEmpty() || closed) return;
       doCommit();
     } catch (IOException e) {
+      recordCommitFailure(e);
       // The scheduler swallows checked exceptions; surface as an unchecked one so it
-      // shows up in test logs. Awaiting appenders will be released by the next commit.
+      // shows up in test logs. Awaiting appenders are released before this is thrown.
       throw new UncheckedIOException(e);
     } finally {
       lock.unlock();
     }
+  }
+
+  private void throwIfCommitFailed() throws IOException {
+    if (commitFailure != null) {
+      throw new IOException("WAL commit failed", commitFailure);
+    }
+  }
+
+  private void recordCommitFailure(IOException failure) {
+    if (commitFailure == null) {
+      commitFailure = failure;
+    }
+    durable.signalAll();
   }
 
   /**
