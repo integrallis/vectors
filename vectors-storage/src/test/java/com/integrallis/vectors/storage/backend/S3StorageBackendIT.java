@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterAll;
@@ -55,7 +56,7 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
  * :vectors-storage:integrationTest}.
  */
 @Tag("integration")
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class S3StorageBackendIT {
 
   private static final String BUCKET = "test-vectors-storage";
@@ -104,6 +105,30 @@ class S3StorageBackendIT {
   }
 
   @Test
+  void listReturnsKeysUnderPrefix() throws IOException {
+    S3StorageBackend b = backend();
+    String prefix = "list-" + UUID.randomUUID() + "/";
+    b.put(prefix + "a", new byte[] {1});
+    b.put(prefix + "b", new byte[] {2});
+    b.put("other-" + UUID.randomUUID(), new byte[] {3});
+
+    List<String> keys = b.list(prefix);
+
+    assertThat(keys).containsExactlyInAnyOrder(prefix + "a", prefix + "b");
+  }
+
+  @Test
+  void deleteRemovesKey() throws IOException {
+    S3StorageBackend b = backend();
+    String key = "delete-" + UUID.randomUUID();
+    b.put(key, new byte[] {42});
+
+    b.delete(key);
+
+    assertThat(b.get(key)).isNull();
+  }
+
+  @Test
   void getMissingKeyReturnsNull() throws IOException {
     assertThat(backend().get("absent-" + UUID.randomUUID())).isNull();
   }
@@ -149,6 +174,77 @@ class S3StorageBackendIT {
   @Test
   void getRange_missingKeyReturnsNull() throws IOException {
     assertThat(backend().getRange("ghost-" + UUID.randomUUID(), 0, 4)).isNull();
+  }
+
+  @Test
+  void conditionalPut_succeedsWhenKeyAbsent() throws IOException {
+    S3StorageBackend b = backend();
+    String key = "cas-new-" + UUID.randomUUID();
+
+    StorageBackend.ConditionalPutResult result = b.conditionalPut(key, new byte[] {1, 2}, null);
+
+    assertThat(result.succeeded()).isTrue();
+    assertThat(result.newEtag()).isNotBlank();
+    assertThat(b.get(key)).isEqualTo(new byte[] {1, 2});
+  }
+
+  @Test
+  void conditionalPut_failsWhenKeyExistsAndEtagIsNull() throws IOException {
+    S3StorageBackend b = backend();
+    String key = "cas-exists-" + UUID.randomUUID();
+    b.put(key, new byte[] {1});
+
+    StorageBackend.ConditionalPutResult result = b.conditionalPut(key, new byte[] {2}, null);
+
+    assertThat(result.succeeded()).isFalse();
+    assertThat(result.newEtag()).isNull();
+    assertThat(b.get(key)).isEqualTo(new byte[] {1});
+  }
+
+  @Test
+  void conditionalPut_failsOnStaleEtag() throws IOException {
+    S3StorageBackend b = backend();
+    String key = "cas-stale-" + UUID.randomUUID();
+    b.put(key, new byte[] {1});
+
+    StorageBackend.ConditionalPutResult result =
+        b.conditionalPut(key, new byte[] {2}, "stale-etag");
+
+    assertThat(result.succeeded()).isFalse();
+    assertThat(result.newEtag()).isNull();
+    assertThat(b.get(key)).isEqualTo(new byte[] {1});
+  }
+
+  @Test
+  void conditionalPut_succeedsWithCurrentEtag() throws IOException {
+    S3StorageBackend b = backend();
+    String key = "cas-current-" + UUID.randomUUID();
+    StorageBackend.ConditionalPutResult first = b.conditionalPut(key, new byte[] {1}, null);
+    assertThat(first.succeeded()).isTrue();
+
+    StorageBackend.ConditionalPutResult second =
+        b.conditionalPut(key, new byte[] {2}, first.newEtag());
+
+    assertThat(second.succeeded()).isTrue();
+    assertThat(second.newEtag()).isNotBlank();
+    assertThat(b.get(key)).isEqualTo(new byte[] {2});
+  }
+
+  @Test
+  void conditionalPut_allowsOnlyOneWriterForSameEtag() throws IOException {
+    S3StorageBackend b = backend();
+    String key = "cas-race-" + UUID.randomUUID();
+    StorageBackend.ConditionalPutResult first = b.conditionalPut(key, new byte[] {1}, null);
+    assertThat(first.succeeded()).isTrue();
+
+    StorageBackend.ConditionalPutResult winner =
+        b.conditionalPut(key, new byte[] {2}, first.newEtag());
+    StorageBackend.ConditionalPutResult loser =
+        b.conditionalPut(key, new byte[] {3}, first.newEtag());
+
+    assertThat(winner.succeeded()).isTrue();
+    assertThat(loser.succeeded()).isFalse();
+    assertThat(b.get(key)).isEqualTo(new byte[] {2});
   }
 
   // ─── ExecutionInterceptor: captures outbound HTTP Range header ─────────────

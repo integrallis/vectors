@@ -28,6 +28,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -219,6 +220,10 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
       if (expectedEtag == null) {
         builder.ifNoneMatch("*");
       } else {
+        HeadObjectResponse current = s3.headObject(b -> b.bucket(bucket).key(key));
+        if (!expectedEtag.equals(unquoted(current.eTag()))) {
+          return new ConditionalPutResult(false, null);
+        }
         // S3 If-Match header requires the ETag in double-quoted form per RFC 7232.
         builder.ifMatch(quoted(expectedEtag));
       }
@@ -226,9 +231,10 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
       return new ConditionalPutResult(true, unquoted(response.eTag()));
     } catch (S3Exception e) {
       int status = e.statusCode();
-      if (status == 412 || status == 409) {
+      if (status == 412 || status == 409 || status == 404) {
         // 412 Precondition Failed: If-Match / If-None-Match mismatch.
         // 409 Conflict: returned by newer S3 API when If-None-Match: * fails.
+        // 404 Not Found: expected an existing ETag but the key is absent.
         return new ConditionalPutResult(false, null);
       }
       throw new IOException("S3 conditionalPut failed for key: " + key, e);
