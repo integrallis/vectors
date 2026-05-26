@@ -16,6 +16,7 @@
 package com.integrallis.vectors.storage.wal;
 
 import com.integrallis.vectors.storage.backend.StorageBackend;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
@@ -302,12 +303,16 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
     long lastSeqInActive = (lastDurableSeq >= activeFirstSeq) ? lastDurableSeq : -1L;
     boolean activeDirty = false;
     long lastFlushed = lastDurableSeq;
+    ByteArrayOutputStream activeBuffer = new ByteArrayOutputStream(activeBytes.length);
+    activeBuffer.writeBytes(activeBytes);
+    int activeLength = activeBytes.length;
 
     for (Pending p : pending) {
       byte[] frame = encodeFrame(p.payload);
       // Seal before adding when the new frame would push the active segment past its cap.
-      if (activeBytes.length > 0 && activeBytes.length + frame.length > maxSegmentBytes) {
+      if (activeLength > 0 && activeLength + frame.length > maxSegmentBytes) {
         if (activeDirty) {
+          activeBytes = activeBuffer.toByteArray();
           backend.put(segmentKey(activeSegmentIndex), activeBytes);
           putCount.incrementAndGet();
           activeDirty = false;
@@ -316,15 +321,15 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
             new SegmentMeta(activeSegmentIndex, activeFirstSeq, lastSeqInActive, false));
         activeSegmentIndex++;
         activeBytes = new byte[0];
+        activeBuffer = new ByteArrayOutputStream(frame.length);
+        activeLength = 0;
         lastSeqInActive = -1L;
       }
-      if (activeBytes.length == 0) {
+      if (activeLength == 0) {
         activeFirstSeq = p.seq;
       }
-      byte[] expanded = new byte[activeBytes.length + frame.length];
-      System.arraycopy(activeBytes, 0, expanded, 0, activeBytes.length);
-      System.arraycopy(frame, 0, expanded, activeBytes.length, frame.length);
-      activeBytes = expanded;
+      activeBuffer.writeBytes(frame);
+      activeLength += frame.length;
       lastSeqInActive = p.seq;
       lastFlushed = p.seq;
       activeDirty = true;
@@ -332,6 +337,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
     pending.clear();
 
     if (activeDirty) {
+      activeBytes = activeBuffer.toByteArray();
       backend.put(segmentKey(activeSegmentIndex), activeBytes);
       putCount.incrementAndGet();
     }
