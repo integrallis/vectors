@@ -24,7 +24,9 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -328,35 +330,38 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
     } finally {
       lock.unlock();
     }
-    List<WalEntry> entries = new ArrayList<>();
+    List<SegmentReadPlan> plans = new ArrayList<>();
     for (SegmentMeta s : closedSnapshot) {
       if (s.lastSeq < fromSeqInclusive) continue;
-      readSegment(segmentKey(s.index), s.firstSeq, fromSeqInclusive, s.lastSeq, entries);
+      plans.add(new SegmentReadPlan(segmentKey(s.index), s.firstSeq, fromSeqInclusive, s.lastSeq));
     }
     if (lastDurableSnapshot >= activeFirstSnapshot && lastDurableSnapshot >= fromSeqInclusive) {
-      readSegment(
-          segmentKey(activeIdxSnapshot),
-          activeFirstSnapshot,
-          fromSeqInclusive,
-          lastDurableSnapshot,
-          entries);
+      plans.add(
+          new SegmentReadPlan(
+              segmentKey(activeIdxSnapshot),
+              activeFirstSnapshot,
+              fromSeqInclusive,
+              lastDurableSnapshot));
     }
-    return entries.stream();
+    return java.util.stream.StreamSupport.stream(
+        java.util.Spliterators.spliteratorUnknownSize(
+            new WalEntryIterator(plans),
+            java.util.Spliterator.ORDERED | java.util.Spliterator.NONNULL),
+        false);
   }
 
-  private void readSegment(
-      String key, long firstSeq, long fromSeqInclusive, long lastSeqInSegment, List<WalEntry> out)
-      throws IOException {
-    byte[] data = backend.get(key);
-    if (data == null) throw new IOException("WAL segment missing: " + key);
-    long seq = firstSeq;
+  private List<WalEntry> readSegment(SegmentReadPlan plan) throws IOException {
+    byte[] data = backend.get(plan.key());
+    if (data == null) throw new IOException("WAL segment missing: " + plan.key());
+    List<WalEntry> entries = new ArrayList<>();
+    long seq = plan.firstSeq();
     int off = 0;
-    while (off < data.length && seq <= lastSeqInSegment) {
-      if (off + 4 > data.length) throw new IOException("truncated WAL segment: " + key);
+    while (off < data.length && seq <= plan.lastSeqInSegment()) {
+      if (off + 4 > data.length) throw new IOException("truncated WAL segment: " + plan.key());
       int len = ByteBuffer.wrap(data, off, 4).order(ByteOrder.BIG_ENDIAN).getInt();
       off += 4;
       if (len < 0 || off + len + 4 > data.length) {
-        throw new IOException("corrupt WAL frame in " + key + " at seq " + seq);
+        throw new IOException("corrupt WAL frame in " + plan.key() + " at seq " + seq);
       }
       byte[] payload = new byte[len];
       System.arraycopy(data, off, payload, 0, len);
@@ -366,10 +371,43 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
       CRC32 crc = new CRC32();
       crc.update(payload);
       if ((int) crc.getValue() != storedCrc) {
-        throw new IOException("CRC mismatch in WAL segment " + key + " at seq " + seq);
+        throw new IOException("CRC mismatch in WAL segment " + plan.key() + " at seq " + seq);
       }
-      if (seq >= fromSeqInclusive) out.add(new WalEntry(seq, payload));
+      if (seq >= plan.fromSeqInclusive()) entries.add(new WalEntry(seq, payload));
       seq++;
+    }
+    return entries;
+  }
+
+  private final class WalEntryIterator implements Iterator<WalEntry> {
+    private final Iterator<SegmentReadPlan> plans;
+    private Iterator<WalEntry> current = List.<WalEntry>of().iterator();
+
+    WalEntryIterator(List<SegmentReadPlan> plans) {
+      this.plans = plans.iterator();
+    }
+
+    @Override
+    public boolean hasNext() {
+      while (!current.hasNext()) {
+        if (!plans.hasNext()) {
+          return false;
+        }
+        try {
+          current = readSegment(plans.next()).iterator();
+        } catch (IOException e) {
+          throw new UncheckedIOException(e);
+        }
+      }
+      return true;
+    }
+
+    @Override
+    public WalEntry next() {
+      if (!hasNext()) {
+        throw new NoSuchElementException();
+      }
+      return current.next();
     }
   }
 
@@ -429,6 +467,9 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
   // ─── records ───────────────────────────────────────────────────────────────
 
   private record Pending(long seq, byte[] payload) {}
+
+  private record SegmentReadPlan(
+      String key, long firstSeq, long fromSeqInclusive, long lastSeqInSegment) {}
 
   static final class SegmentMeta {
     final int index;

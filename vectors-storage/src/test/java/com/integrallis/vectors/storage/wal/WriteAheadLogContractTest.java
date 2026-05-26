@@ -22,9 +22,11 @@ import com.integrallis.vectors.storage.backend.HeapStorageBackend;
 import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
 import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -162,24 +164,27 @@ class WriteAheadLogContractTest {
     StorageBackend b = backend(type);
     // Force the entry into a closed segment by capping each segment at one frame.
     try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
-      w.append("payload-1".getBytes());
-      w.append("payload-2".getBytes());
+      w.append(new byte[] {1, 1, 1, 1});
+      w.append(new byte[] {2, 2, 2, 2});
     }
-    // Corrupt the first segment object (closed and on disk in the backend).
-    String firstSegKey = b.list("ns/wal/").stream().sorted().findFirst().orElseThrow();
-    byte[] data = b.get(firstSegKey);
+    // Corrupt the second segment so replay must deliver the first valid entry before failing.
+    String secondSegKey = b.list("ns/wal/").stream().sorted().skip(1).findFirst().orElseThrow();
+    byte[] data = b.get(secondSegKey);
     data[data.length - 1] ^= (byte) 0xFF;
-    b.put(firstSegKey, data);
+    b.put(secondSegKey, data);
 
     try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
-      assertThatThrownBy(
-              () -> {
-                try (Stream<WriteAheadLog.WalEntry> s = w.readFrom(0)) {
-                  s.toList();
-                }
-              })
-          .isInstanceOf(IOException.class)
-          .hasMessageContaining("CRC mismatch");
+      try (Stream<WriteAheadLog.WalEntry> s = w.readFrom(0)) {
+        Iterator<WriteAheadLog.WalEntry> iterator = s.iterator();
+        WriteAheadLog.WalEntry first = iterator.next();
+        assertThat(first.sequenceNumber()).isEqualTo(0L);
+        assertThat(first.data()).isEqualTo(new byte[] {1, 1, 1, 1});
+
+        assertThatThrownBy(iterator::hasNext)
+            .isInstanceOf(UncheckedIOException.class)
+            .hasCauseInstanceOf(IOException.class)
+            .hasRootCauseMessage("CRC mismatch in WAL segment ns/wal/000000000002.log at seq 1");
+      }
     }
   }
 
