@@ -171,7 +171,7 @@ public final class ChannelOutput implements RandomAccessOutput {
 
   @Override
   public void flush() throws IOException {
-    channel.force(false);
+    channel.force(true);
   }
 
   @Override
