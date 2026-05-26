@@ -54,6 +54,7 @@ public final class VectorsServerClient implements AutoCloseable {
   private final HttpClient http;
   private final Duration requestTimeout;
   private final long maxResponseBytes;
+  private final String apiKey;
 
   /**
    * Creates a client connecting to the given base URL (e.g. {@code http://localhost:8287}).
@@ -61,7 +62,7 @@ public final class VectorsServerClient implements AutoCloseable {
    * @param baseUrl the server base URL (no trailing slash)
    */
   public VectorsServerClient(String baseUrl) {
-    this(baseUrl, DEFAULT_REQUEST_TIMEOUT);
+    this(baseUrl, DEFAULT_REQUEST_TIMEOUT, null);
   }
 
   /**
@@ -71,10 +72,36 @@ public final class VectorsServerClient implements AutoCloseable {
    * @param requestTimeout timeout applied to every HTTP request
    */
   public VectorsServerClient(String baseUrl, Duration requestTimeout) {
-    this(baseUrl, requestTimeout, DEFAULT_MAX_RESPONSE_BYTES);
+    this(baseUrl, requestTimeout, null);
+  }
+
+  /**
+   * Creates a client with bearer-token authentication enabled.
+   *
+   * @param baseUrl the server base URL (no trailing slash)
+   * @param apiKey token sent as {@code Authorization: Bearer <token>}
+   */
+  public VectorsServerClient(String baseUrl, String apiKey) {
+    this(baseUrl, DEFAULT_REQUEST_TIMEOUT, apiKey);
+  }
+
+  /**
+   * Creates a client with a per-request timeout and bearer-token authentication enabled.
+   *
+   * @param baseUrl the server base URL (no trailing slash)
+   * @param requestTimeout timeout applied to every HTTP request
+   * @param apiKey token sent as {@code Authorization: Bearer <token>}
+   */
+  public VectorsServerClient(String baseUrl, Duration requestTimeout, String apiKey) {
+    this(baseUrl, requestTimeout, DEFAULT_MAX_RESPONSE_BYTES, apiKey);
   }
 
   VectorsServerClient(String baseUrl, Duration requestTimeout, long maxResponseBytes) {
+    this(baseUrl, requestTimeout, maxResponseBytes, null);
+  }
+
+  VectorsServerClient(
+      String baseUrl, Duration requestTimeout, long maxResponseBytes, String apiKey) {
     Objects.requireNonNull(baseUrl, "baseUrl");
     Objects.requireNonNull(requestTimeout, "requestTimeout");
     if (requestTimeout.isZero() || requestTimeout.isNegative()) {
@@ -83,9 +110,16 @@ public final class VectorsServerClient implements AutoCloseable {
     if (maxResponseBytes < 1) {
       throw new IllegalArgumentException("maxResponseBytes must be positive");
     }
+    if (apiKey != null) {
+      apiKey = apiKey.trim();
+      if (apiKey.isEmpty()) {
+        throw new IllegalArgumentException("apiKey must not be blank");
+      }
+    }
     this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
     this.requestTimeout = requestTimeout;
     this.maxResponseBytes = maxResponseBytes;
+    this.apiKey = apiKey;
     this.http =
         HttpClient.newBuilder()
             .connectTimeout(DEFAULT_CONNECT_TIMEOUT)
@@ -302,11 +336,7 @@ public final class VectorsServerClient implements AutoCloseable {
   public Optional<byte[]> getBlob(String collection, String documentId) {
     try {
       HttpRequest req =
-          HttpRequest.newBuilder(
-                  URI.create(baseUrl + "/v1/collections/" + collection + "/blobs/" + documentId))
-              .timeout(requestTimeout)
-              .GET()
-              .build();
+          newRequest("/v1/collections/" + collection + "/blobs/" + documentId).GET().build();
       HttpResponse<byte[]> res = sendBytes(req);
       if (res.statusCode() == 200) {
         return Optional.of(res.body());
@@ -340,8 +370,7 @@ public final class VectorsServerClient implements AutoCloseable {
 
   private HttpResponse<String> get(String path) {
     try {
-      HttpRequest req =
-          HttpRequest.newBuilder(URI.create(baseUrl + path)).timeout(requestTimeout).GET().build();
+      HttpRequest req = newRequest(path).GET().build();
       HttpResponse<String> res = sendString(req);
       if (res.statusCode() >= 400) {
         throw new VectorsServerException(res.statusCode(), res.body());
@@ -360,8 +389,7 @@ public final class VectorsServerClient implements AutoCloseable {
   private HttpResponse<String> post(String path, Object body) {
     try {
       HttpRequest req =
-          HttpRequest.newBuilder(URI.create(baseUrl + path))
-              .timeout(requestTimeout)
+          newRequest(path)
               .header("Content-Type", CONTENT_TYPE)
               .POST(HttpRequest.BodyPublishers.ofString(MAPPER.writeValueAsString(body)))
               .build();
@@ -382,11 +410,7 @@ public final class VectorsServerClient implements AutoCloseable {
 
   private HttpResponse<String> delete(String path) {
     try {
-      HttpRequest req =
-          HttpRequest.newBuilder(URI.create(baseUrl + path))
-              .timeout(requestTimeout)
-              .DELETE()
-              .build();
+      HttpRequest req = newRequest(path).DELETE().build();
       HttpResponse<String> res = sendString(req);
       if (res.statusCode() >= 400 && res.statusCode() != 404) {
         throw new VectorsServerException(res.statusCode(), res.body());
@@ -400,6 +424,15 @@ public final class VectorsServerClient implements AutoCloseable {
       }
       throw new RuntimeException("HTTP DELETE failed: " + path, e);
     }
+  }
+
+  private HttpRequest.Builder newRequest(String path) {
+    HttpRequest.Builder builder =
+        HttpRequest.newBuilder(URI.create(baseUrl + path)).timeout(requestTimeout);
+    if (apiKey != null) {
+      builder.header("Authorization", "Bearer " + apiKey);
+    }
+    return builder;
   }
 
   private HttpResponse<String> sendString(HttpRequest request)

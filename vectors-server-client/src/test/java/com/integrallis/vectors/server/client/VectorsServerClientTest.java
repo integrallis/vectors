@@ -111,6 +111,57 @@ class VectorsServerClientTest {
   }
 
   @Test
+  void authenticatedClientSendsBearerToken() {
+    AtomicReference<String> authorization = new AtomicReference<>();
+    route(
+        "/v1/collections",
+        exchange -> {
+          authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+          respond(
+              exchange,
+              200,
+              """
+              {"collections":[]}
+              """);
+        });
+    server.start();
+    client.close();
+    client = new VectorsServerClient(baseUrl(), Duration.ofSeconds(2), "secret");
+
+    client.listCollections();
+
+    assertThat(authorization.get()).isEqualTo("Bearer secret");
+  }
+
+  @Test
+  void unauthenticatedClientDoesNotSendAuthorizationHeader() {
+    AtomicReference<String> authorization = new AtomicReference<>();
+    route(
+        "/v1/collections",
+        exchange -> {
+          authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+          respond(
+              exchange,
+              200,
+              """
+              {"collections":[]}
+              """);
+        });
+    server.start();
+
+    client.listCollections();
+
+    assertThat(authorization.get()).isNull();
+  }
+
+  @Test
+  void blankApiKeyIsRejected() {
+    assertThatThrownBy(() -> new VectorsServerClient(baseUrl(), Duration.ofSeconds(2), " "))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("apiKey must not be blank");
+  }
+
+  @Test
   void collectionExistsMaps404ToFalse() {
     route("/v1/collections/missing", exchange -> respond(exchange, 404, "{\"error\":\"missing\"}"));
     server.start();

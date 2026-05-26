@@ -98,4 +98,27 @@ class StudioBackendRemoteIT {
     assertThat(hits.get(0).score()).isGreaterThan(0.99);
     assertThat(hits.get(0).text()).startsWith("txt-");
   }
+
+  @Test
+  void remoteBackendForwardsBearerToken() {
+    if (backend != null) {
+      backend.close();
+      backend = null;
+    }
+    if (handle != null) {
+      handle.close();
+      handle = null;
+    }
+    handle = VectorsServer.start(ServerConfig.forTesting().withApiKey("secret"));
+    try (VectorsServerClient client =
+        new VectorsServerClient("http://localhost:" + handle.port(), "secret")) {
+      client.createCollection("docs", DIM, "COSINE", "FLAT", null);
+    }
+    backend =
+        RemoteStudioBackend.open(
+            new ConnectionConfig.Remote(
+                URI.create("http://localhost:" + handle.port()), "secret", Duration.ofSeconds(5)));
+
+    assertThat(backend.listCollections()).extracting(CollectionSummary::name).contains("docs");
+  }
 }

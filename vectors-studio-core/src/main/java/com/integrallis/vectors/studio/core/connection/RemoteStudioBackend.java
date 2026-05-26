@@ -45,7 +45,8 @@ public final class RemoteStudioBackend implements StudioBackend {
   /** Opens a remote backend from a {@link ConnectionConfig.Remote} configuration. */
   public static RemoteStudioBackend open(ConnectionConfig.Remote cfg) {
     Objects.requireNonNull(cfg, "cfg");
-    return new RemoteStudioBackend(new VectorsServerClient(cfg.baseUrl().toString()));
+    return new RemoteStudioBackend(
+        new VectorsServerClient(cfg.baseUrl().toString(), cfg.timeout(), cfg.token()));
   }
 
   @Override
