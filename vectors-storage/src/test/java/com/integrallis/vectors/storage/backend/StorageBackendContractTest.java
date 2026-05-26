@@ -62,6 +62,30 @@ class StorageBackendContractTest {
 
   @ParameterizedTest
   @MethodSource("implementations")
+  void putDefensivelyCopiesInputArray(String type) throws IOException {
+    StorageBackend b = backend(type);
+    byte[] value = new byte[] {1, 2, 3};
+
+    b.put("copy", value);
+    value[0] = 99;
+
+    assertThat(b.get("copy")).isEqualTo(new byte[] {1, 2, 3});
+  }
+
+  @ParameterizedTest
+  @MethodSource("implementations")
+  void getReturnsDefensiveCopy(String type) throws IOException {
+    StorageBackend b = backend(type);
+    b.put("copy", new byte[] {1, 2, 3});
+
+    byte[] first = b.get("copy");
+    first[0] = 99;
+
+    assertThat(b.get("copy")).isEqualTo(new byte[] {1, 2, 3});
+  }
+
+  @ParameterizedTest
+  @MethodSource("implementations")
   void getMissingKeyReturnsNull(String type) throws IOException {
     assertThat(backend(type).get("nonexistent")).isNull();
   }

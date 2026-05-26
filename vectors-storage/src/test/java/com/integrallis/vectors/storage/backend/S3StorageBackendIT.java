@@ -105,6 +105,30 @@ class S3StorageBackendIT {
   }
 
   @Test
+  void putDefensivelyCopiesInputArray() throws IOException {
+    S3StorageBackend b = backend();
+    String key = "copy-put-" + UUID.randomUUID();
+    byte[] value = new byte[] {1, 2, 3};
+
+    b.put(key, value);
+    value[0] = 99;
+
+    assertThat(b.get(key)).isEqualTo(new byte[] {1, 2, 3});
+  }
+
+  @Test
+  void getReturnsDefensiveCopy() throws IOException {
+    S3StorageBackend b = backend();
+    String key = "copy-get-" + UUID.randomUUID();
+    b.put(key, new byte[] {1, 2, 3});
+
+    byte[] first = b.get(key);
+    first[0] = 99;
+
+    assertThat(b.get(key)).isEqualTo(new byte[] {1, 2, 3});
+  }
+
+  @Test
   void listReturnsKeysUnderPrefix() throws IOException {
     S3StorageBackend b = backend();
     String prefix = "list-" + UUID.randomUUID() + "/";
