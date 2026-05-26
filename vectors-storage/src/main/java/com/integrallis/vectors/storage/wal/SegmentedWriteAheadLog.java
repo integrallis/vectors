@@ -19,9 +19,9 @@ import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -57,8 +57,8 @@ public final class SegmentedWriteAheadLog implements Closeable {
 
   private final Path walDir;
 
-  /** The open segment's output stream, or {@code null} when no segment is currently open. */
-  private OutputStream current;
+  /** The open segment channel, or {@code null} when no segment is currently open. */
+  private FileChannel current;
 
   /** First sequence number of {@link #current}. Meaningful only while {@code current != null}. */
   private long currentSegStart;
@@ -91,8 +91,8 @@ public final class SegmentedWriteAheadLog implements Closeable {
     }
     long seq = nextSeq++;
     byte[] frame = buildFrame(entry);
-    current.write(frame);
-    current.flush();
+    writeFully(current, ByteBuffer.wrap(frame));
+    current.force(true);
     return seq;
   }
 
@@ -138,9 +138,12 @@ public final class SegmentedWriteAheadLog implements Closeable {
 
   // --- internals ---
 
-  private OutputStream openSegment(long seqStart) throws IOException {
-    return Files.newOutputStream(
-        segmentPath(seqStart), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+  private FileChannel openSegment(long seqStart) throws IOException {
+    return FileChannel.open(
+        segmentPath(seqStart),
+        StandardOpenOption.CREATE,
+        StandardOpenOption.WRITE,
+        StandardOpenOption.APPEND);
   }
 
   private Path segmentPath(long seqStart) {
@@ -212,5 +215,11 @@ public final class SegmentedWriteAheadLog implements Closeable {
     buf.put(payload);
     buf.putInt((int) crc.getValue());
     return buf.array();
+  }
+
+  private static void writeFully(FileChannel channel, ByteBuffer buffer) throws IOException {
+    while (buffer.hasRemaining()) {
+      channel.write(buffer);
+    }
   }
 }
