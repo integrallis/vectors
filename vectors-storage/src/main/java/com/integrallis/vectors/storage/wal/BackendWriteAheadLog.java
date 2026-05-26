@@ -77,6 +77,8 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
 
   private long nextSeq;
   private long lastDurableSeq = -1L;
+  private int compactedSegmentIndex;
+  private long compactedThroughSeq = -1L;
   private int activeSegmentIndex;
   private long activeFirstSeq;
   private byte[] activeBytes = new byte[0];
@@ -181,6 +183,7 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
           s.indexed = true;
         }
       }
+      compactIndexedPrefix();
       writeManifest();
     } finally {
       lock.unlock();
@@ -364,14 +367,19 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
     int activeIdxSnapshot;
     long activeFirstSnapshot;
     long lastDurableSnapshot;
+    long compactedThroughSnapshot;
     lock.lock();
     try {
       closedSnapshot = new ArrayList<>(closedSegments);
       activeIdxSnapshot = activeSegmentIndex;
       activeFirstSnapshot = activeFirstSeq;
       lastDurableSnapshot = lastDurableSeq;
+      compactedThroughSnapshot = compactedThroughSeq;
     } finally {
       lock.unlock();
+    }
+    if (fromSeqInclusive <= compactedThroughSnapshot) {
+      throw new IOException("WAL entries compacted through seq " + compactedThroughSnapshot);
     }
     List<SegmentReadPlan> plans = new ArrayList<>();
     for (SegmentMeta s : closedSnapshot) {
@@ -508,11 +516,13 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
     byte[] raw = backend.get(manifestKey());
     Manifest m =
         raw == null
-            ? new Manifest(-1L, List.of())
+            ? new Manifest(-1L, 0, -1L, List.of())
             : Manifest.parse(new String(raw, java.nio.charset.StandardCharsets.UTF_8));
+    compactedSegmentIndex = m.compactedSegmentIndex;
+    compactedThroughSeq = m.compactedThroughSeq;
     closedSegments.addAll(m.segments);
-    int maxIdx = 0;
-    long maxLastSeq = -1L;
+    int maxIdx = compactedSegmentIndex;
+    long maxLastSeq = compactedThroughSeq;
     for (SegmentMeta s : m.segments) {
       if (s.index > maxIdx) maxIdx = s.index;
       if (s.lastSeq > maxLastSeq) maxLastSeq = s.lastSeq;
@@ -559,8 +569,22 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
   }
 
   private void writeManifest() throws IOException {
-    Manifest m = new Manifest(lastDurableSeq, closedSegments);
+    Manifest m =
+        new Manifest(lastDurableSeq, compactedSegmentIndex, compactedThroughSeq, closedSegments);
     backend.put(manifestKey(), m.toJson().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  }
+
+  private void compactIndexedPrefix() {
+    Iterator<SegmentMeta> it = closedSegments.iterator();
+    while (it.hasNext()) {
+      SegmentMeta s = it.next();
+      if (!s.indexed) {
+        return;
+      }
+      compactedSegmentIndex = s.index;
+      compactedThroughSeq = s.lastSeq;
+      it.remove();
+    }
   }
 
   // ─── records ───────────────────────────────────────────────────────────────

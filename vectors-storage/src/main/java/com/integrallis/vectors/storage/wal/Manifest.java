@@ -30,16 +30,27 @@ import java.util.List;
 final class Manifest {
 
   final long lastSeq;
+  final int compactedSegmentIndex;
+  final long compactedThroughSeq;
   final List<BackendWriteAheadLog.SegmentMeta> segments;
 
-  Manifest(long lastSeq, List<BackendWriteAheadLog.SegmentMeta> segments) {
+  Manifest(
+      long lastSeq,
+      int compactedSegmentIndex,
+      long compactedThroughSeq,
+      List<BackendWriteAheadLog.SegmentMeta> segments) {
     this.lastSeq = lastSeq;
+    this.compactedSegmentIndex = compactedSegmentIndex;
+    this.compactedThroughSeq = compactedThroughSeq;
     this.segments = segments;
   }
 
   String toJson() {
     StringBuilder sb = new StringBuilder(64 + segments.size() * 64);
-    sb.append("{\"lastSeq\":").append(lastSeq).append(",\"segments\":[");
+    sb.append("{\"lastSeq\":").append(lastSeq);
+    sb.append(",\"compactedSegmentIndex\":").append(compactedSegmentIndex);
+    sb.append(",\"compactedThroughSeq\":").append(compactedThroughSeq);
+    sb.append(",\"segments\":[");
     for (int i = 0; i < segments.size(); i++) {
       BackendWriteAheadLog.SegmentMeta s = segments.get(i);
       if (i > 0) sb.append(',');
@@ -58,6 +69,8 @@ final class Manifest {
       Cursor c = new Cursor(json);
       c.expect('{');
       long lastSeq = 0L;
+      int compactedSegmentIndex = 0;
+      long compactedThroughSeq = -1L;
       List<BackendWriteAheadLog.SegmentMeta> segs = new ArrayList<>();
       while (true) {
         c.skipWs();
@@ -68,6 +81,8 @@ final class Manifest {
         c.skipWs();
         switch (key) {
           case "lastSeq" -> lastSeq = c.readLong();
+          case "compactedSegmentIndex" -> compactedSegmentIndex = (int) c.readLong();
+          case "compactedThroughSeq" -> compactedThroughSeq = c.readLong();
           case "segments" -> segs.addAll(readSegments(c));
           default -> c.skipValue();
         }
@@ -79,7 +94,7 @@ final class Manifest {
         c.expect('}');
         break;
       }
-      return new Manifest(lastSeq, segs);
+      return new Manifest(lastSeq, compactedSegmentIndex, compactedThroughSeq, segs);
     } catch (RuntimeException e) {
       throw new IOException("malformed WAL manifest: " + e.getMessage(), e);
     }

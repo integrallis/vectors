@@ -23,6 +23,7 @@ import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
 import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -310,6 +311,41 @@ class WriteAheadLogContractTest {
       w.markIndexed(0, 1); // covers the first two closed segments
       long[] tail = w.unindexedTailSeqs();
       assertThat(tail).containsExactly(2L, 2L);
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("backends")
+  void markIndexedCompactsManifestPrefix(String type) throws IOException {
+    StorageBackend b = backend(type);
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
+      w.append(new byte[] {1, 1, 1, 1});
+      w.append(new byte[] {2, 2, 2, 2});
+      w.append(new byte[] {3, 3, 3, 3});
+      w.append(new byte[] {4, 4, 4, 4});
+      w.markIndexed(0, 1);
+    }
+
+    String manifest = new String(b.get("ns/manifest.json"), StandardCharsets.UTF_8);
+    assertThat(manifest).contains("\"compactedSegmentIndex\":2");
+    assertThat(manifest).contains("\"compactedThroughSeq\":1");
+    assertThat(manifest).doesNotContain("\"firstSeq\":0");
+    assertThat(manifest).doesNotContain("\"firstSeq\":1");
+
+    try (BackendWriteAheadLog reopened =
+        new BackendWriteAheadLog(b, "ns", Duration.ofMillis(50), 16)) {
+      assertThat(reopened.lastSequenceNumber()).isEqualTo(3L);
+      assertThat(reopened.unindexedTailSeqs()).containsExactly(2L, 2L, 3L, 3L);
+      assertThat(reopened.append(new byte[] {5, 5, 5, 5})).isEqualTo(4L);
+
+      assertThatThrownBy(() -> reopened.readFrom(0))
+          .isInstanceOf(IOException.class)
+          .hasMessage("WAL entries compacted through seq 1");
+      try (Stream<WriteAheadLog.WalEntry> s = reopened.readFrom(2)) {
+        assertThat(s.toList())
+            .extracting(WriteAheadLog.WalEntry::sequenceNumber)
+            .containsExactly(2L, 3L, 4L);
+      }
     }
   }
 
