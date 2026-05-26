@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
@@ -49,7 +50,7 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
  * <p>Tagged {@code @Tag("integration")} — requires Docker.
  */
 @Tag("integration")
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class BackendWriteAheadLogIT {
 
   private static final String BUCKET = "test-vectors-wal";
@@ -152,6 +153,54 @@ class BackendWriteAheadLogIT {
       assertThat(w.putCount()).isEqualTo(1L);
       List<String> walSegs = b.list(ns + "/wal/");
       assertThat(walSegs).hasSize(1);
+    }
+  }
+
+  @Test
+  void unindexedTailSeqsIncludesActiveAndClosedUnmarkedViaS3() throws IOException {
+    String ns = "wal-" + UUID.randomUUID();
+    S3StorageBackend b = backend();
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, ns, Duration.ofMillis(100), 16)) {
+      w.append(new byte[] {1, 2, 3, 4});
+      w.append(new byte[] {5, 6, 7, 8});
+      w.append(new byte[] {9, 0, 1, 2});
+
+      assertThat(w.unindexedTailSeqs()).containsExactly(0L, 0L, 1L, 1L, 2L, 2L);
+    }
+  }
+
+  @Test
+  void markIndexedMovesClosedSegmentsOutOfTailViaS3() throws IOException {
+    String ns = "wal-" + UUID.randomUUID();
+    S3StorageBackend b = backend();
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, ns, Duration.ofMillis(100), 16)) {
+      w.append(new byte[] {1, 2, 3, 4});
+      w.append(new byte[] {5, 6, 7, 8});
+      w.append(new byte[] {9, 0, 1, 2});
+
+      w.markIndexed(0, 1);
+
+      assertThat(w.unindexedTailSeqs()).containsExactly(2L, 2L);
+    }
+  }
+
+  @Test
+  void flushMakesPendingAppendDurableViaS3() throws Exception {
+    String ns = "wal-" + UUID.randomUUID();
+    S3StorageBackend b = backend();
+    try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, ns, Duration.ofSeconds(30), 512)) {
+      try (var pool = Executors.newSingleThreadExecutor()) {
+        Future<Long> append = pool.submit(() -> w.append("pending".getBytes()));
+        Thread.sleep(100);
+        assertThat(append.isDone()).isFalse();
+
+        w.flush();
+
+        assertThat(append.get(5, TimeUnit.SECONDS)).isEqualTo(0L);
+        try (Stream<WriteAheadLog.WalEntry> s = w.readFrom(0)) {
+          assertThat(s.toList()).extracting(e -> new String(e.data())).containsExactly("pending");
+        }
+      }
     }
   }
 }
