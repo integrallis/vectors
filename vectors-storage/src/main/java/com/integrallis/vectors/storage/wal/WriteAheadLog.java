@@ -76,7 +76,7 @@ public interface WriteAheadLog extends Closeable {
   /**
    * Returns the sequence-number range descriptors for closed-but-unindexed (◈) segments plus the
    * active segment. A query node MUST scan these for strong-consistency reads. The array length is
-   * the number of ◈ segments + (1 if the active segment has any entries, else 0).
+   * two longs per range: {@code [start0, end0, start1, end1, ...]}.
    */
   long[] unindexedTailSeqs();
 
