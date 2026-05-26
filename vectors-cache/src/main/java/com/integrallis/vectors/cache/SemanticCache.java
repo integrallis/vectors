@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.cache;
 
+import java.util.Collection;
 import java.util.Optional;
 
 /**
@@ -41,6 +42,11 @@ public interface SemanticCache<V> extends AutoCloseable {
 
   /** Exact insert or replace. */
   void put(String key, float[] embedding, V value);
+
+  /**
+   * Exact insert or replace for a batch of entries. Implementations commit the batch atomically.
+   */
+  void putAll(Collection<Entry<V>> entries);
 
   /**
    * Nearest-neighbour lookup. Returns the value whose embedding scores above {@link #threshold()}
@@ -80,4 +86,14 @@ public interface SemanticCache<V> extends AutoCloseable {
    * @param <V> payload type
    */
   record Hit<V>(V value, double score) {}
+
+  /**
+   * A semantic-cache entry to insert.
+   *
+   * @param key exact cache key
+   * @param embedding embedding associated with the cached value
+   * @param value payload to cache
+   * @param <V> payload type
+   */
+  record Entry<V>(String key, float[] embedding, V value) {}
 }

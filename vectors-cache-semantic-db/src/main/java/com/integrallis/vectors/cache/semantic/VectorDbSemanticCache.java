@@ -23,6 +23,9 @@ import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -87,18 +90,40 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
 
   @Override
   public void put(String key, float[] embedding, V value) {
-    Objects.requireNonNull(key, "key");
-    Objects.requireNonNull(embedding, "embedding");
-    Objects.requireNonNull(value, "value");
+    putAll(List.of(new Entry<>(key, embedding, value)));
+  }
+
+  @Override
+  public void putAll(Collection<Entry<V>> entries) {
+    Objects.requireNonNull(entries, "entries");
+    List<Document> accepted = new ArrayList<>(entries.size());
+    for (Entry<V> entry : entries) {
+      Document doc = toDocument(entry);
+      if (doc != null) {
+        accepted.add(doc);
+      }
+    }
+    if (accepted.isEmpty()) {
+      return;
+    }
+    for (Document doc : accepted) {
+      collection.upsert(doc);
+    }
+    collection.commit();
+  }
+
+  private Document toDocument(Entry<V> entry) {
+    Objects.requireNonNull(entry, "entry");
+    String key = Objects.requireNonNull(entry.key(), "key");
+    float[] embedding = Objects.requireNonNull(entry.embedding(), "embedding");
+    V value = Objects.requireNonNull(entry.value(), "value");
     if (!admissionPolicy.test(value)) {
       rejections.increment();
-      return;
+      return null;
     }
     Map<String, MetadataValue> md =
         Map.of(PAYLOAD_FIELD, new MetadataValue.Str(codec.encode(value)));
-    Document doc = new Document(key, embedding, null, md);
-    collection.upsert(doc);
-    collection.commit();
+    return new Document(key, embedding, null, md);
   }
 
   @Override

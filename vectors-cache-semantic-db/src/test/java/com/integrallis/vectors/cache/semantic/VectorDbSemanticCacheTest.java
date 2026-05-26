@@ -23,7 +23,11 @@ import com.integrallis.vectors.cache.SemanticCache;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.VectorCollection;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -60,6 +64,43 @@ class VectorDbSemanticCacheTest {
     cache.put("k1", new float[] {1f, 0f, 0f, 0f}, "assistant reply #1");
     assertThat(cache.get("k1")).hasValue("assistant reply #1");
     assertThat(cache.get("missing")).isEmpty();
+  }
+
+  @Test
+  void putAllCommitsAcceptedEntriesOnce() {
+    AtomicInteger commits = new AtomicInteger();
+    VectorDbSemanticCache<String> countedCache =
+        VectorDbSemanticCache.builder(countingCommits(collection, commits), PayloadCodec.identity())
+            .threshold(0.92)
+            .build();
+
+    countedCache.putAll(
+        List.of(
+            new SemanticCache.Entry<>("k1", new float[] {1f, 0f, 0f, 0f}, "r1"),
+            new SemanticCache.Entry<>("k2", new float[] {0f, 1f, 0f, 0f}, "r2")));
+
+    assertThat(commits.get()).isEqualTo(1);
+    assertThat(countedCache.get("k1")).hasValue("r1");
+    assertThat(countedCache.get("k2")).hasValue("r2");
+  }
+
+  @Test
+  void putAllDoesNotCommitWhenAdmissionRejectsEveryEntry() {
+    AtomicInteger commits = new AtomicInteger();
+    VectorDbSemanticCache<String> countedCache =
+        VectorDbSemanticCache.builder(countingCommits(collection, commits), PayloadCodec.identity())
+            .threshold(0.92)
+            .admissionPolicy(value -> false)
+            .build();
+
+    countedCache.putAll(
+        List.of(
+            new SemanticCache.Entry<>("k1", new float[] {1f, 0f, 0f, 0f}, "r1"),
+            new SemanticCache.Entry<>("k2", new float[] {0f, 1f, 0f, 0f}, "r2")));
+
+    assertThat(commits.get()).isZero();
+    assertThat(countedCache.stats().rejections()).isEqualTo(2);
+    assertThat(countedCache.stats().size()).isZero();
   }
 
   @Test
@@ -161,5 +202,23 @@ class VectorDbSemanticCacheTest {
       filteredCache.put("q2", new float[] {0f, 1f, 0f, 0f}, "I cannot do that.");
       assertThat(filteredCache.stats().rejections()).isEqualTo(2);
     }
+  }
+
+  private static VectorCollection countingCommits(
+      VectorCollection delegate, AtomicInteger commits) {
+    return (VectorCollection)
+        Proxy.newProxyInstance(
+            VectorCollection.class.getClassLoader(),
+            new Class<?>[] {VectorCollection.class},
+            (proxy, method, args) -> {
+              if (method.getName().equals("commit") && method.getParameterCount() == 0) {
+                commits.incrementAndGet();
+              }
+              try {
+                return method.invoke(delegate, args);
+              } catch (InvocationTargetException e) {
+                throw e.getCause();
+              }
+            });
   }
 }
