@@ -19,9 +19,11 @@ import com.integrallis.vectors.core.VectorEncoding;
 import com.integrallis.vectors.storage.StorageLayouts;
 import com.integrallis.vectors.storage.io.MappedSegmentInputSupplier;
 import com.integrallis.vectors.storage.memory.AlignmentUtil;
+import java.io.EOFException;
 import java.io.IOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.file.Path;
+import java.util.Objects;
 
 /**
  * Read-only {@link VectorStore} backed by a memory-mapped file. Vectors are stored contiguously
@@ -101,10 +103,16 @@ public final class MappedVectorStore implements VectorStore {
       Path path, int size, int dimension, VectorEncoding encoding, long dataOffset, int alignment)
       throws IOException {
     MappedSegmentInputSupplier supplier = MappedSegmentInputSupplier.open(path);
-    MemorySegment seg = supplier.segment();
-    int rawBytes = encoding.vectorByteSize(dimension);
-    long stride = AlignmentUtil.alignUp(rawBytes, alignment);
-    return new MappedVectorStore(supplier, seg, size, dimension, encoding, stride, dataOffset);
+    try {
+      MemorySegment seg = supplier.segment();
+      int rawBytes = vectorByteSize(size, dimension, encoding);
+      long stride = AlignmentUtil.alignUp(rawBytes, alignment);
+      validateMappedSize(size, rawBytes, stride, dataOffset, seg.byteSize());
+      return new MappedVectorStore(supplier, seg, size, dimension, encoding, stride, dataOffset);
+    } catch (RuntimeException e) {
+      supplier.close();
+      throw e;
+    }
   }
 
   /**
@@ -128,8 +136,9 @@ public final class MappedVectorStore implements VectorStore {
       VectorEncoding encoding,
       long dataOffset,
       int alignment) {
-    int rawBytes = encoding.vectorByteSize(dimension);
+    int rawBytes = vectorByteSize(size, dimension, encoding);
     long stride = AlignmentUtil.alignUp(rawBytes, alignment);
+    validateMappedSize(size, rawBytes, stride, dataOffset, segment.byteSize());
     return new MappedVectorStore(supplier, segment, size, dimension, encoding, stride, dataOffset);
   }
 
@@ -158,10 +167,10 @@ public final class MappedVectorStore implements VectorStore {
     checkOrdinal(ordinal);
     long offset = vectorOffset(ordinal);
     if (encoding == VectorEncoding.FLOAT32) {
-      for (int i = 0; i < dimension; i++) {
-        dst[i] = segment.get(StorageLayouts.FLOAT_LE, offset + (long) i * Float.BYTES);
-      }
+      checkFloatDestination(dst);
+      MemorySegment.copy(segment, StorageLayouts.FLOAT_LE, offset, dst, 0, dimension);
     } else if (encoding == VectorEncoding.INT8) {
+      checkFloatDestination(dst);
       for (int i = 0; i < dimension; i++) {
         dst[i] = segment.get(StorageLayouts.BYTE, offset + i);
       }
@@ -173,6 +182,7 @@ public final class MappedVectorStore implements VectorStore {
   @Override
   public void getVector(int ordinal, byte[] dst) {
     checkOrdinal(ordinal);
+    checkByteDestination(dst);
     long offset = vectorOffset(ordinal);
     MemorySegment.copy(segment, offset, MemorySegment.ofArray(dst), 0, rawVectorByteSize);
   }
@@ -186,6 +196,7 @@ public final class MappedVectorStore implements VectorStore {
   @Override
   public void getVector(int ordinal, MemorySegment dst, long dstByteOffset) {
     checkOrdinal(ordinal);
+    checkSegmentDestination(dst, dstByteOffset);
     long offset = vectorOffset(ordinal);
     MemorySegment.copy(segment, offset, dst, dstByteOffset, rawVectorByteSize);
   }
@@ -202,6 +213,69 @@ public final class MappedVectorStore implements VectorStore {
   private void checkOrdinal(int ordinal) {
     if (ordinal < 0 || ordinal >= size) {
       throw new IndexOutOfBoundsException("ordinal " + ordinal + " out of range [0, " + size + ")");
+    }
+  }
+
+  private void checkFloatDestination(float[] dst) {
+    if (dst.length < dimension) {
+      throw new IllegalArgumentException(
+          "destination float length " + dst.length + " < required " + dimension);
+    }
+  }
+
+  private void checkByteDestination(byte[] dst) {
+    if (dst.length < rawVectorByteSize) {
+      throw new IllegalArgumentException(
+          "destination byte length " + dst.length + " < required " + rawVectorByteSize);
+    }
+  }
+
+  private void checkSegmentDestination(MemorySegment dst, long dstByteOffset) {
+    Objects.requireNonNull(dst, "dst");
+    if (dstByteOffset < 0 || dst.byteSize() - dstByteOffset < rawVectorByteSize) {
+      throw new IndexOutOfBoundsException(
+          "destination range ["
+              + dstByteOffset
+              + ", "
+              + (dstByteOffset + rawVectorByteSize)
+              + ") outside segment length "
+              + dst.byteSize());
+    }
+  }
+
+  private static int vectorByteSize(int size, int dimension, VectorEncoding encoding) {
+    if (size < 0) {
+      throw new IllegalArgumentException("size must be non-negative: " + size);
+    }
+    if (dimension <= 0) {
+      throw new IllegalArgumentException("dimension must be positive: " + dimension);
+    }
+    return Objects.requireNonNull(encoding, "encoding").vectorByteSize(dimension);
+  }
+
+  private static void validateMappedSize(
+      int size, int rawVectorByteSize, long stride, long dataOffset, long fileSize) {
+    if (dataOffset < 0) {
+      throw new IllegalArgumentException("dataOffset must be non-negative: " + dataOffset);
+    }
+    long requiredSize;
+    try {
+      requiredSize =
+          size == 0
+              ? dataOffset
+              : Math.addExact(
+                  dataOffset,
+                  Math.addExact(Math.multiplyExact((long) size - 1, stride), rawVectorByteSize));
+    } catch (ArithmeticException e) {
+      throw new IllegalArgumentException("mapped vector store byte size overflows long", e);
+    }
+    if (fileSize < requiredSize) {
+      EOFException cause =
+          new EOFException(
+              "mapped vector store requires " + requiredSize + " bytes but file has " + fileSize);
+      throw new IllegalArgumentException(
+          "mapped vector store requires " + requiredSize + " bytes but file has " + fileSize,
+          cause);
     }
   }
 

@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Random;
 import org.junit.jupiter.api.Nested;
@@ -157,6 +158,21 @@ class MappedVectorStoreTest {
             .isInstanceOf(IndexOutOfBoundsException.class);
       }
     }
+
+    @Test
+    void getVectorRejectsUndersizedFloatDestination() throws IOException {
+      int dim = 4;
+      Path file = tempDir.resolve("small_float_dst.bin");
+      try (var writer = VectorStoreWriter.open(file, dim, VectorEncoding.FLOAT32)) {
+        writer.writeVector(new float[] {1, 2, 3, 4});
+      }
+
+      try (var store = MappedVectorStore.open(file, 1, dim, VectorEncoding.FLOAT32)) {
+        assertThatThrownBy(() -> store.getVector(0, new float[dim - 1]))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("destination float length");
+      }
+    }
   }
 
   @Nested
@@ -199,6 +215,92 @@ class MappedVectorStoreTest {
         float[] readBack = new float[dim];
         store.getVector(0, readBack);
         assertThat(readBack).containsExactly(10f, -20f, 30f, -40f);
+      }
+    }
+  }
+
+  @Nested
+  class BinaryVectors {
+
+    @Test
+    void writeAndRead_binaryRawBytes() throws IOException {
+      int dim = 70;
+      byte[] bits = new byte[VectorEncoding.BINARY.vectorByteSize(dim)];
+      for (int i = 0; i < bits.length; i++) {
+        bits[i] = (byte) (0xA0 + i);
+      }
+
+      Path file = tempDir.resolve("binary.bin");
+      try (var writer = VectorStoreWriter.open(file, dim, VectorEncoding.BINARY)) {
+        writer.writeVector(bits);
+      }
+
+      try (var store = MappedVectorStore.open(file, 1, dim, VectorEncoding.BINARY)) {
+        assertThat(store.vectorByteSize()).isEqualTo(16);
+        byte[] readBack = new byte[bits.length];
+        store.getVector(0, readBack);
+        assertThat(readBack).containsExactly(bits);
+        assertThat(store.vectorSlice(0).byteSize()).isEqualTo(bits.length);
+        assertThatThrownBy(() -> store.getVector(0, new float[dim]))
+            .isInstanceOf(UnsupportedOperationException.class);
+      }
+    }
+
+    @Test
+    void getVectorRejectsUndersizedByteDestination() throws IOException {
+      int dim = 70;
+      Path file = tempDir.resolve("small_byte_dst.bin");
+      try (var writer = VectorStoreWriter.open(file, dim, VectorEncoding.BINARY)) {
+        writer.writeVector(new byte[VectorEncoding.BINARY.vectorByteSize(dim)]);
+      }
+
+      try (var store = MappedVectorStore.open(file, 1, dim, VectorEncoding.BINARY)) {
+        assertThatThrownBy(() -> store.getVector(0, new byte[store.vectorByteSize() - 1]))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("destination byte length");
+      }
+    }
+  }
+
+  @Nested
+  class FileValidation {
+
+    @Test
+    void emptyStoreCanOpenEmptyFile() throws IOException {
+      Path file = tempDir.resolve("empty.bin");
+      Files.write(file, new byte[0]);
+
+      try (var store = MappedVectorStore.open(file, 0, 4, VectorEncoding.FLOAT32)) {
+        assertThat(store.size()).isZero();
+        assertThatThrownBy(() -> store.vectorSlice(0))
+            .isInstanceOf(IndexOutOfBoundsException.class);
+      }
+    }
+
+    @Test
+    void undersizedFileIsRejectedAtOpen() throws IOException {
+      Path file = tempDir.resolve("undersized.bin");
+      Files.write(file, new byte[Float.BYTES * 3]);
+
+      assertThatThrownBy(() -> MappedVectorStore.open(file, 1, 4, VectorEncoding.FLOAT32, 0, 4))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("requires 16 bytes but file has 12");
+    }
+
+    @Test
+    void getVectorRejectsUndersizedMemorySegmentDestination() throws IOException {
+      int dim = 4;
+      Path file = tempDir.resolve("small_segment_dst.bin");
+      try (var writer = VectorStoreWriter.open(file, dim, VectorEncoding.FLOAT32)) {
+        writer.writeVector(new float[] {1, 2, 3, 4});
+      }
+
+      try (var store = MappedVectorStore.open(file, 1, dim, VectorEncoding.FLOAT32);
+          Arena arena = Arena.ofConfined()) {
+        MemorySegment dst = arena.allocate(store.vectorByteSize() - 1);
+        assertThatThrownBy(() -> store.getVector(0, dst, 0))
+            .isInstanceOf(IndexOutOfBoundsException.class)
+            .hasMessageContaining("outside segment length");
       }
     }
   }

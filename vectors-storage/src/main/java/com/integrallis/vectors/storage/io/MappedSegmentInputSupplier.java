@@ -74,18 +74,18 @@ public final class MappedSegmentInputSupplier implements InputSupplier {
       throws IOException {
     Arena arena = Arena.ofShared();
     try {
-      FileChannel channel = FileChannel.open(path, StandardOpenOption.READ);
-      long size = channel.size();
-      MemorySegment mapped;
-      if (size == 0) {
-        // Cannot map zero-length file; use a zero-length slice of a trivial segment
-        mapped = MemorySegment.NULL;
-      } else {
-        mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
+      try (FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+        long size = channel.size();
+        MemorySegment mapped;
+        if (size == 0) {
+          // Cannot map zero-length file; use a zero-length slice of a trivial segment
+          mapped = MemorySegment.NULL;
+        } else {
+          mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
+        }
+        MadviseUtil.apply(mapped, strategy);
+        return new MappedSegmentInputSupplier(arena, mapped, size);
       }
-      channel.close();
-      MadviseUtil.apply(mapped, strategy);
-      return new MappedSegmentInputSupplier(arena, mapped, size);
     } catch (Exception e) {
       arena.close();
       throw e instanceof IOException ioe ? ioe : new IOException(e);
