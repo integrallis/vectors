@@ -49,26 +49,26 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * End-to-end acceptance tests for the Step 4b HNSW backend wired into {@link VectorCollection}.
+ * End-to-end acceptance tests for the persistent HNSW backend wired into {@link VectorCollection}.
  *
- * <p>Organized into nested classes that exercise the Step 4b scope, one slice at a time:
+ * <p>Organized into nested classes that exercise the persistent-HNSW scope, one slice at a time:
  *
  * <ul>
  *   <li>{@link InMemoryHnsw} — HNSW works in in-memory mode (no {@code storagePath}), auto-commit
  *       triggers a rebuild, and {@code add}/{@code addAll} flows identically to FLAT.
  *   <li>{@link PersistentHnsw} — persistent HNSW writes a {@code graph.bin} file per generation,
  *       round-trips identically across a close/reopen cycle, handles the empty-collection
- *       bootstrap, preserves metadata, and survives multi-generation commits (Step 4b Phase 5).
+ *       bootstrap, preserves metadata, and survives multi-generation commits.
  *   <li>{@link SimulatedKill9Hnsw} — corrupting {@code graph.bin} or the manifest of the latest
  *       HNSW generation forces recovery to fall back to the previous generation, mirroring the FLAT
- *       {@code VectorDbPersistenceTest.SimulatedKill9} pattern (Step 4b Phase 6).
+ *       {@code VectorDbPersistenceTest.SimulatedKill9} pattern.
  *   <li>{@link CommitOpenFailureRecoveryHnsw} — the A1 regression pattern extended to the HNSW open
  *       path: a successful write followed by an injected {@code openGenerationFailureHook} must
  *       leave the collection usable and a retry must advance {@code nextGenerationNumber} instead
- *       of colliding with the orphaned generation directory (Step 4b Phase 6).
+ *       of colliding with the orphaned generation directory.
  *   <li>{@link ConcurrencyHnsw} — concurrent readers never see spurious {@code
  *       IllegalStateException("closed")} while the writer is swapping mmap-backed HNSW generations
- *       underneath them (Step 4b Phase 6).
+ *       underneath them.
  * </ul>
  */
 class VectorDbHnswPersistenceTest {
@@ -339,7 +339,7 @@ class VectorDbHnswPersistenceTest {
   /**
    * Round-trip tests for persistent HNSW. Each test opens a fresh collection under a {@link
    * TempDir}, writes documents + commits, closes, reopens, and asserts the reopened collection
-   * serves the same data. These tests exercise the Step 4b Phase 5 path end-to-end: {@code
+   * serves the same data. These tests exercise the persistent graph path end-to-end: {@code
    * HnswGraphCodec.encode} on commit, {@code graph.bin} fsync via {@code
    * GenerationDirectory.writeGeneration}, per-file CRC verification in {@code openGeneration}, and
    * {@code HnswGraphCodec.decode} + {@link
@@ -568,9 +568,8 @@ class VectorDbHnswPersistenceTest {
 
       // Phase 2: corrupt gen-2's graph.bin by zeroing it out. The manifest's graphBinCrc32 no
       // longer matches, so GenerationDirectory.recover()'s tryVerifyPayloadCrcs pass will reject
-      // it (payload CRCs are verified during recovery, not at openGeneration time — see
-      // GenerationDirectory.recover Javadoc for the Step 4b rationale). The recovery walk must
-      // then fall back to gen-1's graph and republish CURRENT.
+      // it (payload CRCs are verified during recovery, not at openGeneration time). The recovery
+      // walk must then fall back to gen-1's graph and republish CURRENT.
       Path latestGraph =
           storageRoot.resolve(FileFormat.generationDirName(2L)).resolve(FileFormat.GRAPH_FILE);
       assertThat(latestGraph).exists();

@@ -115,10 +115,10 @@ class GenerationDirectoryTest {
 
   private static Manifest sampleManifest(long generationNumber) {
     // Compute the real CRC32 of each payload so the manifest matches what the trivial source
-    // writes. Since Step 4b, recover() verifies per-file CRCs in addition to the manifest
-    // self-CRC; a generation whose manifest-declared CRC doesn't match the on-disk bytes is
-    // treated as corrupt and walks back to an older generation. Tests that want to model
-    // corruption must explicitly mutate the bytes AFTER writing.
+    // writes. recover() verifies per-file CRCs in addition to the manifest self-CRC; a generation
+    // whose manifest-declared CRC doesn't match the on-disk bytes is treated as corrupt and walks
+    // back to an older generation. Tests that want to model corruption must explicitly mutate the
+    // bytes AFTER writing.
     return Manifest.build(
         CONFIG,
         generationNumber,
@@ -366,11 +366,11 @@ class GenerationDirectoryTest {
 
     @Test
     void corruptedPayloadInNewestGenFallsBackToPrevious(@TempDir Path tmp) throws IOException {
-      // Step 4b recovery guarantee: recover() verifies every payload file's CRC against the
-      // manifest-stored CRC, not just the manifest self-CRC. A generation whose manifest is
-      // perfectly readable but whose vectors.bin has been silently corrupted (bit rot, partial
-      // truncation, fsck-after-crash) is rejected and the walk-back rolls forward to the newest
-      // gen whose payload bytes also match the manifest CRCs.
+      // recover() verifies every payload file's CRC against the manifest-stored CRC, not just the
+      // manifest self-CRC. A generation whose manifest is perfectly readable but whose vectors.bin
+      // has been silently corrupted (bit rot, partial truncation, fsck-after-crash) is rejected and
+      // the walk-back rolls forward to the newest gen whose payload bytes also match the manifest
+      // CRCs.
       GenerationDirectory.writeGeneration(tmp, 0L, trivialSource(), sampleManifest(0L));
       GenerationDirectory.writeGeneration(tmp, 1L, trivialSource(), sampleManifest(1L));
 

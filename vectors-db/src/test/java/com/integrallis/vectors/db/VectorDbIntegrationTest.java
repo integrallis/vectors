@@ -102,9 +102,9 @@ class VectorDbIntegrationTest {
     }
 
     @Test
-    void indexTypeHnsw_buildsSuccessfully_inStep4b() {
-      // Step 4b unblocked HNSW in both in-memory and persistent modes. The 5-arg builder here
-      // runs the in-memory path; persistent HNSW is covered by VectorDbHnswPersistenceTest.
+    void indexTypeHnsw_buildsSuccessfully() {
+      // The 5-arg builder here runs the in-memory HNSW path; persistent HNSW is covered by
+      // VectorDbHnswPersistenceTest.
       try (var col =
           VectorCollection.builder()
               .dimension(8)

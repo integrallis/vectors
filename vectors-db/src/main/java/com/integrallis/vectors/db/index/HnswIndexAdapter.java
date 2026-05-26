@@ -46,8 +46,9 @@ import java.util.function.IntPredicate;
  * com.integrallis.vectors.db.VectorCollection}'s in-memory open.
  *
  * <p><b>Thread-safety.</b> {@link HnswIndex} is thread-safe for concurrent search (its internal
- * {@code ThreadLocal<HnswSearcher>} pool) and single-threaded for construction. This adapter
- * inherits both guarantees: {@link #search} is thread-safe, {@link #build} is not.
+ * {@code ThreadLocal<HnswSearcher>} pool). Construction is single-threaded when {@code buildThreads
+ * == 1} and parallel when {@code buildThreads > 1}; in either mode this adapter does not support
+ * concurrent {@link #build} calls. {@link #search} is thread-safe.
  */
 public final class HnswIndexAdapter implements IndexSpi {
 

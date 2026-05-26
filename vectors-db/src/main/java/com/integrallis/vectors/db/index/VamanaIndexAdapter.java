@@ -43,8 +43,9 @@ import java.util.Objects;
  * com.integrallis.vectors.db.VectorCollection}'s in-memory open.
  *
  * <p><b>Thread-safety.</b> {@link VamanaIndex} is thread-safe for concurrent search (its internal
- * {@code ThreadLocal<VamanaSearcher>} pool) and single-threaded for construction. This adapter
- * inherits both guarantees: {@link #search} is thread-safe, {@link #build} is not.
+ * {@code ThreadLocal<VamanaSearcher>} pool). Construction is single-threaded when {@code
+ * buildThreads == 1} and parallel when {@code buildThreads > 1}; in either mode this adapter does
+ * not support concurrent {@link #build} calls. {@link #search} is thread-safe.
  */
 public final class VamanaIndexAdapter implements IndexSpi {
 
