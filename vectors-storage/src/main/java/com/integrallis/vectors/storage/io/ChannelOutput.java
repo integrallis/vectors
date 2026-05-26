@@ -15,11 +15,8 @@
  */
 package com.integrallis.vectors.storage.io;
 
-import com.integrallis.vectors.storage.StorageLayouts;
 import java.io.IOException;
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SegmentAllocator;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -141,17 +138,7 @@ public final class ChannelOutput implements RandomAccessOutput {
   @Override
   public void writeFloats(MemorySegment src, long srcByteOffset, int count) throws IOException {
     long byteCount = (long) count * Float.BYTES;
-    // Copy from MemorySegment to a heap array, then write
-    try (Arena arena = Arena.ofConfined()) {
-      SegmentAllocator alloc = SegmentAllocator.slicingAllocator(arena.allocate(byteCount));
-      MemorySegment tmp = alloc.allocate(byteCount);
-      MemorySegment.copy(src, srcByteOffset, tmp, 0, byteCount);
-      float[] floats = new float[count];
-      for (int i = 0; i < count; i++) {
-        floats[i] = tmp.get(StorageLayouts.FLOAT_LE, (long) i * Float.BYTES);
-      }
-      writeFloats(floats, 0, count);
-    }
+    writeFully(src.asSlice(srcByteOffset, byteCount).asByteBuffer().order(ByteOrder.LITTLE_ENDIAN));
   }
 
   @Override

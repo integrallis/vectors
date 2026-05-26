@@ -154,6 +154,30 @@ class ChannelOutputTest {
   }
 
   @Test
+  void writeFloats_fromMemorySegmentHonorsByteOffset() throws IOException {
+    Path file = tempDir.resolve("memseg_offset.bin");
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment seg = arena.allocate(24);
+      for (int i = 0; i < 6; i++) {
+        seg.setAtIndex(ValueLayout.JAVA_FLOAT, i, (float) (i + 1));
+      }
+
+      try (var out = ChannelOutput.open(file)) {
+        out.writeFloats(seg, Float.BYTES * 2L, 3);
+      }
+    }
+
+    try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+      ByteBuffer buf = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN);
+      ch.read(buf);
+      buf.flip();
+      assertThat(buf.getFloat()).isEqualTo(3.0f);
+      assertThat(buf.getFloat()).isEqualTo(4.0f);
+      assertThat(buf.getFloat()).isEqualTo(5.0f);
+    }
+  }
+
+  @Test
   void roundTrip_writeAndReadViaMappedInput() throws IOException {
     Path file = tempDir.resolve("roundtrip.bin");
     try (var out = ChannelOutput.open(file)) {
