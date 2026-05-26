@@ -18,6 +18,13 @@ package com.integrallis.vectors.cache.jcache;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.integrallis.vectors.cache.CacheStats;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.cache.Cache;
 import javax.cache.CacheManager;
@@ -101,6 +108,47 @@ class JCacheVectorCacheTest {
     Integer b = cache.getOrCompute("k", k -> calls.incrementAndGet());
     assertThat(a).isEqualTo(1);
     assertThat(b).isEqualTo(1);
+    assertThat(calls.get()).isEqualTo(1);
+  }
+
+  @Test
+  void getOrComputeInvokesLoaderOnceUnderContention() throws Exception {
+    int callers = 16;
+    CountDownLatch ready = new CountDownLatch(callers);
+    CountDownLatch start = new CountDownLatch(1);
+    AtomicInteger calls = new AtomicInteger();
+    ExecutorService executor = Executors.newFixedThreadPool(callers);
+    List<Future<Integer>> results = new ArrayList<>();
+
+    for (int i = 0; i < callers; i++) {
+      results.add(
+          executor.submit(
+              () -> {
+                ready.countDown();
+                assertThat(start.await(5, TimeUnit.SECONDS)).isTrue();
+                return cache.getOrCompute(
+                    "hot",
+                    key -> {
+                      calls.incrementAndGet();
+                      try {
+                        Thread.sleep(50);
+                      } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("interrupted while loading cache value", e);
+                      }
+                      return 42;
+                    });
+              }));
+    }
+
+    assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+    start.countDown();
+
+    for (Future<Integer> result : results) {
+      assertThat(result.get(5, TimeUnit.SECONDS)).isEqualTo(42);
+    }
+    executor.shutdown();
+    assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
     assertThat(calls.get()).isEqualTo(1);
   }
 }

@@ -19,6 +19,7 @@ import com.integrallis.vectors.cache.CacheStats;
 import com.integrallis.vectors.cache.VectorCache;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 import javax.cache.Cache;
@@ -36,6 +37,7 @@ import javax.cache.Cache;
 public final class JCacheVectorCache<K, V> implements VectorCache<K, V> {
 
   private final Cache<K, V> cache;
+  private final ConcurrentHashMap<K, Object> loadLocks = new ConcurrentHashMap<>();
   private final LongAdder hits = new LongAdder();
   private final LongAdder misses = new LongAdder();
 
@@ -82,19 +84,25 @@ public final class JCacheVectorCache<K, V> implements VectorCache<K, V> {
       hits.increment();
       return existing;
     }
-    misses.increment();
-    V loaded = loader.apply(key);
-    if (loaded == null) {
-      throw new IllegalStateException("loader returned null for key " + key);
+    Object lock = loadLocks.computeIfAbsent(key, ignored -> new Object());
+    try {
+      synchronized (lock) {
+        existing = cache.get(key);
+        if (existing != null) {
+          hits.increment();
+          return existing;
+        }
+        misses.increment();
+        V loaded = loader.apply(key);
+        if (loaded == null) {
+          throw new IllegalStateException("loader returned null for key " + key);
+        }
+        cache.put(key, loaded);
+        return loaded;
+      }
+    } finally {
+      loadLocks.remove(key, lock);
     }
-    // putIfAbsent is atomic per JCache; on contention the winning loader's value is stored, and a
-    // re-get is issued to retrieve whichever value the backing cache now has. Both paths are safe
-    // because callers expect idempotent loaders.
-    if (cache.putIfAbsent(key, loaded)) {
-      return loaded;
-    }
-    V winner = cache.get(key);
-    return winner == null ? loaded : winner;
   }
 
   @Override
