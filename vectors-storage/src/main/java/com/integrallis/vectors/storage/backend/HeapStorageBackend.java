@@ -15,6 +15,8 @@
  */
 package com.integrallis.vectors.storage.backend;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -30,34 +32,36 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class HeapStorageBackend implements StorageBackend {
 
-  /** Etag separator — separates hex-content-hash from a monotone counter. */
-  private static final String ETAG_SEP = "-";
-
-  private final ConcurrentHashMap<String, byte[]> store = new ConcurrentHashMap<>();
-  private final ConcurrentHashMap<String, String> etags = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, Entry> store = new ConcurrentHashMap<>();
 
   @Override
   public synchronized void put(String key, byte[] value) {
-    store.put(key, Arrays.copyOf(value, value.length));
-    etags.put(key, computeEtag(value));
+    store.put(key, Entry.copyOf(value));
   }
 
   @Override
   public byte[] get(String key) {
-    byte[] v = store.get(key);
-    return v == null ? null : Arrays.copyOf(v, v.length);
+    Entry entry = store.get(key);
+    return entry == null ? null : entry.valueCopy();
   }
 
   @Override
   public byte[] getRange(String key, long offset, int length) {
-    byte[] v = store.get(key);
-    if (v == null) return null;
-    if (offset < 0 || length < 0 || offset + length > v.length) {
+    Entry entry = store.get(key);
+    if (entry == null) return null;
+    if (offset < 0 || length < 0 || offset + length > entry.value.length) {
       throw new IndexOutOfBoundsException(
-          "getRange(" + key + ", offset=" + offset + ", length=" + length + ") size=" + v.length);
+          "getRange("
+              + key
+              + ", offset="
+              + offset
+              + ", length="
+              + length
+              + ") size="
+              + entry.value.length);
     }
     int from = Math.toIntExact(offset);
-    return Arrays.copyOfRange(v, from, from + length);
+    return Arrays.copyOfRange(entry.value, from, from + length);
   }
 
   @Override
@@ -72,38 +76,58 @@ public final class HeapStorageBackend implements StorageBackend {
   @Override
   public synchronized void delete(String key) {
     store.remove(key);
-    etags.remove(key);
   }
 
   @Override
   public synchronized ConditionalPutResult conditionalPut(
       String key, byte[] value, String expectedEtag) {
-    String currentEtag = etags.get(key);
-    if (!etag_equals(currentEtag, expectedEtag)) {
+    Entry current = store.get(key);
+    String currentEtag = current == null ? null : current.etag;
+    if (!etagEquals(currentEtag, expectedEtag)) {
       return new ConditionalPutResult(false, null);
     }
-    String newEtag = computeEtag(value);
-    store.put(key, Arrays.copyOf(value, value.length));
-    etags.put(key, newEtag);
-    return new ConditionalPutResult(true, newEtag);
+    Entry next = Entry.copyOf(value);
+    store.put(key, next);
+    return new ConditionalPutResult(true, next.etag);
   }
 
   // --- internals ---
 
-  private static boolean etag_equals(String current, String expected) {
+  private static boolean etagEquals(String current, String expected) {
     if (expected == null) return current == null; // "must not exist"
     return expected.equals(current);
   }
 
   private static String computeEtag(byte[] value) {
-    // CRC32 hex is sufficient for an in-heap etag — not cryptographic.
-    java.util.zip.CRC32 crc = new java.util.zip.CRC32();
-    crc.update(value);
-    return Long.toHexString(crc.getValue()) + ETAG_SEP + value.length;
+    try {
+      byte[] digest = MessageDigest.getInstance("SHA-256").digest(value);
+      StringBuilder hex = new StringBuilder(digest.length * 2);
+      for (byte b : digest) {
+        hex.append(Character.forDigit((b >>> 4) & 0xF, 16));
+        hex.append(Character.forDigit(b & 0xF, 16));
+      }
+      return hex.toString();
+    } catch (NoSuchAlgorithmException e) {
+      throw new ExceptionInInitializerError(e);
+    }
   }
 
   /** Returns a read-only snapshot of the internal store (for diagnostics / tests). */
   Map<String, byte[]> snapshot() {
-    return Map.copyOf(store);
+    return store.entrySet().stream()
+        .collect(
+            java.util.stream.Collectors.toUnmodifiableMap(
+                Map.Entry::getKey, entry -> entry.getValue().valueCopy()));
+  }
+
+  private record Entry(byte[] value, String etag) {
+    static Entry copyOf(byte[] value) {
+      byte[] copy = Arrays.copyOf(value, value.length);
+      return new Entry(copy, computeEtag(copy));
+    }
+
+    byte[] valueCopy() {
+      return Arrays.copyOf(value, value.length);
+    }
   }
 }

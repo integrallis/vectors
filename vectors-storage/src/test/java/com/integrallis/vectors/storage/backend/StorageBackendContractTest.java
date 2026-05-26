@@ -249,6 +249,16 @@ class HeapStorageBackendContractTest implements StorageBackendContract {
   public StorageBackend backend() {
     return new HeapStorageBackend();
   }
+
+  @Test
+  void heapEtagIsSha256HexOfStoredValue() throws IOException {
+    StorageBackend.ConditionalPutResult result =
+        backend().conditionalPut(key("sha256-etag"), new byte[] {1, 2, 3}, null);
+
+    assertThat(result.succeeded()).isTrue();
+    assertThat(result.newEtag())
+        .isEqualTo("039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81");
+  }
 }
 
 @Tag("unit")
