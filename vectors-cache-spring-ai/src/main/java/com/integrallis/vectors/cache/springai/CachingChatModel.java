@@ -29,8 +29,8 @@ import reactor.core.publisher.Flux;
 /**
  * Caching decorator around a Spring AI {@link ChatModel}. {@link #call(Prompt)}, {@link
  * #call(String)}, and {@link #call(Message...)} are cached by a normalized key derived from the
- * call arguments. {@link #stream(Prompt)} is not cached — streaming responses are forwarded
- * verbatim to the delegate to preserve backpressure.
+ * equivalent {@link Prompt}. {@link #stream(Prompt)} is not cached — streaming responses are
+ * forwarded verbatim to the delegate to preserve backpressure.
  *
  * <p>The key functions are pluggable. The default {@code promptKey} is the result of {@code
  * prompt.getContents()} plus the {@code toString()} of the prompt options; callers needing stronger
@@ -79,24 +79,20 @@ public class CachingChatModel implements ChatModel {
   @Override
   public ChatResponse call(Prompt prompt) {
     Objects.requireNonNull(prompt, "prompt");
-    String key = keyFn.apply(promptKey.apply(prompt));
-    return cache.getOrCompute(key, k -> delegate.call(prompt));
+    return cached(prompt);
   }
 
   @Override
   public String call(String message) {
     Objects.requireNonNull(message, "message");
-    String key = keyFn.apply("str:" + message);
-    ChatResponse response = cache.getOrCompute(key, k -> delegate.call(new Prompt(message)));
+    ChatResponse response = cached(new Prompt(message));
     return response.getResult().getOutput().getText();
   }
 
   @Override
   public String call(Message... messages) {
     Objects.requireNonNull(messages, "messages");
-    String key = keyFn.apply("msgs:" + List.of(messages).toString());
-    ChatResponse response =
-        cache.getOrCompute(key, k -> delegate.call(new Prompt(List.of(messages))));
+    ChatResponse response = cached(new Prompt(List.of(messages)));
     return response.getResult().getOutput().getText();
   }
 
@@ -114,5 +110,10 @@ public class CachingChatModel implements ChatModel {
     String contents = prompt.getContents();
     Object options = prompt.getOptions();
     return options == null ? contents : contents + "\u0000" + options;
+  }
+
+  private ChatResponse cached(Prompt prompt) {
+    String key = keyFn.apply(promptKey.apply(prompt));
+    return cache.getOrCompute(key, k -> delegate.call(prompt));
   }
 }

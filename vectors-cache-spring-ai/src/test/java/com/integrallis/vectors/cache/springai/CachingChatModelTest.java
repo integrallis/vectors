@@ -69,6 +69,19 @@ class CachingChatModelTest {
   }
 
   @Test
+  void stringAndPromptCallsShareCacheEntry() {
+    FakeChatModel fake = new FakeChatModel();
+    CachingChatModel model = new CachingChatModel(fake, newCache());
+
+    String text = model.call("ping");
+    ChatResponse response = model.call(new Prompt("ping"));
+
+    assertThat(text).isEqualTo("echo: ping");
+    assertThat(response.getResult().getOutput().getText()).isEqualTo("echo: ping");
+    assertThat(fake.calls.get()).isEqualTo(1);
+  }
+
+  @Test
   void messagesCallCaches() {
     FakeChatModel fake = new FakeChatModel();
     CachingChatModel model = new CachingChatModel(fake, newCache());
@@ -78,6 +91,18 @@ class CachingChatModelTest {
 
     assertThat(a).startsWith("echo:");
     assertThat(b).isEqualTo(a);
+    assertThat(fake.calls.get()).isEqualTo(1);
+  }
+
+  @Test
+  void messageAndPromptCallsShareCacheEntry() {
+    FakeChatModel fake = new FakeChatModel();
+    CachingChatModel model = new CachingChatModel(fake, newCache());
+
+    String text = model.call(new UserMessage("q"));
+    ChatResponse response = model.call(new Prompt(new UserMessage("q")));
+
+    assertThat(response.getResult().getOutput().getText()).isEqualTo(text);
     assertThat(fake.calls.get()).isEqualTo(1);
   }
 
