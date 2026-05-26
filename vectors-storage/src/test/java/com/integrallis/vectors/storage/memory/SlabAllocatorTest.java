@@ -77,6 +77,21 @@ class SlabAllocatorTest {
   }
 
   @Test
+  void allocatedIncludesAlignmentPadding() {
+    try (Arena arena = Arena.ofConfined()) {
+      SlabAllocator slab = SlabAllocator.create(arena, 256, AlignmentUtil.VECTOR_ALIGNMENT);
+
+      MemorySegment first = slab.allocate(1, 1);
+      assertThat(first.address() - slab.slab().address()).isZero();
+      assertThat(slab.allocated()).isEqualTo(1);
+
+      MemorySegment second = slab.allocate(1, 64);
+      assertThat(second.address() - slab.slab().address()).isEqualTo(64);
+      assertThat(slab.allocated()).isEqualTo(65);
+    }
+  }
+
+  @Test
   void overflow_throwsWhenExhausted() {
     try (Arena arena = Arena.ofConfined()) {
       SlabAllocator slab = SlabAllocator.create(arena, 128, AlignmentUtil.VECTOR_ALIGNMENT);

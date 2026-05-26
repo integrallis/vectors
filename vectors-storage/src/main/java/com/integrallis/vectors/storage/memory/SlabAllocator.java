@@ -74,7 +74,7 @@ public final class SlabAllocator {
    */
   public MemorySegment allocate(long byteSize) {
     MemorySegment result = allocator.allocate(byteSize);
-    allocated += byteSize;
+    recordAllocation(result);
     return result;
   }
 
@@ -88,7 +88,7 @@ public final class SlabAllocator {
    */
   public MemorySegment allocate(long byteSize, long alignment) {
     MemorySegment result = allocator.allocate(byteSize, alignment);
-    allocated += byteSize;
+    recordAllocation(result);
     return result;
   }
 
@@ -97,7 +97,7 @@ public final class SlabAllocator {
     return capacity;
   }
 
-  /** Returns an approximation of the number of bytes allocated so far. */
+  /** Returns the slab high-water mark in bytes, including alignment padding. */
   public long allocated() {
     return allocated;
   }
@@ -105,5 +105,20 @@ public final class SlabAllocator {
   /** Returns the backing slab segment. */
   public MemorySegment slab() {
     return slab;
+  }
+
+  private void recordAllocation(MemorySegment segment) {
+    long offset = Math.subtractExact(segment.address(), slab.address());
+    long end = Math.addExact(offset, segment.byteSize());
+    if (offset < 0 || end > capacity) {
+      throw new IndexOutOfBoundsException(
+          "allocated segment range ["
+              + offset
+              + ", "
+              + end
+              + ") outside slab capacity "
+              + capacity);
+    }
+    allocated = Math.max(allocated, end);
   }
 }
