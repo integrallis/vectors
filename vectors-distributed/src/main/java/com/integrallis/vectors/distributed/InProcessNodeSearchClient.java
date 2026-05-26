@@ -19,6 +19,8 @@ package com.integrallis.vectors.distributed;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Objects;
 
 /**
@@ -32,16 +34,33 @@ import java.util.Objects;
 public final class InProcessNodeSearchClient implements NodeSearchClient {
 
   private final VectorCollection collection;
+  private final String requiredBearerToken;
 
   /**
    * @param collection the backing collection for this simulated node (must not be null)
    */
   public InProcessNodeSearchClient(VectorCollection collection) {
+    this(collection, null);
+  }
+
+  /**
+   * @param collection the backing collection for this simulated node (must not be null)
+   * @param requiredBearerToken bearer token required for node-to-node calls; {@code null} disables
+   *     authentication
+   */
+  public InProcessNodeSearchClient(VectorCollection collection, String requiredBearerToken) {
     this.collection = Objects.requireNonNull(collection, "collection must not be null");
+    this.requiredBearerToken = requiredBearerToken;
   }
 
   @Override
   public SearchResult search(LocalSearchRequest request) {
+    return search(request, NodeCallContext.none());
+  }
+
+  @Override
+  public SearchResult search(LocalSearchRequest request, NodeCallContext context) {
+    requireAuthorized(context);
     // clusterIds is informational for IVF routing; for in-process FLAT/HNSW collections
     // we forward the full query and let the collection search all its data.
     SearchRequest sr =
@@ -51,11 +70,36 @@ public final class InProcessNodeSearchClient implements NodeSearchClient {
 
   @Override
   public int size() {
+    return size(NodeCallContext.none());
+  }
+
+  @Override
+  public int size(NodeCallContext context) {
+    requireAuthorized(context);
     return collection.size();
   }
 
   @Override
   public int physicalSize() {
+    return physicalSize(NodeCallContext.none());
+  }
+
+  @Override
+  public int physicalSize(NodeCallContext context) {
+    requireAuthorized(context);
     return collection.physicalSize();
+  }
+
+  private void requireAuthorized(NodeCallContext context) {
+    if (requiredBearerToken == null) {
+      return;
+    }
+    String actual = context == null ? null : context.bearerToken();
+    if (actual == null
+        || !MessageDigest.isEqual(
+            actual.getBytes(StandardCharsets.UTF_8),
+            requiredBearerToken.getBytes(StandardCharsets.UTF_8))) {
+      throw new SecurityException("missing or invalid node bearer token");
+    }
   }
 }

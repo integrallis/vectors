@@ -45,18 +45,29 @@ public final class ScatterGatherExecutor {
 
   private final NodeDirectory directory;
   private final long timeoutMillis;
+  private final NodeCallContext context;
 
   /**
    * @param directory resolves NodeId → NodeSearchClient
    * @param timeout per-node call timeout; must be positive
    */
   public ScatterGatherExecutor(NodeDirectory directory, Duration timeout) {
+    this(directory, timeout, NodeCallContext.none());
+  }
+
+  /**
+   * @param directory resolves NodeId → NodeSearchClient
+   * @param timeout per-node call timeout; must be positive
+   * @param context metadata sent with each node call
+   */
+  public ScatterGatherExecutor(NodeDirectory directory, Duration timeout, NodeCallContext context) {
     this.directory = Objects.requireNonNull(directory, "directory must not be null");
     Objects.requireNonNull(timeout, "timeout must not be null");
     if (timeout.isNegative() || timeout.isZero()) {
       throw new IllegalArgumentException("timeout must be positive: " + timeout);
     }
     this.timeoutMillis = timeout.toMillis();
+    this.context = Objects.requireNonNull(context, "context must not be null");
   }
 
   /**
@@ -82,7 +93,7 @@ public final class ScatterGatherExecutor {
         tasks.add(
             () -> {
               NodeSearchClient client = directory.clientFor(req.targetNode());
-              return client.search(req);
+              return client.search(req, context);
             });
       }
 

@@ -51,18 +51,21 @@ public final class DistributedVectorCollection implements VectorCollection {
   private final List<NodeId> allNodes;
   private final NodeDirectory directory;
   private final NodeId localNodeId;
+  private final NodeCallContext nodeCallContext;
 
   private DistributedVectorCollection(
       VectorCollection localCollection,
       NodeId localNodeId,
       NodeDirectory directory,
       List<NodeId> allNodes,
-      Duration timeout) {
+      Duration timeout,
+      NodeCallContext nodeCallContext) {
     this.localCollection = localCollection;
     this.localNodeId = localNodeId;
     this.directory = directory;
     this.allNodes = List.copyOf(allNodes);
-    this.executor = new ScatterGatherExecutor(directory, timeout);
+    this.nodeCallContext = nodeCallContext;
+    this.executor = new ScatterGatherExecutor(directory, timeout, nodeCallContext);
   }
 
   // ---- Write path: delegate to local collection ----
@@ -149,7 +152,7 @@ public final class DistributedVectorCollection implements VectorCollection {
   public int size() {
     int total = 0;
     for (NodeId node : allNodes) {
-      total += directory.clientFor(node).size();
+      total += directory.clientFor(node).size(nodeCallContext);
     }
     return total;
   }
@@ -159,7 +162,7 @@ public final class DistributedVectorCollection implements VectorCollection {
   public int physicalSize() {
     int total = 0;
     for (NodeId node : allNodes) {
-      total += directory.clientFor(node).physicalSize();
+      total += directory.clientFor(node).physicalSize(nodeCallContext);
     }
     return total;
   }
@@ -189,6 +192,7 @@ public final class DistributedVectorCollection implements VectorCollection {
     private NodeDirectory directory;
     private List<NodeId> allNodes;
     private Duration timeout = Duration.ofSeconds(5);
+    private NodeCallContext nodeCallContext = NodeCallContext.none();
 
     private Builder() {}
 
@@ -222,13 +226,18 @@ public final class DistributedVectorCollection implements VectorCollection {
       return this;
     }
 
+    public Builder nodeBearerToken(String token) {
+      this.nodeCallContext = NodeCallContext.bearer(Objects.requireNonNull(token));
+      return this;
+    }
+
     public DistributedVectorCollection build() {
       Objects.requireNonNull(localCollection, "localCollection must be set");
       Objects.requireNonNull(localNodeId, "localNodeId must be set");
       Objects.requireNonNull(directory, "directory must be set");
       Objects.requireNonNull(allNodes, "allNodes must be set");
       return new DistributedVectorCollection(
-          localCollection, localNodeId, directory, allNodes, timeout);
+          localCollection, localNodeId, directory, allNodes, timeout, nodeCallContext);
     }
   }
 }

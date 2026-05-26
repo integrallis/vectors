@@ -17,6 +17,7 @@
 package com.integrallis.vectors.distributed;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.SimilarityFunction;
@@ -120,6 +121,62 @@ class DistributedVectorCollectionTest {
     SearchResult result = dvc.search(SearchRequest.builder(vectors.get(0), 1).build());
     assertThat(result.hits()).hasSize(1);
     assertThat(result.hits().get(0).id()).isEqualTo("doc-0");
+  }
+
+  @Test
+  void authenticatedNodeCallsUseConfiguredBearerToken() {
+    InProcessNodeDirectory authenticatedDirectory =
+        InProcessNodeDirectory.builder()
+            .registerAuthenticated(local, localCol, "cluster-secret")
+            .registerAuthenticated(peer1, peerCol1, "cluster-secret")
+            .registerAuthenticated(peer2, peerCol2, "cluster-secret")
+            .build();
+    DistributedVectorCollection authenticated =
+        DistributedVectorCollection.builder()
+            .localCollection(localCol)
+            .localNodeId(local)
+            .directory(authenticatedDirectory)
+            .allNodes(List.of(local, peer1, peer2))
+            .timeout(TIMEOUT)
+            .nodeBearerToken("cluster-secret")
+            .build();
+
+    float[] vector = randomUnit(new Random(5L));
+    authenticated.add(Document.of("auth-doc", vector));
+    authenticated.commit();
+
+    assertThat(authenticated.size()).isEqualTo(1);
+    assertThat(authenticated.physicalSize()).isEqualTo(1);
+    SearchResult result = authenticated.search(SearchRequest.builder(vector, 1).build());
+    assertThat(result.hits()).hasSize(1);
+    assertThat(result.hits().getFirst().id()).isEqualTo("auth-doc");
+  }
+
+  @Test
+  void wrongNodeBearerTokenIsRejectedByDistributedClients() {
+    InProcessNodeDirectory authenticatedDirectory =
+        InProcessNodeDirectory.builder()
+            .registerAuthenticated(local, localCol, "cluster-secret")
+            .build();
+    DistributedVectorCollection authenticated =
+        DistributedVectorCollection.builder()
+            .localCollection(localCol)
+            .localNodeId(local)
+            .directory(authenticatedDirectory)
+            .allNodes(List.of(local))
+            .timeout(TIMEOUT)
+            .nodeBearerToken("wrong-secret")
+            .build();
+
+    float[] vector = randomUnit(new Random(6L));
+    authenticated.add(Document.of("auth-doc", vector));
+    authenticated.commit();
+
+    assertThatThrownBy(authenticated::size)
+        .isInstanceOf(SecurityException.class)
+        .hasMessage("missing or invalid node bearer token");
+    SearchResult result = authenticated.search(SearchRequest.builder(vector, 1).build());
+    assertThat(result.hits()).isEmpty();
   }
 
   /** Deleting a document and committing must exclude it from subsequent searches. */

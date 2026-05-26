@@ -78,6 +78,23 @@ public final class InProcessNodeDirectory implements NodeDirectory {
     }
 
     /**
+     * Registers an authenticated in-process node backed by the given collection.
+     *
+     * @param nodeId the node identifier
+     * @param collection the backing local collection
+     * @param requiredBearerToken token required on node-to-node calls
+     * @return this builder
+     */
+    public Builder registerAuthenticated(
+        NodeId nodeId, VectorCollection collection, String requiredBearerToken) {
+      Objects.requireNonNull(nodeId, "nodeId must not be null");
+      Objects.requireNonNull(collection, "collection must not be null");
+      Objects.requireNonNull(requiredBearerToken, "requiredBearerToken must not be null");
+      clients.put(nodeId, new InProcessNodeSearchClient(collection, requiredBearerToken));
+      return this;
+    }
+
+    /**
      * Registers a node backed by a custom {@link NodeSearchClient}.
      *
      * @param nodeId the node identifier

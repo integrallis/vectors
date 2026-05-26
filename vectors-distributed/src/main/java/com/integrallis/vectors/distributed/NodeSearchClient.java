@@ -38,6 +38,16 @@ public interface NodeSearchClient {
   SearchResult search(LocalSearchRequest request);
 
   /**
+   * Executes a local search with node-call metadata.
+   *
+   * <p>Transport-backed implementations should use {@code context.bearerToken()} as the
+   * node-to-node bearer credential. Implementations that do not require auth may ignore it.
+   */
+  default SearchResult search(LocalSearchRequest request, NodeCallContext context) {
+    return search(request);
+  }
+
+  /**
    * Returns the number of documents in the committed generation on this node.
    *
    * <p>Used by {@link DistributedVectorCollection#size()} for cluster-wide size aggregation.
@@ -46,10 +56,20 @@ public interface NodeSearchClient {
    */
   int size();
 
+  /** Returns the logical document count with node-call metadata. */
+  default int size(NodeCallContext context) {
+    return size();
+  }
+
   /**
    * Returns the physical (including tombstoned) document count on this node.
    *
    * @return non-negative count
    */
   int physicalSize();
+
+  /** Returns the physical document count with node-call metadata. */
+  default int physicalSize(NodeCallContext context) {
+    return physicalSize();
+  }
 }
