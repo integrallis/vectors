@@ -32,7 +32,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class SseEventsTest {
@@ -111,6 +114,102 @@ class SseEventsTest {
         assertThat(joined).contains("\"epoch\":1");
       }
     }
+  }
+
+  @Test
+  void sseSerializesConcurrentEpochEmitsPerConnection() throws Exception {
+    int commits = 12;
+    try (VectorsServer.ServerHandle handle = VectorsServer.start(ServerConfig.forTesting())) {
+      HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
+      int port = handle.port();
+
+      postJson(
+          client,
+          port,
+          "/v1/collections",
+          "{\"name\":\"stream\",\"dimension\":4,\"metric\":\"COSINE\",\"indexType\":\"FLAT\"}");
+
+      HttpResponse<InputStream> sseRes =
+          client.send(
+              HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/events"))
+                  .timeout(Duration.ofSeconds(30))
+                  .header("accept", "text/event-stream")
+                  .GET()
+                  .build(),
+              BodyHandlers.ofInputStream());
+      assertThat(sseRes.statusCode()).isEqualTo(200);
+
+      CountDownLatch gotAll = new CountDownLatch(1);
+      AtomicInteger highestEpoch = new AtomicInteger();
+      Thread reader =
+          Thread.startVirtualThread(
+              () -> {
+                try (BufferedReader r =
+                    new BufferedReader(
+                        new InputStreamReader(sseRes.body(), StandardCharsets.UTF_8))) {
+                  String line;
+                  while ((line = r.readLine()) != null) {
+                    int epoch = parseEpoch(line);
+                    if (epoch > 0) {
+                      highestEpoch.accumulateAndGet(epoch, Math::max);
+                      if (highestEpoch.get() >= commits) {
+                        gotAll.countDown();
+                        break;
+                      }
+                    }
+                  }
+                } catch (Exception ignored) {
+                  // connection closed by server teardown
+                }
+              });
+
+      ExecutorService writers = Executors.newFixedThreadPool(commits);
+      try {
+        CountDownLatch ready = new CountDownLatch(commits);
+        CountDownLatch go = new CountDownLatch(1);
+        for (int i = 0; i < commits; i++) {
+          final int id = i;
+          writers.submit(
+              () -> {
+                ready.countDown();
+                try {
+                  go.await();
+                  postJson(
+                      client,
+                      port,
+                      "/v1/collections/stream/documents",
+                      "{\"documents\":[{\"id\":\"doc-" + id + "\",\"vector\":[1,0,0,0]}]}");
+                } catch (Exception e) {
+                  throw new AssertionError(e);
+                }
+              });
+        }
+        assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+        go.countDown();
+
+        assertThat(gotAll.await(10, TimeUnit.SECONDS))
+            .as("expected concurrent commits to emit %s serialized epoch events", commits)
+            .isTrue();
+        reader.join(Duration.ofSeconds(2));
+        assertThat(highestEpoch.get()).isGreaterThanOrEqualTo(commits);
+      } finally {
+        writers.shutdownNow();
+      }
+    }
+  }
+
+  private static int parseEpoch(String line) {
+    String marker = "\"epoch\":";
+    int start = line.indexOf(marker);
+    if (start < 0) {
+      return -1;
+    }
+    start += marker.length();
+    int end = start;
+    while (end < line.length() && Character.isDigit(line.charAt(end))) {
+      end++;
+    }
+    return Integer.parseInt(line.substring(start, end));
   }
 
   private static HttpResponse<String> postJson(

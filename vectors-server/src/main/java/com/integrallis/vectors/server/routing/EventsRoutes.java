@@ -29,7 +29,10 @@ import io.helidon.webserver.http.ServerResponse;
 import io.helidon.webserver.sse.SseSink;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Route for {@code GET /v1/events} — a Server-Sent Events stream that emits one event per
@@ -49,6 +52,8 @@ import java.util.concurrent.CountDownLatch;
  */
 public final class EventsRoutes implements HttpService {
 
+  private static final int EVENT_QUEUE_CAPACITY = 1024;
+
   private final CollectionRegistry registry;
 
   public EventsRoutes(CollectionRegistry registry) {
@@ -64,8 +69,9 @@ public final class EventsRoutes implements HttpService {
     res.headers().set(HeaderNames.CACHE_CONTROL, "no-cache");
     res.status(Status.OK_200);
     SseSink sink = res.sink(SseSink.TYPE);
-    sink.emit(SseEvent.builder().name("hello").data("{}").build());
     CountDownLatch done = new CountDownLatch(1);
+    SerialSseSink serialSink = new SerialSseSink(sink, done::countDown);
+    serialSink.emit(SseEvent.builder().name("hello").data("{}").build());
     Runnable remove =
         registry.addEpochListener(
             (EpochChange change) -> {
@@ -73,7 +79,9 @@ public final class EventsRoutes implements HttpService {
                 String payload =
                     ObjectMapperHolder.shared()
                         .writeValueAsString(Map.of("name", change.name(), "epoch", change.epoch()));
-                sink.emit(SseEvent.builder().name("epoch").data(payload).build());
+                if (!serialSink.emit(SseEvent.builder().name("epoch").data(payload).build())) {
+                  done.countDown();
+                }
               } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException ex) {
                 // Client disconnected, sink closed, or serialization error — clean up below.
                 done.countDown();
@@ -87,6 +95,56 @@ public final class EventsRoutes implements HttpService {
       Thread.currentThread().interrupt();
     } finally {
       remove.run();
+      serialSink.close();
+    }
+  }
+
+  private static final class SerialSseSink implements AutoCloseable {
+
+    private final SseSink sink;
+    private final BlockingQueue<SseEvent> queue = new ArrayBlockingQueue<>(EVENT_QUEUE_CAPACITY);
+    private final AtomicBoolean closed = new AtomicBoolean();
+    private final Runnable onFailure;
+    private final Thread worker;
+
+    private SerialSseSink(SseSink sink, Runnable onFailure) {
+      this.sink = Objects.requireNonNull(sink, "sink");
+      this.onFailure = Objects.requireNonNull(onFailure, "onFailure");
+      this.worker = Thread.ofVirtual().name("vectors-sse-sink").start(this::drain);
+    }
+
+    private boolean emit(SseEvent event) {
+      Objects.requireNonNull(event, "event");
+      if (closed.get()) {
+        return false;
+      }
+      if (queue.offer(event)) {
+        return true;
+      }
+      onFailure.run();
+      close();
+      return false;
+    }
+
+    private void drain() {
+      try {
+        while (!closed.get()) {
+          SseEvent event = queue.take();
+          sink.emit(event);
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } catch (RuntimeException e) {
+        closed.set(true);
+        onFailure.run();
+      }
+    }
+
+    @Override
+    public void close() {
+      if (closed.compareAndSet(false, true)) {
+        worker.interrupt();
+      }
       try {
         sink.close();
       } catch (RuntimeException ignored) {
