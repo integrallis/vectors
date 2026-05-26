@@ -21,8 +21,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -83,6 +85,29 @@ class WriteAheadLogTest {
       assertThat(wal.nextSeq()).isEqualTo(1L);
       wal.append("y".getBytes());
       assertThat(wal.nextSeq()).isEqualTo(2L);
+    }
+  }
+
+  @Test
+  void implementsWriteAheadLogSpi() throws IOException {
+    try (WriteAheadLog wal = new SegmentedWriteAheadLog(tmp)) {
+      assertThat(wal.groupCommitInterval()).isEqualTo(Duration.ZERO);
+      assertThat(wal.lastSequenceNumber()).isEqualTo(-1L);
+
+      assertThat(wal.append("a".getBytes())).isEqualTo(0L);
+      assertThat(wal.append("b".getBytes())).isEqualTo(1L);
+      assertThat(wal.lastSequenceNumber()).isEqualTo(1L);
+      assertThat(wal.unindexedTailSeqs()).containsExactly(0L, 1L);
+
+      wal.markIndexed(0L, 0L);
+      assertThat(wal.unindexedTailSeqs()).containsExactly(1L, 1L);
+
+      try (Stream<WriteAheadLog.WalEntry> entries = wal.readFrom(1L)) {
+        List<WriteAheadLog.WalEntry> tail = entries.toList();
+        assertThat(tail).hasSize(1);
+        assertThat(tail.getFirst().sequenceNumber()).isEqualTo(1L);
+        assertThat(tail.getFirst().data()).isEqualTo("b".getBytes());
+      }
     }
   }
 

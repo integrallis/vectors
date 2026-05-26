@@ -15,7 +15,6 @@
  */
 package com.integrallis.vectors.storage.wal;
 
-import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,9 +24,11 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import java.util.zip.CRC32;
 
 /**
@@ -50,10 +51,11 @@ import java.util.zip.CRC32;
  *
  * <p>This class is thread-compatible: external synchronisation is required for concurrent appends.
  */
-public final class SegmentedWriteAheadLog implements Closeable {
+public final class SegmentedWriteAheadLog implements WriteAheadLog {
 
   private static final String SEGMENT_PREFIX = "wal-";
   private static final String SEGMENT_SUFFIX = ".seg";
+  private static final Duration GROUP_COMMIT_INTERVAL = Duration.ZERO;
 
   private final Path walDir;
 
@@ -64,6 +66,7 @@ public final class SegmentedWriteAheadLog implements Closeable {
   private long currentSegStart;
 
   private long nextSeq;
+  private long indexedThrough = -1L;
 
   /**
    * Opens (or creates) a WAL in {@code walDir}. Existing segment files are discovered and their
@@ -121,6 +124,48 @@ public final class SegmentedWriteAheadLog implements Closeable {
       if (current != null && start == currentSegStart) continue; // skip the open segment
       replaySegment(segmentPath(start), handler);
     }
+  }
+
+  @Override
+  public synchronized Stream<WalEntry> readFrom(long fromSeqInclusive) throws IOException {
+    List<WalEntry> entries = new ArrayList<>();
+    for (long start : existingSegmentStarts()) {
+      readSegment(segmentPath(start), start, fromSeqInclusive, entries);
+    }
+    return entries.stream();
+  }
+
+  @Override
+  public synchronized long lastSequenceNumber() {
+    return nextSeq - 1;
+  }
+
+  @Override
+  public synchronized long[] unindexedTailSeqs() {
+    long lastSeq = lastSequenceNumber();
+    if (indexedThrough >= lastSeq) {
+      return new long[0];
+    }
+    return new long[] {indexedThrough + 1, lastSeq};
+  }
+
+  @Override
+  public synchronized void markIndexed(long seqStartInclusive, long seqEndInclusive) {
+    if (seqStartInclusive <= indexedThrough + 1 && seqEndInclusive > indexedThrough) {
+      indexedThrough = seqEndInclusive;
+    }
+  }
+
+  @Override
+  public synchronized void flush() throws IOException {
+    if (current != null) {
+      current.force(true);
+    }
+  }
+
+  @Override
+  public Duration groupCommitInterval() {
+    return GROUP_COMMIT_INTERVAL;
   }
 
   /** The sequence number that will be assigned to the next {@link #append} call. */
@@ -191,20 +236,54 @@ public final class SegmentedWriteAheadLog implements Closeable {
     try (InputStream in = Files.newInputStream(segPath)) {
       byte[] lenBuf = new byte[4];
       while (true) {
-        int r = in.readNBytes(lenBuf, 0, 4);
-        if (r == 0) return;
-        if (r < 4) throw new EOFException("truncated WAL entry in " + segPath);
-        int len = ByteBuffer.wrap(lenBuf).order(ByteOrder.BIG_ENDIAN).getInt();
-        byte[] payload = in.readNBytes(len);
-        byte[] crcBuf = in.readNBytes(4);
-        int storedCrc = ByteBuffer.wrap(crcBuf).order(ByteOrder.BIG_ENDIAN).getInt();
-        CRC32 crc = new CRC32();
-        crc.update(payload);
-        if ((int) crc.getValue() != storedCrc)
-          throw new IOException("CRC mismatch in WAL segment " + segPath);
+        byte[] payload = readPayload(in, lenBuf, segPath);
+        if (payload == null) return;
         handler.accept(payload);
       }
     }
+  }
+
+  private void readSegment(
+      Path segPath, long firstSeq, long fromSeqInclusive, List<WalEntry> entries)
+      throws IOException {
+    try (InputStream in = Files.newInputStream(segPath)) {
+      long seq = firstSeq;
+      byte[] lenBuf = new byte[4];
+      while (true) {
+        byte[] payload = readPayload(in, lenBuf, segPath);
+        if (payload == null) return;
+        if (seq >= fromSeqInclusive) {
+          entries.add(new WalEntry(seq, payload));
+        }
+        seq++;
+      }
+    }
+  }
+
+  private static byte[] readPayload(InputStream in, byte[] lenBuf, Path segPath)
+      throws IOException {
+    int r = in.readNBytes(lenBuf, 0, 4);
+    if (r == 0) return null;
+    if (r < 4) throw new EOFException("truncated WAL entry in " + segPath);
+    int len = ByteBuffer.wrap(lenBuf).order(ByteOrder.BIG_ENDIAN).getInt();
+    if (len < 0) {
+      throw new IOException("negative WAL entry length in " + segPath);
+    }
+    byte[] payload = in.readNBytes(len);
+    if (payload.length < len) {
+      throw new EOFException("truncated WAL payload in " + segPath);
+    }
+    byte[] crcBuf = in.readNBytes(4);
+    if (crcBuf.length < 4) {
+      throw new EOFException("truncated WAL checksum in " + segPath);
+    }
+    int storedCrc = ByteBuffer.wrap(crcBuf).order(ByteOrder.BIG_ENDIAN).getInt();
+    CRC32 crc = new CRC32();
+    crc.update(payload);
+    if ((int) crc.getValue() != storedCrc) {
+      throw new IOException("CRC mismatch in WAL segment " + segPath);
+    }
+    return payload;
   }
 
   private static byte[] buildFrame(byte[] payload) {
