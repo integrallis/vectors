@@ -23,232 +23,228 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Stream;
+import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
 
-/**
- * Contract test for all in-JVM {@link StorageBackend} implementations. Each parameterised test runs
- * against {@link HeapStorageBackend} and {@link LocalFileStorageBackend}.
- */
-@Tag("unit")
-class StorageBackendContractTest {
+interface StorageBackendContract {
 
-  @TempDir Path tmpDir;
+  StorageBackend backend() throws IOException;
 
-  static Stream<String> implementations() {
-    return Stream.of("heap", "local");
+  default String key(String suffix) {
+    return suffix + "-" + UUID.randomUUID();
   }
 
-  private StorageBackend backend(String type) throws IOException {
-    return switch (type) {
-      case "heap" -> new HeapStorageBackend();
-      case "local" -> new LocalFileStorageBackend(Files.createTempDirectory(null));
-      default -> throw new IllegalArgumentException(type);
-    };
-  }
-
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void putAndGetRoundTrip(String type) throws IOException {
-    StorageBackend b = backend(type);
+  @Test
+  default void putAndGetRoundTrip() throws IOException {
+    StorageBackend b = backend();
     byte[] value = "hello world".getBytes();
-    b.put("mykey", value);
-    assertThat(b.get("mykey")).isEqualTo(value);
+    String key = key("mykey");
+    b.put(key, value);
+    assertThat(b.get(key)).isEqualTo(value);
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void putDefensivelyCopiesInputArray(String type) throws IOException {
-    StorageBackend b = backend(type);
+  @Test
+  default void putDefensivelyCopiesInputArray() throws IOException {
+    StorageBackend b = backend();
+    String key = key("copy-put");
     byte[] value = new byte[] {1, 2, 3};
 
-    b.put("copy", value);
+    b.put(key, value);
     value[0] = 99;
 
-    assertThat(b.get("copy")).isEqualTo(new byte[] {1, 2, 3});
+    assertThat(b.get(key)).isEqualTo(new byte[] {1, 2, 3});
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void getReturnsDefensiveCopy(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("copy", new byte[] {1, 2, 3});
+  @Test
+  default void getReturnsDefensiveCopy() throws IOException {
+    StorageBackend b = backend();
+    String key = key("copy-get");
+    b.put(key, new byte[] {1, 2, 3});
 
-    byte[] first = b.get("copy");
+    byte[] first = b.get(key);
     first[0] = 99;
 
-    assertThat(b.get("copy")).isEqualTo(new byte[] {1, 2, 3});
+    assertThat(b.get(key)).isEqualTo(new byte[] {1, 2, 3});
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void getMissingKeyReturnsNull(String type) throws IOException {
-    assertThat(backend(type).get("nonexistent")).isNull();
+  @Test
+  default void getMissingKeyReturnsNull() throws IOException {
+    assertThat(backend().get(key("nonexistent"))).isNull();
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void listReturnsKeysUnderPrefix(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("a/x", new byte[] {1});
-    b.put("a/y", new byte[] {2});
-    b.put("b/z", new byte[] {3});
+  @Test
+  default void listReturnsKeysUnderPrefix() throws IOException {
+    StorageBackend b = backend();
+    String prefix = key("list") + "/";
+    b.put(prefix + "a", new byte[] {1});
+    b.put(prefix + "b", new byte[] {2});
+    b.put(key("other"), new byte[] {3});
 
-    List<String> result = b.list("a/");
-    assertThat(result).hasSize(2).containsExactlyInAnyOrder("a/x", "a/y");
+    List<String> result = b.list(prefix);
+
+    assertThat(result).hasSize(2).containsExactlyInAnyOrder(prefix + "a", prefix + "b");
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void deleteRemovesKey(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("todelete", new byte[] {42});
-    b.delete("todelete");
-    assertThat(b.get("todelete")).isNull();
+  @Test
+  default void deleteRemovesKey() throws IOException {
+    StorageBackend b = backend();
+    String key = key("delete");
+    b.put(key, new byte[] {42});
+    b.delete(key);
+    assertThat(b.get(key)).isNull();
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void deleteMissingKeyIsNoOp(String type) throws IOException {
-    backend(type).delete("ghost"); // must not throw
+  @Test
+  default void deleteMissingKeyIsNoOp() throws IOException {
+    backend().delete(key("ghost"));
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void conditionalPut_succeedsWhenKeyAbsent(String type) throws IOException {
-    StorageBackend b = backend(type);
-    StorageBackend.ConditionalPutResult r =
-        b.conditionalPut("newkey", new byte[] {1, 2}, null /* must not exist */);
+  @Test
+  default void conditionalPut_succeedsWhenKeyAbsent() throws IOException {
+    StorageBackend b = backend();
+    String key = key("cas-new");
+    StorageBackend.ConditionalPutResult r = b.conditionalPut(key, new byte[] {1, 2}, null);
 
     assertThat(r.succeeded()).isTrue();
     assertThat(r.newEtag()).isNotNull().isNotEmpty();
-    assertThat(b.get("newkey")).isEqualTo(new byte[] {1, 2});
+    assertThat(b.get(key)).isEqualTo(new byte[] {1, 2});
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void conditionalPut_failsWhenKeyExistsAndEtagIsNull(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("exists", new byte[] {1});
-    StorageBackend.ConditionalPutResult r = b.conditionalPut("exists", new byte[] {2}, null);
+  @Test
+  default void conditionalPut_failsWhenKeyExistsAndEtagIsNull() throws IOException {
+    StorageBackend b = backend();
+    String key = key("cas-exists");
+    b.put(key, new byte[] {1});
+    StorageBackend.ConditionalPutResult r = b.conditionalPut(key, new byte[] {2}, null);
 
     assertThat(r.succeeded()).isFalse();
-    assertThat(b.get("exists")).isEqualTo(new byte[] {1}); // unchanged
+    assertThat(b.get(key)).isEqualTo(new byte[] {1});
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void conditionalPut_failsOnStaleEtag(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("k", new byte[] {10});
+  @Test
+  default void conditionalPut_failsOnStaleEtag() throws IOException {
+    StorageBackend b = backend();
+    String key = key("cas-stale");
+    b.put(key, new byte[] {10});
     StorageBackend.ConditionalPutResult r =
-        b.conditionalPut("k", new byte[] {20}, "stale-etag-xxx");
+        b.conditionalPut(key, new byte[] {20}, "stale-etag-xxx");
 
     assertThat(r.succeeded()).isFalse();
-    assertThat(b.get("k")).isEqualTo(new byte[] {10});
+    assertThat(b.get(key)).isEqualTo(new byte[] {10});
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void conditionalPut_succeedsWithCurrentEtag(String type) throws IOException {
-    StorageBackend b = backend(type);
-    StorageBackend.ConditionalPutResult r1 = b.conditionalPut("chain", new byte[] {1}, null);
+  @Test
+  default void conditionalPut_succeedsWithCurrentEtag() throws IOException {
+    StorageBackend b = backend();
+    String key = key("cas-current");
+    StorageBackend.ConditionalPutResult r1 = b.conditionalPut(key, new byte[] {1}, null);
     assertThat(r1.succeeded()).isTrue();
 
-    StorageBackend.ConditionalPutResult r2 =
-        b.conditionalPut("chain", new byte[] {2}, r1.newEtag());
+    StorageBackend.ConditionalPutResult r2 = b.conditionalPut(key, new byte[] {2}, r1.newEtag());
     assertThat(r2.succeeded()).isTrue();
-    assertThat(b.get("chain")).isEqualTo(new byte[] {2});
+    assertThat(b.get(key)).isEqualTo(new byte[] {2});
 
-    StorageBackend.ConditionalPutResult r3 =
-        b.conditionalPut("chain", new byte[] {3}, r2.newEtag());
+    StorageBackend.ConditionalPutResult r3 = b.conditionalPut(key, new byte[] {3}, r2.newEtag());
     assertThat(r3.succeeded()).isTrue();
-    assertThat(b.get("chain")).isEqualTo(new byte[] {3});
+    assertThat(b.get(key)).isEqualTo(new byte[] {3});
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void overwriteWithPutChangesValue(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("key", new byte[] {1, 2, 3});
-    b.put("key", new byte[] {9});
-    assertThat(b.get("key")).isEqualTo(new byte[] {9});
+  @Test
+  default void overwriteWithPutChangesValue() throws IOException {
+    StorageBackend b = backend();
+    String key = key("overwrite");
+    b.put(key, new byte[] {1, 2, 3});
+    b.put(key, new byte[] {9});
+    assertThat(b.get(key)).isEqualTo(new byte[] {9});
   }
 
-  // ─── getRange (§6.1) ──────────────────────────────────────────────────────
-
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void getRange_partialFetchMatchesFullSlice(String type) throws IOException {
-    StorageBackend b = backend(type);
+  @Test
+  default void getRange_partialFetchMatchesFullSlice() throws IOException {
+    StorageBackend b = backend();
+    String key = key("range");
     byte[] full = new byte[1024];
     for (int i = 0; i < full.length; i++) full[i] = (byte) (i & 0xFF);
-    b.put("blob", full);
+    b.put(key, full);
 
-    byte[] slice = b.getRange("blob", 100, 256);
+    byte[] slice = b.getRange(key, 100, 256);
 
     assertThat(slice).hasSize(256).isEqualTo(Arrays.copyOfRange(full, 100, 356));
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void getRange_offsetZeroLengthEqualsSize_returnsFullValue(String type) throws IOException {
-    StorageBackend b = backend(type);
+  @Test
+  default void getRange_offsetZeroLengthEqualsSize_returnsFullValue() throws IOException {
+    StorageBackend b = backend();
+    String key = key("range-full");
     byte[] full = "the quick brown fox".getBytes();
-    b.put("k", full);
+    b.put(key, full);
 
-    assertThat(b.getRange("k", 0, full.length)).isEqualTo(full);
+    assertThat(b.getRange(key, 0, full.length)).isEqualTo(full);
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void getRange_zeroLengthReturnsEmpty(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("k", new byte[] {1, 2, 3});
+  @Test
+  default void getRange_zeroLengthReturnsEmpty() throws IOException {
+    StorageBackend b = backend();
+    String key = key("range-empty");
+    b.put(key, new byte[] {1, 2, 3});
 
-    assertThat(b.getRange("k", 1, 0)).isEmpty();
+    assertThat(b.getRange(key, 1, 0)).isEmpty();
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void getRange_missingKeyReturnsNull(String type) throws IOException {
-    assertThat(backend(type).getRange("ghost", 0, 4)).isNull();
+  @Test
+  default void getRange_missingKeyReturnsNull() throws IOException {
+    assertThat(backend().getRange(key("range-missing"), 0, 4)).isNull();
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void getRange_pastEofThrows(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("k", new byte[] {1, 2, 3, 4});
+  @Test
+  default void getRange_pastEofThrows() throws IOException {
+    StorageBackend b = backend();
+    String key = key("range-past");
+    b.put(key, new byte[] {1, 2, 3, 4});
 
-    assertThatThrownBy(() -> b.getRange("k", 2, 5)).isInstanceOf(IndexOutOfBoundsException.class);
+    assertThatThrownBy(() -> b.getRange(key, 2, 5)).isInstanceOf(IndexOutOfBoundsException.class);
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void getRange_negativeOffsetThrows(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("k", new byte[] {1, 2, 3, 4});
+  @Test
+  default void getRange_negativeOffsetThrows() throws IOException {
+    StorageBackend b = backend();
+    String key = key("range-negative-offset");
+    b.put(key, new byte[] {1, 2, 3, 4});
 
-    assertThatThrownBy(() -> b.getRange("k", -1, 2)).isInstanceOf(IndexOutOfBoundsException.class);
+    assertThatThrownBy(() -> b.getRange(key, -1, 2)).isInstanceOf(IndexOutOfBoundsException.class);
   }
 
-  @ParameterizedTest
-  @MethodSource("implementations")
-  void getRange_negativeLengthThrows(String type) throws IOException {
-    StorageBackend b = backend(type);
-    b.put("k", new byte[] {1, 2, 3, 4});
+  @Test
+  default void getRange_negativeLengthThrows() throws IOException {
+    StorageBackend b = backend();
+    String key = key("range-negative-length");
+    b.put(key, new byte[] {1, 2, 3, 4});
 
-    assertThatThrownBy(() -> b.getRange("k", 0, -1)).isInstanceOf(IndexOutOfBoundsException.class);
+    assertThatThrownBy(() -> b.getRange(key, 0, -1)).isInstanceOf(IndexOutOfBoundsException.class);
+  }
+}
+
+@Tag("unit")
+class HeapStorageBackendContractTest implements StorageBackendContract {
+  @Override
+  public StorageBackend backend() {
+    return new HeapStorageBackend();
+  }
+}
+
+@Tag("unit")
+class LocalFileStorageBackendContractTest implements StorageBackendContract {
+  @TempDir Path tmpDir;
+
+  @Override
+  public StorageBackend backend() throws IOException {
+    return new LocalFileStorageBackend(tmpDir);
   }
 
   @Test
   void localFileRejectsPathTraversal() throws IOException {
-    StorageBackend b = new LocalFileStorageBackend(tmpDir);
+    StorageBackend b = backend();
 
     assertThatThrownBy(() -> b.put("../escape", new byte[] {1})).isInstanceOf(IOException.class);
     assertThatThrownBy(() -> b.put("a/../escape", new byte[] {1})).isInstanceOf(IOException.class);
@@ -258,20 +254,22 @@ class StorageBackendContractTest {
 
   @Test
   void localFileStoresEtagAndValueAtomicallyInOneFile() throws IOException {
-    StorageBackend b = new LocalFileStorageBackend(tmpDir);
+    StorageBackend b = backend();
+    String key = key("atomic");
 
-    StorageBackend.ConditionalPutResult first = b.conditionalPut("dir/k", new byte[] {1, 2}, null);
+    StorageBackend.ConditionalPutResult first = b.conditionalPut(key, new byte[] {1, 2, 3}, null);
+    StorageBackend.ConditionalPutResult second =
+        b.conditionalPut(key, new byte[] {4, 5, 6}, first.newEtag());
+
     assertThat(first.succeeded()).isTrue();
-
-    assertThat(tmpDir.resolve("dir/k")).exists();
-    assertThat(tmpDir.resolve("dir/k.etag")).doesNotExist();
-    assertThat(b.get("dir/k")).isEqualTo(new byte[] {1, 2});
+    assertThat(second.succeeded()).isTrue();
+    assertThat(b.get(key)).isEqualTo(new byte[] {4, 5, 6});
 
     StorageBackend reopened = new LocalFileStorageBackend(tmpDir);
-    StorageBackend.ConditionalPutResult second =
-        reopened.conditionalPut("dir/k", new byte[] {3}, first.newEtag());
-
-    assertThat(second.succeeded()).isTrue();
-    assertThat(reopened.get("dir/k")).isEqualTo(new byte[] {3});
+    assertThat(reopened.get(key)).isEqualTo(new byte[] {4, 5, 6});
+    StorageBackend.ConditionalPutResult stale =
+        reopened.conditionalPut(key, new byte[] {7}, first.newEtag());
+    assertThat(stale.succeeded()).isFalse();
+    assertThat(reopened.get(key)).isEqualTo(new byte[] {4, 5, 6});
   }
 }

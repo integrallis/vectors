@@ -57,7 +57,7 @@ import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
  */
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
-class S3StorageBackendIT {
+class S3StorageBackendIT implements StorageBackendContract {
 
   private static final String BUCKET = "test-vectors-storage";
 
@@ -91,12 +91,18 @@ class S3StorageBackendIT {
     if (s3Client != null) s3Client.close();
   }
 
-  private S3StorageBackend backend() {
+  @Override
+  public S3StorageBackend backend() {
     return new S3StorageBackend(s3Client, BUCKET);
   }
 
+  @Override
+  public String key(String suffix) {
+    return "s3-contract-" + UUID.randomUUID() + "/" + suffix;
+  }
+
   @Test
-  void putAndGetRoundTrip() throws IOException {
+  public void putAndGetRoundTrip() throws IOException {
     S3StorageBackend b = backend();
     String key = "obj-" + UUID.randomUUID();
     byte[] value = "hello s3".getBytes();
@@ -105,7 +111,7 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void putDefensivelyCopiesInputArray() throws IOException {
+  public void putDefensivelyCopiesInputArray() throws IOException {
     S3StorageBackend b = backend();
     String key = "copy-put-" + UUID.randomUUID();
     byte[] value = new byte[] {1, 2, 3};
@@ -117,7 +123,7 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void getReturnsDefensiveCopy() throws IOException {
+  public void getReturnsDefensiveCopy() throws IOException {
     S3StorageBackend b = backend();
     String key = "copy-get-" + UUID.randomUUID();
     b.put(key, new byte[] {1, 2, 3});
@@ -129,7 +135,7 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void listReturnsKeysUnderPrefix() throws IOException {
+  public void listReturnsKeysUnderPrefix() throws IOException {
     S3StorageBackend b = backend();
     String prefix = "list-" + UUID.randomUUID() + "/";
     b.put(prefix + "a", new byte[] {1});
@@ -142,7 +148,7 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void deleteRemovesKey() throws IOException {
+  public void deleteRemovesKey() throws IOException {
     S3StorageBackend b = backend();
     String key = "delete-" + UUID.randomUUID();
     b.put(key, new byte[] {42});
@@ -153,12 +159,12 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void getMissingKeyReturnsNull() throws IOException {
+  public void getMissingKeyReturnsNull() throws IOException {
     assertThat(backend().get("absent-" + UUID.randomUUID())).isNull();
   }
 
   @Test
-  void getRange_partialFetchMatchesFullSlice() throws IOException {
+  public void getRange_partialFetchMatchesFullSlice() throws IOException {
     S3StorageBackend b = backend();
     String key = "blob-" + UUID.randomUUID();
     byte[] full = new byte[4096];
@@ -187,7 +193,7 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void getRange_pastEofThrows() throws IOException {
+  public void getRange_pastEofThrows() throws IOException {
     S3StorageBackend b = backend();
     String key = "small-" + UUID.randomUUID();
     b.put(key, new byte[] {1, 2, 3, 4});
@@ -196,12 +202,12 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void getRange_missingKeyReturnsNull() throws IOException {
+  public void getRange_missingKeyReturnsNull() throws IOException {
     assertThat(backend().getRange("ghost-" + UUID.randomUUID(), 0, 4)).isNull();
   }
 
   @Test
-  void conditionalPut_succeedsWhenKeyAbsent() throws IOException {
+  public void conditionalPut_succeedsWhenKeyAbsent() throws IOException {
     S3StorageBackend b = backend();
     String key = "cas-new-" + UUID.randomUUID();
 
@@ -213,7 +219,7 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void conditionalPut_failsWhenKeyExistsAndEtagIsNull() throws IOException {
+  public void conditionalPut_failsWhenKeyExistsAndEtagIsNull() throws IOException {
     S3StorageBackend b = backend();
     String key = "cas-exists-" + UUID.randomUUID();
     b.put(key, new byte[] {1});
@@ -226,7 +232,7 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void conditionalPut_failsOnStaleEtag() throws IOException {
+  public void conditionalPut_failsOnStaleEtag() throws IOException {
     S3StorageBackend b = backend();
     String key = "cas-stale-" + UUID.randomUUID();
     b.put(key, new byte[] {1});
@@ -240,7 +246,7 @@ class S3StorageBackendIT {
   }
 
   @Test
-  void conditionalPut_succeedsWithCurrentEtag() throws IOException {
+  public void conditionalPut_succeedsWithCurrentEtag() throws IOException {
     S3StorageBackend b = backend();
     String key = "cas-current-" + UUID.randomUUID();
     StorageBackend.ConditionalPutResult first = b.conditionalPut(key, new byte[] {1}, null);
