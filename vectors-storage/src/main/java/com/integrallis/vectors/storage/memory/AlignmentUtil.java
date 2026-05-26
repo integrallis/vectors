@@ -15,6 +15,11 @@
  */
 package com.integrallis.vectors.storage.memory;
 
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
+
 /**
  * Alignment helpers for SIMD-friendly memory layout. Provides constants for page, cache-line, and
  * vector-register alignment, plus rounding utilities.
@@ -23,7 +28,7 @@ public final class AlignmentUtil {
 
   private AlignmentUtil() {}
 
-  /** Default OS page size (4KB). Used for section-level alignment in on-disk formats. */
+  /** OS page size in bytes. Used for section-level alignment in on-disk formats. */
   public static final int PAGE_SIZE = detectPageSize();
 
   /**
@@ -72,13 +77,33 @@ public final class AlignmentUtil {
   }
 
   private static int detectPageSize() {
-    // Try to get the actual page size from the system. This is typically 4096 on x86/ARM.
-    // JDK doesn't expose sysconf(_SC_PAGESIZE) directly, but on most systems it's 4096.
-    // We could use FFM Linker to call sysconf, but for now use the safe default.
     String override = System.getProperty("vectors.pageSize");
     if (override != null) {
-      return Integer.parseInt(override);
+      return requirePowerOfTwoPageSize(Integer.parseInt(override), "vectors.pageSize");
     }
-    return 4096;
+    return requirePowerOfTwoPageSize(nativePageSize(), "native getpagesize()");
+  }
+
+  @SuppressWarnings("restricted")
+  private static int nativePageSize() {
+    try {
+      Linker linker = Linker.nativeLinker();
+      var symbol = linker.defaultLookup().find("getpagesize");
+      if (symbol.isPresent()) {
+        MethodHandle handle =
+            linker.downcallHandle(symbol.get(), FunctionDescriptor.of(ValueLayout.JAVA_INT));
+        return (int) handle.invokeExact();
+      }
+    } catch (Throwable e) {
+      throw new ExceptionInInitializerError(e);
+    }
+    throw new ExceptionInInitializerError("native getpagesize() is not available");
+  }
+
+  private static int requirePowerOfTwoPageSize(int pageSize, String source) {
+    if (pageSize <= 0 || (pageSize & (pageSize - 1)) != 0) {
+      throw new IllegalStateException(source + " returned invalid page size: " + pageSize);
+    }
+    return pageSize;
   }
 }
