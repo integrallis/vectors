@@ -142,6 +142,29 @@ class WriteAheadLogContractTest {
     }
   }
 
+  @ParameterizedTest
+  @MethodSource("backends")
+  void reopenedWalRecoversDurableActiveSegment(String type) throws IOException {
+    StorageBackend b = backend(type);
+    BackendWriteAheadLog writer = wal(b);
+    try {
+      writer.append("a".getBytes());
+      writer.append("b".getBytes());
+
+      try (BackendWriteAheadLog recovered = wal(b)) {
+        assertThat(recovered.lastSequenceNumber()).isEqualTo(1L);
+        assertThat(recovered.append("c".getBytes())).isEqualTo(2L);
+        try (Stream<WriteAheadLog.WalEntry> s = recovered.readFrom(0)) {
+          assertThat(s.toList())
+              .extracting(e -> new String(e.data()))
+              .containsExactly("a", "b", "c");
+        }
+      }
+    } finally {
+      writer.close();
+    }
+  }
+
   // ─── segment rollover & integrity ─────────────────────────────────────────
 
   @ParameterizedTest

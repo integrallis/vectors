@@ -422,6 +422,31 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
     return entries;
   }
 
+  private static long lastSeqInSegment(String key, long firstSeq, byte[] data) throws IOException {
+    long seq = firstSeq;
+    int off = 0;
+    while (off < data.length) {
+      if (off + 4 > data.length) throw new IOException("truncated WAL segment: " + key);
+      int len = ByteBuffer.wrap(data, off, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+      off += 4;
+      if (len < 0 || off + len + 4 > data.length) {
+        throw new IOException("corrupt WAL frame in " + key + " at seq " + seq);
+      }
+      byte[] payload = new byte[len];
+      System.arraycopy(data, off, payload, 0, len);
+      off += len;
+      int storedCrc = ByteBuffer.wrap(data, off, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+      off += 4;
+      CRC32 crc = new CRC32();
+      crc.update(payload);
+      if ((int) crc.getValue() != storedCrc) {
+        throw new IOException("CRC mismatch in WAL segment " + key + " at seq " + seq);
+      }
+      seq++;
+    }
+    return seq - 1;
+  }
+
   private final class WalEntryIterator implements Iterator<WalEntry> {
     private final Iterator<SegmentReadPlan> plans;
     private Iterator<WalEntry> current = List.<WalEntry>of().iterator();
@@ -481,14 +506,10 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
 
   private void loadManifest() throws IOException {
     byte[] raw = backend.get(manifestKey());
-    if (raw == null) {
-      activeSegmentIndex = 1;
-      activeFirstSeq = 0L;
-      nextSeq = 0L;
-      lastDurableSeq = -1L;
-      return;
-    }
-    Manifest m = Manifest.parse(new String(raw, java.nio.charset.StandardCharsets.UTF_8));
+    Manifest m =
+        raw == null
+            ? new Manifest(-1L, List.of())
+            : Manifest.parse(new String(raw, java.nio.charset.StandardCharsets.UTF_8));
     closedSegments.addAll(m.segments);
     int maxIdx = 0;
     long maxLastSeq = -1L;
@@ -496,10 +517,45 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
       if (s.index > maxIdx) maxIdx = s.index;
       if (s.lastSeq > maxLastSeq) maxLastSeq = s.lastSeq;
     }
-    activeSegmentIndex = maxIdx + 1;
-    nextSeq = maxLastSeq + 1;
-    lastDurableSeq = maxLastSeq;
-    activeFirstSeq = nextSeq;
+    List<RecoveredSegment> recovered = new ArrayList<>();
+    int candidateIndex = maxIdx + 1;
+    long candidateFirstSeq = maxLastSeq + 1;
+    while (true) {
+      String key = segmentKey(candidateIndex);
+      byte[] data = backend.get(key);
+      if (data == null) break;
+      long candidateLastSeq = lastSeqInSegment(key, candidateFirstSeq, data);
+      recovered.add(
+          new RecoveredSegment(candidateIndex, candidateFirstSeq, candidateLastSeq, data));
+      candidateIndex++;
+      candidateFirstSeq = candidateLastSeq + 1;
+    }
+
+    if (recovered.isEmpty()) {
+      if (m.lastSeq > maxLastSeq) {
+        throw new IOException(
+            "WAL manifest references missing active segment: " + segmentKey(maxIdx + 1));
+      }
+      activeSegmentIndex = maxIdx + 1;
+      nextSeq = maxLastSeq + 1;
+      lastDurableSeq = maxLastSeq;
+      activeFirstSeq = nextSeq;
+      return;
+    }
+
+    for (int i = 0; i < recovered.size() - 1; i++) {
+      RecoveredSegment s = recovered.get(i);
+      closedSegments.add(new SegmentMeta(s.index(), s.firstSeq(), s.lastSeq(), false));
+    }
+    RecoveredSegment active = recovered.getLast();
+    activeSegmentIndex = active.index();
+    activeFirstSeq = active.firstSeq();
+    activeBytes = active.bytes();
+    lastDurableSeq = active.lastSeq();
+    if (m.lastSeq > lastDurableSeq) {
+      throw new IOException("WAL manifest lastSeq exceeds recovered segments: " + m.lastSeq);
+    }
+    nextSeq = lastDurableSeq + 1;
   }
 
   private void writeManifest() throws IOException {
@@ -513,6 +569,8 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
 
   private record SegmentReadPlan(
       String key, long firstSeq, long fromSeqInclusive, long lastSeqInSegment) {}
+
+  private record RecoveredSegment(int index, long firstSeq, long lastSeq, byte[] bytes) {}
 
   static final class SegmentMeta {
     final int index;
