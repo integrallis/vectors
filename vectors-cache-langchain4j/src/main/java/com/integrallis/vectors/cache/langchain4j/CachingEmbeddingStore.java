@@ -24,6 +24,8 @@ import dev.langchain4j.store.embedding.filter.Filter;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Caching decorator around a LangChain4j {@link EmbeddingStore}. Search results are cached in the
@@ -42,6 +44,7 @@ public class CachingEmbeddingStore<T> implements EmbeddingStore<T> {
 
   private final EmbeddingStore<T> delegate;
   private final VectorCache<EmbeddingSearchRequest, EmbeddingSearchResult<T>> searchCache;
+  private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
   /**
    * @param delegate non-null underlying store
@@ -63,72 +66,127 @@ public class CachingEmbeddingStore<T> implements EmbeddingStore<T> {
 
   @Override
   public String add(Embedding embedding) {
-    String id = delegate.add(embedding);
-    invalidate();
-    return id;
+    lock.writeLock().lock();
+    try {
+      String id = delegate.add(embedding);
+      invalidate();
+      return id;
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public void add(String id, Embedding embedding) {
-    delegate.add(id, embedding);
-    invalidate();
+    lock.writeLock().lock();
+    try {
+      delegate.add(id, embedding);
+      invalidate();
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public String add(Embedding embedding, T embedded) {
-    String id = delegate.add(embedding, embedded);
-    invalidate();
-    return id;
+    lock.writeLock().lock();
+    try {
+      String id = delegate.add(embedding, embedded);
+      invalidate();
+      return id;
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public List<String> addAll(List<Embedding> embeddings) {
-    List<String> ids = delegate.addAll(embeddings);
-    invalidate();
-    return ids;
+    lock.writeLock().lock();
+    try {
+      List<String> ids = delegate.addAll(embeddings);
+      invalidate();
+      return ids;
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public List<String> addAll(List<Embedding> embeddings, List<T> embedded) {
-    List<String> ids = delegate.addAll(embeddings, embedded);
-    invalidate();
-    return ids;
+    lock.writeLock().lock();
+    try {
+      List<String> ids = delegate.addAll(embeddings, embedded);
+      invalidate();
+      return ids;
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public void addAll(List<String> ids, List<Embedding> embeddings, List<T> embedded) {
-    delegate.addAll(ids, embeddings, embedded);
-    invalidate();
+    lock.writeLock().lock();
+    try {
+      delegate.addAll(ids, embeddings, embedded);
+      invalidate();
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public void remove(String id) {
-    delegate.remove(id);
-    invalidate();
+    lock.writeLock().lock();
+    try {
+      delegate.remove(id);
+      invalidate();
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public void removeAll(Collection<String> ids) {
-    delegate.removeAll(ids);
-    invalidate();
+    lock.writeLock().lock();
+    try {
+      delegate.removeAll(ids);
+      invalidate();
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public void removeAll(Filter filter) {
-    delegate.removeAll(filter);
-    invalidate();
+    lock.writeLock().lock();
+    try {
+      delegate.removeAll(filter);
+      invalidate();
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public void removeAll() {
-    delegate.removeAll();
-    invalidate();
+    lock.writeLock().lock();
+    try {
+      delegate.removeAll();
+      invalidate();
+    } finally {
+      lock.writeLock().unlock();
+    }
   }
 
   @Override
   public EmbeddingSearchResult<T> search(EmbeddingSearchRequest request) {
     Objects.requireNonNull(request, "request");
-    return searchCache.getOrCompute(request, delegate::search);
+    lock.readLock().lock();
+    try {
+      return searchCache.getOrCompute(request, delegate::search);
+    } finally {
+      lock.readLock().unlock();
+    }
   }
 
   private void invalidate() {

@@ -23,6 +23,14 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
+import dev.langchain4j.store.embedding.EmbeddingStore;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -113,5 +121,93 @@ class CachingEmbeddingStoreTest {
     store.search(req);
 
     assertThat(fake.searchCalls.get()).isEqualTo(2);
+  }
+
+  @Test
+  void mutationCannotInstallStaleResultAfterInvalidation() throws Exception {
+    BlockingSearchStore<TextSegment> blocking = new BlockingSearchStore<>();
+    VectorCache<EmbeddingSearchRequest, EmbeddingSearchResult<TextSegment>> localCache =
+        CaffeineVectorCache.<EmbeddingSearchRequest, EmbeddingSearchResult<TextSegment>>builder()
+            .maximumSize(64)
+            .build();
+    CachingEmbeddingStore<TextSegment> localStore =
+        new CachingEmbeddingStore<>(blocking, localCache);
+    localStore.add(Embedding.from(new float[] {1f, 0f, 0f}), TextSegment.from("apple"));
+    blocking.delegate.searchCalls.set(0);
+
+    EmbeddingSearchRequest req =
+        EmbeddingSearchRequest.builder()
+            .queryEmbedding(Embedding.from(new float[] {1f, 0f, 0f}))
+            .maxResults(1)
+            .build();
+    blocking.blockSearch.set(true);
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try {
+      Future<EmbeddingSearchResult<TextSegment>> inFlightSearch =
+          executor.submit(() -> localStore.search(req));
+      assertThat(blocking.searchEntered.await(5, TimeUnit.SECONDS)).isTrue();
+
+      Future<?> mutation = executor.submit(() -> localStore.removeAll());
+      Thread.sleep(100);
+      assertThat(mutation.isDone()).isFalse();
+
+      blocking.releaseSearch.countDown();
+      assertThat(inFlightSearch.get(5, TimeUnit.SECONDS).matches()).hasSize(1);
+      mutation.get(5, TimeUnit.SECONDS);
+
+      EmbeddingSearchResult<TextSegment> afterMutation = localStore.search(req);
+      assertThat(afterMutation.matches()).isEmpty();
+      assertThat(blocking.delegate.searchCalls.get()).isEqualTo(2);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  private static final class BlockingSearchStore<T> implements EmbeddingStore<T> {
+    private final FakeEmbeddingStore<T> delegate = new FakeEmbeddingStore<>();
+    private final AtomicBoolean blockSearch = new AtomicBoolean();
+    private final CountDownLatch searchEntered = new CountDownLatch(1);
+    private final CountDownLatch releaseSearch = new CountDownLatch(1);
+
+    @Override
+    public String add(Embedding embedding) {
+      return delegate.add(embedding);
+    }
+
+    @Override
+    public void add(String id, Embedding embedding) {
+      delegate.add(id, embedding);
+    }
+
+    @Override
+    public String add(Embedding embedding, T embedded) {
+      return delegate.add(embedding, embedded);
+    }
+
+    @Override
+    public List<String> addAll(List<Embedding> embeddings) {
+      return delegate.addAll(embeddings);
+    }
+
+    @Override
+    public void removeAll() {
+      delegate.removeAll();
+    }
+
+    @Override
+    public EmbeddingSearchResult<T> search(EmbeddingSearchRequest request) {
+      if (blockSearch.get()) {
+        searchEntered.countDown();
+        try {
+          assertThat(releaseSearch.await(5, TimeUnit.SECONDS)).isTrue();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          throw new IllegalStateException("interrupted while waiting to search", e);
+        } finally {
+          blockSearch.set(false);
+        }
+      }
+      return delegate.search(request);
+    }
   }
 }
