@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -72,6 +73,23 @@ interface StorageBackendContract {
   @Test
   default void getMissingKeyReturnsNull() throws IOException {
     assertThat(backend().get(key("nonexistent"))).isNull();
+  }
+
+  @Test
+  default void openStreamsStoredValue() throws IOException {
+    StorageBackend b = backend();
+    String key = key("open");
+    b.put(key, new byte[] {1, 2, 3, 4});
+
+    try (InputStream in = b.open(key)) {
+      assertThat(in).isNotNull();
+      assertThat(in.readAllBytes()).isEqualTo(new byte[] {1, 2, 3, 4});
+    }
+  }
+
+  @Test
+  default void openMissingKeyReturnsNull() throws IOException {
+    assertThat(backend().open(key("open-missing"))).isNull();
   }
 
   @Test

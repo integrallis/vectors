@@ -15,7 +15,9 @@
  */
 package com.integrallis.vectors.storage.backend;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -45,6 +47,17 @@ public interface StorageBackend {
    * @throws IOException on storage failure
    */
   byte[] get(String key) throws IOException;
+
+  /**
+   * Opens a stream for the value stored under {@code key}, or {@code null} if the key does not
+   * exist. Callers own the returned stream and must close it.
+   *
+   * @throws IOException on storage failure
+   */
+  default InputStream open(String key) throws IOException {
+    byte[] data = get(key);
+    return data == null ? null : new ByteArrayInputStream(data);
+  }
 
   /**
    * Returns exactly {@code length} bytes from the value stored under {@code key}, starting at byte

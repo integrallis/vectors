@@ -18,6 +18,7 @@ package com.integrallis.vectors.storage.wal;
 import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -402,32 +403,36 @@ public final class BackendWriteAheadLog implements WriteAheadLog {
   }
 
   private List<WalEntry> readSegment(SegmentReadPlan plan) throws IOException {
-    byte[] data = backend.get(plan.key());
-    if (data == null) throw new IOException("WAL segment missing: " + plan.key());
-    List<WalEntry> entries = new ArrayList<>();
-    long seq = plan.firstSeq();
-    int off = 0;
-    while (off < data.length && seq <= plan.lastSeqInSegment()) {
-      if (off + 4 > data.length) throw new IOException("truncated WAL segment: " + plan.key());
-      int len = ByteBuffer.wrap(data, off, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-      off += 4;
-      if (len < 0 || off + len + 4 > data.length) {
-        throw new IOException("corrupt WAL frame in " + plan.key() + " at seq " + seq);
+    try (InputStream in = backend.open(plan.key())) {
+      if (in == null) throw new IOException("WAL segment missing: " + plan.key());
+      List<WalEntry> entries = new ArrayList<>();
+      long seq = plan.firstSeq();
+      while (seq <= plan.lastSeqInSegment()) {
+        byte[] lenBuf = in.readNBytes(4);
+        if (lenBuf.length == 0) {
+          break;
+        }
+        if (lenBuf.length < 4) throw new IOException("truncated WAL segment: " + plan.key());
+        int len = ByteBuffer.wrap(lenBuf).order(ByteOrder.BIG_ENDIAN).getInt();
+        if (len < 0) {
+          throw new IOException("corrupt WAL frame in " + plan.key() + " at seq " + seq);
+        }
+        byte[] payload = in.readNBytes(len);
+        byte[] crcBuf = in.readNBytes(4);
+        if (payload.length < len || crcBuf.length < 4) {
+          throw new IOException("corrupt WAL frame in " + plan.key() + " at seq " + seq);
+        }
+        int storedCrc = ByteBuffer.wrap(crcBuf).order(ByteOrder.BIG_ENDIAN).getInt();
+        CRC32 crc = new CRC32();
+        crc.update(payload);
+        if ((int) crc.getValue() != storedCrc) {
+          throw new IOException("CRC mismatch in WAL segment " + plan.key() + " at seq " + seq);
+        }
+        if (seq >= plan.fromSeqInclusive()) entries.add(new WalEntry(seq, payload));
+        seq++;
       }
-      byte[] payload = new byte[len];
-      System.arraycopy(data, off, payload, 0, len);
-      off += len;
-      int storedCrc = ByteBuffer.wrap(data, off, 4).order(ByteOrder.BIG_ENDIAN).getInt();
-      off += 4;
-      CRC32 crc = new CRC32();
-      crc.update(payload);
-      if ((int) crc.getValue() != storedCrc) {
-        throw new IOException("CRC mismatch in WAL segment " + plan.key() + " at seq " + seq);
-      }
-      if (seq >= plan.fromSeqInclusive()) entries.add(new WalEntry(seq, payload));
-      seq++;
+      return entries;
     }
-    return entries;
   }
 
   private static long lastSeqInSegment(String key, long firstSeq, byte[] data) throws IOException {

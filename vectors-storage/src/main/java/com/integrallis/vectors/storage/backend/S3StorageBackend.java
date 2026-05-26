@@ -17,17 +17,20 @@ package com.integrallis.vectors.storage.backend;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
@@ -128,6 +131,19 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
       return null;
     } catch (SdkException e) {
       throw new IOException("S3 get failed for key: " + key, e);
+    }
+  }
+
+  @Override
+  public InputStream open(String key) throws IOException {
+    try {
+      ResponseInputStream<GetObjectResponse> response =
+          s3.getObject(GetObjectRequest.builder().bucket(bucket).key(key).build());
+      return response;
+    } catch (NoSuchKeyException e) {
+      return null;
+    } catch (SdkException e) {
+      throw new IOException("S3 open failed for key: " + key, e);
     }
   }
 
