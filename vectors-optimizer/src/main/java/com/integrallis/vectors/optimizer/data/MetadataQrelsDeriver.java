@@ -58,11 +58,12 @@ public final class MetadataQrelsDeriver {
   public static Result derive(Iterable<Document> docs, String metadataField) {
     Objects.requireNonNull(docs, "docs");
     Objects.requireNonNull(metadataField, "metadataField");
+    List<Document> materialized = materialize(docs);
 
     Map<String, Set<String>> labelToDocIds = new LinkedHashMap<>();
     int labeled = 0;
     int unlabeled = 0;
-    for (Document d : docs) {
+    for (Document d : materialized) {
       List<String> labels = labelsOf(d, metadataField);
       if (labels.isEmpty()) {
         unlabeled++;
@@ -87,7 +88,7 @@ public final class MetadataQrelsDeriver {
 
     // Build qrels: for each labeled doc, every doc with the same label is relevant=1.
     Map<String, Map<String, Integer>> rel = new LinkedHashMap<>();
-    for (Document d : docs) {
+    for (Document d : materialized) {
       List<String> labels = labelsOf(d, metadataField);
       if (labels.isEmpty()) continue;
       Map<String, Integer> row = new LinkedHashMap<>();
@@ -100,6 +101,19 @@ public final class MetadataQrelsDeriver {
       if (!row.isEmpty()) rel.put(d.id(), row);
     }
     return new Result(new Qrels(rel), new Coverage(labeled, unlabeled, labelToDocIds.size()));
+  }
+
+  private static List<Document> materialize(Iterable<Document> docs) {
+    if (docs instanceof List<?> list) {
+      @SuppressWarnings("unchecked")
+      List<Document> typed = (List<Document>) list;
+      return typed;
+    }
+    java.util.ArrayList<Document> out = new java.util.ArrayList<>();
+    for (Document doc : docs) {
+      out.add(doc);
+    }
+    return List.copyOf(out);
   }
 
   private static List<String> labelsOf(Document d, String field) {

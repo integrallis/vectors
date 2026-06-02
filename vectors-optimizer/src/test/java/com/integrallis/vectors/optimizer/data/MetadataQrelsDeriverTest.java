@@ -22,6 +22,7 @@ import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.MetadataValue;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -94,5 +95,28 @@ class MetadataQrelsDeriverTest {
     assertThat(result.coverage().distinctLabels()).isEqualTo(3);
     assertThat(result.coverage().labeledDocs()).isEqualTo(4);
     assertThat(result.coverage().unlabeledDocs()).isZero();
+  }
+
+  @Test
+  void derivesFromOneShotIterable() {
+    List<Document> docs =
+        List.of(
+            doc("d1", "label", new MetadataValue.Str("animal")),
+            doc("d2", "label", new MetadataValue.Str("animal")),
+            doc("d3", "label", new MetadataValue.Str("plant")));
+    AtomicBoolean consumed = new AtomicBoolean();
+    Iterable<Document> oneShot =
+        () -> {
+          if (!consumed.compareAndSet(false, true)) {
+            throw new IllegalStateException("iterated twice");
+          }
+          return docs.iterator();
+        };
+
+    var result = MetadataQrelsDeriver.derive(oneShot, "label");
+
+    assertThat(result.qrels().relevance().get("d1")).containsOnlyKeys("d2");
+    assertThat(result.qrels().relevance().get("d2")).containsOnlyKeys("d1");
+    assertThat(result.coverage().labeledDocs()).isEqualTo(3);
   }
 }
