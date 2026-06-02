@@ -123,4 +123,25 @@ class StudyStoreTest {
     store.writeMeta("study-D", Map.of("nTrials", 10, "samplerKind", "TPE"));
     assertThat(tmp.resolve("study-D.meta.json")).exists();
   }
+
+  @Test
+  void flushDurableForcesExistingTrialFile(@TempDir Path tmp) {
+    StudyStore store = new StudyStore(tmp);
+    store.appendTrial("study-E", sampleResult("t-0", 0.4));
+
+    store.flushDurable("study-E");
+
+    assertThat(tmp.resolve("study-E.jsonl")).exists();
+    assertThat(new StudyStore(tmp).loadAll("study-E")).hasSize(1);
+  }
+
+  @Test
+  void flushDurableMissingStudyIsNoOp(@TempDir Path tmp) {
+    StudyStore store = new StudyStore(tmp);
+
+    store.flushDurable("missing");
+
+    assertThat(tmp.resolve("missing.jsonl")).doesNotExist();
+    assertThat(store.listStudies()).isEmpty();
+  }
 }

@@ -22,6 +22,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.integrallis.vectors.optimizer.study.TrialResult;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,8 +41,8 @@ import java.util.stream.Stream;
  * Append-only JSON-Lines persistence for study results. Each study writes to {@code
  * {root}/{studyId}.jsonl}; one line per {@link TrialResult}. Concurrent writers contend on a
  * per-file {@link ReentrantLock} so a single JVM can run several studies in parallel without
- * interleaving lines. Survives JVM restarts: trial files are flushed and durable on every {@link
- * #appendTrial} call.
+ * interleaving lines. Appended trials are immediately visible to new {@link StudyStore} instances;
+ * callers that need an explicit storage flush can call {@link #flushDurable(String)}.
  */
 public final class StudyStore {
 
@@ -68,7 +69,11 @@ public final class StudyStore {
     }
   }
 
-  /** Appends a single trial result to the study's JSON-Lines file. Thread-safe per study. */
+  /**
+   * Appends a single trial result to the study's JSON-Lines file. Thread-safe per study. This does
+   * not force the operating system's page cache to stable storage; call {@link #flushDurable} when
+   * that boundary matters.
+   */
   public void appendTrial(String studyId, TrialResult result) {
     Objects.requireNonNull(studyId, "studyId");
     Objects.requireNonNull(result, "result");
@@ -81,6 +86,29 @@ public final class StudyStore {
           file, line, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     } catch (IOException ioe) {
       throw new UncheckedIOException("Failed to append trial to " + file, ioe);
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  /**
+   * Forces the study's trial file content and metadata to storage if the trial file exists. Missing
+   * studies are a no-op.
+   */
+  public void flushDurable(String studyId) {
+    Objects.requireNonNull(studyId, "studyId");
+    Path file = trialsPath(studyId);
+    ReentrantLock lock = locks.computeIfAbsent(studyId, k -> new ReentrantLock());
+    lock.lock();
+    try {
+      if (!Files.exists(file)) {
+        return;
+      }
+      try (FileChannel channel = FileChannel.open(file, StandardOpenOption.WRITE)) {
+        channel.force(true);
+      }
+    } catch (IOException ioe) {
+      throw new UncheckedIOException("Failed to flush trial file to storage: " + file, ioe);
     } finally {
       lock.unlock();
     }
@@ -144,19 +172,16 @@ public final class StudyStore {
     }
     String name = fileName.toString();
     String studyId = name.substring(0, name.length() - ".jsonl".length());
-    int count = 0;
-    try (var lines = Files.lines(p, StandardCharsets.UTF_8)) {
-      count = (int) lines.filter(s -> !s.isBlank()).count();
-    } catch (IOException ignored) {
-      // best-effort; surface zero count if read fails
-    }
-    Instant when;
+    int count;
     try {
-      when = Files.getLastModifiedTime(p).toInstant();
+      try (var lines = Files.lines(p, StandardCharsets.UTF_8)) {
+        count = (int) lines.filter(s -> !s.isBlank()).count();
+      }
+      Instant when = Files.getLastModifiedTime(p).toInstant();
+      return new StudySummary(studyId, count, when);
     } catch (IOException ioe) {
-      when = Instant.EPOCH;
+      throw new UncheckedIOException("Failed to summarize study file " + p, ioe);
     }
-    return new StudySummary(studyId, count, when);
   }
 
   private static ObjectMapper newMapper() {
