@@ -16,6 +16,7 @@
 package com.integrallis.vectors.cache;
 
 import java.util.Collection;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -95,5 +96,15 @@ public interface SemanticCache<V> extends AutoCloseable {
    * @param value payload to cache
    * @param <V> payload type
    */
-  record Entry<V>(String key, float[] embedding, V value) {}
+  record Entry<V>(String key, float[] embedding, V value) {
+    public Entry {
+      Objects.requireNonNull(key, "key");
+      embedding = Objects.requireNonNull(embedding, "embedding").clone();
+    }
+
+    @Override
+    public float[] embedding() {
+      return embedding.clone();
+    }
+  }
 }
