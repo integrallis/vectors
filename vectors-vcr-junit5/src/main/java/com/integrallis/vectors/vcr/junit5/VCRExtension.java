@@ -127,12 +127,28 @@ public final class VCRExtension
   public void afterAll(ExtensionContext ctx) throws Exception {
     VCRContext vcrContext = getContext(ctx);
     if (vcrContext != null) {
-      try {
-        vcrContext.getCassetteStore().flush();
-      } catch (IOException e) {
-        // Best-effort flush; do not fail the suite teardown on I/O errors here.
+      flushAndClose(vcrContext.getCassetteStore());
+    }
+  }
+
+  static void flushAndClose(CassetteStore store) throws IOException {
+    IOException failure = null;
+    try {
+      store.flush();
+    } catch (IOException e) {
+      failure = e;
+    }
+    try {
+      store.close();
+    } catch (IOException e) {
+      if (failure == null) {
+        failure = e;
+      } else {
+        failure.addSuppressed(e);
       }
-      vcrContext.getCassetteStore().close();
+    }
+    if (failure != null) {
+      throw failure;
     }
   }
 

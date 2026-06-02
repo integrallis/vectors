@@ -121,15 +121,43 @@ public final class VCRListener implements ITestListener, IInvokedMethodListener 
 
   @Override
   public void onFinish(ITestContext context) {
+    IOException failure = null;
     for (VCRContext vcrContext : contexts.values()) {
       try {
-        vcrContext.getCassetteStore().flush();
-        vcrContext.getCassetteStore().close();
+        flushAndClose(vcrContext.getCassetteStore());
       } catch (IOException e) {
-        // best-effort
+        if (failure == null) {
+          failure = e;
+        } else {
+          failure.addSuppressed(e);
+        }
       }
     }
     contexts.clear();
+    if (failure != null) {
+      throw new RuntimeException("VCR cassette flush/close failed", failure);
+    }
+  }
+
+  static void flushAndClose(CassetteStore store) throws IOException {
+    IOException failure = null;
+    try {
+      store.flush();
+    } catch (IOException e) {
+      failure = e;
+    }
+    try {
+      store.close();
+    } catch (IOException e) {
+      if (failure == null) {
+        failure = e;
+      } else {
+        failure.addSuppressed(e);
+      }
+    }
+    if (failure != null) {
+      throw failure;
+    }
   }
 
   private static VCRContext buildContext(VCRTestNG config) {

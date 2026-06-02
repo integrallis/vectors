@@ -17,15 +17,18 @@ package com.integrallis.vectors.vcr.testng;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
+import static org.testng.Assert.expectThrows;
 
 import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
 import com.integrallis.vectors.vcr.CassetteKey;
 import com.integrallis.vectors.vcr.CassetteRecord;
+import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.testng.TestNG;
@@ -88,6 +91,28 @@ public class VCRListenerTest {
     runScenario();
   }
 
+  @Test(groups = "unit")
+  public void flushFailureFailsTeardownAndStillClosesStore() {
+    FailingCassetteStore store = new FailingCassetteStore(true, false);
+
+    IOException thrown = expectThrows(IOException.class, () -> VCRListener.flushAndClose(store));
+
+    assertEquals(thrown.getMessage(), "flush failed");
+    assertTrue(store.closed, "close must still be attempted after flush failure");
+  }
+
+  @Test(groups = "unit")
+  public void closeFailureIsSuppressedWhenFlushAlsoFails() {
+    FailingCassetteStore store = new FailingCassetteStore(true, true);
+
+    IOException thrown = expectThrows(IOException.class, () -> VCRListener.flushAndClose(store));
+
+    assertEquals(thrown.getMessage(), "flush failed");
+    assertEquals(thrown.getSuppressed().length, 1);
+    assertEquals(thrown.getSuppressed()[0].getMessage(), "close failed");
+    assertTrue(store.closed, "close must still be attempted after flush failure");
+  }
+
   private static void runScenario() {
     TestNG testng = new TestNG();
     testng.setTestClasses(new Class<?>[] {RecordPlaybackScenario.class});
@@ -95,5 +120,52 @@ public class VCRListenerTest {
     testng.setUseDefaultListeners(false);
     testng.run();
     assertEquals(testng.getStatus(), 0, "scenario run must succeed");
+  }
+
+  private static final class FailingCassetteStore implements CassetteStore {
+    private final boolean failFlush;
+    private final boolean failClose;
+    private boolean closed;
+
+    private FailingCassetteStore(boolean failFlush, boolean failClose) {
+      this.failFlush = failFlush;
+      this.failClose = failClose;
+    }
+
+    @Override
+    public void store(CassetteKey key, CassetteRecord record) {}
+
+    @Override
+    public Optional<CassetteRecord> retrieve(CassetteKey key) {
+      return Optional.empty();
+    }
+
+    @Override
+    public boolean exists(CassetteKey key) {
+      return false;
+    }
+
+    @Override
+    public void delete(CassetteKey key) {}
+
+    @Override
+    public List<CassetteKey> listByTestId(String testId) {
+      return List.of();
+    }
+
+    @Override
+    public void flush() throws IOException {
+      if (failFlush) {
+        throw new IOException("flush failed");
+      }
+    }
+
+    @Override
+    public void close() throws IOException {
+      closed = true;
+      if (failClose) {
+        throw new IOException("close failed");
+      }
+    }
   }
 }
