@@ -41,9 +41,22 @@ public record SearchHitDto(String id, float score, float[] vector, String text, 
    */
   public static SearchHitDto from(
       SearchResult.Hit hit, boolean includeVector, boolean includeText, boolean includeMetadata) {
+    return from(hit, hit.score(), includeVector, includeText, includeMetadata);
+  }
+
+  /**
+   * Projects a vectors-db hit into the wire form with a caller-supplied score, used when a route
+   * returns a score from a fusion strategy instead of the underlying vector search.
+   */
+  public static SearchHitDto from(
+      SearchResult.Hit hit,
+      float score,
+      boolean includeVector,
+      boolean includeText,
+      boolean includeMetadata) {
     float[] v = includeVector ? hit.document().vector() : null;
     String t = includeText ? hit.document().text() : null;
     JsonNode md = includeMetadata ? MetadataCodec.toJson(hit.document().metadata()) : null;
-    return new SearchHitDto(hit.id(), hit.score(), v, t, md);
+    return new SearchHitDto(hit.id(), score, v, t, md);
   }
 }

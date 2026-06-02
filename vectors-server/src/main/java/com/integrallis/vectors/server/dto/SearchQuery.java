@@ -49,6 +49,8 @@ public record SearchQuery(
     String queryText,
     String hybridMode) {
 
+  private static final String DEFAULT_HYBRID_MODE = "RRF";
+
   @JsonCreator
   public SearchQuery(
       @JsonProperty("queryVector") float[] queryVector,
@@ -84,6 +86,9 @@ public record SearchQuery(
     if (efSearch != null && efSearch <= 0) {
       return "efSearch must be positive";
     }
+    if (hybridMode != null && !"RRF".equals(hybridMode) && !"WEIGHTED".equals(hybridMode)) {
+      return "hybridMode must be RRF or WEIGHTED";
+    }
     return null;
   }
 
@@ -97,5 +102,9 @@ public record SearchQuery(
 
   public boolean includeMetadataDefault() {
     return includeMetadata == null ? true : includeMetadata;
+  }
+
+  public String hybridModeDefault() {
+    return hybridMode == null ? DEFAULT_HYBRID_MODE : hybridMode;
   }
 }

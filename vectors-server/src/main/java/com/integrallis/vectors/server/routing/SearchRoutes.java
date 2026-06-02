@@ -20,8 +20,10 @@ import com.integrallis.vectors.core.filter.Filter;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
+import com.integrallis.vectors.hybrid.FusionStrategy;
 import com.integrallis.vectors.hybrid.RRFFusion;
 import com.integrallis.vectors.hybrid.ScoredId;
+import com.integrallis.vectors.hybrid.WeightedFusion;
 import com.integrallis.vectors.hybrid.text.TextIndexSpi;
 import com.integrallis.vectors.hybrid.text.TextSearchOutcome;
 import com.integrallis.vectors.server.CollectionRegistry;
@@ -158,8 +160,7 @@ public final class SearchRoutes implements HttpService {
           textHits.add(new ScoredId(textOutcome.ids()[i], textOutcome.scores()[i]));
         }
 
-        // Fuse via RRF
-        var fusion = new RRFFusion();
+        FusionStrategy fusion = fusionFor(body.hybridModeDefault());
         List<ScoredId> fused = fusion.fuse(List.of(vectorHits, textHits), body.k());
 
         // Build response from fused results
@@ -167,7 +168,9 @@ public final class SearchRoutes implements HttpService {
         for (ScoredId scored : fused) {
           SearchResult.Hit originalHit = hitMap.get(scored.id());
           if (originalHit != null) {
-            hits.add(SearchHitDto.from(originalHit, includeVector, includeText, includeMetadata));
+            hits.add(
+                SearchHitDto.from(
+                    originalHit, scored.score(), includeVector, includeText, includeMetadata));
           } else {
             // Hit came from text search only — include basic info
             hits.add(new SearchHitDto(scored.id(), scored.score(), null, null, null));
@@ -188,5 +191,13 @@ public final class SearchRoutes implements HttpService {
       LOG.debug("search rejected for '{}': {}", name, e.getMessage());
       RouteSupport.sendProblem(res, Status.BAD_REQUEST_400, "invalid search", e.getMessage(), req);
     }
+  }
+
+  static FusionStrategy fusionFor(String hybridMode) {
+    return switch (hybridMode) {
+      case "RRF" -> new RRFFusion();
+      case "WEIGHTED" -> new WeightedFusion(1.0f, 1.0f);
+      default -> throw new IllegalArgumentException("hybridMode must be RRF or WEIGHTED");
+    };
   }
 }
