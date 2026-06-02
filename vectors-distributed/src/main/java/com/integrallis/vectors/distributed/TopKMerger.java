@@ -46,7 +46,7 @@ public final class TopKMerger {
    */
   public static SearchResult merge(
       List<SearchResult> partialResults, int k, long totalSearchTimeNanos) {
-    if (partialResults.isEmpty()) {
+    if (partialResults.isEmpty() || k <= 0) {
       return new SearchResult(List.of(), totalSearchTimeNanos);
     }
 
@@ -59,10 +59,13 @@ public final class TopKMerger {
     }
 
     // Use a min-heap of size k to find top-k in O(n log k)
-    PriorityQueue<Hit> heap = new PriorityQueue<>(k + 1, Comparator.comparingDouble(Hit::score));
+    int limit = Math.min(k, best.size());
+    int heapCapacity = limit == Integer.MAX_VALUE ? Integer.MAX_VALUE : limit + 1;
+    PriorityQueue<Hit> heap =
+        new PriorityQueue<>(heapCapacity, Comparator.comparingDouble(Hit::score));
     for (Hit hit : best.values()) {
       heap.offer(hit);
-      if (heap.size() > k) {
+      if (heap.size() > limit) {
         heap.poll(); // evict lowest score
       }
     }
