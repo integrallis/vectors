@@ -103,6 +103,34 @@ class FilterParserTest {
   }
 
   @Test
+  void duplicateLowerRangeBoundsAreRejected() throws Exception {
+    assertThatThrownBy(() -> FilterParser.parse(j("{\"field\":\"n\",\"gt\":0,\"gte\":1}")))
+        .isInstanceOf(FilterParseException.class)
+        .hasMessageContaining("multiple lower bounds");
+  }
+
+  @Test
+  void duplicateUpperRangeBoundsAreRejected() throws Exception {
+    assertThatThrownBy(() -> FilterParser.parse(j("{\"field\":\"n\",\"lt\":10,\"lte\":9}")))
+        .isInstanceOf(FilterParseException.class)
+        .hasMessageContaining("multiple upper bounds");
+  }
+
+  @Test
+  void scalarAndRangeOperatorsAreRejected() throws Exception {
+    assertThatThrownBy(() -> FilterParser.parse(j("{\"field\":\"n\",\"eq\":5,\"gte\":3}")))
+        .isInstanceOf(FilterParseException.class)
+        .hasMessageContaining("combines range and scalar/set operators");
+  }
+
+  @Test
+  void multipleScalarOrSetOperatorsAreRejected() throws Exception {
+    assertThatThrownBy(() -> FilterParser.parse(j("{\"field\":\"cat\",\"eq\":\"a\",\"ne\":\"b\"}")))
+        .isInstanceOf(FilterParseException.class)
+        .hasMessageContaining("multiple scalar/set operators");
+  }
+
+  @Test
   void andCompound() throws Exception {
     Filter f =
         FilterParser.parse(j("{\"and\":[{\"field\":\"a\",\"eq\":1},{\"field\":\"b\",\"gte\":2}]}"));
@@ -130,7 +158,8 @@ class FilterParserTest {
   @Test
   void unknownOpIsRejected() throws Exception {
     assertThatThrownBy(() -> FilterParser.parse(j("{\"field\":\"a\",\"like\":\"x\"}")))
-        .isInstanceOf(FilterParseException.class);
+        .isInstanceOf(FilterParseException.class)
+        .hasMessageContaining("unknown operator 'like'");
   }
 
   @Test

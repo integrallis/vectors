@@ -101,6 +101,7 @@ public final class FilterParser {
       throw new FilterParseException(
           "field name exceeds maximum length of " + MAX_FIELD_NAME_LENGTH + " characters");
     }
+    validateFieldPredicateOperators(field, node);
 
     if (node.has("eq")) {
       return new Filter.Eq(field, scalar(node.get("eq"), "eq"));
@@ -136,6 +137,53 @@ public final class FilterParser {
           "predicate for '" + field + "' has no operator (expected eq/ne/in/nin/gt/gte/lt/lte)");
     }
     return new Filter.NumericRange(field, lower, lowerInc, upper, upperInc);
+  }
+
+  private static void validateFieldPredicateOperators(String field, JsonNode node) {
+    var names = node.fieldNames();
+    while (names.hasNext()) {
+      String name = names.next();
+      if (!isFieldPredicateKey(name)) {
+        throw new FilterParseException(
+            "predicate for '" + field + "' has unknown operator '" + name + "'");
+      }
+    }
+
+    int scalarOrSetOps = countPresent(node, "eq", "ne", "in", "nin");
+    int rangeOps = countPresent(node, "gt", "gte", "lt", "lte");
+    if (scalarOrSetOps > 1) {
+      throw new FilterParseException(
+          "predicate for '" + field + "' combines multiple scalar/set operators");
+    }
+    if (scalarOrSetOps == 1 && rangeOps > 0) {
+      throw new FilterParseException(
+          "predicate for '" + field + "' combines range and scalar/set operators");
+    }
+    if (node.has("gt") && node.has("gte")) {
+      throw new FilterParseException(
+          "predicate for '" + field + "' combines multiple lower bounds");
+    }
+    if (node.has("lt") && node.has("lte")) {
+      throw new FilterParseException(
+          "predicate for '" + field + "' combines multiple upper bounds");
+    }
+  }
+
+  private static boolean isFieldPredicateKey(String name) {
+    return switch (name) {
+      case "field", "eq", "ne", "in", "nin", "gt", "gte", "lt", "lte" -> true;
+      default -> false;
+    };
+  }
+
+  private static int countPresent(JsonNode node, String... names) {
+    int count = 0;
+    for (String name : names) {
+      if (node.has(name)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   /** Returns either a String, Long, Double, or Boolean, matching {@link Filters#eq} overloads. */
