@@ -144,6 +144,50 @@ class SemanticRouterTest {
       assertThatThrownBy(() -> new SemanticRouter(FAKE_EMBEDDER, null))
           .isInstanceOf(NullPointerException.class);
     }
+
+    @Test
+    void nullReferenceEmbeddingThrowsAtConstruction() {
+      assertThatThrownBy(() -> new SemanticRouter(text -> null, List.of(SPORTS)))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("reference 'football game' embedding must not be null");
+    }
+
+    @Test
+    void emptyReferenceEmbeddingThrowsAtConstruction() {
+      assertThatThrownBy(() -> new SemanticRouter(text -> new float[0], List.of(SPORTS)))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("reference 'football game' embedding must not be empty");
+    }
+
+    @Test
+    void wrongSizedReferenceEmbeddingThrowsAtConstruction() {
+      EmbeddingFunction embedder =
+          text -> text.equals("football game") ? new float[] {1, 0, 0} : new float[] {1, 0};
+
+      assertThatThrownBy(() -> new SemanticRouter(embedder, List.of(SPORTS)))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("reference 'basketball score' embedding dimension 2 != expected 3");
+    }
+
+    @Test
+    void nullQueryEmbeddingThrowsBeforeSimilarity() {
+      SemanticRouter router = new SemanticRouter(FAKE_EMBEDDER, List.of(SPORTS));
+
+      assertThatThrownBy(() -> router.route("missing query"))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("query embedding must not be null");
+    }
+
+    @Test
+    void wrongSizedQueryEmbeddingThrowsBeforeSimilarity() {
+      EmbeddingFunction embedder =
+          text -> text.equals("wrong sized query") ? new float[] {1, 0} : EMBEDDINGS.get(text);
+      SemanticRouter router = new SemanticRouter(embedder, List.of(SPORTS));
+
+      assertThatThrownBy(() -> router.route("wrong sized query"))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("query embedding dimension 2 != expected 3");
+    }
   }
 
   @Nested

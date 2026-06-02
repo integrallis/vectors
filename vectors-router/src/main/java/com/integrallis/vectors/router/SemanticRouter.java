@@ -37,6 +37,7 @@ public final class SemanticRouter {
   private final EmbeddingFunction embeddingFunction;
   private final Map<String, Route> routes;
   private final Map<String, List<float[]>> routeEmbeddings;
+  private final int dimension;
 
   /**
    * Creates a semantic router.
@@ -49,15 +50,24 @@ public final class SemanticRouter {
     Objects.requireNonNull(routes, "routes");
     this.routes = new LinkedHashMap<>();
     this.routeEmbeddings = new LinkedHashMap<>();
+    int detectedDimension = -1;
 
     for (Route route : routes) {
       this.routes.put(route.getName(), route);
       List<float[]> embeddings = new ArrayList<>();
       for (String reference : route.getReferences()) {
-        embeddings.add(embeddingFunction.embed(reference));
+        float[] embedding =
+            requireEmbedding("reference '" + reference + "'", embeddingFunction.embed(reference));
+        if (detectedDimension < 0) {
+          detectedDimension = embedding.length;
+        } else {
+          requireDimension("reference '" + reference + "'", embedding, detectedDimension);
+        }
+        embeddings.add(embedding);
       }
       routeEmbeddings.put(route.getName(), embeddings);
     }
+    this.dimension = detectedDimension;
   }
 
   /**
@@ -68,6 +78,10 @@ public final class SemanticRouter {
    */
   public RouteMatch route(String query) {
     float[] queryVec = embeddingFunction.embed(query);
+    if (dimension < 0) {
+      return RouteMatch.noMatch();
+    }
+    requireDimension("query", requireEmbedding("query", queryVec), dimension);
 
     String bestRoute = null;
     double bestDistance = Double.MAX_VALUE;
@@ -102,5 +116,26 @@ public final class SemanticRouter {
   /** Gets a route by name, or {@code null} if not found. */
   public Route get(String name) {
     return routes.get(name);
+  }
+
+  private static float[] requireEmbedding(String source, float[] embedding) {
+    if (embedding == null) {
+      throw new IllegalArgumentException(source + " embedding must not be null");
+    }
+    if (embedding.length == 0) {
+      throw new IllegalArgumentException(source + " embedding must not be empty");
+    }
+    return embedding;
+  }
+
+  private static void requireDimension(String source, float[] embedding, int expectedDimension) {
+    if (embedding.length != expectedDimension) {
+      throw new IllegalArgumentException(
+          source
+              + " embedding dimension "
+              + embedding.length
+              + " != expected "
+              + expectedDimension);
+    }
   }
 }
