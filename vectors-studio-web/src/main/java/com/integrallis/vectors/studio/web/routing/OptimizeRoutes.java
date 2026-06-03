@@ -40,6 +40,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * HTTP surface for the optimization feature: a study-design page, JSON+SSE control APIs, and a
@@ -47,6 +49,8 @@ import java.util.concurrent.Flow;
  * by the existing projector page.
  */
 public final class OptimizeRoutes implements HttpService {
+
+  private static final long SSE_WAIT_TIMEOUT_MINUTES = 10;
 
   private static final ObjectMapper MAPPER =
       new ObjectMapper()
@@ -134,14 +138,13 @@ public final class OptimizeRoutes implements HttpService {
         return;
       }
       CountDownLatch done = new CountDownLatch(1);
+      AtomicReference<Flow.Subscription> subscription = new AtomicReference<>();
       job.publisher()
           .subscribe(
               new Flow.Subscriber<>() {
-                private Flow.Subscription sub;
-
                 @Override
                 public void onSubscribe(Flow.Subscription s) {
-                  this.sub = s;
+                  subscription.set(s);
                   s.request(Long.MAX_VALUE);
                 }
 
@@ -150,7 +153,10 @@ public final class OptimizeRoutes implements HttpService {
                   try {
                     sink.emit(SseEvent.builder().data(MAPPER.writeValueAsString(ev)).build());
                   } catch (Exception ignore) {
-                    sub.cancel();
+                    Flow.Subscription s = subscription.get();
+                    if (s != null) {
+                      s.cancel();
+                    }
                     done.countDown();
                   }
                 }
@@ -166,8 +172,18 @@ public final class OptimizeRoutes implements HttpService {
                 }
               });
       try {
-        done.await();
+        boolean completed = done.await(SSE_WAIT_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+        if (!completed) {
+          Flow.Subscription s = subscription.get();
+          if (s != null) {
+            s.cancel();
+          }
+        }
       } catch (InterruptedException ie) {
+        Flow.Subscription s = subscription.get();
+        if (s != null) {
+          s.cancel();
+        }
         Thread.currentThread().interrupt();
       }
     }
