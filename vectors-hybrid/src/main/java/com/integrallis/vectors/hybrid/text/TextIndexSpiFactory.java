@@ -38,6 +38,11 @@ public interface TextIndexSpiFactory {
    * @return a new text index instance
    */
   default TextIndexSpi create(String collectionName, java.nio.file.Path dataDir) {
+    if (dataDir != null) {
+      throw new UnsupportedOperationException(
+          getClass().getName()
+              + " does not implement persistent text indexes; override create(String, Path)");
+    }
     return create(collectionName);
   }
 }

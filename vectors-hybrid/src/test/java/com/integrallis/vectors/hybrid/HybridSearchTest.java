@@ -19,6 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -37,10 +39,11 @@ class HybridSearchTest {
   }
 
   @Test
-  void multipleRetrieversRunInParallel() {
-    Retriever r1 = k -> List.of(new ScoredId("a", 1.0f));
-    Retriever r2 = k -> List.of(new ScoredId("b", 1.0f));
-    Retriever r3 = k -> List.of(new ScoredId("c", 1.0f));
+  void multipleRetrieversRunInParallel() throws Exception {
+    CountDownLatch allStarted = new CountDownLatch(3);
+    Retriever r1 = blockingRetriever("a", allStarted);
+    Retriever r2 = blockingRetriever("b", allStarted);
+    Retriever r3 = blockingRetriever("c", allStarted);
     var search = new HybridSearch(new RRFFusion(), r1, r2, r3);
 
     List<ScoredId> results = search.search(3);
@@ -70,5 +73,20 @@ class HybridSearchTest {
   void nullFusionThrows() {
     assertThatThrownBy(() -> new HybridSearch(null, k -> List.of()))
         .isInstanceOf(NullPointerException.class);
+  }
+
+  private static Retriever blockingRetriever(String id, CountDownLatch allStarted) {
+    return k -> {
+      allStarted.countDown();
+      try {
+        assertThat(allStarted.await(1, TimeUnit.SECONDS))
+            .as("all retrievers should start before any retriever returns")
+            .isTrue();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError("interrupted while waiting for parallel retrievers", e);
+      }
+      return List.of(new ScoredId(id, 1.0f));
+    };
   }
 }
