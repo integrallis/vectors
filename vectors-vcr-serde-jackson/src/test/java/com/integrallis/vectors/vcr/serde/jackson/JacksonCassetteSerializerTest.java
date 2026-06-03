@@ -18,10 +18,13 @@ package com.integrallis.vectors.vcr.serde.jackson;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteSerializer;
+import com.integrallis.vectors.vcr.serde.avaje.AvajeCassetteSerializer;
 import java.util.Map;
+import java.util.ServiceLoader;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -77,7 +80,73 @@ class JacksonCassetteSerializerTest {
 
   @Test
   void serviceLoaderFindsSerializer() {
-    CassetteSerializer loaded = CassetteSerializer.load();
-    assertInstanceOf(JacksonCassetteSerializer.class, loaded);
+    boolean found =
+        ServiceLoader.load(CassetteSerializer.class).stream()
+            .anyMatch(provider -> provider.type().equals(JacksonCassetteSerializer.class));
+    assertTrue(found);
+  }
+
+  @Test
+  void avajeSerializedEmbeddingReadsWithJacksonAndReverse() {
+    CassetteRecord.Embedding in =
+        new CassetteRecord.Embedding("T:interop", "embedder", 123L, new float[] {1f, -2f, 0.5f});
+
+    assertSameRecord(in, serializer.deserialize(new AvajeCassetteSerializer().serialize(in)));
+    assertSameRecord(in, new AvajeCassetteSerializer().deserialize(serializer.serialize(in)));
+  }
+
+  @Test
+  void avajeSerializedBatchEmbeddingReadsWithJacksonAndReverse() {
+    CassetteRecord.BatchEmbedding in =
+        new CassetteRecord.BatchEmbedding(
+            "T:batch",
+            "embedder",
+            124L,
+            new float[][] {
+              {1f, 2f},
+              {-3f, 4.25f}
+            });
+
+    assertSameRecord(in, serializer.deserialize(new AvajeCassetteSerializer().serialize(in)));
+    assertSameRecord(in, new AvajeCassetteSerializer().deserialize(serializer.serialize(in)));
+  }
+
+  @Test
+  void avajeSerializedChatReadsWithJacksonAndReverse() {
+    CassetteRecord.Chat in =
+        new CassetteRecord.Chat(
+            "T:chat",
+            "chat-model",
+            125L,
+            "hello",
+            "world",
+            Map.of("finishReason", "stop", "usage", "42"));
+
+    assertSameRecord(in, serializer.deserialize(new AvajeCassetteSerializer().serialize(in)));
+    assertSameRecord(in, new AvajeCassetteSerializer().deserialize(serializer.serialize(in)));
+  }
+
+  private static void assertSameRecord(CassetteRecord expected, CassetteRecord actual) {
+    assertEquals(expected.testId(), actual.testId());
+    assertEquals(expected.model(), actual.model());
+    assertEquals(expected.timestamp(), actual.timestamp());
+    if (expected instanceof CassetteRecord.Embedding e) {
+      CassetteRecord.Embedding a = assertInstanceOf(CassetteRecord.Embedding.class, actual);
+      assertArrayEquals(e.embedding(), a.embedding());
+    } else if (expected instanceof CassetteRecord.BatchEmbedding e) {
+      CassetteRecord.BatchEmbedding a =
+          assertInstanceOf(CassetteRecord.BatchEmbedding.class, actual);
+      assertEquals(e.embeddings().length, a.embeddings().length);
+      for (int i = 0; i < e.embeddings().length; i++) {
+        assertArrayEquals(e.embeddings()[i], a.embeddings()[i]);
+      }
+    } else if (expected instanceof CassetteRecord.Chat e) {
+      CassetteRecord.Chat a = assertInstanceOf(CassetteRecord.Chat.class, actual);
+      assertEquals(e.prompt(), a.prompt());
+      assertEquals(e.response(), a.response());
+      assertEquals(e.metadata(), a.metadata());
+    } else {
+      throw new AssertionError("unsupported record type: " + expected.getClass());
+    }
   }
 }
