@@ -67,6 +67,14 @@ public final class LocalFileStorageBackend implements StorageBackend {
   }
 
   @Override
+  public StoredValue getWithEtag(String key) throws IOException {
+    Path target = resolve(key);
+    if (!Files.exists(target)) return null;
+    FramedValue stored = readFramed(target);
+    return new StoredValue(stored.value(), stored.etag());
+  }
+
+  @Override
   public byte[] getRange(String key, long offset, int length) throws IOException {
     Path target = resolve(key);
     if (!Files.exists(target)) return null;

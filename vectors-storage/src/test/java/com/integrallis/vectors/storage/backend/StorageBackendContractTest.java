@@ -71,8 +71,38 @@ interface StorageBackendContract {
   }
 
   @Test
+  default void getWithEtagReturnsValueAndCurrentEtag() throws IOException {
+    StorageBackend b = backend();
+    String key = key("get-etag");
+    StorageBackend.ConditionalPutResult written = b.conditionalPut(key, new byte[] {1, 2}, null);
+
+    StorageBackend.StoredValue stored = b.getWithEtag(key);
+
+    assertThat(stored).isNotNull();
+    assertThat(stored.value()).isEqualTo(new byte[] {1, 2});
+    assertThat(stored.etag()).isEqualTo(written.newEtag());
+  }
+
+  @Test
+  default void getWithEtagReturnsDefensiveCopy() throws IOException {
+    StorageBackend b = backend();
+    String key = key("copy-get-etag");
+    b.put(key, new byte[] {1, 2, 3});
+
+    StorageBackend.StoredValue first = b.getWithEtag(key);
+    first.value()[0] = 99;
+
+    assertThat(b.getWithEtag(key).value()).isEqualTo(new byte[] {1, 2, 3});
+  }
+
+  @Test
   default void getMissingKeyReturnsNull() throws IOException {
     assertThat(backend().get(key("nonexistent"))).isNull();
+  }
+
+  @Test
+  default void getWithEtagMissingKeyReturnsNull() throws IOException {
+    assertThat(backend().getWithEtag(key("nonexistent-etag"))).isNull();
   }
 
   @Test

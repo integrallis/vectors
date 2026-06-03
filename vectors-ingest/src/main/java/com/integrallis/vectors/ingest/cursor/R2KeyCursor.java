@@ -30,18 +30,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Durable {@link IngestCursor} that persists per-source offsets as a single small JSON object on a
  * {@link StorageBackend}. Reads and writes happen on the configured {@code key} (default {@code
  * _ingest/cursor.json}); each save is a single {@link StorageBackend#conditionalPut conditionalPut}
- * that supplies the etag returned by the previous successful save, so concurrent writers
- * race-detect via CAS.
- *
- * <p>Limitations:
- *
- * <ul>
- *   <li><b>Single-writer per source.</b> When two cursor instances start fresh against an
- *       already-existing key, the very first save in each process cannot CAS-validate (the backend
- *       exposes no etag-on-get); the cursor falls back to an unconditional {@link
- *       StorageBackend#put put}. Subsequent saves use full CAS and throw {@link
- *       ConcurrentModificationException} on conflict.
- * </ul>
+ * using the etag read from {@link StorageBackend#getWithEtag(String)} or returned by the previous
+ * successful save, so concurrent writers race-detect via CAS.
  */
 public final class R2KeyCursor implements IngestCursor {
 
@@ -84,27 +74,19 @@ public final class R2KeyCursor implements IngestCursor {
     }
     synchronized (writeLock) {
       ensureLoaded();
-      offsets.put(sourceName, offset);
+      Long previous = offsets.put(sourceName, offset);
       byte[] payload = serialise();
-      if (etag != null) {
-        StorageBackend.ConditionalPutResult r = backend.conditionalPut(key, payload, etag);
-        if (!r.succeeded()) {
-          throw new ConcurrentModificationException(
-              "cursor key '" + key + "' was modified by another writer");
-        }
-        etag = r.newEtag();
-      } else {
-        // First save in this process. Try CAS-null (key must be absent); fall back to unconditional
-        // put if the key already existed when we loaded.
-        StorageBackend.ConditionalPutResult r = backend.conditionalPut(key, payload, null);
-        if (r.succeeded()) {
-          etag = r.newEtag();
+      StorageBackend.ConditionalPutResult r = backend.conditionalPut(key, payload, etag);
+      if (!r.succeeded()) {
+        if (previous == null) {
+          offsets.remove(sourceName);
         } else {
-          backend.put(key, payload);
-          // We cannot recover the etag without a separate read API; subsequent saves will retry the
-          // CAS-null path until they succeed (or fall back again).
+          offsets.put(sourceName, previous);
         }
+        throw new ConcurrentModificationException(
+            "cursor key '" + key + "' was modified by another writer");
       }
+      etag = r.newEtag();
     }
   }
 
@@ -112,9 +94,9 @@ public final class R2KeyCursor implements IngestCursor {
     if (loaded) return;
     synchronized (writeLock) {
       if (loaded) return;
-      byte[] data = backend.get(key);
-      if (data != null) {
-        JsonNode root = MAPPER.readTree(data);
+      StorageBackend.StoredValue stored = backend.getWithEtag(key);
+      if (stored != null) {
+        JsonNode root = MAPPER.readTree(stored.value());
         if (root.isObject()) {
           for (var e : root.properties()) {
             if (e.getValue().isIntegralNumber()) {
@@ -122,6 +104,7 @@ public final class R2KeyCursor implements IngestCursor {
             }
           }
         }
+        etag = stored.etag();
       }
       loaded = true;
     }

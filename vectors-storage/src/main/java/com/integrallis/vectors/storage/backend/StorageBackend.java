@@ -49,6 +49,14 @@ public interface StorageBackend {
   byte[] get(String key) throws IOException;
 
   /**
+   * Returns the value and current etag stored under {@code key}, or {@code null} if the key does
+   * not exist.
+   *
+   * @throws IOException on storage failure
+   */
+  StoredValue getWithEtag(String key) throws IOException;
+
+  /**
    * Opens a stream for the value stored under {@code key}, or {@code null} if the key does not
    * exist. Callers own the returned stream and must close it.
    *
@@ -109,4 +117,7 @@ public interface StorageBackend {
 
   /** Result of a {@link #conditionalPut} operation. */
   record ConditionalPutResult(boolean succeeded, String newEtag) {}
+
+  /** Value plus current etag returned by {@link #getWithEtag(String)}. */
+  record StoredValue(byte[] value, String etag) {}
 }

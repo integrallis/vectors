@@ -370,6 +370,11 @@ class WriteAheadLogContractTest {
     }
 
     @Override
+    public StoredValue getWithEtag(String key) throws IOException {
+      return delegate.getWithEtag(key);
+    }
+
+    @Override
     public byte[] getRange(String key, long offset, int length) throws IOException {
       return delegate.getRange(key, offset, length);
     }

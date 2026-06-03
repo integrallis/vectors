@@ -49,6 +49,11 @@ public final class PrefixedStorageBackend implements StorageBackend, Closeable {
   }
 
   @Override
+  public StoredValue getWithEtag(String key) throws IOException {
+    return delegate.getWithEtag(prefix + key);
+  }
+
+  @Override
   public byte[] getRange(String key, long offset, int length) throws IOException {
     return delegate.getRange(prefix + key, offset, length);
   }

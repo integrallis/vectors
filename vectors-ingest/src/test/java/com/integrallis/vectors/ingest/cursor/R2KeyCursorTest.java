@@ -63,14 +63,14 @@ class R2KeyCursorTest {
     HeapStorageBackend backend = new HeapStorageBackend();
     R2KeyCursor a = new R2KeyCursor(backend);
     a.save("s", 10L); // a now caches a valid etag
-    // A second writer arrives, observes the existing key, and writes via the
-    // unconditional fallback path → bumps the backend etag.
+    // A second writer arrives, observes the existing key and current etag, then writes a new value.
     R2KeyCursor b = new R2KeyCursor(backend);
     b.save("s", 99L);
     // a's cached etag is now stale → next CAS save must blow up.
     assertThatThrownBy(() -> a.save("s", 11L))
         .isInstanceOf(ConcurrentModificationException.class)
         .hasMessageContaining(R2KeyCursor.DEFAULT_KEY);
+    assertThat(a.load("s")).isEqualTo(10L);
   }
 
   @Test
@@ -79,9 +79,25 @@ class R2KeyCursorTest {
     R2KeyCursor a = new R2KeyCursor(backend);
     R2KeyCursor b = new R2KeyCursor(backend);
     a.save("s", 5L);
-    // b's first-save CAS-null fails (key now exists); falls back to unconditional put → no throw.
+    // b has not loaded yet, so it observes a's etag before saving.
     b.save("s", 99L);
     assertThat(new R2KeyCursor(backend).load("s")).isEqualTo(99L);
+  }
+
+  @Test
+  void preloadedFreshCursorDetectsFirstSaveRace() throws Exception {
+    HeapStorageBackend backend = new HeapStorageBackend();
+    R2KeyCursor a = new R2KeyCursor(backend);
+    R2KeyCursor b = new R2KeyCursor(backend);
+
+    assertThat(b.load("s")).isZero();
+    a.save("s", 5L);
+
+    assertThatThrownBy(() -> b.save("s", 99L))
+        .isInstanceOf(ConcurrentModificationException.class)
+        .hasMessageContaining(R2KeyCursor.DEFAULT_KEY);
+    assertThat(b.load("s")).isZero();
+    assertThat(new R2KeyCursor(backend).load("s")).isEqualTo(5L);
   }
 
   @Test

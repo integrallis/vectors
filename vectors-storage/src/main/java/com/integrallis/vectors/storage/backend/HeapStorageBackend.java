@@ -46,6 +46,12 @@ public final class HeapStorageBackend implements StorageBackend {
   }
 
   @Override
+  public StoredValue getWithEtag(String key) {
+    Entry entry = store.get(key);
+    return entry == null ? null : new StoredValue(entry.valueCopy(), entry.etag);
+  }
+
+  @Override
   public byte[] getRange(String key, long offset, int length) {
     Entry entry = store.get(key);
     if (entry == null) return null;

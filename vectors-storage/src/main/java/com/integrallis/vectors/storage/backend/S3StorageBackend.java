@@ -135,6 +135,19 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
   }
 
   @Override
+  public StoredValue getWithEtag(String key) throws IOException {
+    try {
+      var response =
+          s3.getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(key).build());
+      return new StoredValue(response.asByteArray(), unquoted(response.response().eTag()));
+    } catch (NoSuchKeyException e) {
+      return null;
+    } catch (SdkException e) {
+      throw new IOException("S3 getWithEtag failed for key: " + key, e);
+    }
+  }
+
+  @Override
   public InputStream open(String key) throws IOException {
     try {
       ResponseInputStream<GetObjectResponse> response =
