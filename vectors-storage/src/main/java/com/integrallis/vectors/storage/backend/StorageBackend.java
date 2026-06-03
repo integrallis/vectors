@@ -18,6 +18,7 @@ package com.integrallis.vectors.storage.backend;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -119,5 +120,14 @@ public interface StorageBackend {
   record ConditionalPutResult(boolean succeeded, String newEtag) {}
 
   /** Value plus current etag returned by {@link #getWithEtag(String)}. */
-  record StoredValue(byte[] value, String etag) {}
+  record StoredValue(byte[] value, String etag) {
+    public StoredValue {
+      value = Arrays.copyOf(value, value.length);
+    }
+
+    @Override
+    public byte[] value() {
+      return Arrays.copyOf(value, value.length);
+    }
+  }
 }
