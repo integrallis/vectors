@@ -154,30 +154,33 @@ class JavaVectorsVectorStoreTest {
     @Test
     void similarityThresholdFilters() {
       createStore(IndexType.FLAT, true);
+      when(embeddingModel.embed(any(Document.class)))
+          .thenAnswer(
+              inv -> {
+                Document doc = inv.getArgument(0);
+                return switch (doc.getId()) {
+                  case "d1" -> new float[] {1f, 0f, 0f, 0f};
+                  case "d2" -> new float[] {0f, 1f, 0f, 0f};
+                  default -> throw new IllegalArgumentException("unexpected document: " + doc);
+                };
+              });
+      when(embeddingModel.embed("query")).thenReturn(new float[] {1f, 0f, 0f, 0f});
 
       store.add(
           List.of(
-              new Document("d1", "very relevant query text", Map.of()),
-              new Document("d2", "completely unrelated content xyz", Map.of())));
+              new Document("d1", "exact match", Map.of()),
+              new Document("d2", "orthogonal match", Map.of())));
 
-      // Very high threshold should return fewer results
       List<Document> highThreshold =
           store.similaritySearch(
-              SearchRequest.builder()
-                  .query("very relevant query text")
-                  .topK(10)
-                  .similarityThreshold(0.99)
-                  .build());
+              SearchRequest.builder().query("query").topK(10).similarityThreshold(0.99).build());
 
       List<Document> lowThreshold =
           store.similaritySearch(
-              SearchRequest.builder()
-                  .query("very relevant query text")
-                  .topK(10)
-                  .similarityThreshold(0.0)
-                  .build());
+              SearchRequest.builder().query("query").topK(10).similarityThreshold(0.0).build());
 
-      assertThat(highThreshold.size()).isLessThanOrEqualTo(lowThreshold.size());
+      assertThat(highThreshold).extracting(Document::getId).containsExactly("d1");
+      assertThat(lowThreshold).extracting(Document::getId).containsExactly("d1", "d2");
     }
 
     @Test
