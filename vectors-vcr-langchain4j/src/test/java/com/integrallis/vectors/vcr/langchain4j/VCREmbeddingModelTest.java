@@ -25,15 +25,22 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.integrallis.vectors.storage.backend.HeapStorageBackend;
+import com.integrallis.vectors.vcr.CassetteKey;
+import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
+import com.integrallis.vectors.vcr.SimilarityCassetteStore;
 import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -78,6 +85,25 @@ class VCREmbeddingModelTest {
   }
 
   @Test
+  void playbackOrRecordUsesSemanticSingleEmbeddingOnExactMiss() {
+    when(delegate.embed(anyString()))
+        .thenReturn(Response.from(Embedding.from(new float[] {1f, 0f})));
+    SemanticLookupStore semanticStore =
+        new SemanticLookupStore(
+            new CassetteRecord.Embedding("T:sem", "m", 1L, new float[] {0.99f, 0.01f}));
+
+    VCREmbeddingModel player =
+        new VCREmbeddingModel(delegate, "T:sem", VCRMode.PLAYBACK_OR_RECORD, "m", semanticStore);
+    float[] played = player.embed("near").content().vector();
+
+    assertThat(played).containsExactly(0.99f, 0.01f);
+    assertThat(semanticStore.similarQueries).hasSize(1);
+    assertThat(semanticStore.similarQueries.get(0)).containsExactly(1f, 0f);
+    assertThat(semanticStore.stored).isEmpty();
+    verify(delegate, times(1)).embed(anyString());
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void recordsAndReplaysBatchEmbedding() {
     when(delegate.embedAll((List<TextSegment>) any(List.class)))
@@ -100,9 +126,77 @@ class VCREmbeddingModelTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  void playbackOrRecordUsesSemanticBatchEmbeddingOnExactMiss() {
+    when(delegate.embedAll((List<TextSegment>) any(List.class)))
+        .thenReturn(
+            Response.from(
+                List.of(
+                    Embedding.from(new float[] {1f, 0f}), Embedding.from(new float[] {0f, 1f}))));
+    SemanticLookupStore semanticStore =
+        new SemanticLookupStore(
+            new CassetteRecord.BatchEmbedding(
+                "T:sem-b", "m", 1L, new float[][] {{0.98f, 0.02f}, {0.02f, 0.98f}}));
+
+    VCREmbeddingModel player =
+        new VCREmbeddingModel(delegate, "T:sem-b", VCRMode.PLAYBACK_OR_RECORD, "m", semanticStore);
+    List<Embedding> played =
+        player.embedAll(List.of(TextSegment.from("near-a"), TextSegment.from("near-b"))).content();
+
+    assertThat(played).hasSize(2);
+    assertThat(played.get(0).vector()).containsExactly(0.98f, 0.02f);
+    assertThat(played.get(1).vector()).containsExactly(0.02f, 0.98f);
+    assertThat(semanticStore.similarQueries).hasSize(1);
+    assertThat(semanticStore.similarQueries.get(0)).containsExactly(1f, 0f);
+    assertThat(semanticStore.stored).isEmpty();
+    verify(delegate, times(1)).embedAll((List<TextSegment>) any(List.class));
+  }
+
+  @Test
   void offModeBypassesStore() {
     when(delegate.embed(anyString())).thenReturn(Response.from(Embedding.from(new float[] {9f})));
     VCREmbeddingModel off = new VCREmbeddingModel(delegate, "T:off", VCRMode.OFF, "m", store);
     assertThat(off.embed("x").content().vector()).containsExactly(9f);
+  }
+
+  private static final class SemanticLookupStore implements SimilarityCassetteStore {
+    final Map<CassetteKey, CassetteRecord> stored = new LinkedHashMap<>();
+    final List<float[]> similarQueries = new ArrayList<>();
+    private final CassetteRecord similarHit;
+
+    SemanticLookupStore(CassetteRecord similarHit) {
+      this.similarHit = similarHit;
+    }
+
+    @Override
+    public void store(CassetteKey key, CassetteRecord record) {
+      stored.put(key, record);
+    }
+
+    @Override
+    public Optional<CassetteRecord> retrieve(CassetteKey key) {
+      return Optional.ofNullable(stored.get(key));
+    }
+
+    @Override
+    public boolean exists(CassetteKey key) {
+      return stored.containsKey(key);
+    }
+
+    @Override
+    public void delete(CassetteKey key) {
+      stored.remove(key);
+    }
+
+    @Override
+    public List<CassetteKey> listByTestId(String testId) {
+      return stored.keySet().stream().filter(key -> key.testId().equals(testId)).toList();
+    }
+
+    @Override
+    public Optional<CassetteRecord> retrieveSimilar(float[] queryEmbedding) {
+      similarQueries.add(queryEmbedding);
+      return Optional.of(similarHit);
+    }
   }
 }

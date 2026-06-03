@@ -18,6 +18,7 @@ package com.integrallis.vectors.vcr.langchain4j;
 import com.integrallis.vectors.vcr.CassetteKey;
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
+import com.integrallis.vectors.vcr.SimilarityCassetteStore;
 import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
 import dev.langchain4j.data.embedding.Embedding;
@@ -98,20 +99,19 @@ public final class VCREmbeddingModel implements EmbeddingModel {
     if (mode.isPlaybackMode()) {
       Optional<CassetteRecord> hit = store.retrieve(key);
       if (hit.isPresent()) {
-        if (hit.get() instanceof CassetteRecord.Embedding e) {
-          return e.embedding();
-        }
-        throw new IllegalStateException(
-            "Expected Embedding cassette for key "
-                + key.serializedKey()
-                + " but got "
-                + hit.get().getClass().getSimpleName());
+        return requireEmbedding(key, hit.get());
       }
       if (mode == VCRMode.PLAYBACK) {
         throw new VCRCassetteMissingException(key.serializedKey(), testId);
       }
     }
     float[] vector = delegate.embed(text).content().vector();
+    if (mode == VCRMode.PLAYBACK_OR_RECORD) {
+      Optional<CassetteRecord> similar = retrieveSimilar(vector, CassetteRecord.Embedding.class);
+      if (similar.isPresent()) {
+        return ((CassetteRecord.Embedding) similar.get()).embedding();
+      }
+    }
     store.store(
         key, new CassetteRecord.Embedding(testId, modelName, System.currentTimeMillis(), vector));
     return vector;
@@ -125,30 +125,66 @@ public final class VCREmbeddingModel implements EmbeddingModel {
     if (mode.isPlaybackMode()) {
       Optional<CassetteRecord> hit = store.retrieve(key);
       if (hit.isPresent()) {
-        if (!(hit.get() instanceof CassetteRecord.BatchEmbedding b)) {
-          throw new IllegalStateException(
-              "Expected BatchEmbedding cassette for key "
-                  + key.serializedKey()
-                  + " but got "
-                  + hit.get().getClass().getSimpleName());
-        }
-        float[][] arr = b.embeddings();
-        List<float[]> result = new ArrayList<>(arr.length);
-        for (float[] v : arr) {
-          result.add(v);
-        }
-        return result;
+        return toVectorList(requireBatchEmbedding(key, hit.get()));
       }
       if (mode == VCRMode.PLAYBACK) {
         throw new VCRCassetteMissingException(key.serializedKey(), testId);
       }
     }
     List<float[]> vectors = callDelegateBatch(texts);
+    if (mode == VCRMode.PLAYBACK_OR_RECORD && !vectors.isEmpty()) {
+      Optional<CassetteRecord> similar =
+          retrieveSimilar(vectors.get(0), CassetteRecord.BatchEmbedding.class);
+      if (similar.isPresent()) {
+        return toVectorList((CassetteRecord.BatchEmbedding) similar.get());
+      }
+    }
     store.store(
         key,
         new CassetteRecord.BatchEmbedding(
             testId, modelName, System.currentTimeMillis(), vectors.toArray(new float[0][])));
     return vectors;
+  }
+
+  private Optional<CassetteRecord> retrieveSimilar(
+      float[] vector, Class<? extends CassetteRecord> expectedType) {
+    if (!(store instanceof SimilarityCassetteStore semanticStore)) {
+      return Optional.empty();
+    }
+    Optional<CassetteRecord> hit = semanticStore.retrieveSimilar(vector);
+    return hit.filter(expectedType::isInstance);
+  }
+
+  private static float[] requireEmbedding(CassetteKey key, CassetteRecord record) {
+    if (record instanceof CassetteRecord.Embedding e) {
+      return e.embedding();
+    }
+    throw new IllegalStateException(
+        "Expected Embedding cassette for key "
+            + key.serializedKey()
+            + " but got "
+            + record.getClass().getSimpleName());
+  }
+
+  private static CassetteRecord.BatchEmbedding requireBatchEmbedding(
+      CassetteKey key, CassetteRecord record) {
+    if (record instanceof CassetteRecord.BatchEmbedding b) {
+      return b;
+    }
+    throw new IllegalStateException(
+        "Expected BatchEmbedding cassette for key "
+            + key.serializedKey()
+            + " but got "
+            + record.getClass().getSimpleName());
+  }
+
+  private static List<float[]> toVectorList(CassetteRecord.BatchEmbedding record) {
+    float[][] arr = record.embeddings();
+    List<float[]> result = new ArrayList<>(arr.length);
+    for (float[] v : arr) {
+      result.add(v);
+    }
+    return result;
   }
 
   private List<float[]> callDelegateBatch(List<String> texts) {

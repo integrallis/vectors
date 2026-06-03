@@ -28,6 +28,7 @@ import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteSerializer;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
+import com.integrallis.vectors.vcr.SimilarityCassetteStore;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -46,7 +47,7 @@ import java.util.Optional;
  * not byte-identical (e.g. minor whitespace variations). Falls back to the exact store for keys
  * that have no associated embedding (e.g. chat cassettes).
  */
-public final class SemanticCassetteStore implements CassetteStore {
+public final class SemanticCassetteStore implements SimilarityCassetteStore {
 
   /** Default cosine-similarity threshold above which a semantic hit is accepted. */
   public static final float DEFAULT_SIMILARITY_THRESHOLD = 0.95f;
