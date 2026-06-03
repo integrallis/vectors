@@ -90,7 +90,6 @@ class BulkIngestorTest {
     assertThatThrownBy(() -> b.embeddingConcurrency(0))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> b.queueCapacity(-1)).isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> b.sinkConcurrency(0)).isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test

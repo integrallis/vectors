@@ -39,7 +39,6 @@ public final class BulkIngestor implements AutoCloseable {
   private final Embedder embedder;
   private final BatchPolicy batchPolicy;
   private final int embeddingConcurrency;
-  private final int sinkConcurrency;
   private final int queueCapacity;
   private final IngestCursor cursor;
   private final RetryPolicy retryPolicy;
@@ -53,7 +52,6 @@ public final class BulkIngestor implements AutoCloseable {
     this.embedder = b.embedder;
     this.batchPolicy = b.batchPolicy;
     this.embeddingConcurrency = b.embeddingConcurrency;
-    this.sinkConcurrency = b.sinkConcurrency;
     this.queueCapacity = b.queueCapacity;
     this.cursor = b.cursor;
     this.retryPolicy = b.retryPolicy;
@@ -131,7 +129,6 @@ public final class BulkIngestor implements AutoCloseable {
     private Embedder embedder;
     private BatchPolicy batchPolicy = BatchPolicy.defaults();
     private int embeddingConcurrency = Math.max(1, Runtime.getRuntime().availableProcessors());
-    private int sinkConcurrency = 2;
     private int queueCapacity = -1;
     private IngestCursor cursor = new InMemoryCursor();
     private RetryPolicy retryPolicy = RetryPolicy.defaults();
@@ -160,12 +157,6 @@ public final class BulkIngestor implements AutoCloseable {
     public Builder embeddingConcurrency(int n) {
       if (n <= 0) throw new IllegalArgumentException("embeddingConcurrency must be > 0");
       this.embeddingConcurrency = n;
-      return this;
-    }
-
-    public Builder sinkConcurrency(int n) {
-      if (n <= 0) throw new IllegalArgumentException("sinkConcurrency must be > 0");
-      this.sinkConcurrency = n;
       return this;
     }
 
