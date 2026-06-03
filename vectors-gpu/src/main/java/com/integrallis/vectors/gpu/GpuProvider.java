@@ -16,7 +16,6 @@
  */
 package com.integrallis.vectors.gpu;
 
-import java.util.Iterator;
 import java.util.ServiceLoader;
 import java.util.logging.Logger;
 
@@ -32,14 +31,13 @@ public final class GpuProvider {
 
   private static final Logger LOG = Logger.getLogger(GpuProvider.class.getName());
 
-  private static final GpuAvailability AVAILABILITY = probe();
-  private static final GpuBackend BACKEND = AVAILABILITY.isAvailable() ? findBackend() : null;
+  private static final Resolved RESOLVED = resolve(ServiceLoader.load(GpuBackend.class));
 
   private GpuProvider() {}
 
   /** Reports whether any GPU backend initialised successfully. */
   public static GpuAvailability availability() {
-    return AVAILABILITY;
+    return RESOLVED.availability();
   }
 
   /**
@@ -47,30 +45,22 @@ public final class GpuProvider {
    * Callers SHOULD guard with {@link GpuAvailability#isAvailable()}.
    */
   public static GpuBackend backend() {
-    return BACKEND;
+    return RESOLVED.backend();
   }
 
-  private static GpuAvailability probe() {
-    for (GpuBackend candidate : ServiceLoader.load(GpuBackend.class)) {
+  static Resolved resolve(Iterable<GpuBackend> backends) {
+    for (GpuBackend candidate : backends) {
       GpuAvailability a = candidate.detect();
       if (a.isAvailable()) {
         LOG.info("vectors-gpu: selected backend " + candidate.name() + " (" + a + ")");
-        return a;
+        return new Resolved(a, candidate);
       }
       LOG.fine(
           "vectors-gpu: backend " + candidate.name() + " unavailable: " + a.reason().orElse("?"));
     }
-    return GpuAvailability.unavailable("no GpuBackend service advertised compatibility");
+    return new Resolved(
+        GpuAvailability.unavailable("no GpuBackend service advertised compatibility"), null);
   }
 
-  private static GpuBackend findBackend() {
-    Iterator<GpuBackend> it = ServiceLoader.load(GpuBackend.class).iterator();
-    while (it.hasNext()) {
-      GpuBackend b = it.next();
-      if (b.detect().isAvailable()) {
-        return b;
-      }
-    }
-    return null;
-  }
+  record Resolved(GpuAvailability availability, GpuBackend backend) {}
 }
