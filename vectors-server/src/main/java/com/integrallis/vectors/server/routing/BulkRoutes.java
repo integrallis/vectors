@@ -35,8 +35,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.random.RandomGenerator;
 
 /**
  * Bulk read endpoints used by Studio and similar exploration tools.
@@ -180,17 +181,29 @@ public final class BulkRoutes implements HttpService {
     RouteSupport.sendJson(res, Status.OK_200, new SampleResponseDto(ids, vecs, meta));
   }
 
-  private static Set<Integer> reservoirIndices(int total, int take) {
+  static Set<Integer> reservoirIndices(int total, int take) {
+    return reservoirIndices(total, take, ThreadLocalRandom.current());
+  }
+
+  static Set<Integer> reservoirIndices(int total, int take, RandomGenerator rng) {
+    Objects.requireNonNull(rng, "rng");
     if (take >= total) {
       Set<Integer> all = new HashSet<>(total);
       for (int i = 0; i < total; i++) all.add(i);
       return all;
     }
-    Random rng = new Random(0xC0FFEE);
-    Set<Integer> picked = new HashSet<>(take * 2);
-    while (picked.size() < take) {
-      picked.add(rng.nextInt(total));
+    int[] reservoir = new int[take];
+    for (int i = 0; i < take; i++) {
+      reservoir[i] = i;
     }
+    for (int i = take; i < total; i++) {
+      int slot = rng.nextInt(i + 1);
+      if (slot < take) {
+        reservoir[slot] = i;
+      }
+    }
+    Set<Integer> picked = new HashSet<>(take * 2);
+    for (int idx : reservoir) picked.add(idx);
     return picked;
   }
 
