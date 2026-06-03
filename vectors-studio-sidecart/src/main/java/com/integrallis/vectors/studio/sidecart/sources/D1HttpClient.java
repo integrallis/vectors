@@ -26,6 +26,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Thin HTTP shim over Cloudflare's D1 {@code /query} endpoint. Encapsulates URL construction,
@@ -36,16 +38,44 @@ final class D1HttpClient implements AutoCloseable {
 
   private static final String BASE_URL = "https://api.cloudflare.com/client/v4";
   private static final Duration TIMEOUT = Duration.ofSeconds(30);
+  private static final int DEFAULT_MAX_ATTEMPTS = 3;
+  private static final Duration DEFAULT_BACKOFF = Duration.ofMillis(100);
 
   private final HttpClient http;
   private final URI queryUri;
   private final String authHeader;
+  private final int maxAttempts;
+  private final Duration baseBackoff;
+  private final Sleeper sleeper;
 
   D1HttpClient(HttpClient http, String accountId, String databaseId, String apiToken) {
-    this.http = http;
+    this(
+        http,
+        accountId,
+        databaseId,
+        apiToken,
+        DEFAULT_MAX_ATTEMPTS,
+        DEFAULT_BACKOFF,
+        Thread::sleep);
+  }
+
+  D1HttpClient(
+      HttpClient http,
+      String accountId,
+      String databaseId,
+      String apiToken,
+      int maxAttempts,
+      Duration baseBackoff,
+      Sleeper sleeper) {
+    if (maxAttempts <= 0) throw new IllegalArgumentException("maxAttempts must be positive");
+    this.baseBackoff = Objects.requireNonNull(baseBackoff, "baseBackoff");
+    if (baseBackoff.isNegative()) throw new IllegalArgumentException("baseBackoff must be >= 0");
+    this.http = Objects.requireNonNull(http, "http");
     this.queryUri =
         URI.create(BASE_URL + "/accounts/" + accountId + "/d1/database/" + databaseId + "/query");
     this.authHeader = "Bearer " + apiToken;
+    this.maxAttempts = maxAttempts;
+    this.sleeper = Objects.requireNonNull(sleeper, "sleeper");
   }
 
   /**
@@ -108,18 +138,31 @@ final class D1HttpClient implements AutoCloseable {
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> sendAndCheck(HttpRequest request) {
-    HttpResponse<String> response;
-    try {
-      response = http.send(request, HttpResponse.BodyHandlers.ofString());
-    } catch (IOException e) {
-      throw new SidecartSourceException("D1 request failed: " + e.getMessage(), e);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new SidecartSourceException("D1 request interrupted", e);
+    HttpResponse<String> response = null;
+    int attempts = 0;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      attempts = attempt;
+      try {
+        response = http.send(request, HttpResponse.BodyHandlers.ofString());
+      } catch (IOException e) {
+        throw new SidecartSourceException("D1 request failed: " + e.getMessage(), e);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new SidecartSourceException("D1 request interrupted", e);
+      }
+      if (!shouldRetry(response.statusCode()) || attempt == maxAttempts) break;
+      sleepBeforeRetry(attempt, response.statusCode());
     }
+    if (response == null) throw new SidecartSourceException("D1 request was not attempted");
     if (response.statusCode() / 100 != 2) {
       throw new SidecartSourceException(
-          "D1 returned HTTP " + response.statusCode() + ": " + response.body(), null);
+          "D1 returned HTTP "
+              + response.statusCode()
+              + " after "
+              + attempts
+              + " attempt(s): "
+              + response.body(),
+          null);
     }
     Map<String, Object> envelope = D1Json.decodeObject(response.body());
     Object success = envelope.get("success");
@@ -127,6 +170,29 @@ final class D1HttpClient implements AutoCloseable {
       throw new SidecartSourceException("D1 reported failure: " + response.body(), null);
     }
     return envelope;
+  }
+
+  private void sleepBeforeRetry(int failedAttempt, int statusCode) {
+    long delayMillis = retryDelayMillis(failedAttempt);
+    try {
+      sleeper.sleep(delayMillis);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new SidecartSourceException("D1 retry interrupted after HTTP " + statusCode, e);
+    }
+  }
+
+  private long retryDelayMillis(int failedAttempt) {
+    long baseMillis = baseBackoff.toMillis();
+    if (baseMillis == 0) return 0;
+    int exponent = Math.min(failedAttempt - 1, 30);
+    long exponential = baseMillis * (1L << exponent);
+    long jitter = ThreadLocalRandom.current().nextLong(baseMillis + 1);
+    return exponential + jitter;
+  }
+
+  private static boolean shouldRetry(int statusCode) {
+    return statusCode == 429 || statusCode / 100 == 5;
   }
 
   @SuppressWarnings("unchecked")
@@ -145,5 +211,10 @@ final class D1HttpClient implements AutoCloseable {
   @Override
   public void close() {
     // The shared HttpClient is owned by whoever passed it in.
+  }
+
+  @FunctionalInterface
+  interface Sleeper {
+    void sleep(long millis) throws InterruptedException;
   }
 }

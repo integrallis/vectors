@@ -16,19 +16,27 @@
 package com.integrallis.vectors.studio.sidecart.sources;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.studio.sidecart.SidecartRecord;
+import com.integrallis.vectors.studio.sidecart.SidecartSourceException;
 import com.integrallis.vectors.studio.sidecart.TextSearchHit;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class D1SidecartSourceTest {
 
   private D1HttpClient newClient(StubHttpClient stub) {
     return new D1HttpClient(stub, "acct", "db", "tok");
+  }
+
+  private D1HttpClient newRetryingClient(StubHttpClient stub) {
+    return new D1HttpClient(stub, "acct", "db", "tok", 3, Duration.ZERO, ignored -> {});
   }
 
   private D1SidecartSource newSource(D1HttpClient http) {
@@ -69,6 +77,33 @@ class D1SidecartSourceTest {
   }
 
   @Test
+  void getAllChunksIdsBelowD1ParameterLimit() {
+    StubHttpClient stub = new StubHttpClient();
+    stub.enqueue(
+        "{\"success\":true,\"result\":[{\"results\":["
+            + "{\"doc_id\":\"id-000\",\"content\":\"first\",\"payload\":null,\"mime_type\":null}"
+            + "]}]}");
+    stub.enqueue(
+        "{\"success\":true,\"result\":[{\"results\":["
+            + "{\"doc_id\":\"id-900\",\"content\":\"second\",\"payload\":null,\"mime_type\":null}"
+            + "]}]}");
+    List<String> ids =
+        IntStream.range(0, D1SidecartSource.MAX_D1_QUERY_PARAMS + 1)
+            .mapToObj(i -> "id-%03d".formatted(i))
+            .toList();
+
+    Map<String, SidecartRecord> got = newSource(newClient(stub)).getAll(ids);
+
+    assertThat(got).containsOnlyKeys("id-000", "id-900");
+    assertThat(stub.bodies).hasSize(2);
+    assertThat(stub.bodies.get(0))
+        .contains("\"id-000\"")
+        .contains("\"id-899\"")
+        .doesNotContain("\"id-900\"");
+    assertThat(stub.bodies.get(1)).contains("\"id-900\"");
+  }
+
+  @Test
   void textSearchUsesFts5MatchAndInvertsBm25Sign() {
     StubHttpClient stub = new StubHttpClient();
     stub.enqueue(
@@ -100,5 +135,32 @@ class D1SidecartSourceTest {
     Optional<SidecartRecord> rec = newSource(newClient(stub)).get("");
     assertThat(rec).isEmpty();
     assertThat(stub.requests).isEmpty();
+  }
+
+  @Test
+  void retriesTransientHttpStatusBeforeDecodingRows() {
+    StubHttpClient stub = new StubHttpClient();
+    stub.enqueue(429, "{\"success\":false,\"errors\":[{\"message\":\"rate limited\"}]}");
+    stub.enqueue(
+        200,
+        "{\"success\":true,\"result\":[{\"results\":["
+            + "{\"doc_id\":\"a\",\"content\":\"alpha\",\"payload\":null,\"mime_type\":null}"
+            + "]}]}");
+
+    Optional<SidecartRecord> rec = newSource(newRetryingClient(stub)).get("a");
+
+    assertThat(rec).isPresent();
+    assertThat(rec.get().text()).isEqualTo("alpha");
+    assertThat(stub.requests).hasSize(2);
+  }
+
+  @Test
+  void reportsFailureAfterTransientHttpRetriesAreExhausted() {
+    StubHttpClient stub = new StubHttpClient().withStatus(503);
+
+    assertThatThrownBy(() -> newSource(newRetryingClient(stub)).get("a"))
+        .isInstanceOf(SidecartSourceException.class)
+        .hasMessageContaining("D1 returned HTTP 503 after 3 attempt(s)");
+    assertThat(stub.requests).hasSize(3);
   }
 }

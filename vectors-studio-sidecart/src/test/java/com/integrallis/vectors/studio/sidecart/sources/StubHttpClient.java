@@ -15,7 +15,6 @@
  */
 package com.integrallis.vectors.studio.sidecart.sources;
 
-import java.io.IOException;
 import java.net.Authenticator;
 import java.net.CookieHandler;
 import java.net.ProxySelector;
@@ -44,11 +43,15 @@ final class StubHttpClient extends HttpClient {
 
   final List<HttpRequest> requests = new java.util.ArrayList<>();
   final List<String> bodies = new java.util.ArrayList<>();
-  private final Queue<String> responses = new ConcurrentLinkedQueue<>();
+  private final Queue<StubResponseSpec> responses = new ConcurrentLinkedQueue<>();
   private int statusCode = 200;
 
   StubHttpClient enqueue(String body) {
-    responses.add(body);
+    return enqueue(statusCode, body);
+  }
+
+  StubHttpClient enqueue(int statusCode, String body) {
+    responses.add(new StubResponseSpec(statusCode, body));
     return this;
   }
 
@@ -61,10 +64,11 @@ final class StubHttpClient extends HttpClient {
   public <T> HttpResponse<T> send(HttpRequest request, BodyHandler<T> responseBodyHandler) {
     requests.add(request);
     bodies.add(captureBody(request));
-    String body = responses.poll();
-    if (body == null) body = "{\"success\":true,\"result\":[]}";
+    StubResponseSpec spec = responses.poll();
+    if (spec == null) spec = new StubResponseSpec(statusCode, "{\"success\":true,\"result\":[]}");
     @SuppressWarnings("unchecked")
-    HttpResponse<T> resp = (HttpResponse<T>) new StubResponse(request, statusCode, body);
+    HttpResponse<T> resp =
+        (HttpResponse<T>) new StubResponse(request, spec.statusCode(), spec.body());
     return resp;
   }
 
@@ -148,6 +152,8 @@ final class StubHttpClient extends HttpClient {
 
   // ─── Inner stub types ────────────────────────────────────────────────────
 
+  private record StubResponseSpec(int statusCode, String body) {}
+
   private record StubResponse(HttpRequest request, int statusCode, String body)
       implements HttpResponse<String> {
     @Override
@@ -212,11 +218,5 @@ final class StubHttpClient extends HttpClient {
       }
       return sb.toString();
     }
-  }
-
-  // Suppress unused-import warning on IOException — kept for future error-path tests.
-  @SuppressWarnings("unused")
-  private static IOException placeholder() {
-    return new IOException();
   }
 }

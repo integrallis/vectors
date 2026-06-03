@@ -44,6 +44,7 @@ import java.util.regex.Pattern;
 public final class D1SidecartSource implements SidecartSource {
 
   private static final Pattern IDENT_PATTERN = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{0,63}");
+  static final int MAX_D1_QUERY_PARAMS = 900;
 
   private final D1HttpClient http;
   private final String table;
@@ -113,17 +114,25 @@ public final class D1SidecartSource implements SidecartSource {
   public Map<String, SidecartRecord> getAll(Collection<String> ids) {
     if (ids == null || ids.isEmpty()) return Map.of();
     List<String> list = new ArrayList<>(ids);
+    Map<String, SidecartRecord> out = new HashMap<>(list.size());
+    for (int offset = 0; offset < list.size(); offset += MAX_D1_QUERY_PARAMS) {
+      int end = Math.min(offset + MAX_D1_QUERY_PARAMS, list.size());
+      fetchChunk(list.subList(offset, end), out);
+    }
+    return out;
+  }
+
+  private void fetchChunk(List<String> ids, Map<String, SidecartRecord> out) {
     StringBuilder cols = new StringBuilder();
     cols.append(idColumn);
     if (hasText) cols.append(", ").append(textColumn);
     if (hasBlob) cols.append(", ").append(blobColumn);
     if (hasMime) cols.append(", ").append(mimeColumn);
     StringBuilder placeholders = new StringBuilder();
-    for (int i = 0; i < list.size(); i++) placeholders.append(i == 0 ? "?" : ", ?");
+    for (int i = 0; i < ids.size(); i++) placeholders.append(i == 0 ? "?" : ", ?");
     String sql =
         "SELECT " + cols + " FROM " + table + " WHERE " + idColumn + " IN (" + placeholders + ")";
-    List<Map<String, Object>> rows = http.queryRows(sql, list);
-    Map<String, SidecartRecord> out = new HashMap<>(rows.size());
+    List<Map<String, Object>> rows = http.queryRows(sql, ids);
     for (Map<String, Object> row : rows) {
       Object idObj = row.get(idColumn);
       if (idObj == null) continue;
@@ -133,7 +142,6 @@ public final class D1SidecartSource implements SidecartSource {
       String mime = hasMime ? asString(row.get(mimeColumn)) : null;
       out.put(key, new SidecartRecord(text, blob, mime));
     }
-    return out;
   }
 
   @Override
