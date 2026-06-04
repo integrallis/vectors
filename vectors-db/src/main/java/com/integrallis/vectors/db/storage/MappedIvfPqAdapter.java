@@ -85,14 +85,23 @@ public final class MappedIvfPqAdapter implements IndexSpi {
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
     int requestedNprobe = (searchListSize > 0) ? searchListSize : nprobe;
-    int effectiveNprobe = Math.min(requestedNprobe, index.k());
     boolean twoPass = overQueryFactor > 1.0f;
+    // Over-query must widen BOTH the probe count and the rescore pool, exactly as the in-memory
+    // IvfPqAdapter does. Widening only the rescore pool is near-inert because IVF_PQ recall is
+    // gated
+    // by cluster coverage: if the true neighbours sit in unprobed clusters, no rescore depth
+    // recovers them. Scaling only rescore (the previous behaviour) left persistent IVF_PQ recall
+    // flat as overQueryFactor rose, diverging from the in-memory path (P1.3a).
+    int probeCount =
+        twoPass
+            ? Math.min((int) Math.ceil(requestedNprobe * overQueryFactor), index.k())
+            : Math.min(requestedNprobe, index.k());
     int effectiveRescore =
         twoPass
             ? Math.max(rescoreFactor, (int) Math.ceil(rescoreFactor * overQueryFactor))
             : rescoreFactor;
     IvfSearchRequest req =
-        new IvfSearchRequest(query, k, effectiveNprobe, gamma, -Float.MAX_VALUE, effectiveRescore);
+        new IvfSearchRequest(query, k, probeCount, gamma, -Float.MAX_VALUE, effectiveRescore);
     IvfSearchResult result = index.search(req);
     int sz = result.hits().size();
     int[] ordinals = new int[sz];

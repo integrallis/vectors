@@ -89,10 +89,20 @@ public final class MappedIvfFlatAdapter implements IndexSpi {
     // Per-query nprobe override: searchListSize > 0 acts as the IVF beam width for this call,
     // matching the HNSW/Vamana contract; falls back to the constructor-time nprobe otherwise.
     int requestedNprobe = (searchListSize > 0) ? searchListSize : nprobe;
-    int effectiveNprobe = Math.min(requestedNprobe, index.k());
-    IvfSearchRequest req = new IvfSearchRequest(query, k, effectiveNprobe, gamma, -Float.MAX_VALUE);
+    // Two-pass expansion: when overQueryFactor > 1, probe more clusters (and request more
+    // candidates, trimmed to k below), mirroring the in-memory IvfFlatAdapter. Omitting this left
+    // over-query inert on the persistent IVF_FLAT path, the same divergence fixed for IVF_PQ
+    // (P1.3a).
+    boolean twoPass = overQueryFactor > 1.0f;
+    int probeCount =
+        twoPass
+            ? Math.min((int) Math.ceil(requestedNprobe * overQueryFactor), index.k())
+            : Math.min(requestedNprobe, index.k());
+    int candidateK = twoPass ? (int) Math.ceil(k * overQueryFactor) : k;
+    IvfSearchRequest req =
+        new IvfSearchRequest(query, candidateK, probeCount, gamma, -Float.MAX_VALUE);
     IvfSearchResult result = index.search(req);
-    int sz = result.hits().size();
+    int sz = Math.min(result.hits().size(), k);
     int[] ordinals = new int[sz];
     float[] scores = new float[sz];
     for (int i = 0; i < sz; i++) {
