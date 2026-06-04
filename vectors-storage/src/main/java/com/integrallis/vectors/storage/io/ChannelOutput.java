@@ -35,7 +35,7 @@ public final class ChannelOutput implements RandomAccessOutput {
   private final FileChannel channel;
   private final ByteBuffer scalarBuf;
 
-  private ChannelOutput(FileChannel channel) {
+  ChannelOutput(FileChannel channel) {
     this.channel = channel;
     this.scalarBuf = ByteBuffer.allocate(SCALAR_BUFFER_SIZE).order(ByteOrder.LITTLE_ENDIAN);
   }
@@ -54,18 +54,6 @@ public final class ChannelOutput implements RandomAccessOutput {
             StandardOpenOption.CREATE,
             StandardOpenOption.WRITE,
             StandardOpenOption.TRUNCATE_EXISTING);
-    return new ChannelOutput(ch);
-  }
-
-  /**
-   * Opens a file for writing without truncating (for appending or random writes).
-   *
-   * @param path the file to write to
-   * @return a new output
-   * @throws IOException if the file cannot be opened
-   */
-  public static ChannelOutput openExisting(Path path) throws IOException {
-    FileChannel ch = FileChannel.open(path, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
     return new ChannelOutput(ch);
   }
 

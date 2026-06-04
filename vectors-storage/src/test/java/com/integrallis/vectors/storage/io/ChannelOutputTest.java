@@ -23,7 +23,11 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import org.junit.jupiter.api.Test;
@@ -196,6 +200,18 @@ class ChannelOutputTest {
   }
 
   @Test
+  void flushForcesFileDataAndMetadata() throws IOException {
+    RecordingFileChannel channel = new RecordingFileChannel();
+
+    try (var out = new ChannelOutput(channel)) {
+      out.flush();
+    }
+
+    assertThat(channel.forceCalled).isTrue();
+    assertThat(channel.forceMetadata).isTrue();
+  }
+
+  @Test
   void writeSubArrays_offsetAndCount() throws IOException {
     Path file = tempDir.resolve("subarrays.bin");
     float[] floats = {0.0f, 1.1f, 2.2f, 3.3f, 4.4f};
@@ -217,5 +233,104 @@ class ChannelOutputTest {
       assertThat(buf.getInt()).isEqualTo(20);
       assertThat(buf.getInt()).isEqualTo(30);
     }
+  }
+
+  private static final class RecordingFileChannel extends FileChannel {
+    private boolean forceCalled;
+    private boolean forceMetadata;
+    private long position;
+
+    @Override
+    public int read(ByteBuffer dst) {
+      return -1;
+    }
+
+    @Override
+    public long read(ByteBuffer[] dsts, int offset, int length) {
+      return -1;
+    }
+
+    @Override
+    public int write(ByteBuffer src) {
+      int remaining = src.remaining();
+      src.position(src.limit());
+      position += remaining;
+      return remaining;
+    }
+
+    @Override
+    public long write(ByteBuffer[] srcs, int offset, int length) {
+      long written = 0;
+      for (int i = 0; i < length; i++) {
+        written += write(srcs[offset + i]);
+      }
+      return written;
+    }
+
+    @Override
+    public long position() {
+      return position;
+    }
+
+    @Override
+    public FileChannel position(long newPosition) {
+      position = newPosition;
+      return this;
+    }
+
+    @Override
+    public long size() {
+      return position;
+    }
+
+    @Override
+    public FileChannel truncate(long size) {
+      position = Math.min(position, size);
+      return this;
+    }
+
+    @Override
+    public void force(boolean metaData) {
+      forceCalled = true;
+      forceMetadata = metaData;
+    }
+
+    @Override
+    public long transferTo(long position, long count, WritableByteChannel target) {
+      return 0;
+    }
+
+    @Override
+    public long transferFrom(ReadableByteChannel src, long position, long count) {
+      return 0;
+    }
+
+    @Override
+    public int read(ByteBuffer dst, long position) {
+      return -1;
+    }
+
+    @Override
+    public int write(ByteBuffer src, long position) {
+      return write(src);
+    }
+
+    @Override
+    public MappedByteBuffer map(MapMode mode, long position, long size) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileLock lock(long position, long size, boolean shared) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileLock tryLock(long position, long size, boolean shared) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    protected void implCloseChannel() {}
   }
 }
