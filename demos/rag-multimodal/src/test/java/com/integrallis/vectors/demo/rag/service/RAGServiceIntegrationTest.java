@@ -19,12 +19,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.integrallis.vectors.cache.CacheAdmissionPolicy;
-import com.integrallis.vectors.cache.LLMResponseFilters;
 import com.integrallis.vectors.demo.rag.model.CacheType;
+import com.integrallis.vectors.demo.rag.model.ChatMessage;
 import com.integrallis.vectors.demo.rag.model.LLMConfig;
 import com.integrallis.vectors.server.ServerConfig;
 import com.integrallis.vectors.server.VectorsServer;
@@ -305,58 +305,31 @@ class RAGServiceIntegrationTest {
   class AdmissionPolicyIntegration {
 
     @Test
-    @DisplayName("rejectRefusals policy filters LLM refusal responses from cache")
-    void rejectRefusalsFiltersRefusals() {
-      CacheAdmissionPolicy<String> policy = LLMResponseFilters.rejectRefusals();
+    @DisplayName("RAGService does not cache LLM refusal responses")
+    void ragServiceDoesNotCacheRefusals() {
+      float[] queryVector = {0.9f, 0.1f, 0.0f, 0.0f};
+      when(embeddingModel.embed(anyString()))
+          .thenReturn(new Response<>(Embedding.from(queryVector)));
+      when(chatModel.chat(any(dev.langchain4j.model.chat.request.ChatRequest.class)))
+          .thenReturn(
+              ChatResponse.builder()
+                  .aiMessage(
+                      dev.langchain4j.data.message.AiMessage.from(
+                          "I'm sorry, but I can't answer that question."))
+                  .build());
+      when(costTracker.countTokens(anyString())).thenReturn(12);
+      when(costTracker.calculateCost(any(), anyString(), anyInt())).thenReturn(0.001);
 
-      // Simulate RAGService caching decision: the policy rejects refusals
-      String refusal = "I'm sorry, but I can't answer that question.";
-      assertThat(policy.test(refusal)).isFalse();
+      LLMConfig config = LLMConfig.defaultConfig(LLMConfig.Provider.OPENAI, "test-key");
+      RAGService ragService =
+          new RAGService(client, COLLECTION, embeddingModel, chatModel, costTracker, config);
 
-      String normal = "The document discusses vector search algorithms.";
-      assertThat(policy.test(normal)).isTrue();
-    }
+      ChatMessage first = ragService.query("what is the answer?", CacheType.LOCAL);
+      ChatMessage second = ragService.query("what is the answer?", CacheType.LOCAL);
 
-    @Test
-    @DisplayName("admission policy used by RAGService matches framework rejectRefusals")
-    void ragServiceUsesFrameworkPolicy() {
-      // Verify that the RAGService's admission policy matches the framework behavior
-      // for all the same refusal phrases that the old shouldCache() method handled
-      CacheAdmissionPolicy<String> policy = LLMResponseFilters.rejectRefusals();
-
-      // All phrases from the original shouldCache() method
-      List<String> refusalPhrases =
-          List.of(
-              "I am unable to process that request.",
-              "I can't help with that.",
-              "I cannot provide that information.",
-              "Please specify which document you mean.",
-              "That data is not available at this time.",
-              "I don't have access to that information.",
-              "I'm sorry, but I can't help with that request.",
-              "Visual content is not available for this document.",
-              "Could you specify which section?",
-              "Which image are you referring to?",
-              "Which page should I look at?");
-
-      for (String phrase : refusalPhrases) {
-        assertThat(policy.test(phrase)).as("Should reject: %s", phrase).isFalse();
-      }
-
-      // Normal responses should pass
-      assertThat(policy.test("The key findings from page 3 include...")).isTrue();
-      assertThat(policy.test("Based on the document, the answer is...")).isTrue();
-    }
-
-    @Test
-    @DisplayName("composed policy rejects short AND refusal responses")
-    void composedPolicyRejectsBoth() {
-      CacheAdmissionPolicy<String> policy =
-          LLMResponseFilters.rejectRefusals().and(LLMResponseFilters.rejectShort(20));
-
-      assertThat(policy.test("I can't do that.")).isFalse(); // refusal
-      assertThat(policy.test("Yes.")).isFalse(); // too short
-      assertThat(policy.test("The document covers machine learning topics in detail.")).isTrue();
+      assertThat(first.fromCache()).isFalse();
+      assertThat(second.fromCache()).isFalse();
+      verify(chatModel, times(2)).chat(any(dev.langchain4j.model.chat.request.ChatRequest.class));
     }
   }
 }
