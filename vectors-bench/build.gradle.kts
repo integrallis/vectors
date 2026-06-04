@@ -14,6 +14,17 @@ dependencies {
     implementation(project(":vectors-db"))
     implementation(project(":vectors-distributed"))
 
+    // Cache layer (P1.6 benchmarks) — declared on the jmh source set ONLY, not main. vectors-bench
+    // is an implementation dependency of vectors-optimizer (and thus vectors-studio-web), so putting
+    // these on `implementation` would leak Caffeine + the JSR-107 provider into those modules'
+    // runtime classpaths. `jmhImplementation` keeps them on the benchmark classpath alone.
+    // The JCache provider is only a testImplementation of vectors-cache-jcache, so it is not on the
+    // bench classpath transitively and must be declared explicitly for the JMH fork.
+    jmhImplementation(project(":vectors-cache"))
+    jmhImplementation(project(":vectors-cache-jcache"))
+    jmhImplementation(project(":vectors-cache-semantic-db"))
+    jmhImplementation("com.github.ben-manes.caffeine:jcache:3.1.8")
+
     // HDF5 reader for ANN-Benchmarks datasets (MIT, pure Java, no native code)
     implementation("io.jhdf:jhdf:0.9.4")
 

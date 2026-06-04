@@ -1,0 +1,61 @@
+# java-vectors cache-baseline JMH results — 2026-06-04
+# Platform: Intel Core i9-14900HX (x86-64, AVX2 256-bit; no AVX-512), JDK 25 (Zulu 25.0.3), JMH 1.37
+# Run config: java -jar vectors-bench-*-jmh.jar ".*Cache.*Benchmark" -f 1 -wi 3 -i 5 -r 1s
+#   (--add-modules jdk.incubator.vector, -XX:+UseG1GC)
+#
+# P1.6 — steady-state RPS, tail-latency, hit-rate, and commit-storm for the cache layer:
+# CaffeineVectorCache + JCacheVectorCache (exact-match) and VectorDbSemanticCache (similarity).
+# NoOpVectorCache is the zero-hit baseline. The P0.6 correctness floor (single-flight getOrCompute,
+# putAll batch commit) is assumed.
+#
+# Methodology / caveats:
+# - All in-memory, single JVM, NO embedding model and NO network. Vectors are seeded-random
+#   float[128]; the semantic collection is an in-memory FLAT/COSINE VectorCollection (threshold 0.92).
+# - Latency is reported from JMH SampleTime percentiles (·p0.50/·p0.99), which are stable. The
+#   single-thread Throughput-mode numbers for sub-microsecond exact-cache ops are high-variance
+#   (JMH overhead dominates), so single-thread RPS below is DERIVED as 1e6 / p50(us); the only
+#   directly-measured throughput we trust is the contended @Threads(16) getOrCompute run.
+# - Hit-rate is taken from the raw AuxCounters hits/total (the mixed run is built to ~0.80 by
+#   construction; the measured ratios confirm it). FLAT semantic search is O(corpus), so its latency
+#   scales with corpus size — that is expected, not a regression.
+
+# === CacheBenchmark — exact-match lookup latency (SampleTime, us/op) ===
+# method              impl       p50      p95      p99     ~RPS(1/p50, single-thread)
+# lookupAlwaysHit     caffeine  0.073    0.255    1.132    ~13.7 M/s
+# lookupAlwaysHit     jcache    0.105    0.206    0.471    ~9.5  M/s
+# lookupAlwaysHit     noop      0.027    0.036    0.062    ~37   M/s   (baseline: Optional.empty)
+# lookupMixed(0.8)    caffeine  0.100    0.244    0.506    ~10.0 M/s
+# lookupMixed(0.8)    jcache    0.124    0.252    0.526    ~8.1  M/s
+# lookupMixed(0.8)    noop      0.032    0.035    0.039    ~31   M/s
+
+# === CacheBenchmark — getOrCompute single-flight, @Threads(16) (Throughput, ops/us) ===
+# impl       throughput(ops/us)   p50(us)  p99(us)
+# caffeine   179.2 ± 91.0         0.057    1.138     (~179 M ops/s aggregate; high variance)
+# jcache      54.3 ±  5.4         0.209    1.636     (~54  M ops/s aggregate)
+# noop      1595.7 ± 78.6         (n/a)    (n/a)     (no caching; just invokes the loader)
+
+# === CacheBenchmark — measured hit-rate (raw AuxCounters hits/total) ===
+# impl       lookupMixed hits/total      hit-rate   (analytic target 0.80)
+# caffeine   18,830,960 / 23,538,571      0.800
+# jcache      9,231,050 / 11,538,734      0.800
+# noop                0 / 355,763,720     0.000     (always-miss baseline)
+
+# === SemanticCacheBenchmark — VectorDbSemanticCache.lookup (SampleTime, us/op) ===
+# method      corpus   p50      p95      p99      ~RPS(1/p50, single-thread)
+# lookupHit   1000     21.6     56.7     62.5     ~46 k/s
+# lookupHit   5000    121.9    387.1    444.7     ~8.2 k/s
+# lookupMiss  1000     73.1    129.4    288.8     ~14 k/s
+# lookupMiss  5000    349.2    953.3   4182.5     ~2.9 k/s
+# (FLAT top-1 cosine scan is O(corpus); the 5x corpus gives ~5x latency. Hit decodes the payload;
+#  miss returns empty after the same full scan.)
+
+# === SemanticCachePutBenchmark — commit-storm (AverageTime, us per putAll == us per commit) ===
+# batchSize   us/op (1 commit)   us/entry   putAll/s   entries/s   commits/hour(sustained)
+# 1            234.8              234.8       4259       4,259        15.3 M
+# 100         5253.5               52.5        190      19,034       685 k
+# 1000       13508.7               13.5         74      74,026       266 k
+#
+# Commit-storm collapse (the P0.6 putAll win): batching 1000 inserts into one putAll cuts per-entry
+# latency ~17x (234.8 -> 13.5 us) AND collapses commits-per-N-entries by 1000x. A naive per-put
+# cache that commits on every entry caps at ~4.3 k inserts/s and ~15 M commits/hour; the batch API
+# reaches ~74 k inserts/s at ~266 k commits/hour for the same volume.
