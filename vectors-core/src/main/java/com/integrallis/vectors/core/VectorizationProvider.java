@@ -50,9 +50,16 @@ public final class VectorizationProvider {
 
     try {
       VectorUtilSupport panama = new PanamaVectorUtilSupport();
+      String capNote =
+          PanamaVectorUtilSupport.VECTOR_BITSIZE < PanamaConstants.PREFERRED_BITS
+              ? " (capped from hardware-preferred "
+                  + PanamaConstants.PREFERRED_BITS
+                  + "; raise with -Dvectors.maxBits)"
+              : "";
       LOG.info(
-          "vectors-core: Using Panama Vector API SIMD provider (bit size: "
+          "vectors-core: Using Panama Vector API SIMD provider (vector bits: "
               + PanamaVectorUtilSupport.VECTOR_BITSIZE
+              + capNote
               + ")");
       return panama;
     } catch (Throwable t) {

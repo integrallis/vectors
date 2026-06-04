@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 import jdk.incubator.vector.FloatVector;
+import jdk.incubator.vector.VectorShape;
 import jdk.incubator.vector.VectorSpecies;
 
 /**
@@ -33,12 +34,87 @@ import jdk.incubator.vector.VectorSpecies;
 public final class PanamaConstants {
 
   private static final Path LINUX_CPUINFO = Path.of("/proc/cpuinfo");
-  private static final VectorSpecies<Float> FLOAT_SPECIES = FloatVector.SPECIES_PREFERRED;
+
+  /**
+   * Default ceiling on SIMD register width, in bits. Matches Lucene's {@code
+   * MAX_BITS_PER_VECTOR=256}: on many Intel server parts a sustained AVX-512 (512-bit) workload
+   * triggers a frequency downclock that makes the wider registers a net loss for the rest of the
+   * process. Capping at 256 bits keeps the common case fast; opt back in with {@code
+   * -Dvectors.maxBits=512} on hardware (e.g. recent Sapphire Rapids, AMD Zen 4+) where 512-bit does
+   * not downclock.
+   */
+  static final int DEFAULT_MAX_BITS = 256;
+
+  private static final int SMALLEST_SIMD_BITS = 64;
+  private static final int LARGEST_SIMD_BITS = 512;
+
+  /**
+   * The resolved SIMD register-width ceiling in bits. Defaults to {@link #DEFAULT_MAX_BITS};
+   * override with {@code -Dvectors.maxBits=<64|128|256|512>}. The effective species width is {@code
+   * min(MAX_BITS, hardware-preferred)} — this never widens beyond what the platform prefers, it
+   * only caps it.
+   */
+  public static final int MAX_BITS = resolveMaxBits();
+
+  /**
+   * The platform's hardware-preferred float SIMD width in bits, before any {@link #MAX_BITS} cap.
+   */
+  public static final int PREFERRED_BITS = FloatVector.SPECIES_PREFERRED.vectorBitSize();
+
+  private static final VectorSpecies<Float> FLOAT_SPECIES =
+      preferredSpecies(FloatVector.SPECIES_PREFERRED);
   private static final int FMA_BENCHMARK_ITERATIONS = 10_000;
   private static final float FMA_SLOW_THRESHOLD = 1.05f;
   private static volatile float fmaBenchmarkSink;
 
   private PanamaConstants() {}
+
+  /**
+   * Returns {@code preferred} capped to {@link #MAX_BITS}. When the platform-preferred width is
+   * already within the cap the preferred species is returned unchanged; otherwise the same element
+   * type is returned at the capped shape. Because this only ever caps downward to a width the
+   * platform already supports, the returned species is always natively executable.
+   */
+  static <E> VectorSpecies<E> preferredSpecies(VectorSpecies<E> preferred) {
+    if (preferred.vectorBitSize() <= MAX_BITS) {
+      return preferred;
+    }
+    return VectorSpecies.of(preferred.elementType(), VectorShape.forBitSize(MAX_BITS));
+  }
+
+  static int resolveMaxBits() {
+    String override = System.getProperty("vectors.maxBits");
+    if (override == null || override.isBlank()) {
+      return DEFAULT_MAX_BITS;
+    }
+    return parseMaxBits(override.trim());
+  }
+
+  static int parseMaxBits(String value) {
+    int parsed;
+    try {
+      parsed = Integer.parseInt(value);
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException(
+          "-Dvectors.maxBits must be an integer power of two in ["
+              + SMALLEST_SIMD_BITS
+              + ", "
+              + LARGEST_SIMD_BITS
+              + "]; got: "
+              + value,
+          e);
+    }
+    if (parsed < SMALLEST_SIMD_BITS || parsed > LARGEST_SIMD_BITS || (parsed & (parsed - 1)) != 0) {
+      throw new IllegalArgumentException(
+          "-Dvectors.maxBits must be a power of two in ["
+              + SMALLEST_SIMD_BITS
+              + ", "
+              + LARGEST_SIMD_BITS
+              + "]; got: "
+              + parsed);
+    }
+    return parsed;
+  }
 
   /**
    * Whether the platform has fast vector FMA. When false, SIMD code should use {@code

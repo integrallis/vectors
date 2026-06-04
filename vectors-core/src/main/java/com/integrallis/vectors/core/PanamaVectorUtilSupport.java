@@ -42,11 +42,21 @@ import jdk.incubator.vector.VectorSpecies;
  */
 final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
-  static final VectorSpecies<Float> FLOAT_SPECIES = FloatVector.SPECIES_PREFERRED;
-  static final VectorSpecies<Byte> BYTE_SPECIES = ByteVector.SPECIES_PREFERRED;
-  static final VectorSpecies<Short> SHORT_SPECIES = ShortVector.SPECIES_PREFERRED;
-  static final VectorSpecies<Integer> INT_SPECIES = IntVector.SPECIES_PREFERRED;
-  static final VectorSpecies<Long> LONG_SPECIES = LongVector.SPECIES_PREFERRED;
+  // Species are capped to PanamaConstants.MAX_BITS (default 256) to avoid AVX-512 frequency
+  // downclock; opt into wider with -Dvectors.maxBits=512. The cap only ever narrows below the
+  // hardware-preferred width, so every loop below stays correct (they are written generically
+  // against FLOAT_SPECIES.length()/loopBound). Note the byte kernels use their own fixed 256-bit
+  // tiers (ByteVector.SPECIES_64 -> IntVector.SPECIES_256) independent of these constants.
+  static final VectorSpecies<Float> FLOAT_SPECIES =
+      PanamaConstants.preferredSpecies(FloatVector.SPECIES_PREFERRED);
+  static final VectorSpecies<Byte> BYTE_SPECIES =
+      PanamaConstants.preferredSpecies(ByteVector.SPECIES_PREFERRED);
+  static final VectorSpecies<Short> SHORT_SPECIES =
+      PanamaConstants.preferredSpecies(ShortVector.SPECIES_PREFERRED);
+  static final VectorSpecies<Integer> INT_SPECIES =
+      PanamaConstants.preferredSpecies(IntVector.SPECIES_PREFERRED);
+  static final VectorSpecies<Long> LONG_SPECIES =
+      PanamaConstants.preferredSpecies(LongVector.SPECIES_PREFERRED);
   static final int VECTOR_BITSIZE = FLOAT_SPECIES.vectorBitSize();
 
   // --- Conditional FMA helpers ---
