@@ -22,12 +22,7 @@ import com.integrallis.vectors.studio.core.projection.ProjectionParams.TsneParam
 import com.integrallis.vectors.studio.core.projection.ProjectionResult;
 import smile.manifold.TSNE;
 
-/**
- * t-SNE projection backed by Smile's {@code smile.manifold.TSNE}.
- *
- * <p>Smile 6.0.0 exposes t-SNE as a one-shot {@code fit}; we report start/end iteration markers via
- * the listener so the UI sees at least two progress updates.
- */
+/** t-SNE projection backed by Smile's {@code smile.manifold.TSNE}. */
 public final class SmileTsneProjection implements Projection {
 
   private final TsneParams params;
@@ -42,9 +37,6 @@ public final class SmileTsneProjection implements Projection {
   public ProjectionResult run(float[][] data, ProgressListener listener) {
     long start = System.currentTimeMillis();
     double[][] dd = SmilePcaProjection.toDouble(data);
-    if (listener != null) {
-      listener.onIteration(0, params.iterations(), zeros(data.length));
-    }
     TSNE.Options opts =
         new TSNE.Options(
             dimensions, params.perplexity(), params.learningRate(), 12.0, params.iterations());
@@ -53,7 +45,6 @@ public final class SmileTsneProjection implements Projection {
     long ms = System.currentTimeMillis() - start;
     ProjectionResult out = new ProjectionResult(coords, ProjectionAlgorithm.TSNE, params, ms, null);
     if (listener != null) {
-      listener.onIteration(params.iterations() / 2, params.iterations(), coords);
       listener.onIteration(params.iterations(), params.iterations(), coords);
       listener.onDone(out);
     }
@@ -63,10 +54,5 @@ public final class SmileTsneProjection implements Projection {
   @Override
   public ProjectionAlgorithm algorithm() {
     return ProjectionAlgorithm.TSNE;
-  }
-
-  private float[][] zeros(int n) {
-    float[][] z = new float[n][dimensions];
-    return z;
   }
 }

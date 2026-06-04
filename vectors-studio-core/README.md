@@ -50,7 +50,7 @@ pure-Java with no JNI.
 - `ProjectionAlgorithm` — enum `PCA`, `TSNE`, `UMAP`
 - `ProjectionParams` (sealed): `PcaParams(components, center, whiten)`, `TsneParams(perplexity, learningRate, iterations, seed)`, `UmapParams(neighbors, minDist, iterations, seed)`
 - `ProjectionRequest(collection, algorithm, dimensions, sampleSize, params)`, `ProjectionResult(coords, algorithm, durationMs)`
-- `ProgressListener` — `onIteration(int step, int total, double loss)`
+- `ProgressListener` — `onIteration(int step, int total, float[][] currentCoords)`
 - `HeuristicRecommender.recommend(DatasetStats, int targetDims)` → `ProjectionRecommendation(algorithm, params, rationale, llmExplanation)`
 - `LlmRecommender.enrich(DatasetStats, ProjectionRecommendation)` → enriched copy
 - `StudioSession.backend()`, `heuristic()`, `llm()`, `projectionRunner()`, `metadataSchema(name)`, `putMetadataSchema(name, schema)`

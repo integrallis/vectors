@@ -22,10 +22,7 @@ import com.integrallis.vectors.studio.core.projection.ProjectionParams.UmapParam
 import com.integrallis.vectors.studio.core.projection.ProjectionResult;
 import smile.manifold.UMAP;
 
-/**
- * UMAP projection backed by Smile's {@code smile.manifold.UMAP}. Smile's API performs a one-shot
- * fit; we issue start and end iteration markers to the listener.
- */
+/** UMAP projection backed by Smile's {@code smile.manifold.UMAP}. */
 public final class SmileUmapProjection implements Projection {
 
   private final UmapParams params;
@@ -40,9 +37,6 @@ public final class SmileUmapProjection implements Projection {
   public ProjectionResult run(float[][] data, ProgressListener listener) {
     long start = System.currentTimeMillis();
     double[][] dd = SmilePcaProjection.toDouble(data);
-    if (listener != null) {
-      listener.onIteration(0, params.iterations(), new float[data.length][dimensions]);
-    }
     UMAP.Options opts =
         new UMAP.Options(
             params.neighbors(),

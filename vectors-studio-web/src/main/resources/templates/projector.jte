@@ -75,7 +75,7 @@
                   </label>
                   <label class="projector-field projector-field--inline">
                     <span>Max iterations</span>
-                    <input type="number" id="tsne-iterations" min="50" step="50" value="1000">
+                    <input type="number" id="tsne-iterations" min="300" step="50" value="1000">
                   </label>
                   <label class="projector-field projector-field--inline">
                     <span>Random seed</span>

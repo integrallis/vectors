@@ -27,11 +27,31 @@ class SmileUmapProjectionTest {
   @Test
   void embeds3ClusterDataIntoTwoDimensions() {
     float[][] data = SmilePcaProjectionTest.ThreeClusterData.generate(120, 16, 9L);
+    int[] iters = {0};
+    boolean[] done = {false};
     SmileUmapProjection p =
         new SmileUmapProjection(new ProjectionParams.UmapParams(10, 0.1, 100, 42L), 2);
-    ProjectionResult r = p.run(data, ProgressListener.noop());
+    ProjectionResult r =
+        p.run(
+            data,
+            new ProgressListener() {
+              @Override
+              public void onIteration(int iter, int total, float[][] coords) {
+                iters[0]++;
+                assertThat(iter).isEqualTo(total);
+                assertThat(coords).hasNumberOfRows(120);
+                assertThat(coords[0]).hasSize(2);
+              }
+
+              @Override
+              public void onDone(ProjectionResult result) {
+                done[0] = true;
+              }
+            });
     assertThat(r.algorithm()).isEqualTo(ProjectionAlgorithm.UMAP);
     assertThat(r.coords()).hasNumberOfRows(120);
     assertThat(r.coords()[0]).hasSize(2);
+    assertThat(iters[0]).isEqualTo(1);
+    assertThat(done[0]).isTrue();
   }
 }

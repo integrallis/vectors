@@ -28,8 +28,9 @@ class SmileTsneProjectionTest {
   void embeds3ClusterDataIntoTwoDimensions() {
     float[][] data = SmilePcaProjectionTest.ThreeClusterData.generate(120, 16, 7L);
     int[] iters = {0};
+    boolean[] done = {false};
     SmileTsneProjection p =
-        new SmileTsneProjection(new ProjectionParams.TsneParams(10, 200.0, 200, 42L), 2);
+        new SmileTsneProjection(new ProjectionParams.TsneParams(10, 200.0, 300, 42L), 2);
     ProjectionResult r =
         p.run(
             data,
@@ -37,11 +38,20 @@ class SmileTsneProjectionTest {
               @Override
               public void onIteration(int iter, int total, float[][] coords) {
                 iters[0]++;
+                assertThat(iter).isEqualTo(total);
+                assertThat(coords).hasNumberOfRows(120);
+                assertThat(coords[0]).hasSize(2);
+              }
+
+              @Override
+              public void onDone(ProjectionResult result) {
+                done[0] = true;
               }
             });
     assertThat(r.algorithm()).isEqualTo(ProjectionAlgorithm.TSNE);
     assertThat(r.coords()).hasNumberOfRows(120);
     assertThat(r.coords()[0]).hasSize(2);
-    assertThat(iters[0]).isGreaterThanOrEqualTo(3);
+    assertThat(iters[0]).isEqualTo(1);
+    assertThat(done[0]).isTrue();
   }
 }

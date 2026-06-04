@@ -119,7 +119,7 @@ class OptimizeApiIT {
   }
 
   @Test
-  void submitSseAndCancelLifecycle() throws Exception {
+  void submitCompletesAndListsTrials() throws Exception {
     String dto =
         "{\"collection\":\"docs\",\"sampler\":\"RANDOM\",\"nTrials\":3,\"kForMetrics\":5,"
             + "\"querySampleSize\":8,\"mMin\":8,\"mMax\":16,\"efMin\":50,\"efMax\":100}";
