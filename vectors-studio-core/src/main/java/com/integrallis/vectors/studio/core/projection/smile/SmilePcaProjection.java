@@ -20,6 +20,7 @@ import com.integrallis.vectors.studio.core.projection.Projection;
 import com.integrallis.vectors.studio.core.projection.ProjectionAlgorithm;
 import com.integrallis.vectors.studio.core.projection.ProjectionParams.PcaParams;
 import com.integrallis.vectors.studio.core.projection.ProjectionResult;
+import java.util.concurrent.CancellationException;
 import smile.feature.extraction.PCA;
 import smile.tensor.Vector;
 
@@ -37,10 +38,14 @@ public final class SmilePcaProjection implements Projection {
   @Override
   public ProjectionResult run(float[][] data, ProgressListener listener) {
     long start = System.currentTimeMillis();
+    checkInterrupted();
     double[][] dd = toDouble(data);
+    checkInterrupted();
     PCA full = PCA.fit(dd);
+    checkInterrupted();
     PCA reduced = full.getProjection(dimensions);
     double[][] projected = reduced.apply(dd);
+    checkInterrupted();
     float[][] coords = toFloat(projected);
     Vector vp = full.varianceProportion();
     double[] variance = new double[Math.min(vp.size(), dimensions)];
@@ -63,6 +68,7 @@ public final class SmilePcaProjection implements Projection {
   static double[][] toDouble(float[][] in) {
     double[][] out = new double[in.length][];
     for (int i = 0; i < in.length; i++) {
+      checkInterrupted();
       double[] row = new double[in[i].length];
       for (int j = 0; j < in[i].length; j++) row[j] = in[i][j];
       out[i] = row;
@@ -73,10 +79,17 @@ public final class SmilePcaProjection implements Projection {
   static float[][] toFloat(double[][] in) {
     float[][] out = new float[in.length][];
     for (int i = 0; i < in.length; i++) {
+      checkInterrupted();
       float[] row = new float[in[i].length];
       for (int j = 0; j < in[i].length; j++) row[j] = (float) in[i][j];
       out[i] = row;
     }
     return out;
+  }
+
+  static void checkInterrupted() {
+    if (Thread.currentThread().isInterrupted()) {
+      throw new CancellationException("projection interrupted");
+    }
   }
 }

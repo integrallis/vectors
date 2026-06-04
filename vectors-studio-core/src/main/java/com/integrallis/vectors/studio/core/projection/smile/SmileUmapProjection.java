@@ -36,7 +36,9 @@ public final class SmileUmapProjection implements Projection {
   @Override
   public ProjectionResult run(float[][] data, ProgressListener listener) {
     long start = System.currentTimeMillis();
+    SmilePcaProjection.checkInterrupted();
     double[][] dd = SmilePcaProjection.toDouble(data);
+    SmilePcaProjection.checkInterrupted();
     UMAP.Options opts =
         new UMAP.Options(
             params.neighbors(),
@@ -49,6 +51,7 @@ public final class SmileUmapProjection implements Projection {
             1.0,
             1.0);
     double[][] projected = UMAP.fit(dd, opts);
+    SmilePcaProjection.checkInterrupted();
     float[][] coords = SmilePcaProjection.toFloat(projected);
     long ms = System.currentTimeMillis() - start;
     ProjectionResult out = new ProjectionResult(coords, ProjectionAlgorithm.UMAP, params, ms, null);

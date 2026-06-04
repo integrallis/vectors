@@ -36,11 +36,14 @@ public final class SmileTsneProjection implements Projection {
   @Override
   public ProjectionResult run(float[][] data, ProgressListener listener) {
     long start = System.currentTimeMillis();
+    SmilePcaProjection.checkInterrupted();
     double[][] dd = SmilePcaProjection.toDouble(data);
+    SmilePcaProjection.checkInterrupted();
     TSNE.Options opts =
         new TSNE.Options(
             dimensions, params.perplexity(), params.learningRate(), 12.0, params.iterations());
     TSNE result = TSNE.fit(dd, opts);
+    SmilePcaProjection.checkInterrupted();
     float[][] coords = SmilePcaProjection.toFloat(result.coordinates());
     long ms = System.currentTimeMillis() - start;
     ProjectionResult out = new ProjectionResult(coords, ProjectionAlgorithm.TSNE, params, ms, null);
