@@ -22,6 +22,7 @@ import com.integrallis.vectors.quantization.CompressedVectors;
 import com.integrallis.vectors.quantization.ScalarQuantizer;
 import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
@@ -59,6 +60,19 @@ public final class TieredCluster {
 
   /** T1: SQ8-encoded representation; null when not materialised. */
   private volatile CompressedVectors t1Data;
+
+  /**
+   * Optional object-storage read-through. When set, {@link #scan} fetches this cluster's float32
+   * vectors from the backend (T3) on first probe and caches them, instead of scanning the
+   * heap-resident {@code globalVectors}. Null (the default) preserves exact heap/T1 scanning with
+   * zero behavioral change for existing callers — see {@link #enableReadThrough}.
+   */
+  private volatile StorageBackend readThroughBackend;
+
+  /**
+   * Cached cluster slice fetched from {@link #readThroughBackend}; null = cold (not yet fetched).
+   */
+  private volatile float[][] readThroughCache;
 
   /**
    * Constructs a {@code TieredCluster} from an existing partition and the global vector array.
@@ -221,7 +235,49 @@ public final class TieredCluster {
    * @return hits in descending score order, size ≤ k
    */
   public List<IvfHit> scan(float[] query, int k, float minScore) {
+    if (readThroughBackend != null) {
+      return scanReadThrough(query, k, minScore);
+    }
     return (t1Data != null) ? scanWithT1(query, k, minScore) : scanExact(query, k, minScore);
+  }
+
+  // ─── object-storage read-through (P1.8) ────────────────────────────────────
+
+  /**
+   * Enables object-storage read-through: subsequent {@link #scan} calls fetch this cluster's
+   * vectors from {@code backend} (a network GET on the first probe — "cold") and cache the slice in
+   * heap so later probes are served without a round-trip ("warm"). This makes per-query cold/warm
+   * object-storage reads observable for benchmarking the object-storage-native serving path, rather
+   * than always scanning the heap-resident global array. Idempotent; clears any cached slice.
+   */
+  public void enableReadThrough(StorageBackend backend) {
+    this.readThroughBackend = backend;
+    this.readThroughCache = null;
+  }
+
+  /**
+   * Drops the cached read-through slice so the next {@link #scan} re-fetches (forces a cold read).
+   */
+  public void dropReadThroughCache() {
+    this.readThroughCache = null;
+  }
+
+  /** True when read-through is enabled and the cluster slice is cached in heap (warm). */
+  public boolean isReadThroughWarm() {
+    return readThroughBackend != null && readThroughCache != null;
+  }
+
+  private List<IvfHit> scanReadThrough(float[] query, int k, float minScore) {
+    float[][] slice = readThroughCache;
+    if (slice == null) {
+      try {
+        slice = fetchT3(readThroughBackend); // cold: network GET from object storage
+      } catch (IOException e) {
+        throw new UncheckedIOException("read-through fetchT3 failed for " + t3Key(), e);
+      }
+      readThroughCache = slice; // warm for subsequent probes
+    }
+    return scanSlice(query, k, minScore, slice);
   }
 
   // ─── internals ─────────────────────────────────────────────────────────────
@@ -276,6 +332,27 @@ public final class TieredCluster {
         new PriorityQueue<>(k + 1, (a, b) -> Float.compare(a.score(), b.score()));
     for (int local = 0; local < ordinals.length; local++) {
       float s = scoreFunction.score(local);
+      if (s < minScore) continue;
+      if (heap.size() < k) {
+        heap.offer(new IvfHit(ordinals[local], null, s));
+      } else if (s > heap.peek().score()) {
+        heap.poll();
+        heap.offer(new IvfHit(ordinals[local], null, s));
+      }
+    }
+    IvfHit[] arr = heap.toArray(new IvfHit[0]);
+    Arrays.sort(arr); // IvfHit.compareTo is descending by score
+    return List.of(arr);
+  }
+
+  /** Exact scan over an externally-supplied cluster slice (read-through path). */
+  private List<IvfHit> scanSlice(float[] query, int k, float minScore, float[][] slice) {
+    int[] ordinals = partition.ordinals();
+    int limit = Math.min(slice.length, ordinals.length);
+    PriorityQueue<IvfHit> heap =
+        new PriorityQueue<>(k + 1, (a, b) -> Float.compare(a.score(), b.score()));
+    for (int local = 0; local < limit; local++) {
+      float s = score(query, slice[local]);
       if (s < minScore) continue;
       if (heap.size() < k) {
         heap.offer(new IvfHit(ordinals[local], null, s));

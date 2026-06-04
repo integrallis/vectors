@@ -149,6 +149,55 @@ tasks.register<JavaExec>("recallQps") {
 }
 
 // ---------------------------------------------------------------------------
+// s3Bench — P1.8 turbopuffer object-storage benchmark (Cloudflare R2 / S3 / LocalStack)
+//
+// Reads R2 creds from the repo-root .env (VECTORS_R2_*); self-skips when absent unless
+// -Pbench.s3.localstack=true (with a LocalStack container at -Pbench.s3.endpoint).
+//
+// Usage:
+//   ./gradlew :vectors-bench:s3Bench
+//   ./gradlew :vectors-bench:s3Bench -Pbench.s3.n=10000 -Pbench.s3.dim=128 -Pbench.s3.k=64 \
+//       -Pbench.s3.q=1000 -Pbench.s3.nprobe=8
+//   ./gradlew :vectors-bench:s3Bench -Pbench.s3.localstack=true -Pbench.s3.endpoint=http://localhost:4566
+//
+// Measures ingest throughput, cold-open latency, cold-vs-warm per-query latency + bytes-fetched
+// (via the TieredCluster S3 read-through), tier promotion, and R2 cost. Cleans up its bucket prefix.
+// ---------------------------------------------------------------------------
+tasks.register<JavaExec>("s3Bench") {
+    group = "benchmark"
+    description = "Turbopuffer object-storage benchmark against Cloudflare R2 / S3 / LocalStack"
+
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.integrallis.vectors.bench.TurbopufferS3Benchmark")
+
+    jvmArgs(
+        "--add-modules", "jdk.incubator.vector",
+        "-Xmx4g", "-Xms4g",
+        "-XX:+UseG1GC",
+        "-XX:MaxGCPauseMillis=100"
+    )
+
+    // Make dotenv lookups deterministic regardless of Gradle's invocation directory.
+    systemProperty("dotenv.directory", rootProject.projectDir.absolutePath)
+
+    // Forward -Pbench.s3.* properties as -Dbench.s3.* system properties the harness reads.
+    listOf(
+        "bench.s3.n", "bench.s3.dim", "bench.s3.k", "bench.s3.q", "bench.s3.nprobe",
+        "bench.s3.seed", "bench.s3.localstack", "bench.s3.endpoint", "bench.s3.bucket",
+        "bench.s3.iAcceptCost"
+    ).forEach { key ->
+        (project.findProperty(key) as String?)?.let { systemProperty(key, it) }
+    }
+
+    standardOutput = System.out
+    errorOutput = System.err
+
+    doFirst {
+        project.file("build/results/turbopuffer-s3").mkdirs()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // buildScalability — HNSW/Vamana/FLAT build-time scaling sweep
 //
 // Usage:

@@ -1,0 +1,51 @@
+# java-vectors turbopuffer-baseline results — 2026-06-04
+# Platform: Intel Core i9-14900HX (x86-64, AVX2 256-bit), JDK 25 (Zulu 25.0.3), harness=JavaExec
+# Backend: Cloudflare R2 (S3-compatible), region=auto, forcePathStyle; harness=TurbopufferS3Benchmark
+# Run config: ./gradlew :vectors-bench:s3Bench   (n=10000 dim=128 clusters=64 nprobe=8 queries=1000 seed=42)
+#
+# P1.8 — object-storage-native vector serving ("JVM turbopuffer"): can vectors-ivf serve queries
+# directly from Cloudflare R2, and what does cold vs warm cost? This run uses the additive
+# TieredCluster S3 read-through (P1.8): an evicted cluster fetches its float32 vectors from R2 on the
+# first probe (COLD) and caches them in heap (WARM); default behaviour (no read-through) is unchanged.
+#
+# Methodology / honesty (read before quoting numbers):
+# - COLD query  = read-through enabled, caches dropped before each query, so every probed cluster is
+#   fetched from R2 (nprobe GETs/query). This is a real network read path.
+# - WARM query  = the same clusters served from the heap cache populated by the first probe (0 GETs).
+# - The full vector set is still heap-resident in the current design, so the read-through measures
+#   the object-storage READ latency/bytes, NOT the memory savings of a fully paged index — paged /
+#   per-ordinal range reads (true RAM-free serving) are future work (Pillar I, I.4-style).
+# - Default vectors-ivf search() (no read-through) serves entirely from heap and issues 0 S3 GETs;
+#   only open() and the read-through path touch R2. vectors-db VectorCollection has no S3 read path.
+# - T2 ("warm") currently stores a SECOND float32 copy in S3 (cluster-T2-*), not a local SSD mmap —
+#   hence storage below (~10.2 MB) is ~2x the 5.15 MB corpus once promotion writes T2 snapshots. The
+#   4-tier latency ladder is therefore partly aspirational; T2-as-local-SSD is not yet implemented.
+# - Numbers are single-shot/network-bound; R2 has no client-side data cache. Cost guard caps the run
+#   at a ~5 MB corpus (fractions of a US cent); the bucket prefix is deleted on exit.
+
+# === Ingest (build + commit to R2) ===
+# vectors   wall    throughput   PutObject   bytes-put
+# 10000     45.4 s  220 vec/s    65          5.15 MB        (1 routing index + 64 cluster snapshots)
+
+# === Cold open (reopen from R2 + local WAL replay) ===
+# latency   GETs   bytes-fetched
+# 878 ms    1      33.6 KB        (one ROUTING_KEY GET; the 10k ADD records replay from the local WAL)
+
+# === Cold vs warm query (read-through; k=10, nprobe=8) ===
+# mode   p50         p99         bytes/query   GETs/query
+# COLD   1331.3 ms   1870.1 ms   639.3 KB      8.0          (8 cluster snapshots fetched from R2)
+# WARM      0.039 ms    0.055 ms   0.0 KB      0.0          (served from heap cache after first probe)
+# cold/warm speedup: ~33900x (p50). Per-GET ≈ 166 ms (1331 ms / 8 sequential GETs); ~80 KB/cluster.
+
+# === Tier promotion (fresh reopen, Zipf s=1.0 over 64 queries, TierPolicy(5,2), batch=8/round) ===
+# round:  1   2   3   4   5   6   7   8   9  10  11  12
+# T1:     0   5  16  30  36  40  45  48  50  52  53  53   (of 64; the rarely-probed cold tail stays T3)
+# Access-driven promotion: hot clusters cross the T1 threshold first; the count climbs with the skew
+# and plateaus as the long tail stays cold. Per-cluster T1/T2/T3 transitions are unit-tested
+# (TieredClusterTest); this confirms the mechanism end-to-end against R2.
+
+# === Cost (R2 pricing: $0.015/GB-month storage, $0 egress) ===
+# stored        objects   storage/mo     per-vector/mo
+# 10.20 MB      128       $0.000153      $1.53e-08      (storage ~2x corpus due to T2 second copy)
+# Warm queries fetch 0 bytes -> $0 egress. R2's free egress is the headline economic differentiator
+# vs S3 (which bills egress per GB): a warm-cache read tier over R2 has zero per-query network cost.

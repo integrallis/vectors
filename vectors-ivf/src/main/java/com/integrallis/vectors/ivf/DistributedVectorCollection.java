@@ -425,6 +425,39 @@ public final class DistributedVectorCollection implements AutoCloseable {
     }
   }
 
+  /**
+   * Enables object-storage read-through on every cluster (P1.8): subsequent {@link #search} calls
+   * fetch each probed cluster's vectors from the T3 {@link StorageBackend} on first probe and cache
+   * them, instead of scanning the heap-resident global array — making per-query cold/warm
+   * object-storage reads observable. Off by default; existing callers and the R2 integration tests
+   * are unaffected. Call after ingest/commits, since {@link #commit} rebuilds dirty clusters
+   * without read-through.
+   */
+  public void enableReadThrough() {
+    rwLock.writeLock().lock();
+    try {
+      for (TieredCluster c : clusters) {
+        c.enableReadThrough(t3Backend);
+      }
+    } finally {
+      rwLock.writeLock().unlock();
+    }
+  }
+
+  /**
+   * Drops every cluster's read-through cache so the next probe re-fetches from T3 (forces cold).
+   */
+  public void dropReadThroughCaches() {
+    rwLock.writeLock().lock();
+    try {
+      for (TieredCluster c : clusters) {
+        c.dropReadThroughCache();
+      }
+    } finally {
+      rwLock.writeLock().unlock();
+    }
+  }
+
   /** Number of clusters currently materialised at T1. */
   public int t1ClusterCount() {
     rwLock.readLock().lock();
