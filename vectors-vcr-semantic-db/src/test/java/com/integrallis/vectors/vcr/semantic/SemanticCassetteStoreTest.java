@@ -153,6 +153,12 @@ class SemanticCassetteStoreTest {
       CassetteRecord.Embedding got = (CassetteRecord.Embedding) store.retrieve(key).orElseThrow();
       assertArrayEquals(v2, got.embedding());
       assertEquals(1L, got.timestamp());
+
+      assertTrue(store.retrieveSimilar(v1).isEmpty());
+      Optional<CassetteRecord> hit = store.retrieveSimilar(v2);
+      assertTrue(hit.isPresent());
+      CassetteRecord.Embedding indexed = (CassetteRecord.Embedding) hit.get();
+      assertArrayEquals(v2, indexed.embedding());
     }
   }
 
