@@ -217,10 +217,31 @@ configure(libraryProjects) {
         systemProperty("junit.jupiter.execution.timeout.default", "30m")
     }
 
+    // Recall regression gate (P1.1): deterministic recall@10 vs a committed baseline, no downloads.
+    // Run via ./gradlew :vectors-bench:recallGate (wired into CI). Record a fresh baseline with
+    // -Drecall.gate.mode=record. Lives only in vectors-bench; other modules' task is a no-op.
+    tasks.register<Test>("recallGate") {
+        description = "Recall@10 regression gate vs committed baseline (deterministic, no downloads)"
+        group = "verification"
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
+        useJUnitPlatform {
+            includeTags("recall")
+        }
+        // One heavy, deterministic test class — no intra-task forking, and forward the mode flag.
+        maxParallelForks = 1
+        systemProperty("recall.gate.mode", System.getProperty("recall.gate.mode", "verify"))
+        testLogging {
+            events("passed", "skipped", "failed")
+            showStandardStreams = true
+        }
+    }
+
     // Default 'test' task excludes all infrastructure-heavy tags.
     tasks.named<Test>("test") {
         useJUnitPlatform {
-            excludeTags("slow", "benchmark", "integration", "distributed", "k8s", "chaos", "scale")
+            excludeTags(
+                "slow", "benchmark", "integration", "distributed", "k8s", "chaos", "scale", "recall")
         }
     }
 

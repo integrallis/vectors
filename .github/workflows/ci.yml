@@ -27,6 +27,13 @@ jobs:
         working-directory: vectors
         run: ./gradlew build -x :docs:build
 
+      # P1.1 recall@10 regression gate: deterministic, no dataset download. Fails the build if
+      # recall on any gated index (HNSW/VAMANA/IVF_FLAT/IVF_PQ) drops > 0.005 vs the committed
+      # baseline. Re-baseline an intentional change with -Drecall.gate.mode=record.
+      - name: Recall Regression Gate
+        working-directory: vectors
+        run: ./gradlew :vectors-bench:recallGate
+
       - name: Generate SBOM
         working-directory: vectors
         run: ./gradlew cyclonedxDirectBom
