@@ -58,4 +58,34 @@ class VectorizationProviderTest {
     float[] b = {4.0f, 5.0f, 6.0f};
     assertThat(scalar.dotProduct(a, b)).isEqualTo(32.0f);
   }
+
+  // P1.7 — guard the "scalar is the correctness baseline" claim: it is only meaningful if the
+  // thing it is baselined against (Panama SIMD) is actually live. Kernel-value agreement between
+  // scalar and Panama is already pinned by VectorUtilSupportTest.panamaMatchesScalar; the missing
+  // piece is a test that fails when the runtime has silently fallen back to scalar (the regression
+  // P1.7 targets).
+
+  @Test
+  void panamaActiveImpliesNoSilentFallback() {
+    // When SIMD is the selected provider, no Panama load failure was recorded and scalar was not
+    // forced. If a JDK upgrade silently broke jdk.incubator.vector, isPanamaEnabled() would be
+    // false here (and getPanamaFailure() would carry the cause), failing CI loudly.
+    if (VectorizationProvider.isPanamaEnabled()) {
+      assertThat(VectorizationProvider.getPanamaFailure()).isEmpty();
+      assertThat(VectorizationProvider.isForcedScalar()).isFalse();
+    } else {
+      // Scalar is active: either explicitly forced, or Panama failed to load — exactly one is true,
+      // and a failure must carry its cause so the regression is diagnosable.
+      assertThat(
+              VectorizationProvider.isForcedScalar()
+                  ^ VectorizationProvider.getPanamaFailure().isPresent())
+          .isTrue();
+    }
+  }
+
+  @Test
+  void isForcedScalarReflectsSystemProperty() {
+    assertThat(VectorizationProvider.isForcedScalar())
+        .isEqualTo(Boolean.getBoolean("vectors.forceScalar"));
+  }
 }

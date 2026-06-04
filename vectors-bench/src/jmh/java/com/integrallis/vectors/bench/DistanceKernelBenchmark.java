@@ -33,20 +33,33 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 /**
- * JMH Tier-1 microbenchmarks for SIMD vs. scalar distance kernels.
+ * JMH Tier-1 microbenchmarks for SIMD vs. scalar distance kernels — the P1.7 "scalar baseline"
+ * suite.
  *
- * <p>Measures raw throughput of each kernel at representative embedding dimensions. Run via:
+ * <p>Every kernel is measured on both the auto-selected SIMD provider ({@link
+ * VectorizationProvider#getInstance()}) and the scalar provider ({@link
+ * VectorizationProvider#newScalarProvider()}) within a single JVM, so the {@code simd*} / {@code
+ * scalar*} pair is an apples-to-apples A/B (same JIT warmup, same heap). Dividing the SIMD score by
+ * the scalar score yields the SIMD speed-up — the number that quantifies how much is lost if a JDK
+ * upgrade silently disables Panama and the runtime falls back to {@code ScalarVectorUtilSupport}
+ * (see {@link VectorizationProvider#getPanamaFailure()}). The curated ratios live in {@code
+ * vectors-bench/jmh-results/scalar-baseline.txt}.
+ *
+ * <p>Run via:
  *
  * <pre>{@code
  * ./gradlew :vectors-bench:jmh -Pjmh.includes=DistanceKernelBenchmark
  * }</pre>
  *
  * <p>Each benchmark method is a single kernel call; the {@code @Param dim} axis sweeps small to
- * large embeddings so both cache-resident and memory-bandwidth-limited regimes are covered.
+ * large embeddings so both cache-resident and memory-bandwidth-limited regimes are covered: tiny
+ * (4-16), standard (32-256), LLM embeddings (384-768), and large (1024-2048).
  *
- * <p>Expanded from the original 5 dimensions to cover the full range: tiny (4-16), standard
- * (32-256), LLM embeddings (384-768), and large (1024-2048). Added l2normalize and hamming distance
- * kernels.
+ * <p>Kernel × type coverage: dot / L2 / cosine / cosineNormalized for FLOAT32 and INT8, plus
+ * hamming for BINARY. {@code cosineNormalized} is synthesized as a dot product over unit-normalized
+ * inputs (there is no dedicated SPI method, and {@code a}/{@code b} are L2-normalized in {@link
+ * #setUp()}). INT8 and BINARY have no {@code cosineNormalized} cell — INT8 has no normalize path
+ * and BINARY's distance is hamming — so those are intentionally omitted rather than invented.
  */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -137,12 +150,20 @@ public class DistanceKernelBenchmark {
     return simd.cosine(a, b);
   }
 
+  // cosineNormalized has no dedicated SPI method. For unit-length vectors the cosine is exactly the
+  // dot product, and setUp() L2-normalizes a/b, so the honest measurement is a dot product over
+  // already-normalized inputs (the work a caller skips when it knows its vectors are unit-length).
+  @Benchmark
+  public float simdCosineNormalized() {
+    return simd.dotProduct(a, b);
+  }
+
   @Benchmark
   public float[] simdL2Normalize() {
     return simd.l2normalize(unnormalized, false);
   }
 
-  // --- Scalar float kernels (baseline) ---
+  // --- Scalar float kernels (P1.7 baseline) ---
 
   @Benchmark
   public float scalarDotProduct() {
@@ -160,15 +181,25 @@ public class DistanceKernelBenchmark {
   }
 
   @Benchmark
+  public float scalarCosineNormalized() {
+    return scalar.dotProduct(a, b);
+  }
+
+  @Benchmark
   public float[] scalarL2Normalize() {
     return scalar.l2normalize(unnormalized, false);
   }
 
-  // --- Byte kernels (used by SQ8 scoring) ---
+  // --- Byte (INT8) kernels, used by SQ8 scoring; SIMD vs. scalar baseline ---
 
   @Benchmark
   public int byteDotProduct() {
     return simd.dotProduct(ba, bb);
+  }
+
+  @Benchmark
+  public int scalarByteDotProduct() {
+    return scalar.dotProduct(ba, bb);
   }
 
   @Benchmark
@@ -177,11 +208,23 @@ public class DistanceKernelBenchmark {
   }
 
   @Benchmark
+  public int scalarByteL2Distance() {
+    return scalar.squareDistance(ba, bb);
+  }
+
+  @Benchmark
   public float byteCosine() {
     return simd.cosine(ba, bb);
   }
 
-  // --- Binary kernels (hamming distance for BQ) ---
+  @Benchmark
+  public float scalarByteCosine() {
+    return scalar.cosine(ba, bb);
+  }
+
+  // --- Binary (BINARY) kernels: hamming distance for BQ; SIMD vs. scalar baseline ---
+  // BINARY has no dot/L2/cosine/cosineNormalized kernel — hamming is the binary distance, so it is
+  // the sole BINARY cell of the P1.7 matrix.
 
   @Benchmark
   public int simdHammingDistance() {

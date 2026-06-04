@@ -15,6 +15,8 @@
  */
 package com.integrallis.vectors.core;
 
+import java.util.Optional;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -32,6 +34,14 @@ public final class VectorizationProvider {
 
   private static final Logger LOG = Logger.getLogger(VectorizationProvider.class.getName());
 
+  /**
+   * The throwable that prevented the Panama provider from loading, or {@code null} when SIMD is
+   * active (or scalar was requested explicitly). Written once inside {@link #selectProvider()}
+   * during {@link #INSTANCE} class-initialization — a single writer with a happens-before edge to
+   * every subsequent read, so {@code volatile} suffices.
+   */
+  private static volatile Throwable panamaFailure;
+
   private static final VectorUtilSupport INSTANCE = selectProvider();
 
   private VectorizationProvider() {}
@@ -43,7 +53,7 @@ public final class VectorizationProvider {
 
   private static VectorUtilSupport selectProvider() {
     // Allow forcing scalar mode for testing
-    if (Boolean.getBoolean("vectors.forceScalar")) {
+    if (isForcedScalar()) {
       LOG.info("vectors-core: Forced scalar mode via -Dvectors.forceScalar=true");
       return new ScalarVectorUtilSupport();
     }
@@ -63,11 +73,33 @@ public final class VectorizationProvider {
               + ")");
       return panama;
     } catch (Throwable t) {
-      LOG.warning(
-          "vectors-core: Panama Vector API not available, falling back to scalar: "
-              + t.getMessage());
+      // Record the throwable (type + stack), not just getMessage() — a removed/renamed
+      // jdk.incubator.vector after a JDK upgrade often surfaces with a null/empty message, and the
+      // silent scalar fallback is exactly the regression P1.7 guards against. Query via
+      // getPanamaFailure(). Fallback behaviour is unchanged.
+      panamaFailure = t;
+      LOG.log(
+          Level.WARNING,
+          "vectors-core: Panama Vector API not available, falling back to scalar",
+          t);
       return new ScalarVectorUtilSupport();
     }
+  }
+
+  /**
+   * Returns the throwable that prevented the Panama SIMD provider from loading, present only when
+   * the runtime silently fell back to the scalar implementation. Empty when SIMD is active or when
+   * scalar was requested explicitly via {@code -Dvectors.forceScalar}. Lets callers detect a SIMD
+   * regression (e.g. a JDK upgrade that drops {@code jdk.incubator.vector}) instead of paying an
+   * unexplained throughput cliff.
+   */
+  public static Optional<Throwable> getPanamaFailure() {
+    return Optional.ofNullable(panamaFailure);
+  }
+
+  /** Returns true when scalar mode was requested explicitly via {@code -Dvectors.forceScalar}. */
+  public static boolean isForcedScalar() {
+    return Boolean.getBoolean("vectors.forceScalar");
   }
 
   /** Returns true if the current provider is the SIMD (Panama) implementation. */

@@ -1,0 +1,99 @@
+# java-vectors scalar-baseline JMH results — 2026-06-04
+# Platform: Intel Core i9-14900HX (x86-64, AVX2 256-bit; no AVX-512), JDK 25 (Zulu 25.0.3), JMH 1.37
+# Run config: java -jar vectors-bench-*-jmh.jar DistanceKernelBenchmark -p dim=128,768,1536
+#   -f 1 -wi 5 -i 10 -r 1s   (--add-modules jdk.incubator.vector, -XX:+UseG1GC, -XX:+AlwaysPreTouch)
+#
+# P1.7 — quantifies the SIMD-vs-scalar throughput ratio so that a JDK upgrade which silently disables
+# the Panama Vector API (falling back to ScalarVectorUtilSupport) surfaces as a MEASURABLE regression
+# instead of an unexplained throughput cliff. Confirm the live provider at runtime with
+# VectorizationProvider.isPanamaEnabled() / getPanamaFailure() / isForcedScalar().
+#
+# Note: the P1.5 256-bit cap is a no-op on this box (hardware-preferred is already 256-bit AVX2), so
+# the simd* numbers reflect true AVX2. cosineNormalized has no dedicated SPI method — it is
+# synthesized as a dot product over unit-length inputs (a/b are L2-normalized in setUp). INT8 and
+# BINARY have no cosineNormalized cell (INT8 has no normalize path; BINARY's distance is hamming) and
+# are intentionally omitted rather than invented.
+
+# === DistanceKernelBenchmark (raw JMH TEXT table) ===
+Benchmark                                       (dim)   Mode  Cnt    Score     Error   Units
+DistanceKernelBenchmark.byteCosine                128  thrpt   10   58.727 ±   0.854  ops/us
+DistanceKernelBenchmark.byteCosine                768  thrpt   10    8.834 ±   6.092  ops/us
+DistanceKernelBenchmark.byteCosine               1536  thrpt   10    5.215 ±   0.556  ops/us
+DistanceKernelBenchmark.byteDotProduct            128  thrpt   10  111.316 ±   6.110  ops/us
+DistanceKernelBenchmark.byteDotProduct            768  thrpt   10   24.079 ±   1.740  ops/us
+DistanceKernelBenchmark.byteDotProduct           1536  thrpt   10   12.089 ±   0.918  ops/us
+DistanceKernelBenchmark.byteL2Distance            128  thrpt   10   88.260 ±  36.551  ops/us
+DistanceKernelBenchmark.byteL2Distance            768  thrpt   10   21.363 ±   1.714  ops/us
+DistanceKernelBenchmark.byteL2Distance           1536  thrpt   10   10.085 ±   0.712  ops/us
+DistanceKernelBenchmark.scalarByteCosine          128  thrpt   10   11.505 ±   0.826  ops/us
+DistanceKernelBenchmark.scalarByteCosine          768  thrpt   10    1.978 ±   0.120  ops/us
+DistanceKernelBenchmark.scalarByteCosine         1536  thrpt   10    1.007 ±   0.085  ops/us
+DistanceKernelBenchmark.scalarByteDotProduct      128  thrpt   10   31.694 ±   2.314  ops/us
+DistanceKernelBenchmark.scalarByteDotProduct      768  thrpt   10    5.641 ±   0.484  ops/us
+DistanceKernelBenchmark.scalarByteDotProduct     1536  thrpt   10    2.788 ±   0.156  ops/us
+DistanceKernelBenchmark.scalarByteL2Distance      128  thrpt   10   28.521 ±   1.993  ops/us
+DistanceKernelBenchmark.scalarByteL2Distance      768  thrpt   10    5.449 ±   0.385  ops/us
+DistanceKernelBenchmark.scalarByteL2Distance     1536  thrpt   10    2.910 ±   0.094  ops/us
+DistanceKernelBenchmark.scalarCosine              128  thrpt   10   26.035 ±   1.715  ops/us
+DistanceKernelBenchmark.scalarCosine              768  thrpt   10    4.446 ±   0.371  ops/us
+DistanceKernelBenchmark.scalarCosine             1536  thrpt   10    2.214 ±   0.160  ops/us
+DistanceKernelBenchmark.scalarCosineNormalized    128  thrpt   10   46.487 ±   2.256  ops/us
+DistanceKernelBenchmark.scalarCosineNormalized    768  thrpt   10    7.028 ±   0.425  ops/us
+DistanceKernelBenchmark.scalarCosineNormalized   1536  thrpt   10    3.536 ±   0.102  ops/us
+DistanceKernelBenchmark.scalarDotProduct          128  thrpt   10   47.761 ±   1.378  ops/us
+DistanceKernelBenchmark.scalarDotProduct          768  thrpt   10    7.095 ±   0.598  ops/us
+DistanceKernelBenchmark.scalarDotProduct         1536  thrpt   10    3.522 ±   0.126  ops/us
+DistanceKernelBenchmark.scalarHammingDistance     128  thrpt   10  270.052 ± 252.946  ops/us
+DistanceKernelBenchmark.scalarHammingDistance     768  thrpt   10  203.637 ±  10.366  ops/us
+DistanceKernelBenchmark.scalarHammingDistance    1536  thrpt   10  124.730 ±   4.128  ops/us
+DistanceKernelBenchmark.scalarL2Distance          128  thrpt   10   28.051 ±   1.424  ops/us
+DistanceKernelBenchmark.scalarL2Distance          768  thrpt   10    5.064 ±   0.084  ops/us
+DistanceKernelBenchmark.scalarL2Distance         1536  thrpt   10    2.554 ±   0.049  ops/us
+DistanceKernelBenchmark.scalarL2Normalize         128  thrpt   10   55.570 ±   2.793  ops/us
+DistanceKernelBenchmark.scalarL2Normalize         768  thrpt   10    7.317 ±   0.394  ops/us
+DistanceKernelBenchmark.scalarL2Normalize        1536  thrpt   10    3.617 ±   0.052  ops/us
+DistanceKernelBenchmark.simdCosine                128  thrpt   10   82.958 ±   3.713  ops/us
+DistanceKernelBenchmark.simdCosine                768  thrpt   10   19.558 ±   1.348  ops/us
+DistanceKernelBenchmark.simdCosine               1536  thrpt   10   10.114 ±   0.854  ops/us
+DistanceKernelBenchmark.simdCosineNormalized      128  thrpt   10  119.574 ±   7.890  ops/us
+DistanceKernelBenchmark.simdCosineNormalized      768  thrpt   10   34.215 ±   2.062  ops/us
+DistanceKernelBenchmark.simdCosineNormalized     1536  thrpt   10   16.362 ±   1.107  ops/us
+DistanceKernelBenchmark.simdDotProduct            128  thrpt   10  123.208 ±   2.285  ops/us
+DistanceKernelBenchmark.simdDotProduct            768  thrpt   10   34.089 ±   3.734  ops/us
+DistanceKernelBenchmark.simdDotProduct           1536  thrpt   10   16.195 ±   0.905  ops/us
+DistanceKernelBenchmark.simdHammingDistance       128  thrpt   10  514.307 ±  25.295  ops/us
+DistanceKernelBenchmark.simdHammingDistance       768  thrpt   10  215.087 ±  21.116  ops/us
+DistanceKernelBenchmark.simdHammingDistance      1536  thrpt   10  121.785 ±   4.604  ops/us
+DistanceKernelBenchmark.simdL2Distance            128  thrpt   10   58.902 ±  51.723  ops/us
+DistanceKernelBenchmark.simdL2Distance            768  thrpt   10   34.495 ±   0.593  ops/us
+DistanceKernelBenchmark.simdL2Distance           1536  thrpt   10   14.220 ±   1.060  ops/us
+DistanceKernelBenchmark.simdL2Normalize           128  thrpt   10  111.426 ±   3.972  ops/us
+DistanceKernelBenchmark.simdL2Normalize           768  thrpt   10   29.585 ±   2.472  ops/us
+DistanceKernelBenchmark.simdL2Normalize          1536  thrpt   10   21.352 ±   0.830  ops/us
+
+# === SIMD / scalar throughput ratio (derived; higher = larger SIMD speed-up) ===
+# kernel              type       dim=128   dim=768   dim=1536
+# dot                 FLOAT32       2.58      4.81      4.60
+# L2                  FLOAT32       2.10 *    6.81      5.57
+# cosine              FLOAT32       3.19      4.40      4.57
+# cosineNormalized    FLOAT32       2.57      4.87      4.63
+# dot                 INT8          3.51      4.27      4.34
+# L2                  INT8          3.09      3.92      3.47
+# cosine              INT8          5.10      4.47 *    5.18
+# hamming             BINARY        1.90 *    1.06      0.98
+#
+# Interpretation:
+# - FLOAT32 kernels run ~4.4-6.8x faster with SIMD at representative embedding dims (768/1536) on
+#   AVX2 256-bit. If any FLOAT32 ratio collapses toward ~1.0x, SIMD is effectively off — check
+#   VectorizationProvider.getPanamaFailure().
+# - INT8 kernels run ~3.5-5x faster with SIMD.
+# - BINARY hamming is ~1.0x: scalar Long.bitCount() already compiles to the POPCNT instruction, so
+#   the LongVector path is not materially faster on this hardware. This is expected, not a
+#   regression — hamming is therefore NOT a useful silent-fallback sentinel; use a FLOAT32 kernel.
+# - Ratios are platform-specific (AVX2 256-bit here; AVX-512 and ARM NEON/SVE differ). Compare only
+#   against a run on the same hardware; do not hardcode an expected ratio in tests.
+#
+# Cells marked * have JMH error > 25% of the score (call-overhead-dominated at small dim, or a GC
+# outlier): simdL2Distance@128, byteCosine@768, scalarHammingDistance@128 (and byteL2Distance@128 in
+# the raw table). Treat those ratios as indicative only — the dim=768/1536 columns are the stable
+# comparison.
