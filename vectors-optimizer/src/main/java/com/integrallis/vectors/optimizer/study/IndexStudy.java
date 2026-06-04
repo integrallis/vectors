@@ -81,7 +81,8 @@ public final class IndexStudy {
       col.addAll(corpus);
       col.commit();
       buildTimeMs = (System.nanoTime() - buildStart) / 1_000_000L;
-      memoryBytes = (long) col.physicalSize() * (long) col.config().dimension() * 4L;
+      memoryBytes =
+          IndexMemoryEstimator.estimateIndexPayloadBytes(col.config(), col.physicalSize());
 
       List<String> qIds = new ArrayList<>(queries.byId().keySet());
       List<String> qTexts = new ArrayList<>(queries.byId().values());
