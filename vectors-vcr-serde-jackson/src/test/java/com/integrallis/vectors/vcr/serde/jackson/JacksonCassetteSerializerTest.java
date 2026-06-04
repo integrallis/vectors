@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteSerializer;
 import com.integrallis.vectors.vcr.serde.avaje.AvajeCassetteSerializer;
+import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import org.junit.jupiter.api.Tag;
@@ -64,13 +65,20 @@ class JacksonCassetteSerializerTest {
   void roundTripChat() {
     CassetteRecord.Chat in =
         new CassetteRecord.Chat(
-            "T:c", "gpt", 5L, "hello", "world", Map.of("role", "assistant", "k", "v"));
+            "T:c",
+            "gpt",
+            5L,
+            "hello",
+            chatPayload(
+                "world",
+                List.of(new CassetteRecord.ToolCall("call-1", "search", "{\"q\":\"x\"}"))));
     CassetteRecord.Chat back =
         (CassetteRecord.Chat) serializer.deserialize(serializer.serialize(in));
     assertEquals("hello", back.prompt());
-    assertEquals("world", back.response());
-    assertEquals("assistant", back.metadata().get("role"));
-    assertEquals("v", back.metadata().get("k"));
+    assertEquals("world", back.response().aiMessage().text());
+    assertEquals("search", back.response().aiMessage().toolExecutionRequests().getFirst().name());
+    assertEquals(11, back.response().metadata().tokenUsage().totalTokenCount());
+    assertEquals("STOP", back.response().metadata().finishReason());
   }
 
   @Test
@@ -115,12 +123,7 @@ class JacksonCassetteSerializerTest {
   void avajeSerializedChatReadsWithJacksonAndReverse() {
     CassetteRecord.Chat in =
         new CassetteRecord.Chat(
-            "T:chat",
-            "chat-model",
-            125L,
-            "hello",
-            "world",
-            Map.of("finishReason", "stop", "usage", "42"));
+            "T:chat", "chat-model", 125L, "hello", chatPayload("world", List.of()));
 
     assertSameRecord(in, serializer.deserialize(new AvajeCassetteSerializer().serialize(in)));
     assertSameRecord(in, new AvajeCassetteSerializer().deserialize(serializer.serialize(in)));
@@ -144,9 +147,17 @@ class JacksonCassetteSerializerTest {
       CassetteRecord.Chat a = assertInstanceOf(CassetteRecord.Chat.class, actual);
       assertEquals(e.prompt(), a.prompt());
       assertEquals(e.response(), a.response());
-      assertEquals(e.metadata(), a.metadata());
     } else {
       throw new AssertionError("unsupported record type: " + expected.getClass());
     }
+  }
+
+  private static CassetteRecord.ChatPayload chatPayload(
+      String text, List<CassetteRecord.ToolCall> tools) {
+    return new CassetteRecord.ChatPayload(
+        new CassetteRecord.AiMessagePayload(
+            text, "chain-of-thought-redacted", tools, Map.of("source", "unit")),
+        new CassetteRecord.ChatMetadata(
+            "resp-1", "chat-model", new CassetteRecord.TokenUsage(5, 6, 11), "STOP"));
   }
 }

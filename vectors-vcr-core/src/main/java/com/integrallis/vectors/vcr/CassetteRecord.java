@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.vcr;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -69,22 +70,57 @@ public sealed interface CassetteRecord
     }
   }
 
-  /** A chat exchange (prompt + response pair). */
-  record Chat(
-      String testId,
-      String model,
-      long timestamp,
-      String prompt,
-      String response,
-      Map<String, String> metadata)
+  /** A chat exchange with enough structured response data for lossless framework playback. */
+  record Chat(String testId, String model, long timestamp, String prompt, ChatPayload response)
       implements CassetteRecord {
-    /** Compact constructor defensively copies the metadata map and validates non-null text. */
+    /** Compact constructor validates non-null prompt and response payloads. */
     public Chat {
       Objects.requireNonNull(testId, "testId");
       Objects.requireNonNull(model, "model");
       Objects.requireNonNull(prompt, "prompt");
       Objects.requireNonNull(response, "response");
-      metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
     }
   }
+
+  /** Structured chat response payload. */
+  record ChatPayload(AiMessagePayload aiMessage, ChatMetadata metadata) {
+    /** Compact constructor with null-safe empty metadata. */
+    public ChatPayload {
+      Objects.requireNonNull(aiMessage, "aiMessage");
+      metadata = metadata == null ? ChatMetadata.empty() : metadata;
+    }
+  }
+
+  /** Assistant message content and tool-call requests. */
+  record AiMessagePayload(
+      String text,
+      String thinking,
+      List<ToolCall> toolExecutionRequests,
+      Map<String, Object> attributes) {
+    /** Compact constructor defensively copies tool calls and attributes. */
+    public AiMessagePayload {
+      toolExecutionRequests =
+          toolExecutionRequests == null ? List.of() : List.copyOf(toolExecutionRequests);
+      attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
+    }
+  }
+
+  /** A framework-neutral tool execution request. */
+  record ToolCall(String id, String name, String arguments) {
+    /** Compact constructor validates the required tool name. */
+    public ToolCall {
+      Objects.requireNonNull(name, "name");
+    }
+  }
+
+  /** Chat response metadata that should survive playback. */
+  record ChatMetadata(String id, String modelName, TokenUsage tokenUsage, String finishReason) {
+    /** Shared empty metadata value. */
+    public static ChatMetadata empty() {
+      return new ChatMetadata(null, null, null, null);
+    }
+  }
+
+  /** Token accounting for a chat response. */
+  record TokenUsage(Integer inputTokenCount, Integer outputTokenCount, Integer totalTokenCount) {}
 }

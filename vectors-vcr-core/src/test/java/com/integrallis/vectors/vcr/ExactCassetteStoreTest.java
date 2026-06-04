@@ -78,13 +78,21 @@ class ExactCassetteStoreTest {
     CassetteKey key = new CassetteKey("chat", "T:chat", 1);
     CassetteRecord.Chat rec =
         new CassetteRecord.Chat(
-            "T:chat", "gpt", 99L, "hello?", "world!", Map.of("role", "assistant"));
+            "T:chat",
+            "gpt",
+            99L,
+            "hello?",
+            new CassetteRecord.ChatPayload(
+                new CassetteRecord.AiMessagePayload("world!", null, List.of(), Map.of()),
+                new CassetteRecord.ChatMetadata(
+                    "resp-1", "gpt", new CassetteRecord.TokenUsage(3, 4, 7), "STOP")));
     store.store(key, rec);
 
     CassetteRecord.Chat back = (CassetteRecord.Chat) store.retrieve(key).orElseThrow();
     assertEquals("hello?", back.prompt());
-    assertEquals("world!", back.response());
-    assertEquals("assistant", back.metadata().get("role"));
+    assertEquals("world!", back.response().aiMessage().text());
+    assertEquals("resp-1", back.response().metadata().id());
+    assertEquals(7, back.response().metadata().tokenUsage().totalTokenCount());
   }
 
   @Test

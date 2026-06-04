@@ -79,8 +79,7 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
       tree.put("model", c.model());
       tree.put("timestamp", c.timestamp());
       tree.put("prompt", c.prompt());
-      tree.put("response", c.response());
-      tree.put("metadata", new LinkedHashMap<>(c.metadata()));
+      tree.put("response", chatPayloadToTree(c.response()));
     } else {
       throw new IllegalArgumentException("unsupported record type: " + record.getClass());
     }
@@ -105,16 +104,9 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
         yield new CassetteRecord.BatchEmbedding(testId, model, timestamp, embeddings);
       }
       case TYPE_CHAT -> {
-        Object raw = map.get("metadata");
-        Map<String, String> metadata = new LinkedHashMap<>();
-        if (raw instanceof Map<?, ?> m) {
-          for (Map.Entry<?, ?> e : m.entrySet()) {
-            metadata.put(String.valueOf(e.getKey()), String.valueOf(e.getValue()));
-          }
-        }
-        String prompt = map.get("prompt") instanceof String p ? p : "";
-        String response = (String) map.get("response");
-        yield new CassetteRecord.Chat(testId, model, timestamp, prompt, response, metadata);
+        String prompt = (String) map.get("prompt");
+        yield new CassetteRecord.Chat(
+            testId, model, timestamp, prompt, toChatPayload(map.get("response")));
       }
       default -> throw new IllegalArgumentException("unknown cassette type: " + type);
     };
@@ -128,11 +120,131 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
     return out;
   }
 
+  private static Map<String, Object> chatPayloadToTree(CassetteRecord.ChatPayload response) {
+    Map<String, Object> tree = new LinkedHashMap<>();
+    CassetteRecord.AiMessagePayload aiMessage = response.aiMessage();
+    Map<String, Object> ai = new LinkedHashMap<>();
+    ai.put("text", aiMessage.text());
+    ai.put("thinking", aiMessage.thinking());
+    List<Map<String, Object>> tools = new ArrayList<>(aiMessage.toolExecutionRequests().size());
+    for (CassetteRecord.ToolCall tool : aiMessage.toolExecutionRequests()) {
+      Map<String, Object> item = new LinkedHashMap<>();
+      item.put("id", tool.id());
+      item.put("name", tool.name());
+      item.put("arguments", tool.arguments());
+      tools.add(item);
+    }
+    ai.put("toolExecutionRequests", tools);
+    ai.put("attributes", new LinkedHashMap<>(aiMessage.attributes()));
+    tree.put("aiMessage", ai);
+
+    CassetteRecord.ChatMetadata metadata = response.metadata();
+    Map<String, Object> md = new LinkedHashMap<>();
+    md.put("id", metadata.id());
+    md.put("modelName", metadata.modelName());
+    md.put("finishReason", metadata.finishReason());
+    if (metadata.tokenUsage() == null) {
+      md.put("tokenUsage", null);
+    } else {
+      Map<String, Object> usage = new LinkedHashMap<>();
+      usage.put("inputTokenCount", metadata.tokenUsage().inputTokenCount());
+      usage.put("outputTokenCount", metadata.tokenUsage().outputTokenCount());
+      usage.put("totalTokenCount", metadata.tokenUsage().totalTokenCount());
+      md.put("tokenUsage", usage);
+    }
+    tree.put("metadata", md);
+    return tree;
+  }
+
   private static float[] toFloatArray(List<?> list) {
     float[] arr = new float[list.size()];
     for (int i = 0; i < list.size(); i++) {
       arr[i] = ((Number) list.get(i)).floatValue();
     }
     return arr;
+  }
+
+  private static CassetteRecord.ChatPayload toChatPayload(Object raw) {
+    Map<?, ?> map = requireMap(raw, "response");
+    return new CassetteRecord.ChatPayload(
+        toAiMessage(map.get("aiMessage")), toChatMetadata(map.get("metadata")));
+  }
+
+  private static CassetteRecord.AiMessagePayload toAiMessage(Object raw) {
+    Map<?, ?> map = requireMap(raw, "response.aiMessage");
+    List<CassetteRecord.ToolCall> tools = new ArrayList<>();
+    Object rawTools = map.get("toolExecutionRequests");
+    if (rawTools instanceof List<?> list) {
+      for (Object rawTool : list) {
+        Map<?, ?> tool = requireMap(rawTool, "toolExecutionRequests[]");
+        tools.add(
+            new CassetteRecord.ToolCall(
+                asString(tool.get("id")),
+                requireString(tool.get("name"), "toolExecutionRequests[].name"),
+                asString(tool.get("arguments"))));
+      }
+    }
+    return new CassetteRecord.AiMessagePayload(
+        asString(map.get("text")),
+        asString(map.get("thinking")),
+        tools,
+        toObjectMap(map.get("attributes")));
+  }
+
+  private static CassetteRecord.ChatMetadata toChatMetadata(Object raw) {
+    if (raw == null) {
+      return CassetteRecord.ChatMetadata.empty();
+    }
+    Map<?, ?> map = requireMap(raw, "response.metadata");
+    return new CassetteRecord.ChatMetadata(
+        asString(map.get("id")),
+        asString(map.get("modelName")),
+        toTokenUsage(map.get("tokenUsage")),
+        asString(map.get("finishReason")));
+  }
+
+  private static CassetteRecord.TokenUsage toTokenUsage(Object raw) {
+    if (raw == null) {
+      return null;
+    }
+    Map<?, ?> map = requireMap(raw, "response.metadata.tokenUsage");
+    return new CassetteRecord.TokenUsage(
+        asInteger(map.get("inputTokenCount")),
+        asInteger(map.get("outputTokenCount")),
+        asInteger(map.get("totalTokenCount")));
+  }
+
+  private static Map<String, Object> toObjectMap(Object raw) {
+    if (raw == null) {
+      return Map.of();
+    }
+    Map<?, ?> map = requireMap(raw, "attributes");
+    Map<String, Object> out = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : map.entrySet()) {
+      out.put(String.valueOf(entry.getKey()), entry.getValue());
+    }
+    return out;
+  }
+
+  private static Map<?, ?> requireMap(Object raw, String field) {
+    if (raw instanceof Map<?, ?> map) {
+      return map;
+    }
+    throw new IllegalArgumentException("expected object field: " + field);
+  }
+
+  private static String requireString(Object raw, String field) {
+    if (raw instanceof String s) {
+      return s;
+    }
+    throw new IllegalArgumentException("expected string field: " + field);
+  }
+
+  private static String asString(Object raw) {
+    return raw instanceof String s ? s : null;
+  }
+
+  private static Integer asInteger(Object raw) {
+    return raw instanceof Number n ? n.intValue() : null;
   }
 }

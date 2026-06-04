@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteSerializer;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -60,13 +61,25 @@ class AvajeCassetteSerializerTest {
   void roundTripChat() {
     CassetteRecord.Chat in =
         new CassetteRecord.Chat(
-            "T:c", "gpt", 5L, "hello", "world", Map.of("role", "assistant", "k", "v"));
+            "T:c",
+            "gpt",
+            5L,
+            "hello",
+            new CassetteRecord.ChatPayload(
+                new CassetteRecord.AiMessagePayload(
+                    "world",
+                    "thinking",
+                    List.of(new CassetteRecord.ToolCall("call-1", "search", "{\"q\":\"x\"}")),
+                    Map.of("source", "unit")),
+                new CassetteRecord.ChatMetadata(
+                    "resp-1", "gpt-4", new CassetteRecord.TokenUsage(2, 3, 5), "TOOL_EXECUTION")));
     CassetteRecord.Chat back =
         (CassetteRecord.Chat) serializer.deserialize(serializer.serialize(in));
     assertEquals("hello", back.prompt());
-    assertEquals("world", back.response());
-    assertEquals("assistant", back.metadata().get("role"));
-    assertEquals("v", back.metadata().get("k"));
+    assertEquals("world", back.response().aiMessage().text());
+    assertEquals("search", back.response().aiMessage().toolExecutionRequests().getFirst().name());
+    assertEquals(5, back.response().metadata().tokenUsage().totalTokenCount());
+    assertEquals("TOOL_EXECUTION", back.response().metadata().finishReason());
   }
 
   @Test

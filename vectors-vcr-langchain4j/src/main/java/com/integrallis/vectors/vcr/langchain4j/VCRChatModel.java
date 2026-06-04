@@ -20,11 +20,14 @@ import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
-import java.util.Map;
+import dev.langchain4j.model.output.FinishReason;
+import dev.langchain4j.model.output.TokenUsage;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -75,7 +78,7 @@ public final class VCRChatModel implements ChatModel {
                   + " but got "
                   + hit.get().getClass().getSimpleName());
         }
-        return ChatResponse.builder().aiMessage(AiMessage.from(c.response())).build();
+        return toChatResponse(c.response());
       }
       if (mode == VCRMode.PLAYBACK) {
         throw new VCRCassetteMissingException(key.serializedKey(), testId);
@@ -83,13 +86,87 @@ public final class VCRChatModel implements ChatModel {
     }
     ChatResponse response = delegate.doChat(request);
     String prompt = String.valueOf(request.messages());
-    AiMessage ai = response.aiMessage();
-    String text = ai == null ? "" : ai.text();
     store.store(
         key,
         new CassetteRecord.Chat(
-            testId, modelName, System.currentTimeMillis(), prompt, text, Map.of()));
+            testId, modelName, System.currentTimeMillis(), prompt, toPayload(response)));
     return response;
+  }
+
+  private static CassetteRecord.ChatPayload toPayload(ChatResponse response) {
+    AiMessage ai = response.aiMessage();
+    CassetteRecord.AiMessagePayload aiPayload =
+        new CassetteRecord.AiMessagePayload(
+            ai == null ? null : ai.text(),
+            ai == null ? null : ai.thinking(),
+            toToolCalls(ai),
+            ai == null ? null : ai.attributes());
+    TokenUsage usage = response.tokenUsage();
+    CassetteRecord.TokenUsage tokenUsage =
+        usage == null
+            ? null
+            : new CassetteRecord.TokenUsage(
+                usage.inputTokenCount(), usage.outputTokenCount(), usage.totalTokenCount());
+    FinishReason finishReason = response.finishReason();
+    CassetteRecord.ChatMetadata metadata =
+        new CassetteRecord.ChatMetadata(
+            response.id(),
+            response.modelName(),
+            tokenUsage,
+            finishReason == null ? null : finishReason.name());
+    return new CassetteRecord.ChatPayload(aiPayload, metadata);
+  }
+
+  private static List<CassetteRecord.ToolCall> toToolCalls(AiMessage ai) {
+    if (ai == null || ai.toolExecutionRequests() == null) {
+      return List.of();
+    }
+    return ai.toolExecutionRequests().stream()
+        .map(t -> new CassetteRecord.ToolCall(t.id(), t.name(), t.arguments()))
+        .toList();
+  }
+
+  private static ChatResponse toChatResponse(CassetteRecord.ChatPayload payload) {
+    CassetteRecord.AiMessagePayload ai = payload.aiMessage();
+    AiMessage aiMessage =
+        AiMessage.builder()
+            .text(ai.text())
+            .thinking(ai.thinking())
+            .toolExecutionRequests(toToolExecutionRequests(ai.toolExecutionRequests()))
+            .attributes(ai.attributes())
+            .build();
+    CassetteRecord.ChatMetadata metadata = payload.metadata();
+    ChatResponse.Builder builder = ChatResponse.builder().aiMessage(aiMessage);
+    if (metadata.id() != null) {
+      builder.id(metadata.id());
+    }
+    if (metadata.modelName() != null) {
+      builder.modelName(metadata.modelName());
+    }
+    if (metadata.tokenUsage() != null) {
+      builder.tokenUsage(
+          new TokenUsage(
+              metadata.tokenUsage().inputTokenCount(),
+              metadata.tokenUsage().outputTokenCount(),
+              metadata.tokenUsage().totalTokenCount()));
+    }
+    if (metadata.finishReason() != null) {
+      builder.finishReason(FinishReason.valueOf(metadata.finishReason()));
+    }
+    return builder.build();
+  }
+
+  private static List<ToolExecutionRequest> toToolExecutionRequests(
+      List<CassetteRecord.ToolCall> toolCalls) {
+    return toolCalls.stream()
+        .map(
+            t ->
+                ToolExecutionRequest.builder()
+                    .id(t.id())
+                    .name(t.name())
+                    .arguments(t.arguments())
+                    .build())
+        .toList();
   }
 
   /**

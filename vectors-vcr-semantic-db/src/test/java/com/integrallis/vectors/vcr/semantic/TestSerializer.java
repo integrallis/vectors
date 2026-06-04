@@ -24,6 +24,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -54,13 +55,8 @@ final class TestSerializer implements CassetteSerializer {
       } else if (record instanceof CassetteRecord.Chat c) {
         out.writeByte(TYPE_CHAT);
         writeCommon(out, c.testId(), c.model(), c.timestamp());
-        out.writeUTF(c.prompt() == null ? "" : c.prompt());
-        out.writeUTF(c.response());
-        out.writeInt(c.metadata().size());
-        for (Map.Entry<String, String> entry : c.metadata().entrySet()) {
-          out.writeUTF(entry.getKey());
-          out.writeUTF(entry.getValue());
-        }
+        out.writeUTF(c.prompt());
+        writeChatPayload(out, c.response());
       } else {
         throw new IllegalArgumentException("unknown record type: " + record.getClass());
       }
@@ -91,13 +87,7 @@ final class TestSerializer implements CassetteSerializer {
         }
         case TYPE_CHAT -> {
           String prompt = in.readUTF();
-          String response = in.readUTF();
-          int m = in.readInt();
-          Map<String, String> metadata = new HashMap<>(m);
-          for (int i = 0; i < m; i++) {
-            metadata.put(in.readUTF(), in.readUTF());
-          }
-          return new CassetteRecord.Chat(testId, model, timestamp, prompt, response, metadata);
+          return new CassetteRecord.Chat(testId, model, timestamp, prompt, readChatPayload(in));
         }
         default -> throw new IllegalArgumentException("unknown type byte: " + type);
       }
@@ -120,6 +110,34 @@ final class TestSerializer implements CassetteSerializer {
     }
   }
 
+  private static void writeChatPayload(DataOutputStream out, CassetteRecord.ChatPayload response)
+      throws IOException {
+    CassetteRecord.AiMessagePayload ai = response.aiMessage();
+    writeNullableUtf(out, ai.text());
+    writeNullableUtf(out, ai.thinking());
+    out.writeInt(ai.toolExecutionRequests().size());
+    for (CassetteRecord.ToolCall tool : ai.toolExecutionRequests()) {
+      writeNullableUtf(out, tool.id());
+      out.writeUTF(tool.name());
+      writeNullableUtf(out, tool.arguments());
+    }
+    out.writeInt(ai.attributes().size());
+    for (Map.Entry<String, Object> entry : ai.attributes().entrySet()) {
+      out.writeUTF(entry.getKey());
+      writeNullableUtf(out, entry.getValue() == null ? null : String.valueOf(entry.getValue()));
+    }
+    CassetteRecord.ChatMetadata metadata = response.metadata();
+    writeNullableUtf(out, metadata.id());
+    writeNullableUtf(out, metadata.modelName());
+    out.writeBoolean(metadata.tokenUsage() != null);
+    if (metadata.tokenUsage() != null) {
+      writeNullableInt(out, metadata.tokenUsage().inputTokenCount());
+      writeNullableInt(out, metadata.tokenUsage().outputTokenCount());
+      writeNullableInt(out, metadata.tokenUsage().totalTokenCount());
+    }
+    writeNullableUtf(out, metadata.finishReason());
+  }
+
   private static float[] readFloatArray(DataInputStream in) throws IOException {
     int n = in.readInt();
     float[] arr = new float[n];
@@ -127,5 +145,55 @@ final class TestSerializer implements CassetteSerializer {
       arr[i] = in.readFloat();
     }
     return arr;
+  }
+
+  private static CassetteRecord.ChatPayload readChatPayload(DataInputStream in) throws IOException {
+    String text = readNullableUtf(in);
+    String thinking = readNullableUtf(in);
+    int toolCount = in.readInt();
+    CassetteRecord.ToolCall[] tools = new CassetteRecord.ToolCall[toolCount];
+    for (int i = 0; i < toolCount; i++) {
+      tools[i] =
+          new CassetteRecord.ToolCall(readNullableUtf(in), in.readUTF(), readNullableUtf(in));
+    }
+    int attributeCount = in.readInt();
+    Map<String, Object> attributes = new HashMap<>(attributeCount);
+    for (int i = 0; i < attributeCount; i++) {
+      attributes.put(in.readUTF(), readNullableUtf(in));
+    }
+    String id = readNullableUtf(in);
+    String modelName = readNullableUtf(in);
+    CassetteRecord.TokenUsage tokenUsage = null;
+    if (in.readBoolean()) {
+      tokenUsage =
+          new CassetteRecord.TokenUsage(
+              readNullableInt(in), readNullableInt(in), readNullableInt(in));
+    }
+    String finishReason = readNullableUtf(in);
+    return new CassetteRecord.ChatPayload(
+        new CassetteRecord.AiMessagePayload(text, thinking, List.of(tools), attributes),
+        new CassetteRecord.ChatMetadata(id, modelName, tokenUsage, finishReason));
+  }
+
+  private static void writeNullableUtf(DataOutputStream out, String value) throws IOException {
+    out.writeBoolean(value != null);
+    if (value != null) {
+      out.writeUTF(value);
+    }
+  }
+
+  private static String readNullableUtf(DataInputStream in) throws IOException {
+    return in.readBoolean() ? in.readUTF() : null;
+  }
+
+  private static void writeNullableInt(DataOutputStream out, Integer value) throws IOException {
+    out.writeBoolean(value != null);
+    if (value != null) {
+      out.writeInt(value);
+    }
+  }
+
+  private static Integer readNullableInt(DataInputStream in) throws IOException {
+    return in.readBoolean() ? in.readInt() : null;
   }
 }

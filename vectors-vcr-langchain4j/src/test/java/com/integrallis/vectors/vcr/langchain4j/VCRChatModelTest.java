@@ -28,11 +28,16 @@ import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
 import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.output.FinishReason;
+import dev.langchain4j.model.output.TokenUsage;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -55,8 +60,27 @@ class VCRChatModelTest {
 
   @Test
   void recordsAndReplaysChatResponse() {
+    ToolExecutionRequest tool =
+        ToolExecutionRequest.builder()
+            .id("call-1")
+            .name("lookup")
+            .arguments("{\"query\":\"meaning\"}")
+            .build();
     when(delegate.doChat(any(ChatRequest.class)))
-        .thenReturn(ChatResponse.builder().aiMessage(AiMessage.from("42")).build());
+        .thenReturn(
+            ChatResponse.builder()
+                .aiMessage(
+                    AiMessage.builder()
+                        .text("42")
+                        .thinking("hidden")
+                        .toolExecutionRequests(List.of(tool))
+                        .attributes(Map.of("provider", "fake"))
+                        .build())
+                .id("resp-1")
+                .modelName("test-model")
+                .tokenUsage(new TokenUsage(3, 4, 7))
+                .finishReason(FinishReason.TOOL_EXECUTION)
+                .build());
 
     ChatRequest request = ChatRequest.builder().messages(UserMessage.from("meaning?")).build();
 
@@ -67,6 +91,13 @@ class VCRChatModelTest {
     VCRChatModel player = new VCRChatModel(delegate, "T:c", VCRMode.PLAYBACK, "m", store);
     ChatResponse played = player.doChat(request);
     assertThat(played.aiMessage().text()).isEqualTo("42");
+    assertThat(played.aiMessage().thinking()).isEqualTo("hidden");
+    assertThat(played.aiMessage().toolExecutionRequests()).containsExactly(tool);
+    assertThat(played.aiMessage().attributes()).containsEntry("provider", "fake");
+    assertThat(played.id()).isEqualTo("resp-1");
+    assertThat(played.modelName()).isEqualTo("test-model");
+    assertThat(played.tokenUsage()).isEqualTo(new TokenUsage(3, 4, 7));
+    assertThat(played.finishReason()).isEqualTo(FinishReason.TOOL_EXECUTION);
     verify(delegate, times(1)).doChat(any(ChatRequest.class));
   }
 

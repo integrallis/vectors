@@ -21,7 +21,6 @@ import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -92,7 +91,7 @@ public final class VCRSpringAIChatModel implements ChatModel {
       Optional<CassetteRecord> cached = store.retrieve(key);
       if (cached.isPresent()) {
         if (cached.get() instanceof CassetteRecord.Chat c) {
-          return c.response();
+          return c.response().aiMessage().text();
         }
         throw new IllegalStateException(
             "Expected Chat cassette for key "
@@ -108,8 +107,13 @@ public final class VCRSpringAIChatModel implements ChatModel {
     store.store(
         key,
         new CassetteRecord.Chat(
-            testId, modelName, System.currentTimeMillis(), prompt, response, Map.of()));
+            testId, modelName, System.currentTimeMillis(), prompt, payload(response)));
     return response;
+  }
+
+  private static CassetteRecord.ChatPayload payload(String text) {
+    return new CassetteRecord.ChatPayload(
+        new CassetteRecord.AiMessagePayload(text, null, List.of(), null), null);
   }
 
   /**

@@ -118,7 +118,15 @@ class SemanticCassetteStoreTest {
     try (SemanticCassetteStore store = newStore()) {
       CassetteKey key = new CassetteKey("chat", "T:c", 1);
       store.store(
-          key, new CassetteRecord.Chat("T:c", "gpt", 0L, "hi", "hello", java.util.Map.of()));
+          key,
+          new CassetteRecord.Chat(
+              "T:c",
+              "gpt",
+              0L,
+              "hi",
+              new CassetteRecord.ChatPayload(
+                  new CassetteRecord.AiMessagePayload("hello", null, java.util.List.of(), null),
+                  null)));
 
       assertTrue(store.exists(key));
       assertTrue(store.retrieve(key).isPresent());
