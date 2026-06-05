@@ -67,6 +67,7 @@ final class IndexMemoryEstimator {
       case BQ -> binaryQuantizedBytes(config.quantizerParams(), physicalSize, dimension);
       case RABITQ -> rabitQuantizedBytes(physicalSize, dimension);
       case NVQ -> nvqBytes(config.quantizerParams(), physicalSize, dimension);
+      case TURBOQUANT -> turboQuantizedBytes(config.quantizerParams(), physicalSize, dimension);
     };
   }
 
@@ -111,6 +112,20 @@ final class IndexMemoryEstimator {
     long centroids = rawVectorBytes(1, dimension) + rawVectorBytes(1, paddedDimension);
     long givensRotation = (long) (paddedDimension / 2) * 2L * Float.BYTES;
     return (long) physicalSize * codeBytesPerVector + corrections + centroids + givensRotation;
+  }
+
+  private static long turboQuantizedBytes(QuantizerParams params, int physicalSize, int dimension) {
+    int bits =
+        params instanceof QuantizerParams.TurboParams p
+            ? p.bits()
+            : VectorCollectionBuilder.DEFAULT_TURBO_BITS;
+    int paddedDimension = ((dimension + 63) / 64) * 64;
+    // Per vector: packed indices ((paddedDim*bits+7)/8) + norm float. Codebook is not stored.
+    long indicesBytesPerVector = (long) (paddedDimension * bits + 7) / 8;
+    long bytesPerVector = indicesBytesPerVector + Float.BYTES;
+    long centroid = rawVectorBytes(1, dimension);
+    long givensRotation = (long) (paddedDimension / 2) * 2L * Float.BYTES;
+    return (long) physicalSize * bytesPerVector + centroid + givensRotation;
   }
 
   private static long nvqBytes(QuantizerParams params, int physicalSize, int dimension) {

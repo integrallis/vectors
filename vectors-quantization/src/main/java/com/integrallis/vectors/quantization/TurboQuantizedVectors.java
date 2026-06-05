@@ -46,7 +46,18 @@ public final class TurboQuantizedVectors implements CompressedVectors {
   private final float[] norms; // norms[i] = ||v - centroid||
   private final int dimension;
 
-  TurboQuantizedVectors(TurboQuantizer quantizer, byte[][] indices, float[] norms, int dimension) {
+  /**
+   * Wraps already-encoded TurboQuant state. Used by {@link TurboQuantizer#encodeAll} and by the
+   * persistence codec when reconstructing from disk.
+   *
+   * @param quantizer the quantizer whose codebook/rotation/centroid produced {@code indices}
+   * @param indices per-vector packed coordinate indices ({@code indices[i].length ==
+   *     quantizer.encodedByteSize()})
+   * @param norms per-vector magnitudes {@code ||v - centroid||}
+   * @param dimension original (unpadded) vector dimension
+   */
+  public TurboQuantizedVectors(
+      TurboQuantizer quantizer, byte[][] indices, float[] norms, int dimension) {
     this.quantizer = quantizer;
     this.indices = indices;
     this.norms = norms;

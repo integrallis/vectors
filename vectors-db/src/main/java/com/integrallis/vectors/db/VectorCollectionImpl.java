@@ -65,6 +65,7 @@ import com.integrallis.vectors.quantization.Quantizer;
 import com.integrallis.vectors.quantization.RaBitQuantizer;
 import com.integrallis.vectors.quantization.ScalarBits;
 import com.integrallis.vectors.quantization.ScalarQuantizer;
+import com.integrallis.vectors.quantization.TurboQuantizer;
 import com.integrallis.vectors.quantization.VectorDataset;
 import com.integrallis.vectors.storage.memory.AlignmentUtil;
 import com.integrallis.vectors.vamana.VamanaGraph;
@@ -1421,6 +1422,15 @@ final class VectorCollectionImpl implements VectorCollection {
                     ? n.numSubvectors()
                     : Math.max(1, config.dimension() / 4);
             yield NVQuantizer.train(dataset, numSv);
+          }
+          case TURBOQUANT -> {
+            QuantizerParams.TurboParams t =
+                params instanceof QuantizerParams.TurboParams tp
+                    ? tp
+                    : new QuantizerParams.TurboParams(
+                        VectorCollectionBuilder.DEFAULT_TURBO_BITS,
+                        VectorCollectionBuilder.DEFAULT_TURBO_SEED);
+            yield TurboQuantizer.train(dataset, t.bits(), t.seed());
           }
         };
     @SuppressWarnings("rawtypes")

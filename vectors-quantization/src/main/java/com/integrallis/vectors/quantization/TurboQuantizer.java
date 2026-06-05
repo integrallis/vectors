@@ -131,6 +131,34 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
     return new TurboQuantizer(dim, paddedDim, bits, centroid, rotation, codebook);
   }
 
+  /**
+   * Reconstructs a quantizer from its serialized state (used by the persistence codec). The
+   * Lloyd-Max codebook is not stored — it is data-independent (MSE-optimal for the {@code N(0,
+   * 1/paddedDimension)} per-coordinate distribution) and recomputed here from {@code
+   * (paddedDimension, bits)}, exactly as {@link #train} computed it.
+   *
+   * @param dimension original (unpadded) vector dimension
+   * @param paddedDimension padded dimension; must match {@code rotation.dimension()}
+   * @param bits quantization bit-width (1-8)
+   * @param centroid the training centroid (length {@code dimension})
+   * @param rotation the rotation strategy (its dimension must equal {@code paddedDimension})
+   * @return a quantizer equivalent to the one whose state was serialized
+   * @throws IllegalArgumentException if the rotation dimension does not match {@code
+   *     paddedDimension}
+   */
+  public static TurboQuantizer fromState(
+      int dimension, int paddedDimension, int bits, float[] centroid, Rotation rotation) {
+    if (rotation.dimension() != paddedDimension) {
+      throw new IllegalArgumentException(
+          "Rotation dimension "
+              + rotation.dimension()
+              + " must match padded dimension "
+              + paddedDimension);
+    }
+    LloydMaxCodebook codebook = LloydMaxCodebook.compute(paddedDimension, bits);
+    return new TurboQuantizer(dimension, paddedDimension, bits, centroid, rotation, codebook);
+  }
+
   // --- Quantizer interface ---
 
   @Override
@@ -227,15 +255,15 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
     return dimension;
   }
 
-  // --- Package-private accessors for TurboQuantizedVectors ---
+  // --- Accessors (public ones expose the serializable state for the db codec) ---
 
-  /** Returns the centroid. */
-  float[] centroid() {
+  /** Returns the centroid (length {@code dimension}). */
+  public float[] centroid() {
     return centroid;
   }
 
   /** Returns the rotation strategy. */
-  Rotation rotation() {
+  public Rotation rotation() {
     return rotation;
   }
 
@@ -244,13 +272,13 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
     return codebook;
   }
 
-  /** Returns the padded dimension. */
-  int paddedDimension() {
+  /** Returns the padded dimension (next multiple of 64 at or above {@code dimension}). */
+  public int paddedDimension() {
     return paddedDimension;
   }
 
-  /** Returns the quantization bit-width. */
-  int bits() {
+  /** Returns the quantization bit-width (1-8). */
+  public int bits() {
     return bits;
   }
 
@@ -285,7 +313,7 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
   }
 
   /** Returns the number of bytes needed to store one encoded vector's indices. */
-  int encodedByteSize() {
+  public int encodedByteSize() {
     // Each dimension gets `bits` bits; total bits = paddedDimension * bits
     return (paddedDimension * bits + 7) / 8;
   }

@@ -35,6 +35,8 @@ import com.integrallis.vectors.quantization.ScalarBits;
 import com.integrallis.vectors.quantization.ScalarQuantizedVectors;
 import com.integrallis.vectors.quantization.ScalarQuantizer;
 import com.integrallis.vectors.quantization.ScoreFunction;
+import com.integrallis.vectors.quantization.TurboQuantizedVectors;
+import com.integrallis.vectors.quantization.TurboQuantizer;
 import com.integrallis.vectors.quantization.VectorDataset;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -300,6 +302,64 @@ class QuantizedVectorsCodecTest {
 
       byte[] first = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.NVQ);
       byte[] second = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.NVQ);
+      assertThat(first).isEqualTo(second);
+    }
+  }
+
+  @Nested
+  class TurboQuantRoundTrip {
+
+    @Test
+    void roundTripProducesIdenticalScores() throws IOException {
+      VectorDataset data = dataset();
+      TurboQuantizer quantizer = TurboQuantizer.train(data, 8, SEED);
+      TurboQuantizedVectors original = quantizer.encodeAll(data);
+
+      byte[] encoded = QuantizedVectorsCodec.encode(original, quantizer, QuantizerKind.TURBOQUANT);
+      CompressedVectors decoded = QuantizedVectorsCodec.decode(encoded);
+
+      assertThat(decoded).isInstanceOf(TurboQuantizedVectors.class);
+      TurboQuantizedVectors tq = (TurboQuantizedVectors) decoded;
+      assertThat(tq.size()).isEqualTo(original.size());
+      assertThat(tq.dimension()).isEqualTo(DIM);
+
+      float[] query = randomVectors(1, DIM, 99L)[0];
+      ScoreFunction origScorer = original.scoreFunctionFor(query, SimilarityFunction.EUCLIDEAN);
+      ScoreFunction decodedScorer = tq.scoreFunctionFor(query, SimilarityFunction.EUCLIDEAN);
+      for (int i = 0; i < NUM_VECTORS; i++) {
+        assertThat(decodedScorer.score(i))
+            .isCloseTo(origScorer.score(i), org.assertj.core.api.Assertions.within(1e-5f));
+      }
+    }
+
+    @Test
+    void fourBitRoundTripProducesIdenticalScores() throws IOException {
+      // 4-bit exercises sub-byte index packing across byte boundaries.
+      VectorDataset data = dataset();
+      TurboQuantizer quantizer = TurboQuantizer.train(data, 4, SEED);
+      TurboQuantizedVectors original = quantizer.encodeAll(data);
+
+      byte[] encoded = QuantizedVectorsCodec.encode(original, quantizer, QuantizerKind.TURBOQUANT);
+      CompressedVectors decoded = QuantizedVectorsCodec.decode(encoded);
+
+      TurboQuantizedVectors tq = (TurboQuantizedVectors) decoded;
+      float[] query = randomVectors(1, DIM, 99L)[0];
+      ScoreFunction origScorer = original.scoreFunctionFor(query, SimilarityFunction.EUCLIDEAN);
+      ScoreFunction decodedScorer = tq.scoreFunctionFor(query, SimilarityFunction.EUCLIDEAN);
+      for (int i = 0; i < NUM_VECTORS; i++) {
+        assertThat(decodedScorer.score(i))
+            .isCloseTo(origScorer.score(i), org.assertj.core.api.Assertions.within(1e-5f));
+      }
+    }
+
+    @Test
+    void encodeTwiceProducesSameBytes() {
+      VectorDataset data = dataset();
+      TurboQuantizer quantizer = TurboQuantizer.train(data, 8, SEED);
+      TurboQuantizedVectors compressed = quantizer.encodeAll(data);
+
+      byte[] first = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.TURBOQUANT);
+      byte[] second = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.TURBOQUANT);
       assertThat(first).isEqualTo(second);
     }
   }

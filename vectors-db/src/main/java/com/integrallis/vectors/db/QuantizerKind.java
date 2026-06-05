@@ -36,5 +36,8 @@ public enum QuantizerKind {
   RABITQ,
 
   /** Nonlinear per-vector quantization. */
-  NVQ
+  NVQ,
+
+  /** TurboQuant: rotation + data-independent Lloyd-Max scalar quantization. */
+  TURBOQUANT
 }

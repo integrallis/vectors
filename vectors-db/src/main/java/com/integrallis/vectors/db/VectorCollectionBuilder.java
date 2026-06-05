@@ -69,6 +69,12 @@ public final class VectorCollectionBuilder {
   /** Default RaBitQ random seed. */
   public static final long DEFAULT_RABIT_SEED = 42L;
 
+  /** Default TurboQuant per-coordinate bit-width. */
+  public static final int DEFAULT_TURBO_BITS = 8;
+
+  /** Default TurboQuant rotation seed. */
+  public static final long DEFAULT_TURBO_SEED = 42L;
+
   /** Default IVF number of clusters (K). */
   public static final int DEFAULT_IVF_K = 16;
 
@@ -124,6 +130,8 @@ public final class VectorCollectionBuilder {
   private Boolean bqBbq;
   private Long rabitSeed;
   private Integer nvqSubvectors;
+  private Integer turboBits;
+  private Long turboSeed;
 
   VectorCollectionBuilder() {}
 
@@ -503,6 +511,29 @@ public final class VectorCollectionBuilder {
   }
 
   /**
+   * Sets the TurboQuant per-coordinate bit-width. Only used when {@link #quantizer(QuantizerKind)}
+   * is {@link QuantizerKind#TURBOQUANT}. Must be in {@code [1, 8]}. Default: {@value
+   * #DEFAULT_TURBO_BITS}.
+   */
+  public VectorCollectionBuilder turboBits(int bits) {
+    if (bits < 1 || bits > 8) {
+      throw new IllegalArgumentException("TurboQuant bits must be in [1, 8]: " + bits);
+    }
+    this.turboBits = bits;
+    return this;
+  }
+
+  /**
+   * Sets the random seed for TurboQuant's rotation. Only used when {@link
+   * #quantizer(QuantizerKind)} is {@link QuantizerKind#TURBOQUANT}. Default: {@value
+   * #DEFAULT_TURBO_SEED}.
+   */
+  public VectorCollectionBuilder turboSeed(long seed) {
+    this.turboSeed = seed;
+    return this;
+  }
+
+  /**
    * Sets the staging buffer size at which {@code add}/{@code addAll} auto-commit before returning.
    * Must be positive. Pass {@link Integer#MAX_VALUE} to disable auto-commit (the default), which
    * forces the caller to drive {@link VectorCollection#commit()} explicitly.
@@ -644,6 +675,10 @@ public final class VectorCollectionBuilder {
       case NVQ ->
           new QuantizerParams.NvqParams(
               nvqSubvectors != null ? nvqSubvectors : Math.max(1, dimension / 4));
+      case TURBOQUANT ->
+          new QuantizerParams.TurboParams(
+              turboBits != null ? turboBits : DEFAULT_TURBO_BITS,
+              turboSeed != null ? turboSeed : DEFAULT_TURBO_SEED);
     };
   }
 }

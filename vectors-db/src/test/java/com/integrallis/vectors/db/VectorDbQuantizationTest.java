@@ -286,6 +286,29 @@ class VectorDbQuantizationTest {
       assertThat(result.hits()).isNotEmpty();
       coll.close();
     }
+
+    @Test
+    void turboQuantProducesRecallAboveThreshold() {
+      List<Document> docs = generateDocs(500, SEED);
+      float[] query = randomVector(new Random(999L));
+
+      VectorCollection coll =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.HNSW)
+              .quantizer(QuantizerKind.TURBOQUANT)
+              .build();
+      coll.addAll(docs);
+      coll.commit();
+
+      SearchResult result =
+          coll.search(
+              SearchRequest.builder(query, 10).searchListSize(100).overQueryFactor(2.0f).build());
+      Set<String> gt = bruteForceTopKIds(docs, query, 10);
+      assertThat(recall(gt, result)).as("TurboQuant HNSW recall").isGreaterThanOrEqualTo(0.70);
+      coll.close();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -421,6 +444,24 @@ class VectorDbQuantizationTest {
       assertQuantizedPersistentRoundTrip(dir, b);
     }
 
+    @Test
+    void turboQuantRoundTrips(@TempDir Path dir) {
+      assertQuantizedPersistentHnswRoundTrip(dir, QuantizerKind.TURBOQUANT, null);
+    }
+
+    @Test
+    void turboQuant4BitRoundTrips(@TempDir Path dir) {
+      // 4-bit exercises sub-byte index packing across byte boundaries in the codec.
+      VectorCollectionBuilder b =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.HNSW)
+              .quantizer(QuantizerKind.TURBOQUANT)
+              .turboBits(4);
+      assertQuantizedPersistentRoundTrip(dir, b);
+    }
+
     private void assertQuantizedPersistentHnswRoundTrip(
         Path dir, QuantizerKind kind, QuantizerParams params) {
       VectorCollectionBuilder b =
@@ -507,6 +548,17 @@ class VectorDbQuantizationTest {
               .metric(SimilarityFunction.EUCLIDEAN)
               .indexType(IndexType.VAMANA)
               .quantizer(QuantizerKind.SQ4);
+      assertQuantizedPersistentRoundTrip(dir, b);
+    }
+
+    @Test
+    void turboQuantRoundTrips(@TempDir Path dir) {
+      VectorCollectionBuilder b =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.VAMANA)
+              .quantizer(QuantizerKind.TURBOQUANT);
       assertQuantizedPersistentRoundTrip(dir, b);
     }
   }

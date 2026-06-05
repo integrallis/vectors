@@ -135,6 +135,7 @@
             <Class name="com.integrallis.vectors.quantization.RaBitQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.NVQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.OptimizedProductQuantizer"/>
+            <Class name="com.integrallis.vectors.quantization.TurboQuantizer"/>
         </Or>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
@@ -162,6 +163,7 @@
             <Class name="com.integrallis.vectors.quantization.BinaryQuantizedVectors"/>
             <Class name="com.integrallis.vectors.quantization.RaBitQuantizedVectors"/>
             <Class name="com.integrallis.vectors.quantization.NVQuantizedVectors"/>
+            <Class name="com.integrallis.vectors.quantization.TurboQuantizedVectors"/>
         </Or>
         <Or>
             <Bug pattern="EI_EXPOSE_REP2"/>

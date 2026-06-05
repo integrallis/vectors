@@ -34,14 +34,16 @@ import com.integrallis.vectors.quantization.Rotation;
 import com.integrallis.vectors.quantization.ScalarBits;
 import com.integrallis.vectors.quantization.ScalarQuantizedVectors;
 import com.integrallis.vectors.quantization.ScalarQuantizer;
+import com.integrallis.vectors.quantization.TurboQuantizedVectors;
+import com.integrallis.vectors.quantization.TurboQuantizer;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
 
 /**
- * Binary codec for the {@code quantized.bin} file. Serializes and deserializes all 6 quantizer
- * kinds (SQ8, SQ4, PQ, BQ, RABITQ, NVQ) using a tagged-union wire format.
+ * Binary codec for the {@code quantized.bin} file. Serializes and deserializes all 7 quantizer
+ * kinds (SQ8, SQ4, PQ, BQ, RABITQ, NVQ, TURBOQUANT) using a tagged-union wire format.
  *
  * <p>Layout (little-endian throughout):
  *
@@ -99,6 +101,8 @@ public final class QuantizedVectorsCodec {
       case BQ -> encodeBQ((BinaryQuantizedVectors) compressed, (BinaryQuantizer) quantizer);
       case RABITQ -> encodeRaBitQ((RaBitQuantizedVectors) compressed, (RaBitQuantizer) quantizer);
       case NVQ -> encodeNVQ((NVQuantizedVectors) compressed, (NVQuantizer) quantizer);
+      case TURBOQUANT ->
+          encodeTurboQuant((TurboQuantizedVectors) compressed, (TurboQuantizer) quantizer);
       case NONE -> throw new AssertionError("unreachable");
     };
   }
@@ -166,6 +170,7 @@ public final class QuantizedVectorsCodec {
       case BQ -> decodeBQ(buf, dimension, vectorCount);
       case RABITQ -> decodeRaBitQ(buf, dimension, vectorCount);
       case NVQ -> decodeNVQ(buf, dimension, vectorCount);
+      case TURBOQUANT -> decodeTurboQuant(buf, dimension, vectorCount);
       case NONE -> throw new AssertionError("unreachable");
     };
   }
@@ -551,6 +556,89 @@ public final class QuantizedVectorsCodec {
     }
 
     return new RaBitQuantizedVectors(quantizer, codes, corrections, dimension);
+  }
+
+  // ---- TurboQuant ----
+
+  private static byte[] encodeTurboQuant(
+      TurboQuantizedVectors compressed, TurboQuantizer quantizer) {
+    int dimension = quantizer.dimension();
+    int vectorCount = compressed.size();
+    int paddedDimension = quantizer.paddedDimension();
+    int bits = quantizer.bits();
+    float[] centroid = quantizer.centroid();
+    Rotation rotation = quantizer.rotation();
+    int indicesBytes = quantizer.encodedByteSize();
+
+    // Quantizer state: paddedDimension(4) + bits(4) + centroid(D*4) + rotation state. The Lloyd-Max
+    // codebook is NOT stored — it is data-independent and recomputed from (paddedDimension, bits).
+    long rotationSize = rotationEncodedSize(rotation);
+    long quantizerStateSize = 4L + 4L + (long) dimension * Float.BYTES + rotationSize;
+
+    // Per-vector: packed indices (encodedByteSize) + norm float.
+    long perVector = (long) indicesBytes + Float.BYTES;
+    long vectorDataSize = (long) vectorCount * perVector;
+    long totalSize = COMMON_HEADER_SIZE + quantizerStateSize + vectorDataSize;
+    checkSize(totalSize);
+
+    byte[] out = new byte[(int) totalSize];
+    ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
+
+    writeCommonHeader(buf, QuantizerKind.TURBOQUANT, dimension, vectorCount);
+
+    buf.putInt(paddedDimension);
+    buf.putInt(bits);
+    for (int d = 0; d < dimension; d++) {
+      buf.putFloat(centroid[d]);
+    }
+    encodeRotation(buf, rotation);
+
+    for (int i = 0; i < vectorCount; i++) {
+      buf.put(compressed.getIndices(i));
+      buf.putFloat(compressed.getNorm(i));
+    }
+
+    return out;
+  }
+
+  private static TurboQuantizedVectors decodeTurboQuant(
+      ByteBuffer buf, int dimension, int vectorCount) throws IOException {
+    ensureRemaining(buf, 8, "TurboQuant paddedDimension+bits");
+
+    int paddedDimension = buf.getInt();
+    if (paddedDimension <= 0 || paddedDimension % 64 != 0) {
+      throw new IOException(
+          "quantized.bin TurboQuant paddedDimension must be positive multiple of 64: "
+              + paddedDimension);
+    }
+    int bits = buf.getInt();
+    if (bits < 1 || bits > 8) {
+      throw new IOException("quantized.bin TurboQuant bits must be in [1, 8]: " + bits);
+    }
+
+    ensureRemaining(buf, (long) dimension * Float.BYTES, "TurboQuant centroid");
+    float[] centroid = new float[dimension];
+    for (int d = 0; d < dimension; d++) {
+      centroid[d] = buf.getFloat();
+    }
+
+    Rotation rotation = decodeRotation(buf, paddedDimension);
+
+    TurboQuantizer quantizer =
+        TurboQuantizer.fromState(dimension, paddedDimension, bits, centroid, rotation);
+
+    int indicesBytes = quantizer.encodedByteSize();
+    long perVector = (long) indicesBytes + Float.BYTES;
+    ensureRemaining(buf, perVector * vectorCount, "TurboQuant vector data");
+
+    byte[][] indices = new byte[vectorCount][indicesBytes];
+    float[] norms = new float[vectorCount];
+    for (int i = 0; i < vectorCount; i++) {
+      buf.get(indices[i]);
+      norms[i] = buf.getFloat();
+    }
+
+    return new TurboQuantizedVectors(quantizer, indices, norms, dimension);
   }
 
   // ---- NVQ ----

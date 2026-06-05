@@ -255,6 +255,8 @@ public final class QuantizationRecallBenchmark {
           case BQ -> 1;
           case RABITQ -> 1;
           case NVQ -> 8;
+          case TURBOQUANT ->
+              8; // default per-coordinate bits (VectorCollectionBuilder.DEFAULT_TURBO_BITS)
         };
     return 32.0 / bitsPerDim;
   }

@@ -29,6 +29,7 @@ package com.integrallis.vectors.db;
  *   <li>{@link BqParams} — {@link QuantizerKind#BQ}.
  *   <li>{@link RaBitParams} — {@link QuantizerKind#RABITQ}.
  *   <li>{@link NvqParams} — {@link QuantizerKind#NVQ}.
+ *   <li>{@link TurboParams} — {@link QuantizerKind#TURBOQUANT}.
  * </ul>
  *
  * <p>When {@link QuantizerKind#NONE}, the params field must be {@code null}. When non-NONE, the
@@ -102,6 +103,20 @@ public sealed interface QuantizerParams {
     public NvqParams {
       if (numSubvectors <= 0) {
         throw new IllegalArgumentException("numSubvectors must be positive: " + numSubvectors);
+      }
+    }
+  }
+
+  /**
+   * Parameters for TurboQuant ({@link QuantizerKind#TURBOQUANT}).
+   *
+   * @param bits per-coordinate quantization bit-width. Must be in {@code [1, 8]}.
+   * @param seed random seed for the rotation. Default: 42L for reproducibility.
+   */
+  record TurboParams(int bits, long seed) implements QuantizerParams {
+    public TurboParams {
+      if (bits < 1 || bits > 8) {
+        throw new IllegalArgumentException("TurboQuant bits must be in [1, 8]: " + bits);
       }
     }
   }
