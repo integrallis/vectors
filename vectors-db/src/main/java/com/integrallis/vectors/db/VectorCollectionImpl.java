@@ -185,6 +185,11 @@ final class VectorCollectionImpl implements VectorCollection {
       }
     }
 
+    /** Current reference count (>0 while readers hold this generation; 0 once fully released). */
+    int refCount() {
+      return refs.get();
+    }
+
     private void closeResources() {
       try {
         spi.close();
@@ -313,6 +318,20 @@ final class VectorCollectionImpl implements VectorCollection {
   /** Post-commit replication subscribers (P3.1); empty when replication is not configured. */
   private final java.util.List<GenerationSubscriber> subscribers;
 
+  // Background compaction (I.6): when intervalMillis > 0 on a persistent collection, a daemon
+  // reclaims retired generation directories that fall outside the retention window and are no
+  // longer referenced by any in-flight reader. 0 = disabled (default).
+  private final long compactionIntervalMillis;
+  private final int retainGenerations;
+
+  /**
+   * Retired persistent generations awaiting on-disk reclamation; guarded by {@link #writerLock}.
+   */
+  private final java.util.List<Generation> retiredGenerations = new java.util.ArrayList<>();
+
+  /** Compaction daemon; {@code null} unless background compaction is enabled. */
+  private final java.util.concurrent.ScheduledExecutorService compactionExecutor;
+
   VectorCollectionImpl(VectorCollectionConfig config) {
     this(config, QvCache.DISABLED, java.util.List.of());
   }
@@ -325,9 +344,20 @@ final class VectorCollectionImpl implements VectorCollection {
       VectorCollectionConfig config,
       QvCache cache,
       java.util.List<GenerationSubscriber> subscribers) {
+    this(config, cache, subscribers, 0L, VectorCollectionBuilder.DEFAULT_RETAIN_GENERATIONS);
+  }
+
+  VectorCollectionImpl(
+      VectorCollectionConfig config,
+      QvCache cache,
+      java.util.List<GenerationSubscriber> subscribers,
+      long compactionIntervalMillis,
+      int retainGenerations) {
     this.config = Objects.requireNonNull(config, "config must not be null");
     this.queryCache = Objects.requireNonNull(cache, "cache must not be null");
     this.subscribers = java.util.List.copyOf(subscribers);
+    this.compactionIntervalMillis = compactionIntervalMillis;
+    this.retainGenerations = Math.max(1, retainGenerations);
     if (config.storageRoot() == null) {
       this.generation = bootstrapInMemory();
       this.nextGenerationNumber = 0L;
@@ -339,6 +369,23 @@ final class VectorCollectionImpl implements VectorCollection {
         throw new UncheckedIOException(
             "Failed to open persistent collection at " + config.storageRoot(), e);
       }
+    }
+    // Start the compaction daemon only for a persistent collection with a positive interval.
+    if (config.storageRoot() != null && compactionIntervalMillis > 0L) {
+      this.compactionExecutor =
+          java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+              r -> {
+                Thread t = new Thread(r, "vectors-compaction");
+                t.setDaemon(true);
+                return t;
+              });
+      this.compactionExecutor.scheduleWithFixedDelay(
+          this::pruneRetiredGenerationsQuietly,
+          compactionIntervalMillis,
+          compactionIntervalMillis,
+          java.util.concurrent.TimeUnit.MILLISECONDS);
+    } else {
+      this.compactionExecutor = null;
     }
   }
 
@@ -805,7 +852,7 @@ final class VectorCollectionImpl implements VectorCollection {
       Generation newGen = openGeneration(rr.generationDir(), rr.manifest());
       this.generation = newGen;
       this.nextGenerationNumber = Math.max(this.nextGenerationNumber, rr.generationNumber() + 1L);
-      current.release();
+      retire(current);
       queryCache.invalidateAll();
       return true;
     } catch (IOException e) {
@@ -913,7 +960,7 @@ final class VectorCollectionImpl implements VectorCollection {
             newSpi, newMapper, newMeta, newPhysicalCount, newTombstones, 0L, null, null, null);
     this.generation = newGen;
     staging.clear();
-    oldGen.release();
+    retire(oldGen);
   }
 
   // ---------------------------------------------------------------------------
@@ -1062,7 +1109,7 @@ final class VectorCollectionImpl implements VectorCollection {
     this.generation = newGen;
     notifyGenerationSubscribers(newGenNumber, wr.generationDir());
     staging.clear();
-    oldGen.release();
+    retire(oldGen);
   }
 
   /**
@@ -1088,6 +1135,82 @@ final class VectorCollectionImpl implements VectorCollection {
                     + subscriber.getClass().getName()
                     + " failed for generation "
                     + generationNumber);
+      }
+    }
+  }
+
+  /**
+   * Releases a generation being retired and, when background compaction is enabled, records its
+   * directory so the daemon can reclaim it once it ages out and no reader holds it. Callers must
+   * hold {@link #writerLock} (every commit/compact/refresh path does).
+   */
+  private void retire(Generation oldGen) {
+    oldGen.release();
+    if (compactionExecutor != null && oldGen.directory != null) {
+      retiredGenerations.add(oldGen);
+    }
+  }
+
+  private void pruneRetiredGenerationsQuietly() {
+    try {
+      pruneRetiredGenerations();
+    } catch (RuntimeException e) {
+      LOGGER.log(Level.WARNING, e, () -> "background compaction tick failed");
+    }
+  }
+
+  /**
+   * Reclaims retired generation directories on disk (I.6): deletes any {@code gen-NNNN/} older than
+   * the {@code retainGenerations} window, except ones a live reader still references (refcount &gt;
+   * 0). Keeping the most recent {@code retainGenerations} preserves the crash-recovery walk-back.
+   * Package-visible so tests can drive a deterministic pass without waiting for the daemon.
+   */
+  void pruneRetiredGenerations() {
+    Path root = config.storageRoot();
+    if (root == null) {
+      return;
+    }
+    long currentGen;
+    java.util.Set<Long> protectedNumbers = new java.util.HashSet<>();
+    writerLock.lock();
+    try {
+      Generation g = this.generation;
+      if (g == null) {
+        return; // closed
+      }
+      currentGen = g.generationNumber;
+      protectedNumbers.add(currentGen);
+      java.util.Iterator<Generation> it = retiredGenerations.iterator();
+      while (it.hasNext()) {
+        Generation r = it.next();
+        if (r.refCount() > 0) {
+          protectedNumbers.add(r.generationNumber); // an in-flight reader still holds it
+        } else {
+          it.remove(); // fully released and unmapped; the retention window governs its directory
+        }
+      }
+    } finally {
+      writerLock.unlock();
+    }
+
+    long threshold = currentGen - retainGenerations; // delete gen-N with N <= threshold
+    List<Long> onDisk;
+    try {
+      onDisk = GenerationDirectory.listGenerationDirectories(root);
+    } catch (IOException e) {
+      LOGGER.log(Level.WARNING, e, () -> "compaction: failed to list generations under " + root);
+      return;
+    }
+    for (long n : onDisk) {
+      if (n > threshold || protectedNumbers.contains(n)) {
+        continue; // within the retention window, current, or still referenced
+      }
+      Path dir = root.resolve(FileFormat.generationDirName(n));
+      try {
+        GenerationDirectory.deleteRecursively(dir);
+      } catch (IOException e) {
+        LOGGER.log(
+            Level.WARNING, e, () -> "compaction: failed to delete retired generation " + dir);
       }
     }
   }
@@ -1177,7 +1300,7 @@ final class VectorCollectionImpl implements VectorCollection {
     Generation newGen =
         new Generation(newSpi, newMapper, newMeta, liveCount, new BitSet(), 0L, null, null, null);
     this.generation = newGen;
-    oldGen.release();
+    retire(oldGen);
   }
 
   private void compactPersistent(Generation oldGen) {
@@ -1323,7 +1446,7 @@ final class VectorCollectionImpl implements VectorCollection {
     }
 
     this.generation = newGen;
-    oldGen.release();
+    retire(oldGen);
   }
 
   /** Builds a vectors.bin byte image from a float[][] matrix. */
@@ -1782,6 +1905,10 @@ final class VectorCollectionImpl implements VectorCollection {
 
   @Override
   public void close() {
+    // Stop the compaction daemon first so it cannot race the generation teardown below.
+    if (compactionExecutor != null) {
+      compactionExecutor.shutdownNow();
+    }
     writerLock.lock();
     try {
       Generation gen = this.generation;

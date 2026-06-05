@@ -81,6 +81,12 @@ public final class VectorCollectionBuilder {
    */
   public static final boolean DEFAULT_TURBO_UNBIASED = true;
 
+  /**
+   * Default number of most-recent generations the background-compaction daemon retains on disk (the
+   * crash-recovery walk-back window). Older retired generations are reclaimed once unreferenced.
+   */
+  public static final int DEFAULT_RETAIN_GENERATIONS = 2;
+
   /** Default IVF number of clusters (K). */
   public static final int DEFAULT_IVF_K = 16;
 
@@ -130,6 +136,10 @@ public final class VectorCollectionBuilder {
 
   // P3.1 replication subscribers fired after each commit.
   private final java.util.List<GenerationSubscriber> subscribers = new java.util.ArrayList<>();
+
+  // I.6 background compaction: 0 = disabled (default).
+  private long compactionIntervalMillis = 0L;
+  private int retainGenerations = DEFAULT_RETAIN_GENERATIONS;
 
   // Quantizer-specific params (all nullable — null means "use defaults")
   private Integer pqSubspaces;
@@ -623,6 +633,33 @@ public final class VectorCollectionBuilder {
     return replicateTo(GenerationShippingSubscriber.toUri(uri));
   }
 
+  /**
+   * Enables the background-compaction daemon (I.6) that reclaims retired generation directories
+   * from disk on the given interval, keeping the most recent {@link #retainGenerations(int)}
+   * generations for crash recovery and never deleting one an in-flight reader still holds. Only
+   * meaningful for persistent collections; a non-positive interval (the default) leaves compaction
+   * caller-driven.
+   */
+  public VectorCollectionBuilder backgroundCompaction(java.time.Duration interval) {
+    if (interval == null || interval.isNegative() || interval.isZero()) {
+      throw new IllegalArgumentException("compaction interval must be positive: " + interval);
+    }
+    this.compactionIntervalMillis = interval.toMillis();
+    return this;
+  }
+
+  /**
+   * Number of most-recent generations the compaction daemon keeps on disk (the recovery walk-back
+   * window). Must be {@code >= 1}. Default: {@value #DEFAULT_RETAIN_GENERATIONS}.
+   */
+  public VectorCollectionBuilder retainGenerations(int generations) {
+    if (generations < 1) {
+      throw new IllegalArgumentException("retainGenerations must be >= 1: " + generations);
+    }
+    this.retainGenerations = generations;
+    return this;
+  }
+
   /** Builds the collection. */
   public VectorCollection build() {
     if (dimension == null) {
@@ -695,7 +732,12 @@ public final class VectorCollectionBuilder {
             effectiveCuvsParams,
             ivfPqParams);
     QvCache cache = cacheSize > 0 ? new QvCache(cacheSize) : QvCache.DISABLED;
-    return new VectorCollectionImpl(config, cache, java.util.List.copyOf(subscribers));
+    return new VectorCollectionImpl(
+        config,
+        cache,
+        java.util.List.copyOf(subscribers),
+        compactionIntervalMillis,
+        retainGenerations);
   }
 
   /**

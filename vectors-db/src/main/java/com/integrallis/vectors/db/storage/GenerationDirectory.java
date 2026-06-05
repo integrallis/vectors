@@ -571,7 +571,7 @@ public final class GenerationDirectory {
    * specific order (e.g. {@link #recover(Path, GenerationSource, Manifest)} sorting descending)
    * apply their own comparator.
    */
-  static List<Long> listGenerationDirectories(Path storageRoot) throws IOException {
+  public static List<Long> listGenerationDirectories(Path storageRoot) throws IOException {
     List<Long> out = new ArrayList<>();
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(storageRoot)) {
       for (Path child : stream) {
@@ -764,7 +764,7 @@ public final class GenerationDirectory {
    * Recursively deletes a directory tree. No-op if {@code root} does not exist. Safe to call on a
    * tmp dir that was partially populated — every file is deleted before the enclosing directory.
    */
-  static void deleteRecursively(Path root) throws IOException {
+  public static void deleteRecursively(Path root) throws IOException {
     if (!Files.exists(root)) {
       return;
     }
