@@ -30,7 +30,7 @@ import java.util.Objects;
  * identical ({@code size()}, {@code dimension()}, {@code getVector(int)}) but live in separate
  * packages to keep each graph-index module dependency-light. Implementing both on one class means a
  * single reader-side bridge is shared by {@link MappedHnswIndexAdapter} and {@link
- * MappedVamanaIndexAdapter}.
+ * MappedVamanaPagedIndexAdapter}.
  *
  * <p><b>Shared-buffer invariant (CRITICAL).</b> The array returned by {@link #getVector(int)} is a
  * per-thread scratch buffer. Every call on the same thread overwrites the previous call's result.
@@ -62,8 +62,9 @@ import java.util.Objects;
  * contract that's a use-after-overwrite bug. Only the <i>search</i> paths ({@code
  * HnswSearcher.beamSearch}, {@code VamanaSearcher.search}, both rescore methods) satisfy the
  * single-call-per-iteration contract. {@link MappedHnswIndexAdapter} and {@link
- * MappedVamanaIndexAdapter} — the only users of this class — are constructed from <i>pre-built</i>
- * graphs and reject {@link com.integrallis.vectors.db.index.IndexSpi#build(float[][],
+ * MappedVamanaPagedIndexAdapter} — the only users of this class — are constructed from
+ * <i>pre-built</i> graphs and reject {@link
+ * com.integrallis.vectors.db.index.IndexSpi#build(float[][],
  * com.integrallis.vectors.core.SimilarityFunction)} with {@link UnsupportedOperationException}, so
  * the unsafe builder path cannot reach this adapter.
  *

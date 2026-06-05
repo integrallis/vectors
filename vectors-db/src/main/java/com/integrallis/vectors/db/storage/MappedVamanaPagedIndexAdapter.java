@@ -27,13 +27,14 @@ import java.util.Objects;
 /**
  * Disk-resident {@link IndexSpi} that serves Vamana search from a {@link PagedVamanaTopology}
  * (graph adjacency paged from the mmap'd {@code graph.bin}) plus a {@link RandomAccessVectors} view
- * of the mmap'd {@code vectors.bin} (I.4). It is the paged analogue of {@link
- * MappedVamanaIndexAdapter}: identical search semantics and thread-safety, but the graph topology
- * is never decoded into heap — search heap is O(threads·L), not O(N·R).
+ * of the mmap'd {@code vectors.bin} (I.4). It is the sole persistent Vamana adapter: identical
+ * search semantics and thread-safety to in-memory Vamana, but the graph topology is never decoded
+ * into heap — search heap is O(threads·L), not O(N·R).
  *
- * <p>Construction-only (no {@link #build}); the data source is an already-committed generation. The
- * same per-thread-scratch invariant as {@link MappedVamanaIndexAdapter} applies: only the search
- * path is reached here, never the build path.
+ * <p>Construction-only (no {@link #build}); the data source is an already-committed generation.
+ * Only the search path is reached here, never the build path — which matters because {@link
+ * MemorySegmentRandomAccessVectors} returns a shared per-thread scratch buffer that the build path
+ * (unlike search) would corrupt by holding across multiple {@code getVector} calls.
  *
  * <p><b>Close semantics.</b> {@link #close()} is a no-op — both the graph segment and the vector
  * segment are owned by the caller-provided per-generation {@code Arena}, which {@code
@@ -64,8 +65,10 @@ public final class MappedVamanaPagedIndexAdapter implements IndexSpi {
   }
 
   /**
-   * Not supported — this adapter serves an already-committed generation. See {@link
-   * MappedVamanaIndexAdapter#build} for why routing build through a mmap-backed adapter is unsafe.
+   * Not supported — this adapter serves an already-committed generation. Routing build through a
+   * mmap-backed adapter is unsafe: {@code VamanaGraphBuilder}'s insert/link paths hold a query
+   * vector across subsequent {@code getVector} calls, violating the shared-scratch contract of
+   * {@link MemorySegmentRandomAccessVectors}.
    *
    * @throws UnsupportedOperationException always
    */

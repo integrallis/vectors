@@ -252,8 +252,8 @@ public final class VamanaIndex {
    * <p>This factory wraps a decoded graph for the persistence path in {@code vectors-db}: a decoded
    * graph from {@code VamanaGraphCodec.decode(byte[])} is paired with a {@code
    * MemorySegmentRandomAccessVectors} view of the mmap'd {@code vectors.bin} file, and the
-   * resulting index is wrapped in {@code MappedVamanaIndexAdapter} for read-only search. There is
-   * no "rebuild-on-commit" concern here — the graph is loaded from disk and the index is never
+   * resulting index is wrapped in {@code MappedVamanaPagedIndexAdapter} for read-only search. There
+   * is no "rebuild-on-commit" concern here — the graph is loaded from disk and the index is never
    * mutated after construction.
    *
    * <p>The returned index shares its internal state with the arguments; in particular it does not

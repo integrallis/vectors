@@ -345,7 +345,7 @@ class VectorDbVamanaPersistenceTest {
    * VamanaGraphCodec.encode} on commit, {@code graph.bin} fsync via {@code
    * GenerationDirectory.writeGeneration}, per-file CRC verification in {@code openGeneration}, and
    * {@code VamanaGraphCodec.decode} + {@link
-   * com.integrallis.vectors.db.storage.MappedVamanaIndexAdapter} wrapping on open.
+   * com.integrallis.vectors.db.storage.MappedVamanaPagedIndexAdapter} wrapping on open.
    */
   @Nested
   @Tag("unit")
@@ -693,7 +693,7 @@ class VectorDbVamanaPersistenceTest {
    * Concurrency test for persistent Vamana. Mirrors {@code
    * VectorDbHnswPersistenceTest.ConcurrencyHnsw.concurrentReadersNeverBlockedByHnswCommit} but on a
    * Vamana-backed collection so the refcounted {@link
-   * com.integrallis.vectors.db.storage.MappedVamanaIndexAdapter} + per-generation {@link
+   * com.integrallis.vectors.db.storage.MappedVamanaPagedIndexAdapter} + per-generation {@link
    * java.lang.foreign.Arena} flip is exercised under contention. Each commit triggers a full
    * graph.bin rewrite, an atomic CURRENT pointer flip, a new {@code Arena.ofShared()}, and a
    * release of the previous generation when the refcount drops to zero. Readers going through

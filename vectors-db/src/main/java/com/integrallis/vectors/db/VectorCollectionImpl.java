@@ -44,7 +44,6 @@ import com.integrallis.vectors.db.storage.MappedIdMapper;
 import com.integrallis.vectors.db.storage.MappedIvfFlatAdapter;
 import com.integrallis.vectors.db.storage.MappedIvfPqAdapter;
 import com.integrallis.vectors.db.storage.MappedMetadataStore;
-import com.integrallis.vectors.db.storage.MappedVamanaIndexAdapter;
 import com.integrallis.vectors.db.storage.MappedVamanaPagedIndexAdapter;
 import com.integrallis.vectors.db.storage.MemorySegmentRandomAccessVectors;
 import com.integrallis.vectors.db.storage.MemorySegmentVectors;
@@ -479,8 +478,6 @@ final class VectorCollectionImpl implements VectorCollection {
             ha.enableQuantization(compressed);
           } else if (spi instanceof MappedVamanaPagedIndexAdapter vp) {
             vp.enableQuantization(compressed);
-          } else if (spi instanceof MappedVamanaIndexAdapter va) {
-            va.enableQuantization(compressed);
           }
         } catch (IOException qe) {
           throw new IOException(

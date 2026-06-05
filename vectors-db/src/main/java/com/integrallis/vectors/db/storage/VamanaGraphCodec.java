@@ -28,7 +28,7 @@ import java.util.Objects;
  * Vamana collection writes exactly one {@code graph.bin} per generation directory, sitting
  * alongside {@code vectors.bin}, {@code idmap.bin}, and {@code metadata.bin}; every generation open
  * reads it back in one shot and hands the decoded {@link VamanaGraph} to {@code
- * MappedVamanaIndexAdapter}.
+ * MappedVamanaPagedIndexAdapter}.
  *
  * <p>Vamana's single-layer flat graph is substantially simpler than HNSW's multi-layer structure:
  * there are no per-node levels, no upper-layer adjacency sections, and the entry point is a single
