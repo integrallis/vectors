@@ -25,7 +25,7 @@ val libraryProjects = subprojects.filter {
 val demoProjects = subprojects.filter { it.path == ":demos" || it.path.startsWith(":demos:") }
 
 // FSL-1.1-ALv2 modules — all others are Apache 2.0
-val fslModules = setOf("vectors-distributed", "vectors-server", "vectors-gpu")
+val fslModules = setOf("vectors-distributed", "vectors-cluster", "vectors-server", "vectors-gpu")
 
 val apacheLicenseHeader = """
     /*
