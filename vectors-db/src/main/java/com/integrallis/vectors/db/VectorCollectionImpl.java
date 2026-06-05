@@ -310,13 +310,24 @@ final class VectorCollectionImpl implements VectorCollection {
     return queryCache;
   }
 
+  /** Post-commit replication subscribers (P3.1); empty when replication is not configured. */
+  private final java.util.List<GenerationSubscriber> subscribers;
+
   VectorCollectionImpl(VectorCollectionConfig config) {
-    this(config, QvCache.DISABLED);
+    this(config, QvCache.DISABLED, java.util.List.of());
   }
 
   VectorCollectionImpl(VectorCollectionConfig config, QvCache cache) {
+    this(config, cache, java.util.List.of());
+  }
+
+  VectorCollectionImpl(
+      VectorCollectionConfig config,
+      QvCache cache,
+      java.util.List<GenerationSubscriber> subscribers) {
     this.config = Objects.requireNonNull(config, "config must not be null");
     this.queryCache = Objects.requireNonNull(cache, "cache must not be null");
+    this.subscribers = java.util.List.copyOf(subscribers);
     if (config.storageRoot() == null) {
       this.generation = bootstrapInMemory();
       this.nextGenerationNumber = 0L;
@@ -772,6 +783,38 @@ final class VectorCollectionImpl implements VectorCollection {
     }
   }
 
+  @Override
+  public boolean refresh() {
+    Path storageRoot = config.storageRoot();
+    if (storageRoot == null) {
+      return false; // in-memory collections have no shipped generations to reload
+    }
+    writerLock.lock();
+    try {
+      Generation current = this.generation;
+      if (current == null) {
+        throw new IllegalStateException("collection is closed");
+      }
+      // Re-run crash-style recovery on the local root to find the newest valid generation. This is
+      // robust to a generation that is mid-arrival from a shipper: a generation with a missing or
+      // CRC-failing payload is skipped and recovery walks back to the last fully-present one.
+      GenerationDirectory.RecoveryResult rr = GenerationDirectory.recover(storageRoot, null, null);
+      if (rr.generationNumber() <= current.generationNumber) {
+        return false; // nothing newer than what we already serve
+      }
+      Generation newGen = openGeneration(rr.generationDir(), rr.manifest());
+      this.generation = newGen;
+      this.nextGenerationNumber = Math.max(this.nextGenerationNumber, rr.generationNumber() + 1L);
+      current.release();
+      queryCache.invalidateAll();
+      return true;
+    } catch (IOException e) {
+      throw new UncheckedIOException("refresh failed for " + storageRoot, e);
+    } finally {
+      writerLock.unlock();
+    }
+  }
+
   private void commitUnderLock() {
     if (!staging.hasWork()) {
       return;
@@ -1017,8 +1060,36 @@ final class VectorCollectionImpl implements VectorCollection {
     }
 
     this.generation = newGen;
+    notifyGenerationSubscribers(newGenNumber, wr.generationDir());
     staging.clear();
     oldGen.release();
+  }
+
+  /**
+   * Delivers a post-commit event to each replication subscriber, in generation order, under the
+   * writer lock (P3.1). Subscribers must not block; one that throws is logged and skipped so it can
+   * never fail the commit.
+   */
+  private void notifyGenerationSubscribers(long generationNumber, Path generationDir) {
+    if (subscribers.isEmpty()) {
+      return;
+    }
+    GenerationCommitEvent event =
+        new GenerationCommitEvent(generationNumber, generationDir, config.storageRoot());
+    for (GenerationSubscriber subscriber : subscribers) {
+      try {
+        subscriber.onGenerationCommitted(event);
+      } catch (RuntimeException e) {
+        LOGGER.log(
+            Level.WARNING,
+            e,
+            () ->
+                "GenerationSubscriber "
+                    + subscriber.getClass().getName()
+                    + " failed for generation "
+                    + generationNumber);
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1719,6 +1790,17 @@ final class VectorCollectionImpl implements VectorCollection {
       gen.release();
     } finally {
       writerLock.unlock();
+    }
+    // Close any AutoCloseable replication subscribers (e.g. GenerationShippingSubscriber flushes
+    // and shuts down its shipping thread). Outside the writer lock; close() is single-call.
+    for (GenerationSubscriber subscriber : subscribers) {
+      if (subscriber instanceof AutoCloseable closeable) {
+        try {
+          closeable.close();
+        } catch (Exception e) {
+          LOGGER.log(Level.WARNING, e, () -> "failed to close GenerationSubscriber " + subscriber);
+        }
+      }
     }
   }
 

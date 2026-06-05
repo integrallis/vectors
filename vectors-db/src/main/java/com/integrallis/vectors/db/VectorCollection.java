@@ -98,6 +98,21 @@ public interface VectorCollection extends AutoCloseable {
    */
   void commit();
 
+  /**
+   * Reloads the newest committed generation from the storage root, if a newer one has appeared
+   * since this collection last loaded — the read-replica refresh point (P3.1). A follower whose
+   * storage root is being populated by a {@link GenerationShippingSubscriber} (directly, or via
+   * {@link GenerationSync#pull}) calls this to start serving newly-shipped generations.
+   *
+   * <p>Safe to call repeatedly (e.g. on a poll loop). A generation that is only partially present
+   * is skipped until complete. Returns {@code false} for in-memory collections (nothing to reload).
+   *
+   * @return {@code true} if a newer generation was loaded and is now being served
+   */
+  default boolean refresh() {
+    return false;
+  }
+
   /** Flushes durable state for persistent collections; in-memory collections have nothing to do. */
   default void flush() {
     // in-memory: nothing to flush

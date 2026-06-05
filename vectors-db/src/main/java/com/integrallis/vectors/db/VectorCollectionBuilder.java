@@ -128,6 +128,9 @@ public final class VectorCollectionBuilder {
   // QvCache — 0 means disabled
   private int cacheSize = 0;
 
+  // P3.1 replication subscribers fired after each commit.
+  private final java.util.List<GenerationSubscriber> subscribers = new java.util.ArrayList<>();
+
   // Quantizer-specific params (all nullable — null means "use defaults")
   private Integer pqSubspaces;
   private Integer pqClusters;
@@ -597,6 +600,29 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
+  /**
+   * Registers a {@link GenerationSubscriber} fired after each commit (P3.1). May be called multiple
+   * times; subscribers fire in registration order. If a subscriber implements {@link AutoCloseable}
+   * it is closed when the collection closes. Only meaningful for persistent collections.
+   */
+  public VectorCollectionBuilder replicateTo(GenerationSubscriber subscriber) {
+    if (subscriber == null) {
+      throw new IllegalArgumentException("subscriber must not be null");
+    }
+    this.subscribers.add(subscriber);
+    return this;
+  }
+
+  /**
+   * Registers a {@link GenerationShippingSubscriber} that ships each committed generation to the
+   * given replication target URI ({@code file://} or {@code s3://}) — convenience for {@link
+   * #replicateTo(GenerationSubscriber)} with {@link GenerationShippingSubscriber#toUri(String)}.
+   * The created subscriber (and the backend it owns) is closed when the collection closes.
+   */
+  public VectorCollectionBuilder replicateTo(String uri) {
+    return replicateTo(GenerationShippingSubscriber.toUri(uri));
+  }
+
   /** Builds the collection. */
   public VectorCollection build() {
     if (dimension == null) {
@@ -669,7 +695,7 @@ public final class VectorCollectionBuilder {
             effectiveCuvsParams,
             ivfPqParams);
     QvCache cache = cacheSize > 0 ? new QvCache(cacheSize) : QvCache.DISABLED;
-    return new VectorCollectionImpl(config, cache);
+    return new VectorCollectionImpl(config, cache, java.util.List.copyOf(subscribers));
   }
 
   /**
