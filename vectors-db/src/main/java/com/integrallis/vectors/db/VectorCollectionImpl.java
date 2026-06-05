@@ -1429,8 +1429,11 @@ final class VectorCollectionImpl implements VectorCollection {
                     ? tp
                     : new QuantizerParams.TurboParams(
                         VectorCollectionBuilder.DEFAULT_TURBO_BITS,
-                        VectorCollectionBuilder.DEFAULT_TURBO_SEED);
-            yield TurboQuantizer.train(dataset, t.bits(), t.seed());
+                        VectorCollectionBuilder.DEFAULT_TURBO_SEED,
+                        VectorCollectionBuilder.DEFAULT_TURBO_UNBIASED);
+            yield t.unbiased()
+                ? TurboQuantizer.trainProd(dataset, t.bits(), t.seed())
+                : TurboQuantizer.train(dataset, t.bits(), t.seed());
           }
         };
     @SuppressWarnings("rawtypes")

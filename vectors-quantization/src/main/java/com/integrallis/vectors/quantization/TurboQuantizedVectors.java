@@ -44,11 +44,13 @@ public final class TurboQuantizedVectors implements CompressedVectors {
   private final TurboQuantizer quantizer;
   private final byte[][] indices; // indices[i] has paddedDim entries packed into bytes
   private final float[] norms; // norms[i] = ||v - centroid||
+  // Unbiased second stage (TurboQuant_prod); both null for the MSE-only path.
+  private final byte[][] qjlBits; // qjlBits[i] = sign(S·residual_i), or null
+  private final float[] gammaR; // gammaR[i] = ||residual_i||, or null
   private final int dimension;
 
   /**
-   * Wraps already-encoded TurboQuant state. Used by {@link TurboQuantizer#encodeAll} and by the
-   * persistence codec when reconstructing from disk.
+   * Wraps MSE-only encoded state (no unbiased second stage).
    *
    * @param quantizer the quantizer whose codebook/rotation/centroid produced {@code indices}
    * @param indices per-vector packed coordinate indices ({@code indices[i].length ==
@@ -58,9 +60,28 @@ public final class TurboQuantizedVectors implements CompressedVectors {
    */
   public TurboQuantizedVectors(
       TurboQuantizer quantizer, byte[][] indices, float[] norms, int dimension) {
+    this(quantizer, indices, norms, null, null, dimension);
+  }
+
+  /**
+   * Wraps encoded state, optionally including the unbiased QJL second stage (TurboQuant_prod). Used
+   * by {@link TurboQuantizer#encodeAll} and by the persistence codec.
+   *
+   * @param qjlBits per-vector packed QJL sign bits, or {@code null} for MSE-only
+   * @param gammaR per-vector residual magnitudes, or {@code null} for MSE-only
+   */
+  public TurboQuantizedVectors(
+      TurboQuantizer quantizer,
+      byte[][] indices,
+      float[] norms,
+      byte[][] qjlBits,
+      float[] gammaR,
+      int dimension) {
     this.quantizer = quantizer;
     this.indices = indices;
     this.norms = norms;
+    this.qjlBits = qjlBits;
+    this.gammaR = gammaR;
     this.dimension = dimension;
   }
 
@@ -114,12 +135,31 @@ public final class TurboQuantizedVectors implements CompressedVectors {
 
   /** Reconstructs the full approximate vector {@code centroid + reconstructCentered(...)}. */
   private float[] reconstructFull(int ordinal) {
-    float[] full = quantizer.reconstructCentered(indices[ordinal], norms[ordinal]);
+    float[] full =
+        qjlBits == null
+            ? quantizer.reconstructCentered(indices[ordinal], norms[ordinal])
+            : quantizer.reconstructCentered(
+                indices[ordinal], norms[ordinal], qjlBits[ordinal], gammaR[ordinal]);
     float[] centroid = quantizer.centroid();
     for (int d = 0; d < dimension; d++) {
       full[d] += centroid[d];
     }
     return full;
+  }
+
+  /** True if these vectors carry the unbiased QJL second stage. */
+  public boolean isUnbiased() {
+    return qjlBits != null;
+  }
+
+  /** Returns the packed QJL sign bits for the vector at {@code ordinal} (unbiased path only). */
+  public byte[] getQjlBits(int ordinal) {
+    return qjlBits[ordinal];
+  }
+
+  /** Returns the residual magnitude for the vector at {@code ordinal} (unbiased path only). */
+  public float getGammaR(int ordinal) {
+    return gammaR[ordinal];
   }
 
   /** Returns the quantized indices for the vector at the given ordinal. */

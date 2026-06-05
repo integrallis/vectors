@@ -112,8 +112,11 @@ public sealed interface QuantizerParams {
    *
    * @param bits per-coordinate quantization bit-width. Must be in {@code [1, 8]}.
    * @param seed random seed for the rotation. Default: 42L for reproducibility.
+   * @param unbiased when {@code true}, use the two-stage TurboQuant_prod (MSE + QJL residual) for
+   *     an unbiased inner-product estimate — the paper's recommended variant for nearest-neighbour
+   *     search; when {@code false}, MSE-only (smaller and faster, biased inner products).
    */
-  record TurboParams(int bits, long seed) implements QuantizerParams {
+  record TurboParams(int bits, long seed, boolean unbiased) implements QuantizerParams {
     public TurboParams {
       if (bits < 1 || bits > 8) {
         throw new IllegalArgumentException("TurboQuant bits must be in [1, 8]: " + bits);

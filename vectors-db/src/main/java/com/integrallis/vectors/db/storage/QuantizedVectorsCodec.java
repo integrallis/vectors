@@ -569,14 +569,19 @@ public final class QuantizedVectorsCodec {
     float[] centroid = quantizer.centroid();
     Rotation rotation = quantizer.rotation();
     int indicesBytes = quantizer.encodedByteSize();
+    boolean unbiased = quantizer.isUnbiased();
+    int qjlBitBytes = unbiased ? quantizer.qjlBitBytes() : 0;
 
-    // Quantizer state: paddedDimension(4) + bits(4) + centroid(D*4) + rotation state. The Lloyd-Max
-    // codebook is NOT stored — it is data-independent and recomputed from (paddedDimension, bits).
+    // Quantizer state: paddedDimension(4) + bits(4) + unbiasedFlag(4) + [qjlSeed(8) if unbiased] +
+    // centroid(D*4) + rotation state. The Lloyd-Max codebook and (for the unbiased path) the QJL
+    // sketch are NOT stored — both are recomputed from (paddedDimension, bits) and the qjlSeed.
     long rotationSize = rotationEncodedSize(rotation);
-    long quantizerStateSize = 4L + 4L + (long) dimension * Float.BYTES + rotationSize;
+    long quantizerStateSize =
+        4L + 4L + 4L + (unbiased ? 8L : 0L) + (long) dimension * Float.BYTES + rotationSize;
 
-    // Per-vector: packed indices (encodedByteSize) + norm float.
-    long perVector = (long) indicesBytes + Float.BYTES;
+    // Per-vector: packed indices + norm float + [qjlBits + gammaR float if unbiased].
+    long perVector =
+        (long) indicesBytes + Float.BYTES + (unbiased ? qjlBitBytes + Float.BYTES : 0L);
     long vectorDataSize = (long) vectorCount * perVector;
     long totalSize = COMMON_HEADER_SIZE + quantizerStateSize + vectorDataSize;
     checkSize(totalSize);
@@ -588,6 +593,10 @@ public final class QuantizedVectorsCodec {
 
     buf.putInt(paddedDimension);
     buf.putInt(bits);
+    buf.putInt(unbiased ? 1 : 0);
+    if (unbiased) {
+      buf.putLong(quantizer.qjlSeed());
+    }
     for (int d = 0; d < dimension; d++) {
       buf.putFloat(centroid[d]);
     }
@@ -596,6 +605,10 @@ public final class QuantizedVectorsCodec {
     for (int i = 0; i < vectorCount; i++) {
       buf.put(compressed.getIndices(i));
       buf.putFloat(compressed.getNorm(i));
+      if (unbiased) {
+        buf.put(compressed.getQjlBits(i));
+        buf.putFloat(compressed.getGammaR(i));
+      }
     }
 
     return out;
@@ -603,7 +616,7 @@ public final class QuantizedVectorsCodec {
 
   private static TurboQuantizedVectors decodeTurboQuant(
       ByteBuffer buf, int dimension, int vectorCount) throws IOException {
-    ensureRemaining(buf, 8, "TurboQuant paddedDimension+bits");
+    ensureRemaining(buf, 12, "TurboQuant paddedDimension+bits+flag");
 
     int paddedDimension = buf.getInt();
     if (paddedDimension <= 0 || paddedDimension % 64 != 0) {
@@ -615,6 +628,17 @@ public final class QuantizedVectorsCodec {
     if (bits < 1 || bits > 8) {
       throw new IOException("quantized.bin TurboQuant bits must be in [1, 8]: " + bits);
     }
+    int unbiasedFlag = buf.getInt();
+    if (unbiasedFlag != 0 && unbiasedFlag != 1) {
+      throw new IOException(
+          "quantized.bin TurboQuant unbiased flag must be 0 or 1: " + unbiasedFlag);
+    }
+    boolean unbiased = unbiasedFlag == 1;
+    long qjlSeed = 0L;
+    if (unbiased) {
+      ensureRemaining(buf, 8, "TurboQuant qjlSeed");
+      qjlSeed = buf.getLong();
+    }
 
     ensureRemaining(buf, (long) dimension * Float.BYTES, "TurboQuant centroid");
     float[] centroid = new float[dimension];
@@ -625,20 +649,33 @@ public final class QuantizedVectorsCodec {
     Rotation rotation = decodeRotation(buf, paddedDimension);
 
     TurboQuantizer quantizer =
-        TurboQuantizer.fromState(dimension, paddedDimension, bits, centroid, rotation);
+        unbiased
+            ? TurboQuantizer.fromStateProd(
+                dimension, paddedDimension, bits, centroid, rotation, qjlSeed)
+            : TurboQuantizer.fromState(dimension, paddedDimension, bits, centroid, rotation);
 
     int indicesBytes = quantizer.encodedByteSize();
-    long perVector = (long) indicesBytes + Float.BYTES;
+    int qjlBitBytes = unbiased ? quantizer.qjlBitBytes() : 0;
+    long perVector =
+        (long) indicesBytes + Float.BYTES + (unbiased ? qjlBitBytes + Float.BYTES : 0L);
     ensureRemaining(buf, perVector * vectorCount, "TurboQuant vector data");
 
     byte[][] indices = new byte[vectorCount][indicesBytes];
     float[] norms = new float[vectorCount];
+    byte[][] qjlBits = unbiased ? new byte[vectorCount][qjlBitBytes] : null;
+    float[] gammaR = unbiased ? new float[vectorCount] : null;
     for (int i = 0; i < vectorCount; i++) {
       buf.get(indices[i]);
       norms[i] = buf.getFloat();
+      if (unbiased) {
+        buf.get(qjlBits[i]);
+        gammaR[i] = buf.getFloat();
+      }
     }
 
-    return new TurboQuantizedVectors(quantizer, indices, norms, dimension);
+    return unbiased
+        ? new TurboQuantizedVectors(quantizer, indices, norms, qjlBits, gammaR, dimension)
+        : new TurboQuantizedVectors(quantizer, indices, norms, dimension);
   }
 
   // ---- NVQ ----

@@ -115,17 +115,24 @@ final class IndexMemoryEstimator {
   }
 
   private static long turboQuantizedBytes(QuantizerParams params, int physicalSize, int dimension) {
-    int bits =
-        params instanceof QuantizerParams.TurboParams p
-            ? p.bits()
-            : VectorCollectionBuilder.DEFAULT_TURBO_BITS;
+    QuantizerParams.TurboParams tp = params instanceof QuantizerParams.TurboParams p ? p : null;
+    int bits = tp != null ? tp.bits() : VectorCollectionBuilder.DEFAULT_TURBO_BITS;
+    boolean unbiased = tp != null ? tp.unbiased() : VectorCollectionBuilder.DEFAULT_TURBO_UNBIASED;
     int paddedDimension = ((dimension + 63) / 64) * 64;
-    // Per vector: packed indices ((paddedDim*bits+7)/8) + norm float. Codebook is not stored.
+    // Per vector: packed indices ((paddedDim*bits+7)/8) + norm float; the unbiased path adds the
+    // QJL
+    // sign bits (paddedDim/8) + residual-norm float. Codebooks/sketch are not stored per vector.
     long indicesBytesPerVector = (long) (paddedDimension * bits + 7) / 8;
     long bytesPerVector = indicesBytesPerVector + Float.BYTES;
+    if (unbiased) {
+      bytesPerVector += (long) (paddedDimension + 7) / 8 + Float.BYTES;
+    }
     long centroid = rawVectorBytes(1, dimension);
-    long givensRotation = (long) (paddedDimension / 2) * 2L * Float.BYTES;
-    return (long) physicalSize * bytesPerVector + centroid + givensRotation;
+    // Paper-faithful default is a dense random rotation (~paddedDim^2 floats); the unbiased path
+    // keeps an additional paddedDim×paddedDim QJL sketch resident.
+    long rotationState = (long) paddedDimension * paddedDimension * Float.BYTES;
+    long qjlSketch = unbiased ? (long) paddedDimension * paddedDimension * Float.BYTES : 0L;
+    return (long) physicalSize * bytesPerVector + centroid + rotationState + qjlSketch;
   }
 
   private static long nvqBytes(QuantizerParams params, int physicalSize, int dimension) {

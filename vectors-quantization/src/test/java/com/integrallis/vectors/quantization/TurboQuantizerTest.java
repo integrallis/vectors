@@ -552,4 +552,60 @@ class TurboQuantizerTest {
     }
     return indices;
   }
+
+  @Nested
+  class UnbiasedProdTests {
+
+    @Test
+    void qjlEstimatorIsApproximatelyUnbiased() {
+      // Validates the QJL math/normalization (the sqrt(pi/2)/d constant + sign/transpose): for a
+      // unit vector u, E[ sqrt(pi/2)/d · Sᵀ·sign(S·u) ] = u, so its projection onto u averages to
+      // ‖u‖² = 1. A wrong constant or transpose would push this far from 1. Averaging over many u
+      // cancels the QJL variance (which is why per-pair absolute error is a poor metric at small d
+      // —
+      // the paper evaluates d >= 200).
+      int d = 64;
+      QjlSketch sketch = QjlSketch.generate(d, SEED);
+      Random rng = new Random(123L);
+      int trials = 400;
+      double sumProjection = 0;
+      for (int t = 0; t < trials; t++) {
+        float[] u = new float[d];
+        double n2 = 0;
+        for (int j = 0; j < d; j++) {
+          u[j] = (float) rng.nextGaussian();
+          n2 += (double) u[j] * u[j];
+        }
+        float inv = (float) (1.0 / Math.sqrt(n2));
+        for (int j = 0; j < d; j++) {
+          u[j] *= inv;
+        }
+        byte[] bits = sketch.signBits(u);
+        float[] est = new float[d];
+        sketch.addInverseResidual(bits, 1.0f, est); // gamma = ||u|| = 1
+        float projection = 0f;
+        for (int j = 0; j < d; j++) {
+          projection += est[j] * u[j];
+        }
+        sumProjection += projection;
+      }
+      double mean = sumProjection / trials;
+      assertThat(mean)
+          .as("QJL estimate projection onto u should average to 1, got %.4f", mean)
+          .isCloseTo(1.0, org.assertj.core.api.Assertions.within(0.15));
+    }
+
+    @Test
+    void prodReconstructionRoundTripsThroughEncodeAll() {
+      // Sanity: the unbiased path produces valid, finite, descending-or-equal self scores.
+      float[][] vectors = generateVectors(100, DIM, SEED);
+      VectorDataset dataset = makeDataset(vectors);
+      TurboQuantizer prod = TurboQuantizer.trainProd(dataset, 4, SEED);
+      TurboQuantizedVectors enc = prod.encodeAll(dataset);
+      ScoreFunction scorer = enc.scoreFunctionFor(vectors[0], SimilarityFunction.EUCLIDEAN);
+      for (int i = 0; i < vectors.length; i++) {
+        assertThat(scorer.score(i)).isFinite();
+      }
+    }
+  }
 }

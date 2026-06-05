@@ -75,6 +75,12 @@ public final class VectorCollectionBuilder {
   /** Default TurboQuant rotation seed. */
   public static final long DEFAULT_TURBO_SEED = 42L;
 
+  /**
+   * Default TurboQuant mode: the unbiased two-stage TurboQuant_prod (MSE + QJL residual), the
+   * paper's recommended variant for nearest-neighbour search.
+   */
+  public static final boolean DEFAULT_TURBO_UNBIASED = true;
+
   /** Default IVF number of clusters (K). */
   public static final int DEFAULT_IVF_K = 16;
 
@@ -132,6 +138,7 @@ public final class VectorCollectionBuilder {
   private Integer nvqSubvectors;
   private Integer turboBits;
   private Long turboSeed;
+  private Boolean turboUnbiased;
 
   VectorCollectionBuilder() {}
 
@@ -534,6 +541,17 @@ public final class VectorCollectionBuilder {
   }
 
   /**
+   * Selects the TurboQuant variant. {@code true} (default) uses the unbiased two-stage
+   * TurboQuant_prod (MSE + QJL residual) recommended by the paper for nearest-neighbour search;
+   * {@code false} uses the smaller/faster MSE-only variant (biased inner products). Only used when
+   * {@link #quantizer(QuantizerKind)} is {@link QuantizerKind#TURBOQUANT}.
+   */
+  public VectorCollectionBuilder turboUnbiased(boolean unbiased) {
+    this.turboUnbiased = unbiased;
+    return this;
+  }
+
+  /**
    * Sets the staging buffer size at which {@code add}/{@code addAll} auto-commit before returning.
    * Must be positive. Pass {@link Integer#MAX_VALUE} to disable auto-commit (the default), which
    * forces the caller to drive {@link VectorCollection#commit()} explicitly.
@@ -678,7 +696,8 @@ public final class VectorCollectionBuilder {
       case TURBOQUANT ->
           new QuantizerParams.TurboParams(
               turboBits != null ? turboBits : DEFAULT_TURBO_BITS,
-              turboSeed != null ? turboSeed : DEFAULT_TURBO_SEED);
+              turboSeed != null ? turboSeed : DEFAULT_TURBO_SEED,
+              turboUnbiased != null ? turboUnbiased : DEFAULT_TURBO_UNBIASED);
     };
   }
 }

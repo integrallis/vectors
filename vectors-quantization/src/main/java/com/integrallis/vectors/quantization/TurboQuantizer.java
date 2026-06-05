@@ -19,12 +19,17 @@ import com.integrallis.vectors.core.VectorUtil;
 import java.util.Arrays;
 
 /**
- * TurboQuant quantizer — rotation-based MSE-optimal per-coordinate quantization at any bit-width.
- * Implements the MSE stage of the TurboQuant algorithm (ICLR 2026, Google) with pluggable rotation
- * strategies from RotorQuant.
+ * TurboQuant quantizer — rotation-based MSE-optimal per-coordinate quantization at any bit-width
+ * (TurboQuant, arXiv:2504.19874, ICLR 2026, Google), with pluggable rotation strategies.
+ *
+ * <p>Two variants: the default MSE quantizer ({@link #train}) and the unbiased two-stage
+ * TurboQuant_prod ({@link #trainProd}), which adds a {@link QjlSketch} on the per-vector residual
+ * to remove the inner-product bias of MSE-only quantization — the paper's recommended variant for
+ * nearest-neighbour search.
  *
  * <p><b>Encoding pipeline:</b> center → normalize → rotate → per-coordinate Lloyd-Max quantize →
- * pack indices. The per-vector norm is stored as a correction factor for distance estimation.
+ * pack indices (→ for {@code prod}: QJL-sign the residual). The per-vector norm is stored as a
+ * correction factor for distance estimation.
  *
  * <p><b>Rotation strategies</b> (via {@link Rotation}):
  *
@@ -44,7 +49,7 @@ import java.util.Arrays;
  *
  * <pre>{@code
  * VectorDataset data = new ArrayVectorDataset(vectors);
- * TurboQuantizer tq = TurboQuantizer.train(data, 4); // 4-bit, default Givens rotation
+ * TurboQuantizer tq = TurboQuantizer.train(data, 4); // 4-bit, default random rotation
  * TurboQuantizedVectors compressed = tq.encodeAll(data);
  * ScoreFunction scorer = compressed.scoreFunctionFor(query, SimilarityFunction.EUCLIDEAN);
  * }</pre>
@@ -62,6 +67,8 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
   private final float[] paddedCentroid;
   private final Rotation rotation;
   private final LloydMaxCodebook codebook;
+  // Non-null enables the unbiased second stage (TurboQuant_prod); null is MSE-only.
+  private final QjlSketch qjl;
 
   private TurboQuantizer(
       int dimension,
@@ -69,7 +76,8 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
       int bits,
       float[] centroid,
       Rotation rotation,
-      LloydMaxCodebook codebook) {
+      LloydMaxCodebook codebook,
+      QjlSketch qjl) {
     this.dimension = dimension;
     this.paddedDimension = paddedDimension;
     this.bits = bits;
@@ -78,6 +86,7 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
     System.arraycopy(centroid, 0, this.paddedCentroid, 0, dimension);
     this.rotation = rotation;
     this.codebook = codebook;
+    this.qjl = qjl;
   }
 
   // --- Factory methods ---
@@ -135,7 +144,43 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
     }
     float[] centroid = dataset.computeCentroid();
     LloydMaxCodebook codebook = LloydMaxCodebook.compute(paddedDim, bits);
-    return new TurboQuantizer(dim, paddedDim, bits, centroid, rotation, codebook);
+    return new TurboQuantizer(dim, paddedDim, bits, centroid, rotation, codebook, null);
+  }
+
+  /**
+   * Trains the unbiased two-stage TurboQuant_prod quantizer (arXiv:2504.19874): the MSE first stage
+   * plus a QJL sketch on the per-vector residual, which removes the inner-product bias of MSE-only
+   * quantization. Uses the paper-faithful {@link RandomRotation} and a QJL sketch derived from
+   * {@code seed}.
+   *
+   * @param dataset the training data
+   * @param bits per-coordinate bit-width for the MSE stage (1-8)
+   * @param seed random seed for the rotation and (deterministically derived) QJL sketch
+   * @return a trained unbiased quantizer
+   */
+  public static TurboQuantizer trainProd(VectorDataset dataset, int bits, long seed) {
+    int dim = dataset.dimension();
+    int paddedDim = ((dim + 63) / 64) * 64;
+    Rotation rotation = RandomRotation.generate(paddedDim, seed);
+    if (rotation.dimension() != paddedDim) {
+      throw new IllegalArgumentException(
+          "Rotation dimension "
+              + rotation.dimension()
+              + " must match padded dimension "
+              + paddedDim);
+    }
+    float[] centroid = dataset.computeCentroid();
+    LloydMaxCodebook codebook = LloydMaxCodebook.compute(paddedDim, bits);
+    QjlSketch qjl = QjlSketch.generate(paddedDim, deriveQjlSeed(seed));
+    return new TurboQuantizer(dim, paddedDim, bits, centroid, rotation, codebook, qjl);
+  }
+
+  /** Derives an independent QJL-sketch seed from the rotation seed (SplitMix64-style mix). */
+  private static long deriveQjlSeed(long seed) {
+    long z = seed + 0x9E3779B97F4A7C15L;
+    z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
+    z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
+    return z ^ (z >>> 31);
   }
 
   /**
@@ -163,7 +208,34 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
               + paddedDimension);
     }
     LloydMaxCodebook codebook = LloydMaxCodebook.compute(paddedDimension, bits);
-    return new TurboQuantizer(dimension, paddedDimension, bits, centroid, rotation, codebook);
+    return new TurboQuantizer(dimension, paddedDimension, bits, centroid, rotation, codebook, null);
+  }
+
+  /**
+   * Reconstructs an unbiased (TurboQuant_prod) quantizer from serialized state. The QJL sketch is
+   * regenerated from {@code qjlSeed} (data-oblivious), exactly as {@link #trainProd} generated it.
+   *
+   * @param qjlSeed the QJL sketch seed that was persisted
+   * @throws IllegalArgumentException if the rotation dimension does not match {@code
+   *     paddedDimension}
+   */
+  public static TurboQuantizer fromStateProd(
+      int dimension,
+      int paddedDimension,
+      int bits,
+      float[] centroid,
+      Rotation rotation,
+      long qjlSeed) {
+    if (rotation.dimension() != paddedDimension) {
+      throw new IllegalArgumentException(
+          "Rotation dimension "
+              + rotation.dimension()
+              + " must match padded dimension "
+              + paddedDimension);
+    }
+    LloydMaxCodebook codebook = LloydMaxCodebook.compute(paddedDimension, bits);
+    QjlSketch qjl = QjlSketch.generate(paddedDimension, qjlSeed);
+    return new TurboQuantizer(dimension, paddedDimension, bits, centroid, rotation, codebook, qjl);
   }
 
   // --- Quantizer interface ---
@@ -241,12 +313,54 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
     byte[][] allIndices = new byte[count][];
     float[] allNorms = new float[count];
 
-    for (int i = 0; i < count; i++) {
-      allIndices[i] = new byte[encodedByteSize()];
-      allNorms[i] = encode(dataset.getVector(i), allIndices[i]);
+    if (qjl == null) {
+      for (int i = 0; i < count; i++) {
+        allIndices[i] = new byte[encodedByteSize()];
+        allNorms[i] = encode(dataset.getVector(i), allIndices[i]);
+      }
+      return new TurboQuantizedVectors(this, allIndices, allNorms, dimension);
     }
 
-    return new TurboQuantizedVectors(this, allIndices, allNorms, dimension);
+    // Unbiased (TurboQuant_prod): also store the QJL sign bits and residual magnitude per vector.
+    byte[][] allQjlBits = new byte[count][];
+    float[] allGammaR = new float[count];
+    for (int i = 0; i < count; i++) {
+      allIndices[i] = new byte[encodedByteSize()];
+      ProdEncoding pe = encodeWithResidual(dataset.getVector(i), allIndices[i]);
+      allNorms[i] = pe.norm();
+      allQjlBits[i] = pe.qjlBits();
+      allGammaR[i] = pe.gammaR();
+    }
+    return new TurboQuantizedVectors(this, allIndices, allNorms, allQjlBits, allGammaR, dimension);
+  }
+
+  /** Result of a single two-stage encode: the MSE indices' norm plus the QJL residual state. */
+  private record ProdEncoding(float norm, byte[] qjlBits, float gammaR) {}
+
+  /**
+   * Encodes one vector for the unbiased path: writes the MSE indices to {@code dst} and returns the
+   * stored norm together with the QJL sign bits and residual magnitude {@code ||x − x̃_mse||} of
+   * the first-stage residual in rotated space.
+   */
+  private ProdEncoding encodeWithResidual(float[] vector, byte[] dst) {
+    float[] padded = centerAndPad(vector);
+    float norm = (float) Math.sqrt(VectorUtil.dotProduct(padded, padded));
+    if (norm > 0) {
+      VectorUtil.scale(padded, 1.0f / norm);
+    }
+    float[] rotated = rotation.rotate(padded); // x (rotated unit vector)
+    packIndices(rotated, dst);
+
+    // Residual r = x − dequant(quant(x)) in rotated space.
+    float[] xhat = new float[paddedDimension];
+    unpackAndDequantize(dst, xhat);
+    float[] residual = new float[paddedDimension];
+    for (int d = 0; d < paddedDimension; d++) {
+      residual[d] = rotated[d] - xhat[d];
+    }
+    float gammaR = (float) Math.sqrt(VectorUtil.dotProduct(residual, residual));
+    byte[] qjlBits = qjl.signBits(residual);
+    return new ProdEncoding(norm, qjlBits, gammaR);
   }
 
   @Override
@@ -294,19 +408,57 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
    * norm. Used by {@link TurboQuantizedVectors} for scoring.
    */
   float[] reconstructCentered(byte[] packedIndices, float norm) {
-    // Dequantize in rotated space
+    return reconstructCentered(packedIndices, norm, null, 0f);
+  }
+
+  /**
+   * Reconstructs the centered approximate vector, optionally adding the unbiased QJL residual term
+   * (TurboQuant_prod). When {@code qjlBits} is non-null, the rotated MSE reconstruction is
+   * corrected by {@code sqrt(pi/2)/d · gammaR · Sᵀ·sign} before inverse rotation, yielding an
+   * unbiased estimate of the centered vector.
+   *
+   * @param qjlBits packed QJL sign bits, or {@code null} for the MSE-only reconstruction
+   * @param gammaR the stored residual magnitude (ignored when {@code qjlBits} is null)
+   */
+  float[] reconstructCentered(byte[] packedIndices, float norm, byte[] qjlBits, float gammaR) {
+    // Dequantize the first stage in rotated space.
     float[] rotated = new float[paddedDimension];
     unpackAndDequantize(packedIndices, rotated);
 
-    // Inverse rotate
-    float[] unrotated = rotation.inverseRotate(rotated);
+    // Add the unbiased QJL residual estimate (second stage), if present.
+    if (qjl != null && qjlBits != null) {
+      qjl.addInverseResidual(qjlBits, gammaR, rotated);
+    }
 
-    // Scale by stored norm to get centered vector (not unit vector)
+    // Inverse rotate, then scale by the stored norm to recover the centered vector.
+    float[] unrotated = rotation.inverseRotate(rotated);
     float[] result = new float[dimension];
     for (int d = 0; d < dimension; d++) {
       result[d] = unrotated[d] * norm;
     }
     return result;
+  }
+
+  /** True if this quantizer carries the unbiased QJL second stage (TurboQuant_prod). */
+  public boolean isUnbiased() {
+    return qjl != null;
+  }
+
+  /**
+   * The QJL sketch seed (for the persistence codec). Only meaningful when {@link #isUnbiased()}.
+   *
+   * @throws IllegalStateException if this quantizer is MSE-only
+   */
+  public long qjlSeed() {
+    if (qjl == null) {
+      throw new IllegalStateException("qjlSeed() called on an MSE-only TurboQuantizer");
+    }
+    return qjl.seed();
+  }
+
+  /** Number of bytes used to store one vector's QJL sign bits. */
+  public int qjlBitBytes() {
+    return qjl == null ? 0 : qjl.bitBytes();
   }
 
   // --- Internal helpers ---

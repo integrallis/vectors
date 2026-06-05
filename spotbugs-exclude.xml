@@ -139,6 +139,13 @@
         </Or>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- Quantization module: QjlSketch uses a deterministic seeded Random to fill its Gaussian
+         sketch (reproducible from the seed). The Random is used d×d times in a loop; the SpotBugs
+         "used only once" heuristic is a false positive here. -->
+    <Match>
+        <Class name="com.integrallis.vectors.quantization.QjlSketch"/>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
     <!-- Quantization module: QuantizationPipeline.Builder.scalarBits is set by the builder
          but read via build() — SpotBugs UrF is a false positive for builder-pattern fields. -->
     <Match>

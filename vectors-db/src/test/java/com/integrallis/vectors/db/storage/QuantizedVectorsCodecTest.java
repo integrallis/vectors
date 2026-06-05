@@ -362,6 +362,29 @@ class QuantizedVectorsCodecTest {
       byte[] second = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.TURBOQUANT);
       assertThat(first).isEqualTo(second);
     }
+
+    @Test
+    void unbiasedProdRoundTripProducesIdenticalScores() throws IOException {
+      // The two-stage TurboQuant_prod stores a QJL seed + per-vector sign bits + residual norm; the
+      // sketch is regenerated from the seed on decode, so reconstruction (and scores) must match.
+      VectorDataset data = dataset();
+      TurboQuantizer quantizer = TurboQuantizer.trainProd(data, 8, SEED);
+      TurboQuantizedVectors original = quantizer.encodeAll(data);
+      assertThat(original.isUnbiased()).isTrue();
+
+      byte[] encoded = QuantizedVectorsCodec.encode(original, quantizer, QuantizerKind.TURBOQUANT);
+      CompressedVectors decoded = QuantizedVectorsCodec.decode(encoded);
+      assertThat(decoded).isInstanceOf(TurboQuantizedVectors.class);
+      assertThat(((TurboQuantizedVectors) decoded).isUnbiased()).isTrue();
+
+      float[] query = randomVectors(1, DIM, 99L)[0];
+      ScoreFunction origScorer = original.scoreFunctionFor(query, SimilarityFunction.DOT_PRODUCT);
+      ScoreFunction decodedScorer = decoded.scoreFunctionFor(query, SimilarityFunction.DOT_PRODUCT);
+      for (int i = 0; i < NUM_VECTORS; i++) {
+        assertThat(decodedScorer.score(i))
+            .isCloseTo(origScorer.score(i), org.assertj.core.api.Assertions.within(1e-5f));
+      }
+    }
   }
 
   @Nested
