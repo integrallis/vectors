@@ -1,0 +1,30 @@
+# java-vectors Vamana paged-searcher (I.4) — 2026-06-04
+# Platform: Intel Core i9-14900HX (x86-64, AVX2 256-bit), JDK 25 (Zulu 25.0.3)
+#
+# I.4 makes the persistent Vamana graph adjacency DISK-RESIDENT: instead of decoding graph.bin into
+# a heap VamanaGraph on open, the searcher pages each node's neighbour list from the mmap'd graph.bin
+# (format v2, trailing N*int64 offset index) on demand. Vectors were already mmap'd; this removes the
+# graph adjacency from the Java heap, dropping search heap from O(N*R) to O(threads*L). The paged
+# path is now the SOLE persistent Vamana adapter.
+#
+# Measurement below is the pre-removal A/B that justified deleting the heap MappedVamanaIndexAdapter:
+# it compared the (now-removed) heap adapter against the paged adapter over the same graph + vectors.
+# Heap = (Runtime.totalMemory - freeMemory) after System.gc, around opening each adapter; latency =
+# median of 500 warmed single-threaded searches (k=10, L=128). Not a repeatable committed benchmark
+# (the heap adapter no longer exists); recorded here for the record.
+
+# === graph adjacency heap + search latency (N=20000, dim=96, R=64) ===
+# adapter   graph-heap     search p50
+# heap      ~5.6 MB        0.202 ms
+# paged     ~0.4 MB        0.215 ms
+# delta     ~5.3 MB saved  +6% (1.06x)
+#
+# Interpretation: paging the adjacency frees essentially the entire graph heap (~5.3 MB at only 20k
+# nodes; the heap VamanaGraph is N NeighborArray objects, each ~ int[R+1] + float[R+1] + headers,
+# i.e. hundreds of GB at billion-scale — the blocker I.4 removes) for a ~6% latency cost on a
+# page-cached resident graph. Recall is BIT-IDENTICAL to the heap searcher by construction (same
+# beam loop, same on-disk neighbour order), pinned by MappedVamanaPagedIndexAdapterTest.
+#
+# Honest scope: this makes the graph OFF-HEAP (mmap / OS page cache); it does not yet serve the graph
+# FROM object storage. Combined with the P1.8 vector read-through, RAM-free serving from S3/R2 (the
+# turbopuffer goal) is the next step built on this seam.
