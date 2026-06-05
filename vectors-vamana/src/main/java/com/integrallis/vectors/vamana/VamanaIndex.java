@@ -49,6 +49,10 @@ import java.util.Objects;
  */
 public final class VamanaIndex {
 
+  // Topology the searcher traverses — either the heap VamanaGraph or a paged disk-resident view.
+  private final VamanaTopology topology;
+  // The concrete heap graph, or null when this index wraps a paged topology. Exposed by graph()
+  // for the commit/encode path (which only ever runs on a heap-built index, never a paged one).
   private final VamanaGraph graph;
   private final RandomAccessVectors vectors;
   private final SimilarityFunction sim;
@@ -66,12 +70,17 @@ public final class VamanaIndex {
   // Single volatile reference — readers always see a consistent (compressed, searchers) pair.
   private volatile QuantizationState quantizationState;
 
-  private VamanaIndex(VamanaGraph graph, RandomAccessVectors vectors, SimilarityFunction sim) {
-    this.graph = Objects.requireNonNull(graph, "graph must not be null");
+  private VamanaIndex(
+      VamanaTopology topology,
+      VamanaGraph graph,
+      RandomAccessVectors vectors,
+      SimilarityFunction sim) {
+    this.topology = Objects.requireNonNull(topology, "topology must not be null");
+    this.graph = graph; // nullable: null when wrapping a paged topology
     this.vectors = Objects.requireNonNull(vectors, "vectors must not be null");
     this.sim = Objects.requireNonNull(sim, "sim must not be null");
     this.threadLocalSearcher =
-        ThreadLocal.withInitial(() -> new VamanaSearcher(graph, vectors, sim));
+        ThreadLocal.withInitial(() -> new VamanaSearcher(topology, vectors, sim));
   }
 
   /**
@@ -107,7 +116,7 @@ public final class VamanaIndex {
                     ScoreFunction sf = compressed.scoreFunctionFor(query, localSim);
                     return sf::score;
                   };
-              return new VamanaSearcher(graph, vectors, localSim, quantizedFactory);
+              return new VamanaSearcher(topology, vectors, localSim, quantizedFactory);
             });
     // Single volatile write — atomically publishes both the compressed vectors and the
     // thread-local searcher pool.
@@ -185,11 +194,12 @@ public final class VamanaIndex {
   }
 
   /**
-   * Returns the underlying graph for testing and inspection.
+   * Returns the underlying heap graph for testing, inspection, and serialization, or {@code null}
+   * when this index wraps a paged disk-resident topology (which has no heap graph to hand back).
    *
-   * <p><b>Warning:</b> the returned {@link VamanaGraph} is the live graph backing this index.
-   * Mutating it (e.g., calling {@link VamanaGraph#getNeighbors(int)} and clearing the returned
-   * array) will permanently corrupt the index. Use only for read-only inspection.
+   * <p><b>Warning:</b> when non-null, the returned {@link VamanaGraph} is the live graph backing
+   * this index. Mutating it (e.g., calling {@link VamanaGraph#getNeighbors(int)} and clearing the
+   * returned array) will permanently corrupt the index. Use only for read-only inspection.
    */
   public VamanaGraph graph() {
     return graph;
@@ -197,7 +207,7 @@ public final class VamanaIndex {
 
   /** Returns the number of vectors in the index. */
   public int size() {
-    return graph.size();
+    return topology.size();
   }
 
   /** Returns the vector dimension. */
@@ -257,7 +267,24 @@ public final class VamanaIndex {
     Objects.requireNonNull(graph, "graph must not be null");
     Objects.requireNonNull(vectors, "vectors must not be null");
     Objects.requireNonNull(sim, "sim must not be null");
-    return new VamanaIndex(graph, vectors, sim);
+    return new VamanaIndex(graph, graph, vectors, sim);
+  }
+
+  /**
+   * Wraps a pre-built {@link VamanaTopology} (e.g. a disk-resident paged view of {@code graph.bin})
+   * together with its backing {@link RandomAccessVectors} and similarity function, WITHOUT a heap
+   * graph. {@link #graph()} returns {@code null} for the resulting index — it is read-only and is
+   * never re-encoded. Used by the persistence path to serve search from an mmap'd graph without
+   * inflating the full adjacency into heap.
+   *
+   * @throws NullPointerException if any argument is null
+   */
+  public static VamanaIndex ofPrebuilt(
+      VamanaTopology topology, RandomAccessVectors vectors, SimilarityFunction sim) {
+    Objects.requireNonNull(topology, "topology must not be null");
+    Objects.requireNonNull(vectors, "vectors must not be null");
+    Objects.requireNonNull(sim, "sim must not be null");
+    return new VamanaIndex(topology, null, vectors, sim);
   }
 
   /** Builder for {@link VamanaIndex}. */
@@ -336,7 +363,7 @@ public final class VamanaIndex {
         graph =
             VamanaGraphBuilder.create(maxDegree, searchListSize, alpha, vectors, sim, seed).build();
       }
-      return new VamanaIndex(graph, vectors, sim);
+      return new VamanaIndex(graph, graph, vectors, sim);
     }
   }
 }

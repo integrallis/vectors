@@ -32,7 +32,7 @@ import java.util.Objects;
  */
 public final class VamanaSearcher {
 
-  private final VamanaGraph graph;
+  private final VamanaTopology graph;
   private final RandomAccessVectors vectors;
   private final SimilarityFunction similarityFunction;
   private final NodeScorerFactory scorerFactory;
@@ -44,6 +44,9 @@ public final class VamanaSearcher {
   // Scratch buffer for rescore(): avoids allocating a new NodeQueue on every two-pass call.
   private final NodeQueue rescoreHeap;
   private BitSet visited;
+  // Reusable buffer holding one node's neighbour ids, sized to the graph degree R. Lets the
+  // topology fill ids without allocating (and lets a paged topology read straight from the mmap).
+  private final int[] neighborScratch;
   // Scratch buffers for fused bulk neighbor scoring. Sized to an upper bound on graph degree R.
   private static final int BULK_BATCH = 128;
   private final int[] bulkIds = new int[BULK_BATCH];
@@ -63,7 +66,7 @@ public final class VamanaSearcher {
    *     quantized)
    */
   VamanaSearcher(
-      VamanaGraph graph,
+      VamanaTopology graph,
       RandomAccessVectors vectors,
       SimilarityFunction similarityFunction,
       NodeScorerFactory scorerFactory) {
@@ -78,6 +81,7 @@ public final class VamanaSearcher {
     this.results = new NodeQueue(initialCapacity, true); // min-heap
     this.rescoreHeap = new NodeQueue(64, true); // min-heap, grows as needed
     this.visited = new BitSet(Math.max(1, graph.size()));
+    this.neighborScratch = new int[Math.max(1, graph.maxDegree())];
   }
 
   /**
@@ -88,7 +92,7 @@ public final class VamanaSearcher {
    * @param vectors vector data for distance computation
    * @param sim similarity function
    */
-  VamanaSearcher(VamanaGraph graph, RandomAccessVectors vectors, SimilarityFunction sim) {
+  VamanaSearcher(VamanaTopology graph, RandomAccessVectors vectors, SimilarityFunction sim) {
     this(graph, vectors, sim, defaultFullPrecisionFactory(vectors, sim));
   }
 
@@ -183,12 +187,12 @@ public final class VamanaSearcher {
         break;
       }
 
-      // Expand neighbors — gather unvisited into a batch, then fused-score in one call.
-      NeighborArray neighbors = graph.getNeighbors(candidateId);
-      int n = neighbors.size();
+      // Expand neighbors — gather unvisited into a batch, then fused-score in one call. The
+      // topology fills neighborScratch in stored order (heap copy or a paged read from the mmap).
+      int n = graph.neighbors(candidateId, neighborScratch);
       int batchCount = 0;
       for (int i = 0; i < n; i++) {
-        int neighborId = neighbors.node(i);
+        int neighborId = neighborScratch[i];
         if (visited.get(neighborId)) continue;
         visited.set(neighborId);
         bulkIds[batchCount++] = neighborId;

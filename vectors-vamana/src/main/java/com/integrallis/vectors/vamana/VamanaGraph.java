@@ -25,7 +25,7 @@ import java.util.Objects;
  * <p>The entry point is the <b>medoid</b> — the dataset point closest to the centroid — which
  * provides a good starting point for greedy search.
  */
-public final class VamanaGraph {
+public final class VamanaGraph implements VamanaTopology {
 
   private final NeighborArray[] neighbors;
   private final int maxDegree;
@@ -105,5 +105,21 @@ public final class VamanaGraph {
   /** Returns the number of initialized nodes. */
   public int size() {
     return size;
+  }
+
+  /**
+   * {@inheritDoc}
+   *
+   * <p>Copies this node's neighbour ids out of its {@link NeighborArray} in stored order — the same
+   * order {@link #getNeighbors} iterates — so heap and paged searchers traverse identically.
+   */
+  @Override
+  public int neighbors(int nodeId, int[] out) {
+    NeighborArray na = getNeighbors(nodeId);
+    int count = na.size();
+    for (int i = 0; i < count; i++) {
+      out[i] = na.node(i);
+    }
+    return count;
   }
 }
