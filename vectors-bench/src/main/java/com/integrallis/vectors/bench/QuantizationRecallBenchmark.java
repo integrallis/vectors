@@ -257,6 +257,7 @@ public final class QuantizationRecallBenchmark {
           case NVQ -> 8;
           case TURBOQUANT ->
               8; // default per-coordinate bits (VectorCollectionBuilder.DEFAULT_TURBO_BITS)
+          case FP16 -> 16; // half-precision: two bytes per coordinate
         };
     return 32.0 / bitsPerDim;
   }

@@ -68,6 +68,8 @@ final class IndexMemoryEstimator {
       case RABITQ -> rabitQuantizedBytes(physicalSize, dimension);
       case NVQ -> nvqBytes(config.quantizerParams(), physicalSize, dimension);
       case TURBOQUANT -> turboQuantizedBytes(config.quantizerParams(), physicalSize, dimension);
+      // fp16: two bytes per coordinate, no quantizer state.
+      case FP16 -> (long) physicalSize * dimension * Short.BYTES;
     };
   }
 

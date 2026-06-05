@@ -25,6 +25,8 @@ import com.integrallis.vectors.quantization.BinaryMode;
 import com.integrallis.vectors.quantization.BinaryQuantizedVectors;
 import com.integrallis.vectors.quantization.BinaryQuantizer;
 import com.integrallis.vectors.quantization.CompressedVectors;
+import com.integrallis.vectors.quantization.Fp16QuantizedVectors;
+import com.integrallis.vectors.quantization.Fp16Quantizer;
 import com.integrallis.vectors.quantization.NVQuantizedVectors;
 import com.integrallis.vectors.quantization.NVQuantizer;
 import com.integrallis.vectors.quantization.PQVectors;
@@ -103,6 +105,49 @@ class QuantizedVectorsCodecTest {
 
       byte[] first = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.SQ8);
       byte[] second = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.SQ8);
+      assertThat(first).isEqualTo(second);
+    }
+  }
+
+  @Nested
+  class Fp16RoundTrip {
+
+    @Test
+    void roundTripProducesIdenticalScores() throws IOException {
+      VectorDataset data = dataset();
+      Fp16Quantizer quantizer = Fp16Quantizer.train(data);
+      Fp16QuantizedVectors original = quantizer.encodeAll(data);
+
+      byte[] encoded = QuantizedVectorsCodec.encode(original, quantizer, QuantizerKind.FP16);
+      CompressedVectors decoded = QuantizedVectorsCodec.decode(encoded);
+
+      assertThat(decoded).isInstanceOf(Fp16QuantizedVectors.class);
+      Fp16QuantizedVectors fp = (Fp16QuantizedVectors) decoded;
+      assertThat(fp.size()).isEqualTo(original.size());
+      assertThat(fp.dimension()).isEqualTo(DIM);
+      // No quantizer state: header(20) + count * dim * 2 bytes.
+      assertThat(encoded).hasSize(20 + NUM_VECTORS * DIM * 2);
+
+      // Deserialized scorers must reproduce the pre-serialization scores exactly across every
+      // similarity function (both sides upcast the same stored half-floats).
+      float[] query = randomVectors(1, DIM, 99L)[0];
+      for (SimilarityFunction sim : SimilarityFunction.values()) {
+        ScoreFunction origScorer = original.scoreFunctionFor(query, sim);
+        ScoreFunction decodedScorer = fp.scoreFunctionFor(query, sim);
+        for (int i = 0; i < NUM_VECTORS; i++) {
+          assertThat(decodedScorer.score(i))
+              .isCloseTo(origScorer.score(i), org.assertj.core.api.Assertions.within(1e-6f));
+        }
+      }
+    }
+
+    @Test
+    void encodeTwiceProducesSameBytes() {
+      VectorDataset data = dataset();
+      Fp16Quantizer quantizer = Fp16Quantizer.train(data);
+      Fp16QuantizedVectors compressed = quantizer.encodeAll(data);
+      byte[] first = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.FP16);
+      byte[] second = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.FP16);
       assertThat(first).isEqualTo(second);
     }
   }

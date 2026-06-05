@@ -39,5 +39,14 @@ public enum QuantizerKind {
   NVQ,
 
   /** TurboQuant: rotation + data-independent Lloyd-Max scalar quantization. */
-  TURBOQUANT
+  TURBOQUANT,
+
+  /**
+   * Half-precision (IEEE 754 binary16 / fp16) scalar storage — two bytes per coordinate, upcast to
+   * {@code float32} for scoring. Near-lossless (recall ≈ full precision) at 2x compression.
+   *
+   * <p>Appended last so the existing ordinals stay stable on disk ({@code quantized.bin} stores the
+   * ordinal).
+   */
+  FP16
 }

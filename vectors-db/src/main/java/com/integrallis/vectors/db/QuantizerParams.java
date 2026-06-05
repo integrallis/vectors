@@ -45,6 +45,13 @@ public sealed interface QuantizerParams {
   record ScalarParams() implements QuantizerParams {}
 
   /**
+   * Parameters for half-precision quantization ({@link QuantizerKind#FP16}). Empty — fp16 storage
+   * has no trained or tunable state; each coordinate is a data-independent {@code float32 ↔
+   * binary16} conversion.
+   */
+  record Fp16Params() implements QuantizerParams {}
+
+  /**
    * Parameters for product quantization ({@link QuantizerKind#PQ}).
    *
    * @param numSubspaces number of subspaces (M). Must be positive and must evenly divide the vector

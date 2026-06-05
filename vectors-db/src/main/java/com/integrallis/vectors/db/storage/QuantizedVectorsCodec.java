@@ -20,6 +20,8 @@ import com.integrallis.vectors.quantization.BinaryMode;
 import com.integrallis.vectors.quantization.BinaryQuantizedVectors;
 import com.integrallis.vectors.quantization.BinaryQuantizer;
 import com.integrallis.vectors.quantization.CompressedVectors;
+import com.integrallis.vectors.quantization.Fp16QuantizedVectors;
+import com.integrallis.vectors.quantization.Fp16Quantizer;
 import com.integrallis.vectors.quantization.GivensRotation;
 import com.integrallis.vectors.quantization.NVQuantizedVectors;
 import com.integrallis.vectors.quantization.NVQuantizer;
@@ -42,8 +44,8 @@ import java.nio.ByteOrder;
 import java.util.Objects;
 
 /**
- * Binary codec for the {@code quantized.bin} file. Serializes and deserializes all 7 quantizer
- * kinds (SQ8, SQ4, PQ, BQ, RABITQ, NVQ, TURBOQUANT) using a tagged-union wire format.
+ * Binary codec for the {@code quantized.bin} file. Serializes and deserializes all 8 quantizer
+ * kinds (SQ8, SQ4, PQ, BQ, RABITQ, NVQ, TURBOQUANT, FP16) using a tagged-union wire format.
  *
  * <p>Layout (little-endian throughout):
  *
@@ -103,6 +105,7 @@ public final class QuantizedVectorsCodec {
       case NVQ -> encodeNVQ((NVQuantizedVectors) compressed, (NVQuantizer) quantizer);
       case TURBOQUANT ->
           encodeTurboQuant((TurboQuantizedVectors) compressed, (TurboQuantizer) quantizer);
+      case FP16 -> encodeFp16((Fp16QuantizedVectors) compressed, (Fp16Quantizer) quantizer);
       case NONE -> throw new AssertionError("unreachable");
     };
   }
@@ -171,8 +174,39 @@ public final class QuantizedVectorsCodec {
       case RABITQ -> decodeRaBitQ(buf, dimension, vectorCount);
       case NVQ -> decodeNVQ(buf, dimension, vectorCount);
       case TURBOQUANT -> decodeTurboQuant(buf, dimension, vectorCount);
+      case FP16 -> decodeFp16(buf, dimension, vectorCount);
       case NONE -> throw new AssertionError("unreachable");
     };
+  }
+
+  // ---- FP16 ----
+
+  private static byte[] encodeFp16(Fp16QuantizedVectors compressed, Fp16Quantizer quantizer) {
+    int dimension = quantizer.dimension();
+    int vectorCount = compressed.size();
+    // No quantizer state — fp16 is data-independent. Per-vector: dimension * 2 bytes.
+    long perVector = (long) dimension * Short.BYTES;
+    long totalSize = COMMON_HEADER_SIZE + (long) vectorCount * perVector;
+    checkSize(totalSize);
+
+    byte[] out = new byte[(int) totalSize];
+    ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
+    writeCommonHeader(buf, QuantizerKind.FP16, dimension, vectorCount);
+    for (int i = 0; i < vectorCount; i++) {
+      buf.put(compressed.getQuantizedVector(i));
+    }
+    return out;
+  }
+
+  private static Fp16QuantizedVectors decodeFp16(ByteBuffer buf, int dimension, int vectorCount)
+      throws IOException {
+    int perVector = dimension * Short.BYTES;
+    ensureRemaining(buf, (long) perVector * vectorCount, "FP16 vector data");
+    byte[][] quantizedVectors = new byte[vectorCount][perVector];
+    for (int i = 0; i < vectorCount; i++) {
+      buf.get(quantizedVectors[i]);
+    }
+    return new Fp16QuantizedVectors(new Fp16Quantizer(dimension), quantizedVectors, dimension);
   }
 
   // ---- SQ8/SQ4 ----

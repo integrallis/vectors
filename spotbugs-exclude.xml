@@ -166,6 +166,7 @@
     <Match>
         <Or>
             <Class name="com.integrallis.vectors.quantization.ScalarQuantizedVectors"/>
+            <Class name="com.integrallis.vectors.quantization.Fp16QuantizedVectors"/>
             <Class name="com.integrallis.vectors.quantization.PQVectors"/>
             <Class name="com.integrallis.vectors.quantization.BinaryQuantizedVectors"/>
             <Class name="com.integrallis.vectors.quantization.RaBitQuantizedVectors"/>

@@ -749,6 +749,7 @@ public final class VectorCollectionBuilder {
     return switch (quantizerKind) {
       case NONE -> null;
       case SQ8, SQ4 -> new QuantizerParams.ScalarParams();
+      case FP16 -> new QuantizerParams.Fp16Params();
       case PQ ->
           new QuantizerParams.PqParams(
               pqSubspaces != null ? pqSubspaces : Math.max(1, dimension / 8),

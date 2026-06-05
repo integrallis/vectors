@@ -136,6 +136,33 @@ class VectorDbQuantizationTest {
     }
 
     @Test
+    void fp16ProducesHighRecall() {
+      // fp16 is near-lossless (two-byte half-floats upcast to fp32 for scoring), so recall should
+      // be markedly higher than the lossy integer/binary quantizers — close to full precision.
+      List<Document> docs = generateDocs(500, SEED);
+      float[] query = randomVector(new Random(999L));
+
+      VectorCollection coll =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.HNSW)
+              .quantizer(QuantizerKind.FP16)
+              .build();
+      coll.addAll(docs);
+      coll.commit();
+
+      SearchResult result =
+          coll.search(
+              SearchRequest.builder(query, 10).searchListSize(100).overQueryFactor(2.0f).build());
+
+      Set<String> gt = bruteForceTopKIds(docs, query, 10);
+      double r = recall(gt, result);
+      assertThat(r).as("FP16 HNSW recall").isGreaterThanOrEqualTo(0.90);
+      coll.close();
+    }
+
+    @Test
     void overQueryFactorImprovesRecallOrMaintainsIt() {
       List<Document> docs = generateDocs(500, SEED);
       float[] query = randomVector(new Random(999L));
@@ -460,6 +487,11 @@ class VectorDbQuantizationTest {
               .quantizer(QuantizerKind.TURBOQUANT)
               .turboBits(4);
       assertQuantizedPersistentRoundTrip(dir, b);
+    }
+
+    @Test
+    void fp16RoundTrips(@TempDir Path dir) {
+      assertQuantizedPersistentHnswRoundTrip(dir, QuantizerKind.FP16, null);
     }
 
     private void assertQuantizedPersistentHnswRoundTrip(
