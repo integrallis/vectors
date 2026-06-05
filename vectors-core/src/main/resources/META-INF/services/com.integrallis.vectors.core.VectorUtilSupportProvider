@@ -1,0 +1,5 @@
+# Built-in VectorUtilSupport kernel providers, highest priority first.
+# Third-party providers (native AVX, SVE, GPU) ship their own service file with a
+# priority() above PANAMA_PRIORITY (100) to take precedence.
+com.integrallis.vectors.core.PanamaVectorUtilSupportProvider
+com.integrallis.vectors.core.ScalarVectorUtilSupportProvider
