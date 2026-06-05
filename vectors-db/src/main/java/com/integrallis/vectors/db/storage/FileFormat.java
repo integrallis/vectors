@@ -99,8 +99,14 @@ public final class FileFormat {
   /** Current HNSW graph.bin format version (see {@link HnswGraphCodec}). */
   public static final int VERSION_GRAPH = 1;
 
-  /** Current Vamana graph.bin format version (see {@link VamanaGraphCodec}). */
-  public static final int VERSION_GRAPH_VAMANA = 1;
+  /**
+   * Current Vamana graph.bin format version (see {@link VamanaGraphCodec}). Version 2 (I.4): the
+   * flat {@code (degree, neighbours...)} body plus a mandatory trailing {@code N×int64} per-node
+   * offset index giving O(1) node→neighbour-list addressing for the disk-resident paged searcher.
+   * There is no v1 compat shim — {@code vectors-db} is unreleased, so the decoder refuses older
+   * versions rather than carrying a dual-format path.
+   */
+  public static final int VERSION_GRAPH_VAMANA = 2;
 
   /** Current quantized.bin format version (see {@link QuantizedVectorsCodec}). */
   public static final int VERSION_QUANTIZED = 1;

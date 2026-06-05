@@ -313,6 +313,68 @@ class VamanaGraphCodecTest {
   }
 
   // ---------------------------------------------------------------------------
+  // Offset-index (v2) tests
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  @Tag("unit")
+  class OffsetIndex {
+
+    @Test
+    void encodedFileCarriesValidOffsetTrailer() throws IOException {
+      VamanaGraph graph = buildSmallGraph(64, 8, 5L);
+      byte[] bytes = VamanaGraphCodec.encode(graph);
+      ByteBuffer buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+
+      int numNodes = buf.getInt(16);
+      assertThat(numNodes).isEqualTo(64);
+
+      // File = header + body + 8*N trailer; the trailer starts at fileLen - 8N.
+      long trailerStart = bytes.length - 8L * numNodes;
+      assertThat(trailerStart).isGreaterThanOrEqualTo(VamanaGraphCodec.HEADER_SIZE);
+
+      // Each trailer offset must address that node's degree word: reading the int there equals the
+      // node's on-disk degree, and the bytes that follow are its neighbours in order.
+      for (int i = 0; i < numNodes; i++) {
+        long off = buf.getLong((int) (trailerStart + 8L * i));
+        if (i == 0) {
+          assertThat(off).isEqualTo(VamanaGraphCodec.HEADER_SIZE);
+        }
+        int degree = buf.getInt((int) off);
+        assertThat(degree).isEqualTo(graph.getNeighbors(i).size());
+        for (int k = 0; k < degree; k++) {
+          assertThat(buf.getInt((int) (off + 4 + 4L * k))).isEqualTo(graph.getNeighbors(i).node(k));
+        }
+      }
+    }
+
+    @Test
+    void rejectsTruncatedOffsetTrailer() {
+      byte[] encoded = VamanaGraphCodec.encode(buildSmallGraph(32, 8, 6L));
+      // Drop the last 8 bytes (one offset slot) so the trailer is short by one node.
+      byte[] truncated = new byte[encoded.length - 8];
+      System.arraycopy(encoded, 0, truncated, 0, truncated.length);
+      assertThatIOException()
+          .isThrownBy(() -> VamanaGraphCodec.decode(truncated))
+          .withMessageContaining("offset trailer");
+    }
+
+    @Test
+    void rejectsCorruptOffsetInTrailer() {
+      byte[] encoded = VamanaGraphCodec.encode(buildSmallGraph(32, 8, 7L));
+      ByteBuffer buf = ByteBuffer.wrap(encoded).order(ByteOrder.LITTLE_ENDIAN);
+      int numNodes = buf.getInt(16);
+      // Corrupt offset[1] to point past the body (>= trailer start) → not
+      // strictly-increasing/in-body.
+      long trailerStart = encoded.length - 8L * numNodes;
+      buf.putLong((int) (trailerStart + 8), Long.MAX_VALUE);
+      assertThatIOException()
+          .isThrownBy(() -> VamanaGraphCodec.decode(encoded))
+          .withMessageContaining("offset");
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Body-validation tests
   // ---------------------------------------------------------------------------
 
@@ -388,12 +450,14 @@ class VamanaGraphCodecTest {
 
     @Test
     void rejectsTrailingBytes() {
+      // Extra bytes after a non-empty graph land in the offset-index region, so the trailer-length
+      // check (8N bytes expected) rejects them.
       byte[] encoded = VamanaGraphCodec.encode(buildSmallGraph(5, 2, 3L));
       byte[] padded = new byte[encoded.length + 7];
       System.arraycopy(encoded, 0, padded, 0, encoded.length);
       assertThatIOException()
           .isThrownBy(() -> VamanaGraphCodec.decode(padded))
-          .withMessageContaining("trailing");
+          .withMessageContaining("offset trailer");
     }
 
     @Test

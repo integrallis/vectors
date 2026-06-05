@@ -35,13 +35,13 @@ import java.util.Objects;
  * {@code medoid} integer. The entire body is a straight sequence of {@code (degree, neighbors...)}
  * tuples, one per node.
  *
- * <p>Layout (little-endian throughout; format version 1):
+ * <p>Layout (little-endian throughout; format version 2):
  *
  * <pre>
  * Offset  Size   Field                       Notes
  * ------  ----   --------------------------  --------------------------------
  *   0      4     magic                       FileFormat.MAGIC_GRAPH_VAMANA
- *   4      4     format version              FileFormat.VERSION_GRAPH_VAMANA (= 1)
+ *   4      4     format version              FileFormat.VERSION_GRAPH_VAMANA (= 2)
  *   8      4     header length               constant = 28
  *  12      4     flags                       reserved, must be 0
  *  16      4     numNodes                    int32 (must equal manifest.liveCount)
@@ -51,7 +51,17 @@ import java.util.Objects;
  *  28      varies adjacency                  per node i in [0, numNodes):
  *                                              int32 degree
  *                                              degree * int32 nodeId
+ * ------  ----
+ *  body+   8*N    offset index               per node i: int64 absolute file offset of node i's
+ *                                              degree word. Gives O(1) node->neighbour addressing
+ *                                              for the disk-resident paged searcher (I.4). Empty
+ *                                              graph (numNodes == 0): no body, no trailer.
  * </pre>
+ *
+ * <p>The trailing offset index is mandatory: {@link #decode} validates it (then ignores it for heap
+ * construction, since the body is already read in node order), and the paged searcher reads it to
+ * page neighbour lists from the mmap'd file. {@code vectors-db} is unreleased, so there is no v1
+ * compat path — the decoder refuses any version but {@link FileFormat#VERSION_GRAPH_VAMANA}.
  *
  * <p><b>Why node IDs only, no scores.</b> {@link com.integrallis.vectors.vamana.VamanaSearcher}
  * only reads {@link NeighborArray#node(int)}, never {@link NeighborArray#score(int)} — scores are a
@@ -94,8 +104,9 @@ public final class VamanaGraphCodec {
   private VamanaGraphCodec() {}
 
   /**
-   * Serializes {@code graph} into a fresh byte array that matches the file-format spec in this
-   * class's Javadoc. The result includes the 28-byte header and the flat adjacency body.
+   * Serializes {@code graph} into a fresh byte array matching the file-format spec in this class's
+   * Javadoc: the 28-byte header, the flat adjacency body, and the trailing {@code N×int64} per-node
+   * offset index that gives the paged searcher O(1) node→neighbour-list addressing.
    *
    * @throws NullPointerException if {@code graph} is null
    * @throws IllegalStateException if the graph is in an inconsistent state (e.g. a degree above
@@ -115,11 +126,13 @@ public final class VamanaGraphCodec {
       throw new IllegalStateException("graph.maxDegree() must be positive: " + maxDegree);
     }
 
-    // Pre-compute the encoded size in one pass. Also doubles as an invariant check: if any live
-    // node's adjacency list is over-capacity or contains a self-loop or a duplicate, we throw
-    // here rather than writing a half-formed file.
+    // Pre-compute the encoded size in one pass, recording each node's absolute body offset (the
+    // position of its degree word) for the trailing offset index. Also doubles as an invariant
+    // check: an over-capacity adjacency list throws here rather than writing a half-formed file.
     long totalBytes = HEADER_SIZE;
+    long[] nodeOffsets = new long[numNodes];
     for (int i = 0; i < numNodes; i++) {
+      nodeOffsets[i] = totalBytes;
       NeighborArray neighbors = graph.getNeighbors(i);
       int degree = neighbors.size();
       if (degree > maxDegree) {
@@ -134,6 +147,7 @@ public final class VamanaGraphCodec {
       }
       totalBytes += 4L + 4L * degree; // degree word + neighbor IDs
     }
+    totalBytes += 8L * numNodes; // trailing offset index (one int64 per node)
 
     if (totalBytes > MAX_ENCODED_SIZE) {
       throw new IllegalStateException(
@@ -195,6 +209,11 @@ public final class VamanaGraphCodec {
       }
     }
 
+    // --- Trailing offset index --------------------------------------------
+    for (int i = 0; i < numNodes; i++) {
+      buf.putLong(nodeOffsets[i]);
+    }
+
     return out;
   }
 
@@ -245,7 +264,7 @@ public final class VamanaGraphCodec {
     }
     int flags = buf.getInt();
     if (flags != 0) {
-      throw new IOException("graph.bin (vamana) flags must be 0 in version 1, got " + flags);
+      throw new IOException("graph.bin (vamana) flags must be 0, got " + flags);
     }
 
     int numNodes = buf.getInt();
@@ -305,12 +324,47 @@ public final class VamanaGraphCodec {
       loadNeighborsInOrder(buf, arr, degree, numNodes, i);
     }
 
-    if (buf.remaining() != 0) {
-      throw new IOException(
-          "graph.bin (vamana) has " + buf.remaining() + " trailing bytes after full decode");
-    }
+    validateOffsetTrailer(buf, numNodes);
 
     return graph;
+  }
+
+  /**
+   * Validates the trailing offset index: exactly {@code 8N} bytes, strictly increasing, the first
+   * offset equal to {@link #HEADER_SIZE}, and every offset inside the body region (before the
+   * trailer). The trailer is not needed to build the heap {@link VamanaGraph} (the body was already
+   * decoded in node order) — it exists for the paged searcher — but validating it here means a
+   * corrupt index is caught at open time rather than mid-search.
+   */
+  private static void validateOffsetTrailer(ByteBuffer buf, int numNodes) throws IOException {
+    long trailerStart = buf.position(); // == HEADER_SIZE + body bytes
+    long expected = 8L * numNodes;
+    if (buf.remaining() != expected) {
+      throw new IOException(
+          "graph.bin (vamana) offset trailer must be "
+              + expected
+              + " bytes, got "
+              + buf.remaining());
+    }
+    long prev = -1;
+    for (int i = 0; i < numNodes; i++) {
+      long off = buf.getLong();
+      if (i == 0 && off != HEADER_SIZE) {
+        throw new IOException(
+            "graph.bin (vamana) offset[0] must be " + HEADER_SIZE + ", got " + off);
+      }
+      if (off <= prev || off < HEADER_SIZE || off >= trailerStart) {
+        throw new IOException(
+            "graph.bin (vamana) offset["
+                + i
+                + "]="
+                + off
+                + " is not strictly increasing within the body [28, "
+                + trailerStart
+                + ")");
+      }
+      prev = off;
+    }
   }
 
   /**
