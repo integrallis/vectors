@@ -334,11 +334,13 @@ class TurboQuantizerTest {
   class RotationStrategyTests {
 
     @Test
-    void defaultRotation_isGivens() {
+    void defaultRotation_isPaperFaithfulRandom() {
+      // Default is the dense random orthogonal rotation specified by the TurboQuant paper
+      // (arXiv:2504.19874); the O(d) Rotor variants are opt-in via the Rotation-accepting overload.
       float[][] vectors = generateVectors(50, DIM, SEED);
       VectorDataset dataset = makeDataset(vectors);
       TurboQuantizer tq = TurboQuantizer.train(dataset, 4);
-      assertThat(tq.rotation()).isInstanceOf(GivensRotation.class);
+      assertThat(tq.rotation()).isInstanceOf(RandomRotation.class);
     }
 
     @Test

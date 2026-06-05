@@ -29,7 +29,8 @@ import java.util.Arrays;
  * <p><b>Rotation strategies</b> (via {@link Rotation}):
  *
  * <ul>
- *   <li>{@link RandomRotation}: Dense d×d QR matrix (O(d²) FMAs) — TurboQuant original
+ *   <li>{@link RandomRotation}: Dense d×d QR matrix (O(d²) FMAs) — TurboQuant original, the
+ *       paper-faithful <b>default</b> (the distortion guarantee is proven for this rotation)
  *   <li>{@link GivensRotation}: 2D pair Givens (O(d) FMAs) — PlanarQuant, fastest
  *   <li>{@link QuaternionRotation}: 4D block quaternion (O(d) FMAs) — IsoQuant, best quality
  * </ul>
@@ -82,7 +83,8 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
   // --- Factory methods ---
 
   /**
-   * Trains a TurboQuantizer with the default rotation strategy ({@link GivensRotation}).
+   * Trains a TurboQuantizer with the paper-faithful default rotation ({@link RandomRotation}, a
+   * dense random orthogonal matrix).
    *
    * @param dataset the training data
    * @param bits quantization bit-width (1-8)
@@ -103,7 +105,12 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
   public static TurboQuantizer train(VectorDataset dataset, int bits, long seed) {
     int dim = dataset.dimension();
     int paddedDim = ((dim + 63) / 64) * 64;
-    Rotation rotation = GivensRotation.generate(paddedDim, seed);
+    // Paper-faithful default: a dense random orthogonal rotation (QR of a Gaussian matrix), exactly
+    // as TurboQuant specifies (arXiv:2504.19874). It is what the Beta-concentration / coordinate-
+    // near-independence theory relies on for the near-optimal distortion guarantee. The O(d) Rotor
+    // rotations ({@link GivensRotation}, {@link QuaternionRotation}) trade some of that distortion
+    // for speed and remain available via {@link #train(VectorDataset, int, Rotation)}.
+    Rotation rotation = RandomRotation.generate(paddedDim, seed);
     return train(dataset, bits, rotation);
   }
 

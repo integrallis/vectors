@@ -76,45 +76,50 @@ public final class TurboQuantizedVectors implements CompressedVectors {
 
   @Override
   public ScoreFunction scoreFunctionFor(float[] query, SimilarityFunction similarityFunction) {
-    // Precompute query properties
-    float[] centroid = quantizer.centroid();
-    float[] centeredQuery = new float[dimension];
-    for (int d = 0; d < dimension; d++) {
-      centeredQuery[d] = query[d] - centroid[d];
-    }
-    float sqrY = VectorUtil.dotProduct(centeredQuery, centeredQuery);
-    float queryNorm = (float) Math.sqrt(sqrY);
+    // The database vector is approximated by FULL reconstruction: v ≈ centroid +
+    // reconstructCentered.
+    // Scoring the original (un-centered) query against the full reconstruction gives the exact
+    // asymmetric estimate of ⟨q, v⟩ and ‖q − v‖ with NO dropped centroid cross-terms. The earlier
+    // centered-only path silently dropped the per-vector ⟨centroid, v − centroid⟩ term, which
+    // biases
+    // inner-product ranking (see the TurboQuant review against arXiv:2504.19874).
+    float queryNorm = (float) Math.sqrt(VectorUtil.dotProduct(query, query));
 
     return switch (similarityFunction) {
       case EUCLIDEAN ->
           ordinal -> {
-            float[] reconstructed = quantizer.reconstructCentered(indices[ordinal], norms[ordinal]);
-            float sqDist = VectorUtil.squareDistance(centeredQuery, reconstructed);
+            float sqDist = VectorUtil.squareDistance(query, reconstructFull(ordinal));
             return 1f / (1f + sqDist);
           };
       case DOT_PRODUCT ->
           ordinal -> {
-            float[] reconstructed = quantizer.reconstructCentered(indices[ordinal], norms[ordinal]);
-            float dot = VectorUtil.dotProduct(centeredQuery, reconstructed);
-            // Approximate: ignoring centroid cross-terms for ANN ranking
+            float dot = VectorUtil.dotProduct(query, reconstructFull(ordinal));
             return Math.max((1f + dot) / 2f, 0f);
           };
       case COSINE ->
           ordinal -> {
-            float[] reconstructed = quantizer.reconstructCentered(indices[ordinal], norms[ordinal]);
-            float vecNorm = norms[ordinal];
+            float[] full = reconstructFull(ordinal);
+            float vecNorm = (float) Math.sqrt(VectorUtil.dotProduct(full, full));
             if (queryNorm == 0f || vecNorm == 0f) return 0f;
-            float dot = VectorUtil.dotProduct(centeredQuery, reconstructed);
-            float cosine = dot / (queryNorm * vecNorm);
+            float cosine = VectorUtil.dotProduct(query, full) / (queryNorm * vecNorm);
             return Math.max((1f + cosine) / 2f, 0f);
           };
       case MAXIMUM_INNER_PRODUCT ->
           ordinal -> {
-            float[] reconstructed = quantizer.reconstructCentered(indices[ordinal], norms[ordinal]);
-            float dot = VectorUtil.dotProduct(centeredQuery, reconstructed);
+            float dot = VectorUtil.dotProduct(query, reconstructFull(ordinal));
             return SimilarityFunction.scaleMaxInnerProductScore(dot);
           };
     };
+  }
+
+  /** Reconstructs the full approximate vector {@code centroid + reconstructCentered(...)}. */
+  private float[] reconstructFull(int ordinal) {
+    float[] full = quantizer.reconstructCentered(indices[ordinal], norms[ordinal]);
+    float[] centroid = quantizer.centroid();
+    for (int d = 0; d < dimension; d++) {
+      full[d] += centroid[d];
+    }
+    return full;
   }
 
   /** Returns the quantized indices for the vector at the given ordinal. */
