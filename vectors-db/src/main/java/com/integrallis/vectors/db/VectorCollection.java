@@ -113,6 +113,15 @@ public interface VectorCollection extends AutoCloseable {
     return false;
   }
 
+  /**
+   * Returns the current committed generation number, or {@code -1} if the collection does not track
+   * generations. For a persistent collection this advances on every commit and is the value carried
+   * by a {@link CommitToken}.
+   */
+  default long generationNumber() {
+    return -1L;
+  }
+
   /** Flushes durable state for persistent collections; in-memory collections have nothing to do. */
   default void flush() {
     // in-memory: nothing to flush

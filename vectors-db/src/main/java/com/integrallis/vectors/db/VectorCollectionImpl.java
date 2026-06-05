@@ -1884,6 +1884,12 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   @Override
+  public long generationNumber() {
+    Generation gen = this.generation; // volatile read
+    return gen == null ? -1L : gen.generationNumber;
+  }
+
+  @Override
   public int physicalSize() {
     Generation gen = acquireReadSnapshot();
     try {
