@@ -38,7 +38,7 @@ import java.lang.foreign.MemorySegment;
  * <p>Reads use the {@code *_UNALIGNED} layouts because degree words and the offset trailer sit at
  * arbitrary (non-8-aligned) file positions.
  */
-final class PagedVamanaTopology implements VamanaTopology {
+public final class PagedVamanaTopology implements VamanaTopology {
 
   private final MemorySegment seg;
   private final int numNodes;
@@ -63,7 +63,7 @@ final class PagedVamanaTopology implements VamanaTopology {
    *
    * @throws IOException if the segment is too small or the header is not a valid v2 Vamana graph
    */
-  static PagedVamanaTopology open(MemorySegment graphSegment) throws IOException {
+  public static PagedVamanaTopology open(MemorySegment graphSegment) throws IOException {
     long size = graphSegment.byteSize();
     if (size < VamanaGraphCodec.HEADER_SIZE) {
       throw new IOException(

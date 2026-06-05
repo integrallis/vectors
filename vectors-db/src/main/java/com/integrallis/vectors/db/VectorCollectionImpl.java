@@ -45,8 +45,10 @@ import com.integrallis.vectors.db.storage.MappedIvfFlatAdapter;
 import com.integrallis.vectors.db.storage.MappedIvfPqAdapter;
 import com.integrallis.vectors.db.storage.MappedMetadataStore;
 import com.integrallis.vectors.db.storage.MappedVamanaIndexAdapter;
+import com.integrallis.vectors.db.storage.MappedVamanaPagedIndexAdapter;
 import com.integrallis.vectors.db.storage.MemorySegmentRandomAccessVectors;
 import com.integrallis.vectors.db.storage.MemorySegmentVectors;
+import com.integrallis.vectors.db.storage.PagedVamanaTopology;
 import com.integrallis.vectors.db.storage.QuantizedVectorsCodec;
 import com.integrallis.vectors.db.storage.TombstoneCodec;
 import com.integrallis.vectors.db.storage.VamanaGraphCodec;
@@ -450,7 +452,7 @@ final class VectorCollectionImpl implements VectorCollection {
                     : new MappedFlatScanAdapter(mapped, config.metric());
             case VAMANA ->
                 manifest.graphBinLength() > 0L
-                    ? openVamanaAdapter(genDir, manifest, mapped)
+                    ? openVamanaAdapter(genDir, manifest, mapped, arena)
                     : new MappedFlatScanAdapter(mapped, config.metric());
             case IVF_FLAT ->
                 manifest.graphBinLength() > 0L
@@ -475,6 +477,8 @@ final class VectorCollectionImpl implements VectorCollection {
             spi = new QuantizedFlatScanAdapter(fa, fa, config.metric(), compressed);
           } else if (spi instanceof MappedHnswIndexAdapter ha) {
             ha.enableQuantization(compressed);
+          } else if (spi instanceof MappedVamanaPagedIndexAdapter vp) {
+            vp.enableQuantization(compressed);
           } else if (spi instanceof MappedVamanaIndexAdapter va) {
             va.enableQuantization(compressed);
           }
@@ -520,17 +524,24 @@ final class VectorCollectionImpl implements VectorCollection {
     return new MappedHnswIndexAdapter(graph, vectors, config.metric());
   }
 
-  private IndexSpi openVamanaAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
-      throws IOException {
+  private IndexSpi openVamanaAdapter(
+      Path genDir, Manifest manifest, MemorySegmentVectors mapped, Arena arena) throws IOException {
     Path graphFile = genDir.resolve(FileFormat.GRAPH_FILE);
     if (manifest.graphBinLength() <= 0L) {
       throw new IOException(
           "VAMANA generation " + manifest.generationNumber() + " has no graph.bin recorded");
     }
-    byte[] graphBytes = java.nio.file.Files.readAllBytes(graphFile);
-    VamanaGraph graph = VamanaGraphCodec.decode(graphBytes);
+    // Map graph.bin into the per-generation arena and page neighbour lists from it on demand, so
+    // the graph adjacency stays off-heap (I.4). The arena owns the mapping; it is unmapped exactly
+    // once when the generation's refcount drops to zero (the adapter's close() is a no-op).
+    MemorySegment graphSeg;
+    try (java.nio.channels.FileChannel ch =
+        java.nio.channels.FileChannel.open(graphFile, java.nio.file.StandardOpenOption.READ)) {
+      graphSeg = ch.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0L, ch.size(), arena);
+    }
+    PagedVamanaTopology topology = PagedVamanaTopology.open(graphSeg);
     MemorySegmentRandomAccessVectors vectors = new MemorySegmentRandomAccessVectors(mapped);
-    return new MappedVamanaIndexAdapter(graph, vectors, config.metric());
+    return new MappedVamanaPagedIndexAdapter(topology, vectors, config.metric());
   }
 
   private IndexSpi openIvfFlatAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
