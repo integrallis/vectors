@@ -36,6 +36,10 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -328,35 +332,32 @@ public final class GenerationDirectory {
 
     Files.createDirectory(tmpDir);
     try {
-      // 1. Write the data files. The GenerationSource callbacks are expected to fsync their own
-      //    file contents. If any callback throws, we catch below and clean up. The graph.bin
-      //    callback is only invoked when the manifest declares a graph index (HNSW or VAMANA);
-      //    flat-scan generations leave no graph.bin entry on disk and the manifest's
-      //    graphBinLength field carries 0 as the authoritative "no graph" signal.
-      source.writeVectors(tmpDir.resolve(FileFormat.VECTORS_FILE));
-      source.writeIdmap(tmpDir.resolve(FileFormat.IDMAP_FILE));
-      source.writeMetadata(tmpDir.resolve(FileFormat.METADATA_FILE));
-      // Skip the graph callback unless the manifest both declares a graph index type AND records
-      // a non-zero graph payload length. An empty graph generation (bootstrap or liveCount=0 after
-      // a hypothetical compaction) has nothing to write; we treat graphBinLength==0 as the
-      // authoritative "no graph" signal just like FLAT, so the on-disk shape of an empty HNSW or
-      // VAMANA generation is indistinguishable from a FLAT one.
+      // 1. Write the payload files. The GenerationSource callbacks are expected to fsync their own
+      //    file contents. They operate on disjoint, immutable byte buffers and write to distinct
+      //    files, so they are run concurrently (I.7) — the multi-file write+fsync is the dominant
+      //    cost of a commit. The graph/quantized/tombstone callbacks are only enqueued when the
+      //    manifest declares a non-zero payload for them; otherwise that file is absent on disk and
+      //    the manifest's *BinLength==0 field is the authoritative "no such payload" signal (the
+      //    on-disk shape of an empty HNSW/VAMANA generation is then indistinguishable from FLAT).
+      List<FileWriteTask> payloadWrites = new ArrayList<>(6);
+      payloadWrites.add(() -> source.writeVectors(tmpDir.resolve(FileFormat.VECTORS_FILE)));
+      payloadWrites.add(() -> source.writeIdmap(tmpDir.resolve(FileFormat.IDMAP_FILE)));
+      payloadWrites.add(() -> source.writeMetadata(tmpDir.resolve(FileFormat.METADATA_FILE)));
       if (GRAPH_INDEX_TYPES.contains(manifest.indexType()) && manifest.graphBinLength() > 0L) {
-        source.writeGraph(tmpDir.resolve(FileFormat.GRAPH_FILE));
+        payloadWrites.add(() -> source.writeGraph(tmpDir.resolve(FileFormat.GRAPH_FILE)));
       }
-      // Quantized compressed vectors — only when the manifest records a non-zero quantized payload.
-      // Non-quantized generations (quantizedBinLength == 0) skip this entirely, matching the
-      // pattern used for graph.bin above.
       if (manifest.quantizedBinLength() > 0L) {
-        source.writeQuantized(tmpDir.resolve(FileFormat.QUANTIZED_FILE));
+        payloadWrites.add(() -> source.writeQuantized(tmpDir.resolve(FileFormat.QUANTIZED_FILE)));
       }
-      // Tombstones — only when the manifest records a non-zero tombstone payload.
-      // Tombstone-free generations (tombstonesBinLength == 0) skip this entirely.
       if (manifest.tombstonesBinLength() > 0L) {
-        source.writeTombstones(tmpDir.resolve(FileFormat.TOMBSTONES_FILE));
+        payloadWrites.add(() -> source.writeTombstones(tmpDir.resolve(FileFormat.TOMBSTONES_FILE)));
       }
+      writeFilesConcurrently(payloadWrites);
 
-      // 2. Write manifest.bin (fsyncs itself via Manifest.writeTo).
+      // 2. Write manifest.bin LAST (fsyncs itself via Manifest.writeTo). Ordering relative to the
+      //    payloads is immaterial to crash-safety — a crash before the atomic rename below discards
+      //    the whole tmp dir — but keeping the manifest write after the payload barrier preserves
+      //    the original "manifest is the in-dir completion marker" invariant for reviewers.
       manifest.writeTo(tmpDir.resolve(FileFormat.MANIFEST_FILE));
 
       // 3. Fsync the tmp dir so the directory entries are durable before the rename.
@@ -387,6 +388,78 @@ public final class GenerationDirectory {
     writeCurrentAtomic(storageRoot, generationNumber);
 
     return new WriteResult(generationNumber, genDir, manifest);
+  }
+
+  /** A single file-materialization step (one payload file write + its own fsync). */
+  @FunctionalInterface
+  private interface FileWriteTask {
+    void run() throws IOException;
+  }
+
+  /**
+   * Runs the per-payload file writes concurrently (I.7) and joins on all of them before returning.
+   * Each task writes a distinct file from an immutable buffer and fsyncs it, so there is no shared
+   * mutable state and the on-disk result is byte-for-byte identical to running them sequentially.
+   *
+   * <p>The barrier semantics are load-bearing for crash-safety: this method does not return until
+   * <em>every</em> task has finished (success or failure), so a caller that catches a failure and
+   * deletes the tmp directory can never race a still-running writer. The first failure is rethrown
+   * with its original type preserved (an {@link IOException} as-is, a source-thrown {@link
+   * RuntimeException}/{@link Error} unwrapped) so {@link #writeGeneration}'s cleanup and the
+   * caller's exception contract behave exactly as in the former sequential path; later failures are
+   * attached as suppressed exceptions.
+   */
+  private static void writeFilesConcurrently(List<FileWriteTask> tasks) throws IOException {
+    // Avoid executor overhead for the degenerate single-file case.
+    if (tasks.size() <= 1) {
+      for (FileWriteTask task : tasks) {
+        task.run();
+      }
+      return;
+    }
+    List<Future<?>> futures = new ArrayList<>(tasks.size());
+    try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      for (FileWriteTask task : tasks) {
+        futures.add(
+            executor.submit(
+                () -> {
+                  task.run();
+                  return null;
+                }));
+      }
+      // try-with-resources close() blocks until every submitted task terminates, so once we leave
+      // this block no writer is still touching the tmp directory.
+    }
+    Throwable failure = null;
+    for (Future<?> future : futures) {
+      Throwable cause = null;
+      try {
+        future.get();
+      } catch (ExecutionException e) {
+        cause = e.getCause() != null ? e.getCause() : e;
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        cause = new IOException("interrupted while writing generation files", e);
+      }
+      if (cause != null) {
+        if (failure == null) {
+          failure = cause;
+        } else {
+          failure.addSuppressed(cause);
+        }
+      }
+    }
+    if (failure == null) {
+      return;
+    }
+    // Preserve the original failure type so writeGeneration's catch (which rethrows IOException and
+    // RuntimeException unchanged) and callers see the same exception they did before parallelism.
+    switch (failure) {
+      case IOException io -> throw io;
+      case RuntimeException re -> throw re;
+      case Error er -> throw er;
+      default -> throw new IOException("generation file write failed", failure);
+    }
   }
 
   // ---------------------------------------------------------------------------

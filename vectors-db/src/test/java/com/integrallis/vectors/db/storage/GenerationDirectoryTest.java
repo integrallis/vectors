@@ -737,6 +737,151 @@ class GenerationDirectoryTest {
   }
 
   // ---------------------------------------------------------------------------
+  // I.7: the payload files are written concurrently. These tests pin that the
+  // full (graph + quantized + tombstones) fan-out lands every file durably and
+  // recovers, and that a failure in any one concurrent writer still cleans the
+  // tmp dir, leaves no gen-NNNN/, and never advances CURRENT.
+  // ---------------------------------------------------------------------------
+
+  @Nested
+  class ConcurrentWriteProtocol {
+
+    private static final byte[] GRAPH_PAYLOAD = new byte[] {31, 32, 33, 34, 35, 36, 37, 38};
+    private static final byte[] QUANTIZED_PAYLOAD = new byte[] {41, 42, 43, 44, 45, 46, 47, 48};
+    private static final byte[] TOMBSTONES_PAYLOAD = new byte[] {51, 52, 53, 54, 55, 56, 57, 58};
+
+    // A graph index config so the manifest's indexType is in GRAPH_INDEX_TYPES and the graph file
+    // is written. Quantizer stays NONE in the config (these tests exercise only the directory
+    // write/recover/CRC machinery, never openGeneration), but the manifest still declares a
+    // non-zero quantized payload so writeGeneration materializes quantized.bin.
+    private final VectorCollectionConfig graphConfig =
+        new VectorCollectionConfig(
+            16,
+            SimilarityFunction.EUCLIDEAN,
+            IndexType.HNSW,
+            QuantizerKind.NONE,
+            Integer.MAX_VALUE,
+            null,
+            new VectorCollectionConfig.HnswParams(16, 200, 1),
+            null);
+
+    private GenerationSource fullSource() {
+      return new GenerationSource() {
+        @Override
+        public void writeVectors(Path destination) throws IOException {
+          writeAndFsync(destination, VECTORS_PAYLOAD);
+        }
+
+        @Override
+        public void writeIdmap(Path destination) throws IOException {
+          writeAndFsync(destination, IDMAP_PAYLOAD);
+        }
+
+        @Override
+        public void writeMetadata(Path destination) throws IOException {
+          writeAndFsync(destination, METADATA_PAYLOAD);
+        }
+
+        @Override
+        public void writeGraph(Path destination) throws IOException {
+          writeAndFsync(destination, GRAPH_PAYLOAD);
+        }
+
+        @Override
+        public void writeQuantized(Path destination) throws IOException {
+          writeAndFsync(destination, QUANTIZED_PAYLOAD);
+        }
+
+        @Override
+        public void writeTombstones(Path destination) throws IOException {
+          writeAndFsync(destination, TOMBSTONES_PAYLOAD);
+        }
+      };
+    }
+
+    private Manifest fullManifest(long generationNumber) {
+      return Manifest.buildWithTombstones(
+          graphConfig,
+          generationNumber,
+          /* liveCount */ 1L,
+          /* vectorsBinLength */ VECTORS_PAYLOAD.length,
+          /* vectorsBinCrc32 */ Checksums.ofBytes(VECTORS_PAYLOAD),
+          /* metadataBinLength */ METADATA_PAYLOAD.length,
+          /* metadataBinCrc32 */ Checksums.ofBytes(METADATA_PAYLOAD),
+          /* idmapBinLength */ IDMAP_PAYLOAD.length,
+          /* idmapBinCrc32 */ Checksums.ofBytes(IDMAP_PAYLOAD),
+          /* graphBinLength */ GRAPH_PAYLOAD.length,
+          /* graphBinCrc32 */ Checksums.ofBytes(GRAPH_PAYLOAD),
+          /* quantizedBinLength */ QUANTIZED_PAYLOAD.length,
+          /* quantizedBinCrc32 */ Checksums.ofBytes(QUANTIZED_PAYLOAD),
+          /* tombstoneCount */ 1L,
+          /* tombstonesBinLength */ TOMBSTONES_PAYLOAD.length,
+          /* tombstonesBinCrc32 */ Checksums.ofBytes(TOMBSTONES_PAYLOAD));
+    }
+
+    @Test
+    void writesEveryPayloadFileConcurrentlyAndRecovers(@TempDir Path tmp) throws IOException {
+      WriteResult written =
+          GenerationDirectory.writeGeneration(tmp, 0L, fullSource(), fullManifest(0L));
+
+      Path genDir = written.generationDir();
+      assertThat(genDir.resolve(FileFormat.VECTORS_FILE)).exists();
+      assertThat(genDir.resolve(FileFormat.IDMAP_FILE)).exists();
+      assertThat(genDir.resolve(FileFormat.METADATA_FILE)).exists();
+      assertThat(genDir.resolve(FileFormat.GRAPH_FILE)).exists();
+      assertThat(genDir.resolve(FileFormat.QUANTIZED_FILE)).exists();
+      assertThat(genDir.resolve(FileFormat.TOMBSTONES_FILE)).exists();
+      assertThat(genDir.resolve(FileFormat.MANIFEST_FILE)).exists();
+
+      // recover() re-verifies the manifest self-CRC AND every declared payload CRC, so a green
+      // recovery proves the concurrent fan-out wrote every byte correctly and durably.
+      RecoveryResult recovered = GenerationDirectory.recover(tmp, null, null);
+      assertThat(recovered.generationNumber()).isEqualTo(0L);
+      assertThat(GenerationDirectory.readCurrent(tmp)).isEqualTo(0L);
+    }
+
+    @Test
+    void failureInOneConcurrentWriterCleansTmpAndDoesNotAdvanceCurrent(@TempDir Path tmp)
+        throws IOException {
+      // Land a good generation 0 first so CURRENT points at it.
+      GenerationDirectory.writeGeneration(tmp, 0L, trivialSource(), sampleManifest(0L));
+      assertThat(GenerationDirectory.readCurrent(tmp)).isEqualTo(0L);
+
+      // Generation 1 has one payload writer that throws while the others may already be writing.
+      GenerationSource failing =
+          new GenerationSource() {
+            @Override
+            public void writeVectors(Path destination) throws IOException {
+              writeAndFsync(destination, VECTORS_PAYLOAD);
+            }
+
+            @Override
+            public void writeIdmap(Path destination) throws IOException {
+              writeAndFsync(destination, IDMAP_PAYLOAD);
+            }
+
+            @Override
+            public void writeMetadata(Path destination) throws IOException {
+              throw new IOException("simulated metadata write failure");
+            }
+          };
+
+      assertThatIOException()
+          .isThrownBy(
+              () -> GenerationDirectory.writeGeneration(tmp, 1L, failing, sampleManifest(1L)))
+          .withMessageContaining("simulated metadata write failure");
+
+      // The half-written tmp dir is gone, no gen-1 was published, and CURRENT still points at 0.
+      assertThat(tmp.resolve(FileFormat.generationTmpDirName(1L))).doesNotExist();
+      assertThat(tmp.resolve(FileFormat.generationDirName(1L))).doesNotExist();
+      assertThat(GenerationDirectory.readCurrent(tmp)).isEqualTo(0L);
+
+      RecoveryResult recovered = GenerationDirectory.recover(tmp, null, null);
+      assertThat(recovered.generationNumber()).isEqualTo(0L);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Helper.
   // ---------------------------------------------------------------------------
 
