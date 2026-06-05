@@ -157,6 +157,22 @@ public final class VamanaIndex {
   }
 
   /**
+   * Pre-filtered search (ACORN): admits only ordinals accepted by {@code predicate} into the
+   * results while still traversing through non-matching nodes, keeping recall high for
+   * high-selectivity filters (I.5). Uses full-precision scoring.
+   *
+   * @param query the query vector
+   * @param k number of results to return
+   * @param searchListSize beam width L
+   * @param predicate accepts an ordinal iff it is eligible for the result set
+   * @return search result with ranked node IDs and scores (only predicate-accepted ordinals)
+   */
+  public SearchResult searchFiltered(
+      float[] query, int k, int searchListSize, java.util.function.IntPredicate predicate) {
+    return threadLocalSearcher.get().searchFiltered(query, k, searchListSize, predicate);
+  }
+
+  /**
    * Two-pass search: fast quantized coarse pass followed by full-precision rescore.
    *
    * <p>If no quantization is enabled, falls back to the full-precision searcher running the same

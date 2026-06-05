@@ -165,6 +165,32 @@ public final class VamanaIndexAdapter implements IndexSpi {
   }
 
   @Override
+  public SearchOutcome searchWithPredicate(
+      float[] query,
+      int k,
+      int searchListSize,
+      float overQueryFactor,
+      java.util.function.IntPredicate predicate) {
+    Objects.requireNonNull(query, "query must not be null");
+    Objects.requireNonNull(predicate, "predicate must not be null");
+    if (k <= 0) {
+      throw new IllegalArgumentException("k must be positive: " + k);
+    }
+    if (size == 0 || index == null) {
+      return new SearchOutcome(new int[0], new float[0]);
+    }
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Query dimension " + query.length + " does not match index dimension " + dimension);
+    }
+    // ACORN pre-filter: full-precision filtered traversal (over-query is a post-filter lever and
+    // does not apply here — the predicate already constrains results inline).
+    int searchL = Math.max(searchListSize, k);
+    SearchResult result = index.searchFiltered(query, k, searchL, predicate);
+    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+  }
+
+  @Override
   public int size() {
     return size;
   }

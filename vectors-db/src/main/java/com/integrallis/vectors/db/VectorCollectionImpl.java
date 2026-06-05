@@ -1565,11 +1565,14 @@ final class VectorCollectionImpl implements VectorCollection {
     try {
       long start = System.nanoTime();
 
-      // ACORN pre-filter: HNSW SPI implementations navigate non-matching nodes for routing
-      // but only collect matching ones in the result set — avoids recall collapse on selective
-      // filters without expanding the candidate pool.
+      // ACORN pre-filter: HNSW and Vamana SPI implementations navigate non-matching nodes for
+      // routing but only collect matching ones in the result set — avoids recall collapse on
+      // selective filters without expanding the candidate pool.
       boolean supportsPreFilter =
-          gen.spi instanceof HnswIndexAdapter || gen.spi instanceof MappedHnswIndexAdapter;
+          gen.spi instanceof HnswIndexAdapter
+              || gen.spi instanceof MappedHnswIndexAdapter
+              || gen.spi instanceof VamanaIndexAdapter
+              || gen.spi instanceof MappedVamanaPagedIndexAdapter;
       boolean preFilterActive = hasFilter && supportsPreFilter;
 
       int candidateK = request.k();

@@ -102,6 +102,31 @@ public final class MappedVamanaPagedIndexAdapter implements IndexSpi {
     return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
   }
 
+  @Override
+  public SearchOutcome searchWithPredicate(
+      float[] query,
+      int k,
+      int searchListSize,
+      float overQueryFactor,
+      java.util.function.IntPredicate predicate) {
+    Objects.requireNonNull(query, "query must not be null");
+    Objects.requireNonNull(predicate, "predicate must not be null");
+    if (k <= 0) {
+      throw new IllegalArgumentException("k must be positive: " + k);
+    }
+    if (index.size() == 0) {
+      return new SearchOutcome(new int[0], new float[0]);
+    }
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Query dimension " + query.length + " does not match index dimension " + dimension);
+    }
+    // ACORN pre-filter over the paged graph: full-precision filtered traversal.
+    int searchL = Math.max(searchListSize, k);
+    SearchResult result = index.searchFiltered(query, k, searchL, predicate);
+    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+  }
+
   /**
    * Attaches compressed vectors for quantized two-pass search (delegates to {@link
    * VamanaIndex#searchTwoPass} when {@code overQueryFactor > 1.0f}). The coarse traversal still

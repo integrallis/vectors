@@ -208,21 +208,99 @@ public final class VamanaSearcher {
       }
     }
 
-    // Extract top-k from results (min-heap → drain and reverse)
+    return drainTopK(k);
+  }
+
+  /**
+   * Pre-filtered beam search (ACORN-style): traverses through <i>all</i> neighbours to preserve
+   * graph connectivity/routing, but only admits ordinals accepted by {@code predicate} into the
+   * result set. For a high-selectivity filter this keeps recall high where an over-fetch
+   * post-filter would collapse it (I.5). Mirrors {@code HnswSearcher.searchFiltered}.
+   *
+   * @param predicate accepts an ordinal iff it is eligible for the result set (e.g. matches the
+   *     metadata filter and is not tombstoned)
+   */
+  public SearchResult searchFiltered(
+      float[] query, int k, int searchListSize, java.util.function.IntPredicate predicate) {
+    Objects.requireNonNull(query, "query must not be null");
+    Objects.requireNonNull(predicate, "predicate must not be null");
+    if (k <= 0) {
+      throw new IllegalArgumentException("k must be positive: " + k);
+    }
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Query dimension " + query.length + " does not match index dimension " + dimension);
+    }
+    int L = Math.max(searchListSize, k);
+
+    candidates.clear();
+    results.clear();
+    if (visited.size() < graph.size()) {
+      visited = new BitSet(graph.size());
+    } else {
+      visited.clear();
+    }
+
+    NodeScorer scorer = scorerFactory.scorer(query);
+
+    int entryPoint = graph.medoid();
+    if (entryPoint < 0) {
+      return new SearchResult(new int[0], new float[0]); // empty graph
+    }
+    float entryScore = scorer.score(entryPoint);
+    visited.set(entryPoint);
+    // The medoid always routes; it only enters results if it matches the predicate.
+    candidates.add(entryPoint, entryScore);
+    if (predicate.test(entryPoint)) {
+      results.add(entryPoint, entryScore);
+    }
+
+    while (!candidates.isEmpty()) {
+      long topCandidate = candidates.poll();
+      int candidateId = NodeQueue.nodeId(topCandidate);
+      float candidateScore = NodeQueue.score(topCandidate);
+
+      if (results.size() >= L && candidateScore < NodeQueue.score(results.peek())) {
+        break;
+      }
+
+      int n = graph.neighbors(candidateId, neighborScratch);
+      int batchCount = 0;
+      for (int i = 0; i < n; i++) {
+        int neighborId = neighborScratch[i];
+        if (visited.get(neighborId)) continue;
+        visited.set(neighborId);
+        bulkIds[batchCount++] = neighborId;
+        if (batchCount == BULK_BATCH) {
+          scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+          ingestBatchFiltered(batchCount, L, predicate);
+          batchCount = 0;
+        }
+      }
+      if (batchCount > 0) {
+        scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
+        ingestBatchFiltered(batchCount, L, predicate);
+      }
+    }
+
+    return drainTopK(k);
+  }
+
+  /** Extracts the top-{@code k} from the {@code results} min-heap (drain and reverse). */
+  private SearchResult drainTopK(int k) {
     int resultSize = Math.min(k, results.size());
     int[] nodeIds = new int[resultSize];
     float[] scores = new float[resultSize];
-    // Drain more than k if needed (results may have L entries)
+    // Drain extra entries beyond k (results may hold up to L).
     while (results.size() > resultSize) {
       results.poll();
     }
-    // Now drain the remaining resultSize entries (worst first from min-heap)
+    // Drain the remaining entries (worst first from the min-heap) into descending order.
     for (int i = resultSize - 1; i >= 0; i--) {
       long entry = results.poll();
       nodeIds[i] = NodeQueue.nodeId(entry);
       scores[i] = NodeQueue.score(entry);
     }
-
     return new SearchResult(nodeIds, scores);
   }
 
@@ -241,6 +319,27 @@ public final class VamanaSearcher {
         results.poll();
         results.add(neighborId, neighborScore);
         candidates.add(neighborId, neighborScore);
+      }
+    }
+  }
+
+  /**
+   * ACORN ingest: every scored neighbour is pushed to {@code candidates} (so traversal routes
+   * through non-matching nodes), but only predicate-accepted ordinals enter {@code results}.
+   */
+  private void ingestBatchFiltered(int count, int L, java.util.function.IntPredicate predicate) {
+    for (int i = 0; i < count; i++) {
+      int neighborId = bulkIds[i];
+      float neighborScore = bulkScores[i];
+      candidates.add(neighborId, neighborScore); // always explore for routing
+      if (!predicate.test(neighborId)) {
+        continue;
+      }
+      if (results.size() < L) {
+        results.add(neighborId, neighborScore);
+      } else if (neighborScore > NodeQueue.score(results.peek())) {
+        results.poll();
+        results.add(neighborId, neighborScore);
       }
     }
   }
