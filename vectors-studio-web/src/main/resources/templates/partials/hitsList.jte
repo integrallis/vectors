@@ -1,7 +1,10 @@
 @import java.util.List
 @import com.integrallis.vectors.studio.core.search.SearchHit
 @param List<SearchHit> hits
-@if(hits == null || hits.isEmpty())
+@param String note = null
+@if(note != null)
+  <p class="empty-state">${note}</p>
+@elseif(hits == null || hits.isEmpty())
   <p class="empty-state">No results.</p>
 @else
   <table class="hits">

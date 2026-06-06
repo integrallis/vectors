@@ -21,5 +21,8 @@ package com.integrallis.vectors.server.dto;
  *
  * @param upserted number of documents that were applied and committed
  * @param size total live-document count after the commit
+ * @param textIndexed {@code false} when a text index is configured for the collection but its
+ *     dual-write failed (the vector write still committed successfully); {@code true} otherwise
+ *     (write succeeded, or no text index is configured)
  */
-public record UpsertDocumentsResponse(int upserted, int size) {}
+public record UpsertDocumentsResponse(int upserted, int size, boolean textIndexed) {}

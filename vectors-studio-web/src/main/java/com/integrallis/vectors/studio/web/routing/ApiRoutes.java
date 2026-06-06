@@ -221,7 +221,11 @@ public final class ApiRoutes implements HttpService {
       if (id != null && !id.isEmpty()) {
         out = searchByVector(name, id, k);
       } else if (query != null && !query.isEmpty()) {
-        out = searchByText(name, query, k);
+        // Text search needs an embedding model to vectorise the query; the embedded Studio backend
+        // has none, so reject rather than fabricate a meaningless query vector.
+        res.status(Status.BAD_REQUEST_400)
+            .send("text search requires an embedding model, which this Studio backend lacks");
+        return;
       } else {
         res.status(Status.BAD_REQUEST_400).send("missing id or query");
         return;
@@ -251,35 +255,6 @@ public final class ApiRoutes implements HttpService {
       if (out.size() >= k) break;
     }
     return out;
-  }
-
-  private List<Map<String, Object>> searchByText(String name, String query, int k) {
-    var summary = session.backend().describe(name);
-    var spec =
-        new com.integrallis.vectors.studio.core.search.SearchSpec(
-            zeroVector(summary.dimension(), query), query, Math.max(1, k), null, false, true, true);
-    var hits = session.backend().search(name, spec);
-    List<Map<String, Object>> out = new ArrayList<>(hits.size());
-    for (var h : hits) {
-      out.add(Map.of("id", h.id(), "score", h.score()));
-      if (out.size() >= k) break;
-    }
-    return out;
-  }
-
-  private static float[] zeroVector(int dim, String seed) {
-    float[] v = new float[dim];
-    if (seed == null || seed.isEmpty()) return v;
-    int h = seed.hashCode();
-    for (int i = 0; i < dim; i++) {
-      v[i] = ((h >>> (i % 32)) & 1) == 0 ? -1.0f : 1.0f;
-    }
-    double n = 0.0;
-    for (float f : v) n += f * f;
-    n = Math.sqrt(n);
-    float scale = (float) (n == 0 ? 1.0 : 1.0 / n);
-    for (int i = 0; i < dim; i++) v[i] *= scale;
-    return v;
   }
 
   /**

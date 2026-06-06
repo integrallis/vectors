@@ -111,7 +111,8 @@ public final class DocumentsRoutes implements HttpService {
       return;
     }
     if (body.documents().isEmpty()) {
-      RouteSupport.sendJson(res, Status.OK_200, new UpsertDocumentsResponse(0, col.get().size()));
+      RouteSupport.sendJson(
+          res, Status.OK_200, new UpsertDocumentsResponse(0, col.get().size(), true));
       return;
     }
     if (body.documents().size() > MAX_BATCH_SIZE) {
@@ -175,7 +176,10 @@ public final class DocumentsRoutes implements HttpService {
       return;
     }
 
-    // Dual-write to text index if available
+    // Dual-write to text index if available. A failure here does not roll back the (already
+    // committed) vector write; we report it to the client via the textIndexed flag instead of
+    // silently returning success.
+    boolean textIndexed = true;
     Optional<TextIndexSpi> textIndex = registry.getTextIndex(name);
     if (textIndex.isPresent()) {
       try {
@@ -188,12 +192,14 @@ public final class DocumentsRoutes implements HttpService {
         }
         textIndex.get().index(textDocs);
       } catch (RuntimeException e) {
+        textIndexed = false;
         LOG.warn("text index write failed for '{}': {}", name, e.getMessage());
       }
     }
 
     registry.bumpEpoch(name);
-    RouteSupport.sendJson(res, Status.OK_200, new UpsertDocumentsResponse(docs.size(), c.size()));
+    RouteSupport.sendJson(
+        res, Status.OK_200, new UpsertDocumentsResponse(docs.size(), c.size(), textIndexed));
   }
 
   private void delete(ServerRequest req, ServerResponse res) {

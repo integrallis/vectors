@@ -59,7 +59,7 @@ public final class StudioRouting {
         .register("/static", StaticContentService.create("/static"))
         .register(new HomeRoutes(session, renderer))
         .register(new CollectionRoutes(session, renderer))
-        .register(new SearchRoutes(session, renderer))
+        .register(new SearchRoutes(renderer))
         .register(new DocumentRoutes(session, renderer))
         .register(new BlobRoutes(session, sidecart))
         .register(new ProjectorRoutes(session, jobs, renderer))

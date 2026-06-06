@@ -125,7 +125,7 @@ class StudioServerSmokeIT {
   }
 
   @Test
-  void searchPostReturnsHitsFragment() throws Exception {
+  void searchPostReturnsUnsupportedNotice() throws Exception {
     HttpResponse<String> res =
         client.send(
             HttpRequest.newBuilder(
@@ -138,6 +138,8 @@ class StudioServerSmokeIT {
     assertThat(res.statusCode()).isEqualTo(200);
     // Returns the partial fragment (no full layout chrome).
     assertThat(res.body()).doesNotContain("<html");
+    // Text search needs an embedding model the embedded backend lacks → clear notice, not results.
+    assertThat(res.body()).contains("embedding model");
   }
 
   @Test
@@ -195,10 +197,11 @@ class StudioServerSmokeIT {
   }
 
   @Test
-  void searchByQueryReturnsHits() throws Exception {
+  void searchByQueryRejectedWithoutEmbedder() throws Exception {
+    // Text search needs an embedding model the embedded backend lacks → rejected, not fabricated.
     HttpResponse<String> res =
         postJson("/api/collections/docs/search", "{\"query\":\"text 0\",\"k\":3}");
-    assertThat(res.statusCode()).isEqualTo(200);
-    assertThat(res.body()).contains("\"hits\"");
+    assertThat(res.statusCode()).isEqualTo(400);
+    assertThat(res.body()).contains("embedding model");
   }
 }

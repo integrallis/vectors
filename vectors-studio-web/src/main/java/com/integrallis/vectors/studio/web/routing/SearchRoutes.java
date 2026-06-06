@@ -15,9 +15,7 @@
  */
 package com.integrallis.vectors.studio.web.routing;
 
-import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.core.search.SearchHit;
-import com.integrallis.vectors.studio.core.search.SearchSpec;
 import com.integrallis.vectors.studio.web.view.ViewRenderer;
 import io.helidon.http.Status;
 import io.helidon.webserver.http.HttpRules;
@@ -27,14 +25,24 @@ import io.helidon.webserver.http.ServerResponse;
 import java.util.List;
 import java.util.Map;
 
-/** Vector / hybrid search HTMX route — POST returns a hits-list fragment. */
+/**
+ * Search HTMX route — POST returns a hits-list fragment.
+ *
+ * <p>Turning a text query into a vector requires an embedding model, which the embedded Studio
+ * backend does not have. Rather than fabricate a meaningless query vector (which would return
+ * results unrelated to the query text), this returns a clear notice. Vector-space exploration in
+ * the Studio is driven by clicking an existing point (search-by-id), which uses that point's real
+ * vector.
+ */
 public final class SearchRoutes implements HttpService {
 
-  private final StudioSession session;
+  private static final String NO_EMBEDDER_NOTE =
+      "Text search requires an embedding model, which this Studio backend does not have. "
+          + "Click a point to find its nearest neighbours instead.";
+
   private final ViewRenderer renderer;
 
-  public SearchRoutes(StudioSession session, ViewRenderer renderer) {
-    this.session = session;
+  public SearchRoutes(ViewRenderer renderer) {
     this.renderer = renderer;
   }
 
@@ -44,59 +52,10 @@ public final class SearchRoutes implements HttpService {
   }
 
   private void execute(ServerRequest req, ServerResponse res) {
-    String name = req.path().pathParameters().get("name");
-    var summary = session.backend().describe(name);
-    String body = req.content().as(String.class);
-    Map<String, String> form = parseForm(body);
-    String text = form.get("query");
-    int k = parseIntOr(form.get("k"), 10);
-    SearchSpec spec =
-        new SearchSpec(zeroVector(summary.dimension(), text), text, k, null, false, true, true);
-    List<SearchHit> hits;
-    try {
-      hits = session.backend().search(name, spec);
-    } catch (RuntimeException e) {
-      hits = List.of();
-    }
-    renderer.renderFragment(res, Status.OK_200, "partials/hitsList.jte", Map.of("hits", hits));
-  }
-
-  private static float[] zeroVector(int dim, String seed) {
-    float[] v = new float[dim];
-    if (seed == null || seed.isEmpty()) return v;
-    int h = seed.hashCode();
-    for (int i = 0; i < dim; i++) {
-      v[i] = ((h >>> (i % 32)) & 1) == 0 ? -1.0f : 1.0f;
-    }
-    double n = 0.0;
-    for (float f : v) n += f * f;
-    n = Math.sqrt(n);
-    float scale = (float) (n == 0 ? 1.0 : 1.0 / n);
-    for (int i = 0; i < dim; i++) v[i] *= scale;
-    return v;
-  }
-
-  private static Map<String, String> parseForm(String body) {
-    java.util.HashMap<String, String> out = new java.util.HashMap<>();
-    if (body == null) return out;
-    for (String pair : body.split("&")) {
-      int eq = pair.indexOf('=');
-      if (eq <= 0) continue;
-      out.put(
-          java.net.URLDecoder.decode(
-              pair.substring(0, eq), java.nio.charset.StandardCharsets.UTF_8),
-          java.net.URLDecoder.decode(
-              pair.substring(eq + 1), java.nio.charset.StandardCharsets.UTF_8));
-    }
-    return out;
-  }
-
-  private static int parseIntOr(String s, int dflt) {
-    if (s == null || s.isEmpty()) return dflt;
-    try {
-      return Integer.parseInt(s);
-    } catch (NumberFormatException e) {
-      return dflt;
-    }
+    renderer.renderFragment(
+        res,
+        Status.OK_200,
+        "partials/hitsList.jte",
+        Map.of("hits", List.<SearchHit>of(), "note", NO_EMBEDDER_NOTE));
   }
 }
