@@ -29,10 +29,15 @@ import org.springframework.ai.embedding.EmbeddingResponse;
  * texts produce similar vectors — enough to make RAG retrieval feel meaningful without requiring
  * model downloads or API keys.
  *
- * <p>Not for production use. In a real application, substitute e.g. {@code
- * TransformersEmbeddingModel} or {@code OpenAiEmbeddingModel}.
+ * <p><b>DEMO ONLY — NOT FOR PRODUCTION.</b> These are synthetic character-trigram hashes, not real
+ * semantic embeddings; retrieval quality is meaningless on real workloads. In a real application
+ * substitute e.g. {@code TransformersEmbeddingModel} or {@code OpenAiEmbeddingModel}. The
+ * constructor logs a warning so this never sneaks into production unnoticed.
  */
 final class DeterministicEmbeddingModel implements EmbeddingModel {
+
+  private static final System.Logger LOG =
+      System.getLogger(DeterministicEmbeddingModel.class.getName());
 
   private final int dimension;
 
@@ -40,6 +45,10 @@ final class DeterministicEmbeddingModel implements EmbeddingModel {
     if (dimension <= 0) {
       throw new IllegalArgumentException("dimension must be positive: " + dimension);
     }
+    LOG.log(
+        System.Logger.Level.WARNING,
+        "DeterministicEmbeddingModel is a DEMO-ONLY synthetic embedder (character-trigram hashing)"
+            + " — NOT FOR PRODUCTION. Substitute a real EmbeddingModel for any real workload.");
     this.dimension = dimension;
   }
 
