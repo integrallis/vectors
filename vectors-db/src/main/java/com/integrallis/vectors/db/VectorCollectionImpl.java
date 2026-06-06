@@ -85,6 +85,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.IntPredicate;
@@ -1913,9 +1914,21 @@ final class VectorCollectionImpl implements VectorCollection {
 
   @Override
   public void close() {
-    // Stop the compaction daemon first so it cannot race the generation teardown below.
+    // Stop the compaction daemon first so it cannot race the generation teardown below. Request an
+    // orderly shutdown and wait briefly so an in-flight compaction (mid directory delete/rename)
+    // can
+    // finish instead of being interrupted half-way; force it only if it overruns the grace period.
     if (compactionExecutor != null) {
-      compactionExecutor.shutdownNow();
+      compactionExecutor.shutdown();
+      try {
+        if (!compactionExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+          LOGGER.warning("compaction daemon did not stop within 10s; forcing shutdown");
+          compactionExecutor.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        compactionExecutor.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
     }
     writerLock.lock();
     try {

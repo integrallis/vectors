@@ -22,6 +22,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -322,6 +323,14 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
         }
       } finally {
         pool.shutdown();
+        try {
+          if (!pool.awaitTermination(5, TimeUnit.MINUTES)) {
+            pool.shutdownNow();
+          }
+        } catch (InterruptedException ie) {
+          pool.shutdownNow();
+          Thread.currentThread().interrupt();
+        }
       }
     }
 

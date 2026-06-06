@@ -65,7 +65,9 @@ public final class DistributedStudioBackend implements StudioBackend {
   private final int dim;
   private final String metric;
   private final Instant createdAt;
-  private final Map<String, Integer> idToOrdinal;
+  // Published via copy-on-write swap in rebuildIdToOrdinal() so concurrent readers (search/get)
+  // always see a complete map, never a half-rebuilt one.
+  private volatile Map<String, Integer> idToOrdinal;
   private volatile SidecartSource sidecart;
 
   private DistributedStudioBackend(
@@ -288,9 +290,10 @@ public final class DistributedStudioBackend implements StudioBackend {
   }
 
   private void rebuildIdToOrdinal() {
-    idToOrdinal.clear();
     List<String> ids = collection.allIdsView();
-    for (int i = 0; i < ids.size(); i++) idToOrdinal.put(ids.get(i), i);
+    Map<String, Integer> rebuilt = new HashMap<>(ids.size());
+    for (int i = 0; i < ids.size(); i++) rebuilt.put(ids.get(i), i);
+    this.idToOrdinal = rebuilt; // atomic publish: readers see the old or the new complete map
   }
 
   /** Defensive vector lookup: ordinals can shift after commits, so absent ordinals return null. */

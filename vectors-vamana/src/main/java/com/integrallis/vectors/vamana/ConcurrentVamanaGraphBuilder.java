@@ -400,7 +400,8 @@ public final class ConcurrentVamanaGraphBuilder {
       try {
         f.get();
       } catch (ExecutionException e) {
-        throw new RuntimeException(e.getCause());
+        Throwable cause = e.getCause();
+        throw new RuntimeException(cause != null ? cause : e);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new RuntimeException(e);
