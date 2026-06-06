@@ -114,12 +114,11 @@ public final class DistributedVectorCollection implements VectorCollection {
 
   @Override
   public SearchResult search(SearchRequest request) {
-    // Build a broadcast plan: one LocalSearchRequest per node, empty clusterIds = search all
+    // Build a broadcast plan: one LocalSearchRequest per node, empty clusterIds = search all.
+    // Carry the full SearchRequest so each node honours the caller's filter + projection flags.
     List<LocalSearchRequest> plan = new ArrayList<>(allNodes.size());
     for (NodeId node : allNodes) {
-      plan.add(
-          new LocalSearchRequest(
-              node, request.query(), new int[0], request.k(), request.minScore()));
+      plan.add(new LocalSearchRequest(node, new int[0], request));
     }
     return executor.execute(plan, request.k());
   }

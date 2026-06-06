@@ -173,7 +173,7 @@ public class ScatterGatherBenchmark {
     List<LocalSearchRequest> plan = new ArrayList<>(numNodes);
     for (int n = 0; n < numNodes; n++) {
       plan.add(
-          new LocalSearchRequest(new NodeId(nodePrefix + n), q, new int[0], K, -Float.MAX_VALUE));
+          LocalSearchRequest.of(new NodeId(nodePrefix + n), q, new int[0], K, -Float.MAX_VALUE));
     }
     return plan;
   }

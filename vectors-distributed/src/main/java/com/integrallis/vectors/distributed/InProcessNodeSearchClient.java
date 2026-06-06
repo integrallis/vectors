@@ -16,7 +16,6 @@
  */
 package com.integrallis.vectors.distributed;
 
-import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
 import com.integrallis.vectors.db.VectorCollection;
 import java.nio.charset.StandardCharsets;
@@ -61,11 +60,9 @@ public final class InProcessNodeSearchClient implements NodeSearchClient {
   @Override
   public SearchResult search(LocalSearchRequest request, NodeCallContext context) {
     requireAuthorized(context);
-    // clusterIds is informational for IVF routing; for in-process FLAT/HNSW collections
-    // we forward the full query and let the collection search all its data.
-    SearchRequest sr =
-        SearchRequest.builder(request.query(), request.k()).minScore(request.minScore()).build();
-    return collection.search(sr);
+    // clusterIds is informational for IVF routing; for in-process FLAT/HNSW collections we run the
+    // node's full SearchRequest verbatim so the caller's filter and projection flags are honoured.
+    return collection.search(request.request());
   }
 
   @Override

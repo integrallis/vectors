@@ -20,7 +20,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.filter.Filters;
 import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.SearchRequest;
 import com.integrallis.vectors.db.SearchResult;
@@ -121,6 +123,44 @@ class DistributedVectorCollectionTest {
     SearchResult result = dvc.search(SearchRequest.builder(vectors.get(0), 1).build());
     assertThat(result.hits()).hasSize(1);
     assertThat(result.hits().get(0).id()).isEqualTo("doc-0");
+  }
+
+  /**
+   * Metadata filters must be honoured across the scatter-gather, not silently dropped. Spreads
+   * red/blue docs across all three nodes and asserts a {@code color=red} filtered search returns
+   * only red hits. Before the fix (lossy {@code LocalSearchRequest}) this returned blue docs too.
+   */
+  @Test
+  void filteredSearchHonorsFilterAcrossNodes() {
+    Random rng = new Random(4242L);
+    java.util.List<VectorCollection> cols = java.util.List.of(localCol, peerCol1, peerCol2);
+    int reds = 0;
+    for (int i = 0; i < 300; i++) {
+      String color = (i % 2 == 0) ? "red" : "blue";
+      if ("red".equals(color)) {
+        reds++;
+      }
+      Document d =
+          new Document(
+              "doc-" + i,
+              randomUnit(rng),
+              null,
+              java.util.Map.of("color", MetadataValue.of(color)));
+      cols.get(i % cols.size()).add(d);
+    }
+    cols.forEach(VectorCollection::commit);
+
+    float[] query = randomUnit(new Random(11L));
+    SearchResult result =
+        dvc.search(
+            SearchRequest.builder(query, reds + 50).filter(Filters.eq("color", "red")).build());
+
+    assertThat(result.hits()).isNotEmpty();
+    assertThat(result.hits()).hasSizeLessThanOrEqualTo(reds);
+    for (SearchResult.Hit hit : result.hits()) {
+      MetadataValue color = hit.document().metadata().get("color");
+      assertThat(((MetadataValue.Str) color).value()).isEqualTo("red");
+    }
   }
 
   @Test

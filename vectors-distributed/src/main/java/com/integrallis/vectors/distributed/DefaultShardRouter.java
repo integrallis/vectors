@@ -63,7 +63,7 @@ public final class DefaultShardRouter implements ShardRouter {
       for (NodeId node : allNodes) {
         Set<Integer> owned = ownership.clustersFor(node);
         if (!owned.isEmpty()) {
-          requests.add(new LocalSearchRequest(node, query, new int[0], k, minScore));
+          requests.add(LocalSearchRequest.of(node, query, new int[0], k, minScore));
         }
       }
       return requests;
@@ -83,7 +83,7 @@ public final class DefaultShardRouter implements ShardRouter {
       for (int i = 0; i < ids.size(); i++) {
         arr[i] = ids.get(i);
       }
-      requests.add(new LocalSearchRequest(entry.getKey(), query, arr, k, minScore));
+      requests.add(LocalSearchRequest.of(entry.getKey(), query, arr, k, minScore));
     }
     return requests;
   }

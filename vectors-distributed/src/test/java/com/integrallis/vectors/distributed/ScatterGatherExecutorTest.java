@@ -93,9 +93,9 @@ class ScatterGatherExecutorTest {
     float[] query = randomUnit(new Random(42L));
     List<LocalSearchRequest> plan =
         List.of(
-            new LocalSearchRequest(n1, query, new int[0], K, -Float.MAX_VALUE),
-            new LocalSearchRequest(n2, query, new int[0], K, -Float.MAX_VALUE),
-            new LocalSearchRequest(n3, query, new int[0], K, -Float.MAX_VALUE));
+            LocalSearchRequest.of(n1, query, new int[0], K, -Float.MAX_VALUE),
+            LocalSearchRequest.of(n2, query, new int[0], K, -Float.MAX_VALUE),
+            LocalSearchRequest.of(n3, query, new int[0], K, -Float.MAX_VALUE));
 
     SearchResult result = executor.execute(plan, K);
 
@@ -149,9 +149,9 @@ class ScatterGatherExecutorTest {
     float[] query = randomUnit(new Random(99L));
     List<LocalSearchRequest> plan =
         List.of(
-            new LocalSearchRequest(n1, query, new int[0], K, -Float.MAX_VALUE),
-            new LocalSearchRequest(n2, query, new int[0], K, -Float.MAX_VALUE),
-            new LocalSearchRequest(n3, query, new int[0], K, -Float.MAX_VALUE));
+            LocalSearchRequest.of(n1, query, new int[0], K, -Float.MAX_VALUE),
+            LocalSearchRequest.of(n2, query, new int[0], K, -Float.MAX_VALUE),
+            LocalSearchRequest.of(n3, query, new int[0], K, -Float.MAX_VALUE));
 
     SearchResult result = executor.execute(plan, K);
 
@@ -197,8 +197,8 @@ class ScatterGatherExecutorTest {
     float[] query = randomUnit(new Random(7L));
     List<LocalSearchRequest> plan =
         List.of(
-            new LocalSearchRequest(n1, query, new int[0], K, -Float.MAX_VALUE),
-            new LocalSearchRequest(n2, query, new int[0], K, -Float.MAX_VALUE));
+            LocalSearchRequest.of(n1, query, new int[0], K, -Float.MAX_VALUE),
+            LocalSearchRequest.of(n2, query, new int[0], K, -Float.MAX_VALUE));
 
     SearchResult result = executor.execute(plan, K);
     assertThat(result.hits()).isEmpty();
@@ -215,7 +215,7 @@ class ScatterGatherExecutorTest {
 
     float[] query = randomUnit(new Random(55L));
     List<LocalSearchRequest> plan =
-        List.of(new LocalSearchRequest(n1, query, new int[0], K, -Float.MAX_VALUE));
+        List.of(LocalSearchRequest.of(n1, query, new int[0], K, -Float.MAX_VALUE));
 
     SearchResult sg = executor.execute(plan, K);
 
