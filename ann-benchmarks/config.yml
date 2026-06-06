@@ -1,0 +1,33 @@
+# ANN-Benchmarks algorithm config for `vectors` (HNSW index served over HTTP).
+#
+# Schema follows the current ann-benchmarks layout
+# (ann_benchmarks/algorithms/<name>/config.yml). `@metric` is substituted by the
+# harness with the dataset's distance ("euclidean" / "angular"). The query-args
+# inner list is the efSearch sweep that traces the recall-vs-QPS curve.
+#
+# Verify these keys against the exact ann-benchmarks commit you target — the
+# config schema has shifted across versions (older releases used `base_args` /
+# `run_groups` with underscores).
+float:
+  euclidean:
+    vectors:
+      docker-tag: ann-benchmarks-vectors
+      module: ann_benchmarks.algorithms.vectors
+      constructor: Vectors
+      base-args: ["@metric"]
+      run-groups:
+        hnsw:
+          arg-groups:
+            - {"M": [16, 24, 32], "efConstruction": [200, 500]}
+          query-args: [[20, 40, 80, 120, 200, 400, 800]]
+  angular:
+    vectors:
+      docker-tag: ann-benchmarks-vectors
+      module: ann_benchmarks.algorithms.vectors
+      constructor: Vectors
+      base-args: ["@metric"]
+      run-groups:
+        hnsw:
+          arg-groups:
+            - {"M": [16, 24, 32], "efConstruction": [200, 500]}
+          query-args: [[20, 40, 80, 120, 200, 400, 800]]
