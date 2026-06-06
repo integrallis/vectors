@@ -190,6 +190,7 @@ public final class RecallQpsBenchmark {
                     dim,
                     m,
                     efConstruction,
+                    hnswThreads,
                     sweep.hnswEfSearch,
                     pqSubvectors,
                     pqClusters,
@@ -374,6 +375,7 @@ public final class RecallQpsBenchmark {
       int dim,
       int m,
       int efConstruction,
+      int hnswThreads,
       int[] efSearchValues,
       int pqSubvectors,
       int pqClusters,
@@ -434,7 +436,15 @@ public final class RecallQpsBenchmark {
     long t0 = System.nanoTime();
     HnswFusedAdcIndex idx =
         HnswFusedAdcIndex.build(
-            corpus, dsCfg.sim, m, efConstruction, pqSubvectors, pqClusters, 42L, anisoThreshold);
+            corpus,
+            dsCfg.sim,
+            m,
+            efConstruction,
+            pqSubvectors,
+            pqClusters,
+            42L,
+            anisoThreshold,
+            hnswThreads);
     double buildTime = (System.nanoTime() - t0) / 1e9;
     System.out.printf(" %.1fs%n", buildTime);
 

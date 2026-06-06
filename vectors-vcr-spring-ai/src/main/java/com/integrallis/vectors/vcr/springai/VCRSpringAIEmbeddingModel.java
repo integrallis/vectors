@@ -163,10 +163,17 @@ public final class VCRSpringAIEmbeddingModel implements EmbeddingModel {
     return delegate;
   }
 
+  private static final System.Logger LOG =
+      System.getLogger(VCRSpringAIEmbeddingModel.class.getName());
+
   private static int detectDimensions(EmbeddingModel model) {
     try {
       return model.dimensions();
     } catch (Exception e) {
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "could not detect embedding dimensions from the delegate model; using -1",
+          e);
       return -1;
     }
   }

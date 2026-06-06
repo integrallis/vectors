@@ -197,7 +197,8 @@ public final class HnswFusedAdcIndex {
   /**
    * Same as {@link #build(float[][], SimilarityFunction, int, int, int, int, long)} with an
    * optional anisotropic PQ threshold (ScaNN / AVQ). Pass a negative value to use standard
-   * unweighted PQ; typical anisotropic values are 0.1\u20130.3.
+   * unweighted PQ; typical anisotropic values are 0.1\u20130.3. Graph build parallelism defaults to
+   * half the available processors.
    */
   public static HnswFusedAdcIndex build(
       float[][] corpus,
@@ -208,6 +209,34 @@ public final class HnswFusedAdcIndex {
       int pqClusters,
       long seed,
       float anisotropicThreshold) {
+    return build(
+        corpus,
+        metric,
+        maxConnections,
+        efConstruction,
+        pqSubvectors,
+        pqClusters,
+        seed,
+        anisotropicThreshold,
+        Math.max(1, Runtime.getRuntime().availableProcessors() / 2));
+  }
+
+  /**
+   * Full builder with explicit concurrent-graph-build parallelism. {@code buildThreads} controls
+   * the {@link ConcurrentHnswGraphBuilder} fan-out; the graph topology is identical to a
+   * single-threaded build for a given seed, so this only affects build time. Pass 1 for a
+   * deterministic build.
+   */
+  public static HnswFusedAdcIndex build(
+      float[][] corpus,
+      SimilarityFunction metric,
+      int maxConnections,
+      int efConstruction,
+      int pqSubvectors,
+      int pqClusters,
+      long seed,
+      float anisotropicThreshold,
+      int buildThreads) {
 
     int n = corpus.length;
 
@@ -225,11 +254,6 @@ public final class HnswFusedAdcIndex {
 
     // Step 1: Build the HNSW graph. Use the concurrent builder — it scales ~7\u00d7 on M3 and the
     // graph topology matches the sequential path at threads=1 (same seed).
-    int buildThreads =
-        Integer.parseInt(
-            System.getProperty(
-                "bench.hnsw.threads",
-                String.valueOf(Math.max(1, Runtime.getRuntime().availableProcessors() / 2))));
     HnswGraph graph =
         ConcurrentHnswGraphBuilder.create(maxConnections, efConstruction, ivec, metric, seed)
             .build(buildThreads);
