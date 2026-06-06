@@ -19,6 +19,7 @@ this repo for maintenance; they map onto the ann-benchmarks layout
 | `config.jpype.yml` | Same grid for the jpype variant (register as a separate `vectors-jpype` algorithm) |
 | `Dockerfile.jpype` | `FROM ann-benchmarks` + JDK 25 + `pip install JPype1` + the dist's classpath |
 | `smoke_test.py` | Local HTTP end-to-end check (HNSW + VAMANA) **without** the full harness |
+| `docker-compose.yml` + `docker/` | Self-contained container that runs the jpype bridge in-process to verify it (`validate_jpype.py`) |
 
 Both adapters cover **HNSW + VAMANA + IVF-PQ**. Graph indexes sweep `efSearch` at
 query time; IVF sweeps `nprobe` by rebuilding (it is a build-time setting in
@@ -41,12 +42,16 @@ directly — no server, no round-trip — starting the JVM with
 `lib/*.jar` as the classpath. Register it as a separate `vectors-jpype` algorithm
 so both brackets plot side by side.
 
-> **Verification note:** the HTTP adapter is verified end-to-end here (`smoke_test.py`,
-> recall@10 = 1.0 against a live server). The jpype variant makes the same
-> `VectorCollection` build/add/commit/search calls the `vectors-db` test suite
-> covers, but its jpype Python↔JVM marshalling must be exercised in a
-> jpype-capable environment (the `Dockerfile.jpype` image, which `pip install`s
-> JPype1) — it cannot run in a stock dev shell without jpype.
+> **Verification:** both adapters are verified end-to-end. HTTP — `smoke_test.py`,
+> recall@10 = 1.0 against a live server. jpype — `docker-compose.yml` builds a
+> JDK 25 + JPype1 runtime and runs `docker/validate_jpype.py` in-process,
+> HNSW + VAMANA at recall@10 = 1.0:
+>
+> ```bash
+> ./gradlew :vectors-server:installDist
+> docker compose -f ann-benchmarks/docker-compose.yml run --build --rm jpype-validate
+> # -> HNSW: recall@10 = 1.0000 ... VAMANA: recall@10 = 1.0000 ... JPYPE VALIDATION PASSED
+> ```
 
 > **Scope:** the adapter sweeps **HNSW** (M, efConstruction, efSearch) plus FLAT —
 > the universal ANN-Benchmarks algorithm. Tuning Vamana / IVF-PQ over HTTP needs

@@ -1,0 +1,14 @@
+# Self-contained image to VALIDATE the in-process jpype bridge (module_jpype.py)
+# end-to-end, independent of the full ann-benchmarks harness. The adapter code and
+# the vectors-db classpath are mounted at run time (see ../docker-compose.yml), so
+# this image only provides the runtime: JDK 25 + Python + jpype + numpy.
+FROM eclipse-temurin:25-jdk
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir --break-system-packages JPype1 numpy
+
+# eclipse-temurin already sets JAVA_HOME=/opt/java/openjdk, which jpype uses to
+# locate libjvm.

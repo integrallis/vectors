@@ -1,0 +1,23 @@
+# Docker Compose for the in-process jpype ANN-Benchmarks bridge.
+#
+# Validate the bridge end-to-end (no full harness needed):
+#   ./gradlew :vectors-server:installDist
+#   docker compose -f ann-benchmarks/docker-compose.yml run --build --rm jpype-validate
+#
+# The `jpype-validate` image is just a runtime (JDK 25 + Python + JPype1 + numpy);
+# the adapter code and the vectors-db classpath (the vectors-server distribution's
+# lib/) are mounted read-only, so the same checkout is exercised with no copy step.
+services:
+  jpype-validate:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.jpype-validate
+    working_dir: /work
+    environment:
+      VECTORS_CLASSPATH: "/opt/vectors-server/lib/*.jar"
+      VECTORS_APP_DIR: "/work"
+      VECTORS_XMX: "2g"
+    volumes:
+      - ../vectors-server/build/install/vectors-server:/opt/vectors-server:ro
+      - .:/work:ro
+    command: ["python3", "docker/validate_jpype.py"]

@@ -21,6 +21,7 @@ import glob
 import os
 
 import jpype
+import jpype.imports  # registers the import hook so `from com.integrallis... import X` resolves
 
 try:
     from ann_benchmarks.algorithms.base.module import BaseANN
