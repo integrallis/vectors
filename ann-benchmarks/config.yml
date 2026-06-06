@@ -1,9 +1,15 @@
-# ANN-Benchmarks algorithm config for `vectors` (HNSW index served over HTTP).
+# ANN-Benchmarks algorithm config for `vectors`.
 #
 # Schema follows the current ann-benchmarks layout
 # (ann_benchmarks/algorithms/<name>/config.yml). `@metric` is substituted by the
-# harness with the dataset's distance ("euclidean" / "angular"). The query-args
-# inner list is the efSearch sweep that traces the recall-vs-QPS curve.
+# harness with the dataset's distance ("euclidean" / "angular"). One `Vectors`
+# constructor covers every backend; the `indexType` arg-group key selects it.
+#
+# - HNSW / VAMANA (graph): the recall-vs-QPS curve is swept at QUERY time via the
+#   efSearch values in `query-args`.
+# - IVF_FLAT / IVF_PQ: nprobe is a BUILD-time setting in `vectors`, so it is swept
+#   via `arg-groups` (each value rebuilds the index); `query-args` carries a single
+#   placeholder that the adapter ignores for IVF.
 #
 # Verify these keys against the exact ann-benchmarks commit you target — the
 # config schema has shifted across versions (older releases used `base_args` /
@@ -18,8 +24,17 @@ float:
       run-groups:
         hnsw:
           arg-groups:
-            - {"M": [16, 24, 32], "efConstruction": [200, 500]}
+            - {"indexType": ["HNSW"], "M": [16, 24, 32], "efConstruction": [200, 500]}
           query-args: [[20, 40, 80, 120, 200, 400, 800]]
+        vamana:
+          arg-groups:
+            - {"indexType": ["VAMANA"], "R": [32, 64], "L": [128], "alpha": [1.2]}
+          query-args: [[40, 80, 120, 200, 400, 800]]
+        ivfpq:
+          arg-groups:
+            - {"indexType": ["IVF_PQ"], "nlist": [256, 1024], "nprobe": [8, 16, 32, 64, 128],
+               "pqSubspaces": [16], "pqClusters": [256], "rescore": [4]}
+          query-args: [[0]]
   angular:
     vectors:
       docker-tag: ann-benchmarks-vectors
@@ -29,5 +44,14 @@ float:
       run-groups:
         hnsw:
           arg-groups:
-            - {"M": [16, 24, 32], "efConstruction": [200, 500]}
+            - {"indexType": ["HNSW"], "M": [16, 24, 32], "efConstruction": [200, 500]}
           query-args: [[20, 40, 80, 120, 200, 400, 800]]
+        vamana:
+          arg-groups:
+            - {"indexType": ["VAMANA"], "R": [32, 64], "L": [128], "alpha": [1.2]}
+          query-args: [[40, 80, 120, 200, 400, 800]]
+        ivfpq:
+          arg-groups:
+            - {"indexType": ["IVF_PQ"], "nlist": [256, 1024], "nprobe": [8, 16, 32, 64, 128],
+               "pqSubspaces": [16], "pqClusters": [256], "rescore": [4]}
+          query-args: [[0]]

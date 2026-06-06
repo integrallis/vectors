@@ -29,8 +29,9 @@ import java.util.regex.Pattern;
 /**
  * Inbound body for {@code POST /v1/collections}.
  *
- * <p>Wire format (all fields except {@code quantizer}, {@code hnswM}, {@code hnswEfConstruction},
- * and {@code autoCommitThreshold} are required):
+ * <p>Only {@code name}, {@code dimension}, {@code metric}, and {@code indexType} are required;
+ * everything else is an optional tuning knob that defaults to the {@link VectorCollectionBuilder}
+ * default when unset.
  *
  * <pre>{@code
  * {
@@ -41,12 +42,25 @@ import java.util.regex.Pattern;
  *   "quantizer":            "NONE",
  *   "hnswM":                16,
  *   "hnswEfConstruction":   100,
+ *   "hnswBuildThreads":     8,
+ *   "vamanaMaxDegree":      64,
+ *   "vamanaSearchListSize": 128,
+ *   "vamanaAlpha":          1.2,
+ *   "vamanaBuildThreads":   8,
+ *   "ivfK":                 1024,
+ *   "ivfNprobe":            32,
+ *   "ivfMaxIter":           30,
+ *   "ivfPqSubspaces":       16,
+ *   "ivfPqClusters":        256,
+ *   "ivfRescoreFactor":     4,
  *   "autoCommitThreshold":  32
  * }
  * }</pre>
  *
- * <p>Enum strings are matched case-insensitively so clients may use either {@code cosine} or {@code
- * COSINE}. Unknown enum values produce a {@code 400 Bad Request}.
+ * <p>The index-specific knobs are applied unconditionally; {@link VectorCollectionBuilder} ignores
+ * the ones that don't apply to the chosen {@code indexType} (e.g. {@code vamanaMaxDegree} is a
+ * no-op for HNSW). Enum strings are matched case-insensitively. Unknown enum values or out-of-range
+ * numbers produce a {@code 400 Bad Request}.
  */
 public record CreateCollectionRequest(
     String name,
@@ -56,6 +70,17 @@ public record CreateCollectionRequest(
     String quantizer,
     Integer hnswM,
     Integer hnswEfConstruction,
+    Integer hnswBuildThreads,
+    Integer vamanaMaxDegree,
+    Integer vamanaSearchListSize,
+    Double vamanaAlpha,
+    Integer vamanaBuildThreads,
+    Integer ivfK,
+    Integer ivfNprobe,
+    Integer ivfMaxIter,
+    Integer ivfPqSubspaces,
+    Integer ivfPqClusters,
+    Integer ivfRescoreFactor,
     Integer autoCommitThreshold) {
 
   /** URL-safe name charset: letters, digits, hyphen, underscore. 1..128 characters. */
@@ -70,6 +95,17 @@ public record CreateCollectionRequest(
       @JsonProperty("quantizer") String quantizer,
       @JsonProperty("hnswM") Integer hnswM,
       @JsonProperty("hnswEfConstruction") Integer hnswEfConstruction,
+      @JsonProperty("hnswBuildThreads") Integer hnswBuildThreads,
+      @JsonProperty("vamanaMaxDegree") Integer vamanaMaxDegree,
+      @JsonProperty("vamanaSearchListSize") Integer vamanaSearchListSize,
+      @JsonProperty("vamanaAlpha") Double vamanaAlpha,
+      @JsonProperty("vamanaBuildThreads") Integer vamanaBuildThreads,
+      @JsonProperty("ivfK") Integer ivfK,
+      @JsonProperty("ivfNprobe") Integer ivfNprobe,
+      @JsonProperty("ivfMaxIter") Integer ivfMaxIter,
+      @JsonProperty("ivfPqSubspaces") Integer ivfPqSubspaces,
+      @JsonProperty("ivfPqClusters") Integer ivfPqClusters,
+      @JsonProperty("ivfRescoreFactor") Integer ivfRescoreFactor,
       @JsonProperty("autoCommitThreshold") Integer autoCommitThreshold) {
     this.name = name;
     this.dimension = dimension;
@@ -78,6 +114,17 @@ public record CreateCollectionRequest(
     this.quantizer = quantizer;
     this.hnswM = hnswM;
     this.hnswEfConstruction = hnswEfConstruction;
+    this.hnswBuildThreads = hnswBuildThreads;
+    this.vamanaMaxDegree = vamanaMaxDegree;
+    this.vamanaSearchListSize = vamanaSearchListSize;
+    this.vamanaAlpha = vamanaAlpha;
+    this.vamanaBuildThreads = vamanaBuildThreads;
+    this.ivfK = ivfK;
+    this.ivfNprobe = ivfNprobe;
+    this.ivfMaxIter = ivfMaxIter;
+    this.ivfPqSubspaces = ivfPqSubspaces;
+    this.ivfPqClusters = ivfPqClusters;
+    this.ivfRescoreFactor = ivfRescoreFactor;
     this.autoCommitThreshold = autoCommitThreshold;
   }
 
@@ -115,14 +162,36 @@ public record CreateCollectionRequest(
         return "unknown quantizer: " + quantizer;
       }
     }
-    if (hnswM != null && hnswM <= 0) {
-      return "hnswM must be positive";
+    String positive = firstNonPositive();
+    if (positive != null) {
+      return positive;
     }
-    if (hnswEfConstruction != null && hnswEfConstruction <= 0) {
-      return "hnswEfConstruction must be positive";
+    if (vamanaAlpha != null && vamanaAlpha < 1.0) {
+      return "vamanaAlpha must be >= 1.0";
     }
-    if (autoCommitThreshold != null && autoCommitThreshold <= 0) {
-      return "autoCommitThreshold must be positive";
+    return null;
+  }
+
+  /** Returns an error message for the first int knob that is set but non-positive, else null. */
+  private String firstNonPositive() {
+    String[] names = {
+      "hnswM", "hnswEfConstruction", "hnswBuildThreads",
+      "vamanaMaxDegree", "vamanaSearchListSize", "vamanaBuildThreads",
+      "ivfK", "ivfNprobe", "ivfMaxIter",
+      "ivfPqSubspaces", "ivfPqClusters", "ivfRescoreFactor",
+      "autoCommitThreshold"
+    };
+    Integer[] values = {
+      hnswM, hnswEfConstruction, hnswBuildThreads,
+      vamanaMaxDegree, vamanaSearchListSize, vamanaBuildThreads,
+      ivfK, ivfNprobe, ivfMaxIter,
+      ivfPqSubspaces, ivfPqClusters, ivfRescoreFactor,
+      autoCommitThreshold
+    };
+    for (int i = 0; i < names.length; i++) {
+      if (values[i] != null && values[i] <= 0) {
+        return names[i] + " must be positive";
+      }
     }
     return null;
   }
@@ -141,11 +210,47 @@ public record CreateCollectionRequest(
     if (quantizer != null) {
       builder.quantizer(QuantizerKind.valueOf(quantizer.toUpperCase()));
     }
+    // HNSW knobs.
     if (hnswM != null) {
       builder.hnswM(hnswM);
     }
     if (hnswEfConstruction != null) {
       builder.hnswEfConstruction(hnswEfConstruction);
+    }
+    if (hnswBuildThreads != null) {
+      builder.hnswBuildThreads(hnswBuildThreads);
+    }
+    // Vamana knobs (search-time L is supplied per query via efSearch).
+    if (vamanaMaxDegree != null) {
+      builder.vamanaMaxDegree(vamanaMaxDegree);
+    }
+    if (vamanaSearchListSize != null) {
+      builder.vamanaSearchListSize(vamanaSearchListSize);
+    }
+    if (vamanaAlpha != null) {
+      builder.vamanaAlpha(vamanaAlpha.floatValue());
+    }
+    if (vamanaBuildThreads != null) {
+      builder.vamanaBuildThreads(vamanaBuildThreads);
+    }
+    // IVF / IVF-PQ knobs (nprobe is a build-time setting in vectors, swept by rebuilding).
+    if (ivfK != null) {
+      builder.ivfK(ivfK);
+    }
+    if (ivfNprobe != null) {
+      builder.ivfNprobe(ivfNprobe);
+    }
+    if (ivfMaxIter != null) {
+      builder.ivfMaxIter(ivfMaxIter);
+    }
+    if (ivfPqSubspaces != null) {
+      builder.ivfPqSubspaces(ivfPqSubspaces);
+    }
+    if (ivfPqClusters != null) {
+      builder.ivfPqClusters(ivfPqClusters);
+    }
+    if (ivfRescoreFactor != null) {
+      builder.ivfRescoreFactor(ivfRescoreFactor);
     }
     if (autoCommitThreshold != null) {
       builder.autoCommitThreshold(autoCommitThreshold);

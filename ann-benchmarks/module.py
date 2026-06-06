@@ -7,7 +7,13 @@
 # bracket as Qdrant / Milvus / Weaviate / pgvector (the per-query localhost
 # round-trip is part of the measured latency, exactly as it is for those
 # systems). For a future in-process (library-bracket) comparison vs hnswlib /
-# FAISS, swap the HTTP calls for a jpype bridge — see README.md.
+# FAISS, swap the HTTP calls for a jpype bridge (see README.md, module_jpype.py).
+#
+# One `Vectors` constructor covers every index backend; `method_param["indexType"]`
+# selects HNSW / VAMANA / IVF_FLAT / IVF_PQ and the rest of the dict carries that
+# backend's build knobs. For graph indexes (HNSW/VAMANA) the recall-vs-QPS curve
+# is swept at query time via efSearch; for IVF, nprobe is a build-time setting in
+# `vectors`, so it is swept by rebuilding (arg-groups) instead.
 import json
 import os
 import subprocess
@@ -16,7 +22,6 @@ import urllib.error
 import urllib.request
 
 try:
-    # Provided by the ann-benchmarks harness at runtime.
     from ann_benchmarks.algorithms.base.module import BaseANN
 except ImportError:  # standalone (smoke_test.py) — minimal stand-in.
 
@@ -25,12 +30,9 @@ except ImportError:  # standalone (smoke_test.py) — minimal stand-in.
             pass
 
 
-# ann-benchmarks metric name -> vectors SimilarityFunction.
 _METRIC = {"euclidean": "EUCLIDEAN", "angular": "COSINE"}
+_GRAPH_INDEXES = {"HNSW", "VAMANA"}
 
-# Launcher for the vectors-server distribution (built via
-# `./gradlew :vectors-server:installDist`). The Dockerfile sets this to the
-# installed path; locally, smoke_test.py points it at build/install.
 _SERVER_CMD = os.environ.get("VECTORS_SERVER_CMD", "vectors-server")
 _PORT = int(os.environ.get("VECTORS_PORT", "8287"))
 _DATA_DIR = os.environ.get("VECTORS_DATA_DIR", "/tmp/ann-vectors-data")
@@ -39,19 +41,24 @@ _INGEST_BATCH = 2000
 
 
 class Vectors(BaseANN):
-    """ANN-Benchmarks wrapper for the `vectors` HNSW index, served over HTTP."""
+    """ANN-Benchmarks wrapper for `vectors`, served over HTTP. Backend-agnostic."""
 
     def __init__(self, metric, method_param):
         if metric not in _METRIC:
             raise NotImplementedError(f"vectors: unsupported metric {metric!r}")
         self._metric = _METRIC[metric]
-        self._m = int(method_param["M"])
-        self._ef_construction = int(method_param["efConstruction"])
+        self._p = dict(method_param)
+        self._index = str(self._p.get("indexType", "HNSW")).upper()
+        # Build threads default to the server's deterministic single-threaded build.
+        # Parallel HNSW build (hnswBuildThreads > 1) currently has a self-loop bug in
+        # ConcurrentHnswGraphBuilder, so only opt in via an explicit "buildThreads"
+        # once that is fixed; build time is reported separately from QPS anyway.
+        bt = self._p.get("buildThreads")
+        self._build_threads = int(bt) if bt else None
         self._ef_search = None
         self._base = f"http://127.0.0.1:{_PORT}"
-        self._dim = None
         self._proc = None
-        self.name = f"vectors(M={self._m}, efC={self._ef_construction})"
+        self.name = f"vectors({self._index}, {self._build_label()})"
         self._start_server()
 
     # ---- server lifecycle ----
@@ -63,7 +70,7 @@ class Vectors(BaseANN):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        deadline = time.time() + 180  # JVM start + incubator module load
+        deadline = time.time() + 180
         while time.time() < deadline:
             if self._proc.poll() is not None:
                 raise RuntimeError("vectors-server exited during startup")
@@ -86,29 +93,58 @@ class Vectors(BaseANN):
             raw = r.read()
             return json.loads(raw) if raw else None
 
+    # ---- collection body per index backend ----
+
+    def _build_label(self):
+        p = self._p
+        if self._index == "HNSW":
+            return f"M={p.get('M')}, efC={p.get('efConstruction')}"
+        if self._index == "VAMANA":
+            return f"R={p.get('R')}, L={p.get('L')}, alpha={p.get('alpha')}"
+        if self._index in ("IVF_FLAT", "IVF_PQ"):
+            return f"nlist={p.get('nlist')}, nprobe={p.get('nprobe')}"
+        return ""
+
+    def _create_body(self, dim):
+        p = self._p
+        body = {
+            "name": _COLLECTION,
+            "dimension": dim,
+            "metric": self._metric,
+            "indexType": self._index,
+        }
+        if self._index == "HNSW":
+            _put(body, "hnswM", p.get("M"))
+            _put(body, "hnswEfConstruction", p.get("efConstruction"))
+            _put(body, "hnswBuildThreads", self._build_threads)
+        elif self._index == "VAMANA":
+            _put(body, "vamanaMaxDegree", p.get("R"))
+            _put(body, "vamanaSearchListSize", p.get("L"))
+            _put(body, "vamanaAlpha", p.get("alpha"))
+            _put(body, "vamanaBuildThreads", self._build_threads)
+        elif self._index in ("IVF_FLAT", "IVF_PQ"):
+            _put(body, "ivfK", p.get("nlist"))
+            _put(body, "ivfNprobe", p.get("nprobe"))
+            _put(body, "ivfMaxIter", p.get("maxIter"))
+            if self._index == "IVF_PQ":
+                _put(body, "ivfPqSubspaces", p.get("pqSubspaces"))
+                _put(body, "ivfPqClusters", p.get("pqClusters"))
+                _put(body, "ivfRescoreFactor", p.get("rescore"))
+        return body
+
     # ---- ANN-Benchmarks API ----
 
     def fit(self, X):
         n = len(X)
-        self._dim = len(X[0])
+        dim = len(X[0])
         try:
             urllib.request.urlopen(
                 urllib.request.Request(self._base + "/v1/collections/" + _COLLECTION, method="DELETE"),
                 timeout=30,
             )
         except urllib.error.HTTPError:
-            pass  # 404 if absent — fine
-        self._post(
-            "/v1/collections",
-            {
-                "name": _COLLECTION,
-                "dimension": self._dim,
-                "metric": self._metric,
-                "indexType": "HNSW",
-                "hnswM": self._m,
-                "hnswEfConstruction": self._ef_construction,
-            },
-        )
+            pass
+        self._post("/v1/collections", self._create_body(dim))
         for start in range(0, n, _INGEST_BATCH):
             docs = [
                 {"id": str(i), "vector": _to_list(X[i])}
@@ -118,10 +154,14 @@ class Vectors(BaseANN):
         self._post(f"/v1/collections/{_COLLECTION}/commit", {})
 
     def set_query_arguments(self, ef_search):
-        self._ef_search = int(ef_search)
-        self.name = (
-            f"vectors(M={self._m}, efC={self._ef_construction}, efSearch={self._ef_search})"
-        )
+        # efSearch is the graph-index (HNSW/VAMANA) search-time beam. IVF sweeps
+        # nprobe at build time, so the argument is ignored there.
+        if self._index in _GRAPH_INDEXES and ef_search and int(ef_search) > 0:
+            self._ef_search = int(ef_search)
+            self.name = f"vectors({self._index}, {self._build_label()}, efSearch={self._ef_search})"
+        else:
+            self._ef_search = None
+            self.name = f"vectors({self._index}, {self._build_label()})"
 
     def query(self, v, n):
         body = {"queryVector": _to_list(v), "k": n}
@@ -143,7 +183,11 @@ class Vectors(BaseANN):
             self._proc = None
 
 
+def _put(body, key, value):
+    if value is not None:
+        body[key] = value
+
+
 def _to_list(v):
-    # Accept numpy arrays (ann-benchmarks) or plain lists (smoke test).
     tolist = getattr(v, "tolist", None)
     return tolist() if tolist is not None else list(v)

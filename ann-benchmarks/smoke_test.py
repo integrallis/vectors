@@ -33,20 +33,24 @@ def main():
         gt.append(set(np.argsort(d)[:k].tolist()))
 
     os.environ.setdefault("VECTORS_DATA_DIR", tempfile.mkdtemp(prefix="annb-smoke-"))
-    algo = Vectors("euclidean", {"M": 16, "efConstruction": 200})
-    try:
-        algo.fit(data)
-        algo.set_query_arguments(128)
-        hits = 0
-        for i, q in enumerate(queries):
-            got = set(algo.query(q, k))
-            hits += len(got & gt[i])
-        recall = hits / (nq * k)
-        print(f"recall@{k} = {recall:.4f} over {nq} queries (efSearch=128)")
-        assert recall >= 0.90, f"recall too low: {recall:.4f}"
-        print("SMOKE TEST PASSED")
-    finally:
-        algo.done()
+    configs = [
+        {"indexType": "HNSW", "M": 16, "efConstruction": 200},
+        {"indexType": "VAMANA", "R": 32, "L": 128, "alpha": 1.2},
+    ]
+    for params in configs:
+        algo = Vectors("euclidean", params)
+        try:
+            algo.fit(data)
+            algo.set_query_arguments(128)
+            hits = 0
+            for i, q in enumerate(queries):
+                hits += len(set(algo.query(q, k)) & gt[i])
+            recall = hits / (nq * k)
+            print(f"{params['indexType']}: recall@{k} = {recall:.4f} over {nq} queries (efSearch=128)")
+            assert recall >= 0.90, f"{params['indexType']} recall too low: {recall:.4f}"
+        finally:
+            algo.done()
+    print("SMOKE TEST PASSED")
 
 
 if __name__ == "__main__":
