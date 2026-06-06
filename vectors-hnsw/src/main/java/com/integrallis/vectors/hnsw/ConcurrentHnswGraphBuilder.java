@@ -196,7 +196,7 @@ public final class ConcurrentHnswGraphBuilder {
     // Phase 1: greedy descent from epLevel down to level+1
     int currentBest = ep;
     for (int layer = epLevel; layer > level; layer--) {
-      currentBest = greedyConcurrent(query, currentBest, layer, graph, locks, ctx);
+      currentBest = greedyConcurrent(query, currentBest, layer, graph, locks, ctx, nodeId);
     }
 
     // Phase 2: beam search + backlinks at each insertion layer
@@ -207,7 +207,8 @@ public final class ConcurrentHnswGraphBuilder {
       int maxConn = (layer == 0) ? graph.maxConnections0() : maxConnections;
 
       NeighborArray searchResults =
-          searchLayerConcurrent(query, entryPoints, efConstruction, layer, graph, locks, ctx);
+          searchLayerConcurrent(
+              query, entryPoints, efConstruction, layer, graph, locks, ctx, nodeId);
 
       NeighborArray neighbors =
           NeighborSelector.selectDiverse(searchResults, maxConn, vectors, similarityFunction);
@@ -258,14 +259,21 @@ public final class ConcurrentHnswGraphBuilder {
   // Concurrent greedy + beam search
   // ---------------------------------------------------------------------------
 
-  /** Single-best greedy walk at the given layer (used for upper-layer descent). */
+  /**
+   * Single-best greedy walk at the given layer (used for upper-layer descent). {@code self} is the
+   * node being inserted; it is never a valid move target — because all neighbor arrays exist from
+   * the start, a concurrent insert may have already back-linked {@code self} into a node we visit,
+   * and {@code self} scores maximal self-similarity, which would otherwise pull the walk onto
+   * itself and ultimately produce a self-loop edge.
+   */
   private int greedyConcurrent(
       float[] query,
       int entry,
       int layer,
       HnswGraph graph,
       ReentrantLock[] locks,
-      WorkContext ctx) {
+      WorkContext ctx,
+      int self) {
     int current = entry;
     float currentScore = similarityFunction.compare(query, vectors.getVector(current));
     boolean improved = true;
@@ -273,10 +281,12 @@ public final class ConcurrentHnswGraphBuilder {
       improved = false;
       int nCount = snapshotNeighbors(current, layer, graph, locks, ctx.tmpIds);
       for (int i = 0; i < nCount; i++) {
-        float s = similarityFunction.compare(query, vectors.getVector(ctx.tmpIds[i]));
+        int nbr = ctx.tmpIds[i];
+        if (nbr == self) continue;
+        float s = similarityFunction.compare(query, vectors.getVector(nbr));
         if (s > currentScore) {
           currentScore = s;
-          current = ctx.tmpIds[i];
+          current = nbr;
           improved = true;
         }
       }
@@ -284,7 +294,12 @@ public final class ConcurrentHnswGraphBuilder {
     return current;
   }
 
-  /** ef-limited beam search; results returned as a descending-score NeighborArray. */
+  /**
+   * ef-limited beam search; results returned as a descending-score NeighborArray. {@code self} (the
+   * node being inserted) is pre-marked visited so it can never enter the candidate/result set: a
+   * concurrent insert may have already back-linked {@code self} into the graph, and admitting it
+   * here would select the node as its own neighbour (a self-loop). See {@link #greedyConcurrent}.
+   */
   private NeighborArray searchLayerConcurrent(
       float[] query,
       int[] entryPoints,
@@ -292,11 +307,13 @@ public final class ConcurrentHnswGraphBuilder {
       int layer,
       HnswGraph graph,
       ReentrantLock[] locks,
-      WorkContext ctx) {
+      WorkContext ctx,
+      int self) {
 
     ctx.visited.clear();
     ctx.candidates.clear();
     ctx.results.clear();
+    ctx.visited.set(self); // never admit the node being inserted into its own neighbour set
 
     for (int ep : entryPoints) {
       if (!ctx.visited.get(ep)) {

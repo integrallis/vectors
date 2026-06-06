@@ -49,10 +49,11 @@ class Vectors(BaseANN):
         self._metric = _METRIC[metric]
         self._p = dict(method_param)
         self._index = str(self._p.get("indexType", "HNSW")).upper()
-        # Build threads default to the server's deterministic single-threaded build.
-        # Parallel HNSW build (hnswBuildThreads > 1) currently has a self-loop bug in
-        # ConcurrentHnswGraphBuilder, so only opt in via an explicit "buildThreads"
-        # once that is fixed; build time is reported separately from QPS anyway.
+        # Build threads default to the server's deterministic single-threaded build
+        # (reproducible graphs). Parallel build (hnswBuildThreads > 1) is safe — the
+        # ConcurrentHnswGraphBuilder self-loop bug is fixed — and faster for large
+        # corpora; opt in via an explicit "buildThreads". Build time is reported
+        # separately from QPS either way.
         bt = self._p.get("buildThreads")
         self._build_threads = int(bt) if bt else None
         self._ef_search = None
