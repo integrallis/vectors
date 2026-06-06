@@ -110,6 +110,16 @@ public final class VectorsServer implements Callable<Integer> {
    */
   public static ServerHandle start(ServerConfig config) {
     Objects.requireNonNull(config, "config");
+    // Make the security posture explicit at startup — a server that silently runs without auth is
+    // an operational foot-gun (the api-key is optional and absent by default).
+    if (config.apiKey() != null) {
+      LOG.info("API authentication ENABLED — protected routes require a bearer token.");
+    } else {
+      LOG.warn(
+          "API authentication DISABLED — no api-key configured (pass --api-key or set"
+              + " VECTORS_API_KEY). All routes are open; do not expose this server on an untrusted"
+              + " network.");
+    }
     CollectionRegistry registry = new CollectionRegistry();
     registry.setDataDir(config.dataDir());
     try {
