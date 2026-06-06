@@ -520,6 +520,22 @@ public final class RecallQpsBenchmark {
     }
     latency.compute();
     double recall10 = RecallUtil.meanRecallAtK(groundTruth, approxResults, k);
+    // recall@100 at the same operating point (same efSearch/overQuery) via an extra untimed pass.
+    double recall100 = -1;
+    if (groundTruth.length > 0 && groundTruth[0].length >= 100) {
+      if (k >= 100) {
+        recall100 = RecallUtil.meanRecallAtK(groundTruth, approxResults, 100);
+      } else {
+        int[][] approx100 = new int[numQueries][100];
+        for (int qi = 0; qi < numQueries; qi++) {
+          int[] ids = idx.searchTwoPass(queries[qi], 100, efSearch, overQuery).nodeIds();
+          int take = Math.min(100, ids.length);
+          System.arraycopy(ids, 0, approx100[qi], 0, take);
+          for (int i = take; i < 100; i++) approx100[qi][i] = -1;
+        }
+        recall100 = RecallUtil.meanRecallAtK(groundTruth, approx100, 100);
+      }
+    }
 
     System.out.printf(
         "    %s: recall@%d=%.3f  QPS=%,.0f  p50=%.0fus  p99=%.0fus%n",
@@ -534,7 +550,7 @@ public final class RecallQpsBenchmark {
         .buildParams(buildParams)
         .searchParams(searchParams)
         .recall10(recall10)
-        .recall100(-1)
+        .recall100(recall100)
         .qps(latency.qps())
         .p50Us(latency.p50Us())
         .p95Us(latency.p95Us())
@@ -947,11 +963,29 @@ public final class RecallQpsBenchmark {
 
     // Compute recall.
     double recall10 = RecallUtil.meanRecallAtK(groundTruth, approxResults, k);
+    // recall@100 at the SAME operating point (same searchListSize) via an extra untimed k=100 pass.
+    // The timed loop above measures QPS at k; this only adds the deeper-k recall number. Naturally
+    // bounded when the swept efSearch < 100. Requires >=100 ground-truth neighbours per query.
     double recall100 = -1;
-    // Only compute recall@100 if groundTruth has >= 100 neighbors.
-    if (groundTruth.length > 0 && groundTruth[0].length >= 100 && k <= 100) {
-      // We'd need k=100 search to compute recall@100; skip for now.
-      recall100 = -1;
+    if (groundTruth.length > 0 && groundTruth[0].length >= 100) {
+      if (k >= 100) {
+        recall100 = RecallUtil.meanRecallAtK(groundTruth, approxResults, 100);
+      } else {
+        int[][] approx100 = new int[numQueries][100];
+        for (int qi = 0; qi < numQueries; qi++) {
+          SearchRequest.Builder req =
+              SearchRequest.builder(queries[qi], 100)
+                  .includeVector(false)
+                  .includeText(false)
+                  .includeMetadata(false);
+          if (searchListSize > 0) req.searchListSize(searchListSize);
+          List<SearchResult.Hit> hits = col.search(req.build()).hits();
+          int take = Math.min(100, hits.size());
+          for (int i = 0; i < take; i++) approx100[qi][i] = parseOrdinal(hits.get(i).id());
+          for (int i = take; i < 100; i++) approx100[qi][i] = -1;
+        }
+        recall100 = RecallUtil.meanRecallAtK(groundTruth, approx100, 100);
+      }
     }
 
     System.out.printf(
