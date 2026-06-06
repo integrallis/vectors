@@ -12,10 +12,17 @@ this repo for maintenance; they map onto the ann-benchmarks layout
 
 | File | Purpose |
 |------|---------|
-| `module.py` | The `BaseANN` subclass — drives `vectors-server` over localhost HTTP |
-| `config.yml` | Algorithm + HNSW parameter grid (M, efConstruction, efSearch sweep) |
-| `Dockerfile` | `FROM ann-benchmarks` + JDK 25 + the prebuilt `vectors-server` |
-| `smoke_test.py` | Local end-to-end check **without** the full harness |
+| `module.py` | HTTP `BaseANN` subclass — drives `vectors-server` over localhost (DB-server bracket) |
+| `config.yml` | Grid for HNSW + VAMANA + IVF-PQ (graph indexes sweep efSearch; IVF rebuilds nprobe) |
+| `Dockerfile` | `FROM ann-benchmarks` + JDK 25 + the prebuilt `vectors-server` (HTTP variant) |
+| `module_jpype.py` | In-process `BaseANN` via jpype — calls `vectors-db` directly, zero IPC (library bracket) |
+| `config.jpype.yml` | Same grid for the jpype variant (register as a separate `vectors-jpype` algorithm) |
+| `Dockerfile.jpype` | `FROM ann-benchmarks` + JDK 25 + `pip install JPype1` + the dist's classpath |
+| `smoke_test.py` | Local HTTP end-to-end check (HNSW + VAMANA) **without** the full harness |
+
+Both adapters cover **HNSW + VAMANA + IVF-PQ**. Graph indexes sweep `efSearch` at
+query time; IVF sweeps `nprobe` by rebuilding (it is a build-time setting in
+`vectors`).
 
 ## Which bracket this measures
 
@@ -26,12 +33,20 @@ round-trip is part of the measured latency). This adapter runs `vectors` as a
 **server**, so it compares fairly against the database bracket — which matches
 how `vectors` is positioned ("the default JVM vector database").
 
-For a future *library-bracket* comparison vs hnswlib/FAISS with zero IPC, replace
-the HTTP calls in `module.py` with a [jpype](https://jpype.readthedocs.io)
-in-process bridge that calls `vectors-db`'s `VectorCollection` directly (passing
-`--add-modules=jdk.incubator.vector` to `startJVM`). The HTTP path is shipped
-first because it is robust and fully testable; the jpype path is a drop-in
-follow-up.
+For the *library-bracket* comparison vs hnswlib/FAISS with zero IPC, use
+`module_jpype.py` (`Dockerfile.jpype`, `config.jpype.yml`): it loads `vectors-db`
+in-process via [jpype](https://jpype.readthedocs.io) and calls `VectorCollection`
+directly — no server, no round-trip — starting the JVM with
+`--add-modules=jdk.incubator.vector` and the `vectors-server` distribution's
+`lib/*.jar` as the classpath. Register it as a separate `vectors-jpype` algorithm
+so both brackets plot side by side.
+
+> **Verification note:** the HTTP adapter is verified end-to-end here (`smoke_test.py`,
+> recall@10 = 1.0 against a live server). The jpype variant makes the same
+> `VectorCollection` build/add/commit/search calls the `vectors-db` test suite
+> covers, but its jpype Python↔JVM marshalling must be exercised in a
+> jpype-capable environment (the `Dockerfile.jpype` image, which `pip install`s
+> JPype1) — it cannot run in a stock dev shell without jpype.
 
 > **Scope:** the adapter sweeps **HNSW** (M, efConstruction, efSearch) plus FLAT —
 > the universal ANN-Benchmarks algorithm. Tuning Vamana / IVF-PQ over HTTP needs
