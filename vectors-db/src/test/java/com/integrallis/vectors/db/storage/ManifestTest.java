@@ -496,5 +496,99 @@ class ManifestTest {
                       -1L,
                       0L));
     }
+
+    /**
+     * Cross-field invariant: {@code tombstoneCount == 0} ⟺ {@code tombstonesBinLength == 0}.
+     * Pre-fix audit T2.7 noted that the constructor only checked individual fields for
+     * non-negativity, so an inverted manifest claiming "1234 tombstones in 0 bytes" passed
+     * validation. The check has to live in the constructor because that's the gate every
+     * persisted/derived manifest flows through (build*, fromBytes, direct construction).
+     */
+    @Test
+    void positiveTombstoneCountWithZeroBytesRejected() {
+      assertThatIllegalArgumentException()
+          .isThrownBy(
+              () ->
+                  new Manifest(
+                      64,
+                      SimilarityFunction.DOT_PRODUCT,
+                      IndexType.FLAT,
+                      QuantizerKind.NONE,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      5L, // tombstoneCount > 0 but tombstonesBinLength == 0 → inconsistent
+                      0L,
+                      0L))
+          .withMessageContaining("tombstone");
+    }
+
+    @Test
+    void positiveTombstoneBytesWithZeroCountRejected() {
+      assertThatIllegalArgumentException()
+          .isThrownBy(
+              () ->
+                  new Manifest(
+                      64,
+                      SimilarityFunction.DOT_PRODUCT,
+                      IndexType.FLAT,
+                      QuantizerKind.NONE,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L, // tombstoneCount == 0 but tombstonesBinLength > 0 → inconsistent
+                      128L,
+                      0L))
+          .withMessageContaining("tombstone");
+    }
+
+    @Test
+    void zeroTombstoneBytesWithNonZeroCrcRejected() {
+      assertThatIllegalArgumentException()
+          .isThrownBy(
+              () ->
+                  new Manifest(
+                      64,
+                      SimilarityFunction.DOT_PRODUCT,
+                      IndexType.FLAT,
+                      QuantizerKind.NONE,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0L,
+                      0xDEADBEEFL)) // tombstonesBinLength == 0 but CRC is set → inconsistent
+          .withMessageContaining("tombstone");
+    }
   }
 }
