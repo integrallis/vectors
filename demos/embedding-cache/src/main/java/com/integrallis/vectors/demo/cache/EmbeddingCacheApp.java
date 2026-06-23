@@ -58,6 +58,22 @@ public final class EmbeddingCacheApp {
   private EmbeddingCacheApp() {}
 
   public static void main(String[] args) {
+    DemoResult r = runDemo();
+    System.out.printf(
+        "FINAL: hits=%d misses=%d entries=%d hitRate=%.1f%% delegateCalls=%d%n",
+        r.stats.hits(),
+        r.stats.misses(),
+        r.stats.size(),
+        100.0 * r.stats.hitRate(),
+        r.delegateCalls);
+  }
+
+  /**
+   * Pure-function variant of the demo's golden path: runs three phases (batch with dupes, mostly-
+   * hit batch, hot-key single embed) and returns final cache stats plus the delegate-call count.
+   * Extracted so a CI test can assert the cache actually caches without parsing stdout.
+   */
+  public static DemoResult runDemo() {
     AtomicInteger delegateCalls = new AtomicInteger();
     EmbeddingModel realModel = new CountingEmbeddingModel(DIMENSION, delegateCalls);
 
@@ -96,8 +112,13 @@ public final class EmbeddingCacheApp {
           "  embed(\"What is HNSW?\") -> dim=%d, first=%f%n",
           r.content().vector().length, r.content().vector()[0]);
       printStats("after phase 3", cache.stats(), delegateCalls.get());
+
+      return new DemoResult(cache.stats(), delegateCalls.get());
     }
   }
+
+  /** Result of the demo's golden path — cache stats + delegate-call count. */
+  public record DemoResult(CacheStats stats, int delegateCalls) {}
 
   private static void embedBatch(EmbeddingModel model, List<String> texts) {
     List<TextSegment> segments = texts.stream().map(TextSegment::from).toList();
