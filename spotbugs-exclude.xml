@@ -440,6 +440,23 @@
         <Bug pattern="REC_CATCH_EXCEPTION"/>
     </Match>
 
+    <!-- vectors-db: every nextGenerationNumber read/write happens while the writer thread holds
+         the per-collection ReentrantLock (#writerLock). The lock is now acquired via a helper
+         (acquireWriterLockOrThrow) that performs tryLock(timeout, …) instead of the bare lock(),
+         which SpotBugs does not pattern-match for guarded-field analysis — but the guard is in
+         fact present on every call site (commit, refresh, compact). The 64-bit-write atomicity
+         and read-modify-write warnings are therefore false positives. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.VectorCollectionImpl"/>
+        <Field name="nextGenerationNumber"/>
+        <Or>
+            <Bug pattern="AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION"/>
+            <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
+            <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+            <Bug category="MT_CORRECTNESS"/>
+        </Or>
+    </Match>
+
     <!-- vectors-spring-boot-starter: JavaVectorsProperties uses standard Spring Boot @ConfigurationProperties
          getter/setter pattern. Properties are mutable POJO beans managed by the Spring container.
          EI_EXPOSE_REP/EI2 warnings are inherent to the Spring ConfigurationProperties design. -->

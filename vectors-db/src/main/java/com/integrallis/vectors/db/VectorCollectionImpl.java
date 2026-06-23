@@ -288,6 +288,22 @@ final class VectorCollectionImpl implements VectorCollection {
   private final VectorCollectionConfig config;
   private final ReentrantLock writerLock = new ReentrantLock();
 
+  /**
+   * Maximum wait for {@link #writerLock} on user-facing write/commit paths. A bare {@code lock()}
+   * would block forever on a stalled fsync or a blocking {@link GenerationSubscriber}; this bound
+   * surfaces the stall as a {@link WriterLockTimeoutException} so callers can fail loudly. Mutable
+   * for tests via {@link #setWriterLockTimeoutMillisForTesting}; otherwise effectively constant.
+   */
+  private volatile long writerLockTimeoutMillis = DEFAULT_WRITER_LOCK_TIMEOUT_MILLIS;
+
+  private static final long DEFAULT_WRITER_LOCK_TIMEOUT_MILLIS = 60_000L;
+
+  /** Shorter bound for the background compaction daemon — it can simply skip a tick on stall. */
+  private static final long PRUNE_LOCK_TIMEOUT_MILLIS = 1_000L;
+
+  /** Shorter bound for {@link #close()} so a wedged writer can't block JVM shutdown forever. */
+  private static final long CLOSE_LOCK_TIMEOUT_MILLIS = 5_000L;
+
   /** Staging buffer, guarded exclusively by {@link #writerLock}. */
   private final StagingBuffer staging = new StagingBuffer();
 
@@ -642,13 +658,49 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   // ---------------------------------------------------------------------------
+  // Writer-lock acquisition (bounded — see writerLockTimeoutMillis)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Acquires {@link #writerLock} with the bounded wait declared on the collection. Throws {@link
+   * WriterLockTimeoutException} if the wait elapses without acquisition; re-asserts the interrupt
+   * flag and throws on interrupt. The bare {@code lock()} that this replaces would have parked the
+   * caller indefinitely.
+   */
+  private void acquireWriterLockOrThrow(String operation) {
+    long timeoutMs = writerLockTimeoutMillis;
+    try {
+      if (!writerLock.tryLock(timeoutMs, TimeUnit.MILLISECONDS)) {
+        throw new WriterLockTimeoutException(
+            operation + " timed out after " + timeoutMs + "ms waiting for the writer lock");
+      }
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      throw new WriterLockTimeoutException(
+          operation + " interrupted while waiting for the writer lock");
+    }
+  }
+
+  /**
+   * Test-only: override the writer-lock timeout for this collection. Production code uses {@link
+   * #DEFAULT_WRITER_LOCK_TIMEOUT_MILLIS}; tests shorten this so they don't have to wait the full
+   * default to observe a timeout.
+   */
+  void setWriterLockTimeoutMillisForTesting(long millis) {
+    if (millis <= 0L) {
+      throw new IllegalArgumentException("writerLockTimeoutMillis must be > 0");
+    }
+    this.writerLockTimeoutMillis = millis;
+  }
+
+  // ---------------------------------------------------------------------------
   // Write API
   // ---------------------------------------------------------------------------
 
   @Override
   public void add(Document doc) {
     validateForInsert(doc);
-    writerLock.lock();
+    acquireWriterLockOrThrow("add");
     try {
       ensureOpenUnderLock();
       stageUnderLock(doc);
@@ -667,7 +719,7 @@ final class VectorCollectionImpl implements VectorCollection {
     for (Document d : docs) {
       validateForInsert(d);
     }
-    writerLock.lock();
+    acquireWriterLockOrThrow("addAll");
     try {
       ensureOpenUnderLock();
       for (Document d : docs) {
@@ -718,7 +770,7 @@ final class VectorCollectionImpl implements VectorCollection {
   @Override
   public boolean delete(String id) {
     Objects.requireNonNull(id, "id must not be null");
-    writerLock.lock();
+    acquireWriterLockOrThrow("delete");
     try {
       ensureOpenUnderLock();
       return deleteUnderLock(id);
@@ -747,7 +799,7 @@ final class VectorCollectionImpl implements VectorCollection {
   @Override
   public int deleteWhere(Filter filter) {
     Objects.requireNonNull(filter, "filter must not be null");
-    writerLock.lock();
+    acquireWriterLockOrThrow("deleteWhere");
     try {
       ensureOpenUnderLock();
       int count = 0;
@@ -790,7 +842,7 @@ final class VectorCollectionImpl implements VectorCollection {
   @Override
   public void upsert(Document doc) {
     validateForInsert(doc);
-    writerLock.lock();
+    acquireWriterLockOrThrow("upsert");
     try {
       ensureOpenUnderLock();
       String id = doc.id();
@@ -821,7 +873,7 @@ final class VectorCollectionImpl implements VectorCollection {
 
   @Override
   public void commit() {
-    writerLock.lock();
+    acquireWriterLockOrThrow("commit");
     try {
       ensureOpenUnderLock();
       commitUnderLock();
@@ -838,7 +890,7 @@ final class VectorCollectionImpl implements VectorCollection {
     if (storageRoot == null) {
       return false; // in-memory collections have no shipped generations to reload
     }
-    writerLock.lock();
+    acquireWriterLockOrThrow("refresh");
     try {
       Generation current = this.generation;
       if (current == null) {
@@ -1174,7 +1226,21 @@ final class VectorCollectionImpl implements VectorCollection {
     }
     long currentGen;
     java.util.Set<Long> protectedNumbers = new java.util.HashSet<>();
-    writerLock.lock();
+    // The daemon must never park on a stalled writer — skip this tick and retry on the next one.
+    try {
+      if (!writerLock.tryLock(PRUNE_LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+        LOGGER.log(
+            Level.FINE,
+            () ->
+                "compaction: writer lock busy for "
+                    + PRUNE_LOCK_TIMEOUT_MILLIS
+                    + "ms; skipping this tick");
+        return;
+      }
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      return;
+    }
     try {
       Generation g = this.generation;
       if (g == null) {
@@ -1223,7 +1289,7 @@ final class VectorCollectionImpl implements VectorCollection {
 
   @Override
   public void compact() {
-    writerLock.lock();
+    acquireWriterLockOrThrow("compact");
     try {
       ensureOpenUnderLock();
       // Commit any pending work first.
@@ -1930,7 +1996,24 @@ final class VectorCollectionImpl implements VectorCollection {
         Thread.currentThread().interrupt();
       }
     }
-    writerLock.lock();
+    // close() must never park forever — a stalled writer cannot be allowed to block JVM shutdown.
+    // On lock-timeout we proceed best-effort: drop the generation reference and let the GC reclaim
+    // it. The retired-generations directories may leak until process exit, which is the lesser evil
+    // versus a hung close().
+    boolean haveLock = false;
+    try {
+      haveLock = writerLock.tryLock(CLOSE_LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException ie) {
+      Thread.currentThread().interrupt();
+    }
+    if (!haveLock) {
+      LOGGER.warning(
+          () ->
+              "close(): writer lock busy after "
+                  + CLOSE_LOCK_TIMEOUT_MILLIS
+                  + "ms; proceeding without it. Some retired generations may leak until process"
+                  + " exit.");
+    }
     try {
       Generation gen = this.generation;
       if (gen == null) {
@@ -1940,7 +2023,9 @@ final class VectorCollectionImpl implements VectorCollection {
       staging.clear();
       gen.release();
     } finally {
-      writerLock.unlock();
+      if (haveLock) {
+        writerLock.unlock();
+      }
     }
     // Close any AutoCloseable replication subscribers (e.g. GenerationShippingSubscriber flushes
     // and shuts down its shipping thread). Outside the writer lock; close() is single-call.
