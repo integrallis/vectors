@@ -41,7 +41,16 @@ import java.util.TreeMap;
  */
 public final class ConsistentHashRouter {
 
-  /** Default number of virtual ring positions per shard — high enough for an even spread. */
+  /**
+   * Default number of virtual ring positions per shard.
+   *
+   * <p>Why 200: load imbalance across the ring scales as ~{@code 1/sqrt(V*S)} where V is this value
+   * and S is the shard count. A typical write tier has 4-16 shards, so V=200 yields roughly ±2.5%
+   * imbalance at S=8 — well inside the noise floor of per-shard ingest latency. {@code
+   * vectors-distributed.ConsistentHashShardOwnership} uses V=100 because it operates on physical
+   * node counts that are typically larger (more nodes → smaller V suffices for the same imbalance
+   * bound).
+   */
   public static final int DEFAULT_VIRTUAL_NODES_PER_SHARD = 200;
 
   private final int shardCount;

@@ -56,7 +56,16 @@ public final class BulkRoutes implements HttpService {
 
   private static final Logger LOG = LoggerFactory.getLogger(BulkRoutes.class);
 
-  /** Hard upper bound on a single page or sample to prevent runaway memory allocations. */
+  /**
+   * Hard upper bound on a single page or sample to prevent runaway memory allocations.
+   *
+   * <p>Why 10,000: at the largest stored vector dim (4096 fp32 = 16 KiB) and the largest sane k,
+   * one page caps at roughly 160 MiB of response payload — bounded enough that the Helidon
+   * connection's outbound queue won't OOM the server, but loose enough to support paginated sweep
+   * tooling (Studio's index preview, ann-benchmarks ingest verification). Operators that need to
+   * stream larger result sets should chunk via offset+limit; the bound is a guardrail, not a tuning
+   * knob.
+   */
   private static final int MAX_PAGE = 10_000;
 
   private final CollectionRegistry registry;
