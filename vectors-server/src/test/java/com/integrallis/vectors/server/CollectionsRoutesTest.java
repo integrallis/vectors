@@ -26,10 +26,15 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 class CollectionsRoutesTest {
 
@@ -160,5 +165,71 @@ class CollectionsRoutesTest {
     assertThat(d.statusCode()).isEqualTo(204);
     assertThat(get("/v1/collections/gone").statusCode()).isEqualTo(404);
     assertThat(delete("/v1/collections/gone").statusCode()).isEqualTo(404);
+  }
+
+  /**
+   * Pins the contract that {@code DELETE /v1/collections/{name}} reports a 5xx problem when the
+   * collection's on-disk storage cannot be fully removed — the previous behavior was a silent 204
+   * with a server-side WARN log, leaving the operator unable to detect orphaned files.
+   *
+   * <p>The trigger is a real POSIX permission denial: a probe file is placed inside the collection
+   * directory and the directory is then chmod'd to {@code 0500} (read+execute, no write), so the
+   * recursive delete cannot unlink the probe child. Linux/macOS only because the trick relies on
+   * POSIX file permissions.
+   */
+  @Test
+  @EnabledOnOs({OS.LINUX, OS.MAC})
+  void dropReportsErrorWhenStorageDirCannotBeFullyDeleted() throws Exception {
+    // Stop the default in-memory server and start a fresh persistent one so the storage-dir branch
+    // of CollectionsRoutes#drop runs.
+    handle.close();
+    Path dataDir = Files.createTempDirectory("vectors-drop-fail-it-");
+    handle = VectorsServer.start(ServerConfig.forTesting().withDataDir(dataDir));
+    try {
+      String name = "stubborn";
+      assertThat(
+              postJson(
+                      "/v1/collections",
+                      "{\"name\":\""
+                          + name
+                          + "\",\"dimension\":4,\"metric\":\"COSINE\",\"indexType\":\"FLAT\"}")
+                  .statusCode())
+          .isEqualTo(201);
+      Path collectionDir = dataDir.resolve(name);
+      assertThat(Files.isDirectory(collectionDir)).isTrue();
+      Path probe = Files.write(collectionDir.resolve("stubborn-child.tmp"), new byte[] {1, 2, 3});
+      Files.setPosixFilePermissions(collectionDir, PosixFilePermissions.fromString("r-x------"));
+      try {
+        HttpResponse<String> r = delete("/v1/collections/" + name);
+        assertThat(r.statusCode())
+            .as("partial-delete must not masquerade as success")
+            .isEqualTo(500);
+        assertThat(r.headers().firstValue("content-type"))
+            .hasValueSatisfying(v -> assertThat(v).startsWith("application/problem+json"));
+        assertThat(r.body())
+            .as("problem body should mention storage cleanup")
+            .containsIgnoringCase("storage")
+            .contains(name);
+      } finally {
+        // Restore perms so the temp dir can be cleaned up below.
+        Files.setPosixFilePermissions(collectionDir, PosixFilePermissions.fromString("rwx------"));
+        Files.deleteIfExists(probe);
+      }
+    } finally {
+      // Best-effort cleanup of the persistent tempdir.
+      if (Files.exists(dataDir)) {
+        try (java.util.stream.Stream<Path> walk = Files.walk(dataDir)) {
+          walk.sorted(java.util.Comparator.reverseOrder())
+              .forEach(
+                  p -> {
+                    try {
+                      Files.deleteIfExists(p);
+                    } catch (Exception ignored) {
+                      // best-effort
+                    }
+                  });
+        }
+      }
+    }
   }
 }
