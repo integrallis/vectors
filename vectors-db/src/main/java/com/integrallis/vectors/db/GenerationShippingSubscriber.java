@@ -32,6 +32,9 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
@@ -62,6 +65,9 @@ public final class GenerationShippingSubscriber implements GenerationSubscriber,
   private final String keyPrefix; // "" or "some/prefix/"
   private final boolean ownsBackend;
   private final ExecutorService executor;
+  private final BiConsumer<Long, Throwable> failureSink;
+  private final AtomicLong shipFailureCount = new AtomicLong();
+  private final AtomicReference<Throwable> lastShipFailure = new AtomicReference<>();
 
   /**
    * Ships to {@code backend} under {@code keyPrefix}. The caller retains ownership of {@code
@@ -71,14 +77,41 @@ public final class GenerationShippingSubscriber implements GenerationSubscriber,
    * @param keyPrefix key prefix (a trailing {@code /} is added if missing; {@code ""} for the root)
    */
   public GenerationShippingSubscriber(StorageBackend backend, String keyPrefix) {
-    this(backend, keyPrefix, false);
+    this(backend, keyPrefix, false, null);
+  }
+
+  /**
+   * Ships to {@code backend} under {@code keyPrefix} with an observable failure callback. Producer
+   * commits never block on shipping (the work is enqueued to a daemon thread), so without this
+   * visibility hook a follower can silently miss a generation when the destination put fails. The
+   * sink is invoked from the shipping thread with the generation number and the underlying cause;
+   * exceptions from the sink are caught and recorded as another failure (the pool thread is never
+   * crashed by a broken sink). {@link #shipFailureCount()} and {@link #lastShipFailure()} expose
+   * the same data for metric scraping.
+   *
+   * @param backend the destination store
+   * @param keyPrefix key prefix (a trailing {@code /} is added if missing; {@code ""} for the root)
+   * @param failureSink callback {@code (generationNumber, throwable)}; {@code null} disables it
+   */
+  public GenerationShippingSubscriber(
+      StorageBackend backend, String keyPrefix, BiConsumer<Long, Throwable> failureSink) {
+    this(backend, keyPrefix, false, failureSink);
   }
 
   private GenerationShippingSubscriber(
       StorageBackend backend, String keyPrefix, boolean ownsBackend) {
+    this(backend, keyPrefix, ownsBackend, null);
+  }
+
+  private GenerationShippingSubscriber(
+      StorageBackend backend,
+      String keyPrefix,
+      boolean ownsBackend,
+      BiConsumer<Long, Throwable> failureSink) {
     this.backend = backend;
     this.keyPrefix = normalizePrefix(keyPrefix);
     this.ownsBackend = ownsBackend;
+    this.failureSink = failureSink;
     this.executor =
         Executors.newSingleThreadExecutor(
             r -> {
@@ -156,12 +189,42 @@ public final class GenerationShippingSubscriber implements GenerationSubscriber,
       ship(event);
     } catch (Exception e) {
       // A replica that misses this generation will catch up on the next one (CURRENT is
-      // monotonic), so log and continue rather than crash the shipping thread.
+      // monotonic), so log and continue rather than crash the shipping thread. Surface the
+      // failure on observable counters and via the optional sink so operators can detect
+      // "follower fell behind" without scraping logs.
+      shipFailureCount.incrementAndGet();
+      lastShipFailure.set(e);
       LOG.log(
           Level.WARNING,
           e,
           () -> "failed to ship generation " + event.generationNumber() + " to " + describe());
+      BiConsumer<Long, Throwable> sink = failureSink;
+      if (sink != null) {
+        try {
+          sink.accept(event.generationNumber(), e);
+        } catch (Throwable sinkFailure) {
+          // A broken sink must not crash the shipping thread; record it so it's still observable.
+          shipFailureCount.incrementAndGet();
+          lastShipFailure.set(sinkFailure);
+          LOG.log(Level.WARNING, sinkFailure, () -> "failureSink threw while reporting a failure");
+        }
+      }
     }
+  }
+
+  /**
+   * Number of generations whose shipping (or whose failure-sink invocation) has thrown since this
+   * subscriber was constructed. A non-zero value means at least one follower may be missing the
+   * corresponding generation; the next successful ship of a later generation will republish {@code
+   * CURRENT} and the follower will catch up.
+   */
+  public long shipFailureCount() {
+    return shipFailureCount.get();
+  }
+
+  /** Most recent throwable from a failed ship, or {@code null} if none has failed. */
+  public Throwable lastShipFailure() {
+    return lastShipFailure.get();
   }
 
   private void ship(GenerationCommitEvent event) throws IOException {
