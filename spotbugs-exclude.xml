@@ -35,6 +35,16 @@
         </Or>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
+
+    <!-- vectors-bench: TieredIvfRecallQpsBenchmark seeds a single Random with a fixed seed for
+         reproducible corpus generation. It is reused across multiple nextGaussian()/nextInt()
+         calls in nested loops, but SpotBugs's DMI heuristic misclassifies the per-loop call as
+         "used only once". The reproducibility is the explicit design choice — switching to
+         ThreadLocalRandom would lose deterministic output across runs. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.TieredIvfRecallQpsBenchmark"/>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
     <!-- HNSW: SearchResult record exposes/stores arrays intentionally for zero-copy access -->
     <Match>
         <Class name="com.integrallis.vectors.hnsw.SearchResult"/>
