@@ -63,13 +63,72 @@ public final class VectorizationProvider {
     // Allow forcing scalar mode for testing — bypasses discovery entirely.
     if (isForcedScalar()) {
       LOG.info("vectors-core: Forced scalar mode via -Dvectors.forceScalar=true");
-      return new ScalarVectorUtilSupport();
+      VectorUtilSupport scalar = new ScalarVectorUtilSupport();
+      logActiveToggles(scalar);
+      return scalar;
     }
     List<VectorUtilSupportProvider> providers = new ArrayList<>();
     ServiceLoader.load(
             VectorUtilSupportProvider.class, VectorizationProvider.class.getClassLoader())
         .forEach(providers::add);
-    return select(providers);
+    VectorUtilSupport selected = select(providers);
+    logActiveToggles(selected);
+    return selected;
+  }
+
+  /**
+   * Logs a single INFO line describing the active SIMD provider plus every {@code vectors.*}
+   * system-property toggle that influenced selection. Operators can grep one line to confirm what
+   * kernels actually came up — important because a missing JVM flag (e.g. {@code
+   * --add-modules=jdk.incubator.vector}) silently downgrades to the scalar fallback.
+   */
+  private static void logActiveToggles(VectorUtilSupport impl) {
+    LOG.info(buildToggleSummary(impl));
+  }
+
+  /**
+   * Builds the toggle-summary string emitted at startup. Package-visible (instead of inlined into
+   * {@link #logActiveToggles}) so the regression test can assert the exact composition without
+   * needing to install a custom {@code java.util.logging} handler before the static initializer
+   * runs.
+   */
+  static String buildToggleSummary(VectorUtilSupport impl) {
+    String forceScalar = System.getProperty("vectors.forceScalar");
+    String maxBits = System.getProperty("vectors.maxBits");
+    String useVectorFMA = System.getProperty("vectors.useVectorFMA");
+    String useScalarFMA = System.getProperty("vectors.useScalarFMA");
+
+    StringBuilder sb = new StringBuilder("vectors-core: provider=");
+    sb.append(impl.getClass().getSimpleName());
+    sb.append(" panama=").append(impl instanceof PanamaVectorUtilSupport);
+    sb.append(" maxBits=").append(PanamaConstants.MAX_BITS);
+    sb.append(" preferredBits=").append(PanamaConstants.PREFERRED_BITS);
+    sb.append(" fastVectorFMA=").append(PanamaConstants.HAS_FAST_VECTOR_FMA);
+    sb.append(" fastScalarFMA=").append(PanamaConstants.HAS_FAST_SCALAR_FMA);
+    sb.append(" toggles=[");
+    boolean first = true;
+    if (forceScalar != null) {
+      sb.append("vectors.forceScalar=").append(forceScalar);
+      first = false;
+    }
+    if (maxBits != null) {
+      if (!first) sb.append(", ");
+      sb.append("vectors.maxBits=").append(maxBits);
+      first = false;
+    }
+    if (useVectorFMA != null) {
+      if (!first) sb.append(", ");
+      sb.append("vectors.useVectorFMA=").append(useVectorFMA);
+      first = false;
+    }
+    if (useScalarFMA != null) {
+      if (!first) sb.append(", ");
+      sb.append("vectors.useScalarFMA=").append(useScalarFMA);
+      first = false;
+    }
+    if (first) sb.append("(defaults — no -Dvectors.* overrides)");
+    sb.append(']');
+    return sb.toString();
   }
 
   /**

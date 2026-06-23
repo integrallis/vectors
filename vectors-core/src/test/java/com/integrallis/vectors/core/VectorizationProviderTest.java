@@ -29,6 +29,45 @@ class VectorizationProviderTest {
     assertThat(VectorizationProvider.getInstance()).isNotNull();
   }
 
+  /**
+   * Pins the startup-toggles summary content: an operator should be able to grep one INFO line for
+   * the provider name, the resolved SIMD width, FMA capability flags, and any {@code vectors.*}
+   * system-property overrides that were applied. Avoids a silent SIMD-to-scalar downgrade when
+   * {@code --add-modules=jdk.incubator.vector} is missing on a JDK upgrade.
+   */
+  @Test
+  void toggleSummaryExposesProviderAndKnobs() {
+    String summary = VectorizationProvider.buildToggleSummary(VectorizationProvider.getInstance());
+    assertThat(summary).startsWith("vectors-core: provider=");
+    assertThat(summary).contains("panama=");
+    assertThat(summary).contains("maxBits=" + PanamaConstants.MAX_BITS);
+    assertThat(summary).contains("preferredBits=");
+    assertThat(summary).contains("fastVectorFMA=");
+    assertThat(summary).contains("fastScalarFMA=");
+    assertThat(summary).contains("toggles=[");
+    assertThat(summary).endsWith("]");
+  }
+
+  @Test
+  void toggleSummaryReportsForcedScalarProperty() {
+    String key = "vectors.forceScalar";
+    String prior = System.getProperty(key);
+    System.setProperty(key, "true");
+    try {
+      String summary =
+          VectorizationProvider.buildToggleSummary(VectorizationProvider.newScalarProvider());
+      assertThat(summary)
+          .as("forced-scalar property must appear verbatim in the toggles list")
+          .contains("vectors.forceScalar=true");
+    } finally {
+      if (prior == null) {
+        System.clearProperty(key);
+      } else {
+        System.setProperty(key, prior);
+      }
+    }
+  }
+
   @Test
   void isPanamaEnabledReturnsBooleanWithoutCrashing() {
     // On JDK 25+ with --add-modules jdk.incubator.vector, this should be true
