@@ -56,7 +56,25 @@ public final class SemanticCacheApp {
   private SemanticCacheApp() {}
 
   public static void main(String[] args) {
+    DemoResult r = runDemo();
+    System.out.println();
+    System.out.printf(
+        "hits: %d, misses: %d, real LLM calls saved: %d%n",
+        r.hits, r.misses, r.hits); // every hit is one LLM call avoided
+    System.out.printf("cache entries after run: %d%n", r.entries);
+  }
+
+  /**
+   * Pure-function variant of the demo's golden path. Seeds canonical Q→A pairs, issues a
+   * paraphrased query batch, and returns hit/miss counts + LLM-call savings. Extracted so a CI test
+   * can pin the semantic-threshold contract (exact-match queries hit; paraphrases hit when their
+   * cosine score clears the threshold; novel queries miss).
+   */
+  public static DemoResult runDemo() {
     AtomicInteger llmCalls = new AtomicInteger();
+    int hits = 0;
+    int misses = 0;
+    long entries;
 
     try (VectorCollection backing =
             VectorCollection.builder()
@@ -102,8 +120,6 @@ public final class SemanticCacheApp {
               "What is scalar quantization?", // novel — miss
               "How does mmap persistence work?"); // paraphrase
 
-      int hits = 0;
-      int misses = 0;
       for (String q : queries) {
         float[] qvec = trigramVector(q, DIMENSION);
         Optional<SemanticCache.Hit<String>> hit = cache.lookup(qvec);
@@ -119,14 +135,13 @@ public final class SemanticCacheApp {
           System.out.printf("  MISS  %-50s -> %s%n", q, answer);
         }
       }
-
-      System.out.println();
-      System.out.printf(
-          "hits: %d, misses: %d, real LLM calls saved: %d%n",
-          hits, misses, hits); // every hit is one LLM call avoided
-      System.out.printf("cache entries after run: %d%n", cache.stats().size());
+      entries = cache.stats().size();
     }
+    return new DemoResult(hits, misses, llmCalls.get(), entries);
   }
+
+  /** Result of the demo's golden path. */
+  public record DemoResult(int hits, int misses, int llmCalls, long entries) {}
 
   private static String callRealLlm(String question, AtomicInteger counter) {
     counter.incrementAndGet();
