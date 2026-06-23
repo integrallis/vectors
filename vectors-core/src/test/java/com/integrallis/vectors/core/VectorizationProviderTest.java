@@ -44,6 +44,7 @@ class VectorizationProviderTest {
     assertThat(summary).contains("preferredBits=");
     assertThat(summary).contains("fastVectorFMA=");
     assertThat(summary).contains("fastScalarFMA=");
+    assertThat(summary).contains("sve=");
     assertThat(summary).contains("toggles=[");
     assertThat(summary).endsWith("]");
   }

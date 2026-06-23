@@ -105,6 +105,7 @@ public final class VectorizationProvider {
     sb.append(" preferredBits=").append(PanamaConstants.PREFERRED_BITS);
     sb.append(" fastVectorFMA=").append(PanamaConstants.HAS_FAST_VECTOR_FMA);
     sb.append(" fastScalarFMA=").append(PanamaConstants.HAS_FAST_SCALAR_FMA);
+    sb.append(" sve=").append(PanamaConstants.HAS_SVE);
     sb.append(" toggles=[");
     boolean first = true;
     if (forceScalar != null) {
