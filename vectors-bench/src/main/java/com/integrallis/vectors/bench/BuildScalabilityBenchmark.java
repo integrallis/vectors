@@ -149,7 +149,10 @@ public final class BuildScalabilityBenchmark {
                 vamanaL));
       }
 
-      corpus = null; // Help GC before next size.
+      corpus = null;
+      // Justified System.gc(): we are sizing heap measurements per (n, algorithm) row and need
+      // the previous corpus reclaimed so its bytes do not skew the next row's heapBefore reading.
+      // Not used to mask GC variance in latency — audit T4.11 distinguishes the two uses.
       System.gc();
     }
 
@@ -178,6 +181,10 @@ public final class BuildScalabilityBenchmark {
 
     System.out.printf("  %s: building %,d vectors...", algorithm.toUpperCase(), n);
 
+    // Justified System.gc(): we are about to record heapBefore as the baseline against which the
+    // index's resident size is measured. Without forcing a collection, leftover allocations from
+    // the previous configuration inflate "heap delta" and the published "memory cost" loses
+    // meaning. Not used to mask GC variance in latency — audit T4.11 distinguishes the two uses.
     System.gc();
     long heapBefore = memBean.getHeapMemoryUsage().getUsed();
     long gcCountBefore = totalGcCount();
