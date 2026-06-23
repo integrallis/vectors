@@ -37,6 +37,18 @@ public final class QuickstartApp {
   private QuickstartApp() {}
 
   public static void main(String[] args) {
+    SearchResult result = runDemo();
+    System.out.printf("search took %.2f ms%n", result.searchTimeNanos() / 1_000_000.0);
+    for (SearchResult.Hit hit : result.hits()) {
+      System.out.printf("  %.4f  %-6s  %s%n", hit.score(), hit.id(), hit.document().text());
+    }
+  }
+
+  /**
+   * Returns the search result the quickstart demo prints. Extracted so a unit test can assert on
+   * the demo's golden path without parsing stdout.
+   */
+  public static SearchResult runDemo() {
     try (VectorCollection collection =
         VectorCollection.builder()
             .dimension(4)
@@ -54,15 +66,7 @@ public final class QuickstartApp {
       collection.commit();
 
       float[] query = {0.8f, 0.15f, 0.05f, 0.05f};
-      SearchResult result =
-          collection.search(SearchRequest.builder(query, 3).includeText(true).build());
-
-      System.out.printf(
-          "collection size: %d, search took %.2f ms%n",
-          collection.size(), result.searchTimeNanos() / 1_000_000.0);
-      for (SearchResult.Hit hit : result.hits()) {
-        System.out.printf("  %.4f  %-6s  %s%n", hit.score(), hit.id(), hit.document().text());
-      }
+      return collection.search(SearchRequest.builder(query, 3).includeText(true).build());
     }
   }
 }
