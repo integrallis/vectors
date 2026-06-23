@@ -26,6 +26,8 @@ import com.integrallis.vectors.db.VectorCollection;
 import java.time.Duration;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -107,101 +109,113 @@ class ScatterGatherExecutorTest {
     }
   }
 
-  /** One node sleeps past the timeout — executor must return partial results from the other two. */
+  /**
+   * One node parks on a latch past the executor's timeout — executor must return partial results
+   * from the other two. Coordinates on a latch instead of {@code Thread.sleep} so the test is
+   * deterministic under CPU contention: the slow client never finishes within the executor's wait,
+   * regardless of scheduling jitter.
+   */
   @Test
-  void partialTimeoutReturnsPartialResults() {
+  void partialTimeoutReturnsPartialResults() throws Exception {
     NodeId n1 = new NodeId("fast1"), n2 = new NodeId("slow"), n3 = new NodeId("fast2");
     VectorCollection c1 = buildNode(500, 10L);
     VectorCollection c3 = buildNode(500, 30L);
 
-    // Slow client: sleeps 200 ms past a 50 ms timeout
-    NodeSearchClient slow =
-        new NodeSearchClient() {
-          @Override
-          public SearchResult search(LocalSearchRequest req) {
-            try {
-              Thread.sleep(300);
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-            }
-            return new SearchResult(List.of(), 0L);
-          }
+    LatchHoldClient slow = new LatchHoldClient();
+    try {
+      InProcessNodeDirectory dir =
+          InProcessNodeDirectory.builder()
+              .register(n1, c1)
+              .registerClient(n2, slow)
+              .register(n3, c3)
+              .build();
 
-          @Override
-          public int size() {
-            return 0;
-          }
+      // Executor wait is short (200ms) — long enough for the fast clients to complete on a busy
+      // CI box but short enough that the latch-held slow client cannot finish before timeout.
+      ScatterGatherExecutor executor = new ScatterGatherExecutor(dir, Duration.ofMillis(200));
+      float[] query = randomUnit(new Random(99L));
+      List<LocalSearchRequest> plan =
+          List.of(
+              LocalSearchRequest.of(n1, query, new int[0], K, -Float.MAX_VALUE),
+              LocalSearchRequest.of(n2, query, new int[0], K, -Float.MAX_VALUE),
+              LocalSearchRequest.of(n3, query, new int[0], K, -Float.MAX_VALUE));
 
-          @Override
-          public int physicalSize() {
-            return 0;
-          }
-        };
+      SearchResult result = executor.execute(plan, K);
 
-    InProcessNodeDirectory dir =
-        InProcessNodeDirectory.builder()
-            .register(n1, c1)
-            .registerClient(n2, slow)
-            .register(n3, c3)
-            .build();
-
-    ScatterGatherExecutor executor = new ScatterGatherExecutor(dir, Duration.ofMillis(50));
-    float[] query = randomUnit(new Random(99L));
-    List<LocalSearchRequest> plan =
-        List.of(
-            LocalSearchRequest.of(n1, query, new int[0], K, -Float.MAX_VALUE),
-            LocalSearchRequest.of(n2, query, new int[0], K, -Float.MAX_VALUE),
-            LocalSearchRequest.of(n3, query, new int[0], K, -Float.MAX_VALUE));
-
-    SearchResult result = executor.execute(plan, K);
-
-    // Partial results from n1 and n3 — must be non-empty
-    assertThat(result.hits()).isNotEmpty();
-    assertThat(result.hits().size()).isLessThanOrEqualTo(K);
+      // Partial results from n1 and n3 — must be non-empty
+      assertThat(result.hits()).isNotEmpty();
+      assertThat(result.hits().size()).isLessThanOrEqualTo(K);
+    } finally {
+      slow.release();
+    }
   }
 
   /** When all nodes time out the result should be empty (not an exception). */
   @Test
-  void allNodesTimeOutReturnsEmpty() {
+  void allNodesTimeOutReturnsEmpty() throws Exception {
     NodeId n1 = new NodeId("s1"), n2 = new NodeId("s2");
-    NodeSearchClient sleepy =
-        new NodeSearchClient() {
-          @Override
-          public SearchResult search(LocalSearchRequest req) {
-            try {
-              Thread.sleep(500);
-            } catch (InterruptedException e) {
-              Thread.currentThread().interrupt();
-            }
-            return new SearchResult(List.of(), 0L);
-          }
+    LatchHoldClient sleepy1 = new LatchHoldClient();
+    LatchHoldClient sleepy2 = new LatchHoldClient();
+    try {
+      InProcessNodeDirectory dir =
+          InProcessNodeDirectory.builder()
+              .registerClient(n1, sleepy1)
+              .registerClient(n2, sleepy2)
+              .build();
 
-          @Override
-          public int size() {
-            return 0;
-          }
+      ScatterGatherExecutor executor = new ScatterGatherExecutor(dir, Duration.ofMillis(150));
+      float[] query = randomUnit(new Random(7L));
+      List<LocalSearchRequest> plan =
+          List.of(
+              LocalSearchRequest.of(n1, query, new int[0], K, -Float.MAX_VALUE),
+              LocalSearchRequest.of(n2, query, new int[0], K, -Float.MAX_VALUE));
 
-          @Override
-          public int physicalSize() {
-            return 0;
-          }
-        };
+      SearchResult result = executor.execute(plan, K);
+      assertThat(result.hits()).isEmpty();
+    } finally {
+      sleepy1.release();
+      sleepy2.release();
+    }
+  }
 
-    InProcessNodeDirectory dir =
-        InProcessNodeDirectory.builder()
-            .registerClient(n1, sleepy)
-            .registerClient(n2, sleepy)
-            .build();
+  /**
+   * Test double for a "slow" node client. {@link #search} blocks on an internal latch that the test
+   * never counts down until {@link #release()} is called from the test's finally block. The search
+   * method honors thread interrupts so the executor's timeout-driven cancel still unwinds cleanly.
+   */
+  private static final class LatchHoldClient implements NodeSearchClient {
+    private final CountDownLatch latch = new CountDownLatch(1);
 
-    ScatterGatherExecutor executor = new ScatterGatherExecutor(dir, Duration.ofMillis(30));
-    float[] query = randomUnit(new Random(7L));
-    List<LocalSearchRequest> plan =
-        List.of(
-            LocalSearchRequest.of(n1, query, new int[0], K, -Float.MAX_VALUE),
-            LocalSearchRequest.of(n2, query, new int[0], K, -Float.MAX_VALUE));
+    @Override
+    public SearchResult search(LocalSearchRequest req) {
+      try {
+        // Hold up to 30s — far longer than any executor wait used in these tests so we are
+        // certain to time out before this returns. If the test calls release() the latch
+        // immediately fires.
+        if (!latch.await(30, TimeUnit.SECONDS)) {
+          // Latch never released (test forgot to call release in finally) — return empty so we
+          // don't propagate a spurious exception out of a leaked thread.
+          return new SearchResult(List.of(), 0L);
+        }
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      }
+      return new SearchResult(List.of(), 0L);
+    }
 
-    SearchResult result = executor.execute(plan, K);
-    assertThat(result.hits()).isEmpty();
+    @Override
+    public int size() {
+      return 0;
+    }
+
+    @Override
+    public int physicalSize() {
+      return 0;
+    }
+
+    void release() {
+      latch.countDown();
+    }
   }
 
   /** Single-node degenerate case: scatter-gather acts as a passthrough. */
