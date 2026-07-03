@@ -24,29 +24,25 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build + Test
-        working-directory: vectors
-        run: ./gradlew build -x :docs:build
+        run: ./gradlew spotlessCheck build -x :docs:build
 
       # P1.1 recall@10 regression gate: deterministic, no dataset download. Fails the build if
       # recall on any gated index (HNSW/VAMANA/IVF_FLAT/IVF_PQ) drops > 0.005 vs the committed
       # baseline. Re-baseline an intentional change with -Drecall.gate.mode=record.
       - name: Recall Regression Gate
-        working-directory: vectors
         run: ./gradlew :vectors-bench:recallGate
 
       - name: Generate SBOM
-        working-directory: vectors
         run: ./gradlew cyclonedxDirectBom
 
       - name: Compliance Check
-        working-directory: vectors
-        run: ./gradlew complianceCheck
+        run: ./gradlew complianceCheck verifyLockfiles verifyGithubWorkflows
 
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
           name: sbom
-          path: vectors/*/build/reports/cyclonedx-direct/bom.json
+          path: '*/build/reports/cyclonedx-direct/bom.json'
           retention-days: 90
 
       - name: Upload Test Reports
@@ -54,5 +50,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
-          path: vectors/*/build/reports/tests/
+          path: '*/build/reports/tests/'
           retention-days: 30

@@ -32,7 +32,6 @@ jobs:
           build-mode: manual
 
       - name: Build
-        working-directory: vectors
         run: ./gradlew build -x test -x :docs:build
 
       - name: Perform CodeQL Analysis

@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (validate signing, POMs, and bundle without publishing)"
+        type: boolean
+        default: true
+      skip_deploy:
+        description: "Skip Maven Central deployment and only create or refresh the GitHub release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release to Maven Central and GitHub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "25"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build, test, and stage artifacts
+        run: >
+          ./gradlew clean spotlessCheck build
+          :vectors-bench:recallGate complianceCheck publish
+          -x :docs:build --no-daemon --stacktrace
+
+      - name: Resolve project version
+        id: version
+        run: echo "version=$(grep -E '^version' gradle.properties | sed -E 's/.*=[[:space:]]*//')" >> "$GITHUB_OUTPUT"
+
+      - name: Reject snapshot release
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [[ "$VERSION" == *-SNAPSHOT ]]; then
+            echo "::error::Release version must not end in -SNAPSHOT: $VERSION"
+            exit 1
+          fi
+
+      - name: Validate Maven Central deployment
+        if: ${{ inputs.dry_run }}
+        uses: jreleaser/release-action@v2
+        with:
+          arguments: deploy --dry-run
+        env:
+          JRELEASER_PROJECT_VERSION: ${{ steps.version.outputs.version }}
+          JRELEASER_MAVENCENTRAL_SONATYPE_USERNAME: ${{ secrets.MAVENCENTRAL_USERNAME }}
+          JRELEASER_MAVENCENTRAL_SONATYPE_PASSWORD: ${{ secrets.MAVENCENTRAL_PASSWORD }}
+          JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.GPG_PUBLIC_KEY }}
+          JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
+          JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Deploy to Maven Central
+        if: ${{ !inputs.dry_run && !inputs.skip_deploy }}
+        uses: jreleaser/release-action@v2
+        with:
+          arguments: deploy
+        env:
+          JRELEASER_PROJECT_VERSION: ${{ steps.version.outputs.version }}
+          JRELEASER_MAVENCENTRAL_SONATYPE_USERNAME: ${{ secrets.MAVENCENTRAL_USERNAME }}
+          JRELEASER_MAVENCENTRAL_SONATYPE_PASSWORD: ${{ secrets.MAVENCENTRAL_PASSWORD }}
+          JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.GPG_PUBLIC_KEY }}
+          JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
+          JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Publish GitHub release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "java-vectors $VERSION" \
+              --generate-notes
+          fi
+
+      - name: Upload JReleaser logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jreleaser-logs
+          if-no-files-found: ignore
+          path: |
+            out/jreleaser/trace.log
+            out/jreleaser/output.properties
