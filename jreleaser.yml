@@ -1,0 +1,49 @@
+# JReleaser signs the Gradle-staged artifacts and uploads one validated deployment
+# to the Maven Central Publisher Portal.
+
+project:
+  name: vectors
+  description: Embedded vector search and persistence for Java
+  longDescription: |
+    java-vectors is a JDK 25-native vector-search toolkit and embedded vector
+    database with SIMD kernels, HNSW, Vamana, IVF, quantization, durable mmap
+    persistence, metadata filtering, and Spring AI and LangChain4j adapters.
+  authors:
+    - Brian Sam-Bodden
+  license: Apache-2.0
+  inceptionYear: "2026"
+  links:
+    homepage: https://github.com/integrallis/vectors
+  java:
+    groupId: com.integrallis
+    version: "25"
+
+signing:
+  active: ALWAYS
+  pgp:
+    armored: true
+
+deploy:
+  maven:
+    mavenCentral:
+      sonatype:
+        active: RELEASE
+        url: https://central.sonatype.com/api/v1/publisher
+        namespace: com.integrallis
+        applyMavenCentralRules: true
+        stagingRepositories:
+          - build/staging-deploy
+
+release:
+  github:
+    owner: integrallis
+    name: vectors
+    tagName: 'v{{projectVersion}}'
+    releaseName: 'java-vectors {{projectVersion}}'
+    skipTag: false
+    overwrite: true
+    changelog:
+      formatted: ALWAYS
+      preset: conventional-commits
+      contributors:
+        enabled: false
