@@ -151,7 +151,11 @@ class Vectors(BaseANN):
                 {"id": str(i), "vector": _to_list(X[i])}
                 for i in range(start, min(start + _INGEST_BATCH, n))
             ]
-            self._post(f"/v1/collections/{_COLLECTION}/documents", {"documents": docs})
+            # Bulk load: stage each batch without committing (a per-batch commit re-persists the
+            # whole growing collection — O(n^2)); the single commit below publishes them all.
+            self._post(
+                f"/v1/collections/{_COLLECTION}/documents?commit=false", {"documents": docs}
+            )
         self._post(f"/v1/collections/{_COLLECTION}/commit", {})
 
     def set_query_arguments(self, ef_search):

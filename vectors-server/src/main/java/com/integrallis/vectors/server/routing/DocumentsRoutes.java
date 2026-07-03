@@ -146,19 +146,26 @@ public final class DocumentsRoutes implements HttpService {
           res, Status.BAD_REQUEST_400, "invalid document", e.getMessage(), req);
       return;
     }
+    // Bulk-load path: `?commit=false` stages this batch without committing so a large ingest is
+    // not O(n^2). Each commit persists a new generation of the WHOLE collection, so committing
+    // once per batch re-writes the growing collection on every batch. Callers doing a bulk load
+    // (e.g. seeding a collection) send many `?commit=false` batches then one explicit
+    // POST .../commit. Default remains commit-per-batch for the atomic single-batch contract.
+    boolean commitBatch = !"false".equalsIgnoreCase(req.query().first("commit").orElse("true"));
     try {
-      // Hold the per-name write lock so the batch's upsert+commit pair is observably atomic
-      // w.r.t. other write paths against the same collection — without it, a concurrent batch
-      // can stage into the shared buffer between this batch's first upsert and its commit, so
-      // this commit would publish the other batch's docs (and vice versa). See
-      // CollectionRegistryLockTest.
+      // Hold the per-name write lock so the batch's upsert(+commit) is observably atomic w.r.t.
+      // other write paths against the same collection — without it, a concurrent batch can stage
+      // into the shared buffer between this batch's first upsert and its commit, so this commit
+      // would publish the other batch's docs (and vice versa). See CollectionRegistryLockTest.
       registry.runUnderWriteLock(
           name,
           () -> {
             for (Document d : docs) {
               c.upsert(d);
             }
-            c.commit();
+            if (commitBatch) {
+              c.commit();
+            }
           });
     } catch (IllegalArgumentException e) {
       LOG.debug("rejected upsert batch for '{}': {}", name, e.getMessage());
