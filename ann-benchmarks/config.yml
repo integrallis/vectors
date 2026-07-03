@@ -1,57 +1,35 @@
 # ANN-Benchmarks algorithm config for `vectors`.
 #
-# Schema follows the current ann-benchmarks layout
-# (ann_benchmarks/algorithms/<name>/config.yml). `@metric` is substituted by the
-# harness with the dataset's distance ("euclidean" / "angular"). One `Vectors`
-# constructor covers every backend; the `indexType` arg-group key selects it.
+# Schema matches the current ann-benchmarks layout (ann_benchmarks/algorithms/<name>/config.yml):
+# under `float:`, `any:` (all metrics) maps to a LIST of algorithm-definition dicts using
+# UNDERSCORE keys (base_args, docker_tag, run_groups, arg_groups, query_args) and a required
+# `name`. `@metric` is substituted by the harness with the dataset's distance
+# ("euclidean" / "angular"); the adapter maps euclidean->EUCLIDEAN, angular->COSINE.
 #
-# - HNSW / VAMANA (graph): the recall-vs-QPS curve is swept at QUERY time via the
-#   efSearch values in `query-args`.
-# - IVF_FLAT / IVF_PQ: nprobe is a BUILD-time setting in `vectors`, so it is swept
-#   via `arg-groups` (each value rebuilds the index); `query-args` carries a single
-#   placeholder that the adapter ignores for IVF.
+# List-valued entries in arg_groups expand into a cartesian product (definitions.py uses
+# itertools.product), so one arg_group dict sweeps every M x efConstruction combination.
 #
-# Verify these keys against the exact ann-benchmarks commit you target — the
-# config schema has shifted across versions (older releases used `base_args` /
-# `run_groups` with underscores).
+# - HNSW / VAMANA (graph): the recall-vs-QPS curve is swept at QUERY time via the efSearch
+#   values in query_args.
+# - IVF_PQ: nprobe is a BUILD-time setting in `vectors`, swept via arg_groups (each value
+#   rebuilds the index); query_args carries a single placeholder the adapter ignores.
 float:
-  euclidean:
-    vectors:
-      docker-tag: ann-benchmarks-vectors
-      module: ann_benchmarks.algorithms.vectors
-      constructor: Vectors
-      base-args: ["@metric"]
-      run-groups:
-        hnsw:
-          arg-groups:
-            - {"indexType": ["HNSW"], "M": [16, 24, 32], "efConstruction": [200, 500]}
-          query-args: [[20, 40, 80, 120, 200, 400, 800]]
-        vamana:
-          arg-groups:
-            - {"indexType": ["VAMANA"], "R": [32, 64], "L": [128], "alpha": [1.2]}
-          query-args: [[40, 80, 120, 200, 400, 800]]
-        ivfpq:
-          arg-groups:
-            - {"indexType": ["IVF_PQ"], "nlist": [256, 1024], "nprobe": [8, 16, 32, 64, 128],
-               "pqSubspaces": [16], "pqClusters": [256], "rescore": [4]}
-          query-args: [[0]]
-  angular:
-    vectors:
-      docker-tag: ann-benchmarks-vectors
-      module: ann_benchmarks.algorithms.vectors
-      constructor: Vectors
-      base-args: ["@metric"]
-      run-groups:
-        hnsw:
-          arg-groups:
-            - {"indexType": ["HNSW"], "M": [16, 24, 32], "efConstruction": [200, 500]}
-          query-args: [[20, 40, 80, 120, 200, 400, 800]]
-        vamana:
-          arg-groups:
-            - {"indexType": ["VAMANA"], "R": [32, 64], "L": [128], "alpha": [1.2]}
-          query-args: [[40, 80, 120, 200, 400, 800]]
-        ivfpq:
-          arg-groups:
-            - {"indexType": ["IVF_PQ"], "nlist": [256, 1024], "nprobe": [8, 16, 32, 64, 128],
-               "pqSubspaces": [16], "pqClusters": [256], "rescore": [4]}
-          query-args: [[0]]
+  any:
+  - name: vectors
+    constructor: Vectors
+    module: ann_benchmarks.algorithms.vectors
+    docker_tag: ann-benchmarks-vectors
+    disabled: false
+    base_args: ['@metric']
+    run_groups:
+      hnsw:
+        arg_groups: [{indexType: [HNSW], M: [16, 24, 32], efConstruction: [200, 500]}]
+        query_args: [[20, 40, 80, 120, 200, 400, 800]]
+      vamana:
+        arg_groups: [{indexType: [VAMANA], R: [32, 64], L: [128], alpha: [1.2]}]
+        query_args: [[40, 80, 120, 200, 400, 800]]
+      ivfpq:
+        arg_groups:
+          - {indexType: [IVF_PQ], nlist: [256, 1024], nprobe: [8, 16, 32, 64, 128],
+             pqSubspaces: [16], pqClusters: [256], rescore: [4]}
+        query_args: [[0]]

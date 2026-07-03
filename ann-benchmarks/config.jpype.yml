@@ -1,36 +1,20 @@
-# ANN-Benchmarks config for the IN-PROCESS (jpype, library-bracket) `vectors`
-# variant — register this as a separate algorithm (e.g. directory
-# ann_benchmarks/algorithms/vectors_jpype/) so it plots alongside, not on top of,
-# the HTTP "vectors" entry. Identical sweep to config.yml; only the module,
-# constructor, and docker-tag differ.
+# ANN-Benchmarks config for the IN-PROCESS (jpype, library-bracket) `vectors` variant — staged as
+# a separate algorithm (ann_benchmarks/algorithms/vectors_jpype/) so it plots alongside, not on top
+# of, the HTTP "vectors" entry. Same current schema as config.yml (list of algo dicts, underscore
+# keys, `any:` for both metrics). The harness imports `<module>.module`, so the staged file must be
+# named module.py (run-benchmark.sh stages module_jpype.py -> vectors_jpype/module.py).
 float:
-  euclidean:
-    vectors-jpype:
-      docker-tag: ann-benchmarks-vectors-jpype
-      module: ann_benchmarks.algorithms.vectors_jpype.module_jpype
-      constructor: VectorsJpype
-      base-args: ["@metric"]
-      run-groups:
-        hnsw:
-          arg-groups:
-            - {"indexType": ["HNSW"], "M": [16, 24, 32], "efConstruction": [200, 500]}
-          query-args: [[20, 40, 80, 120, 200, 400, 800]]
-        vamana:
-          arg-groups:
-            - {"indexType": ["VAMANA"], "R": [32, 64], "L": [128], "alpha": [1.2]}
-          query-args: [[40, 80, 120, 200, 400, 800]]
-  angular:
-    vectors-jpype:
-      docker-tag: ann-benchmarks-vectors-jpype
-      module: ann_benchmarks.algorithms.vectors_jpype.module_jpype
-      constructor: VectorsJpype
-      base-args: ["@metric"]
-      run-groups:
-        hnsw:
-          arg-groups:
-            - {"indexType": ["HNSW"], "M": [16, 24, 32], "efConstruction": [200, 500]}
-          query-args: [[20, 40, 80, 120, 200, 400, 800]]
-        vamana:
-          arg-groups:
-            - {"indexType": ["VAMANA"], "R": [32, 64], "L": [128], "alpha": [1.2]}
-          query-args: [[40, 80, 120, 200, 400, 800]]
+  any:
+  - name: vectors_jpype
+    constructor: VectorsJpype
+    module: ann_benchmarks.algorithms.vectors_jpype
+    docker_tag: ann-benchmarks-vectors-jpype
+    disabled: false
+    base_args: ['@metric']
+    run_groups:
+      hnsw:
+        arg_groups: [{indexType: [HNSW], M: [16, 24, 32], efConstruction: [200, 500]}]
+        query_args: [[20, 40, 80, 120, 200, 400, 800]]
+      vamana:
+        arg_groups: [{indexType: [VAMANA], R: [32, 64], L: [128], alpha: [1.2]}]
+        query_args: [[40, 80, 120, 200, 400, 800]]

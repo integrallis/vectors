@@ -134,7 +134,8 @@ stage_adapter() {
   # in-process jpype variant as a sibling algorithm
   local dstj="$WORKDIR/ann-benchmarks/ann_benchmarks/algorithms/vectors_jpype"
   mkdir -p "$dstj"
-  cp "$src/module_jpype.py" "$dstj/"
+  # The harness imports "<module>.module", so the file must be module.py (not module_jpype.py).
+  cp "$src/module_jpype.py" "$dstj/module.py"
   cp "$src/config.jpype.yml" "$dstj/config.yml"
   cp "$src/Dockerfile.jpype" "$dstj/Dockerfile"
   cp -r "$dst/vectors-server-dist" "$dstj/vectors-server-dist"
