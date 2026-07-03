@@ -16,7 +16,9 @@
 #   VECTORS_REF    branch/tag/sha to build               (default: main)
 #   ANN_REPO       ann-benchmarks git URL                (default: erikbern/ann-benchmarks)
 #   ANN_REF        ann-benchmarks ref                    (default: main)
-#   DATASET        ann-benchmarks dataset                (default: sift-128-euclidean)
+#   DATASETS       space-separated ann-benchmarks datasets (default: sift-128-euclidean)
+#                  e.g. "sift-128-euclidean glove-100-angular" for a multi-dataset sweep
+#                  (DATASET, singular, is still accepted for backward compatibility)
 #   ALGORITHMS     space-separated algorithms to run     (default: "vectors")
 #                  e.g. "vectors hnswlib faiss qdrant" for a head-to-head
 #   RUN_COUNT      runs per config (best is kept)        (default: 3)
@@ -28,7 +30,7 @@ VECTORS_REPO="${VECTORS_REPO:-https://github.com/integrallis/vectors.git}"
 VECTORS_REF="${VECTORS_REF:-main}"
 ANN_REPO="${ANN_REPO:-https://github.com/erikbern/ann-benchmarks.git}"
 ANN_REF="${ANN_REF:-main}"
-DATASET="${DATASET:-sift-128-euclidean}"
+DATASETS="${DATASETS:-${DATASET:-sift-128-euclidean}}"
 ALGORITHMS="${ALGORITHMS:-vectors}"
 RUN_COUNT="${RUN_COUNT:-3}"
 WORKDIR="${WORKDIR:-$HOME/vectors-bench}"
@@ -80,7 +82,7 @@ capture_manifest() {
   {
     echo "# vectors ANN-Benchmarks run manifest"
     echo "generated_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    echo "dataset=$DATASET"
+    echo "datasets=$DATASETS"
     echo "algorithms=$ALGORITHMS"
     echo "run_count=$RUN_COUNT"
     echo "vectors_repo=$VECTORS_REPO"
@@ -137,17 +139,21 @@ run_harness() {
   done
   local algo_args=()
   for algo in $ALGORITHMS; do algo_args+=(--algorithm "$algo"); done
-  log "run.py --dataset $DATASET ${algo_args[*]} --runs $RUN_COUNT"
-  python3 run.py --dataset "$DATASET" "${algo_args[@]}" --runs "$RUN_COUNT"
-  log "plot.py --dataset $DATASET"
-  python3 plot.py --dataset "$DATASET" -o "results-${DATASET}.png" || true
+  for dataset in $DATASETS; do
+    log "run.py --dataset $dataset ${algo_args[*]} --runs $RUN_COUNT"
+    python3 run.py --dataset "$dataset" "${algo_args[@]}" --runs "$RUN_COUNT"
+    log "plot.py --dataset $dataset"
+    python3 plot.py --dataset "$dataset" -o "results-${dataset}.png" || true
+  done
 }
 
 upload_results() {
   [ -n "$S3_RESULTS" ] || return 0
   log "uploading results to $S3_RESULTS"
   aws s3 cp --recursive "$WORKDIR/ann-benchmarks/results" "$S3_RESULTS/results"
-  aws s3 cp "$WORKDIR/ann-benchmarks/results-${DATASET}.png" "$S3_RESULTS/" 2>/dev/null || true
+  for dataset in $DATASETS; do
+    aws s3 cp "$WORKDIR/ann-benchmarks/results-${dataset}.png" "$S3_RESULTS/" 2>/dev/null || true
+  done
 }
 
 mkdir -p "$WORKDIR"
