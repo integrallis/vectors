@@ -2,9 +2,9 @@
 
 ## Supported Versions
 
-| Version     | Supported          |
-|-------------|--------------------|
-| 0.1.x       | :white_check_mark: |
+| Version            | Status                         |
+|--------------------|--------------------------------|
+| 0.1.x (unreleased) | Pre-release security fixes only |
 
 ## Reporting a Vulnerability
 
@@ -55,19 +55,32 @@ We follow a **90-day coordinated disclosure policy**:
 
 ## Security-Relevant Design Properties
 
-java-vectors is designed with security in mind:
+Security-relevant boundaries:
 
-- **Pure Java** — No JNI, no FFM bindings to native code, no native backends. The entire codebase is Java, eliminating classes of native memory corruption bugs.
-- **No cryptographic operations** — java-vectors does not implement or depend on cryptographic primitives. Artifact signing uses Sigstore (external tooling), not library code.
-- **Arena-based memory management** — All off-heap memory is managed through `java.lang.foreign.Arena`, providing spatial and temporal safety guarantees enforced by the JVM.
-- **No network I/O** — The core library modules perform no network operations. All data is local (in-memory or mmap).
-- **Minimal dependencies** — Library modules depend only on `slf4j-api` at runtime, minimizing supply chain attack surface.
+- **CPU release artifacts are Java bytecode** — They require no JNI library. The storage module
+  uses the FFM API for mmap access and an optional `posix_madvise` call.
+- **Native and network modules exist but are excluded from 0.1.x** — `vectors-gpu` binds to cuVS;
+  distributed, server, replication, and S3-capable modules perform network I/O. They must not be
+  described as part of the CPU release boundary.
+- **Arena-based memory management** — Off-heap segments use `java.lang.foreign.Arena`; callers must
+  still respect the documented lifetime and ownership contracts.
+- **Artifact signing is external** — JReleaser signs staged Maven artifacts with the maintainer's
+  GPG key. Runtime libraries do not perform release-signing operations.
+- **Dependencies vary by module** — Review each published POM and generated SBOM; framework
+  adapters intentionally depend on their framework APIs.
 
 ## Supply Chain Security
 
-- **SBOM generation** — CycloneDX SBOMs are generated for every module on every build
+- **SBOM generation** — CycloneDX SBOMs for every published module are generated and validated by
+  `complianceCheck`
 - **Dependency locking** — Gradle lockfiles pin all transitive dependency versions
-- **Vulnerability scanning** — OWASP Dependency-Check scans for known CVEs (CVSS >= 7.0 fails the build)
-- **Artifact signing** — Release artifacts are signed with Sigstore for tamper-evident distribution
-- **Reproducible builds** — JAR artifacts are reproducible (deterministic timestamps and file ordering)
-- **SAST** — GitHub CodeQL runs on every pull request
+- **Vulnerability scanning** — OWASP Dependency-Check is available as an explicit release audit;
+  findings with CVSS >= 7.0 fail that task
+- **Artifact signing** — The release workflow is configured to sign Maven
+  Central artifacts with GPG through JReleaser; no 0.1.0 release has been
+  signed yet.
+- **Deterministic JAR settings** — JAR tasks disable file timestamps and use
+  reproducible file order. A byte-for-byte clean-room rebuild has not yet been
+  independently verified.
+- **SAST** — A GitHub CodeQL workflow is configured for pull requests, pushes
+  to `main`, and a weekly schedule.

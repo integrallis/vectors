@@ -54,6 +54,7 @@ against competing commercial SaaS offerings:
 | Module | Description | Change Date |
 |---|---|---|
 | `vectors-distributed` | Embedded cluster — gossip, sharding, scatter-gather | April 25, 2028 |
+| `vectors-cluster` | Local sharded collection and top-K merge | April 25, 2028 |
 | `vectors-server` | HTTP server (Helidon SE 4 / Nima) | April 25, 2028 |
 | `vectors-gpu` | GPU backend via Panama-FFM + NVIDIA cuVS | April 25, 2028 |
 
@@ -79,8 +80,8 @@ education, non-commercial research, and professional services.
 
 **Not permitted** for FSL modules until the Change Date. If you want to build a
 commercial vector-database-as-a-service using `vectors-distributed`,
-`vectors-server`, or `vectors-gpu`, you need a commercial license from
-Integrallis Software.
+`vectors-cluster`, `vectors-server`, or `vectors-gpu`, you need a commercial
+license from Integrallis Software.
 
 ### Contributing
 
@@ -107,5 +108,6 @@ Email: licensing@integrallis.com
 | [`LICENSE`](LICENSE) | Apache License 2.0 (full text) |
 | [`LICENSE-FSL`](LICENSE-FSL) | Functional Source License 1.1, ALv2 Future License (full text) |
 | `vectors-distributed/LICENSE` | Copy of LICENSE-FSL |
+| `vectors-cluster/LICENSE` | Copy of LICENSE-FSL |
 | `vectors-server/LICENSE` | Copy of LICENSE-FSL |
 | `vectors-gpu/LICENSE` | Copy of LICENSE-FSL |
