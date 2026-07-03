@@ -1,5 +1,7 @@
 # vectors-ivf
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-ivf/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Inverted File (IVF) family indexes implemented in Java.
 
 ## Responsibility

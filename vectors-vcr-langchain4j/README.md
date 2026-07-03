@@ -1,5 +1,7 @@
 # vectors-vcr-langchain4j
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-vcr-langchain4j/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 VCR model wrappers for LangChain4j's `EmbeddingModel` and `ChatLanguageModel`. Records and replays API calls during test execution.
 
 ## Responsibility

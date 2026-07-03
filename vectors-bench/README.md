@@ -1,5 +1,7 @@
 # vectors-bench
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-bench/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Benchmarks for the Vectors library.
 
 ## Responsibility

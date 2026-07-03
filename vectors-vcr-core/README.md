@@ -1,5 +1,7 @@
 # vectors-vcr-core
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-vcr-core/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Framework-neutral record/replay engine for AI model API calls. Records embedding and chat responses to cassettes during test runs, then replays them without network access.
 
 ## Responsibility

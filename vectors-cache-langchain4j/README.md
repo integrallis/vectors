@@ -1,5 +1,7 @@
 # vectors-cache-langchain4j
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-cache-langchain4j/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Caching decorators for LangChain4j's `EmbeddingModel`, `ChatLanguageModel`, and `EmbeddingStore`. Intercepts calls and serves results from a `VectorCache` using a get-or-embed pattern.
 
 ## Responsibility

@@ -1,5 +1,7 @@
 # vectors-optimizer
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-optimizer/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Hyperparameter optimization for the `vectors-*` retrieval stack. Sweep index
 parameters (HNSW / Vamana / IVF), search-time knobs, quantizer choices,
 similarity metric, semantic-router thresholds, and semantic-cache thresholds

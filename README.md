@@ -13,6 +13,7 @@ a separate vector-database service.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![JDK 25+](https://img.shields.io/badge/JDK-25%2B-orange.svg)](https://openjdk.org/projects/jdk/25/)
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
 
 > **Status: 0.1.0 release candidate, not yet released.** The supported release
 > target is the single-process CPU library and its framework/cache adapters.

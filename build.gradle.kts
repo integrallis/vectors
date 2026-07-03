@@ -6,6 +6,7 @@ plugins {
     id("com.diffplug.spotless") version "6.25.0" apply false
     id("org.cyclonedx.bom") version "3.2.4" apply false
     id("org.owasp.dependencycheck") version "12.2.1" apply false
+    id("com.integrallis.mfcqi") version "0.7.0"
     jacoco
 }
 
@@ -46,6 +47,34 @@ val publishedModuleNames = setOf(
     "vectors-cache-spring-ai"
 )
 val publishedProjects = libraryProjects.filter { it.name in publishedModuleNames }
+
+// ---------------------------------------------------------------------------
+// MFCQI (Multi-Factor Code Quality Index) — https://github.com/integrallis/mfcqi-java
+// The root task produces the aggregate badge over the published-library production sources (the
+// shipped-product signal); each library module additionally scores its own sources for a per-module
+// badge. Pure source-tree analysis (bytecodeSecurity off) — no compiled classpath needed.
+//
+// MFCQI excludes build/ output dirs, so the aggregate cannot be staged there. The MFCQI workflow
+// stages the published sources into a temp dir outside the repo and passes -Pmfcqi.sourceDir; the
+// root task reads that (falling back to the repo root for a quick local run).
+// ---------------------------------------------------------------------------
+mfcqi {
+    source.set(
+        layout.projectDirectory.dir(providers.gradleProperty("mfcqi.sourceDir").getOrElse("."))
+    )
+    bytecodeSecurity.set(false)
+    failOnGate.set(false)
+}
+
+// Per-module MFCQI: every library module with production sources gets its own score + badge JSON.
+configure(libraryProjects.filter { it.file("src/main/java").isDirectory }) {
+    apply(plugin = "com.integrallis.mfcqi")
+    configure<com.integrallis.mfcqi.gradle.MfcqiExtension> {
+        source.set(layout.projectDirectory.dir("src/main/java"))
+        bytecodeSecurity.set(false)
+        failOnGate.set(false)
+    }
+}
 
 val apacheLicenseHeader = """
     /*
@@ -628,7 +657,7 @@ tasks.register("verifyGithubWorkflows") {
     description = "Verify GitHub Actions workflow files exist"
     doLast {
         val workflowDir = rootProject.file(".github/workflows")
-        listOf("ci.yml", "scorecard.yml", "codeql.yml", "release.yml").forEach { name ->
+        listOf("ci.yml", "scorecard.yml", "mfcqi.yml", "release.yml").forEach { name ->
             val f = workflowDir.resolve(name)
             require(f.exists()) { "Missing workflow: ${f.absolutePath}" }
             val content = f.readText()

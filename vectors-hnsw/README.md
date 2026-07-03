@@ -1,5 +1,7 @@
 # vectors-hnsw
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-hnsw/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Hierarchical Navigable Small World (HNSW) graph index implemented in Java.
 
 ## Responsibility

@@ -1,5 +1,7 @@
 # vectors-vcr-testng
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-vcr-testng/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 TestNG listener for VCR record/replay. Mirrors the JUnit 5 extension's functionality using TestNG's listener model.
 
 ## Responsibility

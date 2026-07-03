@@ -1,5 +1,7 @@
 # vectors-storage
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-storage/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Off-heap memory management and on-disk storage for the Vectors library.
 
 ## Responsibility

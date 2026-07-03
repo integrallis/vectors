@@ -1,5 +1,7 @@
 # vectors-quantization
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-quantization/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Vector quantization implementations for the Vectors library.
 
 ## Responsibility

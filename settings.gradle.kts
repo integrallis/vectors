@@ -1,3 +1,12 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        // The first-party MFCQI plugin (com.integrallis.mfcqi) is published to Maven Central,
+        // not the Gradle Plugin Portal.
+        mavenCentral()
+    }
+}
+
 rootProject.name = "vectors"
 
 include("vectors-core")

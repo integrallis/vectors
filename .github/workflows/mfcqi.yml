@@ -1,0 +1,59 @@
+name: MFCQI
+
+# Multi-Factor Code Quality Index (https://github.com/integrallis/mfcqi-java). Replaces CodeQL as
+# the code-quality signal: computes the aggregate score over the published-library production
+# sources plus a per-module score, and commits the shields.io endpoint badge JSONs on push to main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mfcqi:
+    name: MFCQI score and badges
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Stage published-library production sources (aggregate score)
+        run: |
+          STAGE="${RUNNER_TEMP}/mfcqi-src"
+          mkdir -p "$STAGE"
+          for m in vectors-core vectors-storage vectors-quantization vectors-hnsw vectors-vamana \
+                   vectors-ivf vectors-db vectors-spring-ai vectors-langchain4j \
+                   vectors-spring-boot-starter vectors-cache vectors-cache-jcache \
+                   vectors-cache-langchain4j vectors-cache-semantic-db vectors-cache-spring-ai; do
+            cp -r "$m/src/main/java/." "$STAGE/"
+          done
+          echo "MFCQI_STAGE=$STAGE" >> "$GITHUB_ENV"
+
+      - name: Generate MFCQI badges (aggregate + per-module)
+        run: ./gradlew mfcqiBadge -Pmfcqi.sourceDir="$MFCQI_STAGE" --no-daemon
+
+      - name: Commit badge updates
+        if: github.event_name == 'push'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add '.github/badges/mfcqi.json' 'vectors-*/.github/badges/mfcqi.json'
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update MFCQI badges [skip ci]"
+            git push
+          fi

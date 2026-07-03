@@ -1,5 +1,7 @@
 # vectors-studio-sidecart
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-studio-sidecart/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Pluggable sidecart sources for **Vectors Studio**: text, image, audio, and arbitrary binary payloads keyed by external document id and resolved *outside* of the vector index. Lets a thin vector store point at H2, the filesystem, or any HTTP-reachable object store (presigned S3 / GCS / R2 URLs, internal blob services) for the human-readable payload while the embeddings stay in `vectors-server`.
 
 ## Responsibility

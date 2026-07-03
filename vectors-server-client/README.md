@@ -1,5 +1,7 @@
 # vectors-server-client
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-server-client/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Java HTTP client for the `vectors-server` REST API. Built on the JDK `java.net.http.HttpClient` with Jackson for JSON binding — no third-party HTTP dependency.
 
 ## Responsibility

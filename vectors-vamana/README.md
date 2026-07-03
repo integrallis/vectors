@@ -1,5 +1,7 @@
 # vectors-vamana
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-vamana/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Vamana/DiskANN-style graph index implemented in Java.
 
 ## Responsibility

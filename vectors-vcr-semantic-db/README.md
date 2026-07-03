@@ -1,5 +1,7 @@
 # vectors-vcr-semantic-db
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-vcr-semantic-db/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 VCR cassette storage backed by a java-vectors `VectorCollection`. Uses vector similarity search to find semantically equivalent prompts for non-deterministic response matching.
 
 ## Responsibility

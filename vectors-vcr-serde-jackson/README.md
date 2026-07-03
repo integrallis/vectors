@@ -1,5 +1,7 @@
 # vectors-vcr-serde-jackson
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-vcr-serde-jackson/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 VCR cassette serialization using Jackson. Alternative serializer for cassette storage.
 
 ## Responsibility
