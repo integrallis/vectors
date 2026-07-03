@@ -27,9 +27,8 @@ import java.util.Optional;
  * previous response. The 0.92 default cosine threshold follows common practice in chat-assistant
  * caching and is a reasonable starting point for MiniLM-class embedding models.
  *
- * <p>Implementations typically delegate to a {@link com.integrallis.vectors.db.VectorCollection
- * VectorCollection} for the nearest-neighbour search and an {@link VectorCache} for the payload
- * store.
+ * <p>Implementations typically delegate to a vector collection for the nearest-neighbour search and
+ * a {@link VectorCache} for the payload store.
  *
  * @param <V> payload type (e.g. LLM response text, structured assistant output)
  */
