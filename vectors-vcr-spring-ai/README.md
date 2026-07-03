@@ -1,5 +1,7 @@
 # vectors-vcr-spring-ai
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-vcr-spring-ai/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 VCR model wrappers for Spring AI's `EmbeddingModel` and `ChatModel`. Records and replays API calls during test execution.
 
 ## Responsibility

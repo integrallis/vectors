@@ -1,5 +1,7 @@
 # vectors-spring-ai
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-spring-ai/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Spring AI `VectorStore` implementation backed by a java-vectors `VectorCollection`.
 
 ## Responsibility

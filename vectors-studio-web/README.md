@@ -1,5 +1,7 @@
 # vectors-studio-web
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-studio-web/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Helidon SE 4 web frontend for **Vectors Studio** — an interactive exploration and dimensionality-reduction workbench for `vectors-db` collections. Server-rendered HTML pages built with JTE + HTMX, plus a 3D projector island powered by Three.js (loaded from a CDN) and an SSE projection API.
 
 ## Responsibility

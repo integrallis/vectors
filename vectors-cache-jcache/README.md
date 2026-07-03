@@ -1,5 +1,7 @@
 # vectors-cache-jcache
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-cache-jcache/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 JSR-107 (JCache) adapter for the `VectorCache` SPI. Wraps any JCache-compliant backend (Ehcache, Hazelcast, Infinispan, Caffeine-JCache) as a `VectorCache`.
 
 ## Responsibility

@@ -1,5 +1,7 @@
 # vectors-gpu
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-gpu/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Optional GPU backend for java-vectors via Panama-FFM bindings to NVIDIA cuVS (no JNI maintained by
 this project). Loads `libcuvs.so` at runtime only when a compatible CUDA device is present;
 otherwise reports `GpuAvailability.unavailable(reason)` so callers fall back to the CPU indexes.

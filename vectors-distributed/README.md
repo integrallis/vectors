@@ -1,5 +1,7 @@
 # vectors-distributed
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-distributed/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Scatter-gather distributed search layer. Broadcasts queries across multiple nodes and merges results with pluggable cluster membership and shard routing.
 
 ## Responsibility

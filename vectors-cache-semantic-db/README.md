@@ -1,5 +1,7 @@
 # vectors-cache-semantic-db
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-cache-semantic-db/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 `SemanticCache` implementation backed by a java-vectors `VectorCollection`. Uses cosine similarity to find near-duplicate prompts for LLM response caching.
 
 ## Responsibility

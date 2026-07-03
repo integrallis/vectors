@@ -1,5 +1,7 @@
 # vectors-studio-core
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-studio-core/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 UI-agnostic domain core for **Vectors Studio** — backend SPI, dimensionality-reduction projections, dataset analysis, and algorithm recommender. Consumed by `vectors-studio-web` and any other Studio frontend.
 
 ## System Requirements

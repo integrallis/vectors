@@ -1,5 +1,7 @@
 # vectors-spring-boot-starter
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-spring-boot-starter/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Spring Boot auto-configuration for java-vectors. Registers `VectorCollection` and optional `JavaVectorsVectorStore` beans from application properties.
 
 ## Responsibility

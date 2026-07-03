@@ -1,5 +1,7 @@
 # vectors-db
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-db/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Embedded vector database facade. Provides a unified API over multiple index backends with optional quantization, metadata filtering, and mmap-persistent storage.
 
 ## Responsibility

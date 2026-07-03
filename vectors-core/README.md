@@ -1,5 +1,7 @@
 # vectors-core
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-core/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Foundation module for the Vectors library. No internal dependencies.
 
 ## Responsibility

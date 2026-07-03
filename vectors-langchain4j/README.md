@@ -1,5 +1,7 @@
 # vectors-langchain4j
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-langchain4j/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 LangChain4j `EmbeddingStore` adapter backed by a java-vectors `VectorCollection`.
 
 ## Responsibility

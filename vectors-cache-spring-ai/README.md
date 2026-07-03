@@ -1,5 +1,7 @@
 # vectors-cache-spring-ai
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-cache-spring-ai/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Caching decorators for Spring AI's `EmbeddingModel` and `ChatModel`. Intercepts calls and serves results from a `VectorCache` using a get-or-embed pattern.
 
 ## Responsibility

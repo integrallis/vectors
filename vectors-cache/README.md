@@ -1,5 +1,7 @@
 # vectors-cache
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-cache/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Caching SPI for exact-match and similarity-based lookups. Provides `VectorCache` for key-value caching and `SemanticCache` for vector-similarity retrieval, with a Caffeine default backend.
 
 ## Responsibility

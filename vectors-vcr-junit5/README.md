@@ -1,5 +1,7 @@
 # vectors-vcr-junit5
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-vcr-junit5/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 JUnit 5 extension for VCR record/replay. Manages VCR lifecycle via extension callbacks, wraps `@VCRModel` fields, and supports per-test mode overrides.
 
 ## Responsibility

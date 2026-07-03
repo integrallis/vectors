@@ -1,5 +1,7 @@
 # vectors-server
 
+[![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/vectors-server/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
+
 Standalone HTTP server exposing vector collections via a JSON REST API. Built on Helidon SE 4 (Nima virtual-thread runtime) with PicoCLI for command-line entry.
 
 ## Responsibility
