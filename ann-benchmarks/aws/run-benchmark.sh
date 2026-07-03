@@ -103,11 +103,21 @@ capture_manifest() {
 }
 
 build_vectors() {
-  log "building vectors-server @ ${VECTORS_REF}"
   rm -rf "$WORKDIR/vectors"
-  git clone --depth 1 --branch "$VECTORS_REF" "$VECTORS_REPO" "$WORKDIR/vectors" ||
-    git clone "$VECTORS_REPO" "$WORKDIR/vectors"
-  (cd "$WORKDIR/vectors" && git checkout "$VECTORS_REF" && ./gradlew :vectors-server:installDist)
+  # VECTORS_LOCAL_DIR: build from a pre-staged checkout instead of cloning — for a private repo
+  # (rsync the source over rather than putting a token on the box) or local dev. Java is
+  # cross-platform, so the dist is (re)built on this host regardless.
+  if [ -n "${VECTORS_LOCAL_DIR:-}" ]; then
+    log "using pre-staged vectors checkout at $VECTORS_LOCAL_DIR"
+    cp -r "$VECTORS_LOCAL_DIR" "$WORKDIR/vectors"
+  else
+    log "cloning vectors @ ${VECTORS_REF}"
+    git clone --depth 1 --branch "$VECTORS_REF" "$VECTORS_REPO" "$WORKDIR/vectors" ||
+      git clone "$VECTORS_REPO" "$WORKDIR/vectors"
+    (cd "$WORKDIR/vectors" && git checkout "$VECTORS_REF")
+  fi
+  log "building vectors-server dist"
+  (cd "$WORKDIR/vectors" && ./gradlew :vectors-server:installDist)
 }
 
 stage_adapter() {
