@@ -39,11 +39,13 @@ public final class VectorCollectionBuilder {
   public static final int DEFAULT_HNSW_EF_CONSTRUCTION = 200;
 
   /**
-   * HNSW build-time thread count default. Defaults to {@code 1} (deterministic, single-threaded) so
-   * the graph encoding is bit-exact reproducible; call {@link #hnswBuildThreads(int)} to opt in to
-   * parallel construction via {@link com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder}.
+   * HNSW build-time thread count default. {@code 0} = auto: large builds construct in parallel
+   * across all cores via {@link com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder}, while
+   * small builds stay single-threaded. Call {@link #hnswBuildThreads(int)} with {@code 1} to force
+   * deterministic (bit-exact reproducible) single-threaded construction, or a specific count to pin
+   * parallelism.
    */
-  public static final int DEFAULT_HNSW_BUILD_THREADS = 1;
+  public static final int DEFAULT_HNSW_BUILD_THREADS = 0;
 
   /**
    * Vamana build-time thread count default. Defaults to {@code 1} (deterministic, single-threaded)
@@ -234,9 +236,10 @@ public final class VectorCollectionBuilder {
   /**
    * Sets the number of worker threads used during HNSW graph construction. Values {@code > 1} route
    * the build through {@link com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder}, which
-   * produces valid (but non-deterministic) graphs with equivalent recall. Ignored unless {@link
-   * #indexType(IndexType)} is {@link IndexType#HNSW}. Must be {@code >= 1}. Default: {@link
-   * #DEFAULT_HNSW_BUILD_THREADS} (single-threaded and deterministic).
+   * produces valid (but non-deterministic) graphs with equivalent recall. {@code 1} forces
+   * deterministic single-threaded construction. Ignored unless {@link #indexType(IndexType)} is
+   * {@link IndexType#HNSW}. Must be {@code >= 1}. Default (when unset): {@link
+   * #DEFAULT_HNSW_BUILD_THREADS} (auto — parallel for large builds, single-threaded for small).
    */
   public VectorCollectionBuilder hnswBuildThreads(int threads) {
     if (threads < 1) {

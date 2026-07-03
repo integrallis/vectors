@@ -287,7 +287,9 @@ public record VectorCollectionConfig(
    *
    * @param m max connections per upper layer (must be positive)
    * @param efConstruction beam width during construction (must be {@code >= m})
-   * @param threads number of worker threads for graph construction (must be {@code >= 1})
+   * @param threads worker threads for graph construction. {@code 0} means auto (parallel across all
+   *     cores for large builds, single-threaded for small ones); explicit values must be {@code >=
+   *     1}, where {@code 1} forces deterministic single-threaded construction.
    */
   public record HnswParams(int m, int efConstruction, int threads) {
     public HnswParams {
@@ -298,8 +300,8 @@ public record VectorCollectionConfig(
         throw new IllegalArgumentException(
             "efConstruction (" + efConstruction + ") must be >= M (" + m + ")");
       }
-      if (threads < 1) {
-        throw new IllegalArgumentException("threads must be >= 1: " + threads);
+      if (threads < 0) {
+        throw new IllegalArgumentException("threads must be >= 0 (0 = auto): " + threads);
       }
     }
 

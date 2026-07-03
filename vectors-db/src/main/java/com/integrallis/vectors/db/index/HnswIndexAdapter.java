@@ -52,6 +52,14 @@ import java.util.function.IntPredicate;
  */
 public final class HnswIndexAdapter implements IndexSpi {
 
+  /**
+   * Minimum vector count at which an auto ({@code buildThreads == 0}) build goes parallel. Below
+   * this, single-threaded construction is both fast enough and deterministic; the parallel
+   * scheduler's overhead only pays off on larger graphs. HNSW build is distance-bound and scales
+   * near-linearly with cores, so large builds default to all available processors.
+   */
+  private static final int PARALLEL_BUILD_MIN_SIZE = 10_000;
+
   private final int maxConnections;
   private final int efConstruction;
   private final int buildThreads;
@@ -80,7 +88,9 @@ public final class HnswIndexAdapter implements IndexSpi {
    *
    * @param maxConnections HNSW {@code M} (must be positive)
    * @param efConstruction beam width during construction (must be {@code >= maxConnections})
-   * @param buildThreads number of worker threads for construction (must be {@code >= 1})
+   * @param buildThreads worker threads for construction. {@code 0} = auto (resolved in {@link
+   *     #build} to all cores for large graphs, single-threaded for small); explicit values must be
+   *     {@code >= 1}
    * @throws IllegalArgumentException if any argument violates the contract
    */
   public HnswIndexAdapter(int maxConnections, int efConstruction, int buildThreads) {
@@ -95,8 +105,8 @@ public final class HnswIndexAdapter implements IndexSpi {
               + maxConnections
               + ")");
     }
-    if (buildThreads < 1) {
-      throw new IllegalArgumentException("buildThreads must be >= 1: " + buildThreads);
+    if (buildThreads < 0) {
+      throw new IllegalArgumentException("buildThreads must be >= 0 (0 = auto): " + buildThreads);
     }
     this.maxConnections = maxConnections;
     this.efConstruction = efConstruction;
@@ -126,11 +136,20 @@ public final class HnswIndexAdapter implements IndexSpi {
       this.index = null;
       return;
     }
+    // Resolve auto (buildThreads == 0): parallel across all cores for large graphs, single-threaded
+    // (deterministic) for small ones. HNSW build is ~76% distance computation (JFR-measured) and
+    // parallelizes near-linearly, so large builds default to every available processor.
+    int resolvedThreads =
+        buildThreads == 0
+            ? (vectors.length >= PARALLEL_BUILD_MIN_SIZE
+                ? Runtime.getRuntime().availableProcessors()
+                : 1)
+            : buildThreads;
     this.index =
         HnswIndex.builder(vectors, metric)
             .maxConnections(maxConnections)
             .efConstruction(efConstruction)
-            .parallelism(buildThreads)
+            .parallelism(resolvedThreads)
             .build();
   }
 
