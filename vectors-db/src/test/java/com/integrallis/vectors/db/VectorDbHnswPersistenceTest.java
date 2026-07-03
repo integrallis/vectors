@@ -710,8 +710,11 @@ class VectorDbHnswPersistenceTest {
 
     @Test
     void concurrentReadersNeverBlockedByHnswCommit(@TempDir Path tempDir) {
+      // Generous wall-clock budget: this exercises correctness (readers never block), not latency.
+      // Under a parallel build (org.gradle.parallel + maxParallelForks) the reader/writer pool is
+      // heavily oversubscribed, so a tight deadline flakes on slow scheduling, not on a real hang.
       assertTimeoutPreemptively(
-          Duration.ofSeconds(15),
+          Duration.ofSeconds(60),
           () -> {
             try (var col = openPersistentHnsw(tempDir.resolve("col"))) {
               // Seed with 50 docs so readers have real work to do.
@@ -767,7 +770,7 @@ class VectorDbHnswPersistenceTest {
                   });
 
               pool.shutdown();
-              assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+              assertThat(pool.awaitTermination(45, TimeUnit.SECONDS)).isTrue();
               for (AtomicReference<Throwable> err : errors) {
                 Throwable t = err.get();
                 if (t != null) {

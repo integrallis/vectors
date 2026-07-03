@@ -73,6 +73,11 @@ class GenerationShippingFailureVisibilityTest {
       // Shipping is async — wait for the failure to register on the shipper.
       awaitFailures(shipper, 1, Duration.ofSeconds(5));
 
+      // The failure counter and the observer callback are bumped on the same async path but not as
+      // one atomic step, so a scheduler under heavy parallel-build load can return from
+      // awaitFailures() a beat before the callback runs. Wait for the callback too.
+      awaitCallback(cbCount, 1, Duration.ofSeconds(5));
+
       assertThat(shipper.shipFailureCount())
           .as("the put failure must be counted")
           .isGreaterThanOrEqualTo(1L);
@@ -137,6 +142,17 @@ class GenerationShippingFailureVisibilityTest {
     }
     throw new AssertionError(
         "shipper.shipFailureCount did not reach " + target + "; got " + shipper.shipFailureCount());
+  }
+
+  private static void awaitCallback(AtomicLong counter, long target, Duration max)
+      throws InterruptedException {
+    long deadline = System.nanoTime() + max.toNanos();
+    while (System.nanoTime() < deadline) {
+      if (counter.get() >= target) return;
+      Thread.sleep(20);
+    }
+    throw new AssertionError(
+        "failure callback did not fire " + target + " time(s); got " + counter.get());
   }
 
   /** Storage backend whose {@code put} always throws — used to force a shipping failure. */
