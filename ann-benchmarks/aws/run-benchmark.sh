@@ -56,6 +56,50 @@ install_deps() {
   sudo usermod -aG docker "$USER" || true
 }
 
+# Fail fast if the harness won't be able to reach the Docker daemon. The usermod above does not
+# take effect in the current shell, so a standalone (non-root) run needs the invoking user to
+# already be in the docker group (re-login) or to run under sudo. Terraform user_data runs as root,
+# where this is a no-op.
+require_docker_ready() {
+  if ! docker ps >/dev/null 2>&1; then
+    log "ERROR: cannot talk to the Docker daemon as $(id -un)."
+    log "  ann-benchmarks shells out to 'docker' directly, so this must work without sudo."
+    log "  Fix: log out/in after the docker-group change, or run this script as root."
+    exit 1
+  fi
+}
+
+# Reproducibility manifest — the audit requires committed hardware/JDK/dataset/params/SHA metadata
+# for any published benchmark. Written into results/ so it travels with the raw output to S3.
+capture_manifest() {
+  local out="$WORKDIR/ann-benchmarks/results/vectors-bench-manifest.txt"
+  mkdir -p "$(dirname "$out")"
+  local vectors_sha ann_sha
+  vectors_sha="$(git -C "$WORKDIR/vectors" rev-parse HEAD 2>/dev/null || echo unknown)"
+  ann_sha="$(git -C "$WORKDIR/ann-benchmarks" rev-parse HEAD 2>/dev/null || echo unknown)"
+  {
+    echo "# vectors ANN-Benchmarks run manifest"
+    echo "generated_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "dataset=$DATASET"
+    echo "algorithms=$ALGORITHMS"
+    echo "run_count=$RUN_COUNT"
+    echo "vectors_repo=$VECTORS_REPO"
+    echo "vectors_ref=$VECTORS_REF"
+    echo "vectors_sha=$vectors_sha"
+    echo "ann_benchmarks_repo=$ANN_REPO"
+    echo "ann_benchmarks_ref=$ANN_REF"
+    echo "ann_benchmarks_sha=$ann_sha"
+    echo "jvm_flags=--add-modules jdk.incubator.vector"
+    echo "--- java ---"; java -version 2>&1 || echo "java unavailable"
+    echo "--- os ---"; uname -a; (. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") || true
+    echo "--- cpu ---"; lscpu 2>/dev/null || sysctl -n machdep.cpu.brand_string 2>/dev/null || true
+    echo "--- memory ---"; free -h 2>/dev/null || true
+    echo "--- ec2 instance-type (if on EC2) ---"
+    curl -s --max-time 2 http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo "n/a"
+  } > "$out"
+  log "wrote reproducibility manifest -> $out"
+}
+
 build_vectors() {
   log "building vectors-server @ ${VECTORS_REF}"
   rm -rf "$WORKDIR/vectors"
@@ -108,8 +152,10 @@ upload_results() {
 
 mkdir -p "$WORKDIR"
 install_deps
+require_docker_ready
 build_vectors
 stage_adapter
 run_harness
+capture_manifest
 upload_results
 log "done. results in $WORKDIR/ann-benchmarks/results${S3_RESULTS:+ and $S3_RESULTS}"
