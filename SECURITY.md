@@ -82,5 +82,7 @@ Security-relevant boundaries:
 - **Deterministic JAR settings** — JAR tasks disable file timestamps and use
   reproducible file order. A byte-for-byte clean-room rebuild has not yet been
   independently verified.
-- **SAST** — A GitHub CodeQL workflow is configured for pull requests, pushes
-  to `main`, and a weekly schedule.
+- **Code quality** — An MFCQI (Multi-Factor Code Quality Index) workflow scores
+  the library on pull requests and pushes to `main`. Static security signal is
+  provided by OpenSSF Scorecard and the MFCQI security metric; a dedicated SAST
+  scanner is not currently wired.
