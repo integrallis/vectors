@@ -228,7 +228,7 @@ public final class VectorCollectionBuilder {
    * the build through {@link com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder}, which
    * produces valid (but non-deterministic) graphs with equivalent recall. Ignored unless {@link
    * #indexType(IndexType)} is {@link IndexType#HNSW}. Must be {@code >= 1}. Default: {@link
-   * #DEFAULT_HNSW_BUILD_THREADS} (half of {@code Runtime.availableProcessors()}).
+   * #DEFAULT_HNSW_BUILD_THREADS} (single-threaded and deterministic).
    */
   public VectorCollectionBuilder hnswBuildThreads(int threads) {
     if (threads < 1) {
