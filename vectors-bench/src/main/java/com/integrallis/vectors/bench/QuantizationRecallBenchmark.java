@@ -184,7 +184,9 @@ public final class QuantizationRecallBenchmark {
         }
       }
 
-      System.gc();
+      // Intentionally do NOT call System.gc() between warmup and measurement: GC pauses observed
+      // in production are part of the latency distribution we want to publish. Forcing a
+      // collection here resets allocation pressure and biases the measurement low. (Audit T4.11.)
 
       // Measurement.
       LatencyCollector latency = new LatencyCollector(queries.length * MEASUREMENT_ROUNDS);

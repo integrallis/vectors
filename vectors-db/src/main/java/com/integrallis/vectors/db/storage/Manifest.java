@@ -133,6 +133,22 @@ public record Manifest(
     if (tombstoneCount < 0) {
       throw new IllegalArgumentException("tombstoneCount must be >= 0: " + tombstoneCount);
     }
+    // Cross-field invariants on the tombstone triplet — without these, an inverted manifest
+    // could claim "N tombstones in 0 bytes" or "0 tombstones with a non-zero CRC" and still
+    // pass the per-field non-negative checks. TombstoneCodec.encode emits zero bytes iff the
+    // bitset is empty, so the count and the bin length must agree on emptiness.
+    if ((tombstoneCount == 0L) != (tombstonesBinLength == 0L)) {
+      throw new IllegalArgumentException(
+          "tombstoneCount and tombstonesBinLength must both be zero or both be non-zero: "
+              + "tombstoneCount="
+              + tombstoneCount
+              + ", tombstonesBinLength="
+              + tombstonesBinLength);
+    }
+    if (tombstonesBinLength == 0L && tombstonesBinCrc32 != 0L) {
+      throw new IllegalArgumentException(
+          "tombstonesBinCrc32 must be 0 when tombstonesBinLength is 0: " + tombstonesBinCrc32);
+    }
   }
 
   /**

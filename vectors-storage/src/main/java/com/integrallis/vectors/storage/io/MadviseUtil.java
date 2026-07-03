@@ -39,6 +39,13 @@ final class MadviseUtil {
 
   private static final MethodHandle MADVISE_HANDLE = initMadviseHandle();
 
+  /**
+   * Set once when the first apply() call observes a runtime failure, so the warning fires exactly
+   * once per JVM instead of spamming the log on every mmap.
+   */
+  private static final java.util.concurrent.atomic.AtomicBoolean APPLY_FAILURE_LOGGED =
+      new java.util.concurrent.atomic.AtomicBoolean();
+
   private MadviseUtil() {}
 
   @SuppressWarnings("restricted")
@@ -81,10 +88,27 @@ final class MadviseUtil {
     try {
       int result = invokeMadvise(segment, segment.byteSize(), advice);
       if (result != 0) {
-        log.debug("posix_madvise returned non-zero: {} for strategy {}", result, strategy);
+        // First non-zero result is surfaced once at WARN; subsequent ones drop to DEBUG so a
+        // platform that silently rejects every madvise doesn't spam the log. Audit recommended
+        // surfacing the "no-op madvise" case so it's not invisible.
+        if (APPLY_FAILURE_LOGGED.compareAndSet(false, true)) {
+          log.warn(
+              "posix_madvise returned non-zero: {} for strategy {} (further failures at debug)",
+              result,
+              strategy);
+        } else {
+          log.debug("posix_madvise returned non-zero: {} for strategy {}", result, strategy);
+        }
       }
     } catch (Throwable t) {
-      log.debug("Failed to apply madvise strategy {}: {}", strategy, t.getMessage());
+      if (APPLY_FAILURE_LOGGED.compareAndSet(false, true)) {
+        log.warn(
+            "Failed to apply madvise strategy {} (further failures at debug): {}",
+            strategy,
+            t.getMessage());
+      } else {
+        log.debug("Failed to apply madvise strategy {}: {}", strategy, t.getMessage());
+      }
     }
   }
 

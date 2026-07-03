@@ -48,6 +48,13 @@ public final class VamanaSearcher {
   // topology fill ids without allocating (and lets a paged topology read straight from the mmap).
   private final int[] neighborScratch;
   // Scratch buffers for fused bulk neighbor scoring. Sized to an upper bound on graph degree R.
+  //
+  // Why 128 (vs HNSW's 64): Vamana's typical degree R is 64-128 (default DEFAULT_VAMANA_R=64,
+  // tuned configs go to 128); HNSW's typical layer-0 degree is 2*M = 16-32 (M default 8-16).
+  // The fused-scan working set is (R neighbors) × (dim * 4 bytes) for the raw-FP32 path. At
+  // R=128, dim=768 that's 384 KB — fits L2 on every contemporary part but pushes past L1.
+  // The Vamana scan path is graph-only (no PQ-table prefetch competing for L1), so the larger
+  // batch amortises dispatch overhead better than HNSW's narrower window without hurting cache.
   private static final int BULK_BATCH = 128;
   private final int[] bulkIds = new int[BULK_BATCH];
   private final float[] bulkScores = new float[BULK_BATCH];

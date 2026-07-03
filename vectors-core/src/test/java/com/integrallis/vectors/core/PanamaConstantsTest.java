@@ -69,4 +69,73 @@ class PanamaConstantsTest {
 
     assertThat(PanamaConstants.isAmdWithFma(info)).isFalse();
   }
+
+  // ─── P3.5 SVE detection ────────────────────────────────────────────────────
+
+  @Test
+  void armArchDetectionAcceptsAarch64Aliases() {
+    assertThat(PanamaConstants.isArmArch("aarch64")).isTrue();
+    assertThat(PanamaConstants.isArmArch("arm64")).isTrue();
+    assertThat(PanamaConstants.isArmArch("AARCH64")).isTrue();
+    assertThat(PanamaConstants.isArmArch("amd64")).isFalse();
+    assertThat(PanamaConstants.isArmArch("x86_64")).isFalse();
+  }
+
+  @Test
+  void cpuInfoParserDetectsSveOnArmFeaturesLine() {
+    // Graviton 3 cpuinfo shape: Features line lists scalable-vector flags including 'sve'.
+    PanamaConstants.CpuInfo info =
+        PanamaConstants.parseCpuInfo(
+            """
+            processor   : 0
+            BogoMIPS    : 2100.00
+            Features    : fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp \
+                          cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 \
+                          sve asimdfhm
+            CPU implementer : 0x41
+            """);
+
+    assertThat(PanamaConstants.hasSveCpuFlag(info)).isTrue();
+  }
+
+  @Test
+  void cpuInfoParserDoesNotMatchPartialSveToken() {
+    // 'sve2-only' / 'sve3' substrings should not satisfy the bare 'sve' token check (we use
+    // exact-token matching, so a CPU that genuinely supports sve will list it as a separate
+    // token alongside sve2).
+    PanamaConstants.CpuInfo info =
+        PanamaConstants.parseCpuInfo(
+            """
+            Features    : fp asimd sve2 asimddp
+            """);
+
+    assertThat(PanamaConstants.hasSveCpuFlag(info))
+        .as("sve2 without bare 'sve' must not register as SVE support")
+        .isFalse();
+  }
+
+  @Test
+  void cpuInfoParserRejectsSveOnX86CpuInfo() {
+    // A regular x86 cpuinfo has no Features: line and no sve token — must return false.
+    PanamaConstants.CpuInfo info =
+        PanamaConstants.parseCpuInfo(
+            """
+            vendor_id   : GenuineIntel
+            flags       : fpu sse4_2 avx fma avx2 avx512f
+            """);
+
+    assertThat(PanamaConstants.hasSveCpuFlag(info)).isFalse();
+  }
+
+  @Test
+  void hasSveIsFalseOnNonArmHosts() {
+    // This test must run on every CI box including x86_64 — the JVM-resolved HAS_SVE on those
+    // platforms must be false. The complement (HAS_SVE true on an ARM box with SVE) is genuine
+    // hardware coverage that only ARM-with-SVE CI can validate.
+    if (PanamaConstants.isArmArch(System.getProperty("os.arch", ""))) {
+      // Skip: ARM platform may legitimately have SVE; can't assert false.
+      return;
+    }
+    assertThat(PanamaConstants.HAS_SVE).as("non-ARM hosts must report HAS_SVE=false").isFalse();
+  }
 }

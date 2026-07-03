@@ -1,6 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs exclusions for vectors-*. Every <Match> in this file should have a
+  preceding comment explaining the *why* — re-justified during audit T4.13 follow-up.
+  Two patterns dominate:
+
+  1. EI_EXPOSE_REP / EI_EXPOSE_REP2 — vectors stores and returns large float[]/byte[]/
+     MemorySegment payloads by reference for zero-copy producer/consumer handoff. The
+     audited Javadoc on Document, QuantizedVectors, MappedVectorStore etc. explicitly
+     documents the caller contract: arrays returned by the collection are immutable.
+     Defensive copies would multiply the per-query allocation cost and defeat the
+     core's performance proposition.
+
+  2. DMI_RANDOM_USED_ONLY_ONCE — SpotBugs misclassifies a Random object that is reused
+     across multiple nextX() calls inside a nested loop as a one-shot use. Deterministic
+     seeds are an explicit design choice for reproducible quantizer training, IVF
+     clustering, RaBitQ rotation, etc.; switching to ThreadLocalRandom would lose
+     determinism across runs.
+
+  When adding a new entry: include a short comment naming the class + the pattern + the
+  reason the warning is intentional. Group related entries (same package, same rationale)
+  under one comment to keep the file scannable.
+-->
 <FindBugsFilter>
     <!-- VectorizationProvider.getInstance() returns an immutable interface reference -->
+    <!-- (the singleton holder field is never reassigned after class init). -->
+    <!-- See: vectors-core/src/main/java/.../VectorizationProvider.java -->
+    <!-- Pattern: MS_EXPOSE_REP. -->
+    <!-- Begin entries: -->
     <Match>
         <Class name="com.integrallis.vectors.core.VectorizationProvider"/>
         <Bug pattern="MS_EXPOSE_REP"/>
@@ -33,6 +59,16 @@
             <Class name="com.integrallis.vectors.quantization.QuaternionRotation"/>
             <Class name="com.integrallis.vectors.hnsw.RandomLevelGenerator"/>
         </Or>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+
+    <!-- vectors-bench: TieredIvfRecallQpsBenchmark seeds a single Random with a fixed seed for
+         reproducible corpus generation. It is reused across multiple nextGaussian()/nextInt()
+         calls in nested loops, but SpotBugs's DMI heuristic misclassifies the per-loop call as
+         "used only once". The reproducibility is the explicit design choice — switching to
+         ThreadLocalRandom would lose deterministic output across runs. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.TieredIvfRecallQpsBenchmark"/>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
     <!-- HNSW: SearchResult record exposes/stores arrays intentionally for zero-copy access -->
@@ -163,6 +199,11 @@
         <Class name="com.integrallis.vectors.bench.CommitPipelineBenchmark"/>
         <Bug pattern="URF_UNREAD_FIELD"/>
     </Match>
+    <!-- vectors-quantization: the *QuantizedVectors records hold large array payloads (codes,
+         codebooks, training residuals) by reference for zero-copy access from the inner scoring
+         loops. Defensively copying these on every accessor would multiply the per-query cost
+         and defeat the purpose of compressed storage. The records are package-private mutation
+         targets only for the trainer/codec; downstream callers treat the arrays as immutable. -->
     <Match>
         <Or>
             <Class name="com.integrallis.vectors.quantization.ScalarQuantizedVectors"/>
@@ -178,7 +219,11 @@
             <Bug pattern="EI_EXPOSE_REP"/>
         </Or>
     </Match>
-    <!-- vectors-db: public records intentionally expose internal array references -->
+    <!-- vectors-core/db public records that intentionally expose internal array references for
+         zero-copy producer/consumer handoff. Document.vector(), SearchRequest.queryVector(), and
+         SearchResult.hits()[i].vector() are all on the hot path; cloning them on every read would
+         dominate query latency. The Document Javadoc explicitly documents the contract: arrays
+         returned by the collection must be treated as immutable by callers. -->
     <Match>
         <Class name="com.integrallis.vectors.core.Document"/>
         <Or>
@@ -438,6 +483,23 @@
         <Class name="com.integrallis.vectors.db.VectorCollectionImpl"/>
         <Method name="openGeneration"/>
         <Bug pattern="REC_CATCH_EXCEPTION"/>
+    </Match>
+
+    <!-- vectors-db: every nextGenerationNumber read/write happens while the writer thread holds
+         the per-collection ReentrantLock (#writerLock). The lock is now acquired via a helper
+         (acquireWriterLockOrThrow) that performs tryLock(timeout, …) instead of the bare lock(),
+         which SpotBugs does not pattern-match for guarded-field analysis — but the guard is in
+         fact present on every call site (commit, refresh, compact). The 64-bit-write atomicity
+         and read-modify-write warnings are therefore false positives. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.VectorCollectionImpl"/>
+        <Field name="nextGenerationNumber"/>
+        <Or>
+            <Bug pattern="AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION"/>
+            <Bug pattern="AT_NONATOMIC_64BIT_PRIMITIVE"/>
+            <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+            <Bug category="MT_CORRECTNESS"/>
+        </Or>
     </Match>
 
     <!-- vectors-spring-boot-starter: JavaVectorsProperties uses standard Spring Boot @ConfigurationProperties

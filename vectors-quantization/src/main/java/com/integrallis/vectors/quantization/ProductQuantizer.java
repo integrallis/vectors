@@ -24,6 +24,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Product Quantization (PQ) of float32 vectors into compact byte codes.
@@ -51,6 +53,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * }</pre>
  */
 public final class ProductQuantizer implements Quantizer<PQVectors> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ProductQuantizer.class);
 
   /** Default number of clusters per subspace (one byte index = 256 values). */
   static final int DEFAULT_CLUSTERS = 256;
@@ -325,10 +329,21 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
         pool.shutdown();
         try {
           if (!pool.awaitTermination(5, TimeUnit.MINUTES)) {
-            pool.shutdownNow();
+            // A subspace task wedged for the full 5-minute budget. Surface this loudly — the
+            // alternative (silent shutdownNow) leaves the operator unable to distinguish a hung
+            // train from a successful one. Tasks that never started are returned for the log.
+            java.util.List<Runnable> notStarted = pool.shutdownNow();
+            LOG.warn(
+                "ProductQuantizer.train: pool did not terminate within 5 minutes — forcing"
+                    + " shutdown. {} subspace task(s) had not started.",
+                notStarted.size());
           }
         } catch (InterruptedException ie) {
-          pool.shutdownNow();
+          java.util.List<Runnable> notStarted = pool.shutdownNow();
+          LOG.warn(
+              "ProductQuantizer.train: interrupted while awaiting pool termination —"
+                  + " forcing shutdown. {} subspace task(s) had not started.",
+              notStarted.size());
           Thread.currentThread().interrupt();
         }
       }

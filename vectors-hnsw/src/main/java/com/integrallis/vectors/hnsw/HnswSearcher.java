@@ -55,6 +55,13 @@ public final class HnswSearcher {
   // Scratch buffers for fused bulk neighbor scoring. Sized to at least the maximum layer-0 degree
   // (2*M) so a single pass over an origin's full neighbor list never overflows when using the
   // neighbor-batch path (Fused ADC).
+  //
+  // Why 64: matches the Fused-ADC PQ table prefetch pattern — 64 neighbors per pass keeps the
+  // scoring inner loop's working set (16-32 KB depending on PQ subspace count) inside L1 across
+  // every contemporary x86/ARM data-cache. Going wider (e.g. 128) pushes the working set past
+  // L1 on smaller-cache parts (Apple M1 L1d = 64 KB, Zen 3 L1d = 32 KB) and we observed regress;
+  // going narrower amortises less of the dispatch overhead. Vamana uses 128 because its scan
+  // path is graph-only (no PQ table) and the working set is correspondingly smaller per neighbor.
   private static final int BULK_BATCH = 64;
   private final int[] bulkIds;
   private final float[] bulkScores;
@@ -95,8 +102,12 @@ public final class HnswSearcher {
     this.scorerFactory = scorerFactory;
     int graphSize = Math.max(1, graph.size());
     this.visited = new BitSet(graphSize);
-    this.candidates = new NodeQueue(256, false); // max-heap
-    this.results = new NodeQueue(256, true); // min-heap
+    // Initial heap capacity of 256 matches the typical ef (50-200) plus headroom — a query that
+    // hits the top of that range never needs to grow the heap. The NodeQueue grows geometrically
+    // on overflow, so a wrong guess just costs one realloc per ef-doubling, not per-insert.
+    this.candidates = new NodeQueue(256, false); // max-heap, beam-search frontier
+    this.results = new NodeQueue(256, true); // min-heap, current top-k by score
+    // Rescore is bounded by k (typically <= 100), so a small starting capacity is enough.
     this.rescoreHeap = new NodeQueue(64, true); // min-heap, grows as needed
     this.tmpNodes = new int[graphSize];
     this.tmpScores = new float[graphSize];

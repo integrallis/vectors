@@ -54,6 +54,22 @@ public final class ServerClientApp {
   private ServerClientApp() {}
 
   public static void main(String[] args) throws Exception {
+    DemoResult r = runDemo();
+    System.out.printf("FINAL: serverPort=%d searchHits=%s%n", r.serverPort, r.searchHitIds);
+  }
+
+  /**
+   * Result of the demo's golden path. Exposed so a CI test can assert on the round-trip outcome
+   * (top-3 search hits) without parsing stdout.
+   */
+  public record DemoResult(int serverPort, List<String> searchHitIds, int describeStatus) {}
+
+  /**
+   * Runs the full demo and returns a structured result. Boots a persistent {@link VectorsServer} on
+   * an ephemeral port, exercises the full HTTP surface (create → upsert → search → describe →
+   * drop), and cleans up the tempdir at the end.
+   */
+  public static DemoResult runDemo() throws Exception {
     Path dataDir = Files.createTempDirectory("java-vectors-demo-server-client-");
     ServerConfig config = ServerConfig.forTesting().withDataDir(dataDir);
 
@@ -70,11 +86,12 @@ public final class ServerClientApp {
 
       createCollection(http, baseUrl);
       upsertDocuments(http, baseUrl);
-      searchAndPrint(http, baseUrl);
-      describeCollection(http, baseUrl);
+      List<String> searchIds = searchAndCollect(http, baseUrl);
+      int describeStatus = describeCollection(http, baseUrl);
       dropCollection(http, baseUrl);
+      return new DemoResult(port, searchIds, describeStatus);
     } finally {
-      deleteQuietly(dataDir);
+      deleteBestEffort(dataDir);
     }
   }
 
@@ -107,7 +124,7 @@ public final class ServerClientApp {
     expect(res, 200);
   }
 
-  private static void searchAndPrint(HttpClient http, String baseUrl) throws Exception {
+  private static List<String> searchAndCollect(HttpClient http, String baseUrl) throws Exception {
     Random rnd = new Random(7L);
     Map<String, Object> body =
         Map.of("queryVector", unit(DIMENSION, rnd), "k", 3, "includeText", true);
@@ -116,19 +133,23 @@ public final class ServerClientApp {
     expect(res, 200);
     JsonNode response = MAPPER.readTree(res.body());
     System.out.println("top-3 hits:");
+    List<String> ids = new java.util.ArrayList<>();
     for (JsonNode hit : response.get("hits")) {
       System.out.printf(
           "  id=%-6s  score=%.4f  text=%s%n",
           hit.get("id").asText(), hit.get("score").asDouble(), hit.get("text").asText());
+      ids.add(hit.get("id").asText());
     }
+    return ids;
   }
 
-  private static void describeCollection(HttpClient http, String baseUrl) throws Exception {
+  private static int describeCollection(HttpClient http, String baseUrl) throws Exception {
     HttpRequest req =
         HttpRequest.newBuilder(URI.create(baseUrl + "/v1/collections/demo")).GET().build();
     HttpResponse<String> res = http.send(req, BodyHandlers.ofString());
     System.out.printf("GET  /v1/collections/demo -> %d  %s%n", res.statusCode(), res.body());
     expect(res, 200);
+    return res.statusCode();
   }
 
   private static void dropCollection(HttpClient http, String baseUrl) throws Exception {
@@ -172,15 +193,25 @@ public final class ServerClientApp {
     throw new IllegalStateException("unexpected status " + res.statusCode() + ": " + res.body());
   }
 
-  private static void deleteQuietly(Path dir) {
+  /**
+   * Best-effort tempdir cleanup. Logs failures to stderr instead of swallowing them silently — the
+   * previous empty-catch (audit T3.10) made temp-dir leaks invisible to operators.
+   */
+  private static void deleteBestEffort(Path dir) {
     try {
       if (!Files.exists(dir)) return;
       try (var stream = Files.walk(dir)) {
         stream
             .sorted((a, b) -> b.getNameCount() - a.getNameCount())
-            .forEach(p -> p.toFile().delete());
+            .forEach(
+                p -> {
+                  if (!p.toFile().delete() && Files.exists(p)) {
+                    System.err.println("warn: could not delete " + p);
+                  }
+                });
       }
-    } catch (Exception ignored) {
+    } catch (Exception e) {
+      System.err.println("warn: tempdir cleanup failed for " + dir + ": " + e);
     }
   }
 }

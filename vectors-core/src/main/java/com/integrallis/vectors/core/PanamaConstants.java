@@ -131,6 +131,20 @@ public final class PanamaConstants {
    */
   public static final boolean HAS_FAST_SCALAR_FMA = detectFastScalarFma();
 
+  /**
+   * Whether the platform reports ARM SVE (Scalable Vector Extension) support. Detected once at
+   * class load by combining the JVM's {@code os.arch} (must be {@code aarch64}) with the {@code
+   * /proc/cpuinfo} feature flag {@code sve}. On x86/Apple Silicon the result is always {@code
+   * false}; that is the correct "no SVE path here" answer and existing fixed-species kernels are
+   * unaffected.
+   *
+   * <p>This is detection-only scaffolding (P3.5): no kernel currently dispatches on it. A future
+   * predicated/scalable-vector kernel can branch on {@code HAS_SVE} to enter the SVE path while
+   * falling back to {@link #FLOAT_SPECIES} elsewhere. Can be forced via {@code
+   * -Dvectors.forceSve=true|false} for testing.
+   */
+  public static final boolean HAS_SVE = detectSve();
+
   private static boolean detectFastVectorFma() {
     String override = System.getProperty("vectors.useVectorFMA");
     if (override != null) {
@@ -146,6 +160,35 @@ public final class PanamaConstants {
     }
     // Math.fma is generally fast on all modern CPUs
     return true;
+  }
+
+  private static boolean detectSve() {
+    String override = System.getProperty("vectors.forceSve");
+    if (override != null) {
+      return Boolean.parseBoolean(override);
+    }
+    String arch = System.getProperty("os.arch", "");
+    if (!isArmArch(arch)) {
+      return false;
+    }
+    return hasSveCpuFlag(readLinuxCpuInfo());
+  }
+
+  /** Returns true when {@code os.arch} identifies a 64-bit ARM (aarch64 / arm64). */
+  static boolean isArmArch(String arch) {
+    return switch (arch.toLowerCase(Locale.ROOT)) {
+      case "aarch64", "arm64" -> true;
+      default -> false;
+    };
+  }
+
+  /**
+   * Returns true if the linux cpuinfo carries the {@code sve} feature flag in its {@code Features:}
+   * line. On macOS / Windows / containers without {@code /proc/cpuinfo} the empty CpuInfo returns
+   * false (correct: we cannot prove SVE without explicit evidence).
+   */
+  static boolean hasSveCpuFlag(CpuInfo cpuInfo) {
+    return cpuInfo.sve();
   }
 
   private static boolean isAmdCpuWithSlowFma() {
@@ -169,6 +212,7 @@ public final class PanamaConstants {
   static CpuInfo parseCpuInfo(String cpuInfo) {
     boolean amd = false;
     boolean fma = false;
+    boolean sve = false;
     String[] lines = cpuInfo.split("\\R");
     for (String line : lines) {
       int sep = line.indexOf(':');
@@ -181,11 +225,14 @@ public final class PanamaConstants {
         amd = true;
       } else if (key.equals("model name") && value.contains("amd")) {
         amd = true;
-      } else if ((key.equals("flags") || key.equals("features")) && hasCpuFlag(value, "fma")) {
-        fma = true;
+      } else if (key.equals("flags") || key.equals("features")) {
+        if (hasCpuFlag(value, "fma")) fma = true;
+        // The ARM Features: line uses the lowercase token "sve". Containers that report SVE2
+        // typically still list sve as well, so checking the single token is sufficient.
+        if (hasCpuFlag(value, "sve")) sve = true;
       }
     }
-    return new CpuInfo(amd, fma);
+    return new CpuInfo(amd, fma, sve);
   }
 
   static boolean isAmdWithFma(CpuInfo cpuInfo) {
@@ -271,9 +318,9 @@ public final class PanamaConstants {
     fmaBenchmarkSink = acc.reduceLanes(jdk.incubator.vector.VectorOperators.ADD);
   }
 
-  record CpuInfo(boolean amd, boolean fma) {
+  record CpuInfo(boolean amd, boolean fma, boolean sve) {
     static CpuInfo empty() {
-      return new CpuInfo(false, false);
+      return new CpuInfo(false, false, false);
     }
   }
 }

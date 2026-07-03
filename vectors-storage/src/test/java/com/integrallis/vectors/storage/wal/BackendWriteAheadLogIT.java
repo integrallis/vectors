@@ -191,8 +191,16 @@ class BackendWriteAheadLogIT {
     try (BackendWriteAheadLog w = new BackendWriteAheadLog(b, ns, Duration.ofSeconds(30), 512)) {
       try (var pool = Executors.newSingleThreadExecutor()) {
         Future<Long> append = pool.submit(() -> w.append("pending".getBytes()));
-        Thread.sleep(100);
-        assertThat(append.isDone()).isFalse();
+
+        // The append must park until flush() or the 30s flush interval — confirm by polling
+        // isDone() across a small window instead of a single sleep. Multiple short polls catch a
+        // transient scheduler delay without flaking on a single unlucky sample (audit T3.9).
+        for (int i = 0; i < 10; i++) {
+          Thread.sleep(20);
+          assertThat(append.isDone())
+              .as("append must remain parked waiting for flush at poll #%s", i)
+              .isFalse();
+        }
 
         w.flush();
 

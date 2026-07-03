@@ -39,6 +39,18 @@ import java.util.TreeMap;
  */
 public final class ConsistentHashShardOwnership implements ShardOwnership {
 
+  /**
+   * Virtual nodes per real node on the consistent-hash ring.
+   *
+   * <p>Why 100: the standard deviation of the per-node ownership share scales as {@code
+   * 1/sqrt(V*N)} where V is virtual-nodes-per-real-node and N is real nodes. At V=100, N=8 (a
+   * typical cluster) the load imbalance across the ring is roughly ±4% — well below the threshold
+   * at which a single hot shard would dominate end-to-end query latency. Bumping to 200 trims that
+   * further at the cost of a linear growth in the routing TreeMap memory + log-N lookup constant;
+   * 100 is the long-standing default used by Cassandra and Riak and is a safe starting point.
+   * {@code vectors-cluster.ConsistentHashRouter} uses 200 by default because its shards are
+   * typically fewer and the linear cost is negligible.
+   */
   private static final int VIRTUAL_NODES_PER_NODE = 100;
 
   private final int totalClusters;

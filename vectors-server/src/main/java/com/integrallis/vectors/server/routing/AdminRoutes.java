@@ -29,6 +29,8 @@ import java.lang.management.ManagementFactory;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Administrative and observability endpoints:
@@ -43,6 +45,8 @@ import java.util.Optional;
  * </ul>
  */
 public final class AdminRoutes implements HttpService {
+
+  private static final Logger LOG = LoggerFactory.getLogger(AdminRoutes.class);
 
   private final CollectionRegistry registry;
 
@@ -67,7 +71,9 @@ public final class AdminRoutes implements HttpService {
       res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
       res.send(body);
     } catch (Exception e) {
-      res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+      LOG.error("failed to serialize health payload", e);
+      RouteSupport.sendProblem(
+          res, Status.INTERNAL_SERVER_ERROR_500, "internal error", "see server logs", req);
     }
   }
 
@@ -99,7 +105,9 @@ public final class AdminRoutes implements HttpService {
       res.send(
           ObjectMapperHolder.shared().writeValueAsString(Map.of("name", name, "epoch", epoch)));
     } catch (Exception e) {
-      res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+      LOG.error("failed to serialize epoch payload for '{}'", name, e);
+      RouteSupport.sendProblem(
+          res, Status.INTERNAL_SERVER_ERROR_500, "internal error", "see server logs", req);
     }
   }
 

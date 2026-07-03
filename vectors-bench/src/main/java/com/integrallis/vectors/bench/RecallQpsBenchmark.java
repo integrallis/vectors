@@ -500,7 +500,9 @@ public final class RecallQpsBenchmark {
     for (int round = 0; round < WARMUP_ROUNDS; round++) {
       for (float[] q : queries) idx.searchTwoPass(q, k, efSearch, overQuery);
     }
-    System.gc();
+    // Intentionally do NOT call System.gc() between warmup and measurement: the GC pauses
+    // observed in production are part of the latency distribution we want to publish. Forcing a
+    // collection here resets allocation pressure and biases the measurement low. (Audit T4.11.)
 
     LatencyCollector latency = new LatencyCollector(numQueries * MEASUREMENT_ROUNDS);
     int[][] approxResults = new int[numQueries][k];
@@ -924,9 +926,9 @@ public final class RecallQpsBenchmark {
         col.search(req.build());
       }
     }
-
-    // Force GC before measurement.
-    System.gc();
+    // Intentionally do NOT call System.gc() between warmup and measurement: GC pauses observed in
+    // production are part of the latency distribution we want to publish. Forcing a collection
+    // here resets allocation pressure and biases the measurement low. (Audit T4.11.)
 
     // Measurement: collect per-query latencies and results for recall.
     LatencyCollector latency = new LatencyCollector(numQueries * MEASUREMENT_ROUNDS);

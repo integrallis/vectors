@@ -34,6 +34,8 @@ public final class SmileTsneProjection implements Projection {
   }
 
   @Override
+  @SuppressWarnings("try") // try-with-resources holds heartbeat lifetime, body intentionally
+  // doesn't reference it
   public ProjectionResult run(float[][] data, ProgressListener listener) {
     long start = System.currentTimeMillis();
     SmilePcaProjection.checkInterrupted();
@@ -42,12 +44,20 @@ public final class SmileTsneProjection implements Projection {
     TSNE.Options opts =
         new TSNE.Options(
             dimensions, params.perplexity(), params.learningRate(), 12.0, params.iterations());
-    TSNE result = TSNE.fit(dd, opts);
+    // Smile's TSNE.fit is a blocking call with no mid-iteration callbacks. The heartbeat emits
+    // time-based progress estimates with coords == null so consumers can render "still computing"
+    // honestly rather than the previous 0%→100% synthetic jump (audit T4.12).
+    TSNE result;
+    try (SmileProgressHeartbeat ignored =
+        SmileProgressHeartbeat.start(listener, params.iterations())) {
+      result = TSNE.fit(dd, opts);
+    }
     SmilePcaProjection.checkInterrupted();
     float[][] coords = SmilePcaProjection.toFloat(result.coordinates());
     long ms = System.currentTimeMillis() - start;
     ProjectionResult out = new ProjectionResult(coords, ProjectionAlgorithm.TSNE, params, ms, null);
     if (listener != null) {
+      // Terminal call (iter == total) always carries real coordinates.
       listener.onIteration(params.iterations(), params.iterations(), coords);
       listener.onDone(out);
     }

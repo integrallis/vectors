@@ -149,6 +149,45 @@ tasks.register<JavaExec>("recallQps") {
 }
 
 // ---------------------------------------------------------------------------
+// tieredIvfRecallQps — P1.3 recall-vs-QPS sweep for the tiered IVF substrate
+// (BuoyIndex + TieredCluster + HyperDoor + DistributedVectorCollection).
+//
+// Self-contained: generates a mixture-of-Gaussians synthetic corpus, so it runs without an
+// ANN-Benchmarks dataset download. Treat absolute recall/QPS as illustrative; the sweep is
+// meaningful as a comparison across nprobe settings on the same substrate.
+//
+// Usage:
+//   ./gradlew :vectors-bench:runTieredIvfRecallQps
+//   ./gradlew :vectors-bench:runTieredIvfRecallQps \
+//       -Pbench.tieredIvf.corpus=100000 -Pbench.tieredIvf.queries=500 \
+//       -Pbench.tieredIvf.nprobe=1,4,8,16,32,64
+// ---------------------------------------------------------------------------
+tasks.register<JavaExec>("runTieredIvfRecallQps") {
+    group = "benchmark"
+    description = "Recall-vs-QPS sweep over the tiered IVF substrate (synthetic corpus)"
+
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.integrallis.vectors.bench.TieredIvfRecallQpsBenchmark")
+
+    jvmArgs(
+        "--add-modules", "jdk.incubator.vector",
+        "-Xmx4g", "-Xms2g"
+    )
+
+    listOf(
+        "bench.tieredIvf.dim",
+        "bench.tieredIvf.corpus",
+        "bench.tieredIvf.queries",
+        "bench.tieredIvf.nprobe"
+    ).forEach { key ->
+        (project.findProperty(key) as String?)?.let { systemProperty(key, it) }
+    }
+
+    standardOutput = System.out
+    errorOutput    = System.err
+}
+
+// ---------------------------------------------------------------------------
 // s3Bench — P1.8 turbopuffer object-storage benchmark (Cloudflare R2 / S3 / LocalStack)
 //
 // Reads R2 creds from the repo-root .env (VECTORS_R2_*); self-skips when absent unless

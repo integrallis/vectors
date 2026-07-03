@@ -34,6 +34,8 @@ public final class SmileUmapProjection implements Projection {
   }
 
   @Override
+  @SuppressWarnings("try") // try-with-resources holds heartbeat lifetime, body intentionally
+  // doesn't reference it
   public ProjectionResult run(float[][] data, ProgressListener listener) {
     long start = System.currentTimeMillis();
     SmilePcaProjection.checkInterrupted();
@@ -50,12 +52,20 @@ public final class SmileUmapProjection implements Projection {
             5,
             1.0,
             1.0);
-    double[][] projected = UMAP.fit(dd, opts);
+    // Smile's UMAP.fit is a blocking call with no mid-iteration callbacks. The heartbeat emits
+    // time-based progress estimates with coords == null so consumers can render "still computing"
+    // honestly rather than the previous 0%→100% synthetic jump (audit T4.12).
+    double[][] projected;
+    try (SmileProgressHeartbeat ignored =
+        SmileProgressHeartbeat.start(listener, params.iterations())) {
+      projected = UMAP.fit(dd, opts);
+    }
     SmilePcaProjection.checkInterrupted();
     float[][] coords = SmilePcaProjection.toFloat(projected);
     long ms = System.currentTimeMillis() - start;
     ProjectionResult out = new ProjectionResult(coords, ProjectionAlgorithm.UMAP, params, ms, null);
     if (listener != null) {
+      // Terminal call (iter == total) always carries real coordinates.
       listener.onIteration(params.iterations(), params.iterations(), coords);
       listener.onDone(out);
     }

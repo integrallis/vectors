@@ -95,6 +95,14 @@ public final class H2TextIndex implements TextIndexSpi {
     }
   }
 
+  // H2 ErrorCode constants (kept inline to avoid a hard dependency on h2's internal api package
+  // in this file; values verified against org.h2.api.ErrorCode in h2-2.4.x):
+  //   - DUPLICATE_KEY_1 = 23505 (FT_CREATE_INDEX double-call: INSERT into FT.INDEXES violates the
+  //     (SCHEMA, TABLE) primary key)
+  //   - INDEX_ALREADY_EXISTS_1 = 42111 (also accepted defensively — older / future variants).
+  private static final int H2_ERROR_DUPLICATE_KEY = 23505;
+  private static final int H2_ERROR_INDEX_ALREADY_EXISTS = 42111;
+
   private void initSchema() throws SQLException {
     try (Statement stmt = connection.createStatement()) {
       stmt.execute(
@@ -113,8 +121,12 @@ public final class H2TextIndex implements TextIndexSpi {
       try {
         stmt.execute("CALL FT_CREATE_INDEX('PUBLIC', 'DOCUMENTS', 'TEXT_CONTENT')");
       } catch (SQLException e) {
-        // Index may already exist from a prior call
-        if (!e.getMessage().contains("already")) {
+        // The FT index already exists from a prior open of the same persistent database. Detect
+        // this via H2's stable SQLState/ErrorCode rather than scraping the message text — H2 has
+        // already changed the message at least once across releases and our previous
+        // contains("already") check started to silently rethrow on H2 2.x.
+        if (e.getErrorCode() != H2_ERROR_DUPLICATE_KEY
+            && e.getErrorCode() != H2_ERROR_INDEX_ALREADY_EXISTS) {
           throw e;
         }
       }

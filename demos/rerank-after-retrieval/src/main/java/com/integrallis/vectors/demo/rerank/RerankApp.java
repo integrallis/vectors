@@ -65,6 +65,40 @@ public final class RerankApp {
 
   private RerankApp() {}
 
+  /**
+   * Pure-function variant of the demo's golden path: runs the rescore over a synthetic candidate
+   * set and returns the top-K id list plus the count of positions that differ from the noisy
+   * pre-rescore ranking. Extracted so a unit test can gate the "rescore actually changes the
+   * ranking" contract without parsing stdout (audit T3.10).
+   */
+  public static RescoreResult runRescore(long seed, int candidates, int topK) {
+    Random rnd = new Random(seed);
+    float[] query = randomUnit(DIMENSION, rnd);
+    float[][] candidateVectors = new float[candidates][];
+    String[] candidateIds = new String[candidates];
+    float[] noisyRemoteScores = new float[candidates];
+    for (int i = 0; i < candidates; i++) {
+      candidateIds[i] = "doc-" + i;
+      candidateVectors[i] = randomUnit(DIMENSION, rnd);
+      noisyRemoteScores[i] =
+          VectorUtil.dotProduct(query, candidateVectors[i]) + (rnd.nextFloat() - 0.5f) * 0.1f;
+    }
+    float[] exactScores = new float[candidates];
+    VectorUtil.batchDotProduct(query, candidateVectors, exactScores);
+    int[] topOrder = TopK.select(exactScores, topK);
+    String[] topIds = new String[topK];
+    float[] topScores = new float[topK];
+    for (int r = 0; r < topK; r++) {
+      topIds[r] = candidateIds[topOrder[r]];
+      topScores[r] = exactScores[topOrder[r]];
+    }
+    long swaps = countRankingSwaps(noisyRemoteScores, exactScores, topK);
+    return new RescoreResult(topIds, topScores, swaps);
+  }
+
+  /** Result of the demo's golden-path rescore. */
+  public record RescoreResult(String[] topIds, float[] topScores, long swapsVsNoisy) {}
+
   public static void main(String[] args) {
     Random rnd = new Random(42L);
 

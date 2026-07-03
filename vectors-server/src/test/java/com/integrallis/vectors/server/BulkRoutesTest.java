@@ -144,4 +144,26 @@ class BulkRoutesTest {
   void sampleRejectsNonPositiveN() throws Exception {
     assertThat(get("/v1/collections/bulk/sample?n=0").statusCode()).isEqualTo(400);
   }
+
+  /**
+   * Pins that the malformed-body 400 returns a generic problem-detail rather than echoing the raw
+   * Jackson parser message back to the client. Audit finding: server routes that forwarded {@code
+   * e.getMessage()} could leak parser/exception internals.
+   */
+  @Test
+  void vectorsBatchMalformedBodyReturnsGenericProblemNoJacksonInternals() throws Exception {
+    HttpResponse<String> r = postJson("/v1/collections/bulk/vectors-batch", "{not json");
+    assertThat(r.statusCode()).isEqualTo(400);
+    assertThat(r.headers().firstValue("content-type"))
+        .hasValueSatisfying(v -> assertThat(v).startsWith("application/problem+json"));
+    String body = r.body();
+    assertThat(body)
+        .as("must not leak Jackson internals")
+        .doesNotContainIgnoringCase("unexpected character")
+        .doesNotContainIgnoringCase("JsonParseException")
+        .doesNotContainIgnoringCase("JsonMappingException")
+        .doesNotContain("at [Source:")
+        .doesNotContain("line:");
+    assertThat(body).containsIgnoringCase("malformed").containsIgnoringCase("json");
+  }
 }

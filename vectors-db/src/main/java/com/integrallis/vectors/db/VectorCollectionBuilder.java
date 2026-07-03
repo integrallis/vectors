@@ -99,6 +99,14 @@ public final class VectorCollectionBuilder {
   /** Default IVF KMeans seed. */
   public static final long DEFAULT_IVF_SEED = 42L;
 
+  /**
+   * Default Vamana graph-construction seed. Stable across runs so the documented byte-identical
+   * graphs property holds on the default path — the previous default of {@code System.nanoTime()}
+   * silently broke reproducibility for every build that did not explicitly call {@link
+   * #vamanaSeed(long)}.
+   */
+  public static final long DEFAULT_VAMANA_SEED = 42L;
+
   private Integer dimension;
   private SimilarityFunction metric;
   private IndexType indexType = IndexType.FLAT;
@@ -111,7 +119,7 @@ public final class VectorCollectionBuilder {
   private int vamanaMaxDegree = DEFAULT_VAMANA_R;
   private int vamanaSearchListSize = DEFAULT_VAMANA_L;
   private float vamanaAlpha = DEFAULT_VAMANA_ALPHA;
-  private Long vamanaSeed; // lazily filled with System.nanoTime() at build() time if unset
+  private Long vamanaSeed; // lazily filled with DEFAULT_VAMANA_SEED at build() time if unset
   private int vamanaBuildThreads = DEFAULT_VAMANA_BUILD_THREADS;
 
   // IVF-specific params (shared across IVF_FLAT and IVF_PQ)
@@ -288,9 +296,10 @@ public final class VectorCollectionBuilder {
 
   /**
    * Sets the random seed used by {@code VamanaGraphBuilder} for deterministic graph construction.
-   * Ignored unless {@link #indexType(IndexType)} is {@link IndexType#VAMANA}. Default: {@code
-   * System.nanoTime()} at {@link #build()} time — explicit seeds produce byte-identical graphs
-   * across runs with the same data, which is essential for regression testing.
+   * Ignored unless {@link #indexType(IndexType)} is {@link IndexType#VAMANA}. Default: {@link
+   * #DEFAULT_VAMANA_SEED} (a stable constant so the documented byte-identical-graph property holds
+   * on the default path; before 2026-06 the default was {@code System.nanoTime()}, which silently
+   * broke reproducibility on every build that did not call this method).
    */
   public VectorCollectionBuilder vamanaSeed(long seed) {
     this.vamanaSeed = seed;
@@ -684,7 +693,7 @@ public final class VectorCollectionBuilder {
                 vamanaMaxDegree,
                 vamanaSearchListSize,
                 vamanaAlpha,
-                vamanaSeed != null ? vamanaSeed : System.nanoTime(),
+                vamanaSeed != null ? vamanaSeed : DEFAULT_VAMANA_SEED,
                 vamanaBuildThreads)
             : null;
     VectorCollectionConfig.IvfParams ivfParams =

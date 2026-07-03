@@ -19,6 +19,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /**
  * Issues asynchronous touch-reads on a {@link RandomAccessVectors} source so that OS page-cache
@@ -50,24 +52,46 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
   private final RandomAccessVectors vectors;
   private final ExecutorService ioPool;
   private final AtomicLong submittedCount = new AtomicLong();
+  private final AtomicLong failedCount = new AtomicLong();
+  private final AtomicReference<Throwable> lastFailure = new AtomicReference<>();
+  private final Consumer<Throwable> failureSink;
+
+  /**
+   * Creates a prefetcher backed by the given vector source with no failure callback.
+   *
+   * @param vectors the vector source to prefetch from; must support concurrent reads
+   * @param ioThreads number of daemon I/O threads (typically 2–4 for SSD-backed stores)
+   */
+  public AsyncVectorPrefetcher(RandomAccessVectors vectors, int ioThreads) {
+    this(vectors, ioThreads, null);
+  }
 
   /**
    * Creates a prefetcher backed by the given vector source.
    *
    * @param vectors the vector source to prefetch from; must support concurrent reads
    * @param ioThreads number of daemon I/O threads (typically 2–4 for SSD-backed stores)
+   * @param failureSink optional callback invoked when a touch-read throws; failures from the sink
+   *     itself are caught and discarded so they cannot corrupt the pool thread. {@code null}
+   *     disables the callback (failures are still counted and the last cause is retained).
    */
-  public AsyncVectorPrefetcher(RandomAccessVectors vectors, int ioThreads) {
+  public AsyncVectorPrefetcher(
+      RandomAccessVectors vectors, int ioThreads, Consumer<Throwable> failureSink) {
     this.vectors = vectors;
     this.ioPool = Executors.newFixedThreadPool(ioThreads, new PrefetchThreadFactory());
+    this.failureSink = failureSink;
   }
 
   /**
    * Submits an asynchronous touch-read for the vector at {@code ordinal}.
    *
    * <p>The call returns immediately; the actual memory access happens on a pool thread. Exceptions
-   * during the touch (e.g., ordinal out of range) are silently swallowed — they would surface as a
-   * normal error on the main search path anyway.
+   * during the touch (transient SSD/page-fault errors, ordinal out of range that survives the size
+   * check, etc.) are caught and recorded — {@link #failedCount()} is incremented, {@link
+   * #lastFailure()} is updated, and any configured failure sink is invoked. The main search thread
+   * will still see the error if it later touches the same ordinal on the normal path; surfacing the
+   * failure here keeps it visible for operators when the search happens to miss the corrupted
+   * ordinal.
    *
    * @param ordinal the vector ordinal to prefetch; out-of-range values are silently ignored
    */
@@ -79,8 +103,18 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
           try {
             // Touch-read: return value discarded; only the memory access matters.
             vectors.getVector(ordinal);
-          } catch (Exception ignored) {
-            // Silently ignore: the main search thread will handle errors on normal access.
+          } catch (Throwable t) {
+            failedCount.incrementAndGet();
+            lastFailure.set(t);
+            Consumer<Throwable> sink = failureSink;
+            if (sink != null) {
+              try {
+                sink.accept(t);
+              } catch (Throwable sinkFailure) {
+                // A broken sink must not corrupt the pool thread; the failure is already
+                // counted via failedCount/lastFailure for observers.
+              }
+            }
           }
         });
   }
@@ -92,6 +126,19 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
    */
   public long submittedCount() {
     return submittedCount.get();
+  }
+
+  /** Returns the number of prefetch touch-reads that threw an exception since construction. */
+  public long failedCount() {
+    return failedCount.get();
+  }
+
+  /**
+   * Returns the most recent throwable raised by a prefetch touch-read, or {@code null} if no touch
+   * has failed.
+   */
+  public Throwable lastFailure() {
+    return lastFailure.get();
   }
 
   /**

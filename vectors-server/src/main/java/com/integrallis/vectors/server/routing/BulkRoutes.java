@@ -38,6 +38,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.random.RandomGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Bulk read endpoints used by Studio and similar exploration tools.
@@ -52,7 +54,18 @@ import java.util.random.RandomGenerator;
  */
 public final class BulkRoutes implements HttpService {
 
-  /** Hard upper bound on a single page or sample to prevent runaway memory allocations. */
+  private static final Logger LOG = LoggerFactory.getLogger(BulkRoutes.class);
+
+  /**
+   * Hard upper bound on a single page or sample to prevent runaway memory allocations.
+   *
+   * <p>Why 10,000: at the largest stored vector dim (4096 fp32 = 16 KiB) and the largest sane k,
+   * one page caps at roughly 160 MiB of response payload — bounded enough that the Helidon
+   * connection's outbound queue won't OOM the server, but loose enough to support paginated sweep
+   * tooling (Studio's index preview, ann-benchmarks ingest verification). Operators that need to
+   * stream larger result sets should chunk via offset+limit; the bound is a guardrail, not a tuning
+   * knob.
+   */
   private static final int MAX_PAGE = 10_000;
 
   private final CollectionRegistry registry;
@@ -119,8 +132,15 @@ public final class BulkRoutes implements HttpService {
       body =
           RouteSupport.MAPPER.readValue(req.content().inputStream(), VectorsBatchRequestDto.class);
     } catch (Exception e) {
+      // Don't echo Jackson's parser detail to the client — it leaks source positions and parser
+      // internals. The actual exception is logged for operators.
+      LOG.debug("rejected malformed vectors-batch body: {}", e.toString());
       RouteSupport.sendProblem(
-          res, Status.BAD_REQUEST_400, "malformed request body", e.getMessage(), req);
+          res,
+          Status.BAD_REQUEST_400,
+          "malformed request body",
+          "request body is not valid JSON or does not match the expected schema",
+          req);
       return;
     }
     if (body.ids().size() > MAX_PAGE) {

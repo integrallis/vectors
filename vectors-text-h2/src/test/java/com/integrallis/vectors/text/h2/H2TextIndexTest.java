@@ -268,6 +268,27 @@ class H2TextIndexTest {
           .as(".trace.db content must be preserved (cleanup is a bug)")
           .isEqualTo("diagnostic-from-prior-run");
     }
+
+    /**
+     * Pins that the "FT_CREATE_INDEX already exists" detection survives an H2 message change. The
+     * previous check matched on {@code e.getMessage().contains("already")}, which silently
+     * swallowed any other creation error whose message happened to include the word and would break
+     * on a future H2 release that reworded the failure. The hardened check uses H2's stable
+     * error-code constants.
+     */
+    @Test
+    void reopeningPersistentIndexDoesNotThrow(@TempDir Path tempDir) throws Exception {
+      String collection = "reopen_" + System.nanoTime();
+      try (H2TextIndex first = new H2TextIndex(collection, tempDir)) {
+        first.index(java.util.List.of(new TextDocument("d1", "hello world", Map.of(), null)));
+      }
+      // Re-opening the same on-disk DB triggers FT_CREATE_INDEX a second time. The duplicate
+      // create must be recognized by error-code (not message text) and silently ignored.
+      try (H2TextIndex second = new H2TextIndex(collection, tempDir)) {
+        second.index(java.util.List.of(new TextDocument("d2", "another doc", Map.of(), null)));
+        assertThat(second.size()).isEqualTo(2);
+      }
+    }
   }
 
   /**

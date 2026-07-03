@@ -150,7 +150,19 @@ public final class CollectionsRoutes implements HttpService {
       try {
         deleteRecursively(dir);
       } catch (IOException e) {
-        LOG.warn("failed to delete storage dir for '{}': {}", name, e.getMessage());
+        // The in-memory registration is gone but the on-disk files are not — surface this so the
+        // operator can clean up the orphan instead of silently returning 204.
+        LOG.error("failed to delete storage dir for '{}': {}", name, e.getMessage(), e);
+        RouteSupport.sendProblem(
+            res,
+            Status.INTERNAL_SERVER_ERROR_500,
+            "partial drop: storage cleanup failed",
+            "collection '"
+                + name
+                + "' was unregistered but its data directory could not be"
+                + " fully removed; manual cleanup may be required",
+            req);
+        return;
       }
     }
     res.status(Status.NO_CONTENT_204).send();

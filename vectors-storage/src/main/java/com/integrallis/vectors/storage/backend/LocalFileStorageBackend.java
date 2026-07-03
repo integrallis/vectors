@@ -26,6 +26,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.CRC32;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Local-filesystem {@link StorageBackend}. Keys map to files under a root directory; forward
@@ -36,6 +38,8 @@ import java.util.zip.CRC32;
  * Conditional-put is synchronized on this instance to serialise concurrent writers within a JVM.
  */
 public final class LocalFileStorageBackend implements StorageBackend {
+
+  private static final Logger LOG = LoggerFactory.getLogger(LocalFileStorageBackend.class);
 
   private static final int MAGIC = 0x564c4653; // VLFS
   private static final int VERSION = 1;
@@ -277,9 +281,12 @@ public final class LocalFileStorageBackend implements StorageBackend {
   private static void forceDirectory(Path dir) throws IOException {
     try (FileChannel ch = FileChannel.open(dir, StandardOpenOption.READ)) {
       ch.force(true);
-    } catch (UnsupportedOperationException | UncheckedIOException ignored) {
+    } catch (UnsupportedOperationException | UncheckedIOException e) {
       // Some filesystems do not allow opening directories as channels. The value file itself has
-      // already been forced; directory fsync is best-effort on those platforms.
+      // already been forced; directory fsync is best-effort on those platforms. We log at DEBUG
+      // so a non-fsync'ing platform is visible to anyone running with debug logging on (audit
+      // recommended against the previous empty-catch which made this invisible).
+      LOG.debug("forceDirectory({}) skipped: {}", dir, e.toString());
     }
   }
 

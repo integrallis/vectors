@@ -62,17 +62,18 @@ public final class TieredCluster {
   private volatile CompressedVectors t1Data;
 
   /**
-   * Optional object-storage read-through. When set, {@link #scan} fetches this cluster's float32
-   * vectors from the backend (T3) on first probe and caches them, instead of scanning the
-   * heap-resident {@code globalVectors}. Null (the default) preserves exact heap/T1 scanning with
-   * zero behavioral change for existing callers — see {@link #enableReadThrough}.
+   * Object-storage read-through state. Combining the backend and cache into a single immutable
+   * snapshot lets every reader observe a consistent (backend, cache) pair without locking — the
+   * previous two-volatile-field layout allowed a reader to observe a fresh backend with a stale
+   * cache (or vice versa) while another thread was mid-{@link #enableReadThrough} / {@link
+   * #dropReadThroughCache}. Null means read-through is disabled (the default).
    */
-  private volatile StorageBackend readThroughBackend;
+  private volatile ReadThroughState readThrough;
 
-  /**
-   * Cached cluster slice fetched from {@link #readThroughBackend}; null = cold (not yet fetched).
-   */
-  private volatile float[][] readThroughCache;
+  /** Guards the cold-load section so concurrent probes single-flight one backend fetch. */
+  private final Object readThroughLoadLock = new Object();
+
+  private record ReadThroughState(StorageBackend backend, float[][] cache) {}
 
   /**
    * Constructs a {@code TieredCluster} from an existing partition and the global vector array.
@@ -235,8 +236,9 @@ public final class TieredCluster {
    * @return hits in descending score order, size ≤ k
    */
   public List<IvfHit> scan(float[] query, int k, float minScore) {
-    if (readThroughBackend != null) {
-      return scanReadThrough(query, k, minScore);
+    ReadThroughState rt = readThrough;
+    if (rt != null) {
+      return scanReadThrough(query, k, minScore, rt);
     }
     return (t1Data != null) ? scanWithT1(query, k, minScore) : scanExact(query, k, minScore);
   }
@@ -251,31 +253,52 @@ public final class TieredCluster {
    * than always scanning the heap-resident global array. Idempotent; clears any cached slice.
    */
   public void enableReadThrough(StorageBackend backend) {
-    this.readThroughBackend = backend;
-    this.readThroughCache = null;
+    // Publish backend + cleared cache in a single atomic update so concurrent readers cannot
+    // observe a fresh backend with a stale cache from a previous enableReadThrough call.
+    this.readThrough = new ReadThroughState(backend, null);
   }
 
   /**
    * Drops the cached read-through slice so the next {@link #scan} re-fetches (forces a cold read).
    */
   public void dropReadThroughCache() {
-    this.readThroughCache = null;
+    ReadThroughState rt = this.readThrough;
+    if (rt == null || rt.cache == null) return;
+    this.readThrough = new ReadThroughState(rt.backend, null);
   }
 
   /** True when read-through is enabled and the cluster slice is cached in heap (warm). */
   public boolean isReadThroughWarm() {
-    return readThroughBackend != null && readThroughCache != null;
+    ReadThroughState rt = this.readThrough;
+    return rt != null && rt.cache != null;
   }
 
-  private List<IvfHit> scanReadThrough(float[] query, int k, float minScore) {
-    float[][] slice = readThroughCache;
+  private List<IvfHit> scanReadThrough(float[] query, int k, float minScore, ReadThroughState rt) {
+    float[][] slice = rt.cache;
     if (slice == null) {
-      try {
-        slice = fetchT3(readThroughBackend); // cold: network GET from object storage
-      } catch (IOException e) {
-        throw new UncheckedIOException("read-through fetchT3 failed for " + t3Key(), e);
+      // Cold path — single-flight the network fetch so N concurrent probes don't trigger N
+      // GETs against the object-storage backend (audit T1.3). The hot path above stays
+      // lock-free.
+      synchronized (readThroughLoadLock) {
+        ReadThroughState current = this.readThrough;
+        // Another thread may have populated the cache while we waited for the lock; re-read the
+        // state and accept its slice if so. We also re-read the backend reference in case
+        // enableReadThrough has been re-issued during the wait.
+        if (current == null) {
+          // Read-through was disabled while we waited — fall back to the heap-resident scan.
+          return (t1Data != null) ? scanWithT1(query, k, minScore) : scanExact(query, k, minScore);
+        }
+        if (current.cache != null) {
+          slice = current.cache;
+        } else {
+          try {
+            slice = fetchT3(current.backend); // cold: network GET from object storage
+          } catch (IOException e) {
+            throw new UncheckedIOException("read-through fetchT3 failed for " + t3Key(), e);
+          }
+          this.readThrough = new ReadThroughState(current.backend, slice); // warm for next probe
+        }
       }
-      readThroughCache = slice; // warm for subsequent probes
     }
     return scanSlice(query, k, minScore, slice);
   }
