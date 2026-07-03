@@ -185,12 +185,22 @@ public final class DocumentsRoutes implements HttpService {
       try {
         List<TextDocument> textDocs = new ArrayList<>(body.documents().size());
         for (DocumentDto dto : body.documents()) {
-          byte[] blobBytes = dto.blob() != null ? Base64.getDecoder().decode(dto.blob()) : null;
+          boolean hasText = dto.text() != null && !dto.text().isEmpty();
+          boolean hasBlob = dto.blob() != null;
+          boolean hasMeta = dto.metadata() != null && !dto.metadata().isEmpty();
+          // Nothing to text-index — skip. Pure-ANN documents (vector only, no text/blob/metadata)
+          // must not pay the per-document H2 full-text write; at scale that write dominates ingest
+          // (e.g. a 1M-vector ANN load) even though the docs are unsearchable by text.
+          if (!hasText && !hasBlob && !hasMeta) {
+            continue;
+          }
+          byte[] blobBytes = hasBlob ? Base64.getDecoder().decode(dto.blob()) : null;
           Map<String, String> meta = jsonNodeToStringMap(dto.metadata());
-          textDocs.add(
-              new TextDocument(dto.id(), dto.text() != null ? dto.text() : "", meta, blobBytes));
+          textDocs.add(new TextDocument(dto.id(), hasText ? dto.text() : "", meta, blobBytes));
         }
-        textIndex.get().index(textDocs);
+        if (!textDocs.isEmpty()) {
+          textIndex.get().index(textDocs);
+        }
       } catch (RuntimeException e) {
         textIndexed = false;
         LOG.warn("text index write failed for '{}': {}", name, e.getMessage());
