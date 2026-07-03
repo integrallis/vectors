@@ -182,6 +182,7 @@ configure(libraryProjects) {
         useJUnitPlatform {
             includeTags("slow")
         }
+        filter { isFailOnNoMatchingTests = false }
         testLogging {
             events("passed", "skipped", "failed")
         }
@@ -198,6 +199,8 @@ configure(libraryProjects) {
         useJUnitPlatform {
             includeTags("integration")
         }
+        // Modules with no @Tag("integration") tests are a clean no-op rather than a task failure.
+        filter { isFailOnNoMatchingTests = false }
         testLogging {
             events("passed", "skipped", "failed")
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
@@ -217,6 +220,7 @@ configure(libraryProjects) {
         useJUnitPlatform {
             includeTags("distributed")
         }
+        filter { isFailOnNoMatchingTests = false }
         maxParallelForks = 1
     }
 
@@ -229,6 +233,7 @@ configure(libraryProjects) {
         useJUnitPlatform {
             includeTags("k8s")
         }
+        filter { isFailOnNoMatchingTests = false }
         maxParallelForks = 1
     }
 
@@ -241,6 +246,7 @@ configure(libraryProjects) {
         useJUnitPlatform {
             includeTags("chaos")
         }
+        filter { isFailOnNoMatchingTests = false }
         maxParallelForks = 1
     }
 
@@ -253,6 +259,7 @@ configure(libraryProjects) {
         useJUnitPlatform {
             includeTags("scale")
         }
+        filter { isFailOnNoMatchingTests = false }
         maxParallelForks = 1
         systemProperty("junit.jupiter.execution.timeout.default", "30m")
     }
@@ -268,6 +275,8 @@ configure(libraryProjects) {
         useJUnitPlatform {
             includeTags("recall")
         }
+        // Lives only in vectors-bench; other modules' task is a documented no-op.
+        filter { isFailOnNoMatchingTests = false }
         // One heavy, deterministic test class — no intra-task forking, and forward the mode flag.
         maxParallelForks = 1
         systemProperty("recall.gate.mode", System.getProperty("recall.gate.mode", "verify"))
