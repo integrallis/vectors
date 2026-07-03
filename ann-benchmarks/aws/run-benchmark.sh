@@ -149,10 +149,15 @@ run_harness() {
 
 upload_results() {
   [ -n "$S3_RESULTS" ] || return 0
-  log "uploading results to $S3_RESULTS"
-  aws s3 cp --recursive "$WORKDIR/ann-benchmarks/results" "$S3_RESULTS/results"
+  # S3_ENDPOINT lets results go to any S3-compatible store — e.g. Cloudflare R2
+  # (S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com) with AWS_ACCESS_KEY_ID /
+  # AWS_SECRET_ACCESS_KEY set to the R2 token. Empty = real AWS S3.
+  local ep=()
+  [ -n "${S3_ENDPOINT:-}" ] && ep=(--endpoint-url "$S3_ENDPOINT")
+  log "uploading results to $S3_RESULTS${S3_ENDPOINT:+ (endpoint $S3_ENDPOINT)}"
+  aws "${ep[@]}" s3 cp --recursive "$WORKDIR/ann-benchmarks/results" "$S3_RESULTS/results"
   for dataset in $DATASETS; do
-    aws s3 cp "$WORKDIR/ann-benchmarks/results-${dataset}.png" "$S3_RESULTS/" 2>/dev/null || true
+    aws "${ep[@]}" s3 cp "$WORKDIR/ann-benchmarks/results-${dataset}.png" "$S3_RESULTS/" 2>/dev/null || true
   done
 }
 
