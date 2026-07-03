@@ -90,7 +90,9 @@ class Vectors(BaseANN):
         req = urllib.request.Request(
             self._base + path, data=data, headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=600) as r:
+        # Generous ceiling: the commit that builds the index over a large corpus can run for
+        # minutes even with parallel construction; a tight timeout would abort a valid build.
+        with urllib.request.urlopen(req, timeout=3600) as r:
             raw = r.read()
             return json.loads(raw) if raw else None
 
