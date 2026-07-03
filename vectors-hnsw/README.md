@@ -1,6 +1,6 @@
 # vectors-hnsw
 
-Hierarchical Navigable Small World (HNSW) graph index. Pure Java replacement for hnswlib/NMSLIB.
+Hierarchical Navigable Small World (HNSW) graph index implemented in Java.
 
 ## Responsibility
 

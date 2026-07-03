@@ -1,6 +1,6 @@
 # vectors-vamana
 
-Vamana/DiskANN graph index. Pure Java replacement for DiskANN.
+Vamana/DiskANN-style graph index implemented in Java.
 
 ## Responsibility
 

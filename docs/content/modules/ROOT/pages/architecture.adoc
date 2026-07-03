@@ -42,12 +42,11 @@ Unified `VectorCollection` API over all backends with metadata filtering, persis
 
 | `vectors-distributed`
 | Scatter-gather distributed search.
-Broadcasts queries across cluster nodes and merges results.
-Status: in progress.
+Experimental source module; excluded from the 0.1.x publication.
 
 | `vectors-server`
 | HTTP server (Helidon SE 4).
-REST API for collections, documents, search, and SSE event streaming.
+Experimental source module; excluded from the 0.1.x publication.
 
 | `vectors-bench`
 | JMH benchmarks and ANN-Benchmarks-compatible harness.
@@ -55,7 +54,8 @@ Dataset loading, checkpoint/resume, recall/QPS measurement.
 
 | `vectors-gpu`
 | cuVS GPU backend integration.
-Status: planned.
+Experimental FSL-licensed source module requiring an external native NVIDIA
+runtime; excluded from the 0.1.x publication.
 |===
 
 == Module Dependency Graph
@@ -125,13 +125,13 @@ VectorCollection persistent = VectorCollection.builder()
 | Small datasets (< 100K), exact results
 
 | HNSW
-| O(log n) per query
+| Graph traversal; workload-dependent
 | O(n log n)
 | ~12 x M bytes/node
-| General purpose, low-latency recall > 0.95
+| General-purpose approximate search
 
 | Vamana
-| O(log n) per query
+| Graph traversal; workload-dependent
 | O(n log n), 2-pass
 | ~4 x R bytes/node
 | Disk-oriented workloads, mmap-persistent indexes
@@ -146,7 +146,7 @@ VectorCollection persistent = VectorCollection.builder()
 | O(n / k x nprobe), ADC
 | O(n x k-means) + PQ training
 | M bytes/vector (PQ codes)
-| Maximum compression, 100M+ vectors
+| High compression when dataset-specific recall tests pass
 |===
 
 See the xref:sizing.adoc[Sizing Guide] for capacity planning and tuning parameters.

@@ -1,6 +1,6 @@
 # vectors-ivf
 
-Inverted File (IVF) family indexes. Pure Java replacement for FAISS IVF indexes.
+Inverted File (IVF) family indexes implemented in Java.
 
 ## Responsibility
 
