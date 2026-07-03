@@ -24,6 +24,7 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.store.embedding.filter.Filter;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -121,6 +122,30 @@ class CachingEmbeddingStoreTest {
     store.search(req);
 
     assertThat(fake.searchCalls.get()).isEqualTo(2);
+  }
+
+  @Test
+  void allMutationOverloadsDelegateAndReturnDelegateResults() {
+    Embedding embedding = Embedding.from(new float[] {0.5f, 0.5f, 0f});
+    TextSegment payload = TextSegment.from("mixed");
+
+    assertThat(store.delegate()).isSameAs(fake);
+    assertThat(store.add(embedding)).isNotBlank();
+    store.add("explicit", embedding);
+    assertThat(store.add(embedding, payload)).isNotBlank();
+    assertThat(store.addAll(List.of(embedding))).hasSize(1);
+    assertThat(store.addAll(List.of(embedding), List.of(payload))).hasSize(1);
+    store.addAll(List.of("bulk"), List.of(embedding), List.of(payload));
+
+    store.remove("explicit");
+    store.removeAll(List.of("bulk"));
+    Filter allPayloads = ignored -> true;
+    store.removeAll(allPayloads);
+
+    EmbeddingSearchResult<TextSegment> result =
+        store.search(
+            EmbeddingSearchRequest.builder().queryEmbedding(embedding).maxResults(10).build());
+    assertThat(result.matches()).isEmpty();
   }
 
   @Test
