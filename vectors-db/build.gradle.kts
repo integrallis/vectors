@@ -1,4 +1,4 @@
-description = "Facade: VectorCollection, Document, MetadataValue, FlatScanAdapter"
+description = "Embedded vector collection with persistence, metadata filtering, and ANN indexes"
 
 // Apache Arrow's unsafe memory allocator requires access to internal JDK APIs on JDK 17+.
 tasks.withType<Test> {
@@ -15,9 +15,10 @@ dependencies {
     implementation(project(":vectors-hnsw"))
     implementation(project(":vectors-vamana"))
     implementation(project(":vectors-ivf"))
-    // Optional GPU backend. api-scope so downstream modules can directly reference
-    // com.nvidia.cuvs types exposed transitively by vectors-gpu.
-    api(project(":vectors-gpu"))
+    // Optional GPU backend. Keep it off the CPU database's published/runtime dependency graph:
+    // consumers that select a CUVS_* index add vectors-gpu explicitly.
+    compileOnly(project(":vectors-gpu"))
+    testImplementation(project(":vectors-gpu"))
 
     // Apache Arrow IPC — batch ingestion / export (G6)
     implementation("org.apache.arrow:arrow-vector:19.0.0")
