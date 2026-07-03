@@ -114,12 +114,14 @@ Getting Started guide for the full walkthrough.
 
 == What you gain
 
-* **Sublinear search** -- HNSW graph navigation replaces the full linear scan; typical
-  10--100× QPS improvement at the same recall on corpora above a few thousand vectors.
+* **Indexed approximate search** -- HNSW graph navigation replaces the full
+  linear scan. Throughput and recall depend on the corpus, hardware, and index
+  parameters; no universal speedup is claimed.
 * **Intra-query parallelism** -- `searchMultiStart` on `SearchRequest` fans out beam
   searches across virtual threads, trading CPU for latency at high recall.
-* **Quantization** -- swap in `QuantizerKind.SQ8` or `QuantizerKind.RABITQ` on the builder
-  to shrink the footprint by 4×--32× with `IndexRefine` restoring recall when needed.
+* **Quantization** -- swap in `QuantizerKind.SQ8` or `QuantizerKind.RABITQ` on
+  the builder to reduce encoded vector payload size. Measure recall on the
+  target corpus before relying on a quantized index.
 * **Composition** -- wrap any backend with `IndexShards` (horizontal partitioning) or
   `IndexReplicas` (concurrency fan-out) without code changes in the call sites.
 
@@ -127,4 +129,6 @@ Getting Started guide for the full walkthrough.
 
 * The same `Document`-style abstraction (id + vector + optional text + metadata).
 * The same "build once, query many" lifecycle.
-* Pure Java -- no native libraries, no JNI, no GPU backends required.
+* No JNI library or GPU backend is required by the 0.1.x CPU artifacts.
+  Persistent storage may use `posix_madvise` through FFM as an optional
+  optimization.

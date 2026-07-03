@@ -4,6 +4,11 @@
 This page helps you estimate how many vectors fit in a given memory budget and pick an
 index / quantizer combination that matches your dataset and SLO.
 
+IMPORTANT: These are arithmetic planning estimates, not validated 0.1.x scale
+limits or production sizing guarantees. They omit several JVM object, metadata,
+allocator, temporary-build, and operating-system costs. Measure the actual
+corpus, recall, build peak, and steady-state memory before capacity planning.
+
 == Memory model
 
 Vectors uses two memory pools:
@@ -149,67 +154,28 @@ enables `rescoreFactor > 1` to recover recall lost to ADC.
 | 1536 | ~0.51 M | ~1.01 M | ~2.03 M
 |===
 
-=== IVF_PQ measured search latency
+== Performance evidence
 
-Measured via `IvfPqSearchBenchmark` (JMH `avgt`, 5 iterations × 3 warmup,
-single thread, `k = 10`, `nprobe = √k`, `ivfK = √n`). JDK 25.0.2 HotSpot,
-`-Xmx 8G`, Panama Vector API (128-bit SIMD lane). Index is fully in-heap;
-times cover coarse `nprobe` centroid scan + ADC residual search + optional
-FLOAT32 rescore pass.
+No release-grade latency or QPS table is published yet. Earlier local numbers
+were removed because the raw output and complete machine/JDK methodology were
+not committed with this guide. The repository's committed JMH kernel output
+and synthetic recall-regression baseline are useful engineering checks, but
+they are not corpus-scale capacity evidence.
 
-.Pure ADC (`rescoreFactor = 1`), per-query latency in μs
-[cols="1,1,1,1", options="header"]
-|===
-| dim | `M` (subspaces) | `n = 10K` | `n = 100K`
-| 128  | 8  | ~184  | ~373
-| 128  | 16 | ~338  | ~690
-| 128  | 32 | ~525  | ~985
-| 768  | 8  | ~323  | ~623
-| 768  | 16 | ~528  | ~943
-| 768  | 32 | ~958  | ~1880
-|===
-
-.Wide-heap rescore (`rescoreFactor = 4`), per-query latency in μs
-[cols="1,1,1,1", options="header"]
-|===
-| dim | `M` (subspaces) | `n = 10K` | `n = 100K`
-| 128  | 8  | ~190  | ~373
-| 128  | 16 | ~373  | ~702
-| 128  | 32 | ~505  | ~1076
-| 768  | 8  | ~322  | ~634
-| 768  | 16 | ~477  | ~939
-| 768  | 32 | ~977  | ~1900
-|===
-
-Per-thread QPS is `10^6 / μs_per_op` — e.g. `dim = 128, n = 100K, M = 8`
-delivers ~2.7K QPS/core with pure ADC and ~2.7K QPS/core with
-`rescoreFactor = 4`; `dim = 768, n = 100K, M = 16` delivers ~1.1K QPS/core.
-Scale linearly with cores for embarrassingly-parallel query workloads
-(one index, many query threads).
-
-Observations:
-
-* Latency scales near-linearly with `M` (ADC inner loop is
-  `nprobe × clusterSize × M` table look-ups).
-* Latency scales sub-linearly with `n` because `ivfK = √n` and
-  `nprobe = √k` are held: only a shrinking fraction of cells is scanned
-  as `n` grows.
-* `rescoreFactor = 4` adds `≤ 10 %` overhead at these scales — rescore
-  touches only `4 × k = 40` full-precision vectors per query.
-* Raising `dim` from `128` to `768` costs ~1.5–2× per query at equal
-  `(n, M)` because the per-query distance-table build is
-  `M × 256 × dim / M` FMAs.
-
-== Choosing a configuration
+== Starting hypotheses for local testing
 
 [cols="2,3,3", options="header"]
 |===
-| Corpus size | In-memory choice                  | Persistent / mmap choice
+| Corpus size | In-memory candidate               | Persistent / mmap candidate
 | `< 100K`    | `FLAT` (exact)                    | `FLAT`
 | `100K–10M`  | `HNSW` M=16 + FLOAT32             | `VAMANA` (mmap) or `HNSW` mmap
 | `10M–100M`  | `HNSW` + INT8 + rescore           | `VAMANA` + INT8 rescore
 | `> 100M`    | `IVF_PQ` + rescore or shards (`IndexShards`) of the above | `IVF_PQ` mmap or `VAMANA` mmap + shards
 |===
+
+The rows above are test starting points, not demonstrated release ceilings.
+For multi-process writes, high availability, or managed scale, use an external
+vector database; the 0.1.x release is single-process.
 
 == Tuning knobs
 

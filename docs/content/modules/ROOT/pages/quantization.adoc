@@ -117,7 +117,8 @@ VectorCollection collection = VectorCollection.builder()
     .build();
 ----
 
-Best for: maximum compression on large datasets (10M+ vectors) where data has exploitable subspace structure.
+Best for: high compression on datasets where measured recall confirms that the
+subspace structure is suitable. This is not a validated corpus-size claim.
 
 == RaBitQ
 

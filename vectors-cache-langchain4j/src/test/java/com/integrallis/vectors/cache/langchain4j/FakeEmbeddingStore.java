@@ -20,7 +20,9 @@ import dev.langchain4j.store.embedding.EmbeddingMatch;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.store.embedding.filter.Filter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -58,6 +60,37 @@ final class FakeEmbeddingStore<T> implements EmbeddingStore<T> {
       ids.add(add(e));
     }
     return ids;
+  }
+
+  @Override
+  public List<String> addAll(List<Embedding> embeddings, List<T> embedded) {
+    List<String> ids = new ArrayList<>(embeddings.size());
+    for (int i = 0; i < embeddings.size(); i++) {
+      ids.add(add(embeddings.get(i), embedded.get(i)));
+    }
+    return ids;
+  }
+
+  @Override
+  public void addAll(List<String> ids, List<Embedding> embeddings, List<T> embedded) {
+    for (int i = 0; i < ids.size(); i++) {
+      entries.put(ids.get(i), new Entry<>(ids.get(i), embeddings.get(i), embedded.get(i)));
+    }
+  }
+
+  @Override
+  public void remove(String id) {
+    entries.remove(id);
+  }
+
+  @Override
+  public void removeAll(Collection<String> ids) {
+    ids.forEach(entries::remove);
+  }
+
+  @Override
+  public void removeAll(Filter filter) {
+    entries.values().removeIf(entry -> filter.test(entry.payload()));
   }
 
   @Override

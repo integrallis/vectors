@@ -1,10 +1,15 @@
 = Vectors
 
-A Java SIMD-native vector search framework leveraging the Vector API (`jdk.incubator.vector`) for hardware-accelerated approximate nearest neighbor (ANN) search.
+A Java vector-search toolkit using the incubating Vector API (`jdk.incubator.vector`) for SIMD distance kernels.
+
+IMPORTANT: Version 0.1.x is a single-process CPU release candidate. Distributed, server,
+cluster, Studio, optimizer, and GPU modules are experimental and are not published. The
+Vector API is still incubating in JDK 25, and persistent storage optionally invokes
+`posix_madvise` through FFM.
 
 == Overview
 
-Vectors is a pure Java library for building high-performance vector search applications. It provides:
+Vectors is a Java library for embedded vector search. It provides:
 
 * **SIMD-accelerated distance kernels** -- dot product, L2 (Euclidean), and cosine similarity via the Java Vector API
 * **Multiple index types** -- HNSW, Vamana/DiskANN, and IVF family indexes
@@ -57,7 +62,7 @@ NOTE: Requires JDK 25+ and `--add-modules jdk.incubator.vector` at compile and r
 |Scalar, product, binary, and non-uniform vector quantization
 
 |`vectors-hnsw`
-|HNSW graph index (replaces hnswlib)
+|HNSW graph index
 
 |`vectors-vamana`
 |Vamana/DiskANN graph index
@@ -72,7 +77,7 @@ NOTE: Requires JDK 25+ and `--add-modules jdk.incubator.vector` at compile and r
 == Requirements
 
 * **JDK 25+** -- Vector API (incubating) + mature Foreign Function & Memory API
-* **Gradle 8.11+** -- build system
+* **Gradle 9.4.1** -- included through the wrapper
 
 == License
 

@@ -27,9 +27,10 @@ import java.util.concurrent.Future;
 /**
  * Public facade for an embedded vector database collection.
  *
- * <p>Supports FLAT, HNSW, and VAMANA backends in both in-memory and mmap-persistent modes. Deletion
- * uses tombstone semantics: {@code delete}/{@code deleteWhere} stage tombstones that take effect on
- * the next {@code commit}. {@code compact()} rebuilds with dense ordinals, reclaiming space.
+ * <p>Supports FLAT, HNSW, VAMANA, IVF_FLAT, and IVF_PQ backends in both in-memory and
+ * mmap-persistent modes. Deletion uses tombstone semantics: {@code delete}/{@code deleteWhere}
+ * stage tombstones that take effect on the next {@code commit}. {@code compact()} rebuilds with
+ * dense ordinals, reclaiming space.
  *
  * <p>Lifecycle:
  *
@@ -140,19 +141,13 @@ public interface VectorCollection extends AutoCloseable {
   /**
    * Searches the currently-committed generation for multiple queries in parallel.
    *
-   * <p>Each query in {@code requests} is dispatched as an independent virtual-thread task using
-   * {@link java.util.concurrent.StructuredTaskScope StructuredTaskScope}. All tasks run
-   * concurrently; this method blocks until every query has returned or thrown. If any query throws,
-   * the first exception is rethrown (wrapped in {@link RuntimeException}) and all other tasks are
-   * cancelled.
+   * <p>Each query in {@code requests} is dispatched as an independent task on a virtual-thread
+   * executor. This method blocks while collecting the results in request order. If a query fails,
+   * its cause is wrapped in {@link RuntimeException}; closing the executor waits for already
+   * submitted tasks to terminate.
    *
    * <p>The result list has the same size as {@code requests} and preserves request order: {@code
    * results.get(i)} corresponds to {@code requests.get(i)}.
-   *
-   * <p>When the underlying index is an {@link IndexType#IVF_FLAT} or {@link IndexType#HNSW} /
-   * {@link IndexType#VAMANA} with quantization enabled, each per-query distance computation
-   * internally calls the fused GEMV kernel, reducing query memory traffic by 4× vs sequential
-   * per-row dot products.
    *
    * @param requests non-null, non-empty list of search requests
    * @return list of results in the same order as {@code requests}

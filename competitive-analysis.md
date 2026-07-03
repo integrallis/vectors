@@ -1,5 +1,11 @@
 # java-vectors — Competitive Analysis
 
+> **Historical research — not current product documentation.** This April 2026
+> document contains unverified performance, scale, cost, maturity, competitor,
+> distributed, and GPU claims. It is retained as input to a future rewrite and
+> must not be used for release 0.1.0 promotion. The current supported scope and
+> evidence are in [`README.md`](README.md).
+
 **Date:** April 2026
 **Scope:** Positioning of java-vectors (`com.integrallis.vectors`, JDK 25+, pure Java) against the embedded and networked vector-search landscape.
 **Benchmark platform for our numbers:** Apple Silicon M3 (NEON 128-bit), JDK 25, single process. Competitor numbers cited here are from publicly published sources and are *not* apples-to-apples with our hardware; treat them as order-of-magnitude context, not head-to-head benchmarks.
@@ -413,4 +419,3 @@ Both strategies keep the **Java-side contract** intact: one JAR, no JNI we maint
 | Deployment footprint | one JAR | one JAR + optional gRPC front-end | one JAR + optional `libcuvs.so` |
 
 No competitor offers this progression on the JVM without a JNI toolchain and a non-Java runtime.
-

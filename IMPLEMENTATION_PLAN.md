@@ -1,5 +1,10 @@
 # java-vectors — Implementation Plan
 
+> **Historical planning document (April 2026).** Its snapshot, line numbers,
+> test count, gaps, and completion labels are stale and are not release
+> evidence. Use the root README, CHANGELOG, and the dated release audit for the
+> current 0.1.x scope. This file is retained only to preserve design history.
+>
 > Last updated: 2026-04-15  
 > Strategy: dependency-topological order; API-breaking changes before additive ones;
 > TDD gate (Red → Green) before each merge.

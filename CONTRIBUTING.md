@@ -13,8 +13,8 @@ Thank you for your interest in contributing to java-vectors! This guide will hel
 ### Clone and Build
 
 ```bash
-git clone https://github.com/integrallis/java-vectors.git
-cd java-vectors/vectors
+git clone https://github.com/integrallis/vectors.git
+cd vectors
 ./gradlew build -x :docs:build
 ```
 
@@ -85,7 +85,10 @@ Always add the appropriate `@Tag` annotation to new test classes.
 - **Google Java Format** — Enforced via Spotless. Run `./gradlew spotlessApply` before committing.
 - **No Lombok** — This is a low-level library; we use explicit code.
 - **Minimal dependencies** — Library modules should only depend on `slf4j-api` at runtime.
-- **Pure Java** — No JNI, no FFM-to-C++ bindings, no native backends.
+- **Java-first CPU release** — The 0.1.x artifacts require no JNI library.
+  Storage may call `posix_madvise` through FFM as an optional optimization.
+  Experimental GPU code and its external native runtime are outside the
+  published artifact set.
 
 ## Module Structure
 
@@ -109,8 +112,7 @@ Dependencies flow downward: `core -> storage -> quantization -> {hnsw, vamana, i
 3. **Keep changes focused** — one feature or fix per PR
 4. **Run the full build** before submitting:
    ```bash
-   ./gradlew build -x :docs:build
-   ./gradlew spotlessCheck
+   ./gradlew spotlessCheck build :vectors-bench:recallGate complianceCheck -x :docs:build
    ```
 5. **Write a clear PR description** — explain what changed and why
 6. **CI must pass** — the GitHub Actions pipeline runs build + test + SBOM generation

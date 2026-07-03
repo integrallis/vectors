@@ -1,5 +1,11 @@
 # Distributed Vector Database: Design and Development Plan
 
+> **Aspirational design, not released capability.** The 0.1.x release is
+> single-process and publishes none of the distributed, server, cluster, or GPU
+> modules. Scale, latency, cost, topology, and delivery-date figures in this
+> document are design targets or estimates; they have not been validated by a
+> reproducible release benchmark and must not be used in promotion.
+>
 **Status**: Design Draft (May 2026, revised after Turbopuffer ANN v3 deep-dive — see §16)
 **Author**: java-vectors project
 **Inputs**: `tiered-buoy-architecture.md`, `distributed-vector-search-analysis.md`, `design-strategy.md`, `competitive-analysis.md` §11 (enterprise-pattern adoption) and §12 (GPU roadmap), Turbopuffer `docs/architecture` and `blog/ann-v3` (May 2026)
@@ -2490,4 +2496,3 @@ text in the affected sections.
 §8.8, or §12 must either preserve the §16 contract or update §16 in the same PR. CI
 parses the §16.1 latency table and refuses a phase-exit-gate change that loosens any
 target without an accompanying §16 entry.
-

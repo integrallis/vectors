@@ -36,20 +36,17 @@ import org.junit.jupiter.api.Test;
  * recorder for their type through the {@code ModelWrapperProvider} service-loader SPI.
  *
  * <p>Because {@code vectors-vcr-langchain4j} is on the classpath, this LangChain4j {@link
- * EmbeddingModel} field is wrapped with {@code VCREmbeddingModel}. On the first run
- * (PLAYBACK_OR_RECORD with no cassettes present) the real model is called and a cassette is written
- * to {@code src/test/resources/vcr-data/}. On subsequent runs the cassette is replayed and the real
- * model is not called.
+ * EmbeddingModel} field is wrapped with {@code VCREmbeddingModel}. The committed cassettes are
+ * replayed in strict playback mode, so the default build never rewrites source-tree fixtures or
+ * calls the real model.
  *
  * <p>Run:
  *
  * <pre>
- *   ./gradlew :demos:vcr-e2e:test                       # first run records, subsequent runs replay
- *   VCR_MODE=PLAYBACK ./gradlew :demos:vcr-e2e:test     # strict playback (cassettes required)
- *   VCR_MODE=RECORD ./gradlew :demos:vcr-e2e:test       # always re-record
+ *   ./gradlew :demos:vcr-e2e:test   # strict playback; committed cassettes are required
  * </pre>
  */
-@VCRTest(mode = VCRMode.PLAYBACK_OR_RECORD, dataDir = "src/test/resources/vcr-data")
+@VCRTest(mode = VCRMode.PLAYBACK, dataDir = "src/test/resources/vcr-data")
 public class VcrE2eDemo {
 
   static final AtomicInteger realEmbedderCalls = new AtomicInteger();
@@ -61,6 +58,7 @@ public class VcrE2eDemo {
     realEmbedderCalls.set(0);
     Response<Embedding> r = embedder.embed("what is HNSW?");
     assertThat(r.content().vector()).hasSize(4);
+    assertThat(realEmbedderCalls).hasValue(0);
   }
 
   @Test
@@ -70,6 +68,7 @@ public class VcrE2eDemo {
         embedder.embedAll(List.of(TextSegment.from("hello"), TextSegment.from("world")));
     assertThat(r.content()).hasSize(2);
     assertThat(r.content().get(0).vector()).hasSize(4);
+    assertThat(realEmbedderCalls).hasValue(0);
   }
 
   /** Minimal LangChain4j {@code EmbeddingModel} standing in for an external provider. */

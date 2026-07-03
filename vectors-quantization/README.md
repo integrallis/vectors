@@ -1,6 +1,6 @@
 # vectors-quantization
 
-Vector quantization implementations for the Vectors library. Pure Java replacement for FAISS quantization.
+Vector quantization implementations for the Vectors library.
 
 ## Responsibility
 
