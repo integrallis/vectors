@@ -15,11 +15,6 @@
  */
 package com.integrallis.vectors.storage.memory;
 
-import java.lang.foreign.FunctionDescriptor;
-import java.lang.foreign.Linker;
-import java.lang.foreign.ValueLayout;
-import java.lang.invoke.MethodHandle;
-
 /**
  * Alignment helpers for SIMD-friendly memory layout. Provides constants for page, cache-line, and
  * vector-register alignment, plus rounding utilities.
@@ -28,8 +23,11 @@ public final class AlignmentUtil {
 
   private AlignmentUtil() {}
 
-  /** OS page size in bytes. Used for section-level alignment in on-disk formats. */
-  public static final int PAGE_SIZE = detectPageSize();
+  /**
+   * Portable logical page size used for section alignment in on-disk formats. Override with {@code
+   * -Dvectors.pageSize=<power-of-two>} when a different format alignment is required.
+   */
+  public static final int PAGE_SIZE = configuredPageSize();
 
   /**
    * Cache-line and SIMD vector alignment (64 bytes). Compatible with x86 cache lines (64B), ARM
@@ -76,28 +74,10 @@ public final class AlignmentUtil {
     return (value & (alignment - 1L)) == 0;
   }
 
-  private static int detectPageSize() {
+  private static int configuredPageSize() {
     String override = System.getProperty("vectors.pageSize");
-    if (override != null) {
-      return requirePowerOfTwoPageSize(Integer.parseInt(override), "vectors.pageSize");
-    }
-    return requirePowerOfTwoPageSize(nativePageSize(), "native getpagesize()");
-  }
-
-  @SuppressWarnings("restricted")
-  private static int nativePageSize() {
-    try {
-      Linker linker = Linker.nativeLinker();
-      var symbol = linker.defaultLookup().find("getpagesize");
-      if (symbol.isPresent()) {
-        MethodHandle handle =
-            linker.downcallHandle(symbol.get(), FunctionDescriptor.of(ValueLayout.JAVA_INT));
-        return (int) handle.invokeExact();
-      }
-    } catch (Throwable e) {
-      throw new ExceptionInInitializerError(e);
-    }
-    throw new ExceptionInInitializerError("native getpagesize() is not available");
+    return requirePowerOfTwoPageSize(
+        override == null ? 4096 : Integer.parseInt(override), "vectors.pageSize");
   }
 
   private static int requirePowerOfTwoPageSize(int pageSize, String source) {
