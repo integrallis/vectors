@@ -17,6 +17,7 @@ package com.integrallis.vectors.db;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.cache.QvCache;
+import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.nio.file.Path;
 
 /**
@@ -146,6 +147,11 @@ public final class VectorCollectionBuilder {
 
   // P3.1 replication subscribers fired after each commit.
   private final java.util.List<GenerationSubscriber> subscribers = new java.util.ArrayList<>();
+
+  // Object-storage durable floor (S3 / R2 / MinIO); the local storagePath is its cache.
+  // Null = local-only persistence.
+  private StorageBackend objectStoreBackend;
+  private String objectStorePrefix = "";
 
   // I.6 background compaction: 0 = disabled (default).
   private long compactionIntervalMillis = 0L;
@@ -646,6 +652,24 @@ public final class VectorCollectionBuilder {
   }
 
   /**
+   * Backs this collection with an object-storage durable floor — Amazon S3, Cloudflare R2, Google
+   * Cloud Storage, MinIO, or any S3-compatible endpoint — using the local {@link #storagePath(Path)}
+   * as its cache. On {@link #build()} the current generation is hydrated from {@code backend} under
+   * {@code keyPrefix} into the local cache; every commit is shipped back to {@code backend}. The
+   * full collection API — metadata, filters, and text — is preserved; object storage is only the
+   * durable tier. Requires an absolute {@link #storagePath(Path)}.
+   *
+   * @param backend the object-storage backend (for example {@code S3StorageBackend.create(...)})
+   * @param keyPrefix key prefix (namespace) under which this collection's generations live
+   * @return this builder
+   */
+  public VectorCollectionBuilder objectStore(StorageBackend backend, String keyPrefix) {
+    this.objectStoreBackend = java.util.Objects.requireNonNull(backend, "backend must not be null");
+    this.objectStorePrefix = keyPrefix == null ? "" : keyPrefix;
+    return this;
+  }
+
+  /**
    * Enables the background-compaction daemon (I.6) that reclaims retired generation directories
    * from disk on the given interval, keeping the most recent {@link #retainGenerations(int)}
    * generations for crash recovery and never deleting one an in-flight reader still holds. Only
@@ -743,11 +767,32 @@ public final class VectorCollectionBuilder {
             ivfParams,
             effectiveCuvsParams,
             ivfPqParams);
+    java.util.List<GenerationSubscriber> effectiveSubscribers = subscribers;
+    if (objectStoreBackend != null) {
+      if (storageRoot == null) {
+        throw new IllegalStateException(
+            "objectStore(...) requires storagePath(...) as the local cache directory");
+      }
+      // Hydrate the local cache from the object-storage durable floor (no-op if empty), then ship
+      // every committed generation back to it.
+      try {
+        GenerationSync.pull(objectStoreBackend, objectStorePrefix, storageRoot);
+      } catch (java.io.IOException e) {
+        throw new java.io.UncheckedIOException(
+            "failed to hydrate collection from object store under prefix '"
+                + objectStorePrefix
+                + "'",
+            e);
+      }
+      effectiveSubscribers = new java.util.ArrayList<>(subscribers);
+      effectiveSubscribers.add(
+          new GenerationShippingSubscriber(objectStoreBackend, objectStorePrefix));
+    }
     QvCache cache = cacheSize > 0 ? new QvCache(cacheSize) : QvCache.DISABLED;
     return new VectorCollectionImpl(
         config,
         cache,
-        java.util.List.copyOf(subscribers),
+        java.util.List.copyOf(effectiveSubscribers),
         compactionIntervalMillis,
         retainGenerations);
   }
