@@ -1,6 +1,0 @@
-static_files:
-  - .nojekyll
-  - img/java-vectors-logo.png
-  - img/favicon.ico
-  - img/favicon-32x32.png
-output_dir: _
