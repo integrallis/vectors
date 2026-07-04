@@ -57,6 +57,10 @@ public final class IvfIndex implements Closeable {
   // PQ state; both null when the index is IVF-flat.
   private final ProductQuantizer pq;
   private final byte[][] pqCodes; // [n][M]; pqCodes[i] is the PQ code for vectors[i]
+  // Precomputed squared L2 norms of the stored vectors (||v||^2), used by the fused batched COSINE
+  // scan so cosine reuses batchDotProduct instead of a per-row scalar cosine kernel. Null for
+  // non-COSINE metrics.
+  private final float[] vectorNormsSq;
 
   private IvfIndex(
       BuoyIndex buoyIndex,
@@ -73,6 +77,15 @@ public final class IvfIndex implements Closeable {
     this.metric = metric;
     this.pq = pq;
     this.pqCodes = pqCodes;
+    this.vectorNormsSq = metric == SimilarityFunction.COSINE ? computeNormsSq(vectors) : null;
+  }
+
+  private static float[] computeNormsSq(float[][] vectors) {
+    float[] norms = new float[vectors.length];
+    for (int i = 0; i < vectors.length; i++) {
+      norms[i] = VectorUtil.dotProduct(vectors[i], vectors[i]);
+    }
+    return norms;
   }
 
   /**
@@ -167,6 +180,9 @@ public final class IvfIndex implements Closeable {
     TopKHeap heap = new TopKHeap(k);
     boolean euclidean = metric == SimilarityFunction.EUCLIDEAN;
     float minScore = request.minScore();
+    // ||q||^2, reused by the fused batched COSINE scan; 0 for other metrics (unused there).
+    float queryNormSq =
+        metric == SimilarityFunction.COSINE ? VectorUtil.dotProduct(query, query) : 0f;
 
     // Reusable scratch buffers for batch SIMD scan.
     float[][] batchRows = new float[BATCH_ROWS][];
@@ -199,7 +215,7 @@ public final class IvfIndex implements Closeable {
       if (prune && heap.isFull()) {
         scanPartitionWithHarmony(query, ords, partition.keyDimensions(), minScore, heap);
       } else {
-        scanPartitionBulk(query, ords, minScore, heap, batchRows, batchOut);
+        scanPartitionBulk(query, ords, minScore, queryNormSq, heap, batchRows, batchOut);
       }
       clustersScanned++;
     }
@@ -217,21 +233,24 @@ public final class IvfIndex implements Closeable {
   private static final int BATCH_ROWS = 64;
 
   /**
-   * Fused 4-row SIMD scan over a partition. No per-row allocation, no pruning. COSINE falls back to
-   * scalar since there is no fused GEMV cosine kernel yet.
+   * Fused 4-row SIMD scan over a partition. No per-row allocation, no pruning. All three metrics
+   * run through the batched kernels: EUCLIDEAN via {@link VectorUtil#batchSquaredL2}; DOT/MIP and
+   * COSINE via {@link VectorUtil#batchDotProduct}. COSINE divides each batched dot by {@code
+   * sqrt(||q||^2 * ||v||^2)} using the query norm ({@code queryNormSq}) and the stored-vector norms
+   * precomputed at build time ({@link #vectorNormsSq}), matching {@link VectorUtil#cosine}'s
+   * formula.
    */
   private void scanPartitionBulk(
-      float[] query, int[] ords, float minScore, TopKHeap heap, float[][] rows, float[] out) {
+      float[] query,
+      int[] ords,
+      float minScore,
+      float queryNormSq,
+      TopKHeap heap,
+      float[][] rows,
+      float[] out) {
     int n = ords.length;
-    if (metric == SimilarityFunction.COSINE) {
-      for (int ord : ords) {
-        float score = score(query, vectors[ord]);
-        if (score < minScore) continue;
-        heap.offer(ord, score);
-      }
-      return;
-    }
     boolean euclidean = metric == SimilarityFunction.EUCLIDEAN;
+    boolean cosine = metric == SimilarityFunction.COSINE;
     for (int start = 0; start < n; start += BATCH_ROWS) {
       int count = Math.min(BATCH_ROWS, n - start);
       for (int j = 0; j < count; j++) rows[j] = vectors[ords[start + j]];
@@ -241,9 +260,17 @@ public final class IvfIndex implements Closeable {
         VectorUtil.batchDotProduct(query, rows, out, count);
       }
       for (int j = 0; j < count; j++) {
-        float score = euclidean ? -out[j] : out[j];
+        int ord = ords[start + j];
+        float score;
+        if (euclidean) {
+          score = -out[j];
+        } else if (cosine) {
+          score = (float) (out[j] / Math.sqrt((double) queryNormSq * (double) vectorNormsSq[ord]));
+        } else {
+          score = out[j];
+        }
         if (score < minScore) continue;
-        heap.offer(ords[start + j], score);
+        heap.offer(ord, score);
       }
     }
   }

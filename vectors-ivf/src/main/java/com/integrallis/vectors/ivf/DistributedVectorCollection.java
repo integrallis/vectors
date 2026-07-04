@@ -325,28 +325,42 @@ public final class DistributedVectorCollection implements AutoCloseable {
   public List<IvfHit> search(float[] query, int k, int nprobe) {
     rwLock.readLock().lock();
     try {
+      if (k <= 0) return List.of();
       int[] clusterIds = routingIndex.route(query, Math.min(nprobe, this.k), 0f);
 
-      List<IvfHit> candidates = new ArrayList<>();
+      // Merge cluster + staging candidates through a bounded size-k min-heap instead of collecting
+      // every candidate into a list and full-sorting it. Ordinals are kept raw here (cluster hits
+      // are global ordinals >= 0; staging hits use -(i+1)); the document id is re-attached only for
+      // the surviving top-k when the heap is drained. Ties at the k-boundary may resolve to a
+      // different equally-scored ordinal than the previous stable full-sort.
+      TopKHeap heap = new TopKHeap(k);
       for (int cid : clusterIds) {
         clusters[cid].recordAccess();
         for (IvfHit hit : clusters[cid].scan(query, k, -Float.MAX_VALUE)) {
-          // Re-attach the document id from the global id list
-          String id =
-              hit.ordinal() >= 0 && hit.ordinal() < allIds.size()
-                  ? allIds.get(hit.ordinal())
-                  : null;
-          candidates.add(new IvfHit(hit.ordinal(), id, hit.score()));
+          heap.offer(hit.ordinal(), hit.score());
         }
       }
 
       // Scan staging exactly
       for (int i = 0; i < staging.size(); i++) {
-        candidates.add(new IvfHit(-(i + 1), stagingIds.get(i), score(query, staging.get(i))));
+        heap.offer(-(i + 1), score(query, staging.get(i)));
       }
 
-      candidates.sort(null); // IvfHit natural order = descending score
-      return candidates.size() <= k ? candidates : new ArrayList<>(candidates.subList(0, k));
+      TopKHeap.DrainResult drained = heap.drainDescending(); // descending score
+      int[] ords = drained.ordinals();
+      float[] scores = drained.scores();
+      List<IvfHit> results = new ArrayList<>(ords.length);
+      for (int i = 0; i < ords.length; i++) {
+        int ord = ords[i];
+        String id;
+        if (ord < 0) {
+          id = stagingIds.get(-ord - 1); // staging entry
+        } else {
+          id = ord < allIds.size() ? allIds.get(ord) : null; // committed entry
+        }
+        results.add(new IvfHit(ord, id, scores[i]));
+      }
+      return results;
     } finally {
       rwLock.readLock().unlock();
     }

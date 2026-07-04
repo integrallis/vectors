@@ -24,9 +24,8 @@ import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -236,6 +235,7 @@ public final class TieredCluster {
    * @return hits in descending score order, size ≤ k
    */
   public List<IvfHit> scan(float[] query, int k, float minScore) {
+    if (k <= 0) return List.of();
     ReadThroughState rt = readThrough;
     if (rt != null) {
       return scanReadThrough(query, k, minScore, rt);
@@ -329,64 +329,86 @@ public final class TieredCluster {
     return vecs;
   }
 
+  /** Batch size for the fused GEMV scan; matched to {@link IvfIndex}'s partition scan. */
+  private static final int BATCH_ROWS = 64;
+
   private List<IvfHit> scanExact(float[] query, int k, float minScore) {
     int[] ordinals = partition.ordinals();
-    PriorityQueue<IvfHit> heap =
-        new PriorityQueue<>(k + 1, (a, b) -> Float.compare(a.score(), b.score()));
-    for (int global : ordinals) {
-      float s = score(query, globalVectors[global]);
-      if (s < minScore) continue;
-      if (heap.size() < k) {
-        heap.offer(new IvfHit(global, null, s));
-      } else if (s > heap.peek().score()) {
-        heap.poll();
-        heap.offer(new IvfHit(global, null, s));
-      }
-    }
-    IvfHit[] arr = heap.toArray(new IvfHit[0]);
-    Arrays.sort(arr); // IvfHit.compareTo is descending by score
-    return List.of(arr);
+    // extractClusterVectors()[i] == globalVectors[ordinals[i]], so ordinals[i] is the id to emit.
+    return exactTopK(query, ordinals, extractClusterVectors(), ordinals.length, k, minScore);
   }
 
   private List<IvfHit> scanWithT1(float[] query, int k, float minScore) {
     int[] ordinals = partition.ordinals();
     var scoreFunction = t1Data.scoreFunctionFor(query, metric);
-    PriorityQueue<IvfHit> heap =
-        new PriorityQueue<>(k + 1, (a, b) -> Float.compare(a.score(), b.score()));
+    // SQ8 scoring is delegated to the compressed-vector score function, so the batched
+    // full-precision
+    // GEMV kernels do not apply here; we still drop the per-candidate IvfHit boxing +
+    // PriorityQueue.
+    TopKHeap heap = new TopKHeap(k);
     for (int local = 0; local < ordinals.length; local++) {
       float s = scoreFunction.score(local);
       if (s < minScore) continue;
-      if (heap.size() < k) {
-        heap.offer(new IvfHit(ordinals[local], null, s));
-      } else if (s > heap.peek().score()) {
-        heap.poll();
-        heap.offer(new IvfHit(ordinals[local], null, s));
-      }
+      heap.offer(ordinals[local], s);
     }
-    IvfHit[] arr = heap.toArray(new IvfHit[0]);
-    Arrays.sort(arr); // IvfHit.compareTo is descending by score
-    return List.of(arr);
+    return drainToHits(heap);
   }
 
   /** Exact scan over an externally-supplied cluster slice (read-through path). */
   private List<IvfHit> scanSlice(float[] query, int k, float minScore, float[][] slice) {
     int[] ordinals = partition.ordinals();
     int limit = Math.min(slice.length, ordinals.length);
-    PriorityQueue<IvfHit> heap =
-        new PriorityQueue<>(k + 1, (a, b) -> Float.compare(a.score(), b.score()));
-    for (int local = 0; local < limit; local++) {
-      float s = score(query, slice[local]);
-      if (s < minScore) continue;
-      if (heap.size() < k) {
-        heap.offer(new IvfHit(ordinals[local], null, s));
-      } else if (s > heap.peek().score()) {
-        heap.poll();
-        heap.offer(new IvfHit(ordinals[local], null, s));
+    return exactTopK(query, ordinals, slice, limit, k, minScore);
+  }
+
+  /**
+   * Fused top-{@code k} scan over the first {@code limit} full-precision rows of {@code slice},
+   * where {@code slice[i]} is the vector for {@code ordinals[i]}. EUCLIDEAN uses {@link
+   * VectorUtil#batchSquaredL2} and DOT/MIP uses {@link VectorUtil#batchDotProduct}; COSINE keeps
+   * the exact scalar {@link VectorUtil#cosine} (bit-identical). A primitive {@link TopKHeap}
+   * replaces the per-candidate {@code IvfHit} boxing + {@link java.util.PriorityQueue} of the
+   * previous implementation.
+   */
+  private List<IvfHit> exactTopK(
+      float[] query, int[] ordinals, float[][] slice, int limit, int k, float minScore) {
+    TopKHeap heap = new TopKHeap(k);
+    boolean euclidean = metric == SimilarityFunction.EUCLIDEAN;
+    if (metric == SimilarityFunction.COSINE) {
+      for (int local = 0; local < limit; local++) {
+        float s = score(query, slice[local]);
+        if (s < minScore) continue;
+        heap.offer(ordinals[local], s);
+      }
+      return drainToHits(heap);
+    }
+    float[][] rows = new float[BATCH_ROWS][];
+    float[] out = new float[BATCH_ROWS];
+    for (int start = 0; start < limit; start += BATCH_ROWS) {
+      int count = Math.min(BATCH_ROWS, limit - start);
+      for (int j = 0; j < count; j++) rows[j] = slice[start + j];
+      if (euclidean) {
+        VectorUtil.batchSquaredL2(query, rows, out, count);
+      } else {
+        VectorUtil.batchDotProduct(query, rows, out, count);
+      }
+      for (int j = 0; j < count; j++) {
+        float s = euclidean ? -out[j] : out[j];
+        if (s < minScore) continue;
+        heap.offer(ordinals[start + j], s);
       }
     }
-    IvfHit[] arr = heap.toArray(new IvfHit[0]);
-    Arrays.sort(arr); // IvfHit.compareTo is descending by score
-    return List.of(arr);
+    return drainToHits(heap);
+  }
+
+  private static List<IvfHit> drainToHits(TopKHeap heap) {
+    TopKHeap.DrainResult drained = heap.drainDescending();
+    int[] ords = drained.ordinals();
+    float[] scores = drained.scores();
+    List<IvfHit> hits = new ArrayList<>(ords.length);
+    for (int i = 0; i < ords.length; i++) {
+      hits.add(new IvfHit(ords[i], null, scores[i]));
+    }
+    return hits;
   }
 
   private float score(float[] a, float[] b) {
