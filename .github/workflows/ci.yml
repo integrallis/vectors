@@ -23,6 +23,12 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # vectors-studio-core's Smile PCA/t-SNE/UMAP projections bind a system LAPACK via the Java
+      # FFM API (smile.linalg), which dlopens libopenblas.so at runtime. The runner has no BLAS by
+      # default, so those tests fail with NoClassDefFoundError without this.
+      - name: Install native BLAS (Smile LAPACK backend)
+        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev
+
       - name: Build + Test
         run: ./gradlew spotlessCheck build -x :docs:build
 
