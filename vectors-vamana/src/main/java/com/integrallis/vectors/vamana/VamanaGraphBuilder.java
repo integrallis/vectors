@@ -266,7 +266,9 @@ public final class VamanaGraphBuilder {
         var neighborNeighbors = graph.getNeighbors(neighbor);
 
         if (!neighborNeighbors.contains(node)) {
-          float backlinkScore = sim.compare(vectors.getVector(neighbor), vectors.getVector(node));
+          // Reuse the pruned score: the metric is symmetric, so compare(neighbor, node) is
+          // bit-identical to the score already carried in pruneResult (compare(node, neighbor)).
+          float backlinkScore = pruneResult.score(i);
 
           if (neighborNeighbors.size() < maxDegree) {
             // Room available: just insert

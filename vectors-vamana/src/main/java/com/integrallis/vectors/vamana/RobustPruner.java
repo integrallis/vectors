@@ -81,11 +81,13 @@ final class RobustPruner {
       return;
     }
 
-    // Scratch buffer: copy candidateVec before calling getVector(selectedNode) to guard
-    // against shared-buffer RandomAccessVectors implementations (e.g., VectorStoreVectors)
-    // that overwrite the same float[] on each call — without this copy, both calls alias
-    // the same array and sim.compare(x, x) prunes every candidate after the first.
-    float[] candidateScratch = new float[vectors.dimension()];
+    // Scratch buffer only needed for shared-buffer RandomAccessVectors implementations (e.g.,
+    // VectorStoreVectors) that overwrite the same float[] on each getVector() call — without a
+    // copy, both calls alias the same array and sim.compare(x, x) prunes every candidate after the
+    // first. Stable-array stores (InMemoryVectors) compare against getVector(selectedNode)
+    // directly.
+    boolean sharedBuffer = vectors.sharesReturnBuffer();
+    float[] candidateScratch = sharedBuffer ? new float[vectors.dimension()] : null;
 
     // Single-pass: scan candidates in score order (best first), check coverage at targetAlpha
     for (int i = 0; i < n; i++) {
@@ -99,16 +101,18 @@ final class RobustPruner {
       int candidateNode = candidates.node(i);
       float candidateScore = candidates.score(i);
 
-      // Copy candidate vector to scratch before calling getVector(selectedNode):
-      // shared-buffer implementations overwrite the returned array on each call.
       float[] candidateVec = vectors.getVector(candidateNode);
-      System.arraycopy(candidateVec, 0, candidateScratch, 0, candidateScratch.length);
+      if (sharedBuffer) {
+        // Copy candidate vector before getVector(selectedNode) aliases the shared buffer.
+        System.arraycopy(candidateVec, 0, candidateScratch, 0, candidateScratch.length);
+        candidateVec = candidateScratch;
+      }
 
       // Check if this candidate is covered by any already-selected neighbor
       boolean covered = false;
       for (int j = 0; j < result.size(); j++) {
         int selectedNode = result.node(j);
-        float simCandidateSelected = sim.compare(candidateScratch, vectors.getVector(selectedNode));
+        float simCandidateSelected = sim.compare(candidateVec, vectors.getVector(selectedNode));
         if (simCandidateSelected > candidateScore * targetAlpha) {
           covered = true;
           break;

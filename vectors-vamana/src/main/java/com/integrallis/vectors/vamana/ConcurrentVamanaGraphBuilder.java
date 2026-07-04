@@ -233,7 +233,9 @@ public final class ConcurrentVamanaGraphBuilder {
     // Add backlinks to each new neighbor
     for (int i = 0; i < ctx.pruneResult.size(); i++) {
       int neighbor = ctx.pruneResult.node(i);
-      float backlinkScore = sim.compare(vectors.getVector(neighbor), query);
+      // Reuse the pruned score: the metric is symmetric, so compare(neighbor, query) is
+      // bit-identical to the score already carried in pruneResult (compare(query, neighbor)).
+      float backlinkScore = ctx.pruneResult.score(i);
       locks[neighbor].lock();
       try {
         NeighborArray nNbrs = graph.getNeighbors(neighbor);
@@ -295,12 +297,8 @@ public final class ConcurrentVamanaGraphBuilder {
         if (ctx.visited.get(nbr)) continue;
         ctx.visited.set(nbr);
         float score = sim.compare(query, vectors.getVector(nbr));
-        if (ctx.results.size() < L) {
-          ctx.results.add(nbr, score);
-          ctx.candidates.add(nbr, score);
-        } else if (score > NodeQueue.score(ctx.results.peek())) {
-          ctx.results.poll();
-          ctx.results.add(nbr, score);
+        // Single sift-down eviction; only explore the neighbor if it entered the result beam.
+        if (ctx.results.insertWithOverflow(nbr, score, L)) {
           ctx.candidates.add(nbr, score);
         }
       }

@@ -319,12 +319,8 @@ public final class VamanaSearcher {
     for (int i = 0; i < count; i++) {
       int neighborId = bulkIds[i];
       float neighborScore = bulkScores[i];
-      if (results.size() < L) {
-        results.add(neighborId, neighborScore);
-        candidates.add(neighborId, neighborScore);
-      } else if (neighborScore > NodeQueue.score(results.peek())) {
-        results.poll();
-        results.add(neighborId, neighborScore);
+      // Single sift-down eviction; only explore the neighbor if it entered the result beam.
+      if (results.insertWithOverflow(neighborId, neighborScore, L)) {
         candidates.add(neighborId, neighborScore);
       }
     }

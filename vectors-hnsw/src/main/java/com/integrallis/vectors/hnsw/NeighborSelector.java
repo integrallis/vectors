@@ -59,8 +59,11 @@ final class NeighborSelector {
       return result;
     }
 
-    // Scratch buffer for shared-buffer safety when comparing two vectors
-    float[] scratch = new float[vectors.dimension()];
+    // Scratch buffer only needed for shared-buffer stores (e.g. mmap-backed) whose getVector()
+    // may overwrite the previous return. Stable-array stores (InMemoryVectors) can compare against
+    // getVector(id) directly, eliding the per-candidate copy.
+    boolean sharedBuffer = vectors.sharesReturnBuffer();
+    float[] scratch = sharedBuffer ? new float[vectors.dimension()] : null;
 
     // Track which candidates are blocked (pruned)
     boolean[] blocked = new boolean[candidates.size()];
@@ -70,16 +73,19 @@ final class NeighborSelector {
       int candidateId = candidates.node(i);
       float scoreToQuery = candidates.score(i);
 
-      // Copy candidate vector to scratch buffer (shared-buffer safety)
       float[] candidateVec = vectors.getVector(candidateId);
-      System.arraycopy(candidateVec, 0, scratch, 0, scratch.length);
+      if (sharedBuffer) {
+        // Copy candidate vector before subsequent getVector() calls alias the shared buffer.
+        System.arraycopy(candidateVec, 0, scratch, 0, scratch.length);
+        candidateVec = scratch;
+      }
 
       boolean isBlocked = false;
       // Check against already-selected neighbors
       for (int j = 0; j < result.size(); j++) {
         int selectedId = result.node(j);
         float[] selectedVec = vectors.getVector(selectedId);
-        float scoreER = similarityFunction.compare(scratch, selectedVec);
+        float scoreER = similarityFunction.compare(candidateVec, selectedVec);
 
         if (scoreER >= scoreToQuery) {
           isBlocked = true;

@@ -133,7 +133,9 @@ public final class HnswGraphBuilder {
       // Reverse edges (backlinks): each neighbor → nodeId
       for (int i = 0; i < neighbors.size(); i++) {
         int neighborId = neighbors.node(i);
-        float score = similarityFunction.compare(vectors.getVector(neighborId), queryVec);
+        // Reuse the forward-edge score: the metric is symmetric, so compare(neighbor, query) is
+        // bit-identical to the score already carried for this neighbor (compare(query, neighbor)).
+        float score = neighbors.score(i);
         NeighborArray nList = graph.getNeighbors(neighborId, layer);
         nList.insert(nodeId, score);
 
@@ -230,16 +232,9 @@ public final class HnswGraphBuilder {
 
         float score = similarityFunction.compare(query, vectors.getVector(neighborId));
 
-        if (results.size() < ef) {
+        // Single sift-down eviction; only explore the neighbor if it entered the result beam.
+        if (results.insertWithOverflow(neighborId, score, ef)) {
           candidates.add(neighborId, score);
-          results.add(neighborId, score);
-        } else {
-          float worstResult = NodeQueue.score(results.peek());
-          if (score > worstResult) {
-            candidates.add(neighborId, score);
-            results.poll(); // evict worst
-            results.add(neighborId, score);
-          }
         }
       }
     }

@@ -660,16 +660,9 @@ public final class HnswSearcher {
 
   /** Ingests a single scored neighbor into the unfiltered beam-search heaps. */
   private void ingestOne(int neighborId, float score, int ef) {
-    if (results.size() < ef) {
+    // Single sift-down eviction; only explore the neighbor if it entered the result beam.
+    if (results.insertWithOverflow(neighborId, score, ef)) {
       candidates.add(neighborId, score);
-      results.add(neighborId, score);
-    } else {
-      float worstResult = NodeQueue.score(results.peek());
-      if (score > worstResult) {
-        candidates.add(neighborId, score);
-        results.poll();
-        results.add(neighborId, score);
-      }
     }
   }
 
@@ -691,15 +684,8 @@ public final class HnswSearcher {
   private void ingestOneFiltered(int neighborId, float score, int ef, IntPredicate predicate) {
     candidates.add(neighborId, score);
     if (predicate.test(neighborId)) {
-      if (results.size() < ef) {
-        results.add(neighborId, score);
-      } else {
-        float worstResult = NodeQueue.score(results.peek());
-        if (score > worstResult) {
-          results.poll();
-          results.add(neighborId, score);
-        }
-      }
+      // Single sift-down eviction on the bounded result heap.
+      results.insertWithOverflow(neighborId, score, ef);
     }
   }
 

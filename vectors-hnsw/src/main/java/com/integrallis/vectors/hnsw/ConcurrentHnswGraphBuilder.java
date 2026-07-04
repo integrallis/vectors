@@ -234,7 +234,9 @@ public final class ConcurrentHnswGraphBuilder {
       // Reverse edges: each neighbor ← nodeId (requires per-neighbor lock)
       for (int i = 0; i < neighbors.size(); i++) {
         int nbr = neighbors.node(i);
-        float score = similarityFunction.compare(vectors.getVector(nbr), query);
+        // Reuse the forward-edge score: the metric is symmetric, so compare(nbr, query) is
+        // bit-identical to the score already carried for this neighbor (compare(query, nbr)).
+        float score = neighbors.score(i);
         locks[nbr].lock();
         try {
           NeighborArray nList = graph.getNeighbors(nbr, layer);
@@ -354,13 +356,9 @@ public final class ConcurrentHnswGraphBuilder {
       for (int i = 0; i < batch; i++) {
         int nbr = ctx.batchIds[i];
         float score = ctx.batchScores[i];
-        if (ctx.results.size() < ef) {
+        // Single sift-down eviction; only explore the neighbor if it entered the result beam.
+        if (ctx.results.insertWithOverflow(nbr, score, ef)) {
           ctx.candidates.add(nbr, score);
-          ctx.results.add(nbr, score);
-        } else if (score > NodeQueue.score(ctx.results.peek())) {
-          ctx.candidates.add(nbr, score);
-          ctx.results.poll();
-          ctx.results.add(nbr, score);
         }
       }
     }
