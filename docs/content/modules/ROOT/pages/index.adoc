@@ -114,7 +114,7 @@ See xref:architecture.adoc[Architecture] for the full module graph and design.
 
 == Roadmap
 
-A distributed, object-storage tier (`vectors-distributed`, `vectors-cluster`, `vectors-server`, `vectors-gpu`) extends the embedded engine to serverless, horizontally scaled deployments. It is developed alongside the library and licensed separately under the FSL. The embedded library documented here is Apache 2.0.
+The xref:distributed.adoc[distributed tier] (`vectors-distributed`, `vectors-cluster`, `vectors-server`, `vectors-gpu`) extends the same engine into an object-storage-backed database that scales to billions of vectors at object-storage cost. The embedded library documented here is Apache 2.0.
 
 == License
 

@@ -4,7 +4,7 @@
 The `vectors-server` module exposes a `VectorCollection` over a JSON REST API.
 It is built on Helidon SE 4 (Nima), which serves each request on a virtual thread.
 
-`vectors-server` is part of the distributed / object-storage tier and is licensed under the Functional Source License (FSL-1.1-ALv2), which converts to Apache 2.0 on its change date. The embeddable library modules (`vectors-core` and the index modules) are Apache 2.0.
+`vectors-server` is part of the xref:distributed.adoc[distributed tier].
 
 Like the rest of the project, the server runs on JDK 25 with `--add-modules jdk.incubator.vector`. The Gradle `run` task and the application launcher apply this flag automatically; add it yourself when launching the jar directly.
 

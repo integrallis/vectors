@@ -42,11 +42,11 @@ Unified `VectorCollection` API over all backends with metadata filtering, persis
 
 | `vectors-distributed`
 | Scatter-gather distributed search.
-Part of the distributed, object-storage tier; licensed separately under the FSL and not shipped with the embedded library.
+Part of the xref:distributed.adoc[distributed tier].
 
 | `vectors-server`
 | HTTP server (Helidon SE 4).
-Part of the distributed tier; licensed separately under the FSL and not shipped with the embedded library.
+Part of the xref:distributed.adoc[distributed tier].
 
 | `vectors-bench`
 | JMH benchmarks and ANN-Benchmarks-compatible harness.
@@ -54,7 +54,7 @@ Dataset loading, checkpoint/resume, recall/QPS measurement.
 
 | `vectors-gpu`
 | cuVS GPU backend integration.
-Part of the distributed tier; requires an external native NVIDIA runtime, is licensed separately under the FSL, and is not shipped with the embedded library.
+Part of the xref:distributed.adoc[distributed tier]; requires an external native NVIDIA runtime.
 |===
 
 == Module Dependency Graph

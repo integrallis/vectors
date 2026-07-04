@@ -1,0 +1,164 @@
+= The Distributed Vector Database
+:navtitle: Distributed Database
+
+The embedded engine documented in the rest of this guide is a library: it runs in your
+application process and stores data on local disk. The **distributed tier** is the same engine
+with a different storage floor — it makes cloud **object storage (S3, GCS, Cloudflare R2, MinIO)**
+the durable source of truth, turning `vectors` into an object-storage-backed vector database that
+scales to billions of vectors at object-storage cost.
+
+It is the same `VectorCollection` API. You start embedded, and grow into the distributed tier
+without rewriting your application.
+
+== Why object storage
+
+Most vector databases keep the index in RAM. That makes queries fast and the bill large: RAM
+costs roughly $2–5/GB-month, so a RAM-resident index runs on the order of **$3,600/TB-month**
+once replication and SSD are included. Object storage costs about **$0.02/GB-month** — and NVMe
+SSD, only ~4–5× slower than RAM, about $0.10/GB. Serving from object storage with an SSD/RAM
+cache lands near **$70/TB-month**: 10–100× cheaper than keeping everything in memory.
+
+This is not a bet. The market has already moved: turbopuffer, Pinecone Serverless, Chroma Cloud,
+and Milvus all made object storage the durable tier specifically to escape RAM-bound economics.
+What none of them offer is that model as an **open-core library you can embed and self-host, on
+the JVM**. That is the gap this tier fills.
+
+== Architecture
+
+Object storage is the source of truth; RAM and local SSD are caches in front of it.
+
+[cols="1,3"]
+|===
+| Durable floor (object storage)
+| Every write appends to a sequence-numbered write-ahead log under the collection's object-storage
+  prefix, and committed generations are snapshotted as immutable objects. A write is durable once
+  the object store acknowledges it — no synchronous multi-node quorum.
+
+| Tiered cache
+| A four-tier cascade (`TieredCluster`, T0→T3) keeps 1-bit RaBitQ codes hot in JVM heap, warm
+  clusters on local SSD, and full-precision vectors in object storage, promoting and evicting by
+  access frequency. A cold namespace's first query fetches from object storage and warms the
+  cache; subsequent queries are served locally.
+
+| Centroid routing, not a graph
+| Search routes through an IVF centroid hierarchy — `BuoyIndex` (global routing, replicated to
+  every node) then `SubBuoyTree` (hierarchical refinement) — that bounds the number of
+  object-storage round-trips to the height of the tree. This is deliberate: graph indexes like
+  HNSW require many sequential hops, which is fatal over high-latency object storage. It mirrors
+  the centroid-tree approach turbopuffer adopted for the same reason.
+
+| Consistency
+| New data is served by scanning the unindexed tail of the log until asynchronous indexing catches
+  up, so a write is visible to the next query. Indexing never blocks reads or writes.
+|===
+
+The pieces are real code: `DistributedVectorCollection` and `TieredCluster` (`vectors-ivf`),
+`S3StorageBackend` and `SegmentedWriteAheadLog` (`vectors-storage`), and generation shipping in
+`vectors-db`. They are tested against LocalStack and Cloudflare R2.
+
+== What makes it different
+
+* **Embedded-first.** The same engine and API run in-process as a library or as a distributed,
+  object-storage-backed server. Topology is a builder flag, not a rewrite — code written against
+  one mode works against all of them.
+* **No cluster to operate.** Object storage is the durable floor, so there is no etcd, no message
+  queue, and no Kubernetes commitment (contrast Milvus's distributed mode), and no RAM ceiling to
+  provision against (contrast Redis, and the in-RAM HNSW defaults of Weaviate and Qdrant).
+* **JVM-native.** It runs inside your Java, Kotlin, or Scala application. Every embeddable
+  alternative today is Python-first (Chroma, Milvus Lite, Qdrant's in-process mode) or a separate
+  server process. No sidecar, no language boundary.
+* **Open-core.** The embedded library is Apache-2.0; the distributed tier is source-available and
+  converts to Apache-2.0 on its change date (see <<licensing>>).
+
+=== How it compares
+
+[cols="1,1,1,1"]
+|===
+| System | Storage model | Runs embedded on the JVM? | License
+
+| *vectors* (distributed tier)
+| Object-storage-first, SSD/RAM cache
+| *Yes* — same engine, in-process or server
+| Apache-2.0 core / source-available tier
+
+| turbopuffer
+| Object-storage-first
+| No — proprietary managed service, no self-host
+| Proprietary
+
+| Pinecone (serverless)
+| Object-storage-backed
+| No — cloud only (local emulator is dev-scale)
+| Proprietary
+
+| Milvus (distributed)
+| Object storage + etcd + message queue
+| No — Kubernetes cluster
+| Apache-2.0
+
+| Weaviate / Qdrant
+| HNSW in RAM (SSD/offload opt-in)
+| Experimental / dev-only
+| BSD-3 / Apache-2.0
+
+| Redis
+| In-RAM
+| No — server process
+| RSALv2 / SSPL / AGPLv3
+
+| pgvector
+| Postgres heap, RAM-bound index
+| No — a Postgres extension
+| PostgreSQL
+|===
+
+The object-storage systems are proprietary-cloud or cluster-heavy; the embeddable ones are
+RAM-bound and Python-centric. An Apache-cored, object-storage-backed engine that also embeds on
+the JVM sits in the empty intersection.
+
+== Honest trade-offs
+
+Object storage trades latency for cost and scale. Warm queries — served from the SSD/RAM cache —
+are fast. A **cold** query, against a namespace not yet cached, pays object-storage round-trips;
+turbopuffer publishes roughly 874&nbsp;ms cold versus 14&nbsp;ms warm p50 for a million vectors,
+and this tier makes the same bargain. There is also a small consistency-check floor on reads.
+
+So the distributed tier is built for workloads that tolerate cold-start latency in exchange for
+cheap scale: RAG and semantic search, batch and analytical retrieval, and large multi-tenant
+corpora where most data is cold. For a small corpus on a strict single-digit-millisecond hot path,
+an in-memory store is the right tool — the embedded `vectors` engine on local disk, or an in-RAM
+database. This tier does not try to win that fight.
+
+== Object-storage backends
+
+Any S3-compatible endpoint works — AWS S3, Cloudflare R2, Google Cloud Storage, or a local MinIO —
+because the backend supports an endpoint override, path-style addressing, and static credentials:
+
+[source,java]
+----
+// Point the durable tier at MinIO (or R2 / S3 / any S3-compatible endpoint)
+StorageBackend objectStore = S3StorageBackend.create(
+    URI.create("http://localhost:9000"), // endpoint (omit override for AWS S3)
+    "vectors",                            // bucket
+    "us-east-1",                          // region
+    "minioadmin",                         // access key
+    "minioadmin");                        // secret key
+
+// The distributed collection uses it as its durable T3 tier.
+----
+
+[[licensing]]
+== Licensing
+
+The distributed-tier modules — `vectors-distributed`, `vectors-cluster`, `vectors-server`, and
+`vectors-gpu` — are licensed under the Functional Source License (FSL-1.1-ALv2) and convert to
+Apache-2.0 on their change date. The embedded library and its adapters are Apache-2.0. The
+`LICENSING.md` file in the repository carries the module-by-module classification.
+
+== Running it locally
+
+The object-storage engine and the S3/R2/MinIO backend are implemented and tested today. A
+one-command local stack — MinIO plus the `vectors` server, brought up with `docker compose` — and
+Homebrew / SDKMAN distributions are being packaged so you can go from nothing to a running
+object-storage vector database in a single step. This page will carry the quickstart when that
+packaging lands.

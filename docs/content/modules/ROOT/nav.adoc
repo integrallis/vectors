@@ -10,6 +10,9 @@
 * xref:sizing.adoc[Sizing & Tuning]
 * xref:migration-from-simplevectorstore.adoc[Migrating from SimpleVectorStore]
 
+.Distributed Database
+* xref:distributed.adoc[Overview]
+
 .Integrations
 * xref:spring-ai.adoc[Spring AI]
 * xref:langchain4j.adoc[LangChain4j]
