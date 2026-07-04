@@ -42,11 +42,8 @@ Conditions:
   HasStudio: !Not [!Equals [!Ref StudioImage, ""]]
   HasKey: !Not [!Equals [!Ref KeyName, ""]]
 
-Mappings:
-  # Amazon Linux 2023 AMI is resolved at deploy time via a public SSM parameter (no hardcoded IDs,
-  # per AWS Marketplace policy). See the AmiId parameter default below.
-  Placeholder: { x: { y: "unused" } }
-
+# The Amazon Linux 2023 AMI is resolved at deploy time via a public SSM parameter in the
+# ServerInstance ImageId (no hardcoded AMI IDs, per AWS Marketplace policy).
 Resources:
   # --- Durable floor: the customer's own S3 bucket -------------------------------------------------
   DataBucket:
