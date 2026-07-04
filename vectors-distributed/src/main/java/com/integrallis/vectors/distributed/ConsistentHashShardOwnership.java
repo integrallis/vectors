@@ -17,8 +17,6 @@
 package com.integrallis.vectors.distributed;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,7 +31,8 @@ import java.util.TreeMap;
  * Consistent-hash implementation of {@link ShardOwnership}.
  *
  * <p>Each real node is placed at {@value #VIRTUAL_NODES_PER_NODE} virtual positions on a hash ring
- * keyed by MD5 hash of {@code "<nodeId>-<i>"}. A cluster id is assigned to the node whose first
+ * whose positions are derived from the node id (hashed with MurmurHash3, 64-bit) mixed with the
+ * virtual-node index {@code i} via {@code fmix64}. A cluster id is assigned to the node whose first
  * virtual position is ≥ {@code hash(clusterId)} (clockwise wrap-around). Phase 3: RF=1, so {@link
  * #replicasFor} always returns an empty list.
  */
@@ -73,11 +72,12 @@ public final class ConsistentHashShardOwnership implements ShardOwnership {
     }
     this.totalClusters = totalClusters;
 
-    // Populate the ring with virtual nodes
+    // Populate the ring with virtual nodes. Hash the node id once, then mix in the virtual-node
+    // index via fmix64 instead of building (and re-hashing) a "<nodeId>-<i>" string per position.
     for (NodeId node : nodes) {
+      long nodeHash = murmur3(node.id().getBytes(StandardCharsets.UTF_8));
       for (int i = 0; i < VIRTUAL_NODES_PER_NODE; i++) {
-        long hash = hash(node.id() + "-" + i);
-        ring.put(hash, node);
+        ring.put(fmix64(nodeHash + (i + 1) * 0x9E3779B97F4A7C15L), node);
       }
     }
 
@@ -125,7 +125,7 @@ public final class ConsistentHashShardOwnership implements ShardOwnership {
   // --- private helpers ---
 
   private NodeId resolveNode(int clusterId) {
-    long h = hash("cluster-" + clusterId);
+    long h = fmix64(CLUSTER_SALT + clusterId);
     Map.Entry<Long, NodeId> entry = ring.ceilingEntry(h);
     if (entry == null) {
       entry = ring.firstEntry(); // wrap around
@@ -133,18 +133,96 @@ public final class ConsistentHashShardOwnership implements ShardOwnership {
     return entry.getValue();
   }
 
-  private static long hash(String key) {
-    try {
-      MessageDigest md = MessageDigest.getInstance("MD5");
-      byte[] bytes = md.digest(key.getBytes(StandardCharsets.UTF_8));
-      // Use first 8 bytes as a long (unsigned interpretation via shift)
-      long h = 0;
-      for (int i = 0; i < 8; i++) {
-        h = (h << 8) | (bytes[i] & 0xFFL);
-      }
-      return h;
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("MD5 not available", e);
+  /**
+   * Salt that separates cluster-id ring keys from node ring keys in the shared 64-bit space; the
+   * exact value is arbitrary but fixed for determinism.
+   */
+  private static final long CLUSTER_SALT = 0xC1057E12ABCD1234L;
+
+  /**
+   * MurmurHash3 128-bit (x64) over {@code data}, returning the first 64-bit half.
+   *
+   * <p>Replaces a per-call {@link java.security.MessageDigest} MD5 lookup: cluster ownership needs
+   * a well-distributed deterministic mapping, not collision resistance. NOTE: this is not
+   * compatible with the previous MD5 mapping; ring assignments differ, so a ring built with this
+   * version must not be mixed with MD5-built placement without a re-ingest.
+   */
+  private static long murmur3(byte[] data) {
+    final long c1 = 0x87c37b91114253d5L;
+    final long c2 = 0x4cf5ad432745937fL;
+    final int length = data.length;
+    final int nblocks = length >> 4;
+    long h1 = 0L;
+    long h2 = 0L;
+    for (int i = 0; i < nblocks; i++) {
+      final int base = i << 4;
+      long k1 = getLongLE(data, base);
+      long k2 = getLongLE(data, base + 8);
+      k1 *= c1;
+      k1 = Long.rotateLeft(k1, 31);
+      k1 *= c2;
+      h1 ^= k1;
+      h1 = Long.rotateLeft(h1, 27);
+      h1 += h2;
+      h1 = h1 * 5 + 0x52dce729;
+      k2 *= c2;
+      k2 = Long.rotateLeft(k2, 33);
+      k2 *= c1;
+      h2 ^= k2;
+      h2 = Long.rotateLeft(h2, 31);
+      h2 += h1;
+      h2 = h2 * 5 + 0x38495ab5;
     }
+    long k1 = 0L;
+    long k2 = 0L;
+    final int tail = nblocks << 4;
+    final int rem = length & 15;
+    for (int i = rem - 1; i >= 8; i--) {
+      k2 ^= (long) (data[tail + i] & 0xff) << (8 * (i - 8));
+    }
+    if (rem > 8) {
+      k2 *= c2;
+      k2 = Long.rotateLeft(k2, 33);
+      k2 *= c1;
+      h2 ^= k2;
+    }
+    for (int i = Math.min(rem, 8) - 1; i >= 0; i--) {
+      k1 ^= (long) (data[tail + i] & 0xff) << (8 * i);
+    }
+    if (rem > 0) {
+      k1 *= c1;
+      k1 = Long.rotateLeft(k1, 31);
+      k1 *= c2;
+      h1 ^= k1;
+    }
+    h1 ^= length;
+    h2 ^= length;
+    h1 += h2;
+    h2 += h1;
+    h1 = fmix64(h1);
+    h2 = fmix64(h2);
+    h1 += h2;
+    return h1;
+  }
+
+  private static long getLongLE(byte[] b, int i) {
+    return (b[i] & 0xffL)
+        | ((b[i + 1] & 0xffL) << 8)
+        | ((b[i + 2] & 0xffL) << 16)
+        | ((b[i + 3] & 0xffL) << 24)
+        | ((b[i + 4] & 0xffL) << 32)
+        | ((b[i + 5] & 0xffL) << 40)
+        | ((b[i + 6] & 0xffL) << 48)
+        | ((b[i + 7] & 0xffL) << 56);
+  }
+
+  /** 64-bit avalanche finalizer (MurmurHash3 fmix64); a bijection with excellent bit diffusion. */
+  private static long fmix64(long k) {
+    k ^= k >>> 33;
+    k *= 0xff51afd7ed558ccdL;
+    k ^= k >>> 33;
+    k *= 0xc4ceb9fe1a85ec53L;
+    k ^= k >>> 33;
+    return k;
   }
 }

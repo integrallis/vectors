@@ -17,20 +17,19 @@
 package com.integrallis.vectors.cluster;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
 /**
  * Maps a document id to one of {@code N} shards using consistent hashing.
  *
- * <p>Each shard is placed at {@code virtualNodesPerShard} positions on a hash ring keyed by the MD5
- * hash of {@code "shard-<index>-<v>"}. A document id is routed to the shard whose first virtual
- * position is {@code >= hash(documentId)} (clockwise wrap-around). Consistent hashing — rather than
- * plain {@code hash(id) % N} — means that growing or shrinking the shard count only remaps {@code
- * O(keys / N)} document ids instead of nearly all of them, which is what gives the sharded write
- * tier a clean path to adding shards later.
+ * <p>Each shard is placed at {@code virtualNodesPerShard} positions on a hash ring whose positions
+ * are derived from the {@code (shard, v)} pair via a 64-bit finalizer (fmix64). A document id is
+ * routed to the shard whose first virtual position is {@code >= hash(documentId)} (clockwise
+ * wrap-around), where {@code hash} is a fast non-cryptographic hash (MurmurHash3, 64-bit).
+ * Consistent hashing — rather than plain {@code hash(id) % N} — means that growing or shrinking the
+ * shard count only remaps {@code O(keys / N)} document ids instead of nearly all of them, which is
+ * what gives the sharded write tier a clean path to adding shards later.
  *
  * <p>Resharding is <b>not</b> performed in place: this router is immutable, and changing the shard
  * count produces a new router whose routing differs for the remapped slice. Documents already
@@ -86,7 +85,7 @@ public final class ConsistentHashRouter {
     this.virtualNodesPerShard = virtualNodesPerShard;
     for (int shard = 0; shard < shardCount; shard++) {
       for (int v = 0; v < virtualNodesPerShard; v++) {
-        ring.put(hash("shard-" + shard + "-" + v), shard);
+        ring.put(ringPosition(shard, v), shard);
       }
     }
   }
@@ -119,18 +118,112 @@ public final class ConsistentHashRouter {
     return virtualNodesPerShard;
   }
 
+  /**
+   * Hashes a document id to a 64-bit ring position.
+   *
+   * <p>Uses MurmurHash3 (128-bit x64 variant, first 64-bit half) rather than a cryptographic
+   * digest: routing needs a well-distributed, deterministic mapping, not collision resistance. This
+   * avoids a {@link java.security.MessageDigest} lookup + allocation on every {@code route} call,
+   * which is on the hot path of every sharded write and read. NOTE: this hash is not compatible
+   * with the previous MD5-based mapping — a ring built by this version will place ids differently,
+   * so it must not be mixed with data placed by an MD5 build without a re-ingest.
+   */
   private static long hash(String key) {
-    try {
-      MessageDigest md = MessageDigest.getInstance("MD5");
-      byte[] bytes = md.digest(key.getBytes(StandardCharsets.UTF_8));
-      // Fold the first 8 bytes into a long (big-endian).
-      long h = 0;
-      for (int i = 0; i < 8; i++) {
-        h = (h << 8) | (bytes[i] & 0xFFL);
-      }
-      return h;
-    } catch (NoSuchAlgorithmException e) {
-      throw new IllegalStateException("MD5 not available", e);
+    return murmur3(key.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Deterministic ring position for a shard's {@code v}-th virtual node.
+   *
+   * <p>Derived directly from the {@code (shard, v)} pair via {@code fmix64} instead of hashing the
+   * throwaway string {@code "shard-<shard>-<v>"}. {@code fmix64} is a bijection, so distinct pairs
+   * map to distinct, uniformly spread positions; this removes {@code shardCount *
+   * virtualNodesPerShard} transient String + UTF-8 byte[] allocations from ring construction. A
+   * shard's positions depend only on {@code (shard, v)} and not on {@code shardCount}, preserving
+   * the consistent-hashing property that growing the ring only remaps an {@code O(keys /
+   * shardCount)} slice.
+   */
+  private static long ringPosition(int shard, int v) {
+    return fmix64(((long) shard << 32) | (v & 0xFFFF_FFFFL));
+  }
+
+  /** MurmurHash3 128-bit (x64) over {@code data}, returning the first 64-bit half. */
+  private static long murmur3(byte[] data) {
+    final long c1 = 0x87c37b91114253d5L;
+    final long c2 = 0x4cf5ad432745937fL;
+    final int length = data.length;
+    final int nblocks = length >> 4;
+    long h1 = 0L;
+    long h2 = 0L;
+    for (int i = 0; i < nblocks; i++) {
+      final int base = i << 4;
+      long k1 = getLongLE(data, base);
+      long k2 = getLongLE(data, base + 8);
+      k1 *= c1;
+      k1 = Long.rotateLeft(k1, 31);
+      k1 *= c2;
+      h1 ^= k1;
+      h1 = Long.rotateLeft(h1, 27);
+      h1 += h2;
+      h1 = h1 * 5 + 0x52dce729;
+      k2 *= c2;
+      k2 = Long.rotateLeft(k2, 33);
+      k2 *= c1;
+      h2 ^= k2;
+      h2 = Long.rotateLeft(h2, 31);
+      h2 += h1;
+      h2 = h2 * 5 + 0x38495ab5;
     }
+    long k1 = 0L;
+    long k2 = 0L;
+    final int tail = nblocks << 4;
+    final int rem = length & 15;
+    for (int i = rem - 1; i >= 8; i--) {
+      k2 ^= (long) (data[tail + i] & 0xff) << (8 * (i - 8));
+    }
+    if (rem > 8) {
+      k2 *= c2;
+      k2 = Long.rotateLeft(k2, 33);
+      k2 *= c1;
+      h2 ^= k2;
+    }
+    for (int i = Math.min(rem, 8) - 1; i >= 0; i--) {
+      k1 ^= (long) (data[tail + i] & 0xff) << (8 * i);
+    }
+    if (rem > 0) {
+      k1 *= c1;
+      k1 = Long.rotateLeft(k1, 31);
+      k1 *= c2;
+      h1 ^= k1;
+    }
+    h1 ^= length;
+    h2 ^= length;
+    h1 += h2;
+    h2 += h1;
+    h1 = fmix64(h1);
+    h2 = fmix64(h2);
+    h1 += h2;
+    return h1;
+  }
+
+  private static long getLongLE(byte[] b, int i) {
+    return (b[i] & 0xffL)
+        | ((b[i + 1] & 0xffL) << 8)
+        | ((b[i + 2] & 0xffL) << 16)
+        | ((b[i + 3] & 0xffL) << 24)
+        | ((b[i + 4] & 0xffL) << 32)
+        | ((b[i + 5] & 0xffL) << 40)
+        | ((b[i + 6] & 0xffL) << 48)
+        | ((b[i + 7] & 0xffL) << 56);
+  }
+
+  /** 64-bit avalanche finalizer (MurmurHash3 fmix64); a bijection with excellent bit diffusion. */
+  private static long fmix64(long k) {
+    k ^= k >>> 33;
+    k *= 0xff51afd7ed558ccdL;
+    k ^= k >>> 33;
+    k *= 0xc4ceb9fe1a85ec53L;
+    k ^= k >>> 33;
+    return k;
   }
 }

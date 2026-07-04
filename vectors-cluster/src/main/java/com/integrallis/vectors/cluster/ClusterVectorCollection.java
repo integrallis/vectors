@@ -202,7 +202,9 @@ public final class ClusterVectorCollection implements VectorCollection {
       }
     }
     long elapsed = System.nanoTime() - start;
-    return TopKMerger.merge(partials, request.k(), elapsed);
+    // Each document is routed to exactly one shard, so per-shard result id spaces are disjoint:
+    // merge without the de-duplication HashMap pass (dedup=false fast path).
+    return TopKMerger.merge(partials, request.k(), elapsed, false);
   }
 
   @Override
