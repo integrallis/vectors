@@ -45,7 +45,7 @@ jobs:
         run: ./gradlew complianceCheck verifyLockfiles verifyGithubWorkflows
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: '*/build/reports/cyclonedx-direct/bom.json'
@@ -53,7 +53,7 @@ jobs:
 
       - name: Upload Test Reports
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports
           path: '*/build/reports/tests/'
