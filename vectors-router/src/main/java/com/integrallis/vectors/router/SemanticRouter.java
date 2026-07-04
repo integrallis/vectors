@@ -25,12 +25,15 @@ import java.util.Objects;
 /**
  * Local in-memory semantic router using cosine similarity.
  *
- * <p>Each {@link Route} has reference utterances whose embeddings are pre-computed at construction
- * time. Routing a query computes its embedding, then finds the closest reference across all routes.
- * If the cosine distance is within the route's threshold, the query is classified to that route.
+ * <p>Each {@link Route} has reference utterances whose embeddings are pre-computed and
+ * L2-normalized at construction time. Routing a query computes its embedding, L2-normalizes it
+ * once, then finds the closest reference across all routes. If the cosine distance is within the
+ * route's threshold, the query is classified to that route.
  *
- * <p>Distance is computed via {@link VectorUtil#cosine(float[], float[])} (SIMD-accelerated) as
- * {@code 1 - similarity}.
+ * <p>Because both the reference embeddings and the query embedding are L2-normalized, cosine
+ * similarity reduces to the dot product, so the inner loop uses {@link
+ * VectorUtil#dotProduct(float[], float[])} (SIMD-accelerated) and computes distance as {@code 1 -
+ * dot}.
  */
 public final class SemanticRouter {
 
@@ -63,7 +66,10 @@ public final class SemanticRouter {
         } else {
           requireDimension("reference '" + reference + "'", embedding, detectedDimension);
         }
-        embeddings.add(embedding);
+        // L2-normalize once at construction so the route() inner loop can use a plain dot
+        // product (cosine of unit vectors == dot product). throwOnZero=false preserves prior
+        // behavior for degenerate zero embeddings (they simply never win the argmin).
+        embeddings.add(VectorUtil.l2normalize(embedding, false));
       }
       routeEmbeddings.put(route.getName(), embeddings);
     }
@@ -81,7 +87,25 @@ public final class SemanticRouter {
     if (dimension < 0) {
       return RouteMatch.noMatch();
     }
-    requireDimension("query", requireEmbedding("query", queryVec), dimension);
+    return route(queryVec);
+  }
+
+  /**
+   * Routes a pre-computed query embedding to the best matching route.
+   *
+   * <p>The embedding is L2-normalized on a defensive copy, so the caller's array is left unchanged.
+   *
+   * @param queryEmbedding the query embedding (dimension must match the reference embeddings)
+   * @return RouteMatch with the matched route, or a no-match result
+   */
+  public RouteMatch route(float[] queryEmbedding) {
+    if (dimension < 0) {
+      return RouteMatch.noMatch();
+    }
+    requireDimension("query", requireEmbedding("query", queryEmbedding), dimension);
+
+    // Normalize once per route() on a copy (references are already normalized); cosine == dot.
+    float[] queryVec = VectorUtil.l2normalize(queryEmbedding.clone(), false);
 
     String bestRoute = null;
     double bestDistance = Double.MAX_VALUE;
@@ -89,7 +113,7 @@ public final class SemanticRouter {
     for (var entry : routeEmbeddings.entrySet()) {
       String routeName = entry.getKey();
       for (float[] refVec : entry.getValue()) {
-        double distance = 1.0 - VectorUtil.cosine(queryVec, refVec);
+        double distance = 1.0 - VectorUtil.dotProduct(queryVec, refVec);
         if (distance < bestDistance) {
           bestDistance = distance;
           bestRoute = routeName;

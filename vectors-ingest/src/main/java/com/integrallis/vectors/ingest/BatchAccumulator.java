@@ -15,7 +15,6 @@
  */
 package com.integrallis.vectors.ingest;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -98,9 +97,41 @@ final class BatchAccumulator {
   static long sizeOf(IngestDoc d) {
     long s = 0;
     String text = d.text();
-    if (text != null) s += text.getBytes(StandardCharsets.UTF_8).length;
+    if (text != null) s += utf8ByteLength(text);
     byte[] blob = d.blob();
     if (blob != null) s += blob.length;
     return s;
+  }
+
+  /**
+   * Computes the number of bytes {@code text} would occupy when encoded as UTF-8, in a single pass
+   * without allocating an intermediate {@code byte[]} (as {@code getBytes(UTF_8)} would). The
+   * result is bit-identical to {@code text.getBytes(StandardCharsets.UTF_8).length}: unpaired
+   * surrogates are counted as one byte each, matching the encoder's single-byte {@code '?'}
+   * replacement.
+   */
+  static long utf8ByteLength(String text) {
+    long count = 0;
+    int len = text.length();
+    for (int i = 0; i < len; i++) {
+      char c = text.charAt(i);
+      if (c < 0x80) {
+        count += 1;
+      } else if (c < 0x800) {
+        count += 2;
+      } else if (Character.isHighSurrogate(c)) {
+        if (i + 1 < len && Character.isLowSurrogate(text.charAt(i + 1))) {
+          count += 4; // valid surrogate pair -> one 4-byte code point
+          i++;
+        } else {
+          count += 1; // unpaired high surrogate -> '?' replacement
+        }
+      } else if (Character.isLowSurrogate(c)) {
+        count += 1; // unpaired low surrogate -> '?' replacement
+      } else {
+        count += 3;
+      }
+    }
+    return count;
   }
 }

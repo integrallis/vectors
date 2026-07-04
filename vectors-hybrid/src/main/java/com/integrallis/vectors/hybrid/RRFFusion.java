@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 
 /**
  * Reciprocal Rank Fusion (RRF) — a parameter-free fusion strategy.
@@ -72,13 +73,36 @@ public final class RRFFusion implements FusionStrategy {
         rank++;
       }
     }
-    return scores.entrySet().stream()
-        .sorted(
-            Comparator.<Map.Entry<String, Float>, Float>comparing(Map.Entry::getValue)
-                .reversed()
-                .thenComparing(Map.Entry::getKey))
-        .limit(k)
-        .map(e -> new ScoredId(e.getKey(), e.getValue()))
-        .toList();
+    return topK(scores, k);
+  }
+
+  /**
+   * Selects the top-{@code k} entries ordered by score descending, ties broken by id ascending —
+   * bit-identical to a full sort followed by {@code limit(k)}, but in {@code O(n log k)} time using
+   * a bounded size-{@code k} min-heap instead of sorting the entire {@code n}-entry union.
+   */
+  private static List<ScoredId> topK(Map<String, Float> scores, int k) {
+    // Min-heap head is the "weakest" kept entry: lowest score, ties broken by largest id. When the
+    // heap exceeds k, that weakest entry is evicted, leaving the strongest k.
+    Comparator<Map.Entry<String, Float>> weakestFirst =
+        Comparator.<Map.Entry<String, Float>, Float>comparing(Map.Entry::getValue)
+            .thenComparing(Map.Entry::getKey, Comparator.reverseOrder());
+    PriorityQueue<Map.Entry<String, Float>> heap = new PriorityQueue<>(weakestFirst);
+    for (Map.Entry<String, Float> e : scores.entrySet()) {
+      if (heap.size() < k) {
+        heap.offer(e);
+      } else if (weakestFirst.compare(e, heap.peek()) > 0) {
+        heap.poll();
+        heap.offer(e);
+      }
+    }
+    // Draining the heap yields weakest-first; fill the result back-to-front to get the final
+    // strongest-first (score desc, id asc) ordering.
+    ScoredId[] out = new ScoredId[heap.size()];
+    for (int i = out.length - 1; i >= 0; i--) {
+      Map.Entry<String, Float> e = heap.poll();
+      out[i] = new ScoredId(e.getKey(), e.getValue());
+    }
+    return List.of(out);
   }
 }
