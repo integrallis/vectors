@@ -31,9 +31,17 @@ import java.nio.file.StandardOpenOption;
 public final class ChannelOutput implements RandomAccessOutput {
 
   private static final int SCALAR_BUFFER_SIZE = 8; // enough for a long
+  private static final int ZERO_BUFFER_SIZE = 4096;
+
+  /** Shared, preallocated, read-only buffer of zero bytes used for padding writes. */
+  private static final ByteBuffer SHARED_ZEROS =
+      ByteBuffer.allocateDirect(ZERO_BUFFER_SIZE).asReadOnlyBuffer();
 
   private final FileChannel channel;
   private final ByteBuffer scalarBuf;
+
+  /** Reusable little-endian scratch buffer for bulk primitive writes; grows on demand. */
+  private ByteBuffer bulkBuf;
 
   ChannelOutput(FileChannel channel) {
     this.channel = channel;
@@ -99,21 +107,28 @@ public final class ChannelOutput implements RandomAccessOutput {
 
   @Override
   public void writeInts(int[] src, int offset, int count) throws IOException {
-    ByteBuffer buf = ByteBuffer.allocate(count * Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-    for (int i = 0; i < count; i++) {
-      buf.putInt(src[offset + i]);
-    }
-    buf.flip();
+    int bytes = count * Integer.BYTES;
+    ByteBuffer buf = bulkBuffer(bytes);
+    buf.asIntBuffer().put(src, offset, count); // bulk copy, no per-element loop
+    buf.limit(bytes);
     writeFully(buf);
   }
 
   @Override
   public void writeFloats(float[] src, int offset, int count) throws IOException {
-    ByteBuffer buf = ByteBuffer.allocate(count * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-    for (int i = 0; i < count; i++) {
-      buf.putFloat(src[offset + i]);
-    }
-    buf.flip();
+    int bytes = count * Float.BYTES;
+    ByteBuffer buf = bulkBuffer(bytes);
+    buf.asFloatBuffer().put(src, offset, count); // bulk, native-order copy, no per-element loop
+    buf.limit(bytes);
+    writeFully(buf);
+  }
+
+  /**
+   * Writes the remaining bytes of {@code buf} (position..limit) to the channel, advancing the
+   * buffer to its limit. The buffer's byte order must already match the on-disk layout. Lets
+   * callers that own a prebuilt buffer (e.g. a padded vector stride) write it in a single call.
+   */
+  public void write(ByteBuffer buf) throws IOException {
     writeFully(buf);
   }
 
@@ -132,13 +147,13 @@ public final class ChannelOutput implements RandomAccessOutput {
   @Override
   public void writeZeros(int count) throws IOException {
     if (count <= 0) return;
-    // Write zeros in chunks to avoid large allocations
-    int chunkSize = Math.min(count, 4096);
-    ByteBuffer zeros = ByteBuffer.allocate(chunkSize);
+    // Write from the shared preallocated zero buffer; duplicate() gives an independent
+    // position/limit view without copying or reallocating the zero payload.
     int remaining = count;
     while (remaining > 0) {
-      int toWrite = Math.min(remaining, chunkSize);
-      zeros.clear().limit(toWrite);
+      int toWrite = Math.min(remaining, ZERO_BUFFER_SIZE);
+      ByteBuffer zeros = SHARED_ZEROS.duplicate();
+      zeros.position(0).limit(toWrite);
       writeFully(zeros);
       remaining -= toWrite;
     }
@@ -158,5 +173,20 @@ public final class ChannelOutput implements RandomAccessOutput {
     while (buf.hasRemaining()) {
       channel.write(buf);
     }
+  }
+
+  /**
+   * Returns a reusable little-endian scratch buffer with at least {@code minBytes} capacity,
+   * cleared (position 0, limit = capacity). Grows the backing buffer only when a larger one is
+   * needed.
+   */
+  private ByteBuffer bulkBuffer(int minBytes) {
+    ByteBuffer b = bulkBuf;
+    if (b == null || b.capacity() < minBytes) {
+      b = ByteBuffer.allocate(minBytes).order(ByteOrder.LITTLE_ENDIAN);
+      bulkBuf = b;
+    }
+    b.clear();
+    return b;
   }
 }

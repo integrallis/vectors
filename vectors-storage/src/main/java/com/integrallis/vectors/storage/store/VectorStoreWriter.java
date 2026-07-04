@@ -19,6 +19,8 @@ import com.integrallis.vectors.core.VectorEncoding;
 import com.integrallis.vectors.storage.io.ChannelOutput;
 import com.integrallis.vectors.storage.memory.AlignmentUtil;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Path;
 
 /**
@@ -35,6 +37,11 @@ public final class VectorStoreWriter implements AutoCloseable {
   private final int dimension;
   private final int rawVectorByteSize;
   private final int paddingSize;
+  private final int stride;
+
+  /** Reusable stride-sized buffer (raw bytes + zero padding), filled and written per vector. */
+  private ByteBuffer strideBuf;
+
   private int count;
 
   private VectorStoreWriter(
@@ -43,8 +50,9 @@ public final class VectorStoreWriter implements AutoCloseable {
     this.encoding = encoding;
     this.dimension = dimension;
     this.rawVectorByteSize = encoding.vectorByteSize(dimension);
-    long stride = AlignmentUtil.alignUp(rawVectorByteSize, alignment);
-    this.paddingSize = (int) (stride - rawVectorByteSize);
+    long strideBytes = AlignmentUtil.alignUp(rawVectorByteSize, alignment);
+    this.paddingSize = (int) (strideBytes - rawVectorByteSize);
+    this.stride = (int) strideBytes;
     this.count = 0;
   }
 
@@ -93,10 +101,11 @@ public final class VectorStoreWriter implements AutoCloseable {
       throw new IllegalArgumentException(
           "Vector dimension " + vector.length + " != expected " + dimension);
     }
-    output.writeFloats(vector, 0, dimension);
-    if (paddingSize > 0) {
-      output.writeZeros(paddingSize);
-    }
+    // Fill the raw region with little-endian floats; the padding tail stays zero. Write the whole
+    // stride (raw + padding) in a single call.
+    ByteBuffer buf = strideBuffer();
+    buf.asFloatBuffer().put(vector, 0, dimension);
+    output.write(buf);
     count++;
   }
 
@@ -111,11 +120,28 @@ public final class VectorStoreWriter implements AutoCloseable {
       throw new IllegalArgumentException(
           "Vector byte size " + vector.length + " != expected " + rawVectorByteSize);
     }
-    output.writeBytes(vector, 0, vector.length);
-    if (paddingSize > 0) {
-      output.writeZeros(paddingSize);
-    }
+    // Copy the raw bytes into the reusable stride buffer; the padding tail stays zero. Write the
+    // whole stride (raw + padding) in a single call.
+    ByteBuffer buf = strideBuffer();
+    buf.put(vector, 0, rawVectorByteSize);
+    buf.position(0);
+    output.write(buf);
     count++;
+  }
+
+  /**
+   * Returns the reusable stride-sized buffer, cleared to {@code [0, stride)}. The padding tail is
+   * only ever left untouched (never written), so it stays zero across reuse without re-zeroing.
+   */
+  private ByteBuffer strideBuffer() {
+    ByteBuffer b = strideBuf;
+    if (b == null) {
+      b = ByteBuffer.allocate(stride).order(ByteOrder.LITTLE_ENDIAN);
+      strideBuf = b;
+    } else {
+      b.clear();
+    }
+    return b;
   }
 
   /** Returns the number of vectors written so far. */

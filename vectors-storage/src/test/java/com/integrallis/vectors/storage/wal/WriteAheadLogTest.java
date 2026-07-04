@@ -78,6 +78,26 @@ class WriteAheadLogTest {
   }
 
   @Test
+  void appendBatchGroupCommitsAndReplaysInOrder() throws IOException {
+    long[] seqs;
+    List<String> replayed = new ArrayList<>();
+    try (SegmentedWriteAheadLog wal = new SegmentedWriteAheadLog(tmp, Duration.ofMillis(50))) {
+      assertThat(wal.groupCommitInterval()).isEqualTo(Duration.ofMillis(50));
+      assertThat(wal.appendBatch(List.of())).isEmpty(); // empty batch is a no-op, forces nothing
+      seqs = wal.appendBatch(List.of("b0".getBytes(), "b1".getBytes(), "b2".getBytes()));
+      wal.seal();
+    }
+
+    // One force for the whole batch; seqs are contiguous and monotonic.
+    assertThat(seqs).containsExactly(0L, 1L, 2L);
+
+    try (SegmentedWriteAheadLog wal = new SegmentedWriteAheadLog(tmp)) {
+      wal.replay(b -> replayed.add(new String(b)));
+    }
+    assertThat(replayed).containsExactly("b0", "b1", "b2");
+  }
+
+  @Test
   void nextSeqIncrementsAfterEachAppend() throws IOException {
     try (SegmentedWriteAheadLog wal = new SegmentedWriteAheadLog(tmp)) {
       assertThat(wal.nextSeq()).isEqualTo(0L);

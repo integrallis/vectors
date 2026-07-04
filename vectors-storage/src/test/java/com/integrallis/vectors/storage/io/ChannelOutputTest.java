@@ -235,6 +235,70 @@ class ChannelOutputTest {
     }
   }
 
+  @Test
+  void writePrebuiltByteBuffer_readBack() throws IOException {
+    Path file = tempDir.resolve("prebuilt.bin");
+    ByteBuffer body = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN);
+    body.putFloat(1.5f).putFloat(2.5f).putInt(7);
+    body.flip();
+    try (var out = ChannelOutput.open(file)) {
+      out.write(body);
+    }
+    try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+      ByteBuffer buf = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN);
+      ch.read(buf);
+      buf.flip();
+      assertThat(buf.getFloat()).isEqualTo(1.5f);
+      assertThat(buf.getFloat()).isEqualTo(2.5f);
+      assertThat(buf.getInt()).isEqualTo(7);
+    }
+  }
+
+  @Test
+  void writeFloatsAndInts_growReusableBulkBuffer() throws IOException {
+    Path file = tempDir.resolve("grow.bin");
+    float[] small = {1f, 2f};
+    float[] large = new float[2048]; // exceeds the initial bulk buffer -> forces a grow
+    for (int i = 0; i < large.length; i++) large[i] = i * 0.5f;
+    int[] ints = new int[1024];
+    for (int i = 0; i < ints.length; i++) ints[i] = i;
+
+    try (var out = ChannelOutput.open(file)) {
+      out.writeFloats(small, 0, small.length); // allocates a small bulk buffer
+      out.writeFloats(large, 0, large.length); // regrows the bulk buffer
+      out.writeInts(ints, 0, ints.length); // reuses the larger buffer
+    }
+
+    try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+      ByteBuffer buf = ByteBuffer.allocate((int) ch.size()).order(ByteOrder.LITTLE_ENDIAN);
+      ch.read(buf);
+      buf.flip();
+      for (float f : small) assertThat(buf.getFloat()).isEqualTo(f);
+      for (float f : large) assertThat(buf.getFloat()).isEqualTo(f);
+      for (int i : ints) assertThat(buf.getInt()).isEqualTo(i);
+    }
+  }
+
+  @Test
+  void writeZeros_largePaddingSpansSharedZeroBuffer() throws IOException {
+    Path file = tempDir.resolve("bigzeros.bin");
+    int pad = 10_000; // > the 4096-byte shared zero buffer -> multiple chunked writes
+    try (var out = ChannelOutput.open(file)) {
+      out.writeInt(1);
+      out.writeZeros(pad);
+      out.writeInt(2);
+    }
+    try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+      assertThat(ch.size()).isEqualTo(4L + pad + 4);
+      ByteBuffer buf = ByteBuffer.allocate((int) ch.size()).order(ByteOrder.LITTLE_ENDIAN);
+      ch.read(buf);
+      buf.flip();
+      assertThat(buf.getInt()).isEqualTo(1);
+      for (int i = 0; i < pad; i++) assertThat(buf.get()).as("padding byte %d", i).isZero();
+      assertThat(buf.getInt()).isEqualTo(2);
+    }
+  }
+
   private static final class RecordingFileChannel extends FileChannel {
     private boolean forceCalled;
     private boolean forceMetadata;

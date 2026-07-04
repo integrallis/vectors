@@ -31,7 +31,6 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -249,10 +248,8 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
       if (expectedEtag == null) {
         builder.ifNoneMatch("*");
       } else {
-        HeadObjectResponse current = s3.headObject(b -> b.bucket(bucket).key(key));
-        if (!expectedEtag.equals(unquoted(current.eTag()))) {
-          return new ConditionalPutResult(false, null);
-        }
+        // Rely solely on the If-Match precondition: S3 rejects a stale ETag server-side and the
+        // catch below maps 412/409/404 to succeeded=false. This drops a redundant HEAD round-trip.
         // S3 If-Match header requires the ETag in double-quoted form per RFC 7232.
         builder.ifMatch(quoted(expectedEtag));
       }

@@ -58,6 +58,7 @@ public final class SegmentedWriteAheadLog implements WriteAheadLog {
   private static final Duration GROUP_COMMIT_INTERVAL = Duration.ZERO;
 
   private final Path walDir;
+  private final Duration groupCommitInterval;
 
   /** The open segment channel, or {@code null} when no segment is currently open. */
   private FileChannel current;
@@ -74,7 +75,17 @@ public final class SegmentedWriteAheadLog implements WriteAheadLog {
    * created here — the first {@link #append} does that.
    */
   public SegmentedWriteAheadLog(Path walDir) throws IOException {
+    this(walDir, GROUP_COMMIT_INTERVAL);
+  }
+
+  /**
+   * Opens (or creates) a WAL in {@code walDir} with an explicit group-commit interval reported by
+   * {@link #groupCommitInterval()}. Durability semantics are identical to {@link
+   * #SegmentedWriteAheadLog(Path)}.
+   */
+  public SegmentedWriteAheadLog(Path walDir, Duration groupCommitInterval) throws IOException {
     this.walDir = walDir;
+    this.groupCommitInterval = groupCommitInterval;
     Files.createDirectories(walDir);
     List<Long> starts = existingSegmentStarts();
     nextSeq = starts.isEmpty() ? 0L : lastSeqOf(starts.get(starts.size() - 1));
@@ -88,15 +99,56 @@ public final class SegmentedWriteAheadLog implements WriteAheadLog {
    * {@link #seal()}).
    */
   public synchronized long append(byte[] entry) throws IOException {
+    ensureCurrentOpen();
+    long seq = nextSeq++;
+    writeFully(current, ByteBuffer.wrap(buildFrame(entry)));
+    current.force(true);
+    return seq;
+  }
+
+  /**
+   * Group-commit fast path: writes every entry in {@code entries} and forces the segment to disk
+   * exactly once, instead of once per entry. On return the whole batch is durable. Crash
+   * consistency is preserved per batch: a crash mid-batch leaves a prefix of intact, CRC-verified
+   * frames followed by at most one torn trailing frame, which replay rejects (EOF / CRC mismatch).
+   *
+   * @param entries payloads to append, in order
+   * @return the sequence numbers assigned to {@code entries}, in the same order
+   * @throws IOException on storage failure
+   */
+  public synchronized long[] appendBatch(List<byte[]> entries) throws IOException {
+    int n = entries.size();
+    long[] seqs = new long[n];
+    if (n == 0) {
+      return seqs;
+    }
+    ensureCurrentOpen();
+    int total = 0;
+    for (byte[] e : entries) {
+      total += Integer.BYTES + e.length + Integer.BYTES;
+    }
+    ByteBuffer batch = ByteBuffer.allocate(total).order(ByteOrder.BIG_ENDIAN);
+    CRC32 crc = new CRC32();
+    for (int i = 0; i < n; i++) {
+      byte[] e = entries.get(i);
+      seqs[i] = nextSeq++;
+      crc.reset();
+      crc.update(e);
+      batch.putInt(e.length);
+      batch.put(e);
+      batch.putInt((int) crc.getValue());
+    }
+    batch.flip();
+    writeFully(current, batch);
+    current.force(true);
+    return seqs;
+  }
+
+  private void ensureCurrentOpen() throws IOException {
     if (current == null) {
       currentSegStart = nextSeq;
       current = openSegment(currentSegStart);
     }
-    long seq = nextSeq++;
-    byte[] frame = buildFrame(entry);
-    writeFully(current, ByteBuffer.wrap(frame));
-    current.force(true);
-    return seq;
   }
 
   /**
@@ -165,7 +217,7 @@ public final class SegmentedWriteAheadLog implements WriteAheadLog {
 
   @Override
   public Duration groupCommitInterval() {
-    return GROUP_COMMIT_INTERVAL;
+    return groupCommitInterval;
   }
 
   /** The sequence number that will be assigned to the next {@link #append} call. */
