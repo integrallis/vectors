@@ -1,7 +1,9 @@
 = Spring AI Integration
 :navtitle: Spring AI
 
-Vectors provides a Spring AI `VectorStore` adapter and a Spring Boot starter for zero-code configuration.
+Vectors provides a Spring AI `VectorStore` adapter and a Spring Boot starter. `JavaVectorsVectorStore` wraps a `VectorCollection` and an `EmbeddingModel`, implementing Spring AI's `VectorStore` interface as a drop-in, indexed replacement for `SimpleVectorStore`.
+
+NOTE: Vectors requires JDK 25 with the Vector API enabled: run with `--add-modules jdk.incubator.vector`.
 
 == Dependency Setup
 
@@ -62,7 +64,8 @@ Maven::
 
 == Using JavaVectorsVectorStore
 
-`JavaVectorsVectorStore` implements Spring AI's `VectorStore` interface:
+Build a `VectorCollection`, then pass it together with an `EmbeddingModel` to
+`JavaVectorsVectorStore.builder(embeddingModel, collection)`:
 
 [source,java]
 ----
@@ -72,19 +75,24 @@ VectorCollection collection = VectorCollection.builder()
     .indexType(IndexType.HNSW)
     .build();
 
-VectorStore vectorStore = JavaVectorsVectorStore.builder()
-    .vectorCollection(collection)
-    .embeddingModel(embeddingModel)
+VectorStore vectorStore = JavaVectorsVectorStore.builder(embeddingModel, collection)
+    .collectionName("my-docs")   // used in observation metadata; default "default"
+    .commitAfterAdd(true)        // commit after each add() so writes are searchable; default true
     .build();
 
-// Use standard Spring AI API
+// Standard Spring AI API
 vectorStore.add(List.of(
     new Document("hello world"),
     new Document("goodbye world")));
 
 List<Document> results = vectorStore.similaritySearch(
-    SearchRequest.query("hello").withTopK(5));
+    SearchRequest.builder().query("hello").topK(5).build());
 ----
+
+The builder embeds each `Document` through the supplied `EmbeddingModel` before staging it in the
+collection, and validates at build time that the model's dimension matches the collection's.
+`similaritySearch` embeds the query, translates any filter expression, and maps hits back to Spring
+AI `Document` instances with their similarity `score` populated.
 
 == Spring Boot Properties
 

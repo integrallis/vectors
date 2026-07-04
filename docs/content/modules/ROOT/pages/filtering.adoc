@@ -92,10 +92,17 @@ SearchResult result = collection.search(
 
 == Filter Evaluation
 
-Filters are evaluated as a post-filter step after the index returns candidates.
-The graph traversal (HNSW, Vamana) or cluster scan (IVF) produces a candidate set, and each candidate's metadata is checked against the filter predicate.
+Filter evaluation depends on the index type.
 
-For highly selective filters, increase `searchListSize` (HNSW/Vamana) or `nprobe` (IVF) to ensure enough candidates pass filtering:
+Graph indexes (HNSW, Vamana) push the filter into the search: the predicate is evaluated
+*during* traversal. The search navigates through non-matching nodes to preserve graph
+connectivity but collects only matching documents, so no separate candidate-expansion step
+is required.
+
+Flat and cluster indexes (FLAT, IVF_FLAT, IVF_PQ) apply the filter as a post-filter. The index
+returns an expanded candidate pool and each candidate's metadata is checked against the predicate.
+
+For highly selective filters, increase `searchListSize` (HNSW/Vamana) or `nprobe` (IVF) to keep enough matching documents in the result set:
 
 [source,java]
 ----

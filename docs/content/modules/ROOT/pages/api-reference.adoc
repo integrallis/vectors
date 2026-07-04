@@ -1,20 +1,160 @@
 = API Reference
-:navtitle: Javadoc API Reference
+:navtitle: API Reference
 
-Browse the generated Javadoc for the Vectors library.
+This page summarizes the public API surface of the Vectors library and links to the generated Javadoc.
+The collection API lives in `vectors-db` (`com.integrallis.vectors.db`); shared value types live in `vectors-core` (`com.integrallis.vectors.core`).
 
-== Complete API Documentation
+== Public API Surface
+
+=== VectorCollection
+
+`VectorCollection` is the primary interface. Build one with `VectorCollection.builder()`:
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(768)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .storagePath(Path.of("/var/lib/vectors/docs"))  // optional; absolute path enables persistence
+    .build();
+----
+
+`dimension` and `metric` are required. `indexType` defaults to `IndexType.FLAT` and `storagePath` defaults to `null` (in-memory); a non-null `storagePath` must be absolute.
+Index-specific tuning is set through builder methods grouped by family: `hnswM` / `hnswEfConstruction` / `hnswBuildThreads`, the `vamana*` methods, and the `ivf*` methods.
+
+`VectorCollection` extends `AutoCloseable`, so use it in a try-with-resources block or call `close()` when done.
+
+=== Write and Commit Model
+
+Writes stage into a buffer and stay invisible to search until `commit()` publishes a new generation. `commit()` installs the generation atomically via a volatile snapshot, so concurrent searches never block and never observe a partial write.
+
+[source,java]
+----
+collection.add(Document.of("doc-1", vector, "hello world"));
+collection.upsert(otherDoc);          // insert or replace
+collection.delete("stale-id");        // stages a tombstone
+collection.commit();                  // publishes the new generation
+----
+
+Set `autoCommitThreshold` on the builder to commit automatically once the staging buffer reaches a given size; it is disabled by default. See xref:persistence.adoc[Persistence] for the generation and compaction model.
+
+=== Document
+
+`Document` is a record: `Document(String id, float[] vector, String text, Map<String, MetadataValue> metadata)`. Use the `Document.of(...)` factories for the common cases:
+
+[source,java]
+----
+Document a = Document.of("doc-1", vector);
+Document b = Document.of("doc-2", vector, "some text");
+Document c = Document.of("doc-3", vector, "more text",
+    Map.of("author", MetadataValue.of("alice"),
+           "year",   MetadataValue.of(2024L)));
+----
+
+Metadata values are typed via the sealed `MetadataValue` type, which supports `String`, `Long`, `Double`, and `Boolean`.
+
+=== SearchRequest and SearchResult
+
+Build a request with `SearchRequest.builder(query, k)` and pass it to `collection.search(...)`:
+
+[source,java]
+----
+SearchResult result = collection.search(
+    SearchRequest.builder(queryVector, 10)
+        .filter(Filters.eq("author", "alice"))
+        .includeMetadata(true)
+        .build());
+
+for (SearchResult.Hit hit : result.hits()) {
+    System.out.println(hit.id() + " -> " + hit.score());
+}
+----
+
+`SearchResult` holds a `List<Hit>` plus `searchTimeNanos()`. Each `Hit` carries an `id()`, a similarity `score()` (higher is closer), and the `document()`.
+Set `includeVector`, `includeText`, and `includeMetadata` on the request to control which document fields the hits carry.
+
+Run many queries at once with `searchBatch`, which fans each request out on a virtual-thread-per-task executor and returns results in request order:
+
+[source,java]
+----
+List<SearchResult> results = collection.searchBatch(List.of(requestA, requestB));
+----
+
+=== Metadata Filters
+
+Filters are built with the `Filters` factory and compose into a sealed `Filter` tree:
+
+[source,java]
+----
+Filter f = Filters.and(
+    Filters.eq("category", "research"),
+    Filters.gte("year", 2023),
+    Filters.not(Filters.eq("draft", true)));
+----
+
+The factory covers `eq`, `gt`, `gte`, `lt`, `lte`, `between`, `inStr`, `inNum`, `and`, `or`, `not`, and `all`. See xref:filtering.adoc[Filtering] for evaluation details.
+
+=== Enums
+
+.Similarity functions (`SimilarityFunction`)
+[cols="1,3", options="header"]
+|===
+| Value | Meaning
+
+| `EUCLIDEAN`             | L2 distance
+| `DOT_PRODUCT`           | Dot product
+| `COSINE`                | Cosine similarity
+| `MAXIMUM_INNER_PRODUCT` | Maximum inner product
+|===
+
+.Index types (`IndexType`)
+[cols="1,3", options="header"]
+|===
+| Value | Index
+
+| `FLAT`            | Exact brute-force scan (default)
+| `HNSW`            | HNSW graph
+| `VAMANA`          | Vamana / DiskANN graph
+| `IVF_FLAT`        | IVF with full-precision residuals
+| `IVF_PQ`          | IVF with product-quantized residuals
+| `CUVS_BRUTEFORCE` | GPU brute force (cuVS)
+| `CUVS_CAGRA`      | GPU CAGRA graph (cuVS)
+|===
+
+.Quantizers (`QuantizerKind`)
+[cols="1,3", options="header"]
+|===
+| Value | Quantization
+
+| `NONE`       | No quantization (default)
+| `SQ8` / `SQ4`| Scalar quantization (8-bit / 4-bit)
+| `PQ`         | Product quantization
+| `BQ`         | Binary quantization
+| `RABITQ`     | RaBitQ
+| `NVQ`        | Non-uniform vector quantization
+| `TURBOQUANT` | TurboQuant
+| `FP16`       | Half-precision floats
+|===
+
+See xref:quantization.adoc[Quantization] for guidance on choosing a quantizer.
+
+== Javadoc
 
 link:{javadoc-aggregate-url}/index.html[Complete Javadoc (all modules)^]
 
-== Per-Module Javadoc
+=== Per-Module Javadoc
 
 [cols="1,2,1"]
 |===
 |Module |Description |Javadoc
 
+|`vectors-db`
+|Public collection API: `VectorCollection`, builder, search, persistence
+|link:{javadoc-base-url}/modules/db/index.html[Javadoc^]
+
 |`vectors-core`
-|SIMD distance kernels, vector types, similarity functions
+|SIMD distance kernels, vector types, similarity functions, filters
 |link:{javadoc-base-url}/modules/core/index.html[Javadoc^]
 
 |`vectors-storage`

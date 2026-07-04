@@ -42,11 +42,11 @@ Unified `VectorCollection` API over all backends with metadata filtering, persis
 
 | `vectors-distributed`
 | Scatter-gather distributed search.
-Experimental source module; excluded from the 0.1.x publication.
+Part of the distributed, object-storage tier; licensed separately under the FSL and not shipped with the embedded library.
 
 | `vectors-server`
 | HTTP server (Helidon SE 4).
-Experimental source module; excluded from the 0.1.x publication.
+Part of the distributed tier; licensed separately under the FSL and not shipped with the embedded library.
 
 | `vectors-bench`
 | JMH benchmarks and ANN-Benchmarks-compatible harness.
@@ -54,8 +54,7 @@ Dataset loading, checkpoint/resume, recall/QPS measurement.
 
 | `vectors-gpu`
 | cuVS GPU backend integration.
-Experimental FSL-licensed source module requiring an external native NVIDIA
-runtime; excluded from the 0.1.x publication.
+Part of the distributed tier; requires an external native NVIDIA runtime, is licensed separately under the FSL, and is not shipped with the embedded library.
 |===
 
 == Module Dependency Graph
@@ -84,13 +83,13 @@ For most applications, `vectors-db` is the entry point.
 
 Every `VectorCollection` can run in one of two modes:
 
-* **In-memory** -- all data lives on the Java heap.
-No persistence, no disk I/O.
-Suitable for testing, ephemeral workloads, and small datasets.
+* **In-memory** -- all data lives on the Java heap, with no disk I/O.
+Data does not survive process restart. Use it for ephemeral workloads and datasets that fit comfortably in RAM.
 
 * **Persistent (mmap)** -- vectors and graph structures are memory-mapped from disk via `MemorySegment`.
 Writes produce a new generation directory; a single atomic pointer flip (`CURRENT` file) makes the generation visible.
 The OS page cache manages what stays in RAM.
+A persistent collection directory has one in-process writer at a time; reopening a directory recovers the last committed generation, walking back if the newest generation is incomplete.
 
 Switch between modes by providing a `storagePath` to the builder:
 
@@ -146,7 +145,7 @@ VectorCollection persistent = VectorCollection.builder()
 | O(n / k x nprobe), ADC
 | O(n x k-means) + PQ training
 | M bytes/vector (PQ codes)
-| High compression when dataset-specific recall tests pass
+| Maximum compression on large datasets
 |===
 
 See the xref:sizing.adoc[Sizing Guide] for capacity planning and tuning parameters.

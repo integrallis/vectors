@@ -20,6 +20,9 @@ VectorCollection collection = VectorCollection.builder()
 
 Without `storagePath`, the collection operates entirely in-memory.
 
+`storagePath` must be an absolute path. The collection must not depend on the JVM working
+directory, so `build()` rejects a relative path with an `IllegalArgumentException`.
+
 == Generation-Based Commits
 
 Each `commit()` produces a new **generation** -- a self-contained directory holding all data for that snapshot:
@@ -87,7 +90,7 @@ collection.deleteWhere(Filters.eq("draft", true));   // by filter
 collection.commit();                                  // persists tombstones
 ----
 
-Tombstoned documents are skipped during search (the check is a single bit test, the cheapest possible skip).
+Tombstoned documents are skipped during search via a single bit test.
 
 == Compaction
 
@@ -124,6 +127,19 @@ VectorCollection collection = VectorCollection.builder()
 ----
 
 The builder detects existing generations on disk, runs crash recovery, and opens the latest valid snapshot.
+
+== Single Writer
+
+A persistent collection directory has one in-process writer. Each collection instance holds a
+`ReentrantLock` that serializes all mutations, commits, compaction, and close; concurrent writes
+on the same instance block until the lock is available and fail with a `WriterLockTimeoutException`
+after the configured timeout (60 seconds by default). Reads run concurrently against the current
+generation snapshot without taking the lock.
+
+The library does not lock the directory across processes. Running two writers against the same
+`storagePath` -- whether two instances in one JVM or two separate processes -- corrupts the
+generation state. Install an external lock around `open()` and `commit()` if the directory can be
+reached by more than one process. For managed multi-process access, use an external vector database.
 
 == Memory-Mapped I/O
 

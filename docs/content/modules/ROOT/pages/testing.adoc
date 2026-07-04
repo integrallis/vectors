@@ -39,7 +39,7 @@ Annotate your test class:
 [source,java]
 ----
 @VCRTest(mode = VCRMode.PLAYBACK_OR_RECORD,
-         dataDir = "src/test/resources/cassettes")
+         dataDir = "src/test/resources/vcr-data")  // this is the default; omit to inherit it
 @ExtendWith(VCRExtension.class)
 class EmbeddingTest {
 
@@ -82,7 +82,7 @@ dependencies {
 [source,java]
 ----
 @VCRTestNG(mode = VCRMode.PLAYBACK_OR_RECORD,
-           dataDir = "src/test/resources/cassettes")
+           dataDir = "src/test/resources/vcr-data")
 @Listeners(VCRListener.class)
 public class EmbeddingTest {
 
@@ -121,11 +121,12 @@ dev.langchain4j.model.embedding.EmbeddingModel model =
     new AllMiniLmL6V2EmbeddingModel();
 
 @VCRModel
-ChatLanguageModel chatModel = OpenAiChatModel.builder()
+dev.langchain4j.model.chat.ChatModel chatModel = OpenAiChatModel.builder()
     .apiKey(apiKey).build();
 ----
 
-The `vectors-vcr-langchain4j` module provides `VCREmbeddingModel` and `VCRChatModel` wrappers.
+The `vectors-vcr-langchain4j` module provides `VCREmbeddingModel` and `VCRChatModel` wrappers,
+which decorate the LangChain4j `EmbeddingModel` and `ChatModel` interfaces.
 
 == Cassette Storage Options
 

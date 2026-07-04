@@ -4,10 +4,9 @@
 This page helps you estimate how many vectors fit in a given memory budget and pick an
 index / quantizer combination that matches your dataset and SLO.
 
-IMPORTANT: These are arithmetic planning estimates, not validated 0.1.x scale
-limits or production sizing guarantees. They omit several JVM object, metadata,
-allocator, temporary-build, and operating-system costs. Measure the actual
-corpus, recall, build peak, and steady-state memory before capacity planning.
+IMPORTANT: The figures below are arithmetic planning estimates. They exclude JVM object,
+metadata, allocator, temporary-build, and operating-system overheads. Measure your actual
+corpus, recall, build-peak memory, and steady-state memory before finalizing a capacity plan.
 
 == Memory model
 
@@ -156,13 +155,12 @@ enables `rescoreFactor > 1` to recover recall lost to ADC.
 
 == Performance evidence
 
-No release-grade latency or QPS table is published yet. Earlier local numbers
-were removed because the raw output and complete machine/JDK methodology were
-not committed with this guide. The repository's committed JMH kernel output
-and synthetic recall-regression baseline are useful engineering checks, but
-they are not corpus-scale capacity evidence.
+Latency and QPS depend on the corpus, hardware, and JDK, so this guide publishes no
+fixed throughput table. The repository's committed JMH kernel output and synthetic
+recall-regression baseline are engineering checks on the SIMD kernels and recall, not
+corpus-scale capacity evidence. Benchmark on your target hardware and dataset.
 
-== Starting hypotheses for local testing
+== Starting points for local testing
 
 [cols="2,3,3", options="header"]
 |===
@@ -173,9 +171,9 @@ they are not corpus-scale capacity evidence.
 | `> 100M`    | `IVF_PQ` + rescore or shards (`IndexShards`) of the above | `IVF_PQ` mmap or `VAMANA` mmap + shards
 |===
 
-The rows above are test starting points, not demonstrated release ceilings.
-For multi-process writes, high availability, or managed scale, use an external
-vector database; the 0.1.x release is single-process.
+The rows above are starting points for benchmarking on your workload. Validate recall and
+memory against your corpus before committing to a configuration. For multi-process writes,
+high availability, or managed scale, use an external vector database; this release is single-process.
 
 == Tuning knobs
 

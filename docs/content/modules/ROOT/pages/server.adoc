@@ -1,8 +1,12 @@
 = HTTP Server
 :navtitle: HTTP Server
 
-The `vectors-server` module provides a standalone HTTP server for vector operations.
-Built on Helidon SE 4 (Nima virtual-thread runtime) with a JSON REST API.
+The `vectors-server` module exposes a `VectorCollection` over a JSON REST API.
+It is built on Helidon SE 4 (Nima), which serves each request on a virtual thread.
+
+`vectors-server` is part of the distributed / object-storage tier and is licensed under the Functional Source License (FSL-1.1-ALv2), which converts to Apache 2.0 on its change date. The embeddable library modules (`vectors-core` and the index modules) are Apache 2.0.
+
+Like the rest of the project, the server runs on JDK 25 with `--add-modules jdk.incubator.vector`. The Gradle `run` task and the application launcher apply this flag automatically; add it yourself when launching the jar directly.
 
 == Starting the Server
 
@@ -12,18 +16,36 @@ cd vectors
 ./gradlew :vectors-server:run
 ----
 
-The server starts on port 8287 by default.
+The server listens on port 8287 by default.
 
 === Configuration
 
-Pass options via CLI arguments:
+The launcher parses CLI options with picocli:
 
 [source,bash]
 ----
-java -jar vectors-server.jar --port 9090 --data-dir /var/lib/vectors
+java --add-modules jdk.incubator.vector -jar vectors-server.jar \
+  --port 9090 \
+  --data-dir /var/lib/vectors \
+  --max-connections 512 \
+  --shutdown-timeout-seconds 30 \
+  --api-key "$VECTORS_API_KEY"
 ----
 
-Or configure programmatically:
+[cols="2,3", options="header"]
+|===
+| Option | Description
+
+| `--port`                     | Listen port (default 8287)
+| `--data-dir`                 | Directory for persistent collections; omit for in-memory
+| `--max-connections`          | Maximum concurrent connections (default 512)
+| `--shutdown-timeout-seconds` | Graceful shutdown grace period (default 30)
+| `--api-key`                  | Bearer token for authentication; falls back to the `VECTORS_API_KEY` environment variable
+|===
+
+When an API key is configured, every route requires an `Authorization: Bearer <token>` header.
+
+Or configure the server programmatically:
 
 [source,java]
 ----
@@ -34,15 +56,21 @@ ServerHandle handle = VectorsServer.start(config);
 
 == REST API
 
-=== Admin
+All routes are versioned under `/v1`.
+
+=== Observability
 
 [cols="1,3,2", options="header"]
 |===
 | Method | Path | Description
 
-| `GET`  | `/health`    | Health check (returns 200)
-| `POST` | `/shutdown`  | Graceful shutdown
+| `GET` | `/v1/health`                     | Liveness check; returns `{"status":"UP","collections":N}`
+| `GET` | `/v1/readyz`                     | Readiness check
+| `GET` | `/v1/metrics`                    | Prometheus text-format metrics
+| `GET` | `/v1/collections/\{name\}/epoch` | Current collection epoch; supports `ETag` / `If-None-Match` (304)
 |===
+
+The server has no HTTP shutdown route. Shutdown is driven by a JVM shutdown hook and the configured grace period; `ServerHandle.stop()` stops an embedded instance.
 
 === Collections
 
@@ -50,17 +78,22 @@ ServerHandle handle = VectorsServer.start(config);
 |===
 | Method | Path | Description
 
-| `POST`   | `/collections`                | Create a new collection
-| `GET`    | `/collections`                | List all collections
-| `GET`    | `/collections/\{name\}`         | Describe a collection
-| `DELETE` | `/collections/\{name\}`         | Delete a collection
+| `POST`   | `/v1/collections`         | Create a new collection (201)
+| `GET`    | `/v1/collections`         | List all collections
+| `GET`    | `/v1/collections/\{name\}`  | Describe a collection
+| `DELETE` | `/v1/collections/\{name\}`  | Drop a collection (204)
 |===
 
 ==== Create a Collection
 
+`name`, `dimension`, `metric`, and `indexType` are required.
+`metric` is one of `EUCLIDEAN`, `DOT_PRODUCT`, `COSINE`, `MAXIMUM_INNER_PRODUCT`.
+`indexType` is one of `FLAT`, `HNSW`, `VAMANA`, `IVF_FLAT`, `IVF_PQ`.
+The optional `quantizer` and index-specific tuning fields (`hnswM`, `hnswEfConstruction`, and the `vamana*` / `ivf*` families) are accepted as needed.
+
 [source,bash]
 ----
-curl -X POST http://localhost:8287/collections \
+curl -X POST http://localhost:8287/v1/collections \
   -H "Content-Type: application/json" \
   -d '{
     "name": "my-collection",
@@ -79,22 +112,26 @@ curl -X POST http://localhost:8287/collections \
 |===
 | Method | Path | Description
 
-| `POST`   | `/collections/\{name\}/documents`      | Upsert documents
-| `GET`    | `/collections/\{name\}/documents/\{id\}` | Get a document by ID
-| `DELETE` | `/collections/\{name\}/documents/\{id\}` | Delete a document
+| `POST`   | `/v1/collections/\{name\}/documents`      | Upsert a batch of documents
+| `GET`    | `/v1/collections/\{name\}/documents/\{id\}` | Get a document by ID
+| `DELETE` | `/v1/collections/\{name\}/documents/\{id\}` | Delete a document (204)
+| `POST`   | `/v1/collections/\{name\}/commit`         | Commit staged writes (204)
 |===
 
 ==== Upsert Documents
 
+Each document carries an `id` and `vector`, with optional `text`, `metadata`, and Base64 `blob` fields.
+By default an upsert commits immediately; pass `?commit=false` to stage the batch and commit it later with the commit endpoint.
+
 [source,bash]
 ----
-curl -X POST http://localhost:8287/collections/my-collection/documents \
+curl -X POST http://localhost:8287/v1/collections/my-collection/documents \
   -H "Content-Type: application/json" \
   -d '{
     "documents": [
       {
         "id": "doc-1",
-        "vector": [0.1, 0.2, 0.3, ...],
+        "vector": [0.1, 0.2, 0.3],
         "text": "hello world",
         "metadata": {"author": "alice", "year": 2024}
       }
@@ -108,25 +145,44 @@ curl -X POST http://localhost:8287/collections/my-collection/documents \
 |===
 | Method | Path | Description
 
-| `POST` | `/collections/\{name\}/search`  | Search for nearest neighbors
+| `POST` | `/v1/collections/\{name\}/search`  | Search for nearest neighbors
 |===
 
 ==== Search Example
 
+The query is `queryVector`; `k` sets the number of results.
+An optional `filter` restricts results by metadata: a field predicate is `{"field": ..., "<op>": ...}` where `<op>` is one of `eq`, `ne`, `in`, `nin`, `gt`, `gte`, `lt`, `lte`, and predicates compose under `and`, `or`, and `not`.
+
 [source,bash]
 ----
-curl -X POST http://localhost:8287/collections/my-collection/search \
+curl -X POST http://localhost:8287/v1/collections/my-collection/search \
   -H "Content-Type: application/json" \
   -d '{
-    "vector": [0.1, 0.2, 0.3, ...],
+    "queryVector": [0.1, 0.2, 0.3],
     "k": 10,
     "filter": {
-      "type": "eq",
-      "field": "author",
-      "value": "alice"
+      "and": [
+        {"field": "author", "eq": "alice"},
+        {"field": "year", "gte": 2023}
+      ]
     }
   }'
 ----
+
+Response hits include the document `id` and a similarity `score` (higher is closer).
+Set `includeVector`, `includeText`, or `includeMetadata` to control which document fields are returned.
+
+=== Bulk and Blobs
+
+[cols="1,3,2", options="header"]
+|===
+| Method | Path | Description
+
+| `GET`  | `/v1/collections/\{name\}/documents`       | List documents (paged)
+| `POST` | `/v1/collections/\{name\}/vectors-batch`   | Fetch vectors for a set of IDs
+| `GET`  | `/v1/collections/\{name\}/sample`          | Sample documents from the collection
+| `GET`  | `/v1/collections/\{name\}/blobs/\{docId\}`   | Fetch a document's raw blob
+|===
 
 === Events
 
@@ -134,21 +190,21 @@ curl -X POST http://localhost:8287/collections/my-collection/search \
 |===
 | Method | Path | Description
 
-| `GET` | `/events` | SSE event stream for collection changes
+| `GET` | `/v1/events` | SSE stream of collection epoch changes
 |===
 
-The SSE endpoint streams real-time notifications for collection creation, deletion, and document changes.
+The SSE endpoint opens with a `hello` event and then emits an `epoch` event whenever a collection's generation advances, letting clients invalidate caches on ingest, delete, or commit.
 
 == Persistence
 
-When started with a `--data-dir`, the server persists collections to disk.
-On startup, `CollectionDiscovery` scans the data directory and reopens all existing collections.
+Started with a `--data-dir`, the server persists collections to disk.
+On startup, `CollectionDiscovery` scans the data directory and reopens every collection that has a valid `CURRENT` pointer and generation.
 
-Collections created without a data directory are ephemeral and lost on shutdown.
+Collections created without a data directory are in-memory and released on shutdown.
 
 == Embedded Usage
 
-For testing, start the server in-process:
+Start the server in-process for tests. `ServerConfig.forTesting()` binds an ephemeral port and runs in-memory:
 
 [source,java]
 ----

@@ -1,7 +1,9 @@
 = LangChain4j Integration
 :navtitle: LangChain4j
 
-Vectors provides a LangChain4j `EmbeddingStore` adapter for using java-vectors as the storage backend in LangChain4j applications.
+Vectors provides a LangChain4j `EmbeddingStore` adapter for using java-vectors as the storage backend in LangChain4j applications. `JavaVectorsEmbeddingStore` implements LangChain4j's `EmbeddingStore<TextSegment>`, backing it with an indexed, optionally persistent `VectorCollection`.
+
+NOTE: Vectors requires JDK 25 with the Vector API enabled: run with `--add-modules jdk.incubator.vector`.
 
 == Dependency Setup
 
@@ -13,7 +15,7 @@ Gradle::
 ----
 dependencies {
     implementation("com.integrallis:vectors-langchain4j:{vectors-version}")
-    implementation("dev.langchain4j:langchain4j-core:1.0.0-beta1")
+    implementation("dev.langchain4j:langchain4j-core:1.13.1")
 }
 ----
 
@@ -31,7 +33,9 @@ Maven::
 
 == Using JavaVectorsEmbeddingStore
 
-`JavaVectorsEmbeddingStore` implements LangChain4j's `EmbeddingStore<TextSegment>`:
+Build a `VectorCollection` and pass it to `JavaVectorsEmbeddingStore.builder(collection)`. Unlike
+the Spring AI adapter, LangChain4j supplies pre-computed embeddings, so the store needs no
+`EmbeddingModel`:
 
 [source,java]
 ----
@@ -41,8 +45,8 @@ VectorCollection collection = VectorCollection.builder()
     .indexType(IndexType.HNSW)
     .build();
 
-EmbeddingStore<TextSegment> store = JavaVectorsEmbeddingStore.builder()
-    .vectorCollection(collection)
+EmbeddingStore<TextSegment> store = JavaVectorsEmbeddingStore.builder(collection)
+    .commitAfterAdd(true)   // commit after each add/addAll; default true
     .build();
 ----
 
@@ -79,9 +83,12 @@ List<EmbeddingMatch<TextSegment>> matches = store.search(
 
 [source,java]
 ----
-store.remove(id);              // by id
-store.removeAll();             // all documents
-store.removeAll(isEqualTo("author", "alice"));  // by filter
+import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
+
+store.remove(id);                                          // by id
+store.removeAll(List.of(id1, id2));                        // by id collection
+store.removeAll();                                         // all documents
+store.removeAll(metadataKey("author").isEqualTo("alice")); // by filter
 ----
 
 == Metadata Mapping
@@ -105,23 +112,30 @@ All standard LangChain4j filter operators are supported.
 
 == Embedding Cache
 
-Combine with `vectors-cache-langchain4j` to cache embedding model calls:
+Combine with `vectors-cache-langchain4j` to cache embedding model calls. `CachingEmbeddingModel`
+caches embedding vectors keyed by input text:
 
 [source,java]
 ----
-VectorCache<String, Response<Embedding>> cache =
-    CaffeineVectorCache.<String, Response<Embedding>>builder()
-        .maximumSize(10_000)
-        .build();
+VectorCache<String, float[]> cache = CaffeineVectorCache.<String, float[]>builder()
+    .maximumSize(10_000)
+    .build();
 
 EmbeddingModel cached = new CachingEmbeddingModel(embeddingModel, cache);
 ----
 
-The decorator also wraps `EmbeddingStore` search results:
+`CachingEmbeddingStore` wraps an `EmbeddingStore`, caching search results keyed by the
+`EmbeddingSearchRequest`:
 
 [source,java]
 ----
+VectorCache<EmbeddingSearchRequest, EmbeddingSearchResult<TextSegment>> searchCache =
+    CaffeineVectorCache.<EmbeddingSearchRequest, EmbeddingSearchResult<TextSegment>>builder()
+        .maximumSize(10_000)
+        .build();
+
 EmbeddingStore<TextSegment> cachedStore = new CachingEmbeddingStore<>(store, searchCache);
 ----
 
-Write-through semantics: mutations (`add`, `remove`) invalidate the search cache automatically.
+Write-through semantics: mutations (`add`, `addAll`, `remove`, `removeAll`) invalidate the search
+cache automatically.

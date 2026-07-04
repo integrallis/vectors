@@ -20,10 +20,15 @@ Vectors provides several quantizer implementations, each with different compress
 | 8x
 | Higher compression with moderate recall loss.
 
+| FP16 (half precision)
+| 16
+| 2x
+| IEEE 754 half-precision floats. No training. Wider dynamic range than 8-bit scalar.
+
 | Product Quantization (PQ)
 | ~1 (M subspaces)
 | 16-32x
-| Maximum compression for large datasets. Requires subspace structure in data.
+| High compression on data with subspace structure. Requires k-means training.
 
 | Binary Quantization (BQ)
 | 1
@@ -70,7 +75,10 @@ VectorCollection collection = VectorCollection.builder()
     .build();
 ----
 
-Available `QuantizerKind` values: `NONE`, `SQ8`, `SQ4`, `PQ`, `BQ`, `RABITQ`, `NVQ`.
+Available `QuantizerKind` values: `NONE`, `SQ8`, `SQ4`, `FP16`, `PQ`, `BQ`, `RABITQ`, `NVQ`, `TURBOQUANT`.
+
+BBQ is a mode of the binary quantizer and Extended RaBitQ is the multi-bit form of RaBitQ.
+Both are configured through their respective quantizer families rather than as standalone `QuantizerKind` values.
 
 == Two-Pass Search
 
@@ -79,7 +87,7 @@ When a quantizer is enabled, search uses a two-pass strategy:
 1. **Coarse pass** -- traverse the graph using quantized distance estimates. Over-fetch candidates by `overQueryFactor` (default: tuned per quantizer).
 2. **Rescore pass** -- re-rank the top candidates using full-precision vectors for accurate final ordering.
 
-This gives near-full-precision recall at a fraction of the memory cost.
+The rescore pass recovers most of the recall lost to quantization while the index retains only the compressed encoding in memory.
 
 [source,java]
 ----
@@ -117,8 +125,8 @@ VectorCollection collection = VectorCollection.builder()
     .build();
 ----
 
-Best for: high compression on datasets where measured recall confirms that the
-subspace structure is suitable. This is not a validated corpus-size claim.
+Best for: high compression on datasets with subspace structure. Benchmark recall on your
+data to confirm PQ suits the distribution.
 
 == RaBitQ
 

@@ -1,29 +1,29 @@
 = Getting Started
 :navtitle: Getting Started
 
-This guide walks you through setting up a project with Vectors.
+This guide takes you from an empty project to a running vector search.
 
 == Prerequisites
 
-* **JDK 25 or later** -- The Vector API is used via `--add-modules jdk.incubator.vector`
-* **Gradle 8.11+** or **Maven 3.9+**
+* **JDK 25**. Vectors uses the incubating Vector API via `--add-modules jdk.incubator.vector` and the Foreign Function & Memory API.
+* **Gradle** (the wrapper is included) or **Maven 3.9+**.
 
-== Project Setup
+== Add the Dependency
+
+Start with `vectors-db`, the embedded database facade. It pulls in the core kernels, storage, quantization, and index modules transitively, so a single dependency is enough for most applications.
 
 === Gradle (Kotlin DSL)
 
-Add the dependency to your `build.gradle.kts`:
+Add the dependency to `build.gradle.kts`:
 
 [source,kotlin,subs="attributes+"]
 ----
 dependencies {
-    implementation("com.integrallis:vectors-core:{vectors-version}")
-    // Add index modules as needed:
-    // implementation("com.integrallis:vectors-hnsw:{vectors-version}")
+    implementation("com.integrallis:vectors-db:{vectors-version}")
 }
 ----
 
-Configure the Vector API incubator module:
+Pass the Vector API incubator module to the compiler and the JVM:
 
 [source,kotlin]
 ----
@@ -34,6 +34,10 @@ tasks.withType<JavaCompile> {
 tasks.withType<Test> {
     jvmArgs("--add-modules", "jdk.incubator.vector")
 }
+
+tasks.withType<JavaExec> {
+    jvmArgs("--add-modules", "jdk.incubator.vector")
+}
 ----
 
 === Maven
@@ -42,12 +46,12 @@ tasks.withType<Test> {
 ----
 <dependency>
     <groupId>com.integrallis</groupId>
-    <artifactId>vectors-core</artifactId>
+    <artifactId>vectors-db</artifactId>
     <version>{vectors-version}</version>
 </dependency>
 ----
 
-Configure the compiler plugin:
+Configure the compiler plugin to add the incubator module:
 
 [source,xml]
 ----
@@ -63,22 +67,87 @@ Configure the compiler plugin:
 </plugin>
 ----
 
+Run your application and tests with `--add-modules jdk.incubator.vector` on the JVM command line as well.
+
+== Your First Collection
+
+Create an in-memory collection, add documents, commit, and search:
+
+[source,java]
+----
+import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.db.IndexType;
+import com.integrallis.vectors.db.SearchRequest;
+import com.integrallis.vectors.db.SearchResult;
+import com.integrallis.vectors.db.VectorCollection;
+import java.util.List;
+
+try (VectorCollection collection = VectorCollection.builder()
+        .dimension(384)
+        .metric(SimilarityFunction.COSINE)
+        .indexType(IndexType.HNSW)
+        .build()) {
+
+    // Add documents. Vectors are staged until you commit.
+    collection.addAll(List.of(
+        Document.of("doc-1", embedding1, "the quick brown fox"),
+        Document.of("doc-2", embedding2, "lazy dogs sleep")));
+    collection.commit();
+
+    // Search for the k nearest neighbors of a query vector.
+    SearchResult result = collection.search(
+        SearchRequest.builder(queryEmbedding, 5).build());
+
+    for (SearchResult.Hit hit : result.hits()) {
+        System.out.printf("%s  score=%.4f%n", hit.id(), hit.score());
+    }
+}
+----
+
+Added documents are staged and become visible to `search` only after `commit`, so searches always see a consistent snapshot. Set `autoCommitThreshold` on the builder to commit automatically after a number of writes.
+
+== Persisting to Disk
+
+Pass a `storagePath` to make the collection durable. Vectors are memory-mapped from disk, and each commit produces a new atomic generation:
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(384)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .storagePath(Path.of("/var/lib/vectors/my-collection"))
+    .build();
+----
+
+Reopening the same directory recovers the last committed generation. See xref:persistence.adoc[Persistence] for the storage format, recovery, and compaction.
+
+== Choosing an Index and Quantizer
+
+* Start with `IndexType.HNSW` for general-purpose approximate search, or `IndexType.FLAT` for exact results on small datasets.
+* Add a quantizer (for example `.quantizer(QuantizerKind.SQ8)`) to reduce memory at large scale.
+
+See xref:architecture.adoc#_index_type_comparison[the index comparison] and the xref:quantization.adoc[Quantization] and xref:sizing.adoc[Sizing & Tuning] guides to pick the right combination.
+
 == Module Dependency Graph
+
+`vectors-db` resolves the modules below transitively. Depend on an individual index module directly only if you want to use it without the database facade.
 
 [source]
 ----
-vectors-core              <- foundation, no internal deps
-vectors-storage           <- core
-vectors-quantization      <- core, storage
-vectors-hnsw              <- core, storage, quantization
-vectors-vamana            <- core, storage, quantization
-vectors-ivf               <- core, storage, quantization
-vectors-bench             <- all above
+vectors-core              foundation, no internal dependencies
+vectors-storage           depends on core
+vectors-quantization      depends on core, storage
+vectors-hnsw              depends on core, storage, quantization
+vectors-vamana            depends on core, storage, quantization
+vectors-ivf               depends on core, storage, quantization
+vectors-db                depends on the index modules above
 ----
-
-Pick the index module(s) you need and the transitive dependencies will be resolved automatically.
 
 == Next Steps
 
-* Browse the xref:api-reference.adoc[API Reference] for detailed Javadoc
-* Explore the source on {url-vectors-github}[GitHub^]
+* xref:architecture.adoc[Architecture] -- module layout, storage modes, and index trade-offs.
+* xref:spring-ai.adoc[Spring AI] and xref:langchain4j.adoc[LangChain4j] -- framework integrations.
+* xref:api-reference.adoc[API Reference] -- generated Javadoc.
+* Explore the source on {url-vectors-github}[GitHub^].

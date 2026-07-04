@@ -1,10 +1,15 @@
 = Migrating from Spring AI SimpleVectorStore
 :navtitle: Migrating from SimpleVectorStore
 
-`SimpleVectorStore` ships as the in-memory reference implementation of Spring AI's
-`VectorStore`. It loads every vector into a `ConcurrentHashMap` and scans the full map on
-every query. This page shows how to replace it with `VectorCollection` in roughly five
-lines of change while keeping the rest of your application untouched.
+`SimpleVectorStore` is the in-memory reference implementation of Spring AI's
+`VectorStore`. It holds every vector in a `ConcurrentHashMap` and scans the full map on
+every query. This page shows how to replace it with `VectorCollection` — an indexed,
+persistent, in-process collection — with a handful of changes, leaving the rest of your
+application untouched.
+
+TIP: If you interact with Spring AI's `VectorStore` interface rather than `VectorCollection`
+directly, use the xref:spring-ai.adoc[Spring AI adapter] (`JavaVectorsVectorStore`) instead —
+it is a drop-in `VectorStore` implementation and requires no call-site changes at all.
 
 == The five-line migration
 
@@ -61,10 +66,15 @@ List<org.springframework.ai.document.Document> hits =
 float[] query = embeddingModel.embed("hello");
 SearchResult result = store.search(
     SearchRequest.builder(query, 5).build());
-List<Document> hits = result.documents();
+for (SearchResult.Hit hit : result.hits()) {
+    String id = hit.id();
+    float score = hit.score();
+    Document doc = hit.document();  // com.integrallis.vectors.core.Document
+}
 ----
 
-Scores are available directly on `SearchResult#scores()`, one per returned document.
+`SearchResult#hits()` returns an ordered list of `Hit` records, each carrying the document `id`,
+its similarity `score`, and the backing `Document`.
 
 == Metadata filters
 
@@ -88,8 +98,9 @@ SearchResult result = store.search(
         .build());
 ----
 
-`Filters` exposes `eq`, `ne`, `in`, `gt`, `gte`, `lt`, `lte`, `and`, `or`, `not`,
-`exists`, and range predicates that compose to the same set of constraints SpEL provided.
+`Filters` exposes `eq`, `gt`, `gte`, `lt`, `lte`, `inStr`, `inNum`, `between`, `and`, `or`,
+`not`, and `all`, which compose to the same set of constraints SpEL provided (for example,
+inequality is `Filters.not(Filters.eq(...))`).
 
 == Batched queries
 
@@ -109,26 +120,26 @@ List<SearchResult> results = store.searchBatch(requests);
 == Persistence
 
 `SimpleVectorStore` persists the map as JSON via `save(File)` / `load(File)`. Vectors
-provides segment-oriented persistence through the persistent collection variant; see the
-Getting Started guide for the full walkthrough.
+provides segment-oriented persistence: pass an absolute `storagePath` to the builder and the
+collection is backed by mmap storage instead of running fully in-memory. See
+xref:persistence.adoc[Persistence] for the full walkthrough.
 
 == What you gain
 
 * **Indexed approximate search** -- HNSW graph navigation replaces the full
   linear scan. Throughput and recall depend on the corpus, hardware, and index
-  parameters; no universal speedup is claimed.
+  parameters.
 * **Intra-query parallelism** -- `searchMultiStart` on `SearchRequest` fans out beam
   searches across virtual threads, trading CPU for latency at high recall.
-* **Quantization** -- swap in `QuantizerKind.SQ8` or `QuantizerKind.RABITQ` on
+* **Quantization** -- set `QuantizerKind.SQ8` or `QuantizerKind.RABITQ` on
   the builder to reduce encoded vector payload size. Measure recall on the
-  target corpus before relying on a quantized index.
+  target corpus when choosing a quantizer.
 * **Composition** -- wrap any backend with `IndexShards` (horizontal partitioning) or
-  `IndexReplicas` (concurrency fan-out) without code changes in the call sites.
+  `IndexReplicas` (concurrency fan-out) without changing the call sites.
 
 == What you keep
 
 * The same `Document`-style abstraction (id + vector + optional text + metadata).
 * The same "build once, query many" lifecycle.
-* No JNI library or GPU backend is required by the 0.1.x CPU artifacts.
-  Persistent storage may use `posix_madvise` through FFM as an optional
-  optimization.
+* A pure-JVM, in-process deployment: no JNI library or GPU backend is required by the CPU
+  artifacts. Persistent storage uses `posix_madvise` through the Foreign Function & Memory API.
