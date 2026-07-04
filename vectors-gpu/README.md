@@ -21,4 +21,4 @@ otherwise reports `GpuAvailability.unavailable(reason)` so callers fall back to 
 ## Status
 
 Scaffold only. Detection plus SPI wiring are in place; CAGRA / IVF-PQ / brute-force index
-builders and search operations are tracked for Phase 3 of the roadmap in `the roadmap`.
+builders and search operations are tracked for Phase 3 of the roadmap.

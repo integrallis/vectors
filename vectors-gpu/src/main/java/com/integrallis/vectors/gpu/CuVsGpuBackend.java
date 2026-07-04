@@ -25,7 +25,7 @@ import java.util.logging.Logger;
  * without {@code libcuvs.so} (detection simply reports unavailable).
  *
  * <p>Search and indexing entry points are intentionally absent in this scaffold; they are added
- * incrementally once the CPU-side surface (Phase 3 in {@code the roadmap}) stabilises.
+ * incrementally once the CPU-side surface (Phase 3 of the roadmap) stabilises.
  */
 public final class CuVsGpuBackend implements GpuBackend {
 
