@@ -24,12 +24,17 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * K-means clustering with k-means++ seeding and Lloyd's iterations.
  *
- * <p>For datasets with {@code n > 100,000} rows, centroid update uses virtual threads partitioned
- * across available processors to parallelise the partial-sum accumulation.
+ * <p>For datasets with {@code n > 100,000} rows, the Lloyd assignment step and centroid update both
+ * use virtual threads partitioned across available processors, parallelising nearest-centroid
+ * scoring and partial-sum accumulation respectively.
+ *
+ * <p>Nearest-centroid scoring uses the fused GEMV kernel {@link VectorUtil#batchSquaredL2} which
+ * loads each point once and scores it against 4 centroids at a time, amortising point loads.
  */
 public final class KMeans {
 
@@ -58,11 +63,16 @@ public final class KMeans {
     centroids[0] = Arrays.copyOf(dataset[rng.nextInt(n)], dim);
     float[] minDist = new float[n];
     Arrays.fill(minDist, Float.MAX_VALUE);
+    // Reusable buffer for the fused distance-to-newest-centroid pass over all points.
+    float[] seedDist = new float[n];
 
     for (int c = 1; c < k; c++) {
+      // Fused GEMV: squared L2 from the newest centroid to every point in one pass, amortising
+      // the centroid load across 4 points at a time. Symmetric with squareDistance(point,
+      // centroid).
+      VectorUtil.batchSquaredL2(centroids[c - 1], dataset, seedDist, n);
       for (int i = 0; i < n; i++) {
-        float d = VectorUtil.squareDistance(dataset[i], centroids[c - 1]);
-        if (d < minDist[i]) minDist[i] = d;
+        if (seedDist[i] < minDist[i]) minDist[i] = seedDist[i];
       }
       double total = 0.0;
       for (float d : minDist) total += d;
@@ -83,21 +93,40 @@ public final class KMeans {
     int[] assignments = new int[n];
     java.util.Arrays.fill(assignments, -1);
     boolean useVirtualThreads = n > VIRTUAL_THREAD_THRESHOLD;
+    int ncpu = Runtime.getRuntime().availableProcessors();
+
+    // Reusable per-iteration accumulators (cleared each iteration) to avoid re-allocation.
+    double[][] sums;
+    int[] counts;
+    double[][][] partialSums;
+    int[][] partialCounts;
+    float[][] scratchPerThread;
+    if (useVirtualThreads) {
+      sums = null;
+      counts = null;
+      partialSums = new double[ncpu][k][dim];
+      partialCounts = new int[ncpu][k];
+      scratchPerThread = new float[ncpu][k];
+    } else {
+      sums = new double[k][dim];
+      counts = new int[k];
+      partialSums = null;
+      partialCounts = null;
+      scratchPerThread = null;
+    }
+    float[] scratch = useVirtualThreads ? null : new float[k];
 
     for (int iter = 0; iter < maxIter; iter++) {
-      boolean changed = false;
-      for (int i = 0; i < n; i++) {
-        int nearest = nearestCentroid(dataset[i], centroids);
-        if (nearest != assignments[i]) {
-          assignments[i] = nearest;
-          changed = true;
-        }
-      }
+      boolean changed =
+          useVirtualThreads
+              ? assignParallel(dataset, centroids, assignments, k, ncpu, scratchPerThread)
+              : assignSerial(dataset, centroids, assignments, scratch);
       if (!changed) break;
       if (useVirtualThreads) {
-        updateCentroidsParallel(dataset, assignments, centroids, k, dim);
+        updateCentroidsParallel(
+            dataset, assignments, centroids, k, dim, ncpu, partialSums, partialCounts);
       } else {
-        updateCentroids(dataset, assignments, centroids, k, dim);
+        updateCentroids(dataset, assignments, centroids, k, dim, sums, counts);
       }
     }
     return centroids;
@@ -107,7 +136,9 @@ public final class KMeans {
   public static int[] assign(float[][] dataset, float[][] centroids) {
     validateCompatibleMatrices(dataset, "dataset", centroids, "centroids");
     int[] out = new int[dataset.length];
-    for (int i = 0; i < dataset.length; i++) out[i] = nearestCentroid(dataset[i], centroids);
+    float[] scratch = new float[centroids.length];
+    for (int i = 0; i < dataset.length; i++)
+      out[i] = nearestCentroid(dataset[i], centroids, scratch);
     return out;
   }
 
@@ -134,13 +165,85 @@ public final class KMeans {
     return total / dataset.length;
   }
 
-  private static int nearestCentroid(float[] v, float[][] centroids) {
+  /**
+   * Serial Lloyd assignment pass over all rows. Returns {@code true} if any assignment changed.
+   * Reuses the caller-supplied {@code scratch} buffer (length &ge; k) for the fused GEMV output.
+   */
+  private static boolean assignSerial(
+      float[][] dataset, float[][] centroids, int[] assignments, float[] scratch) {
+    boolean changed = false;
+    for (int i = 0; i < dataset.length; i++) {
+      int nearest = nearestCentroid(dataset[i], centroids, scratch);
+      if (nearest != assignments[i]) {
+        assignments[i] = nearest;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /**
+   * Parallel Lloyd assignment pass. Rows are partitioned into {@code ncpu} disjoint contiguous
+   * chunks, one virtual thread per chunk. Writes to {@code assignments} are disjoint across
+   * threads; {@code centroids} is read-only. Each thread owns a private scratch row so the fused
+   * GEMV outputs never alias. The per-thread "changed" flags are OR-ed into a single result.
+   */
+  private static boolean assignParallel(
+      float[][] dataset,
+      float[][] centroids,
+      int[] assignments,
+      int k,
+      int ncpu,
+      float[][] scratchPerThread) {
+    int n = dataset.length;
+    int chunk = (n + ncpu - 1) / ncpu;
+    AtomicBoolean changed = new AtomicBoolean(false);
+
+    try (ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor()) {
+      List<Future<?>> futures = new ArrayList<>(ncpu);
+      for (int t = 0; t < ncpu; t++) {
+        int start = t * chunk;
+        int end = Math.min(start + chunk, n);
+        float[] scratch = scratchPerThread[t];
+        futures.add(
+            exec.submit(
+                () -> {
+                  boolean local = false;
+                  for (int i = start; i < end; i++) {
+                    int nearest = nearestCentroid(dataset[i], centroids, scratch);
+                    if (nearest != assignments[i]) {
+                      assignments[i] = nearest;
+                      local = true;
+                    }
+                  }
+                  if (local) changed.set(true);
+                }));
+      }
+      for (Future<?> f : futures) {
+        try {
+          f.get();
+        } catch (Exception e) {
+          throw new RuntimeException("virtual-thread assignment failed", e);
+        }
+      }
+    }
+    return changed.get();
+  }
+
+  /**
+   * Returns the index of the nearest centroid to {@code v} using the fused {@link
+   * VectorUtil#batchSquaredL2} kernel followed by an argmin over the {@code scratch} distances.
+   * {@code scratch.length} must be &ge; {@code centroids.length}. Ties resolve to the lowest index,
+   * matching a strict {@code <} scan.
+   */
+  private static int nearestCentroid(float[] v, float[][] centroids, float[] scratch) {
+    int k = centroids.length;
+    VectorUtil.batchSquaredL2(v, centroids, scratch, k);
     int best = 0;
-    float bestDist = VectorUtil.squareDistance(v, centroids[0]);
-    for (int c = 1; c < centroids.length; c++) {
-      float d = VectorUtil.squareDistance(v, centroids[c]);
-      if (d < bestDist) {
-        bestDist = d;
+    float bestDist = scratch[0];
+    for (int c = 1; c < k; c++) {
+      if (scratch[c] < bestDist) {
+        bestDist = scratch[c];
         best = c;
       }
     }
@@ -148,13 +251,23 @@ public final class KMeans {
   }
 
   private static void updateCentroids(
-      float[][] dataset, int[] assignments, float[][] centroids, int k, int dim) {
-    double[][] sums = new double[k][dim];
-    int[] counts = new int[k];
+      float[][] dataset,
+      int[] assignments,
+      float[][] centroids,
+      int k,
+      int dim,
+      double[][] sums,
+      int[] counts) {
+    for (int c = 0; c < k; c++) {
+      Arrays.fill(sums[c], 0.0);
+      counts[c] = 0;
+    }
     for (int i = 0; i < dataset.length; i++) {
       int c = assignments[i];
       counts[c]++;
-      for (int d = 0; d < dim; d++) sums[c][d] += dataset[i][d];
+      double[] sc = sums[c];
+      float[] row = dataset[i];
+      for (int d = 0; d < dim; d++) sc[d] += row[d];
     }
     for (int c = 0; c < k; c++) {
       if (counts[c] > 0) {
@@ -164,12 +277,24 @@ public final class KMeans {
   }
 
   private static void updateCentroidsParallel(
-      float[][] dataset, int[] assignments, float[][] centroids, int k, int dim) {
+      float[][] dataset,
+      int[] assignments,
+      float[][] centroids,
+      int k,
+      int dim,
+      int ncpu,
+      double[][][] partialSums,
+      int[][] partialCounts) {
     int n = dataset.length;
-    int ncpu = Runtime.getRuntime().availableProcessors();
     int chunk = (n + ncpu - 1) / ncpu;
-    double[][][] partialSums = new double[ncpu][k][dim];
-    int[][] partialCounts = new int[ncpu][k];
+    for (int t = 0; t < ncpu; t++) {
+      int[] pc = partialCounts[t];
+      double[][] ps = partialSums[t];
+      for (int c = 0; c < k; c++) {
+        pc[c] = 0;
+        Arrays.fill(ps[c], 0.0);
+      }
+    }
 
     try (ExecutorService exec = Executors.newVirtualThreadPerTaskExecutor()) {
       List<Future<?>> futures = new ArrayList<>(ncpu);
