@@ -3,24 +3,63 @@
 
 `SimpleVectorStore` is the in-memory reference implementation of Spring AI's
 `VectorStore`. It holds every vector in a `ConcurrentHashMap` and scans the full map on
-every query. This page shows how to replace it with `VectorCollection` — an indexed,
-persistent, in-process collection — with a handful of changes, leaving the rest of your
-application untouched.
+every query. There are two ways to replace it with `vectors`, depending on whether you
+want to keep programming against Spring AI's `VectorStore` interface.
 
-TIP: If you interact with Spring AI's `VectorStore` interface rather than `VectorCollection`
-directly, use the xref:spring-ai.adoc[Spring AI adapter] (`JavaVectorsVectorStore`) instead —
-it is a drop-in `VectorStore` implementation and requires no call-site changes at all.
+== Option 1: Drop-in replacement (keep Spring AI)
 
-== The five-line migration
+If your code calls the Spring AI `VectorStore` API (`add`, `similaritySearch`,
+`delete`), swap `SimpleVectorStore` for `JavaVectorsVectorStore`. It is a Spring AI
+`VectorStore` backed by an indexed, persistent `VectorCollection`, so **only the
+construction changes — every call site stays the same.**
 
-Replace the `SimpleVectorStore` construction with a `VectorCollection` builder:
-
-[source,java,subs="attributes+"]
+[source,java]
 ----
 // Before -- Spring AI SimpleVectorStore
 VectorStore store = SimpleVectorStore.builder(embeddingModel).build();
 
-// After -- Vectors
+// After -- Vectors, still a Spring AI VectorStore
+VectorCollection collection = VectorCollection.builder()
+    .dimension(embeddingModel.dimensions())
+    .indexType(IndexType.HNSW)
+    .metric(SimilarityFunction.COSINE)
+    .build();
+VectorStore store = JavaVectorsVectorStore.builder(embeddingModel, collection).build();
+----
+
+Everything downstream is untouched — the embedding model still runs inside the store, and
+queries, filters, and writes use the same Spring AI types:
+
+[source,java]
+----
+// Unchanged: adds, queries, and filter expressions are the Spring AI VectorStore API
+store.add(List.of(new Document("hello"), new Document("world")));
+
+List<Document> hits = store.similaritySearch(
+    SearchRequest.builder().query("hello").topK(5).build());
+
+List<Document> filtered = store.similaritySearch(
+    SearchRequest.builder().query("q").topK(5).filterExpression("author == 'alice'").build());
+----
+
+To persist, pass an absolute `storagePath` to the `VectorCollection` builder; nothing else
+changes. See xref:spring-ai.adoc[Spring AI adapter] for the auto-configuration and Spring
+Boot starter.
+
+== Option 2: Program directly against VectorCollection
+
+If you want to drop the Spring AI dependency, use `VectorCollection` directly. You then own
+the embedding call, and in return you get the native `SearchResult` API, batch search, a
+typed filter tree, and control over the write/commit lifecycle.
+
+Replace the store construction:
+
+[source,java]
+----
+// Before -- Spring AI SimpleVectorStore
+VectorStore store = SimpleVectorStore.builder(embeddingModel).build();
+
+// After -- native Vectors collection
 VectorCollection store = VectorCollection.builder()
     .dimension(embeddingModel.dimensions())
     .indexType(IndexType.HNSW)
@@ -28,70 +67,41 @@ VectorCollection store = VectorCollection.builder()
     .build();
 ----
 
-The rest of your write and read paths translate line-for-line.
+=== Writes
 
-== Writes
-
-Spring AI writes pass `org.springframework.ai.document.Document` instances through the
-configured `EmbeddingModel` before storage. Vectors takes the embedding directly, so you
-typically call the model yourself (or reuse your existing pipeline):
+Spring AI's store embeds `Document` text for you. The native API takes the vector directly,
+so you embed with your model (or reuse your existing pipeline):
 
 [source,java]
 ----
-// Before
-List<org.springframework.ai.document.Document> docs = List.of(
-    new org.springframework.ai.document.Document("hello"),
-    new org.springframework.ai.document.Document("world"));
-springStore.add(docs);
-
-// After
-List<com.integrallis.vectors.db.Document> docs = List.of(
+store.addAll(List.of(
     Document.of("1", embeddingModel.embed("hello"), "hello"),
-    Document.of("2", embeddingModel.embed("world"), "world"));
-store.addAll(docs);
+    Document.of("2", embeddingModel.embed("world"), "world")));
 ----
 
-== Queries
+=== Queries
 
-`SimpleVectorStore#similaritySearch` accepts either a text query (embedded internally) or
-a `SearchRequest`. The Vectors equivalent uses `SearchRequest.builder(query, k)`:
+You embed the query, then read results from a `SearchResult`, whose `hits()` are ordered
+`Hit` records carrying the `id`, similarity `score`, and backing `Document`:
 
 [source,java]
 ----
-// Before
-List<org.springframework.ai.document.Document> hits =
-    springStore.similaritySearch(SearchRequest.query("hello").withTopK(5));
-
-// After
 float[] query = embeddingModel.embed("hello");
-SearchResult result = store.search(
-    SearchRequest.builder(query, 5).build());
+SearchResult result = store.search(SearchRequest.builder(query, 5).build());
 for (SearchResult.Hit hit : result.hits()) {
     String id = hit.id();
     float score = hit.score();
-    Document doc = hit.document();  // com.integrallis.vectors.core.Document
+    Document doc = hit.document();
 }
 ----
 
-`SearchResult#hits()` returns an ordered list of `Hit` records, each carrying the document `id`,
-its similarity `score`, and the backing `Document`.
+=== Metadata filters
 
-== Metadata filters
-
-Spring AI expresses filters as an SpEL-like string evaluated at query time:
+Spring AI expresses filters as an SpEL-like string. The native API uses a typed filter tree:
 
 [source,java]
 ----
-// Before
-springStore.similaritySearch(
-    SearchRequest.query("q").withFilterExpression("author == 'alice'"));
-----
-
-Vectors uses a typed filter tree constructed fluently:
-
-[source,java]
-----
-// After
+// Spring AI: SearchRequest.query("q").withFilterExpression("author == 'alice'")
 SearchResult result = store.search(
     SearchRequest.builder(query, 5)
         .filter(Filters.eq("author", "alice"))
@@ -99,42 +109,37 @@ SearchResult result = store.search(
 ----
 
 `Filters` exposes `eq`, `gt`, `gte`, `lt`, `lte`, `inStr`, `inNum`, `between`, `and`, `or`,
-`not`, and `all`, which compose to the same set of constraints SpEL provided (for example,
-inequality is `Filters.not(Filters.eq(...))`).
+`not`, and `all` (inequality is `Filters.not(Filters.eq(...))`).
 
-== Batched queries
+=== Batched queries
 
-`SimpleVectorStore` has no public batching API -- callers wrap `similaritySearch` in
-threads themselves. Vectors exposes batched search directly, with per-query parallelism
-on virtual threads:
+`SimpleVectorStore` has no batching API — callers thread `similaritySearch` themselves.
+The native API batches directly, with per-query parallelism on virtual threads:
 
 [source,java]
 ----
-List<SearchRequest> requests = List.of(
+List<SearchResult> results = store.searchBatch(List.of(
     SearchRequest.builder(embed("q1"), 5).build(),
     SearchRequest.builder(embed("q2"), 5).build(),
-    SearchRequest.builder(embed("q3"), 5).build());
-List<SearchResult> results = store.searchBatch(requests);
+    SearchRequest.builder(embed("q3"), 5).build()));
 ----
 
 == Persistence
 
-`SimpleVectorStore` persists the map as JSON via `save(File)` / `load(File)`. Vectors
-provides segment-oriented persistence: pass an absolute `storagePath` to the builder and the
-collection is backed by mmap storage instead of running fully in-memory. See
+`SimpleVectorStore` persists the map as JSON via `save(File)` / `load(File)`. Either
+migration path gains segment-oriented mmap storage: pass an absolute `storagePath` to the
+`VectorCollection` builder and the collection is durable instead of purely in-memory. See
 xref:persistence.adoc[Persistence] for the full walkthrough.
 
 == What you gain
 
-* **Indexed approximate search** -- HNSW graph navigation replaces the full
-  linear scan. Throughput and recall depend on the corpus, hardware, and index
-  parameters.
-* **Intra-query parallelism** -- `searchMultiStart` on `SearchRequest` fans out beam
+* **Indexed approximate search** — HNSW graph navigation replaces the full linear scan.
+  Throughput and recall depend on the corpus, hardware, and index parameters.
+* **Intra-query parallelism** — `searchMultiStart` on `SearchRequest` fans out beam
   searches across virtual threads, trading CPU for latency at high recall.
-* **Quantization** -- set `QuantizerKind.SQ8` or `QuantizerKind.RABITQ` on
-  the builder to reduce encoded vector payload size. Measure recall on the
-  target corpus when choosing a quantizer.
-* **Composition** -- wrap any backend with `IndexShards` (horizontal partitioning) or
+* **Quantization** — set `QuantizerKind.SQ8` or `QuantizerKind.RABITQ` on the builder to
+  shrink the encoded vector payload. Measure recall on the target corpus.
+* **Composition** — wrap any backend with `IndexShards` (horizontal partitioning) or
   `IndexReplicas` (concurrency fan-out) without changing the call sites.
 
 == What you keep
