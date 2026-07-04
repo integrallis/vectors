@@ -121,6 +121,12 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
       sumQ += q;
     }
 
+    // Decompose the uint8 query into 8 bit-planes once per query so the per-vector inner product
+    // reduces to a sum of SIMD AND+popcounts (bit-plane decomposition, as in
+    // BinaryQuantizedVectors.asymmetricDot). Bit-identical to the per-set-bit scalar gather.
+    int numLongs = (paddedDim + 63) >> 6;
+    long[][] queryBitPlanes = extractByteBitPlanes(queryBytes, numLongs);
+
     // Precompute query-level constants
     float finalVl = vl;
     float widthOver255 = width / 255.0f;
@@ -135,7 +141,7 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
                 estimateL2Squared(
                     codes[ordinal],
                     corrections[ordinal],
-                    queryBytes,
+                    queryBitPlanes,
                     finalVl,
                     widthOver255,
                     finalSumQ,
@@ -148,7 +154,7 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
                 estimateL2Squared(
                     codes[ordinal],
                     corrections[ordinal],
-                    queryBytes,
+                    queryBitPlanes,
                     finalVl,
                     widthOver255,
                     finalSumQ,
@@ -163,7 +169,7 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
                 estimateL2Squared(
                     codes[ordinal],
                     corrections[ordinal],
-                    queryBytes,
+                    queryBitPlanes,
                     finalVl,
                     widthOver255,
                     finalSumQ,
@@ -181,7 +187,7 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
                 estimateL2Squared(
                     codes[ordinal],
                     corrections[ordinal],
-                    queryBytes,
+                    queryBitPlanes,
                     finalVl,
                     widthOver255,
                     finalSumQ,
@@ -206,7 +212,7 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
    *
    * @param storedBits the stored binary codes
    * @param corrections per-vector corrections [sqrX, x0, factorPpc, factorIp, errorFactor]
-   * @param queryBytes uint8-quantized rotated query [0, 255]
+   * @param queryBitPlanes 8 bit-planes of the uint8-quantized rotated query [0, 255]
    * @param vl minimum value of the rotated query (lower quantization bound)
    * @param widthOver255 quantization step size (max - min) / 255
    * @param sumQ sum of all quantized query values
@@ -216,7 +222,7 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
   static float estimateL2Squared(
       long[] storedBits,
       float[] corrections,
-      byte[] queryBytes,
+      long[][] queryBitPlanes,
       float vl,
       float widthOver255,
       int sumQ,
@@ -225,9 +231,56 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
     float factorPpc = corrections[RaBitQuantizer.IDX_FACTOR_PPC];
     float factorIp = corrections[RaBitQuantizer.IDX_FACTOR_IP];
 
-    int ip = asymmetricByteTimesBit(queryBytes, storedBits);
+    int ip = asymmetricByteDot(storedBits, queryBitPlanes);
 
     return sqrX + sqrY + factorPpc * vl + (2 * ip - sumQ) * factorIp * widthOver255;
+  }
+
+  /**
+   * Extracts 8 bit-planes from a uint8-quantized query. Bit-plane {@code b} has bit {@code d} set
+   * iff bit {@code b} of {@code queryBytes[d]} is set. Mirrors {@code
+   * BinaryQuantizedVectors.extractBitPlanes} but over 8 bits (uint8) instead of 4 (int4).
+   *
+   * @param queryBytes the uint8-quantized query [0, 255], one byte per dimension
+   * @param numLongs the number of longs per bit-plane (ceil(paddedDimension / 64))
+   * @return 8 bit-planes, each as a {@code long[]} of length {@code numLongs}
+   */
+  static long[][] extractByteBitPlanes(byte[] queryBytes, int numLongs) {
+    long[][] planes = new long[8][numLongs];
+    for (int d = 0; d < queryBytes.length; d++) {
+      int val = queryBytes[d] & 0xFF;
+      if (val == 0) {
+        continue;
+      }
+      int longIndex = d >> 6;
+      long mask = 1L << (d & 63);
+      for (int bit = 0; bit < 8; bit++) {
+        if (((val >> bit) & 1) == 1) {
+          planes[bit][longIndex] |= mask;
+        }
+      }
+    }
+    return planes;
+  }
+
+  /**
+   * Computes the asymmetric inner product {@code sum_d(queryBytes[d] * bit[d])} via bit-plane
+   * decomposition: for each of the 8 query bit-planes, SIMD-popcount {@code (storedBits & plane)}
+   * and weight it by {@code 2^bit}. Produces the same integer result as {@link
+   * #asymmetricByteTimesBit} but amortizes the plane extraction across all vectors of a query and
+   * replaces the per-set-bit scalar gather with vectorized AND+BIT_COUNT.
+   *
+   * @param storedBits the stored binary codes as packed longs
+   * @param queryBitPlanes 8 bit-planes from {@link #extractByteBitPlanes}
+   * @return the asymmetric inner product
+   */
+  static int asymmetricByteDot(long[] storedBits, long[][] queryBitPlanes) {
+    int result = 0;
+    for (int bit = 0; bit < 8; bit++) {
+      int planeSum = BitCounts.popcountAnd(storedBits, queryBitPlanes[bit]);
+      result += planeSum << bit;
+    }
+    return result;
   }
 
   /**
@@ -235,7 +288,8 @@ public final class RaBitQuantizedVectors implements CompressedVectors {
    * codes: {@code sum_d(queryBytes[d] * bit[d])} where bit[d] is 0 or 1.
    *
    * <p>Iterates over stored longs, extracting each set bit and accumulating the corresponding query
-   * byte value. This is the hot inner loop of RaBitQ scoring.
+   * byte value. Retained for the Extended RaBitQ scoring paths (which mix sign and magnitude codes)
+   * and as the scalar reference for {@link #asymmetricByteDot}.
    *
    * @param queryBytes the uint8-quantized query [0, 255], stored as byte[] (masked with {@code &
    *     0xFF} on read to treat as unsigned)

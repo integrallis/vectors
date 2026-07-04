@@ -397,10 +397,6 @@ public final class RaBitQuantizer implements Quantizer<RaBitQuantizedVectors> {
 
   /** Returns the total number of 1-bits across all longs. */
   private static int totalBitCount(long[] bits) {
-    int count = 0;
-    for (long l : bits) {
-      count += Long.bitCount(l);
-    }
-    return count;
+    return BitCounts.popcount(bits);
   }
 }

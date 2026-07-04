@@ -127,16 +127,24 @@ final class KMeansPlusPlusClusterer {
       float[] data, int numPoints, int dim, int k, Random rng) {
     float[] centroids = new float[k * dim];
 
+    // Materialize each point as its own row once so the squared-L2 to a newly chosen centroid can
+    // be computed for all points with a single fused GEMV (matVecSquaredL2) instead of numPoints
+    // scalar squareDistance calls. Chosen centroids are always data points, so their row is reused.
+    float[][] dataRows = new float[numPoints][dim];
+    for (int i = 0; i < numPoints; i++) {
+      System.arraycopy(data, i * dim, dataRows[i], 0, dim);
+    }
+
     // First centroid: random
     int first = rng.nextInt(numPoints);
     System.arraycopy(data, first * dim, centroids, 0, dim);
 
-    // Minimum distance to nearest centroid for each point
+    // Minimum distance to nearest centroid for each point (batched squared-L2 to the first
+    // centroid)
     float[] minDist = new float[numPoints];
-    for (int i = 0; i < numPoints; i++) {
-      minDist[i] = squareDistance(data, i * dim, centroids, 0, dim);
-    }
+    VectorUtil.batchSquaredL2(dataRows[first], dataRows, minDist);
 
+    float[] distScratch = new float[numPoints];
     for (int c = 1; c < k; c++) {
       // Select next centroid with probability proportional to squared distance
       double totalDist = 0;
@@ -144,10 +152,10 @@ final class KMeansPlusPlusClusterer {
         totalDist += minDist[i];
       }
 
+      int chosen;
       if (totalDist == 0) {
         // All points are identical to existing centroids — pick randomly
-        int idx = rng.nextInt(numPoints);
-        System.arraycopy(data, idx * dim, centroids, c * dim, dim);
+        chosen = rng.nextInt(numPoints);
       } else {
         double threshold = rng.nextDouble() * totalDist;
         double cumulative = 0;
@@ -159,14 +167,15 @@ final class KMeansPlusPlusClusterer {
             break;
           }
         }
-        System.arraycopy(data, selected * dim, centroids, c * dim, dim);
+        chosen = selected;
       }
+      System.arraycopy(data, chosen * dim, centroids, c * dim, dim);
 
-      // Update minimum distances
+      // Update minimum distances (batched squared-L2 to the newly chosen centroid)
+      VectorUtil.batchSquaredL2(dataRows[chosen], dataRows, distScratch);
       for (int i = 0; i < numPoints; i++) {
-        float dist = squareDistance(data, i * dim, centroids, c * dim, dim);
-        if (dist < minDist[i]) {
-          minDist[i] = dist;
+        if (distScratch[i] < minDist[i]) {
+          minDist[i] = distScratch[i];
         }
       }
     }
@@ -180,15 +189,28 @@ final class KMeansPlusPlusClusterer {
    */
   private static int assignPoints(
       float[] data, int numPoints, int dim, float[] centroids, int k, int[] assignments) {
+    // Batched nearest-centroid: one fused GEMV (matVecSquaredL2) computes ||x - c||² for all k
+    // centroids per point, loading each query SIMD chunk once and applying it to 4 centroid rows —
+    // replacing the k separate scalar squareDistance calls. The direct squared-L2 kernel is used
+    // (rather than the ||x||²+||c||²−2·x·c dot expansion) to avoid catastrophic float cancellation
+    // on large-offset data; results are numerically identical to the original per-centroid loop.
+    float[][] centroidRows = new float[k][dim];
+    for (int c = 0; c < k; c++) {
+      System.arraycopy(centroids, c * dim, centroidRows[c], 0, dim);
+    }
+
+    float[] query = new float[dim];
+    float[] dists = new float[k];
     int changed = 0;
     for (int i = 0; i < numPoints; i++) {
-      int nearest = 0;
-      float nearestDist = squareDistance(data, i * dim, centroids, 0, dim);
+      System.arraycopy(data, i * dim, query, 0, dim);
+      VectorUtil.batchSquaredL2(query, centroidRows, dists);
 
+      int nearest = 0;
+      float best = dists[0];
       for (int c = 1; c < k; c++) {
-        float dist = squareDistance(data, i * dim, centroids, c * dim, dim);
-        if (dist < nearestDist) {
-          nearestDist = dist;
+        if (dists[c] < best) {
+          best = dists[c];
           nearest = c;
         }
       }
@@ -226,11 +248,6 @@ final class KMeansPlusPlusClusterer {
         }
       }
     }
-  }
-
-  /** Computes squared L2 distance between two sub-vectors in flat arrays. */
-  private static float squareDistance(float[] a, int aOff, float[] b, int bOff, int len) {
-    return VectorUtil.squareDistance(a, aOff, b, bOff, len);
   }
 
   // -------------------------------------------------------------------------

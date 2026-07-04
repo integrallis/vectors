@@ -264,11 +264,8 @@ public final class BinaryQuantizedVectors implements CompressedVectors {
   static int asymmetricDot(long[] storedBits, long[][] queryBitPlanes) {
     int result = 0;
     for (int bitPos = 0; bitPos < 4; bitPos++) {
-      long[] plane = queryBitPlanes[bitPos];
-      int planeSum = 0;
-      for (int j = 0; j < storedBits.length; j++) {
-        planeSum += Long.bitCount(storedBits[j] & plane[j]);
-      }
+      // SIMD popcount of (stored & plane) — same per-plane AND+BIT_COUNT primitive as Hamming.
+      int planeSum = BitCounts.popcountAnd(storedBits, queryBitPlanes[bitPos]);
       result += planeSum << bitPos;
     }
     return result;
@@ -276,11 +273,7 @@ public final class BinaryQuantizedVectors implements CompressedVectors {
 
   /** Returns the total number of 1-bits across all longs. */
   static int totalBitCount(long[] bits) {
-    int count = 0;
-    for (long l : bits) {
-      count += Long.bitCount(l);
-    }
-    return count;
+    return BitCounts.popcount(bits);
   }
 
   /**

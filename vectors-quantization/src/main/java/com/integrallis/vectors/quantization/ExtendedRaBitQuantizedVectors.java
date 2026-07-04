@@ -503,11 +503,7 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
    * @return the total number of set bits
    */
   static int totalBitCount(long[] bits) {
-    int count = 0;
-    for (long l : bits) {
-      count += Long.bitCount(l);
-    }
-    return count;
+    return BitCounts.popcount(bits);
   }
 
   @Override

@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.quantization;
 
+import com.integrallis.vectors.core.VectorUtil;
 import java.util.Random;
 
 /**
@@ -273,9 +274,8 @@ public final class OptimizedProductQuantizer implements Quantizer<PQVectors> {
     int d = x.length;
     float[] y = new float[d];
     for (int i = 0; i < d; i++) {
-      float s = 0f;
-      for (int j = 0; j < d; j++) s += R[i][j] * x[j];
-      y[i] = s;
+      // Row i of R dotted with x — SIMD dot product instead of a scalar inner loop.
+      y[i] = VectorUtil.dotProduct(R[i], x);
     }
     return y;
   }
@@ -283,11 +283,12 @@ public final class OptimizedProductQuantizer implements Quantizer<PQVectors> {
   /** y = Rᵀ · x: y[i] = sum_j R[j][i] * x[j] (inverse rotation). */
   private static float[] applyTransposeRotation(float[] x, float[][] R) {
     int d = x.length;
+    // Transpose once so each output component becomes a contiguous-row SIMD dot product:
+    // y[i] = sum_j Rᵀ[i][j] * x[j] = sum_j R[j][i] * x[j]. Only used on the (cold) decode path.
+    float[][] rt = transpose(R);
     float[] y = new float[d];
     for (int i = 0; i < d; i++) {
-      float s = 0f;
-      for (int j = 0; j < d; j++) s += R[j][i] * x[j]; // Rᵀ[i][j] = R[j][i]
-      y[i] = s;
+      y[i] = VectorUtil.dotProduct(rt[i], x);
     }
     return y;
   }
