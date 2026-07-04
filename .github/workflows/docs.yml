@@ -23,23 +23,23 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: 25
           distribution: 'zulu'
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
 
       - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/caches
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
@@ -47,7 +47,7 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Cache Gradle wrapper
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle-wrapper.properties') }}
@@ -69,13 +69,13 @@ jobs:
         run: touch docs/build/site/.nojekyll
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v6
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: 'docs/build/site'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
