@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  vectors — object-storage-backed vector database (single node). Provisions an S3 bucket as the
+  durable floor, a least-privilege IAM instance role (no static keys), and an EC2 instance with
+  local NVMe as the hot cache, running the vectors server + Studio in Docker. Data lives in YOUR
+  account and YOUR S3 bucket. This is the "Phase 0" one-click artifact — deploy via a Launch Stack
+  quick-create URL or as an AWS Marketplace AMI + CloudFormation product. Front with an ALB + ACM
+  certificate for production HTTPS (see deploy/aws/README.md).
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: i4i.large
+    AllowedValues: [i4i.large, i4i.xlarge, i3en.large, i3en.xlarge]
+    Description: Storage-optimized instance with local NVMe for the hot cache tier (x86).
+  ServerImage:
+    Type: String
+    Description: Published vectors-server container image (e.g. ghcr.io/integrallis/vectors-server:0.1.0).
+  StudioImage:
+    Type: String
+    Default: ""
+    Description: Optional Studio UI image (e.g. ghcr.io/integrallis/vectors-studio-web:0.1.0); blank to skip.
+  BearerToken:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    Description: Bearer token required on every API/Studio request (min 16 chars).
+  KeyName:
+    Type: String
+    Default: ""
+    Description: Optional EC2 key pair for SSH. Leave blank to use SSM Session Manager only.
+  AllowedCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR allowed to reach the API (8287) and Studio (8288). Restrict this in production.
+  KeyPrefix:
+    Type: String
+    Default: ""
+    Description: Optional S3 key prefix shared by all collections.
+
+Conditions:
+  HasStudio: !Not [!Equals [!Ref StudioImage, ""]]
+  HasKey: !Not [!Equals [!Ref KeyName, ""]]
+
+Mappings:
+  # Amazon Linux 2023 AMI is resolved at deploy time via a public SSM parameter (no hardcoded IDs,
+  # per AWS Marketplace policy). See the AmiId parameter default below.
+  Placeholder: { x: { y: "unused" } }
+
+Resources:
+  # --- Durable floor: the customer's own S3 bucket -------------------------------------------------
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration: { Status: Enabled }
+
+  # --- Least-privilege access via an instance role (no static keys) -------------------------------
+  ServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: vectors-s3-bucket
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListOwnBucket
+                Effect: Allow
+                Action: [s3:ListBucket, s3:GetBucketLocation]
+                Resource: !GetAtt DataBucket.Arn
+              - Sid: ReadWriteObjects
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
+                Resource: !Sub "${DataBucket.Arn}/*"
+
+  ServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref ServerRole]
+
+  # --- Networking (uses the account's default VPC) ------------------------------------------------
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: vectors server + Studio access
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 8287, ToPort: 8287, CidrIp: !Ref AllowedCidr, Description: API }
+        - { IpProtocol: tcp, FromPort: 8288, ToPort: 8288, CidrIp: !Ref AllowedCidr, Description: Studio }
+
+  # --- Compute: EC2 with local NVMe as the hot cache ----------------------------------------------
+  ServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      IamInstanceProfile: !Ref ServerInstanceProfile
+      SecurityGroupIds: [!GetAtt InstanceSecurityGroup.GroupId]
+      KeyName: !If [HasKey, !Ref KeyName, !Ref "AWS::NoValue"]
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs: { VolumeSize: 30, VolumeType: gp3, DeleteOnTermination: true }
+      Tags: [{ Key: Name, Value: !Sub "${AWS::StackName}-vectors" }]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+
+          # 1. Format + mount the local NVMe fresh (it is cryptographically erased on every launch).
+          #    Losing it is never data loss — the durable copy lives in S3, so this is a cold cache.
+          DEV=$(lsblk -dpno NAME,MODEL | awk '/Instance Storage|NVMe Instance/ {print $1; exit}')
+          if [ -z "$DEV" ]; then DEV=$(ls /dev/nvme1n1 2>/dev/null || true); fi
+          mkfs.xfs -f "$DEV"
+          mkdir -p /mnt/cache
+          mount "$DEV" /mnt/cache
+          mkdir -p /mnt/cache/data
+
+          # 2. Docker.
+          dnf install -y docker
+          systemctl enable --now docker
+
+          # 3. Server — durable floor on this account's S3 bucket, via the instance role (no keys).
+          docker run -d --restart unless-stopped --name vectors-server \
+            -p 8287:8287 -v /mnt/cache/data:/data \
+            -e VECTORS_S3_BUCKET=${DataBucket} \
+            -e VECTORS_S3_REGION=${AWS::Region} \
+            -e VECTORS_S3_PREFIX=${KeyPrefix} \
+            -e VECTORS_API_KEY=${BearerToken} \
+            ${ServerImage} --port=8287 --data-dir=/data
+
+          # 4. Studio (optional).
+          if [ -n "${StudioImage}" ]; then
+            docker run -d --restart unless-stopped --name vectors-studio \
+              -p 8288:8288 -e JAVA_OPTS="-Duser.home=/tmp" \
+              ${StudioImage} --port=8288 --connection=http://$(hostname -I | awk '{print $1}'):8287 --token=${BearerToken}
+          fi
+
+Outputs:
+  ApiUrl:
+    Description: Vector database HTTP API (send the bearer token on every request).
+    Value: !Sub "http://${ServerInstance.PublicDnsName}:8287"
+  StudioUrl:
+    Condition: HasStudio
+    Description: Studio web UI.
+    Value: !Sub "http://${ServerInstance.PublicDnsName}:8288"
+  BucketName:
+    Description: The S3 bucket holding the durable data (in your account).
+    Value: !Ref DataBucket
