@@ -15,6 +15,9 @@
  */
 package com.integrallis.vectors.server.client;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.core.StreamWriteFeature;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,7 +47,12 @@ import javax.net.ssl.SSLSession;
 public final class VectorsServerClient implements AutoCloseable {
 
   private static final ObjectMapper MAPPER =
-      new ObjectMapper().registerModule(new JavaTimeModule());
+      new ObjectMapper(
+              JsonFactory.builder()
+                  .enable(StreamReadFeature.USE_FAST_DOUBLE_PARSER)
+                  .enable(StreamWriteFeature.USE_FAST_DOUBLE_WRITER)
+                  .build())
+          .registerModule(new JavaTimeModule());
   private static final String CONTENT_TYPE = "application/json";
   private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(5);
   private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(30);

@@ -62,7 +62,7 @@ final class RouteSupport {
 
   static void sendJson(ServerResponse res, Status status, Object body) {
     try {
-      String json = MAPPER.writeValueAsString(body);
+      byte[] json = MAPPER.writeValueAsBytes(body);
       res.headers().set(HeaderNames.CONTENT_TYPE, JSON);
       res.status(status).send(json);
     } catch (Exception e) {

@@ -16,6 +16,9 @@
  */
 package com.integrallis.vectors.server;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.core.StreamWriteFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -47,7 +50,12 @@ public final class ObjectMapperHolder {
    * @return a new mapper
    */
   public static ObjectMapper buildDefault() {
-    ObjectMapper m = new ObjectMapper();
+    JsonFactory factory =
+        JsonFactory.builder()
+            .enable(StreamReadFeature.USE_FAST_DOUBLE_PARSER)
+            .enable(StreamWriteFeature.USE_FAST_DOUBLE_WRITER)
+            .build();
+    ObjectMapper m = new ObjectMapper(factory);
     m.registerModule(new JavaTimeModule());
     m.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     m.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
