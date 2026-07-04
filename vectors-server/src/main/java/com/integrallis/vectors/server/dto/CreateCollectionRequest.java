@@ -23,6 +23,7 @@ import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.QuantizerKind;
 import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.db.VectorCollectionBuilder;
+import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.nio.file.Path;
 import java.util.regex.Pattern;
 
@@ -201,7 +202,8 @@ public record CreateCollectionRequest(
    *
    * @param storageRoot optional absolute storage root; if {@code null} the collection is in-memory
    */
-  public VectorCollection toCollection(Path storageRoot) {
+  public VectorCollection toCollection(
+      Path storageRoot, StorageBackend objectStore, String keyPrefix) {
     VectorCollectionBuilder builder =
         VectorCollection.builder()
             .dimension(dimension)
@@ -258,6 +260,14 @@ public record CreateCollectionRequest(
     if (storageRoot != null) {
       builder.storagePath(storageRoot);
     }
+    if (objectStore != null) {
+      builder.objectStore(objectStore, keyPrefix);
+    }
     return builder.build();
+  }
+
+  /** Local-only variant: persistence on {@code storageRoot} with no object-storage floor. */
+  public VectorCollection toCollection(Path storageRoot) {
+    return toCollection(storageRoot, null, null);
   }
 }

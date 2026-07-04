@@ -18,6 +18,7 @@ package com.integrallis.vectors.server.routing;
 
 import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.server.CollectionRegistry;
+import com.integrallis.vectors.server.ObjectStoreSupport;
 import com.integrallis.vectors.server.ServerConfig;
 import com.integrallis.vectors.server.dto.CollectionInfo;
 import com.integrallis.vectors.server.dto.CreateCollectionRequest;
@@ -55,6 +56,9 @@ public final class CollectionsRoutes implements HttpService {
   private final CollectionRegistry registry;
   private final ServerConfig config;
 
+  // Shared object-storage durable floor for all collections; null when persistence is local-only.
+  private final com.integrallis.vectors.storage.backend.StorageBackend objectStore;
+
   /**
    * @param registry shared registry of open collections
    * @param config server configuration (data directory for persistent collections)
@@ -62,6 +66,8 @@ public final class CollectionsRoutes implements HttpService {
   public CollectionsRoutes(CollectionRegistry registry, ServerConfig config) {
     this.registry = Objects.requireNonNull(registry, "registry");
     this.config = Objects.requireNonNull(config, "config");
+    this.objectStore =
+        config.isObjectStoreBacked() ? ObjectStoreSupport.open(config.objectStore()) : null;
   }
 
   @Override
@@ -97,7 +103,15 @@ public final class CollectionsRoutes implements HttpService {
     try {
       Path storageRoot = storageRootFor(body.name());
       VectorCollection created =
-          registry.create(body.name(), name -> body.toCollection(storageRoot));
+          registry.create(
+              body.name(),
+              name ->
+                  objectStore != null
+                      ? body.toCollection(
+                          storageRoot,
+                          objectStore,
+                          ObjectStoreSupport.keyPrefixFor(config.objectStore(), name))
+                      : body.toCollection(storageRoot));
       Instant ts =
           registry
               .createdAt(body.name())

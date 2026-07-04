@@ -73,6 +73,36 @@ public final class VectorsServer implements Callable<Integer> {
       description = "Bearer token for protected API routes; defaults to VECTORS_API_KEY")
   private String apiKey;
 
+  @Option(
+      names = "--s3-bucket",
+      description =
+          "Object-storage bucket; setting it backs collections with an S3-compatible durable"
+              + " floor (env VECTORS_S3_BUCKET)")
+  private String s3Bucket;
+
+  @Option(
+      names = "--s3-endpoint",
+      description = "S3-compatible endpoint for MinIO/R2/etc.; omit for AWS S3 (env VECTORS_S3_ENDPOINT)")
+  private String s3Endpoint;
+
+  @Option(names = "--s3-region", description = "Object-storage region (env VECTORS_S3_REGION)")
+  private String s3Region;
+
+  @Option(
+      names = "--s3-access-key",
+      description = "Object-storage access key (env VECTORS_S3_ACCESS_KEY)")
+  private String s3AccessKey;
+
+  @Option(
+      names = "--s3-secret-key",
+      description = "Object-storage secret key (env VECTORS_S3_SECRET_KEY)")
+  private String s3SecretKey;
+
+  @Option(
+      names = "--s3-prefix",
+      description = "Key prefix shared by all collections (env VECTORS_S3_PREFIX)")
+  private String s3Prefix;
+
   public static void main(String[] args) {
     int exit = new CommandLine(new VectorsServer()).execute(args);
     System.exit(exit);
@@ -81,7 +111,13 @@ public final class VectorsServer implements Callable<Integer> {
   @Override
   public Integer call() throws InterruptedException {
     ServerConfig config =
-        new ServerConfig(port, dataDir, maxConnections, shutdownTimeoutSeconds, configuredApiKey());
+        new ServerConfig(
+            port,
+            dataDir,
+            maxConnections,
+            shutdownTimeoutSeconds,
+            configuredApiKey(),
+            configuredObjectStore());
     ServerHandle handle = start(config);
     CountDownLatch shutdown = new CountDownLatch(1);
     Runtime.getRuntime()
@@ -99,6 +135,33 @@ public final class VectorsServer implements Callable<Integer> {
 
   private String configuredApiKey() {
     return apiKey != null ? apiKey : System.getenv("VECTORS_API_KEY");
+  }
+
+  /**
+   * @return the object-storage durable-floor config from flags/env, or {@code null} when no bucket
+   *     is configured (local-only persistence)
+   */
+  private ServerConfig.ObjectStore configuredObjectStore() {
+    String bucket = firstNonBlank(s3Bucket, System.getenv("VECTORS_S3_BUCKET"));
+    if (bucket == null) {
+      return null;
+    }
+    return new ServerConfig.ObjectStore(
+        firstNonBlank(s3Endpoint, System.getenv("VECTORS_S3_ENDPOINT")),
+        bucket,
+        firstNonBlank(s3Region, System.getenv("VECTORS_S3_REGION"), "us-east-1"),
+        firstNonBlank(s3AccessKey, System.getenv("VECTORS_S3_ACCESS_KEY")),
+        firstNonBlank(s3SecretKey, System.getenv("VECTORS_S3_SECRET_KEY")),
+        firstNonBlank(s3Prefix, System.getenv("VECTORS_S3_PREFIX")));
+  }
+
+  private static String firstNonBlank(String... values) {
+    for (String v : values) {
+      if (v != null && !v.isBlank()) {
+        return v;
+      }
+    }
+    return null;
   }
 
   /**
@@ -124,7 +187,7 @@ public final class VectorsServer implements Callable<Integer> {
     registry.setDataDir(config.dataDir());
     try {
       if (config.isPersistent()) {
-        int reopened = CollectionDiscovery.discoverAndOpen(registry, config.dataDir());
+        int reopened = CollectionDiscovery.discoverAndOpen(registry, config);
         if (reopened > 0) {
           LOG.info("reopened {} collection(s) from {}", reopened, config.dataDir());
         }

@@ -21,6 +21,7 @@ import com.integrallis.vectors.db.VectorCollectionBuilder;
 import com.integrallis.vectors.db.storage.FileFormat;
 import com.integrallis.vectors.db.storage.GenerationDirectory;
 import com.integrallis.vectors.db.storage.Manifest;
+import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,11 +59,15 @@ public final class CollectionDiscovery {
    *
    * @return the number of collections reopened
    */
-  public static int discoverAndOpen(CollectionRegistry registry, Path dataDir) {
+  public static int discoverAndOpen(CollectionRegistry registry, ServerConfig config) {
     Objects.requireNonNull(registry, "registry");
+    Objects.requireNonNull(config, "config");
+    Path dataDir = config.dataDir();
     if (dataDir == null || !Files.isDirectory(dataDir)) {
       return 0;
     }
+    StorageBackend objectStore =
+        config.isObjectStoreBacked() ? ObjectStoreSupport.open(config.objectStore()) : null;
     int reopened = 0;
     try (Stream<Path> subdirs = Files.list(dataDir)) {
       for (Path candidate : (Iterable<Path>) subdirs::iterator) {
@@ -78,7 +83,7 @@ public final class CollectionDiscovery {
           LOG.debug("skipping non-collection directory: {}", candidate);
           continue;
         }
-        if (reopenOne(registry, name, candidate)) {
+        if (reopenOne(registry, name, candidate, objectStore, config)) {
           reopened++;
         }
       }
@@ -88,7 +93,12 @@ public final class CollectionDiscovery {
     return reopened;
   }
 
-  private static boolean reopenOne(CollectionRegistry registry, String name, Path storageRoot) {
+  private static boolean reopenOne(
+      CollectionRegistry registry,
+      String name,
+      Path storageRoot,
+      StorageBackend objectStore,
+      ServerConfig config) {
     try {
       long gen = GenerationDirectory.readCurrent(storageRoot);
       if (gen < 0) {
@@ -103,9 +113,11 @@ public final class CollectionDiscovery {
       }
       Manifest manifest = Manifest.readFrom(manifestFile);
       Instant createdAt = readCreationInstant(storageRoot, manifest);
+      String keyPrefix =
+          objectStore == null ? null : ObjectStoreSupport.keyPrefixFor(config.objectStore(), name);
       registry.reopen(
           name,
-          n -> buildFromManifest(manifest, storageRoot),
+          n -> buildFromManifest(manifest, storageRoot, objectStore, keyPrefix),
           createdAt,
           manifest.generationNumber());
       LOG.info(
@@ -122,7 +134,8 @@ public final class CollectionDiscovery {
     }
   }
 
-  private static VectorCollection buildFromManifest(Manifest manifest, Path storageRoot) {
+  private static VectorCollection buildFromManifest(
+      Manifest manifest, Path storageRoot, StorageBackend objectStore, String keyPrefix) {
     VectorCollectionBuilder builder =
         VectorCollection.builder()
             .dimension(manifest.dimension())
@@ -130,6 +143,9 @@ public final class CollectionDiscovery {
             .indexType(manifest.indexType())
             .quantizer(manifest.quantizerKind())
             .storagePath(storageRoot);
+    if (objectStore != null) {
+      builder.objectStore(objectStore, keyPrefix);
+    }
     return builder.build();
   }
 
