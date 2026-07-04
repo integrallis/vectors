@@ -17,10 +17,9 @@ package com.integrallis.vectors.db.cache;
 
 import com.integrallis.vectors.core.filter.Filter;
 import com.integrallis.vectors.db.SearchResult;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -34,9 +33,17 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>a stable hash of the {@link Filter} predicate
  * </ul>
  *
- * <p><b>Eviction policy</b>: LRU with a configurable maximum entry count.
+ * <p><b>Eviction policy</b>: approximate LRU with a configurable maximum entry count, implemented
+ * with a CLOCK (second-chance) sweep over a {@link ConcurrentHashMap}. Each entry carries a
+ * reference bit that is set (lock-free) on every hit; eviction reclaims the first entry whose bit
+ * is clear, giving the second-chance bit one full sweep to survive. This keeps the read path (cache
+ * hits) completely lock-free — a hit is a {@code ConcurrentHashMap.get} plus a single volatile
+ * write of the reference bit — instead of contending on the exclusive lock that an access-order
+ * {@code LinkedHashMap} takes on <em>every</em> {@code get}.
  *
- * <p><b>Thread safety</b>: all operations are synchronized on the internal map instance.
+ * <p><b>Thread safety</b>: reads ({@link #get}) are lock-free. Structural mutations ({@link #put}
+ * insertions and eviction, {@link #invalidateAll}) are serialized on a private write lock; the hot
+ * read path never touches it.
  *
  * <p><b>Invalidation</b>: call {@link #invalidateAll()} after every committed write. This ensures
  * that the cache never serves stale results after the underlying index has changed.
@@ -48,13 +55,38 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class QvCache {
 
   private final int maxEntries;
-  private final Map<QvCacheKey, SearchResult> store;
+
+  /** Backing store; {@code null} in bypass mode ({@code maxEntries == 0}). Reads are lock-free. */
+  private final ConcurrentHashMap<QvCacheKey, Entry> store;
+
+  /**
+   * CLOCK ring of keys in insertion order. Holds exactly one entry per live key (a key is appended
+   * only when a fresh entry is inserted, removed when it is evicted, and re-appended once when it
+   * is granted a second chance). Only touched under {@link #writeLock}.
+   */
+  private final ConcurrentLinkedQueue<QvCacheKey> clock;
+
+  /** Serializes structural mutations (insertion, eviction, clear). The read path never locks. */
+  private final Object writeLock = new Object();
+
   private final AtomicLong hits = new AtomicLong();
   private final AtomicLong misses = new AtomicLong();
   private final AtomicLong evictions = new AtomicLong();
 
   /** Bypass instance used when caching is disabled ({@code maxEntries == 0}). */
   public static final QvCache DISABLED = new QvCache(0);
+
+  /** Cache entry: the value plus a reference bit for the CLOCK second-chance sweep. */
+  private static final class Entry {
+    volatile SearchResult value;
+
+    /** Set on every hit (lock-free); cleared by the eviction sweep to grant a second chance. */
+    volatile boolean referenced;
+
+    Entry(SearchResult value) {
+      this.value = value;
+    }
+  }
 
   /**
    * Creates a QvCache with the given LRU capacity.
@@ -64,19 +96,17 @@ public final class QvCache {
   public QvCache(int maxEntries) {
     this.maxEntries = maxEntries;
     if (maxEntries > 0) {
-      this.store =
-          Collections.synchronizedMap(
-              new LinkedHashMap<>(maxEntries + 1, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<QvCacheKey, SearchResult> eldest) {
-                  boolean remove = size() > maxEntries;
-                  if (remove) evictions.incrementAndGet();
-                  return remove;
-                }
-              });
+      this.store = new ConcurrentHashMap<>(maxEntries + 1, 0.75f);
+      this.clock = new ConcurrentLinkedQueue<>();
     } else {
       this.store = null;
+      this.clock = null;
     }
+  }
+
+  /** Returns {@code true} when caching is enabled ({@code maxEntries > 0}). */
+  public boolean isEnabled() {
+    return maxEntries > 0;
   }
 
   // ---------------------------------------------------------------------------
@@ -93,11 +123,24 @@ public final class QvCache {
    */
   public Optional<SearchResult> get(float[] query, int k, Filter filter) {
     if (maxEntries == 0) return Optional.empty();
-    QvCacheKey key = buildKey(query, k, filter);
-    SearchResult cached = store.get(key);
-    if (cached != null) {
+    return get(buildKey(query, k, filter));
+  }
+
+  /**
+   * Looks up a cached result by a pre-built key. Lock-free: a {@link ConcurrentHashMap#get} plus,
+   * on a hit, a single volatile write of the entry's reference bit.
+   *
+   * @param key the cache key (see {@link #buildKey})
+   * @return the cached result, or {@link Optional#empty()} on a miss
+   */
+  public Optional<SearchResult> get(QvCacheKey key) {
+    if (maxEntries == 0) return Optional.empty();
+    Entry e = store.get(key);
+    if (e != null) {
+      // Second-chance bit — only write when unset to avoid needless cache-line churn.
+      if (!e.referenced) e.referenced = true;
       hits.incrementAndGet();
-      return Optional.of(cached);
+      return Optional.of(e.value);
     }
     misses.incrementAndGet();
     return Optional.empty();
@@ -113,14 +156,75 @@ public final class QvCache {
    */
   public void put(float[] query, int k, Filter filter, SearchResult result) {
     if (maxEntries == 0) return;
-    QvCacheKey key = buildKey(query, k, filter);
-    store.put(key, result);
+    put(buildKey(query, k, filter), result);
+  }
+
+  /**
+   * Stores a result under a pre-built key. Structural mutation (insertion + CLOCK eviction) runs
+   * under the write lock; updating the value of an already-present key is a lock-free volatile
+   * write.
+   *
+   * @param key the cache key (see {@link #buildKey})
+   * @param result the result to cache; must be immutable (records satisfy this)
+   */
+  public void put(QvCacheKey key, SearchResult result) {
+    if (maxEntries == 0) return;
+    Entry existing = store.get(key);
+    if (existing != null) {
+      existing.value = result;
+      existing.referenced = true;
+      return;
+    }
+    synchronized (writeLock) {
+      Entry e = store.get(key);
+      if (e != null) {
+        e.value = result;
+        e.referenced = true;
+        return;
+      }
+      store.put(key, new Entry(result));
+      clock.add(key);
+      while (store.size() > maxEntries && evictOne()) {
+        // keep evicting until the size bound is restored
+      }
+    }
+  }
+
+  /**
+   * CLOCK second-chance eviction of a single entry. Must be called under {@link #writeLock}.
+   *
+   * <p>Sweeps the ring: an entry with its reference bit set is spared (bit cleared, re-queued); the
+   * first entry with a clear bit is removed. Bounded by {@code 2 * size + 1} steps — after at most
+   * one full sweep every bit is clear, so the next candidate is evictable.
+   *
+   * @return {@code true} if an entry was evicted
+   */
+  private boolean evictOne() {
+    int budget = 2 * store.size() + 1;
+    for (int i = 0; i < budget; i++) {
+      QvCacheKey candidate = clock.poll();
+      if (candidate == null) return false; // ring empty
+      Entry e = store.get(candidate);
+      if (e == null) continue; // stale ring slot (already removed) — drop it
+      if (e.referenced) {
+        e.referenced = false;
+        clock.add(candidate); // second chance
+      } else {
+        store.remove(candidate, e);
+        evictions.incrementAndGet();
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Evicts all entries. Call after every {@code commit()} to prevent stale results. */
   public void invalidateAll() {
     if (maxEntries == 0) return;
-    store.clear();
+    synchronized (writeLock) {
+      store.clear();
+      clock.clear();
+    }
   }
 
   /** Returns a snapshot of cache statistics. */
@@ -133,7 +237,17 @@ public final class QvCache {
   // Key construction + query quantization
   // ---------------------------------------------------------------------------
 
-  private QvCacheKey buildKey(float[] query, int k, Filter filter) {
+  /**
+   * Builds the cache key for a query. Exposed so callers can quantize + hash once and pass the
+   * resulting key to both {@link #get(QvCacheKey)} and {@link #put(QvCacheKey, SearchResult)},
+   * avoiding a redundant second quantize + filter-hash per search.
+   *
+   * @param query full-precision query vector
+   * @param k number of results requested
+   * @param filter filter predicate (may be {@code null})
+   * @return the cache key
+   */
+  public QvCacheKey buildKey(float[] query, int k, Filter filter) {
     byte[] quantized = quantize(query);
     long filterHash = FilterHasher.hash(filter);
     return new QvCacheKey(quantized, k, filterHash);

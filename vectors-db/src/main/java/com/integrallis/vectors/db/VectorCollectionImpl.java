@@ -18,6 +18,7 @@ package com.integrallis.vectors.db;
 import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.filter.Filter;
 import com.integrallis.vectors.db.cache.QvCache;
+import com.integrallis.vectors.db.cache.QvCacheKey;
 import com.integrallis.vectors.db.filter.FilterExecutor;
 import com.integrallis.vectors.db.id.IdMapper;
 import com.integrallis.vectors.db.id.InMemoryIdMapper;
@@ -132,6 +133,15 @@ final class VectorCollectionImpl implements VectorCollection {
     final BitSet tombstones;
     final long generationNumber;
 
+    /**
+     * Cached {@code physicalCount - tombstones.cardinality()}. A {@link Generation} is an immutable
+     * snapshot once published (its {@code tombstones} bitset is never mutated after construction),
+     * so the live count is invariant; computing {@link BitSet#cardinality()} once here avoids an
+     * O(words) scan on every {@link #liveCount()} call (hot on the search path — filter expansion
+     * and diagnostics both call it).
+     */
+    final int liveCount;
+
     /** Shared arena owning all mmap'd files for this generation; {@code null} in in-memory mode. */
     final Arena arena;
 
@@ -158,6 +168,7 @@ final class VectorCollectionImpl implements VectorCollection {
       this.metadataStore = metadataStore;
       this.physicalCount = physicalCount;
       this.tombstones = tombstones;
+      this.liveCount = physicalCount - tombstones.cardinality();
       this.generationNumber = generationNumber;
       this.arena = arena;
       this.directory = directory;
@@ -165,7 +176,7 @@ final class VectorCollectionImpl implements VectorCollection {
     }
 
     int liveCount() {
-      return physicalCount - tombstones.cardinality();
+      return liveCount;
     }
 
     boolean acquire() {
@@ -1747,9 +1758,13 @@ final class VectorCollectionImpl implements VectorCollection {
 
     // QvCache: only cache results that do not embed vectors (ids + scores + text + metadata are
     // stable across snapshots; vectors require mmap reads that callers may store separately).
-    boolean cacheEligible = !request.includeVector();
+    // Build the key once (quantize + filter-hash) and reuse it for both the get and the put below,
+    // instead of recomputing it on each side.
+    boolean cacheEligible = !request.includeVector() && queryCache.isEnabled();
+    QvCacheKey cacheKey = null;
     if (cacheEligible) {
-      var cached = queryCache.get(request.query(), request.k(), filter);
+      cacheKey = queryCache.buildKey(request.query(), request.k(), filter);
+      var cached = queryCache.get(cacheKey);
       if (cached.isPresent()) return cached.get();
     }
 
@@ -1878,7 +1893,7 @@ final class VectorCollectionImpl implements VectorCollection {
       long elapsed = System.nanoTime() - start;
       SearchResult result = new SearchResult(hits, elapsed);
       if (cacheEligible) {
-        queryCache.put(request.query(), request.k(), filter, result);
+        queryCache.put(cacheKey, result);
       }
       return result;
     } finally {
