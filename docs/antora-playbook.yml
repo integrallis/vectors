@@ -16,7 +16,17 @@ ui:
   bundle:
     url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/HEAD/raw/build/ui-bundle.zip?job=bundle-stable
     snapshot: true
-  supplemental_files: ./supplemental-ui
+  supplemental_files:
+    - path: partials/header-content.hbs
+      contents: ./supplemental-ui/partials/header-content.hbs
+    - path: partials/head-meta.hbs
+      contents: ./supplemental-ui/partials/head-meta.hbs
+    - path: img/java-vectors-logo.png
+      contents: ./supplemental-ui/img/java-vectors-logo.png
+    - path: img/favicon.ico
+      contents: ./supplemental-ui/img/favicon.ico
+    - path: img/favicon-32x32.png
+      contents: ./supplemental-ui/img/favicon-32x32.png
 
 asciidoc:
   attributes:
