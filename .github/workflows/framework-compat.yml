@@ -1,0 +1,77 @@
+name: Framework Compatibility
+
+# Proves the Spring AI and LangChain4j adapters compile and pass their tests against every
+# supported framework line. The adapters bind only to the stable VectorStore / EmbeddingStore
+# SPIs (dependencies are compileOnly), so one artifact serves the whole range; this matrix
+# guards against a framework release quietly breaking that.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vectors-spring-ai/**'
+      - 'vectors-langchain4j/**'
+      - 'vectors-db/**'
+      - 'vectors-core/**'
+      - '.github/workflows/framework-compat.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vectors-spring-ai/**'
+      - 'vectors-langchain4j/**'
+      - 'vectors-db/**'
+      - 'vectors-core/**'
+      - '.github/workflows/framework-compat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spring-ai:
+    name: Spring AI ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - version: "1.0.0"      # oldest supported GA line
+            micrometer: "1.14.4"
+          - version: "1.1.8"      # current 1.1.x
+            micrometer: "1.14.4"
+          - version: "2.0.0"      # new major (Spring Framework 7 / Jackson 3)
+            micrometer: "1.15.4"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v6
+      # --write-locks lets the version override resolve past the committed lock (ephemeral in CI).
+      - name: Test adapter against Spring AI ${{ matrix.version }}
+        run: >
+          ./gradlew :vectors-spring-ai:test
+          -PspringAiVersion=${{ matrix.version }}
+          -PmicrometerObservationVersion=${{ matrix.micrometer }}
+          --write-locks --console=plain
+
+  langchain4j:
+    name: LangChain4j ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["1.0.0", "1.13.1", "1.17.1"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Test adapter against LangChain4j ${{ matrix.version }}
+        run: >
+          ./gradlew :vectors-langchain4j:test
+          -Plangchain4jVersion=${{ matrix.version }}
+          --write-locks --console=plain

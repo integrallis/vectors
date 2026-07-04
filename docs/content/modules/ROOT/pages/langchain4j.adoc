@@ -5,6 +5,8 @@ Vectors provides a LangChain4j `EmbeddingStore` adapter for using java-vectors a
 
 NOTE: Vectors requires JDK 25 with the Vector API enabled: run with `--add-modules jdk.incubator.vector`.
 
+The adapter's LangChain4j dependency is `compileOnly` and it binds only to the stable `EmbeddingStore` SPI, so one artifact works across the entire LangChain4j **1.x** line (1.0.0 through 1.17.x) — you bring your own version. CI compiles and runs the adapter's tests against each end of that range on every change. LangChain4j 0.x used a different `EmbeddingStore` interface and is not supported.
+
 == Dependency Setup
 
 [tabs]

@@ -5,6 +5,8 @@ Vectors provides a Spring AI `VectorStore` adapter and a Spring Boot starter. `J
 
 NOTE: Vectors requires JDK 25 with the Vector API enabled: run with `--add-modules jdk.incubator.vector`.
 
+The adapter's Spring AI dependency is `compileOnly` and it binds only to the stable `VectorStore` SPI, so one artifact works across Spring AI **1.0.x, 1.1.x, and 2.0.x** — you bring your own Spring AI version. CI compiles and runs the adapter's tests against each line on every change.
+
 == Dependency Setup
 
 === Direct Adapter
