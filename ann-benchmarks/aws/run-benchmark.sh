@@ -143,18 +143,25 @@ stage_adapter() {
 
 run_harness() {
   cd "$WORKDIR/ann-benchmarks"
-  python3 -m pip install --user -r requirements.txt
+  # Ubuntu 24.04 (noble) ships a PEP-668 externally-managed Python, so a system-wide
+  # `pip install` is refused. Use a dedicated venv for the host-side harness (the algorithms
+  # themselves still run in their own Docker containers).
+  local venv="$WORKDIR/annb-venv"
+  [ -d "$venv" ] || python3 -m venv "$venv"
+  local py="$venv/bin/python"
+  "$py" -m pip install --upgrade pip >/dev/null
+  "$py" -m pip install -r requirements.txt
   for algo in $ALGORITHMS; do
     log "install.py --algorithm $algo"
-    python3 install.py --algorithm "$algo"
+    "$py" install.py --algorithm "$algo"
   done
   local algo_args=()
   for algo in $ALGORITHMS; do algo_args+=(--algorithm "$algo"); done
   for dataset in $DATASETS; do
     log "run.py --dataset $dataset ${algo_args[*]} --runs $RUN_COUNT"
-    python3 run.py --dataset "$dataset" "${algo_args[@]}" --runs "$RUN_COUNT"
+    "$py" run.py --dataset "$dataset" "${algo_args[@]}" --runs "$RUN_COUNT"
     log "plot.py --dataset $dataset"
-    python3 plot.py --dataset "$dataset" -o "results-${dataset}.png" || true
+    "$py" plot.py --dataset "$dataset" -o "results-${dataset}.png" || true
   done
 }
 
