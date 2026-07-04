@@ -157,8 +157,70 @@ Apache-2.0 on their change date. The embedded library and its adapters are Apach
 
 == Running it locally
 
-The object-storage engine and the S3/R2/MinIO backend are implemented and tested today. A
-one-command local stack — MinIO plus the `vectors` server, brought up with `docker compose` — and
-Homebrew / SDKMAN distributions are being packaged so you can go from nothing to a running
-object-storage vector database in a single step. This page will carry the quickstart when that
-packaging lands.
+One command brings up a complete object-storage vector database on your machine — MinIO for the
+object store, the `vectors` server, and the Studio web UI:
+
+[source,bash]
+----
+docker compose -f deploy/object-storage/docker-compose.yml up --build
+----
+
+It starts three services:
+
+* *Server* — http://localhost:8287 — the JSON REST API; collections are backed by MinIO.
+* *Studio* — http://localhost:8288 — a web UI to browse collections, inspect vectors, and search.
+* *MinIO* — API http://localhost:9000, console http://localhost:9001 (`minioadmin` / `minioadmin`)
+  — the S3-compatible object store that holds the durable data.
+
+Create a collection, add documents (vectors, text, and metadata), commit, and search:
+
+[source,bash]
+----
+curl -X POST http://localhost:8287/v1/collections \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"demo","dimension":4,"metric":"COSINE","indexType":"HNSW"}'
+
+curl -X POST http://localhost:8287/v1/collections/demo/documents \
+  -H 'Content-Type: application/json' \
+  -d '{"documents":[
+        {"id":"a","vector":[1,0,0,0],"text":"alpha","metadata":{"tag":"x"}},
+        {"id":"b","vector":[0,1,0,0],"text":"beta","metadata":{"tag":"y"}}]}'
+curl -X POST http://localhost:8287/v1/collections/demo/commit
+
+# Nearest-neighbour search, with an optional metadata filter
+curl -X POST http://localhost:8287/v1/collections/demo/search \
+  -H 'Content-Type: application/json' \
+  -d '{"queryVector":[1,0,0,0],"k":10,"filter":{"field":"tag","eq":"x"}}'
+----
+
+The committed data lands in the MinIO bucket under `vectors/demo/gen-.../` (browse it in the
+console), and the collection is reopened from object storage when the server restarts. Point the
+same stack at *Cloudflare R2* or *AWS S3* by changing the `VECTORS_S3_*` values in the compose file
+— drop `VECTORS_S3_ENDPOINT` entirely for AWS S3, which uses the default credential chain.
+
+=== Embedding it in a JVM application
+
+The same durable floor is available to the embedded library — no server required. Build a
+`StorageBackend` for your object store and hand it to the collection builder; everything else (the
+`VectorCollection` API, metadata, filters, text) is unchanged:
+
+[source,java]
+----
+StorageBackend objectStore = S3StorageBackend.create(
+    URI.create("http://localhost:9000"), "vectors", "us-east-1", "minioadmin", "minioadmin");
+
+try (VectorCollection collection = VectorCollection.builder()
+    .dimension(4)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.HNSW)
+    .storagePath(Path.of("/var/lib/myapp/cache/demo")) // local cache
+    .objectStore(objectStore, "demo/")                 // durable floor
+    .build()) {
+
+  collection.add(Document.of("a", new float[] {1, 0, 0, 0}, "alpha"));
+  collection.commit();                                  // ships the generation to object storage
+}
+----
+
+On `build()` the collection hydrates its local cache from the object store, so a fresh process (or
+a scaled-out replica) picks up the committed data automatically.

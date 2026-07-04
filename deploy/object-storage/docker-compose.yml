@@ -1,0 +1,92 @@
+# One-command local object-storage vector database: MinIO + vectors-server.
+#
+#   docker compose -f deploy/object-storage/docker-compose.yml up --build
+#
+# The server serves the full VectorCollection API on http://localhost:8287 with its durable floor
+# on MinIO (S3-compatible). MinIO console: http://localhost:9001 (minioadmin / minioadmin).
+# Point the same config at Cloudflare R2 or AWS S3 by changing the VECTORS_S3_* values.
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: vectors-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # web console
+    volumes:
+      - minio-data:/data
+
+  # Creates the bucket once MinIO is reachable, then exits.
+  createbucket:
+    image: minio/mc:latest
+    container_name: vectors-createbucket
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do
+        echo 'waiting for minio...'; sleep 1;
+      done &&
+      mc mb --ignore-existing local/vectors &&
+      echo 'bucket ready'"
+
+  vectors-server:
+    image: vectors-server:local
+    container_name: vectors-server
+    build:
+      context: ../..
+      dockerfile: vectors-server/Dockerfile
+    depends_on:
+      createbucket:
+        condition: service_completed_successfully
+    ports:
+      - "8287:8287"
+    environment:
+      # Durable floor on MinIO; /data (below) is the local cache in front of it.
+      VECTORS_S3_ENDPOINT: http://minio:9000
+      VECTORS_S3_BUCKET: vectors
+      VECTORS_S3_REGION: us-east-1
+      VECTORS_S3_ACCESS_KEY: minioadmin
+      VECTORS_S3_SECRET_KEY: minioadmin
+      JAVA_OPTS: "-Xmx512m"
+    volumes:
+      - vectors-cache:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8287/v1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # Studio: a web UI over the server. Open http://localhost:8288 to browse collections,
+  # inspect vectors, and run searches against the object-storage-backed database.
+  vectors-studio:
+    image: vectors-studio-web:local
+    container_name: vectors-studio
+    build:
+      context: ../..
+      dockerfile: vectors-studio-web/Dockerfile
+    depends_on:
+      vectors-server:
+        condition: service_healthy
+    ports:
+      - "8288:8288"
+    environment:
+      # Redirect user.home to a writable path; the optimizer's StudyStore roots at ~/.vectors.
+      JAVA_OPTS: "-Xmx256m -Duser.home=/tmp"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8288/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  minio-data:
+  vectors-cache:
