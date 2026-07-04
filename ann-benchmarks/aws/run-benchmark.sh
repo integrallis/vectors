@@ -153,13 +153,17 @@ run_harness() {
   "$py" -m pip install -r requirements.txt
   for algo in $ALGORITHMS; do
     log "install.py --algorithm $algo"
-    "$py" install.py --algorithm "$algo"
+    # Image build; tolerate a name/image already present so the sweep still proceeds.
+    "$py" install.py --algorithm "$algo" || log "WARN: install $algo failed (image may already exist)"
   done
-  local algo_args=()
-  for algo in $ALGORITHMS; do algo_args+=(--algorithm "$algo"); done
+  # run.py's --algorithm is single-valued (only the last flag wins), so loop per algorithm.
+  # A single algorithm failing must not abort the whole head-to-head, so keep going on error.
   for dataset in $DATASETS; do
-    log "run.py --dataset $dataset ${algo_args[*]} --runs $RUN_COUNT"
-    "$py" run.py --dataset "$dataset" "${algo_args[@]}" --runs "$RUN_COUNT"
+    for algo in $ALGORITHMS; do
+      log "run.py --dataset $dataset --algorithm $algo --runs $RUN_COUNT"
+      "$py" run.py --dataset "$dataset" --algorithm "$algo" --runs "$RUN_COUNT" ||
+        log "WARN: run $algo on $dataset failed"
+    done
     log "plot.py --dataset $dataset"
     "$py" plot.py --dataset "$dataset" -o "results-${dataset}.png" || true
   done
