@@ -12,7 +12,7 @@ float:
   - name: vectors_jpype
     constructor: VectorsJpype
     module: ann_benchmarks.algorithms.vectors_jpype
-    docker_tag: ann-benchmarks-vectors-jpype
+    docker_tag: ann-benchmarks-vectors_jpype
     disabled: false
     base_args: ['@metric']
     run_groups:
