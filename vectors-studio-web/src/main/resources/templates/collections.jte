@@ -5,6 +5,45 @@
     title = "Collections",
     body = @`
       <h1>Collections</h1>
+      <section class="sample-datasets">
+        <h2>Sample datasets</h2>
+        <div class="dataset-gallery">
+          <div class="dataset-card">
+            <h3>dbpedia</h3>
+            <p class="muted">OpenAI embeddings (Wikipedia)</p>
+            <button class="btn" id="load-dbpedia" onclick="loadSampleDataset(this)">Load sample</button>
+            <span class="dataset-status muted" id="load-dbpedia-status"></span>
+          </div>
+        </div>
+      </section>
+      <script>
+        function loadSampleDataset(btn) {
+          var status = document.getElementById('load-dbpedia-status');
+          btn.disabled = true;
+          status.textContent = 'loading…';
+          fetch('/api/datasets/load', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              dataset: 'KShivendu/dbpedia-entities-openai-1M',
+              name: 'dbpedia-sample',
+              vectorColumn: 'openai',
+              textColumn: 'text',
+              idColumn: '_id',
+              limit: 2000
+            })
+          }).then(function (r) {
+            if (!r.ok) { return r.text().then(function (t) { throw new Error(t || ('HTTP ' + r.status)); }); }
+            return r.json();
+          }).then(function (data) {
+            status.textContent = 'loaded ' + data.size + ' docs';
+            window.location.href = '/collections/' + data.name + '/projector';
+          }).catch(function (err) {
+            status.textContent = 'error: ' + err.message;
+            btn.disabled = false;
+          });
+        }
+      </script>
       @if(collections.isEmpty())
         <p class="muted">No collections yet.</p>
       @else

@@ -65,6 +65,7 @@ public final class StudioRouting {
         .register(new ProjectorRoutes(session, jobs, renderer))
         .register(new OptimizeRoutes(session, optimizeJobs, renderer))
         .register(new ApiRoutes(session, jobs))
+        .register(new DatasetRoutes(session))
         .register(new HealthRoutes());
   }
 }

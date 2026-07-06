@@ -149,6 +149,19 @@ public final class EmbeddedStudioBackend implements StudioBackend {
   }
 
   @Override
+  public void addCollection(String name, VectorCollection collection) {
+    Objects.requireNonNull(collection, "collection");
+    if (!NAME_PATTERN.matcher(name).matches()) {
+      throw new IllegalArgumentException("invalid collection name: " + name);
+    }
+    if (open.containsKey(name)) {
+      throw new IllegalArgumentException("collection already exists: " + name);
+    }
+    open.put(name, collection);
+    createdAt.put(name, Instant.now());
+  }
+
+  @Override
   public List<CollectionSummary> listCollections() {
     List<CollectionSummary> out = new ArrayList<>(open.size());
     for (Map.Entry<String, VectorCollection> e : open.entrySet()) {

@@ -115,6 +115,20 @@ public interface StudioBackend extends AutoCloseable {
             + "); use an embedded backend to reconfigure a live collection.");
   }
 
+  /**
+   * Registers an already-built {@link com.integrallis.vectors.db.VectorCollection} under {@code
+   * name} so it becomes visible through this backend at runtime (e.g. after loading a sample
+   * dataset). The default implementation throws {@link UnsupportedOperationException}: only
+   * backends that own an in-process collection registry (the embedded backend) support this.
+   *
+   * @throws IllegalArgumentException if a collection with that name already exists
+   * @throws UnsupportedOperationException if this backend cannot create collections at runtime
+   */
+  default void addCollection(String name, com.integrallis.vectors.db.VectorCollection collection) {
+    throw new UnsupportedOperationException(
+        "this backend does not support runtime collection creation");
+  }
+
   @Override
   void close();
 }
