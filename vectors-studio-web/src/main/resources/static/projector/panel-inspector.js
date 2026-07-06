@@ -26,6 +26,10 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
   const showAllBtn = root.querySelector("#ins-show-all");
   const hitsEl = root.querySelector("#ins-hits");
   const statusEl = root.querySelector("#ins-status");
+  const mmrEl = root.querySelector("#ins-mmr");
+  const mmrLambdaEl = root.querySelector("#ins-mmr-lambda");
+  const mmrLambdaField = root.querySelector("#ins-mmr-lambda-field");
+  const mmrLambdaOut = root.querySelector("#ins-mmr-lambda-out");
 
   // SVG overlay used by the lasso tool. Lives alongside the WebGL canvas.
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -102,12 +106,18 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
     } catch (e) { statusEl.textContent = `network error`; return null; }
   }
 
+  // When MMR is enabled, pass the lambda so the backend over-fetches and diversity-re-ranks the
+  // neighbours — visible in the scene as the highlighted hits spreading out instead of clustering.
+  function mmrPayload() {
+    return mmrEl && mmrEl.checked ? { mmr: parseFloat(mmrLambdaEl.value) } : {};
+  }
+
   async function searchById(id, k) {
-    return postSearch({ id, k }, dataPanel.indexOfId?.(id));
+    return postSearch({ id, k, ...mmrPayload() }, dataPanel.indexOfId?.(id));
   }
 
   async function searchByQuery(query, k) {
-    return postSearch({ query, k }, null);
+    return postSearch({ query, k, ...mmrPayload() }, null);
   }
 
   function applyLabels(primaryIndex) {
@@ -218,6 +228,21 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
     svg.addEventListener("pointermove", onMove);
     svg.addEventListener("pointerup", onUp);
     svg.addEventListener("pointerleave", onUp);
+    // MMR toggle + lambda slider: reveal the slider and re-run the current query live so the
+    // diversity effect is immediately visible in the projection.
+    const rerun = () => { if (queryEl.value.trim()) doSearch(); };
+    if (mmrEl) {
+      mmrEl.addEventListener("change", () => {
+        if (mmrLambdaField) mmrLambdaField.hidden = !mmrEl.checked;
+        rerun();
+      });
+    }
+    if (mmrLambdaEl) {
+      mmrLambdaEl.addEventListener("input", () => {
+        if (mmrLambdaOut) mmrLambdaOut.textContent = parseFloat(mmrLambdaEl.value).toFixed(2);
+        if (mmrEl && mmrEl.checked) rerun();
+      });
+    }
   }
 
   return { mount, selectByIndex };

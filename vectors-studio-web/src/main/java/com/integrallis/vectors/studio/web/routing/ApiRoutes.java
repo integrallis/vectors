@@ -17,10 +17,13 @@ package com.integrallis.vectors.studio.web.routing;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.hybrid.MaximalMarginalRelevance;
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.core.projection.ProjectionAlgorithm;
 import com.integrallis.vectors.studio.core.projection.ProjectionParams;
 import com.integrallis.vectors.studio.core.projection.ProjectionRequest;
+import com.integrallis.vectors.studio.core.search.SearchHit;
 import com.integrallis.vectors.studio.web.dto.ProjectionRequestDto;
 import com.integrallis.vectors.studio.web.projection.ProjectionEvent;
 import com.integrallis.vectors.studio.web.projection.ProjectionJob;
@@ -217,9 +220,11 @@ public final class ApiRoutes implements HttpService {
       String id = (String) body.get("id");
       String query = (String) body.get("query");
       int k = asInt(body.get("k"), 10);
+      double mmr = asDouble(body.get("mmr"), -1.0); // >= 0 enables MMR diversity re-ranking
+      Float mmrLambda = mmr >= 0 ? (float) Math.min(1.0, mmr) : null;
       List<Map<String, Object>> out;
       if (id != null && !id.isEmpty()) {
-        out = searchByVector(name, id, k);
+        out = searchByVector(name, id, k, mmrLambda);
       } else if (query != null && !query.isEmpty()) {
         // Text search needs an embedding model to vectorise the query; the embedded Studio backend
         // has none, so reject rather than fabricate a meaningless query vector.
@@ -239,22 +244,61 @@ public final class ApiRoutes implements HttpService {
     }
   }
 
-  private List<Map<String, Object>> searchByVector(String name, String id, int k) {
+  private static final int MMR_FETCH_MULTIPLIER = 4;
+
+  private List<Map<String, Object>> searchByVector(String name, String id, int k, Float mmrLambda) {
     var doc = session.backend().getDocument(name, id);
     if (doc == null || doc.vector() == null) {
       throw new IllegalArgumentException("unknown id: " + id);
     }
+    int want = Math.max(1, k);
+    boolean useMmr = mmrLambda != null;
+    // MMR needs the candidate vectors and a bigger pool to diversify from.
+    int fetch = useMmr ? want * MMR_FETCH_MULTIPLIER + 1 : want + 1;
     var spec =
         new com.integrallis.vectors.studio.core.search.SearchSpec(
-            doc.vector(), null, Math.max(1, k) + 1, null, false, false, false);
+            doc.vector(), null, fetch, null, useMmr, false, false);
     var hits = session.backend().search(name, spec);
-    List<Map<String, Object>> out = new ArrayList<>(hits.size());
+
+    // Exclude the query point itself.
+    List<SearchHit> pool = new ArrayList<>(hits.size());
     for (var h : hits) {
-      if (h.id().equals(id)) continue; // skip the query point itself
+      if (!h.id().equals(id)) {
+        pool.add(h);
+      }
+    }
+
+    List<SearchHit> ranked;
+    if (useMmr && !pool.isEmpty()) {
+      SimilarityFunction metric = parseMetric(session.backend().describe(name).metric());
+      float[][] candidates = new float[pool.size()][];
+      for (int i = 0; i < pool.size(); i++) {
+        candidates[i] = pool.get(i).vector();
+      }
+      int[] selected =
+          MaximalMarginalRelevance.select(
+              doc.vector(), candidates, Math.min(want, pool.size()), mmrLambda, metric);
+      ranked = new ArrayList<>(selected.length);
+      for (int idx : selected) {
+        ranked.add(pool.get(idx));
+      }
+    } else {
+      ranked = pool.subList(0, Math.min(want, pool.size()));
+    }
+
+    List<Map<String, Object>> out = new ArrayList<>(ranked.size());
+    for (var h : ranked) {
       out.add(Map.of("id", h.id(), "score", h.score()));
-      if (out.size() >= k) break;
     }
     return out;
+  }
+
+  private static SimilarityFunction parseMetric(String name) {
+    try {
+      return SimilarityFunction.valueOf(name);
+    } catch (IllegalArgumentException | NullPointerException e) {
+      return SimilarityFunction.COSINE; // embeddings default; MMR ordering is robust to this
+    }
   }
 
   /**

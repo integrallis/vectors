@@ -204,4 +204,27 @@ class StudioServerSmokeIT {
     assertThat(res.statusCode()).isEqualTo(400);
     assertThat(res.body()).contains("embedding model");
   }
+
+  @Test
+  void mmrSearchDiversifiesNeighbours() throws Exception {
+    // doc-0 (v[0]=1) has identical duplicates at every index where N % DIM == 0. Plain kNN returns
+    // only those redundant duplicates; MMR must promote diverse (orthogonal) docs.
+    HttpResponse<String> plain =
+        postJson("/api/collections/docs/search", "{\"id\":\"doc-0\",\"k\":5}");
+    HttpResponse<String> mmr =
+        postJson("/api/collections/docs/search", "{\"id\":\"doc-0\",\"k\":5,\"mmr\":0.1}");
+    assertThat(plain.statusCode()).isEqualTo(200);
+    assertThat(mmr.statusCode()).isEqualTo(200);
+    // Plain: every hit is a duplicate of doc-0 (index % DIM == 0).
+    assertThat(hitIndices(plain.body())).isNotEmpty().allMatch(i -> i % DIM == 0);
+    // MMR: at least one diverse (non-duplicate) hit is promoted.
+    assertThat(hitIndices(mmr.body())).anyMatch(i -> i % DIM != 0);
+  }
+
+  private static java.util.List<Integer> hitIndices(String body) {
+    var m = java.util.regex.Pattern.compile("\"id\"\\s*:\\s*\"doc-(\\d+)\"").matcher(body);
+    var out = new java.util.ArrayList<Integer>();
+    while (m.find()) out.add(Integer.parseInt(m.group(1)));
+    return out;
+  }
 }
