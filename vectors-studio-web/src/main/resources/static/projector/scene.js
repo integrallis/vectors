@@ -372,7 +372,7 @@ export function createScene(host, { onHover, onClick } = {}) {
     }
     queryMarker.position.set(pos[0], pos[1], pos[2]);
     const r = geometry.boundingSphere?.radius || 1;
-    queryMarker.scale.setScalar(r * 0.12);
+    queryMarker.scale.setScalar(r * 0.06);
     queryMarker.visible = true;
   }
 
