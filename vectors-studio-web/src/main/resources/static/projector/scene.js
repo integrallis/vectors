@@ -40,10 +40,10 @@ function makeBullseyeTexture() {
   const cx = 64, cy = 64;
   g.strokeStyle = "#f5820b";
   g.fillStyle = "#f5820b";
-  g.lineWidth = 7;
-  g.beginPath(); g.arc(cx, cy, 54, 0, Math.PI * 2); g.stroke();
-  g.beginPath(); g.arc(cx, cy, 32, 0, Math.PI * 2); g.stroke();
-  g.beginPath(); g.arc(cx, cy, 11, 0, Math.PI * 2); g.fill();
+  g.lineWidth = 3;
+  g.beginPath(); g.arc(cx, cy, 46, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.arc(cx, cy, 26, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.arc(cx, cy, 7, 0, Math.PI * 2); g.fill();
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.minFilter = THREE.LinearFilter;
@@ -297,9 +297,13 @@ export function createScene(host, { onHover, onClick } = {}) {
       }
       geometry.setAttribute("color", new THREE.BufferAttribute(out, 3));
       material.vertexColors = true;
+      // With vertexColors, THREE multiplies vertex color × material.color — so the
+      // base must be white or the orange hits (and column palette) get tinted green.
+      material.color.setHex(0xffffff);
     } else {
       geometry.deleteAttribute("color");
       material.vertexColors = false;
+      material.color.setHex(POINT_COLOR);
     }
     if (isolated && selection.size > 0) {
       const idx = new Uint32Array(selection.size);
@@ -368,7 +372,7 @@ export function createScene(host, { onHover, onClick } = {}) {
     }
     queryMarker.position.set(pos[0], pos[1], pos[2]);
     const r = geometry.boundingSphere?.radius || 1;
-    queryMarker.scale.setScalar(r * 0.28);
+    queryMarker.scale.setScalar(r * 0.12);
     queryMarker.visible = true;
   }
 
