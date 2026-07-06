@@ -16,7 +16,7 @@ function pointInPolygon(x, y, poly) {
   return inside;
 }
 
-export function createInspectorPanel({ root, collection, scene, dataPanel, canvasHost, onReset }) {
+export function createInspectorPanel({ root, collection, scene, dataPanel, canvasHost, onReset, revealPoint }) {
   const queryEl = root.querySelector("#ins-query");
   const kEl = root.querySelector("#ins-k");
   const searchBtn = root.querySelector("#ins-search");
@@ -63,6 +63,7 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       right.textContent = h.score != null ? h.score.toFixed(3) : "";
       li.appendChild(left); li.appendChild(right);
       li.addEventListener("click", (e) => onHitClick(e, h));
+      li.addEventListener("dblclick", (e) => onHitDblClick(e, h));
       hitsEl.appendChild(li);
     }
   }
@@ -70,15 +71,26 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
   function onHitClick(e, h) {
     if (h.index == null) return;
     if (e.shiftKey) {
+      // Shift-click still accumulates a multi-selection.
       if (selection.has(h.index)) selection.delete(h.index); else selection.add(h.index);
       scene.setSelection(selection);
-    } else {
-      // Single-click in the hit list re-pivots: pick this hit as the new query.
-      selectByIndex(h.index);
+      refreshButtons();
+      renderHits();
       return;
     }
+    // Plain single-click reveals ONLY this row (no re-pivot): focus that one
+    // point in the scene and pop its hover-card at its on-screen position.
+    selection = new Set([h.index]);
+    scene.setSelection(selection);
+    revealPoint?.(h.index);
     refreshButtons();
     renderHits();
+  }
+
+  function onHitDblClick(e, h) {
+    if (h.index == null) return;
+    // Double-click a row re-pivots: make this hit the new query.
+    selectByIndex(h.index);
   }
 
   // Posts the given JSON payload to the search API and applies the result to
@@ -98,6 +110,10 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       selection = new Set(queryIndex != null ? [queryIndex] : []);
       for (const h of lastHits) if (h.index != null) selection.add(h.index);
       scene.setSelection(selection);
+      // Paint the neighbour hits orange and drop a bullseye where the query
+      // vector approximately lands.
+      scene.setHits?.(new Set(lastHits.map((h) => h.index).filter((i) => i != null)));
+      updateQueryMarker();
       applyLabels(queryIndex);
       refreshButtons();
       renderHits();
@@ -122,17 +138,34 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
 
   function applyLabels(primaryIndex) {
     if (!scene.setLabels) return;
+    // Only the pivot/query point keeps a persistent label. The K neighbour hits
+    // no longer show always-on text — their text appears on hover / single
+    // row-select via the hover-card instead.
     const items = [];
     if (primaryIndex != null) {
       const txt = dataPanel.labelAt(primaryIndex) ?? dataPanel.idAt(primaryIndex);
       if (txt != null) items.push({ index: primaryIndex, text: String(txt), primary: true });
     }
-    for (const h of lastHits) {
-      if (h.index == null || h.index === primaryIndex) continue;
-      const txt = dataPanel.labelAt(h.index) ?? h.id;
-      if (txt != null) items.push({ index: h.index, text: String(txt) });
-    }
     scene.setLabels(items);
+  }
+
+  // The query vector isn't itself a projected point, so approximate where it
+  // lands as the score-weighted centroid of the hit points' world positions.
+  function updateQueryMarker() {
+    if (!scene.setQueryMarker || !scene.positionOf) return;
+    let wx = 0, wy = 0, wz = 0, sum = 0;
+    let ux = 0, uy = 0, uz = 0, n = 0;
+    for (const h of lastHits) {
+      if (h.index == null) continue;
+      const p = scene.positionOf(h.index);
+      if (!p) continue;
+      ux += p[0]; uy += p[1]; uz += p[2]; n += 1;
+      const w = h.score != null && h.score > 0 ? h.score : 0;
+      wx += p[0] * w; wy += p[1] * w; wz += p[2] * w; sum += w;
+    }
+    if (n === 0) { scene.setQueryMarker(null); return; }
+    if (sum > 0) scene.setQueryMarker([wx / sum, wy / sum, wz / sum]);
+    else scene.setQueryMarker([ux / n, uy / n, uz / n]); // fall back to plain centroid
   }
 
   async function doSearch() {
@@ -152,6 +185,9 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       lastHits = [];
       scene.setSelection(selection);
       scene.setLabels?.([]);
+      scene.setHits?.(new Set());
+      scene.setQueryMarker?.(null);
+      revealPoint?.(-1);
       refreshButtons();
       renderHits();
       statusEl.textContent = "";
@@ -216,6 +252,9 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       selection = new Set(); lastHits = [];
       scene.setSelection(selection); scene.setIsolated(false);
       scene.setLabels?.([]);
+      scene.setHits?.(new Set());
+      scene.setQueryMarker?.(null);
+      revealPoint?.(-1);
       queryEl.value = "";
       if (kEl.defaultValue !== "") kEl.value = kEl.defaultValue;
       if (lassoOn) setLasso(false);

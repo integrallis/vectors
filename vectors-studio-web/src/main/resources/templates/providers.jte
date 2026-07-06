@@ -28,9 +28,9 @@
               <td class="muted">${String.join(", ", p.models())}</td>
               <td>
                 @if(p.keyPresent())
-                  <span class="pill pill-sample" title="key present or none required">✓ ready</span>
+                  <span class="pill pill-sample" title="key present or none required">ready</span>
                 @else
-                  <span class="form-error" title="set the environment variable to enable this provider">✗ missing key</span>
+                  <span class="pill pill-error" title="set the environment variable to enable this provider">missing</span>
                 @endif
                 @if(p.apiKeyEnv() != null)
                   <div class="muted">env: <code>${p.apiKeyEnv()}</code></div>

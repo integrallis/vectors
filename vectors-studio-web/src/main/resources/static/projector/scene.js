@@ -7,6 +7,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const BG = 0xfcfcfd;
 const POINT_COLOR = 0x126e22;
+const HIT_COLOR = 0xf5820b; // search-result hits render in this orange
 const POINT_SIZE_2D = 4;   // screen pixels
 const POINT_SIZE_3D = 5;   // screen pixels
 
@@ -21,6 +22,28 @@ function makePointSprite() {
   g.arc(16, 16, 14, 0, Math.PI * 2);
   g.closePath();
   g.fill();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  return tex;
+}
+
+// Bullseye / target texture for the query marker: two concentric orange rings
+// around a solid center dot, on a transparent canvas. Drawn onto a THREE.Sprite
+// so it always faces the camera.
+function makeBullseyeTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, 128, 128);
+  const cx = 64, cy = 64;
+  g.strokeStyle = "#f5820b";
+  g.fillStyle = "#f5820b";
+  g.lineWidth = 7;
+  g.beginPath(); g.arc(cx, cy, 54, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.arc(cx, cy, 32, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.arc(cx, cy, 11, 0, Math.PI * 2); g.fill();
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.minFilter = THREE.LinearFilter;
@@ -190,6 +213,8 @@ export function createScene(host, { onHover, onClick } = {}) {
   let positions = new Float32Array(0);
   let baseColors = null;            // pristine column-derived colors
   let selection = new Set();        // indices currently selected
+  let hits = new Set();             // search-result hits, rendered orange
+  let queryMarker = null;           // THREE.Sprite bullseye, or null when hidden
   let isolated = false;             // when true, only selected points render
   let is2D = false;                 // tracks current projection dimensionality
   let autoRotateOn = true;          // user-facing toggle, gated by is2D + selection
@@ -236,19 +261,39 @@ export function createScene(host, { onHover, onClick } = {}) {
 
   function applyDisplay() {
     if (!pointCount) return;
-    if (baseColors) {
+    const hasHits = hits.size > 0;
+    // We need per-vertex colors whenever a column drives the palette OR there
+    // are search hits to paint orange (orange takes precedence over base/dim).
+    if (baseColors || hasHits) {
       const out = new Float32Array(pointCount * 3);
       const hasSel = selection.size > 0;
       const bg = ((BG >> 16) & 0xff) / 255;
       const bgg = ((BG >> 8) & 0xff) / 255;
       const bgb = (BG & 0xff) / 255;
+      // Fallback base green, used when no column palette is set.
+      const gr = ((POINT_COLOR >> 16) & 0xff) / 255;
+      const gg = ((POINT_COLOR >> 8) & 0xff) / 255;
+      const gb = (POINT_COLOR & 0xff) / 255;
+      // Orange for search hits.
+      const hr = ((HIT_COLOR >> 16) & 0xff) / 255;
+      const hg = ((HIT_COLOR >> 8) & 0xff) / 255;
+      const hb = (HIT_COLOR & 0xff) / 255;
       for (let i = 0; i < pointCount; i++) {
+        if (hasHits && hits.has(i)) {
+          out[i * 3 + 0] = hr;
+          out[i * 3 + 1] = hg;
+          out[i * 3 + 2] = hb;
+          continue;
+        }
+        const br = baseColors ? baseColors[i * 3 + 0] : gr;
+        const bgn = baseColors ? baseColors[i * 3 + 1] : gg;
+        const bbn = baseColors ? baseColors[i * 3 + 2] : gb;
         const sel = selection.has(i);
         const dim = hasSel && !sel;
         const f = dim ? DIM_FACTOR : 1.0;
-        out[i * 3 + 0] = baseColors[i * 3 + 0] * f + bg * (1 - f);
-        out[i * 3 + 1] = baseColors[i * 3 + 1] * f + bgg * (1 - f);
-        out[i * 3 + 2] = baseColors[i * 3 + 2] * f + bgb * (1 - f);
+        out[i * 3 + 0] = br * f + bg * (1 - f);
+        out[i * 3 + 1] = bgn * f + bgg * (1 - f);
+        out[i * 3 + 2] = bbn * f + bgb * (1 - f);
       }
       geometry.setAttribute("color", new THREE.BufferAttribute(out, 3));
       material.vertexColors = true;
@@ -275,6 +320,57 @@ export function createScene(host, { onHover, onClick } = {}) {
   }
 
   function setIsolated(v) { isolated = !!v; applyDisplay(); }
+
+  // Search-result hits: colored orange (distinct from green base/selection).
+  // Pass an empty set to clear.
+  function setHits(indices) {
+    hits = new Set(indices);
+    applyDisplay();
+  }
+
+  // World position [x,y,z] of a point index, read straight from the internal
+  // positions buffer. Returns null for out-of-range indices.
+  function positionOf(index) {
+    if (index == null || index < 0 || index >= pointCount) return null;
+    return [positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2]];
+  }
+
+  // On-screen client coordinates {x,y} of a point index (via camera.project),
+  // suitable for anchoring DOM overlays. Returns null for out-of-range indices.
+  function screenPositionOf(index) {
+    if (index == null || index < 0 || index >= pointCount) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    _v.set(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2]);
+    _v.project(camera);
+    return {
+      x: rect.left + (_v.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (-_v.y * 0.5 + 0.5) * rect.height,
+    };
+  }
+
+  // Draws a camera-facing bullseye at world pos [x,y,z] (rendered on top), or
+  // hides it when pos is null. Used to mark where the query embedding lands.
+  function setQueryMarker(pos) {
+    if (!pos) {
+      if (queryMarker) queryMarker.visible = false;
+      return;
+    }
+    if (!queryMarker) {
+      const mat = new THREE.SpriteMaterial({
+        map: makeBullseyeTexture(),
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      queryMarker = new THREE.Sprite(mat);
+      queryMarker.renderOrder = 999; // draw over the point cloud
+      scene.add(queryMarker);
+    }
+    queryMarker.position.set(pos[0], pos[1], pos[2]);
+    const r = geometry.boundingSphere?.radius || 1;
+    queryMarker.scale.setScalar(r * 0.28);
+    queryMarker.visible = true;
+  }
 
   // items: Array<{ index: number, text: string, primary?: boolean }>.
   // Pass [] (or omit) to clear all labels.
@@ -349,6 +445,10 @@ export function createScene(host, { onHover, onClick } = {}) {
     controls.dispose();
     geometry.dispose();
     material.dispose();
+    if (queryMarker) {
+      queryMarker.material.map?.dispose();
+      queryMarker.material.dispose();
+    }
     axes.geometry.dispose();
     axes.material.dispose();
     renderer.dispose();
@@ -360,6 +460,7 @@ export function createScene(host, { onHover, onClick } = {}) {
 
   return {
     setPositions, setColors, setSelection, setIsolated, setLabels,
+    setHits, setQueryMarker, positionOf, screenPositionOf,
     projectAll, setControlsEnabled, setAutoRotate,
     get pointCount() { return pointCount; },
     canvas: renderer.domElement,

@@ -173,6 +173,8 @@ h2 { font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.01em; margin:
 .pill-index  { color: var(--kind-image);  border-color: rgba(111, 79, 203, .25); background: rgba(111, 79, 203, .06); }
 /* "sample" tag on catalog-backed collections + the loaded state on the datasets tab. */
 .pill-sample { margin-left: var(--sp-2); color: var(--color-brand); border-color: rgba(18, 110, 34, .25); background: var(--color-brand-soft); }
+/* "missing key" provider status — same shape as .pill-sample, red. */
+.pill-error  { color: var(--color-danger); border-color: rgba(201, 37, 45, .25); background: var(--color-danger-soft); }
 
 /* Page header row: title on the left, primary action on the right. */
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
@@ -310,18 +312,27 @@ form.search-form > button[type="submit"] { flex: 0 0 auto; }
 }
 .projector-canvas { position: absolute; inset: 0; }
 .projector-canvas canvas { display: block; }
-.projector-tooltip {
+/* shadcn-style hover-card shown on point hover / single row-select. */
+.projector-hovercard {
   position: absolute; display: none; pointer-events: none;
   max-width: 280px;
-  padding: 4px 8px;
-  font: 500 var(--fs-xs)/1.3 var(--font-mono);
+  padding: 12px;
   color: var(--color-fg);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  z-index: 2;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  white-space: normal; overflow-wrap: anywhere;
+  z-index: 3;
+}
+.projector-hovercard-id {
+  font: 500 var(--fs-xs)/1.2 var(--font-mono);
+  color: var(--color-fg-muted);
+  margin-bottom: 4px;
+}
+.projector-hovercard-text {
+  font: 500 var(--fs-sm)/1.4 var(--font-sans);
+  color: var(--color-fg);
 }
 .projector-status {
   position: absolute; left: var(--sp-3); bottom: var(--sp-3);
