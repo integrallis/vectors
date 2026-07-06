@@ -59,6 +59,15 @@ public final class SmileUmapProjection implements Projection {
     try (SmileProgressHeartbeat ignored =
         SmileProgressHeartbeat.start(listener, params.iterations())) {
       projected = UMAP.fit(dd, opts);
+    } catch (LinkageError e) {
+      // Smile's UMAP uses ARPACK for spectral initialisation when the kNN graph is a single
+      // connected component — which L2-normalisation ("sphereize") tends to produce. Smile 6's
+      // ARPACK FFM binding fails to initialise on runtimes without a loadable native ARPACK
+      // (surfacing as a class-init LinkageError). Fail with actionable guidance, not a raw stack.
+      throw new IllegalStateException(
+          "UMAP spectral initialisation is unavailable in this runtime (native ARPACK could not"
+              + " load). Try UMAP without 'sphereize', or switch to t-SNE or PCA.",
+          e);
     }
     SmilePcaProjection.checkInterrupted();
     float[][] coords = SmilePcaProjection.toFloat(projected);
