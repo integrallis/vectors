@@ -1,8 +1,12 @@
 # ANN-Benchmarks config for the IN-PROCESS (jpype, library-bracket) `vectors` variant — staged as
 # a separate algorithm (ann_benchmarks/algorithms/vectors_jpype/) so it plots alongside, not on top
-# of, the HTTP "vectors" entry. Same current schema as config.yml (list of algo dicts, underscore
-# keys, `any:` for both metrics). The harness imports `<module>.module`, so the staged file must be
-# named module.py (run-benchmark.sh stages module_jpype.py -> vectors_jpype/module.py).
+# of, the HTTP "vectors" entry. module_jpype.py loads vectors-db into the SAME process via jpype and
+# calls VectorCollection directly — ZERO IPC — so vectors is measured in the in-process LIBRARY
+# bracket vs hnswlib / faiss (no HTTP round-trip). The harness imports `<module>.module`, so the
+# staged file must be named module.py (run-benchmark.sh stages module_jpype.py -> module.py).
+#
+# Grid TRIMMED to mirror config.yml (2 HNSW configs, two separate run_groups) so the in-process
+# numbers are directly comparable to the HTTP-bracket run.
 float:
   any:
   - name: vectors_jpype
@@ -12,9 +16,9 @@ float:
     disabled: false
     base_args: ['@metric']
     run_groups:
-      hnsw:
-        arg_groups: [{indexType: [HNSW], M: [16, 24, 32], efConstruction: [200, 500]}]
-        query_args: [[20, 40, 80, 120, 200, 400, 800]]
-      vamana:
-        arg_groups: [{indexType: [VAMANA], R: [32, 64], L: [128], alpha: [1.2]}]
-        query_args: [[40, 80, 120, 200, 400, 800]]
+      hnsw_fast:
+        arg_groups: [{indexType: [HNSW], M: [16], efConstruction: [200]}]
+        query_args: [[40, 80, 120, 200, 400]]
+      hnsw_hi:
+        arg_groups: [{indexType: [HNSW], M: [32], efConstruction: [500]}]
+        query_args: [[40, 80, 120, 200, 400]]
