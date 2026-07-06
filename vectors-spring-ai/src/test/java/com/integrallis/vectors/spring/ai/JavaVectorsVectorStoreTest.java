@@ -387,4 +387,72 @@ class JavaVectorsVectorStoreTest {
       store = null; // prevent double close in tearDown
     }
   }
+
+  @Nested
+  @Tag("unit")
+  class MmrDiversity {
+    private VectorCollection col;
+    private JavaVectorsVectorStore mmrStore;
+
+    // query ~[1,0,..]. "a" and "b" are near-duplicates and both highly relevant; "c" is diverse
+    // and moderately relevant. Without MMR the top-2 are the redundant pair {a,b}; with diversity
+    // weighting MMR swaps the redundant b for the diverse c.
+    private final Map<String, float[]> vecs =
+        Map.of(
+            "a", new float[] {1f, 0.05f, 0f, 0f},
+            "b", new float[] {1f, 0.06f, 0f, 0f},
+            "c", new float[] {0.6f, 0.8f, 0f, 0f},
+            "query", new float[] {1f, 0f, 0f, 0f});
+
+    private void setup(Float lambda) {
+      when(embeddingModel.embed(any(Document.class)))
+          .thenAnswer(inv -> vecs.get(((Document) inv.getArgument(0)).getText()));
+      when(embeddingModel.embed(any(String.class)))
+          .thenAnswer(inv -> vecs.get((String) inv.getArgument(0)));
+      col =
+          VectorCollection.builder()
+              .dimension(DIMENSION)
+              .metric(SimilarityFunction.COSINE)
+              .indexType(IndexType.FLAT)
+              .autoCommitThreshold(Integer.MAX_VALUE)
+              .build();
+      var b = JavaVectorsVectorStore.builder(embeddingModel, col).commitAfterAdd(true);
+      if (lambda != null) {
+        b.mmr(lambda, 4);
+      }
+      mmrStore = b.build();
+      mmrStore.add(
+          List.of(
+              new Document("a", "a", Map.of()),
+              new Document("b", "b", Map.of()),
+              new Document("c", "c", Map.of())));
+    }
+
+    @AfterEach
+    void cleanup() {
+      if (mmrStore != null) {
+        mmrStore.close();
+      }
+    }
+
+    @Test
+    void withoutMmr_top2AreTheRedundantPair() {
+      setup(null);
+      var ids =
+          mmrStore.similaritySearch(SearchRequest.builder().query("query").topK(2).build()).stream()
+              .map(Document::getId)
+              .toList();
+      assertThat(ids).containsExactly("a", "b"); // relevance order; the diverse c is excluded
+    }
+
+    @Test
+    void withMmr_diverseDocReplacesRedundantNeighbor() {
+      setup(0.3f);
+      var ids =
+          mmrStore.similaritySearch(SearchRequest.builder().query("query").topK(2).build()).stream()
+              .map(Document::getId)
+              .toList();
+      assertThat(ids).containsExactly("a", "c"); // a, then the diverse c; redundant b dropped
+    }
+  }
 }

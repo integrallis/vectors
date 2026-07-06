@@ -96,7 +96,7 @@ EmbeddingStore<TextSegment> store =
 | Indexes | FLAT, HNSW, Vamana, IVF_FLAT, IVF_PQ |
 | Quantization | SQ8, SQ4, FP16, PQ, BQ/BBQ, RaBitQ, NVQ, TurboQuant |
 | Persistence | mmap files, atomic generation commits, recovery walk-back, tombstones, compaction |
-| Querying | cosine, dot product, Euclidean, MIPS, metadata filters, batch search |
+| Querying | cosine, dot product, Euclidean, MIPS, metadata filters, batch search, hybrid (dense + full-text), MMR diversity re-ranking |
 | Integration | Spring AI, LangChain4j, Spring Boot auto-configuration, semantic-cache adapters |
 
 ## Runtime requirements
