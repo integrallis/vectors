@@ -19,12 +19,16 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.hybrid.MaximalMarginalRelevance;
+import com.integrallis.vectors.optimizer.embed.EmbeddingProvider;
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.core.projection.ProjectionAlgorithm;
 import com.integrallis.vectors.studio.core.projection.ProjectionParams;
 import com.integrallis.vectors.studio.core.projection.ProjectionRequest;
 import com.integrallis.vectors.studio.core.search.SearchHit;
+import com.integrallis.vectors.studio.web.dataset.DatasetCatalog;
+import com.integrallis.vectors.studio.web.dataset.DatasetCatalogEntry;
 import com.integrallis.vectors.studio.web.dto.ProjectionRequestDto;
+import com.integrallis.vectors.studio.web.embed.ProviderRegistry;
 import com.integrallis.vectors.studio.web.projection.ProjectionEvent;
 import com.integrallis.vectors.studio.web.projection.ProjectionJob;
 import com.integrallis.vectors.studio.web.projection.ProjectionJobManager;
@@ -42,6 +46,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 
@@ -52,10 +57,18 @@ public final class ApiRoutes implements HttpService {
 
   private final StudioSession session;
   private final ProjectionJobManager jobs;
+  private final DatasetCatalog catalog;
+  private final ProviderRegistry providerRegistry;
 
-  public ApiRoutes(StudioSession session, ProjectionJobManager jobs) {
+  public ApiRoutes(
+      StudioSession session,
+      ProjectionJobManager jobs,
+      DatasetCatalog catalog,
+      ProviderRegistry providerRegistry) {
     this.session = session;
     this.jobs = jobs;
+    this.catalog = catalog;
+    this.providerRegistry = providerRegistry;
   }
 
   @Override
@@ -226,11 +239,25 @@ public final class ApiRoutes implements HttpService {
       if (id != null && !id.isEmpty()) {
         out = searchByVector(name, id, k, mmrLambda);
       } else if (query != null && !query.isEmpty()) {
-        // Text search needs an embedding model to vectorise the query; the embedded Studio backend
-        // has none, so reject rather than fabricate a meaningless query vector.
-        res.status(Status.BAD_REQUEST_400)
-            .send("text search requires an embedding model, which this Studio backend lacks");
-        return;
+        // Free-text search: embed the query with the collection's configured model, then k-NN.
+        DatasetCatalogEntry entry = catalog.byId(name).orElse(null);
+        if (entry == null || entry.queryModel() == null) {
+          res.status(Status.CONFLICT_409).send("text search isn't configured for this collection");
+          return;
+        }
+        Optional<EmbeddingProvider> provider =
+            providerRegistry.providerFor(entry.queryModel(), entry.queryDimensions());
+        if (provider.isEmpty()) {
+          res.status(Status.CONFLICT_409)
+              .send(
+                  "no embedding provider configured for model "
+                      + entry.queryModel()
+                      + " — add one on /providers");
+          return;
+        }
+        String prefix = entry.queryPrefix() == null ? "" : entry.queryPrefix();
+        float[] vec = provider.get().embed(prefix + query);
+        out = searchByRawVector(name, vec, k, mmrLambda, null);
       } else {
         res.status(Status.BAD_REQUEST_400).send("missing id or query");
         return;
@@ -251,19 +278,29 @@ public final class ApiRoutes implements HttpService {
     if (doc == null || doc.vector() == null) {
       throw new IllegalArgumentException("unknown id: " + id);
     }
+    // Search from the document's own vector, excluding the query point itself from the results.
+    return searchByRawVector(name, doc.vector(), k, mmrLambda, id);
+  }
+
+  /**
+   * k-NN (optionally MMR-diversified) from a raw query vector. When {@code excludeId} is non-null
+   * the matching document is dropped from the candidate pool (search-by-id excludes itself;
+   * free-text search passes null so no hit is filtered).
+   */
+  private List<Map<String, Object>> searchByRawVector(
+      String name, float[] queryVec, int k, Float mmrLambda, String excludeId) {
     int want = Math.max(1, k);
     boolean useMmr = mmrLambda != null;
     // MMR needs the candidate vectors and a bigger pool to diversify from.
     int fetch = useMmr ? want * MMR_FETCH_MULTIPLIER + 1 : want + 1;
     var spec =
         new com.integrallis.vectors.studio.core.search.SearchSpec(
-            doc.vector(), null, fetch, null, useMmr, false, false);
+            queryVec, null, fetch, null, useMmr, false, false);
     var hits = session.backend().search(name, spec);
 
-    // Exclude the query point itself.
     List<SearchHit> pool = new ArrayList<>(hits.size());
     for (var h : hits) {
-      if (!h.id().equals(id)) {
+      if (excludeId == null || !h.id().equals(excludeId)) {
         pool.add(h);
       }
     }
@@ -277,7 +314,7 @@ public final class ApiRoutes implements HttpService {
       }
       int[] selected =
           MaximalMarginalRelevance.select(
-              doc.vector(), candidates, Math.min(want, pool.size()), mmrLambda, metric);
+              queryVec, candidates, Math.min(want, pool.size()), mmrLambda, metric);
       ranked = new ArrayList<>(selected.length);
       for (int idx : selected) {
         ranked.add(pool.get(idx));

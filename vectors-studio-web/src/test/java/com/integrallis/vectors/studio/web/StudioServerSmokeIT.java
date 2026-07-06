@@ -22,15 +22,20 @@ import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.VectorCollection;
+import com.integrallis.vectors.optimizer.embed.EmbeddingProvider;
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.core.connection.EmbeddedStudioBackend;
+import com.integrallis.vectors.studio.sidecart.SidecartRegistry;
+import com.integrallis.vectors.studio.web.embed.ProviderRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -80,8 +85,12 @@ class StudioServerSmokeIT {
   }
 
   private HttpResponse<String> postJson(String path, String json) throws Exception {
+    return postJson(handle.port(), path, json);
+  }
+
+  private HttpResponse<String> postJson(int port, String path, String json) throws Exception {
     return client.send(
-        HttpRequest.newBuilder(URI.create("http://localhost:" + handle.port() + path))
+        HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
             .timeout(Duration.ofSeconds(5))
             .header("content-type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(json))
@@ -228,12 +237,110 @@ class StudioServerSmokeIT {
   }
 
   @Test
-  void searchByQueryRejectedWithoutEmbedder() throws Exception {
-    // Text search needs an embedding model the embedded backend lacks → rejected, not fabricated.
+  void searchByQueryOnNonCatalogCollectionReturns409() throws Exception {
+    // "docs" is not a sample-catalog id, so it has no queryModel → text search isn't configured.
     HttpResponse<String> res =
         postJson("/api/collections/docs/search", "{\"query\":\"text 0\",\"k\":3}");
-    assertThat(res.statusCode()).isEqualTo(400);
-    assertThat(res.body()).contains("embedding model");
+    assertThat(res.statusCode()).isEqualTo(409);
+    assertThat(res.body()).contains("text search isn't configured");
+  }
+
+  @Test
+  void providersApiListsBundledProviders() throws Exception {
+    HttpResponse<String> res = get("/api/providers");
+    assertThat(res.statusCode()).isEqualTo(200);
+    assertThat(res.body()).contains("\"openai\"").contains("\"ollama\"");
+    assertThat(res.body()).contains("keyPresent");
+    // Never leak a key value — only the presence flag is exposed.
+    assertThat(res.body()).doesNotContain("apiKeyEnv");
+  }
+
+  @Test
+  void providersPageRenders() throws Exception {
+    HttpResponse<String> res = get("/providers");
+    assertThat(res.statusCode()).isEqualTo(200);
+    assertThat(res.body()).contains("Providers");
+    assertThat(res.body()).contains("OPENAI_API_KEY"); // env-var NAME only, never its value
+  }
+
+  @Test
+  void textSearchWithConfiguredProviderReturnsHits() throws Exception {
+    // A collection named after a catalog id (dbpedia-ada002 → queryModel text-embedding-ada-002)
+    // plus a fake constant-vector provider proves the full query→embed→vector→search path, offline.
+    StudioSession session = catalogNamedSession();
+    EmbeddingProvider constant = text -> constantVector();
+    ProviderRegistry fake = fakeProvider(Optional.of(constant));
+    StudioServerHandle h =
+        StudioServer.start(new StudioConfig(0, session, SidecartRegistry.empty(), fake));
+    try {
+      HttpResponse<String> res =
+          postJson(
+              h.port(), "/api/collections/dbpedia-ada002/search", "{\"query\":\"cat\",\"k\":3}");
+      assertThat(res.statusCode()).isEqualTo(200);
+      assertThat(res.body()).contains("\"hits\"").contains("doc-0");
+      // MMR must keep working on the text path.
+      HttpResponse<String> mmr =
+          postJson(
+              h.port(),
+              "/api/collections/dbpedia-ada002/search",
+              "{\"query\":\"cat\",\"k\":3,\"mmr\":0.5}");
+      assertThat(mmr.statusCode()).isEqualTo(200);
+      assertThat(mmr.body()).contains("\"hits\"");
+    } finally {
+      h.close();
+    }
+  }
+
+  @Test
+  void textSearchWithoutConfiguredProviderReturns409() throws Exception {
+    StudioSession session = catalogNamedSession();
+    ProviderRegistry none = fakeProvider(Optional.empty());
+    StudioServerHandle h =
+        StudioServer.start(new StudioConfig(0, session, SidecartRegistry.empty(), none));
+    try {
+      HttpResponse<String> res =
+          postJson(
+              h.port(), "/api/collections/dbpedia-ada002/search", "{\"query\":\"cat\",\"k\":3}");
+      assertThat(res.statusCode()).isEqualTo(409);
+      assertThat(res.body()).contains("no embedding provider configured for model");
+      assertThat(res.body()).contains("text-embedding-ada-002");
+    } finally {
+      h.close();
+    }
+  }
+
+  /** A session whose single collection is named after a sample-catalog id (has a queryModel). */
+  private static StudioSession catalogNamedSession() {
+    VectorCollection collection =
+        VectorCollection.builder()
+            .dimension(DIM)
+            .metric(SimilarityFunction.COSINE)
+            .indexType(IndexType.FLAT)
+            .build();
+    for (int i = 0; i < 8; i++) {
+      float[] v = new float[DIM];
+      v[i % DIM] = 1.0f;
+      collection.add(new Document("doc-" + i, v, "text " + i, Map.of()));
+    }
+    collection.commit();
+    return new StudioSession(
+        EmbeddedStudioBackend.withCollections(Map.of("dbpedia-ada002", collection)));
+  }
+
+  private static float[] constantVector() {
+    float[] v = new float[DIM];
+    v[0] = 1.0f;
+    return v;
+  }
+
+  /** Registry seam: returns {@code result} for any model, bypassing HTTP embedding entirely. */
+  private static ProviderRegistry fakeProvider(Optional<EmbeddingProvider> result) {
+    return new ProviderRegistry(List.of(), name -> null) {
+      @Override
+      public Optional<EmbeddingProvider> providerFor(String model, Integer dimensions) {
+        return result;
+      }
+    };
   }
 
   @Test

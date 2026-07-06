@@ -34,6 +34,12 @@ package com.integrallis.vectors.studio.web.dataset;
  * @param idColumn column holding the document id, or {@code null}
  * @param metric similarity function name (COSINE/EUCLIDEAN/DOT_PRODUCT/MAXIMUM_INNER_PRODUCT)
  * @param defaultLimit default number of rows to load
+ * @param queryModel embedding model to vectorise free-text queries against this collection, or
+ *     {@code null} when text search is not configured for the entry
+ * @param queryPrefix instruction/prefix prepended to the query text before embedding (e.g. for
+ *     Instructor-style models); never {@code null}, defaults to the empty string
+ * @param queryDimensions optional output dimensionality to request from the embedding provider (for
+ *     Matryoshka models such as text-embedding-3-large), or {@code null} to use the model default
  */
 public record DatasetCatalogEntry(
     String id,
@@ -49,4 +55,7 @@ public record DatasetCatalogEntry(
     String textColumn,
     String idColumn,
     String metric,
-    int defaultLimit) {}
+    int defaultLimit,
+    String queryModel,
+    String queryPrefix,
+    Integer queryDimensions) {}

@@ -5,6 +5,12 @@
 (function () {
   "use strict";
 
+  // model id -> true when some provider serving it has its key present. Populated from
+  // /api/providers at init and consulted by the Load confirmation modal.
+  var configuredModels = {};
+  // dataset id -> catalog entry (carries model + queryModel for the modal copy).
+  var catalogById = {};
+
   function el(tag, attrs, text) {
     var node = document.createElement(tag);
     if (attrs) {
@@ -34,7 +40,7 @@
     status.replaceChildren(el("span", { class: "muted" }, "not loaded"));
     var btn = el("button", { class: "btn btn-primary", type: "button" }, "Load");
     btn.addEventListener("click", function () {
-      startLoad(row, btn);
+      openLoadModal(row, btn);
     });
     actions.replaceChildren(btn);
   }
@@ -54,6 +60,49 @@
     if (btn) {
       btn.disabled = false;
     }
+  }
+
+  // Informational confirmation before a load: reminds the user which model the vectors use and
+  // whether a provider is configured to serve the query model needed for text search.
+  function openLoadModal(row, btn) {
+    var modal = document.getElementById("ds-modal");
+    if (!modal) {
+      startLoad(row, btn);
+      return;
+    }
+    var d = catalogById[row.dataset.id] || {};
+    var configured = !!(d.queryModel && configuredModels[d.queryModel]);
+    var msg = document.getElementById("ds-modal-msg");
+    msg.replaceChildren();
+    msg.appendChild(document.createTextNode("This dataset's vectors are pre-computed with "));
+    msg.appendChild(el("strong", null, d.model || "an embedding model"));
+    msg.appendChild(document.createTextNode("."));
+    if (d.queryModel) {
+      msg.appendChild(
+        document.createTextNode(" To search it by text you'll also need a provider serving ")
+      );
+      msg.appendChild(el("strong", null, d.queryModel));
+      msg.appendChild(document.createTextNode(" — "));
+      if (configured) {
+        msg.appendChild(el("span", { class: "pill pill-sample" }, "✓ configured"));
+      } else {
+        msg.appendChild(el("span", { class: "form-error" }, "✗ not configured (add on Providers)"));
+      }
+      msg.appendChild(document.createTextNode("."));
+    }
+    modal.style.display = "flex";
+    var loadBtn = document.getElementById("ds-modal-load");
+    var cancelBtn = document.getElementById("ds-modal-cancel");
+    function close() {
+      modal.style.display = "none";
+      loadBtn.onclick = null;
+      cancelBtn.onclick = null;
+    }
+    loadBtn.onclick = function () {
+      close();
+      startLoad(row, btn);
+    };
+    cancelBtn.onclick = close;
   }
 
   function startLoad(row, btn) {
@@ -111,18 +160,37 @@
     };
   }
 
-  function init() {
-    fetch("/api/datasets/catalog")
+  function loadProviders() {
+    return fetch("/api/providers")
       .then(function (r) {
         return r.json();
       })
       .then(function (data) {
-        var byId = {};
-        (data.datasets || []).forEach(function (d) {
-          byId[d.id] = d;
+        (data.providers || []).forEach(function (p) {
+          if (p.keyPresent && Array.isArray(p.models)) {
+            p.models.forEach(function (m) {
+              configuredModels[m] = true;
+            });
+          }
         });
-        document.querySelectorAll("tr[data-id]").forEach(function (row) {
-          var d = byId[row.dataset.id];
+      })
+      .catch(function () {
+        // Providers status is advisory for the modal; a fetch failure just shows "not configured".
+      });
+  }
+
+  function init() {
+    loadProviders().then(function () {
+      fetch("/api/datasets/catalog")
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          (data.datasets || []).forEach(function (d) {
+            catalogById[d.id] = d;
+          });
+          document.querySelectorAll("tr[data-id]").forEach(function (row) {
+            var d = catalogById[row.dataset.id];
           if (!d) {
             return;
           }
@@ -134,8 +202,9 @@
           } else {
             renderIdle(row);
           }
+          });
         });
-      });
+    });
   }
 
   if (document.readyState === "loading") {

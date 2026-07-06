@@ -8,7 +8,8 @@
       "domain": "Wikipedia", "model": "openai-text-embedding-ada-002", "dimension": 1536,
       "hfDataset": "KShivendu/dbpedia-entities-openai-1M", "config": "default", "split": "train",
       "vectorColumn": "openai", "textColumn": "text", "idColumn": "_id",
-      "metric": "COSINE", "defaultLimit": 2000
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "text-embedding-ada-002", "queryPrefix": ""
     },
     {
       "id": "dbpedia-3small",
@@ -17,7 +18,8 @@
       "domain": "Wikipedia", "model": "openai-text-embedding-3-small", "dimension": 1536,
       "hfDataset": "Qdrant/dbpedia-entities-openai3-text-embedding-3-small-1536-100K", "config": "default", "split": "train",
       "vectorColumn": "openai", "textColumn": "text", "idColumn": "_id",
-      "metric": "COSINE", "defaultLimit": 2000
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "text-embedding-3-small", "queryPrefix": ""
     },
     {
       "id": "dbpedia-3large-1536",
@@ -26,7 +28,8 @@
       "domain": "Wikipedia", "model": "openai-text-embedding-3-large", "dimension": 1536,
       "hfDataset": "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-1536-1M", "config": "default", "split": "train",
       "vectorColumn": "text-embedding-3-large-1536-embedding", "textColumn": "text", "idColumn": "_id",
-      "metric": "COSINE", "defaultLimit": 2000
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "text-embedding-3-large", "queryDimensions": 1536, "queryPrefix": ""
     },
     {
       "id": "dbpedia-3large-3072",
@@ -35,7 +38,8 @@
       "domain": "Wikipedia", "model": "openai-text-embedding-3-large", "dimension": 3072,
       "hfDataset": "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-3072-1M", "config": "default", "split": "train",
       "vectorColumn": "text-embedding-3-large-3072-embedding", "textColumn": "text", "idColumn": "_id",
-      "metric": "COSINE", "defaultLimit": 1500
+      "metric": "COSINE", "defaultLimit": 1500,
+      "queryModel": "text-embedding-3-large", "queryDimensions": 3072, "queryPrefix": ""
     },
     {
       "id": "dbpedia-ada002-alt",
@@ -44,7 +48,8 @@
       "domain": "Wikipedia", "model": "openai-text-embedding-ada-002", "dimension": 1536,
       "hfDataset": "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-3072-1M", "config": "default", "split": "train",
       "vectorColumn": "text-embedding-ada-002-1536-embedding", "textColumn": "text", "idColumn": "_id",
-      "metric": "COSINE", "defaultLimit": 2000
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "text-embedding-ada-002", "queryPrefix": ""
     },
     {
       "id": "arxiv-titles-instructorxl",
@@ -53,7 +58,8 @@
       "domain": "arXiv", "model": "instructor-xl", "dimension": 768,
       "hfDataset": "Qdrant/arxiv-titles-instructorxl-embeddings", "config": "default", "split": "train",
       "vectorColumn": "vector", "textColumn": "title", "idColumn": "id",
-      "metric": "COSINE", "defaultLimit": 3000
+      "metric": "COSINE", "defaultLimit": 3000,
+      "queryModel": "instructor-xl", "queryPrefix": "Represent the Science title for retrieving relevant documents: "
     },
     {
       "id": "arxiv-abstracts-instructorxl",
@@ -62,7 +68,8 @@
       "domain": "arXiv", "model": "instructor-xl", "dimension": 768,
       "hfDataset": "Qdrant/arxiv-abstracts-instructorxl-embeddings", "config": "default", "split": "train",
       "vectorColumn": "vector", "textColumn": "abstract", "idColumn": "id",
-      "metric": "COSINE", "defaultLimit": 3000
+      "metric": "COSINE", "defaultLimit": 3000,
+      "queryModel": "instructor-xl", "queryPrefix": "Represent the Science abstract for retrieving relevant documents: "
     },
     {
       "id": "wikipedia-mxbai",
@@ -71,7 +78,8 @@
       "domain": "Wikipedia", "model": "mxbai-embed-large-v1", "dimension": 1024,
       "hfDataset": "mixedbread-ai/wikipedia-embed-en-2023-11", "config": "default", "split": "train",
       "vectorColumn": "emb", "textColumn": "text", "idColumn": "_id",
-      "metric": "COSINE", "defaultLimit": 2000
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "mxbai-embed-large", "queryPrefix": "Represent this sentence for searching relevant passages: "
     }
   ]
 }

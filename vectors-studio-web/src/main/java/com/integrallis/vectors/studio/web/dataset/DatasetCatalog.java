@@ -134,7 +134,10 @@ public final class DatasetCatalog {
               text(n, "textColumn", null),
               text(n, "idColumn", null),
               text(n, "metric", "COSINE"),
-              n.path("defaultLimit").asInt(2000)));
+              n.path("defaultLimit").asInt(2000),
+              text(n, "queryModel", null),
+              text(n, "queryPrefix", ""),
+              integerOrNull(n, "queryDimensions")));
     }
     return out;
   }
@@ -142,6 +145,11 @@ public final class DatasetCatalog {
   private static String text(JsonNode n, String field, String dflt) {
     JsonNode v = n.get(field);
     return v == null || v.isNull() ? dflt : v.asText();
+  }
+
+  private static Integer integerOrNull(JsonNode n, String field) {
+    JsonNode v = n.get(field);
+    return v == null || v.isNull() ? null : v.asInt();
   }
 
   /** All catalog entries, in merged declaration order. */

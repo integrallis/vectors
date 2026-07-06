@@ -101,6 +101,9 @@ public final class DatasetRoutes implements HttpService {
       m.put("dimension", e.dimension());
       m.put("metric", e.metric());
       m.put("defaultLimit", e.defaultLimit());
+      m.put("queryModel", e.queryModel());
+      m.put("queryPrefix", e.queryPrefix());
+      m.put("queryDimensions", e.queryDimensions());
       m.put("loaded", loaded.contains(e.id()));
       out.add(m);
     }

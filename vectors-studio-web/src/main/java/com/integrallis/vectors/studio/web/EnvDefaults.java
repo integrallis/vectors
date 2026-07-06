@@ -26,7 +26,7 @@ import java.nio.file.Paths;
  * lookup order used by the {@code R2CorpusSeeder} so a single gitignored {@code .env} drives both
  * the seeder and the server.
  */
-final class EnvDefaults {
+public final class EnvDefaults {
 
   private final Dotenv dotenv;
 
@@ -34,7 +34,7 @@ final class EnvDefaults {
     this.dotenv = dotenv;
   }
 
-  static EnvDefaults fromRepoRoot() {
+  public static EnvDefaults fromRepoRoot() {
     Path dir = resolveDotenvDirectory();
     Dotenv dotenv =
         Dotenv.configure()
@@ -45,7 +45,7 @@ final class EnvDefaults {
     return new EnvDefaults(dotenv);
   }
 
-  String get(String key) {
+  public String get(String key) {
     String env = System.getenv(key);
     if (!isBlank(env)) return env.trim();
     String prop = System.getProperty(key);

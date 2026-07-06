@@ -162,7 +162,8 @@ public final class StudioServer implements Callable<Integer> {
     ProjectionJobManager jobs = new ProjectionJobManager();
     OptimizeJobManager optimizeJobs = new OptimizeJobManager();
     StudioRouting routing =
-        new StudioRouting(config.session(), jobs, optimizeJobs, config.sidecart());
+        new StudioRouting(
+            config.session(), jobs, optimizeJobs, config.sidecart(), config.providerRegistry());
     WebServer server =
         WebServer.builder().port(config.port()).routing(routing::apply).build().start();
     return new StudioServerHandle(server, config.session(), jobs, optimizeJobs);
