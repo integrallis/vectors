@@ -171,6 +171,18 @@ h2 { font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.01em; margin:
 /* Categorical pills — enum tokens; uppercase via the base .pill rule. */
 .pill-metric { color: var(--kind-json);   border-color: rgba(31, 111, 235, .25); background: rgba(31, 111, 235, .06); }
 .pill-index  { color: var(--kind-image);  border-color: rgba(111, 79, 203, .25); background: rgba(111, 79, 203, .06); }
+/* "sample" tag on catalog-backed collections + the loaded state on the datasets tab. */
+.pill-sample { margin-left: var(--sp-2); color: var(--color-brand); border-color: rgba(18, 110, 34, .25); background: var(--color-brand-soft); }
+
+/* Page header row: title on the left, primary action on the right. */
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
+
+/* Sample-datasets tab */
+.datasets-table td { vertical-align: top; }
+.dataset-name { font-weight: 600; }
+.dataset-desc { margin-top: 2px; max-width: 46ch; }
+.ds-progress { width: 140px; height: 8px; vertical-align: middle; }
+.ds-progress-label { margin-left: var(--sp-2); font-variant-numeric: tabular-nums; }
 
 /* Collection meta line (under <h1>) — keeps numeric facts as muted text and
    surfaces metric/index as pills on the same baseline. */

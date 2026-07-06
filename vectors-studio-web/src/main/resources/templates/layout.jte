@@ -27,6 +27,7 @@
     </a>
     <nav class="app-nav">
       <a href="/collections">Collections</a>
+      <a href="/datasets">Datasets</a>
     </nav>
   </header>
   <main>

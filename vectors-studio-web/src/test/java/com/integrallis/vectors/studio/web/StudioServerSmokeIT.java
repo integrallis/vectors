@@ -112,6 +112,37 @@ class StudioServerSmokeIT {
   }
 
   @Test
+  void datasetCatalogListsBundledEntriesUnloaded() throws Exception {
+    HttpResponse<String> res = get("/api/datasets/catalog");
+    assertThat(res.statusCode()).isEqualTo(200);
+    // The bundled sample-datasets.json ships 8 entries; none share a name with the "docs" test
+    // collection, so every entry reports loaded:false. No network is touched to serve the catalog.
+    assertThat(countOccurrences(res.body(), "\"id\"")).isEqualTo(8);
+    assertThat(countOccurrences(res.body(), "\"loaded\":false")).isEqualTo(8);
+    assertThat(res.body()).doesNotContain("\"loaded\":true");
+    assertThat(res.body()).contains("dbpedia-ada002");
+  }
+
+  @Test
+  void datasetsPageRenders() throws Exception {
+    HttpResponse<String> res = get("/datasets");
+    assertThat(res.statusCode()).isEqualTo(200);
+    assertThat(res.body()).contains("Sample datasets");
+    assertThat(res.body()).contains("DBpedia");
+    assertThat(res.body()).contains("/static/datasets.js");
+  }
+
+  private static int countOccurrences(String haystack, String needle) {
+    int count = 0;
+    int idx = 0;
+    while ((idx = haystack.indexOf(needle, idx)) >= 0) {
+      count++;
+      idx += needle.length();
+    }
+    return count;
+  }
+
+  @Test
   void collectionOverviewRenders() throws Exception {
     HttpResponse<String> res = get("/collections/docs");
     assertThat(res.statusCode()).isEqualTo(200);

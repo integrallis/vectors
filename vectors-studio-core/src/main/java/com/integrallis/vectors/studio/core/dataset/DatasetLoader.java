@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntConsumer;
 
 /**
  * Pure, transport-agnostic loader that turns a paged stream of dataset rows into a committed {@link
@@ -71,6 +72,18 @@ public final class DatasetLoader {
    * @throws IllegalStateException if no usable vectors were found
    */
   public static VectorCollection load(Config cfg, RowsFetcher fetcher) throws IOException {
+    return load(cfg, fetcher, count -> {});
+  }
+
+  /**
+   * Same as {@link #load(Config, RowsFetcher)} but invokes {@code onProgress} with the running
+   * count of staged rows after each page is consumed, so callers can drive a progress indicator.
+   * The callback is best-effort and never affects loading behaviour.
+   *
+   * @throws IllegalStateException if no usable vectors were found
+   */
+  public static VectorCollection load(Config cfg, RowsFetcher fetcher, IntConsumer onProgress)
+      throws IOException {
     int limit = Math.max(0, cfg.limit());
     List<Row> staged = new ArrayList<>();
     int dimension = -1;
@@ -95,6 +108,7 @@ public final class DatasetLoader {
         }
         staged.add(new Row(row, vector));
       }
+      onProgress.accept(staged.size());
       offset += page.size();
       if (page.size() < want) {
         break; // last page was short => no more rows
