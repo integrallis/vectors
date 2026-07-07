@@ -34,7 +34,7 @@ import jdk.incubator.vector.VectorSpecies;
  *
  * <ul>
  *   <li>4x unrolling for dot product and L2 (1 FMA per iteration)
- *   <li>4x unrolling for array cosine, 2x unrolling for MemorySegment cosine
+ *   <li>4x unrolling for array cosine and MemorySegment cosine
  *   <li>Conditional FMA dispatch via {@link PanamaConstants#HAS_FAST_VECTOR_FMA}
  *   <li>{@code SPECIES_PREFERRED} for main loop with scalar tail
  *   <li>Byte operations use widening conversions (B2S, S2I) and fixed-width tiers to avoid overflow
@@ -693,52 +693,94 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     float norm1 = 0f;
     float norm2 = 0f;
 
-    if (dimensions > 2 * FLOAT_SPECIES.length()) {
+    int lanes = FLOAT_SPECIES.length();
+    if (dimensions >= 4 * lanes) {
+      // 4x unrolled: 12 independent FMA accumulators hide FMA latency — parity with the float[]
+      // cosine path (cosineBody4x). 3 FMAs per lane-group (dot, ‖a‖², ‖b‖²).
       int limit = FLOAT_SPECIES.loopBound(dimensions);
-      FloatVector vSum1 = FloatVector.zero(FLOAT_SPECIES);
-      FloatVector vSum2 = FloatVector.zero(FLOAT_SPECIES);
-      FloatVector vNorm1a = FloatVector.zero(FLOAT_SPECIES);
-      FloatVector vNorm1b = FloatVector.zero(FLOAT_SPECIES);
-      FloatVector vNorm2a = FloatVector.zero(FLOAT_SPECIES);
-      FloatVector vNorm2b = FloatVector.zero(FLOAT_SPECIES);
-      int unrolledLimit = limit - FLOAT_SPECIES.length();
+      FloatVector s0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector s1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector s2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector s3 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n1_0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n1_1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n1_2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n1_3 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2_0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2_1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2_2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2_3 = FloatVector.zero(FLOAT_SPECIES);
+      int unrolledLimit = limit - 3 * lanes;
 
-      for (; i < unrolledLimit; i += 2 * FLOAT_SPECIES.length()) {
-        long off1 = (long) i * Float.BYTES;
-        long off2 = (long) (i + FLOAT_SPECIES.length()) * Float.BYTES;
-
+      for (; i < unrolledLimit; i += 4 * lanes) {
+        long o0 = (long) i * Float.BYTES;
+        long o1 = (long) (i + lanes) * Float.BYTES;
+        long o2 = (long) (i + 2 * lanes) * Float.BYTES;
+        long o3 = (long) (i + 3 * lanes) * Float.BYTES;
+        FloatVector va0 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, o0, ByteOrder.LITTLE_ENDIAN);
+        FloatVector vb0 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, o0, ByteOrder.LITTLE_ENDIAN);
         FloatVector va1 =
-            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, off1, ByteOrder.LITTLE_ENDIAN);
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, o1, ByteOrder.LITTLE_ENDIAN);
         FloatVector vb1 =
-            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, off1, ByteOrder.LITTLE_ENDIAN);
-        vSum1 = fma(va1, vb1, vSum1);
-        vNorm1a = fma(va1, va1, vNorm1a);
-        vNorm2a = fma(vb1, vb1, vNorm2a);
-
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, o1, ByteOrder.LITTLE_ENDIAN);
         FloatVector va2 =
-            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, off2, ByteOrder.LITTLE_ENDIAN);
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, o2, ByteOrder.LITTLE_ENDIAN);
         FloatVector vb2 =
-            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, off2, ByteOrder.LITTLE_ENDIAN);
-        vSum2 = fma(va2, vb2, vSum2);
-        vNorm1b = fma(va2, va2, vNorm1b);
-        vNorm2b = fma(vb2, vb2, vNorm2b);
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, o2, ByteOrder.LITTLE_ENDIAN);
+        FloatVector va3 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, o3, ByteOrder.LITTLE_ENDIAN);
+        FloatVector vb3 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, o3, ByteOrder.LITTLE_ENDIAN);
+        s0 = fma(va0, vb0, s0);
+        s1 = fma(va1, vb1, s1);
+        s2 = fma(va2, vb2, s2);
+        s3 = fma(va3, vb3, s3);
+        n1_0 = fma(va0, va0, n1_0);
+        n1_1 = fma(va1, va1, n1_1);
+        n1_2 = fma(va2, va2, n1_2);
+        n1_3 = fma(va3, va3, n1_3);
+        n2_0 = fma(vb0, vb0, n2_0);
+        n2_1 = fma(vb1, vb1, n2_1);
+        n2_2 = fma(vb2, vb2, n2_2);
+        n2_3 = fma(vb3, vb3, n2_3);
       }
 
-      // Vector tail
-      for (; i < limit; i += FLOAT_SPECIES.length()) {
+      // Vector tail (1 lane-width at a time)
+      for (; i < limit; i += lanes) {
         long off = (long) i * Float.BYTES;
         FloatVector va =
             FloatVector.fromMemorySegment(FLOAT_SPECIES, a, off, ByteOrder.LITTLE_ENDIAN);
         FloatVector vb =
             FloatVector.fromMemorySegment(FLOAT_SPECIES, b, off, ByteOrder.LITTLE_ENDIAN);
-        vSum1 = fma(va, vb, vSum1);
-        vNorm1a = fma(va, va, vNorm1a);
-        vNorm2a = fma(vb, vb, vNorm2a);
+        s0 = fma(va, vb, s0);
+        n1_0 = fma(va, va, n1_0);
+        n2_0 = fma(vb, vb, n2_0);
       }
 
-      sum = vSum1.add(vSum2).reduceLanes(VectorOperators.ADD);
-      norm1 = vNorm1a.add(vNorm1b).reduceLanes(VectorOperators.ADD);
-      norm2 = vNorm2a.add(vNorm2b).reduceLanes(VectorOperators.ADD);
+      sum = s0.add(s1).add(s2.add(s3)).reduceLanes(VectorOperators.ADD);
+      norm1 = n1_0.add(n1_1).add(n1_2.add(n1_3)).reduceLanes(VectorOperators.ADD);
+      norm2 = n2_0.add(n2_1).add(n2_2.add(n2_3)).reduceLanes(VectorOperators.ADD);
+    } else if (dimensions >= lanes) {
+      // Short vectors: single-accumulator vector body (no unroll prologue cost).
+      int limit = FLOAT_SPECIES.loopBound(dimensions);
+      FloatVector vs = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector vn1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector vn2 = FloatVector.zero(FLOAT_SPECIES);
+      for (; i < limit; i += lanes) {
+        long off = (long) i * Float.BYTES;
+        FloatVector va =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, off, ByteOrder.LITTLE_ENDIAN);
+        FloatVector vb =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, off, ByteOrder.LITTLE_ENDIAN);
+        vs = fma(va, vb, vs);
+        vn1 = fma(va, va, vn1);
+        vn2 = fma(vb, vb, vn2);
+      }
+      sum = vs.reduceLanes(VectorOperators.ADD);
+      norm1 = vn1.reduceLanes(VectorOperators.ADD);
+      norm2 = vn2.reduceLanes(VectorOperators.ADD);
     }
 
     // Scalar tail
