@@ -192,6 +192,67 @@ public interface VectorUtilSupport {
     }
   }
 
+  /**
+   * Fused matrix-vector cosine similarity: fills {@code out[i] = cosine(query, matrix[i])} for
+   * {@code i in [0, count)}, returning the RAW cosine value in {@code [-1, 1]} (callers apply the
+   * {@code (1+cos)/2} score transform).
+   *
+   * <p>The query norm {@code ‖query‖²} is constant for the whole batch, so it is computed once
+   * (single reduction over {@code query}); only the per-row dot product and row norm vary. The
+   * default implementation is a per-row loop over {@link #cosine(float[], float[])}. SIMD
+   * subclasses override this to load each query SIMD chunk <em>once</em> per 4-row group and
+   * accumulate {@code dot[r]} and {@code ‖row[r]‖²} for 4 rows simultaneously — the
+   * query-load-amortized analogue of {@link #matVecDot(float[], float[][], float[], int)}, carrying
+   * a second (row-norm) accumulator set plus the single shared query norm.
+   *
+   * <p>Zero-vector behavior matches {@link #cosine(float[], float[])}: a zero row (or zero query)
+   * yields {@code 0/0 = NaN}, identical to the per-row reference.
+   *
+   * @param query the query vector (length = {@code matrix[0].length})
+   * @param rows the matrix rows (each row must have the same length as {@code query})
+   * @param out the output array (must have length &ge; {@code count})
+   * @param count the number of rows to process (must be &le; {@code rows.length})
+   */
+  default void batchCosine(float[] query, float[][] rows, float[] out, int count) {
+    for (int i = 0; i < count; i++) {
+      out[i] = cosine(query, rows[i]);
+    }
+  }
+
+  /**
+   * Off-heap fused matrix-vector cosine similarity: fills {@code out[i] = cosine(query, rows[i])}
+   * for {@code i in [0, count)}, where each {@code rows[i]} is a {@link MemorySegment} holding
+   * {@code dim} little-endian float32s (typically a zero-copy mmap/off-heap slice). Returns RAW
+   * cosine values in {@code [-1, 1]}.
+   *
+   * <p>Segment-scoring analogue of {@link #batchCosine(float[], float[][], float[], int)}: the
+   * query stays an on-heap {@code float[]} (its norm computed once); only the matrix rows come from
+   * segments. The default implementation is a scalar per-row loop. SIMD subclasses override with
+   * the 4-row fused kernel.
+   *
+   * @param query the query vector (length = {@code dim})
+   * @param rows the matrix rows as off-heap segments (each holds {@code dim} little-endian floats)
+   * @param dim the number of float elements per row
+   * @param out the output array (must have length &ge; {@code count})
+   * @param count the number of rows to process (must be &le; {@code rows.length})
+   */
+  default void batchCosine(float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    for (int i = 0; i < count; i++) {
+      MemorySegment row = rows[i];
+      float dot = 0f;
+      float qn = 0f;
+      float rn = 0f;
+      for (int d = 0; d < dim; d++) {
+        float q = query[d];
+        float rv = row.getAtIndex(ValueLayout.JAVA_FLOAT, d);
+        dot = MathUtil.fma(q, rv, dot);
+        qn = MathUtil.fma(q, q, qn);
+        rn = MathUtil.fma(rv, rv, rn);
+      }
+      out[i] = (float) (dot / Math.sqrt((double) qn * (double) rn));
+    }
+  }
+
   // --- PQ ADC (Asymmetric Distance Computation) kernels ---
 
   /**

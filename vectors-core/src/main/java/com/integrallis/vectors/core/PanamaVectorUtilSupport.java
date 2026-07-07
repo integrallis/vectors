@@ -1228,4 +1228,224 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
     return s;
   }
+
+  // --- Fused batch cosine kernels ---
+
+  /**
+   * Combines a per-row dot product and row norm with the shared query norm into a raw cosine value,
+   * exactly matching the arithmetic of the per-row {@link #cosine(float[], float[])} reference
+   * ({@code (float)(dot / sqrt(qNorm2 * rowNorm2))}). A zero row or zero query gives {@code 0/0 =
+   * NaN}, identical to the per-row kernel.
+   */
+  private static float cosineValue(float dot, float qNorm2, float rowNorm2) {
+    return (float) (dot / Math.sqrt((double) qNorm2 * (double) rowNorm2));
+  }
+
+  /**
+   * SIMD 4-row-unrolled fused cosine GEMV. The squared query norm {@code ‖query‖²} is computed ONCE
+   * (single reduction over {@code query}); then each group of 4 rows loads one SIMD chunk of {@code
+   * query} <em>once</em> and accumulates, for all 4 rows simultaneously, the dot product {@code
+   * fma(qv, rowv, dot[r])} and the row norm {@code fma(rowv, rowv, rn[r])}. This mirrors {@link
+   * #matVecDot(float[], float[][], float[], int)} but carries a second (row-norm) accumulator set
+   * plus the single shared query norm, so non-normalized cosine collections get the same 4×
+   * query-load amortization DOT/EUCLIDEAN already have.
+   *
+   * <p>Rows that do not form a full group of 4 fall back to a single-row fused pass sharing the
+   * same {@code qNorm2}.
+   */
+  @Override
+  public void batchCosine(float[] query, float[][] rows, float[] out, int count) {
+    int dim = query.length;
+    float qNorm2 = dotProduct(query, 0, query, 0, dim); // ‖query‖² — computed once for the batch
+    int rowGroup = count & ~3;
+    int limit = FLOAT_SPECIES.loopBound(dim);
+
+    for (int r = 0; r < rowGroup; r += 4) {
+      float[] r0 = rows[r], r1 = rows[r + 1], r2 = rows[r + 2], r3 = rows[r + 3];
+      FloatVector d0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector d1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector d2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector d3 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n3 = FloatVector.zero(FLOAT_SPECIES);
+
+      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+        FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i); // query chunk loaded ONCE
+        FloatVector v0 = FloatVector.fromArray(FLOAT_SPECIES, r0, i);
+        FloatVector v1 = FloatVector.fromArray(FLOAT_SPECIES, r1, i);
+        FloatVector v2 = FloatVector.fromArray(FLOAT_SPECIES, r2, i);
+        FloatVector v3 = FloatVector.fromArray(FLOAT_SPECIES, r3, i);
+        d0 = fma(qv, v0, d0);
+        d1 = fma(qv, v1, d1);
+        d2 = fma(qv, v2, d2);
+        d3 = fma(qv, v3, d3);
+        n0 = fma(v0, v0, n0);
+        n1 = fma(v1, v1, n1);
+        n2 = fma(v2, v2, n2);
+        n3 = fma(v3, v3, n3);
+      }
+
+      float dot0 = d0.reduceLanes(VectorOperators.ADD);
+      float dot1 = d1.reduceLanes(VectorOperators.ADD);
+      float dot2 = d2.reduceLanes(VectorOperators.ADD);
+      float dot3 = d3.reduceLanes(VectorOperators.ADD);
+      float rn0 = n0.reduceLanes(VectorOperators.ADD);
+      float rn1 = n1.reduceLanes(VectorOperators.ADD);
+      float rn2 = n2.reduceLanes(VectorOperators.ADD);
+      float rn3 = n3.reduceLanes(VectorOperators.ADD);
+
+      // Scalar tail (remaining elements after SIMD loop bound)
+      for (int i = limit; i < dim; i++) {
+        float q = query[i];
+        float e0 = r0[i];
+        dot0 = MathUtil.fma(q, e0, dot0);
+        rn0 = MathUtil.fma(e0, e0, rn0);
+        float e1 = r1[i];
+        dot1 = MathUtil.fma(q, e1, dot1);
+        rn1 = MathUtil.fma(e1, e1, rn1);
+        float e2 = r2[i];
+        dot2 = MathUtil.fma(q, e2, dot2);
+        rn2 = MathUtil.fma(e2, e2, rn2);
+        float e3 = r3[i];
+        dot3 = MathUtil.fma(q, e3, dot3);
+        rn3 = MathUtil.fma(e3, e3, rn3);
+      }
+
+      out[r] = cosineValue(dot0, qNorm2, rn0);
+      out[r + 1] = cosineValue(dot1, qNorm2, rn1);
+      out[r + 2] = cosineValue(dot2, qNorm2, rn2);
+      out[r + 3] = cosineValue(dot3, qNorm2, rn3);
+    }
+
+    // Tail rows (0-3 remaining)
+    for (int r = rowGroup; r < count; r++) {
+      out[r] = cosineArrayRow(query, rows[r], qNorm2, limit, dim);
+    }
+  }
+
+  /** Single-row fused cosine over {@code float[]} rows sharing the batch {@code qNorm2}. */
+  private float cosineArrayRow(float[] query, float[] row, float qNorm2, int limit, int dim) {
+    FloatVector dot = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector rn = FloatVector.zero(FLOAT_SPECIES);
+    for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+      FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i);
+      FloatVector rv = FloatVector.fromArray(FLOAT_SPECIES, row, i);
+      dot = fma(qv, rv, dot);
+      rn = fma(rv, rv, rn);
+    }
+    float d = dot.reduceLanes(VectorOperators.ADD);
+    float n = rn.reduceLanes(VectorOperators.ADD);
+    for (int i = limit; i < dim; i++) {
+      float rv = row[i];
+      d = MathUtil.fma(query[i], rv, d);
+      n = MathUtil.fma(rv, rv, n);
+    }
+    return cosineValue(d, qNorm2, n);
+  }
+
+  /**
+   * Off-heap SIMD 4-row-unrolled fused cosine GEMV. Mirrors {@link #batchCosine(float[], float[][],
+   * float[], int)}, reading the 4 rows from {@link MemorySegment}s (zero-copy mmap/off-heap slices)
+   * via {@code FloatVector.fromMemorySegment} instead of {@code fromArray}. The query is still an
+   * on-heap {@code float[]} whose norm is computed once and whose SIMD chunk is loaded once per
+   * 4-row group.
+   */
+  @Override
+  public void batchCosine(float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    float qNorm2 = dotProduct(query, 0, query, 0, dim); // ‖query‖² — computed once for the batch
+    int rowGroup = count & ~3;
+    int limit = FLOAT_SPECIES.loopBound(dim);
+
+    for (int r = 0; r < rowGroup; r += 4) {
+      MemorySegment r0 = rows[r], r1 = rows[r + 1], r2 = rows[r + 2], r3 = rows[r + 3];
+      FloatVector d0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector d1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector d2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector d3 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n3 = FloatVector.zero(FLOAT_SPECIES);
+
+      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+        long byteOff = (long) i * Float.BYTES;
+        FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i); // query chunk loaded ONCE
+        FloatVector v0 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, r0, byteOff, ByteOrder.LITTLE_ENDIAN);
+        FloatVector v1 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, r1, byteOff, ByteOrder.LITTLE_ENDIAN);
+        FloatVector v2 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, r2, byteOff, ByteOrder.LITTLE_ENDIAN);
+        FloatVector v3 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, r3, byteOff, ByteOrder.LITTLE_ENDIAN);
+        d0 = fma(qv, v0, d0);
+        d1 = fma(qv, v1, d1);
+        d2 = fma(qv, v2, d2);
+        d3 = fma(qv, v3, d3);
+        n0 = fma(v0, v0, n0);
+        n1 = fma(v1, v1, n1);
+        n2 = fma(v2, v2, n2);
+        n3 = fma(v3, v3, n3);
+      }
+
+      float dot0 = d0.reduceLanes(VectorOperators.ADD);
+      float dot1 = d1.reduceLanes(VectorOperators.ADD);
+      float dot2 = d2.reduceLanes(VectorOperators.ADD);
+      float dot3 = d3.reduceLanes(VectorOperators.ADD);
+      float rn0 = n0.reduceLanes(VectorOperators.ADD);
+      float rn1 = n1.reduceLanes(VectorOperators.ADD);
+      float rn2 = n2.reduceLanes(VectorOperators.ADD);
+      float rn3 = n3.reduceLanes(VectorOperators.ADD);
+
+      for (int i = limit; i < dim; i++) {
+        float q = query[i];
+        float e0 = r0.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+        dot0 = MathUtil.fma(q, e0, dot0);
+        rn0 = MathUtil.fma(e0, e0, rn0);
+        float e1 = r1.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+        dot1 = MathUtil.fma(q, e1, dot1);
+        rn1 = MathUtil.fma(e1, e1, rn1);
+        float e2 = r2.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+        dot2 = MathUtil.fma(q, e2, dot2);
+        rn2 = MathUtil.fma(e2, e2, rn2);
+        float e3 = r3.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+        dot3 = MathUtil.fma(q, e3, dot3);
+        rn3 = MathUtil.fma(e3, e3, rn3);
+      }
+
+      out[r] = cosineValue(dot0, qNorm2, rn0);
+      out[r + 1] = cosineValue(dot1, qNorm2, rn1);
+      out[r + 2] = cosineValue(dot2, qNorm2, rn2);
+      out[r + 3] = cosineValue(dot3, qNorm2, rn3);
+    }
+
+    // Tail rows (0-3 remaining)
+    for (int r = rowGroup; r < count; r++) {
+      out[r] = cosineSegRow(query, rows[r], qNorm2, limit, dim);
+    }
+  }
+
+  /** Single-row fused cosine over a {@code MemorySegment} row sharing the batch {@code qNorm2}. */
+  private float cosineSegRow(float[] query, MemorySegment row, float qNorm2, int limit, int dim) {
+    FloatVector dot = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector rn = FloatVector.zero(FLOAT_SPECIES);
+    for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+      FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i);
+      FloatVector rv =
+          FloatVector.fromMemorySegment(
+              FLOAT_SPECIES, row, (long) i * Float.BYTES, ByteOrder.LITTLE_ENDIAN);
+      dot = fma(qv, rv, dot);
+      rn = fma(rv, rv, rn);
+    }
+    float d = dot.reduceLanes(VectorOperators.ADD);
+    float n = rn.reduceLanes(VectorOperators.ADD);
+    for (int i = limit; i < dim; i++) {
+      float rv = row.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+      d = MathUtil.fma(query[i], rv, d);
+      n = MathUtil.fma(rv, rv, n);
+    }
+    return cosineValue(d, qNorm2, n);
+  }
 }

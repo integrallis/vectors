@@ -15,9 +15,7 @@
  */
 package com.integrallis.vectors.core;
 
-import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.util.Objects;
 
 /**
@@ -29,8 +27,9 @@ import java.util.Objects;
  * and a {@code scratch} buffer the same length as {@code pool}. The final similarity-score
  * transform (matching {@link SimilarityFunction#compare}) is applied into {@code outScores}.
  *
- * <p>The {@code COSINE} path has no fused SIMD kernel yet; it falls back to scalar {@link
- * SimilarityFunction#compare} per row.
+ * <p>All four similarity functions route through fused, query-load-amortized batch kernels: {@code
+ * COSINE} uses {@link VectorUtil#batchCosine} (query norm computed once, query chunk loaded once
+ * per 4 rows), the same amortization DOT/EUCLIDEAN already have.
  */
 public final class FusedSimilarity {
 
@@ -86,7 +85,8 @@ public final class FusedSimilarity {
           outScores[i] = SimilarityFunction.scaleMaxInnerProductScore(scratch[i]);
       }
       case COSINE -> {
-        for (int i = 0; i < count; i++) outScores[i] = sim.compare(query, pool[i]);
+        VectorUtil.batchCosine(query, pool, scratch, count);
+        for (int i = 0; i < count; i++) outScores[i] = (1f + scratch[i]) * 0.5f;
       }
     }
   }
@@ -99,12 +99,13 @@ public final class FusedSimilarity {
    * an on-heap {@code float[]} (the GEMV loads it once per 4-row group via {@code
    * FloatVector.fromArray}).
    *
-   * <p>EUCLIDEAN/DOT_PRODUCT/MAXIMUM_INNER_PRODUCT route through {@link VectorUtil#batchSquaredL2}
-   * / {@link VectorUtil#batchDotProduct} with the same score transforms as {@link #bulkCompare}, so
-   * scores/rankings match the {@code float[]} path exactly. COSINE has no fused segment kernel; it
-   * falls back to per-row {@link VectorUtil#cosine(MemorySegment, MemorySegment, int)} against a
-   * one-time query upload. With the cosine-normalize default (cosine collections search as DOT) the
-   * COSINE branch is only reached by non-normalized cosine collections.
+   * <p>All four functions route through fused kernels with the same score transforms as {@link
+   * #bulkCompare}, so scores/rankings match the {@code float[]} path exactly:
+   * EUCLIDEAN/DOT_PRODUCT/ MAXIMUM_INNER_PRODUCT via {@link VectorUtil#batchSquaredL2} / {@link
+   * VectorUtil#batchDotProduct}, and COSINE via {@link VectorUtil#batchCosine(float[],
+   * MemorySegment[], int, float[], int)} (query norm computed once, query chunk loaded once per 4
+   * rows). With the cosine-normalize default (cosine collections search as DOT) the COSINE branch
+   * is only reached by non-normalized cosine collections.
    *
    * @param sim similarity function
    * @param query query vector (on-heap; length {@code dim})
@@ -154,14 +155,8 @@ public final class FusedSimilarity {
           outScores[i] = SimilarityFunction.scaleMaxInnerProductScore(scratch[i]);
       }
       case COSINE -> {
-        if (count == 0) return;
-        // No fused segment cosine kernel: upload the query to a segment ONCE, then score each row
-        // with the same per-pair segment kernel the zero-copy scorer uses (exact parity).
-        try (Arena arena = Arena.ofConfined()) {
-          MemorySegment qs = arena.allocate((long) dim * Float.BYTES);
-          MemorySegment.copy(query, 0, qs, ValueLayout.JAVA_FLOAT, 0L, dim);
-          for (int i = 0; i < count; i++) outScores[i] = sim.compare(qs, rows[i], dim);
-        }
+        VectorUtil.batchCosine(query, rows, dim, scratch, count);
+        for (int i = 0; i < count; i++) outScores[i] = (1f + scratch[i]) * 0.5f;
       }
     }
   }

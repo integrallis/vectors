@@ -218,6 +218,32 @@ public final class VectorUtil {
     IMPL.matVecSquaredL2(query, rows, dim, out, count);
   }
 
+  /**
+   * Fills {@code out[i]} with the raw cosine similarity (in {@code [-1, 1]}) of {@code query} and
+   * {@code rows[i]} for {@code i in [0, count)}. Callers apply the {@code (1+cos)/2} score
+   * transform.
+   *
+   * <p>Delegates to {@link VectorUtilSupport#batchCosine(float[], float[][], float[], int)}, which
+   * SIMD implementations override with a fused 4-row kernel that computes the query norm once and
+   * loads each query SIMD chunk once for 4 rows — the cosine analogue of {@link
+   * #batchDotProduct(float[], float[][], float[], int)}.
+   */
+  public static void batchCosine(float[] query, float[][] rows, float[] out, int count) {
+    checkBatchArguments(query, rows, out, count);
+    IMPL.batchCosine(query, rows, out, count);
+  }
+
+  /**
+   * Off-heap fused GEMV cosine: fills {@code out[i]} with the raw cosine similarity of {@code
+   * query} and the off-heap row {@code rows[i]} for {@code i in [0, count)}. Zero-copy analogue of
+   * {@link #batchCosine(float[], float[][], float[], int)}.
+   */
+  public static void batchCosine(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    checkBatchSegmentArguments(query, rows, dim, out, count);
+    IMPL.batchCosine(query, rows, dim, out, count);
+  }
+
   // --- PQ ADC (Asymmetric Distance Computation) kernels ---
 
   /**
