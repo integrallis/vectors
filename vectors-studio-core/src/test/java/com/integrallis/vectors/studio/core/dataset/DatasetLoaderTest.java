@@ -69,12 +69,8 @@ class DatasetLoaderTest {
             row("c", "gamma", 2003, List.of(0.1, 0.2, 0.3, 0.4)));
     FakeFetcher fetcher = new FakeFetcher(rows);
 
-    // EUCLIDEAN keeps vectors verbatim so this asserts the loader loads the exact input vector.
-    // (Under COSINE the collection unit-normalizes at ingest — the #A optimization — which would
-    // change the retrieved vector; that behavior is covered by CosineNormalizationTest in
-    // vectors-db.)
     DatasetLoader.Config cfg =
-        new DatasetLoader.Config("embedding", "text", "_id", 100, SimilarityFunction.EUCLIDEAN);
+        new DatasetLoader.Config("embedding", "text", "_id", 100, SimilarityFunction.COSINE);
     VectorCollection collection = DatasetLoader.load(cfg, fetcher);
 
     assertThat(collection.size()).isEqualTo(3);

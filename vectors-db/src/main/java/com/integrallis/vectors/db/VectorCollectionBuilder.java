@@ -112,7 +112,7 @@ public final class VectorCollectionBuilder {
 
   private Integer dimension;
   private SimilarityFunction metric;
-  private boolean preserveOriginalVectors = false;
+  private boolean normalizeCosineVectors = false;
   private IndexType indexType = IndexType.FLAT;
   private QuantizerKind quantizerKind = QuantizerKind.NONE;
   private int autoCommitThreshold = Integer.MAX_VALUE;
@@ -191,21 +191,23 @@ public final class VectorCollectionBuilder {
   }
 
   /**
-   * Controls the COSINE unit-normalization optimization (#A). When {@code false} (the default) and
-   * {@link #metric(SimilarityFunction)} is {@link SimilarityFunction#COSINE}, every vector is
-   * L2-unit-normalized at ingest (the persisted {@code vectors.bin} and the in-memory arrays hold
-   * unit vectors, and {@code get}/{@code search} projections therefore return unit vectors) and the
-   * index is built and searched with {@link SimilarityFunction#DOT_PRODUCT}. Because {@code cosine
-   * == dot} for unit vectors, rankings and scores are identical to the true cosine path while the
-   * hot kernel does a single reduction instead of three.
+   * Opts into the COSINE unit-normalization optimization (#A). When {@code false} (the default) and
+   * {@link #metric(SimilarityFunction)} is {@link SimilarityFunction#COSINE}, vectors are stored
+   * verbatim (a retrieved vector equals the original input) and scored with the fused cosine kernel
+   * (#D).
    *
-   * <p>Pass {@code true} to keep the pre-#A behavior: vectors are stored verbatim (a retrieved
-   * vector equals the original input) and scored with the true cosine kernel. Ignored for
-   * non-COSINE metrics. The decision is persisted in the manifest, so a reopened collection behaves
-   * identically to the one that wrote it regardless of the value passed on reopen.
+   * <p>Pass {@code true} to unit-normalize every vector at ingest (the persisted {@code
+   * vectors.bin} and the in-memory arrays hold unit vectors, and {@code get}/{@code search}
+   * projections therefore return unit vectors) and build/search the index with {@link
+   * SimilarityFunction#DOT_PRODUCT}. Because {@code cosine == dot} for unit vectors, rankings and
+   * scores are identical to the true cosine path while the hot kernel does a single reduction
+   * instead of three — a small (~1-6%) dot-product speed edge, at the cost of returning normalized
+   * (not verbatim) vectors on retrieval. Ignored for non-COSINE metrics. The decision is persisted
+   * in the manifest, so a reopened collection behaves identically to the one that wrote it
+   * regardless of the value passed on reopen.
    */
-  public VectorCollectionBuilder preserveOriginalVectors(boolean preserveOriginalVectors) {
-    this.preserveOriginalVectors = preserveOriginalVectors;
+  public VectorCollectionBuilder normalizeCosineVectors(boolean normalizeCosineVectors) {
+    this.normalizeCosineVectors = normalizeCosineVectors;
     return this;
   }
 
@@ -787,7 +789,7 @@ public final class VectorCollectionBuilder {
             ivfParams,
             effectiveCuvsParams,
             ivfPqParams,
-            preserveOriginalVectors);
+            normalizeCosineVectors);
     java.util.List<GenerationSubscriber> effectiveSubscribers = subscribers;
     if (objectStoreBackend != null) {
       if (storageRoot == null) {

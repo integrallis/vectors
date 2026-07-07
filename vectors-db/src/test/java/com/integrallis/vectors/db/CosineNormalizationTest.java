@@ -34,10 +34,10 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Correctness + persistence + benchmark coverage for the #A COSINE unit-normalization optimization:
- * for COSINE collections, vectors are L2-unit-normalized at ingest and the index scores them with
- * DOT_PRODUCT (cosine of unit vectors equals their dot product). The {@code
- * preserveOriginalVectors(true)} opt-in keeps the pre-#A (verbatim vectors, true cosine kernel)
- * behavior and is the reference path these tests compare against.
+ * by default COSINE collections store vectors verbatim and score them with the fused cosine kernel;
+ * this verbatim path is the reference these tests compare against. The opt-in {@code
+ * normalizeCosineVectors(true)} L2-unit-normalizes vectors at ingest and the index scores them with
+ * DOT_PRODUCT (cosine of unit vectors equals their dot product).
  */
 @Tag("unit")
 class CosineNormalizationTest {
@@ -90,20 +90,20 @@ class CosineNormalizationTest {
     Random rnd = new Random(1234567L);
     List<Document> docs = randomDocs(rnd, n, dim);
 
-    VectorCollection normalized = // #A default: normalized + DOT
+    VectorCollection normalized = // #A opt-in: normalized + DOT
         VectorCollection.builder()
             .dimension(dim)
             .metric(SimilarityFunction.COSINE)
             .indexType(IndexType.HNSW)
             .hnswBuildThreads(1)
+            .normalizeCosineVectors(true)
             .build();
-    VectorCollection reference = // pre-#A: original vectors + true cosine kernel
+    VectorCollection reference = // default: verbatim vectors + fused cosine kernel
         VectorCollection.builder()
             .dimension(dim)
             .metric(SimilarityFunction.COSINE)
             .indexType(IndexType.HNSW)
             .hnswBuildThreads(1)
-            .preserveOriginalVectors(true)
             .build();
     normalized.addAll(docs);
     normalized.commit();
@@ -160,7 +160,8 @@ class CosineNormalizationTest {
       VectorCollection c =
           VectorCollection.builder()
               .dimension(dim)
-              .metric(SimilarityFunction.COSINE) // #A default (preserveOriginalVectors=false)
+              .metric(SimilarityFunction.COSINE)
+              .normalizeCosineVectors(true) // #A opt-in: normalized + DOT
               .indexType(IndexType.HNSW)
               .hnswBuildThreads(1)
               .storagePath(dir)
@@ -197,40 +198,40 @@ class CosineNormalizationTest {
   // ---------------------------------------------------------------------------
 
   @Test
-  void getVectorIsUnitLengthByDefaultAndVerbatimWhenPreserved() {
+  void getVectorIsVerbatimByDefaultAndUnitLengthWhenNormalized() {
     int dim = 32;
     Random rnd = new Random(7L);
     float[] original = randomVector(rnd, dim);
     assertThat(norm(original)).isGreaterThan(1.5); // ensure it is genuinely non-unit
 
-    // Default (#A): stored/retrieved vector is unit length.
-    VectorCollection normalized =
+    // Default: retrieved vector equals the original input (verbatim).
+    VectorCollection verbatim =
         VectorCollection.builder()
             .dimension(dim)
             .metric(SimilarityFunction.COSINE)
             .indexType(IndexType.FLAT)
             .build();
     float[] toAdd = original.clone();
-    normalized.add(Document.of("x", toAdd));
-    normalized.commit();
+    verbatim.add(Document.of("x", toAdd));
+    verbatim.commit();
     // The caller's array must not have been mutated.
     assertThat(toAdd).containsExactly(original);
-    float[] retrieved = normalized.get("x").vector();
-    assertThat(norm(retrieved)).isCloseTo(1.0, org.assertj.core.data.Offset.offset(1e-5));
-    normalized.close();
+    assertThat(verbatim.get("x").vector()).containsExactly(original);
+    verbatim.close();
 
-    // preserveOriginalVectors(true): retrieved vector equals the original input.
-    VectorCollection preserved =
+    // normalizeCosineVectors(true): stored/retrieved vector is unit length.
+    VectorCollection normalized =
         VectorCollection.builder()
             .dimension(dim)
             .metric(SimilarityFunction.COSINE)
             .indexType(IndexType.FLAT)
-            .preserveOriginalVectors(true)
+            .normalizeCosineVectors(true)
             .build();
-    preserved.add(Document.of("x", original.clone()));
-    preserved.commit();
-    assertThat(preserved.get("x").vector()).containsExactly(original);
-    preserved.close();
+    normalized.add(Document.of("x", original.clone()));
+    normalized.commit();
+    float[] retrieved = normalized.get("x").vector();
+    assertThat(norm(retrieved)).isCloseTo(1.0, org.assertj.core.data.Offset.offset(1e-5));
+    normalized.close();
   }
 
   // ---------------------------------------------------------------------------
@@ -254,37 +255,37 @@ class CosineNormalizationTest {
             .build();
     euclidean.addAll(docs);
     euclidean.commit();
-    // Vectors are stored verbatim for EUCLIDEAN (preserveOriginalVectors is ignored).
+    // Vectors are stored verbatim for EUCLIDEAN (normalizeCosineVectors is ignored).
     float[] stored = euclidean.get("id-0").vector();
     assertThat(stored).containsExactly(docs.get(0).vector());
     assertThat(norm(stored)).isGreaterThan(1.5); // definitely not unit-normalized
 
-    // Results are identical whether or not preserveOriginalVectors is set (it is a no-op here).
-    VectorCollection euclideanPreserve =
+    // Results are identical whether or not normalizeCosineVectors is set (it is a no-op here).
+    VectorCollection euclideanNormalize =
         VectorCollection.builder()
             .dimension(dim)
             .metric(SimilarityFunction.EUCLIDEAN)
             .indexType(IndexType.HNSW)
             .hnswBuildThreads(1)
-            .preserveOriginalVectors(true)
+            .normalizeCosineVectors(true)
             .build();
-    euclideanPreserve.addAll(docs);
-    euclideanPreserve.commit();
+    euclideanNormalize.addAll(docs);
+    euclideanNormalize.commit();
 
     for (int q = 0; q < 20; q++) {
       float[] query = randomVector(rnd, dim);
-      // preserveOriginalVectors is a no-op for EUCLIDEAN, so the returned neighbours (ranking) are
+      // normalizeCosineVectors is a no-op for EUCLIDEAN, so the returned neighbours (ranking) are
       // identical. Compare ids rather than exact score maps — search scores can differ by a ULP
       // from reduction order and that is not a regression.
       assertThat(topK(euclidean, query, k).keySet())
-          .isEqualTo(topK(euclideanPreserve, query, k).keySet());
+          .isEqualTo(topK(euclideanNormalize, query, k).keySet());
     }
     euclidean.close();
-    euclideanPreserve.close();
+    euclideanNormalize.close();
   }
 
   // ---------------------------------------------------------------------------
-  // Test 5: QPS microbench — #A (default) vs preserveOriginalVectors(true)
+  // Test 5: QPS microbench — normalizeCosineVectors(true) vs verbatim default
   // ---------------------------------------------------------------------------
 
   @Test
@@ -306,13 +307,13 @@ class CosineNormalizationTest {
             .dimension(dim)
             .metric(SimilarityFunction.COSINE)
             .indexType(IndexType.HNSW)
+            .normalizeCosineVectors(true)
             .build();
     VectorCollection reference =
         VectorCollection.builder()
             .dimension(dim)
             .metric(SimilarityFunction.COSINE)
             .indexType(IndexType.HNSW)
-            .preserveOriginalVectors(true)
             .build();
     normalized.addAll(docs);
     normalized.commit();
@@ -331,8 +332,8 @@ class CosineNormalizationTest {
     String report =
         String.format(
             "cosine #A microbench (HNSW, n=%d, dim=%d, k=%d, measured=%d):%n"
-                + "  normalized+DOT (default): %.1f qps%n"
-                + "  original+COSINE (reference): %.1f qps%n"
+                + "  normalized+DOT (opt-in): %.1f qps%n"
+                + "  verbatim+COSINE (default reference): %.1f qps%n"
                 + "  speedup: %.2fx%n",
             n, dim, k, measured, qpsNorm, qpsRef, speedup);
     System.out.print(report);

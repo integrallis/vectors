@@ -37,9 +37,10 @@ import org.junit.jupiter.api.io.TempDir;
  * scorer). The only difference:
  *
  * <ul>
- *   <li><b>default (#A)</b> — COSINE normalized at ingest, scored as a fused DOT segment GEMV (#C)
- *   <li><b>preserveOriginalVectors</b> — verbatim vectors, scored with the per-row segment cosine
- *       (#B)
+ *   <li><b>verbatim default (fused cosine)</b> — verbatim vectors, scored with the per-row segment
+ *       cosine (#B/#D)
+ *   <li><b>normalize opt-in (fused DOT)</b> — COSINE normalized at ingest, scored as a fused DOT
+ *       segment GEMV (#A/#C)
  * </ul>
  *
  * The delta is the combined win of #A (cosine-&gt;dot) and #C (fused GEMV) on the mmap tier. Tagged
@@ -69,20 +70,20 @@ class PersistentMmapCosineBench {
       queries[i] = randomVector(rnd, DIM);
     }
 
-    Path aDir = Files.createDirectories(dir.resolve("a")); // #A default
-    Path bDir = Files.createDirectories(dir.resolve("b")); // preserveOriginalVectors
-    buildAndClose(aDir, docs, false);
-    buildAndClose(bDir, docs, true);
+    Path aDir = Files.createDirectories(dir.resolve("a")); // normalize opt-in
+    Path bDir = Files.createDirectories(dir.resolve("b")); // verbatim default
+    buildAndClose(aDir, docs, true);
+    buildAndClose(bDir, docs, false);
 
-    try (VectorCollection a = open(aDir, false); // mmap segment path, fused DOT
-        VectorCollection b = open(bDir, true)) { // mmap segment path, per-row cosine
+    try (VectorCollection a = open(aDir, true); // mmap segment path, fused DOT
+        VectorCollection b = open(bDir, false)) { // mmap segment path, per-row cosine
       double aQps = bench(a, queries);
       double bQps = bench(b, queries);
       String report =
           String.format(
               "persistent mmap cosine bench (#A+#B+#C), N=%d dim=%d k=%d measured=%d:%n"
-                  + "  preserveOriginalVectors (cosine per-row segment): %.1f qps%n"
-                  + "  #A default (normalize->fused DOT segment GEMV)  : %.1f qps%n"
+                  + "  verbatim default (fused cosine per-row segment)     : %.1f qps%n"
+                  + "  normalize opt-in (normalize->fused DOT segment GEMV): %.1f qps%n"
                   + "  speedup: %.2fx%n",
               N, DIM, K, MEASURED, bQps, aQps, aQps / bQps);
       System.out.print(report);
@@ -92,22 +93,22 @@ class PersistentMmapCosineBench {
     }
   }
 
-  private static void buildAndClose(Path root, List<Document> docs, boolean preserve) {
-    VectorCollection c = open(root, preserve);
+  private static void buildAndClose(Path root, List<Document> docs, boolean normalize) {
+    VectorCollection c = open(root, normalize);
     c.addAll(docs);
     c.commit();
     c.close();
   }
 
-  private static VectorCollection open(Path root, boolean preserve) {
+  private static VectorCollection open(Path root, boolean normalize) {
     VectorCollectionBuilder b =
         VectorCollection.builder()
             .dimension(DIM)
             .metric(SimilarityFunction.COSINE)
             .indexType(IndexType.HNSW)
             .storagePath(root.toAbsolutePath());
-    if (preserve) {
-      b = b.preserveOriginalVectors(true);
+    if (normalize) {
+      b = b.normalizeCosineVectors(true);
     }
     return b.build();
   }
