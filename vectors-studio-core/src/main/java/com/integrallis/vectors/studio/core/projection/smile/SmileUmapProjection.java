@@ -72,7 +72,8 @@ public final class SmileUmapProjection implements Projection {
     SmilePcaProjection.checkInterrupted();
     float[][] coords = SmilePcaProjection.toFloat(projected);
     long ms = System.currentTimeMillis() - start;
-    ProjectionResult out = new ProjectionResult(coords, ProjectionAlgorithm.UMAP, params, ms, null);
+    ProjectionResult out =
+        new ProjectionResult(coords, ProjectionAlgorithm.UMAP, params, ms, null, null);
     if (listener != null) {
       // Terminal call (iter == total) always carries real coordinates.
       listener.onIteration(params.iterations(), params.iterations(), coords);

@@ -23,10 +23,13 @@ package com.integrallis.vectors.studio.core.projection;
  * @param params the algorithm parameters used
  * @param durationMs wall-clock fit time
  * @param varianceExplained PCA only — fraction of variance retained per component; null for others
+ * @param queryProjector out-of-sample projector for placing a query point; non-null for PCA
+ *     (linear, exact), null for t-SNE/UMAP (no transform — the client approximates instead)
  */
 public record ProjectionResult(
     float[][] coords,
     ProjectionAlgorithm algorithm,
     ProjectionParams params,
     long durationMs,
-    double[] varianceExplained) {}
+    double[] varianceExplained,
+    QueryProjector queryProjector) {}

@@ -112,7 +112,8 @@ public final class ApiRoutes implements HttpService {
         rows.subList(dto.sampleSize(), rows.size()).clear();
       }
       float[][] data = rows.toArray(new float[0][]);
-      if (Boolean.TRUE.equals(dto.sphereize())) {
+      boolean sphereize = Boolean.TRUE.equals(dto.sphereize());
+      if (sphereize) {
         sphereize(data);
       }
       ProjectionRequest pr =
@@ -122,7 +123,7 @@ public final class ApiRoutes implements HttpService {
               dto.dimensions(),
               dto.sampleSize(),
               paramsFrom(dto.algorithm(), dto.dimensions(), dto.params()));
-      String jobId = jobs.submit(session, pr, data, ids.toArray(new String[0]));
+      String jobId = jobs.submit(session, pr, data, ids.toArray(new String[0]), sphereize);
       res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
       res.status(Status.ACCEPTED_202)
           .send(MAPPER.writeValueAsBytes(Map.of("jobId", jobId, "n", ids.size())));
@@ -236,6 +237,10 @@ public final class ApiRoutes implements HttpService {
       double mmr = asDouble(body.get("mmr"), -1.0); // >= 0 enables MMR diversity re-ranking
       Float mmrLambda = mmr >= 0 ? (float) Math.min(1.0, mmr) : null;
       List<Map<String, Object>> out;
+      // For a text query on a collection that has a cached PCA projection we return the query
+      // vector's exact coordinates so the client can render it as its own point; otherwise null
+      // (the client approximates from the hit centroid, or shows nothing).
+      Object queryProjection = null;
       if (id != null && !id.isEmpty()) {
         out = searchByVector(name, id, k, mmrLambda);
       } else if (query != null && !query.isEmpty()) {
@@ -258,12 +263,27 @@ public final class ApiRoutes implements HttpService {
         String prefix = entry.queryPrefix() == null ? "" : entry.queryPrefix();
         float[] vec = provider.get().embed(prefix + query);
         out = searchByRawVector(name, vec, k, mmrLambda, null);
+        // If a PCA projection has been run for this collection, project the query vector into the
+        // SAME fitted space so it lands correctly among the rendered points. Sphereize must match.
+        var cached = jobs.queryProjectionFor(name).orElse(null);
+        if (cached != null && cached.projector() != null) {
+          float[] qv = vec;
+          if (cached.sphereize()) {
+            qv = vec.clone();
+            normalize(qv);
+          }
+          float[] coords = cached.projector().project(qv);
+          queryProjection = Map.of("coords", coords, "exact", true);
+        }
       } else {
         res.status(Status.BAD_REQUEST_400).send("missing id or query");
         return;
       }
       res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
-      res.send(MAPPER.writeValueAsBytes(Map.of("hits", out)));
+      Map<String, Object> resp = new java.util.LinkedHashMap<>();
+      resp.put("hits", out);
+      resp.put("queryProjection", queryProjection);
+      res.send(MAPPER.writeValueAsBytes(resp));
     } catch (IllegalArgumentException e) {
       res.status(Status.NOT_FOUND_404).send(String.valueOf(e.getMessage()));
     } catch (Exception e) {
@@ -401,13 +421,18 @@ public final class ApiRoutes implements HttpService {
   /** L2-normalises each row in place (TF Embedding Projector "Sphereize data"). */
   private static void sphereize(float[][] data) {
     for (float[] row : data) {
-      double n = 0.0;
-      for (float f : row) n += (double) f * f;
-      n = Math.sqrt(n);
-      if (n == 0.0) continue;
-      float inv = (float) (1.0 / n);
-      for (int i = 0; i < row.length; i++) row[i] *= inv;
+      normalize(row);
     }
+  }
+
+  /** L2-normalises a single vector in place (same rule as {@link #sphereize}). */
+  private static void normalize(float[] row) {
+    double n = 0.0;
+    for (float f : row) n += (double) f * f;
+    n = Math.sqrt(n);
+    if (n == 0.0) return;
+    float inv = (float) (1.0 / n);
+    for (int i = 0; i < row.length; i++) row[i] *= inv;
   }
 
   /** Builds typed {@link ProjectionParams} from a flat JSON map, defaulting any missing keys. */

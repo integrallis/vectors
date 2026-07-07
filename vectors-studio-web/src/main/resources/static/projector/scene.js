@@ -8,8 +8,10 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 const BG = 0xfcfcfd;
 const POINT_COLOR = 0x126e22;
 const HIT_COLOR = 0xf5820b; // search-result hits render in this orange
+const QUERY_COLOR = "#2563eb"; // the projected query point (blue — distinct from orange hits)
 const POINT_SIZE_2D = 4;   // screen pixels
 const POINT_SIZE_3D = 5;   // screen pixels
+const QUERY_HOVER_INDEX = -2; // sentinel index passed to onHover when the query point is hovered
 
 // Crisp solid disc — small filled circle with a 1px anti-aliased rim. Matches
 // the tight pin-prick dots the TF Embedding Projector renders.
@@ -29,21 +31,22 @@ function makePointSprite() {
   return tex;
 }
 
-// Bullseye / target texture for the query marker: two concentric orange rings
-// around a solid center dot, on a transparent canvas. Drawn onto a THREE.Sprite
-// so it always faces the camera.
-function makeBullseyeTexture() {
+// Query-point texture: a filled blue dot with a thin surrounding ring, on a
+// transparent canvas. Drawn onto a THREE.Sprite so it always faces the camera.
+// This is a *point* (rendered ~1.6× a normal point), NOT the old bullseye target.
+function makeQueryPointTexture() {
   const c = document.createElement("canvas");
-  c.width = c.height = 128;
+  c.width = c.height = 64;
   const g = c.getContext("2d");
-  g.clearRect(0, 0, 128, 128);
-  const cx = 64, cy = 64;
-  g.strokeStyle = "#f5820b";
-  g.fillStyle = "#f5820b";
+  g.clearRect(0, 0, 64, 64);
+  const cx = 32, cy = 32;
+  g.fillStyle = QUERY_COLOR;
+  g.strokeStyle = QUERY_COLOR;
+  // Thin ring.
   g.lineWidth = 3;
-  g.beginPath(); g.arc(cx, cy, 46, 0, Math.PI * 2); g.stroke();
-  g.beginPath(); g.arc(cx, cy, 26, 0, Math.PI * 2); g.stroke();
-  g.beginPath(); g.arc(cx, cy, 7, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(cx, cy, 24, 0, Math.PI * 2); g.stroke();
+  // Filled center dot.
+  g.beginPath(); g.arc(cx, cy, 14, 0, Math.PI * 2); g.fill();
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.minFilter = THREE.LinearFilter;
@@ -136,8 +139,16 @@ export function createScene(host, { onHover, onClick } = {}) {
     ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     ndc.y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
     raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObject(points, false);
-    const idx = hits.length ? hits[0].index : -1;
+    // The query point sprite (drawn on top) takes hover priority over the cloud.
+    let idx = -1;
+    if (queryPoint && queryPoint.visible) {
+      const qhit = raycaster.intersectObject(queryPoint, false);
+      if (qhit.length) idx = QUERY_HOVER_INDEX;
+    }
+    if (idx === -1) {
+      const hits = raycaster.intersectObject(points, false);
+      idx = hits.length ? hits[0].index : -1;
+    }
     if (idx !== hoverIndex) {
       hoverIndex = idx;
       onHover(idx, ev.clientX, ev.clientY);
@@ -214,7 +225,8 @@ export function createScene(host, { onHover, onClick } = {}) {
   let baseColors = null;            // pristine column-derived colors
   let selection = new Set();        // indices currently selected
   let hits = new Set();             // search-result hits, rendered orange
-  let queryMarker = null;           // THREE.Sprite bullseye, or null when hidden
+  let queryPoint = null;            // THREE.Sprite for the projected query, or null when hidden
+  let queryText = "";               // the raw query text shown on hover of the query point
   let isolated = false;             // when true, only selected points render
   let is2D = false;                 // tracks current projection dimensionality
   let autoRotateOn = true;          // user-facing toggle, gated by is2D + selection
@@ -252,6 +264,8 @@ export function createScene(host, { onHover, onClick } = {}) {
     axes.position.set(cx, cy, cz);
     axes.scale.setScalar(r * 1.2);
     axes.visible = !is2D;
+    // A new projection invalidates any prior query point (coords are in the old frame).
+    setQueryPoint(null);
   }
 
   function setColors(colors) {
@@ -352,28 +366,34 @@ export function createScene(host, { onHover, onClick } = {}) {
     };
   }
 
-  // Draws a camera-facing bullseye at world pos [x,y,z] (rendered on top), or
-  // hides it when pos is null. Used to mark where the query embedding lands.
-  function setQueryMarker(pos) {
+  // Draws the query as its OWN camera-facing point at world pos [x,y,z] (rendered
+  // on top), labelled with `text` shown on hover; hides it when pos is null. Sized
+  // ~1.6× a normal point so it reads as a distinct query point, not a target.
+  function setQueryPoint(pos, text) {
     if (!pos) {
-      if (queryMarker) queryMarker.visible = false;
+      queryText = "";
+      if (queryPoint) queryPoint.visible = false;
       return;
     }
-    if (!queryMarker) {
+    queryText = text == null ? "" : String(text);
+    if (!queryPoint) {
       const mat = new THREE.SpriteMaterial({
-        map: makeBullseyeTexture(),
+        map: makeQueryPointTexture(),
         transparent: true,
         depthTest: false,
         depthWrite: false,
       });
-      queryMarker = new THREE.Sprite(mat);
-      queryMarker.renderOrder = 999; // draw over the point cloud
-      scene.add(queryMarker);
+      queryPoint = new THREE.Sprite(mat);
+      queryPoint.renderOrder = 999; // draw over the point cloud
+      scene.add(queryPoint);
     }
-    queryMarker.position.set(pos[0], pos[1], pos[2]);
+    queryPoint.position.set(pos[0], pos[1], pos[2]);
+    // Scale so the sprite reads ~1.6× the on-screen size of a normal point. Points
+    // are sizeAttenuation:false (fixed pixels); sprites scale in world units, so we
+    // derive a small world size from the cloud radius.
     const r = geometry.boundingSphere?.radius || 1;
-    queryMarker.scale.setScalar(r * 0.06);
-    queryMarker.visible = true;
+    queryPoint.scale.setScalar(r * 0.03);
+    queryPoint.visible = true;
   }
 
   // items: Array<{ index: number, text: string, primary?: boolean }>.
@@ -449,9 +469,9 @@ export function createScene(host, { onHover, onClick } = {}) {
     controls.dispose();
     geometry.dispose();
     material.dispose();
-    if (queryMarker) {
-      queryMarker.material.map?.dispose();
-      queryMarker.material.dispose();
+    if (queryPoint) {
+      queryPoint.material.map?.dispose();
+      queryPoint.material.dispose();
     }
     axes.geometry.dispose();
     axes.material.dispose();
@@ -464,9 +484,10 @@ export function createScene(host, { onHover, onClick } = {}) {
 
   return {
     setPositions, setColors, setSelection, setIsolated, setLabels,
-    setHits, setQueryMarker, positionOf, screenPositionOf,
+    setHits, setQueryPoint, positionOf, screenPositionOf,
     projectAll, setControlsEnabled, setAutoRotate,
     get pointCount() { return pointCount; },
+    get queryText() { return queryText; },
     canvas: renderer.domElement,
     dispose,
   };

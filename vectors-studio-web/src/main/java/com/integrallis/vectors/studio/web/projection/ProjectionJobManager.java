@@ -17,10 +17,13 @@ package com.integrallis.vectors.studio.web.projection;
 
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.core.projection.ProgressListener;
+import com.integrallis.vectors.studio.core.projection.ProjectionAlgorithm;
 import com.integrallis.vectors.studio.core.projection.ProjectionRequest;
 import com.integrallis.vectors.studio.core.projection.ProjectionResult;
+import com.integrallis.vectors.studio.core.projection.QueryProjector;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
@@ -45,6 +48,10 @@ public final class ProjectionJobManager implements AutoCloseable {
 
   private final ConcurrentHashMap<String, ProjectionJob> jobs = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, RunningProjection> running = new ConcurrentHashMap<>();
+  // Latest completed projection per collection, retained so a subsequent text search can place the
+  // query as its own point in the same coordinate frame. A new projection overwrites the previous.
+  private final ConcurrentHashMap<String, CachedProjection> queryProjections =
+      new ConcurrentHashMap<>();
   private final ThreadPoolExecutor workers;
   private final ScheduledExecutorService janitor =
       Executors.newSingleThreadScheduledExecutor(
@@ -84,13 +91,41 @@ public final class ProjectionJobManager implements AutoCloseable {
     janitor.scheduleAtFixedRate(this::expireIdle, 1, 1, TimeUnit.MINUTES);
   }
 
+  /**
+   * A completed projection retained per collection so a later query can be projected into its
+   * space.
+   *
+   * @param projector out-of-sample projector (PCA); {@code null} for t-SNE/UMAP (approximate
+   *     client-side)
+   * @param sphereize whether the submitted data was L2-normalized before fitting; the query must be
+   *     normalized the same way before projecting
+   * @param algorithm the algorithm that produced this projection
+   */
+  public record CachedProjection(
+      QueryProjector projector, boolean sphereize, ProjectionAlgorithm algorithm) {}
+
   /** Submits a job. Returns the assigned id; the projection runs asynchronously. */
-  public String submit(StudioSession s, ProjectionRequest req, float[][] data, String[] ids) {
+  public String submit(
+      StudioSession s, ProjectionRequest req, float[][] data, String[] ids, boolean sphereize) {
     Objects.requireNonNull(s, "s");
     Objects.requireNonNull(req, "req");
     Objects.requireNonNull(data, "data");
     Objects.requireNonNull(ids, "ids");
-    return submit(ids, listener -> s.projectionRunner().run(req, data, listener));
+    String collection = req.collection();
+    ProjectionAlgorithm algorithm = req.algorithm();
+    return submit(
+        ids,
+        listener -> {
+          ProjectionResult r = s.projectionRunner().run(req, data, listener);
+          queryProjections.put(
+              collection, new CachedProjection(r.queryProjector(), sphereize, algorithm));
+          return r;
+        });
+  }
+
+  /** The most recent completed projection for {@code collection}, if any. */
+  public Optional<CachedProjection> queryProjectionFor(String collection) {
+    return Optional.ofNullable(queryProjections.get(collection));
   }
 
   String submit(String[] ids, ProjectionTask task) {

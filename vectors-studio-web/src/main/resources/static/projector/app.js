@@ -32,8 +32,24 @@ const setStatus = (msg) => { statusEl.textContent = msg; };
 let lastDim = 3;
 
 // Show the hover-card for point `idx` anchored near client coords (x, y).
-// idx < 0 hides it.
+// idx < 0 hides it. idx === -2 is the sentinel for the projected query point:
+// show the raw query text (from the scene) instead of a dataset row.
 function showHoverCard(idx, x, y) {
+  if (idx === -2) {
+    const q = scene.queryText || "";
+    hoverIdEl.textContent = "query";
+    hoverIdEl.classList.add("is-query");
+    hoverTextEl.textContent = q;
+    hoverTextEl.style.display = q ? "block" : "none";
+    hoverTextEl.classList.add("is-query");
+    const rect = canvasHost.getBoundingClientRect();
+    hoverEl.style.left = `${x - rect.left + 12}px`;
+    hoverEl.style.top = `${y - rect.top + 12}px`;
+    hoverEl.style.display = "block";
+    return;
+  }
+  hoverIdEl.classList.remove("is-query");
+  hoverTextEl.classList.remove("is-query");
   if (idx < 0) { hoverEl.style.display = "none"; return; }
   const id = dataPanel.idAt(idx);
   if (id == null) { hoverEl.style.display = "none"; return; }

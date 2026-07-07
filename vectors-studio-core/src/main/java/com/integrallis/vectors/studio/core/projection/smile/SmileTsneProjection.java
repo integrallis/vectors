@@ -55,7 +55,8 @@ public final class SmileTsneProjection implements Projection {
     SmilePcaProjection.checkInterrupted();
     float[][] coords = SmilePcaProjection.toFloat(result.coordinates());
     long ms = System.currentTimeMillis() - start;
-    ProjectionResult out = new ProjectionResult(coords, ProjectionAlgorithm.TSNE, params, ms, null);
+    ProjectionResult out =
+        new ProjectionResult(coords, ProjectionAlgorithm.TSNE, params, ms, null, null);
     if (listener != null) {
       // Terminal call (iter == total) always carries real coordinates.
       listener.onIteration(params.iterations(), params.iterations(), coords);

@@ -278,6 +278,8 @@ class StudioServerSmokeIT {
               h.port(), "/api/collections/dbpedia-ada002/search", "{\"query\":\"cat\",\"k\":3}");
       assertThat(res.statusCode()).isEqualTo(200);
       assertThat(res.body()).contains("\"hits\"").contains("doc-0");
+      // The query branch always carries a queryProjection key; null until a projection has run.
+      assertThat(res.body()).contains("\"queryProjection\"");
       // MMR must keep working on the text path.
       HttpResponse<String> mmr =
           postJson(

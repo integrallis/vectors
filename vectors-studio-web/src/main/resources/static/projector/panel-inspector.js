@@ -95,8 +95,9 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
 
   // Posts the given JSON payload to the search API and applies the result to
   // the scene + hit list. queryIndex is the optional pivot index (set when
-  // searching by doc id) to render a primary label.
-  async function postSearch(payload, queryIndex) {
+  // searching by doc id) to render a primary label. queryText, when non-null
+  // (free-text search), is the raw text placed as the query point's hover label.
+  async function postSearch(payload, queryIndex, queryText) {
     statusEl.textContent = `searching…`;
     try {
       const res = await fetch(`/api/collections/${encodeURIComponent(collection)}/search`, {
@@ -105,15 +106,14 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
         body: JSON.stringify(payload),
       });
       if (!res.ok) { statusEl.textContent = `error ${res.status}`; return null; }
-      const { hits } = await res.json();
+      const { hits, queryProjection } = await res.json();
       lastHits = hits.map((h) => ({ ...h, index: dataPanel.indexOfId?.(h.id) ?? null }));
       selection = new Set(queryIndex != null ? [queryIndex] : []);
       for (const h of lastHits) if (h.index != null) selection.add(h.index);
       scene.setSelection(selection);
-      // Paint the neighbour hits orange and drop a bullseye where the query
-      // vector approximately lands.
+      // Paint the neighbour hits orange and render the query as its own point.
       scene.setHits?.(new Set(lastHits.map((h) => h.index).filter((i) => i != null)));
-      updateQueryMarker();
+      updateQueryPoint(queryProjection, queryText);
       applyLabels(queryIndex);
       refreshButtons();
       renderHits();
@@ -129,11 +129,13 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
   }
 
   async function searchById(id, k) {
-    return postSearch({ id, k, ...mmrPayload() }, dataPanel.indexOfId?.(id));
+    // Pivoting around an existing doc: it's already a real, labelled point, so no
+    // separate query point (queryText null clears any prior one).
+    return postSearch({ id, k, ...mmrPayload() }, dataPanel.indexOfId?.(id), null);
   }
 
   async function searchByQuery(query, k) {
-    return postSearch({ query, k, ...mmrPayload() }, null);
+    return postSearch({ query, k, ...mmrPayload() }, null, query);
   }
 
   function applyLabels(primaryIndex) {
@@ -149,10 +151,19 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
     scene.setLabels(items);
   }
 
-  // The query vector isn't itself a projected point, so approximate where it
-  // lands as the score-weighted centroid of the hit points' world positions.
-  function updateQueryMarker() {
-    if (!scene.setQueryMarker || !scene.positionOf) return;
+  // Renders the query as its own point, labelled with the raw query text. PCA
+  // returns exact out-of-sample coords from the backend (queryProjection.coords);
+  // t-SNE/UMAP have no transform, so we approximate the query position as the
+  // score-weighted centroid of the hit points' world positions. queryText null
+  // (e.g. an id pivot, or a clear) hides the query point.
+  function updateQueryPoint(queryProjection, queryText) {
+    if (!scene.setQueryPoint) return;
+    if (queryText == null) { scene.setQueryPoint(null); return; }
+    if (queryProjection && queryProjection.coords) {
+      scene.setQueryPoint(queryProjection.coords, queryText);
+      return;
+    }
+    if (!scene.positionOf) { scene.setQueryPoint(null); return; }
     let wx = 0, wy = 0, wz = 0, sum = 0;
     let ux = 0, uy = 0, uz = 0, n = 0;
     for (const h of lastHits) {
@@ -163,9 +174,9 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       const w = h.score != null && h.score > 0 ? h.score : 0;
       wx += p[0] * w; wy += p[1] * w; wz += p[2] * w; sum += w;
     }
-    if (n === 0) { scene.setQueryMarker(null); return; }
-    if (sum > 0) scene.setQueryMarker([wx / sum, wy / sum, wz / sum]);
-    else scene.setQueryMarker([ux / n, uy / n, uz / n]); // fall back to plain centroid
+    if (n === 0) { scene.setQueryPoint(null); return; }
+    if (sum > 0) scene.setQueryPoint([wx / sum, wy / sum, wz / sum], queryText);
+    else scene.setQueryPoint([ux / n, uy / n, uz / n], queryText); // fall back to plain centroid
   }
 
   async function doSearch() {
@@ -186,7 +197,7 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       scene.setSelection(selection);
       scene.setLabels?.([]);
       scene.setHits?.(new Set());
-      scene.setQueryMarker?.(null);
+      scene.setQueryPoint?.(null);
       revealPoint?.(-1);
       refreshButtons();
       renderHits();
@@ -253,7 +264,7 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       scene.setSelection(selection); scene.setIsolated(false);
       scene.setLabels?.([]);
       scene.setHits?.(new Set());
-      scene.setQueryMarker?.(null);
+      scene.setQueryPoint?.(null);
       revealPoint?.(-1);
       queryEl.value = "";
       if (kEl.defaultValue !== "") kEl.value = kEl.defaultValue;

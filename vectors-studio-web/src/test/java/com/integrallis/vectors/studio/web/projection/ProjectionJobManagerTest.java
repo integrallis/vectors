@@ -115,6 +115,7 @@ class ProjectionJobManagerTest {
         ProjectionAlgorithm.PCA,
         new ProjectionParams.PcaParams(2, true, false),
         0L,
+        null,
         null);
   }
 }

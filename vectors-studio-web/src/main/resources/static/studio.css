@@ -334,6 +334,15 @@ form.search-form > button[type="submit"] { flex: 0 0 auto; }
   font: 500 var(--fs-sm)/1.4 var(--font-sans);
   color: var(--color-fg);
 }
+/* Query point hover-card: mark the id slot and italicise the text as the query. */
+.projector-hovercard-id.is-query {
+  color: #2563eb;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.projector-hovercard-text.is-query {
+  font-style: italic;
+}
 .projector-status {
   position: absolute; left: var(--sp-3); bottom: var(--sp-3);
   padding: 4px 10px;

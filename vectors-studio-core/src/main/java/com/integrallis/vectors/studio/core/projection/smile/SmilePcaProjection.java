@@ -20,6 +20,7 @@ import com.integrallis.vectors.studio.core.projection.Projection;
 import com.integrallis.vectors.studio.core.projection.ProjectionAlgorithm;
 import com.integrallis.vectors.studio.core.projection.ProjectionParams.PcaParams;
 import com.integrallis.vectors.studio.core.projection.ProjectionResult;
+import com.integrallis.vectors.studio.core.projection.QueryProjector;
 import java.util.concurrent.CancellationException;
 import smile.feature.extraction.PCA;
 import smile.tensor.Vector;
@@ -51,8 +52,20 @@ public final class SmilePcaProjection implements Projection {
     double[] variance = new double[Math.min(vp.size(), dimensions)];
     for (int i = 0; i < variance.length; i++) variance[i] = vp.get(i);
     long ms = System.currentTimeMillis() - start;
+    // Capture the fitted (reduced) PCA so an out-of-sample query vector projects into the SAME
+    // coordinate frame as the rendered cloud. PCA is linear, so this reproduces the in-sample
+    // projection for training rows and places novel vectors exactly.
+    int dims = dimensions;
+    QueryProjector queryProjector =
+        vector -> {
+          double[] qp = reduced.apply(new double[][] {toDouble(vector)})[0];
+          int m = Math.min(dims, qp.length);
+          float[] out = new float[m];
+          for (int i = 0; i < m; i++) out[i] = (float) qp[i];
+          return out;
+        };
     ProjectionResult result =
-        new ProjectionResult(coords, ProjectionAlgorithm.PCA, params, ms, variance);
+        new ProjectionResult(coords, ProjectionAlgorithm.PCA, params, ms, variance, queryProjector);
     if (listener != null) {
       listener.onIteration(1, 1, coords);
       listener.onDone(result);
@@ -73,6 +86,12 @@ public final class SmilePcaProjection implements Projection {
       for (int j = 0; j < in[i].length; j++) row[j] = in[i][j];
       out[i] = row;
     }
+    return out;
+  }
+
+  static double[] toDouble(float[] in) {
+    double[] out = new double[in.length];
+    for (int i = 0; i < in.length; i++) out[i] = in[i];
     return out;
   }
 
