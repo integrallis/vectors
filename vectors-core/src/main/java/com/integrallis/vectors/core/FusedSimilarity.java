@@ -15,6 +15,9 @@
  */
 package com.integrallis.vectors.core;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.Objects;
 
 /**
@@ -84,6 +87,81 @@ public final class FusedSimilarity {
       }
       case COSINE -> {
         for (int i = 0; i < count; i++) outScores[i] = sim.compare(query, pool[i]);
+      }
+    }
+  }
+
+  /**
+   * Off-heap zero-copy analogue of {@link #bulkCompare}: scores {@code rows[0..count)} against
+   * {@code query} using the fused segment GEMV and writes similarity-function-transformed values
+   * into {@code outScores[0..count)}. Each {@code rows[i]} is a {@link MemorySegment} holding
+   * {@code dim} little-endian float32s (typically a zero-copy mmap/off-heap slice). The query stays
+   * an on-heap {@code float[]} (the GEMV loads it once per 4-row group via {@code
+   * FloatVector.fromArray}).
+   *
+   * <p>EUCLIDEAN/DOT_PRODUCT/MAXIMUM_INNER_PRODUCT route through {@link VectorUtil#batchSquaredL2}
+   * / {@link VectorUtil#batchDotProduct} with the same score transforms as {@link #bulkCompare}, so
+   * scores/rankings match the {@code float[]} path exactly. COSINE has no fused segment kernel; it
+   * falls back to per-row {@link VectorUtil#cosine(MemorySegment, MemorySegment, int)} against a
+   * one-time query upload. With the cosine-normalize default (cosine collections search as DOT) the
+   * COSINE branch is only reached by non-normalized cosine collections.
+   *
+   * @param sim similarity function
+   * @param query query vector (on-heap; length {@code dim})
+   * @param rows reusable off-heap row-segment scratch (rows must be zero-copy slices, not copies)
+   * @param dim vector dimensionality
+   * @param scratch raw-kernel output buffer — at least {@code count} entries
+   * @param outScores final transformed scores — at least {@code count} entries
+   * @param count number of active rows in {@code rows}
+   */
+  public static void bulkCompareSegments(
+      SimilarityFunction sim,
+      float[] query,
+      MemorySegment[] rows,
+      int dim,
+      float[] scratch,
+      float[] outScores,
+      int count) {
+    Objects.requireNonNull(sim, "sim");
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(rows, "rows");
+    Objects.requireNonNull(scratch, "scratch");
+    Objects.requireNonNull(outScores, "outScores");
+    if (count < 0 || count > rows.length) {
+      throw new IllegalArgumentException(
+          "count must be in [0, rows.length]: " + count + " for " + rows.length);
+    }
+    if (scratch.length < count) {
+      throw new IllegalArgumentException(
+          "scratch.length must be >= count: " + scratch.length + " < " + count);
+    }
+    if (outScores.length < count) {
+      throw new IllegalArgumentException(
+          "outScores.length must be >= count: " + outScores.length + " < " + count);
+    }
+    switch (sim) {
+      case EUCLIDEAN -> {
+        VectorUtil.batchSquaredL2(query, rows, dim, scratch, count);
+        for (int i = 0; i < count; i++) outScores[i] = 1f / (1f + scratch[i]);
+      }
+      case DOT_PRODUCT -> {
+        VectorUtil.batchDotProduct(query, rows, dim, scratch, count);
+        for (int i = 0; i < count; i++) outScores[i] = (1f + scratch[i]) * 0.5f;
+      }
+      case MAXIMUM_INNER_PRODUCT -> {
+        VectorUtil.batchDotProduct(query, rows, dim, scratch, count);
+        for (int i = 0; i < count; i++)
+          outScores[i] = SimilarityFunction.scaleMaxInnerProductScore(scratch[i]);
+      }
+      case COSINE -> {
+        if (count == 0) return;
+        // No fused segment cosine kernel: upload the query to a segment ONCE, then score each row
+        // with the same per-pair segment kernel the zero-copy scorer uses (exact parity).
+        try (Arena arena = Arena.ofConfined()) {
+          MemorySegment qs = arena.allocate((long) dim * Float.BYTES);
+          MemorySegment.copy(query, 0, qs, ValueLayout.JAVA_FLOAT, 0L, dim);
+          for (int i = 0; i < count; i++) outScores[i] = sim.compare(qs, rows[i], dim);
+        }
       }
     }
   }

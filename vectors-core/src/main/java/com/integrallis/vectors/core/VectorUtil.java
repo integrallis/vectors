@@ -191,6 +191,33 @@ public final class VectorUtil {
     IMPL.matVecSquaredL2(query, matrix, out, numRows);
   }
 
+  /**
+   * Off-heap fused GEMV dot product: fills {@code out[i]} with the dot product of {@code query} and
+   * the off-heap row {@code rows[i]} for {@code i in [0, count)}. Each {@code rows[i]} is a {@link
+   * MemorySegment} holding {@code dim} little-endian float32s (typically a zero-copy mmap slice).
+   *
+   * <p>Delegates to {@link VectorUtilSupport#matVecDot(float[], MemorySegment[], int, float[],
+   * int)}, which SIMD implementations override with a fused 4-row kernel that loads each query SIMD
+   * chunk once and applies it to 4 segment rows simultaneously — the zero-copy analogue of {@link
+   * #batchDotProduct(float[], float[][], float[], int)}.
+   */
+  public static void batchDotProduct(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    checkBatchSegmentArguments(query, rows, dim, out, count);
+    IMPL.matVecDot(query, rows, dim, out, count);
+  }
+
+  /**
+   * Off-heap fused GEMV squared-L2: fills {@code out[i]} with the squared L2 distance from {@code
+   * query} to the off-heap row {@code rows[i]} for {@code i in [0, count)}. Zero-copy analogue of
+   * {@link #batchSquaredL2(float[], float[][], float[], int)}.
+   */
+  public static void batchSquaredL2(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    checkBatchSegmentArguments(query, rows, dim, out, count);
+    IMPL.matVecSquaredL2(query, rows, dim, out, count);
+  }
+
   // --- PQ ADC (Asymmetric Distance Computation) kernels ---
 
   /**
@@ -256,6 +283,25 @@ public final class VectorUtil {
     for (int i = 0; i < numRows; i++) {
       float[] row = Objects.requireNonNull(matrix[i], "matrix[" + i + "]");
       checkDimensions(query.length, row.length);
+    }
+  }
+
+  private static void checkBatchSegmentArguments(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(rows, "rows");
+    Objects.requireNonNull(out, "out");
+    checkDimensions(query.length, dim);
+    if (count < 0 || count > rows.length) {
+      throw new IllegalArgumentException(
+          "count must be in [0, rows.length]: " + count + " for " + rows.length);
+    }
+    if (out.length < count) {
+      throw new IllegalArgumentException(
+          "out.length must be >= count: " + out.length + " < " + count);
+    }
+    for (int i = 0; i < count; i++) {
+      Objects.requireNonNull(rows[i], "rows[" + i + "]");
     }
   }
 }

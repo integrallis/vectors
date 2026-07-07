@@ -84,6 +84,10 @@ public final class HnswSearcher {
   // vectors support segments.
   private final Arena scorerArena;
   private final MemorySegment queryScratchSeg;
+  // Reusable per-searcher scratch of zero-copy row-segment slices for the fused segment GEMV
+  // (bulkScore on the zero-copy path). Sized to bulkCapacity and refilled with vectorSegment()
+  // views per bulkScore call — NEVER re-allocated per call. Null unless the segment scorer is used.
+  private final MemorySegment[] scorerRows;
   // True when scorerFactory == this::defaultScorer (stateful — bound to this searcher's scratch).
   // Multi-start workers must then build their OWN default scorer rather than share this one, so a
   // worker never touches another thread's scorer scratch.
@@ -180,9 +184,13 @@ public final class HnswSearcher {
       // (MemorySegment.copy) inside defaultScorer, never re-allocated per query.
       this.scorerArena = Arena.ofAuto();
       this.queryScratchSeg = scorerArena.allocate((long) vectors.dimension() * Float.BYTES);
+      // Reusable row-segment scratch for the fused segment GEMV — sized to bulkCapacity like the
+      // float[][] scorerPool, allocated ONCE here, refilled per bulkScore call.
+      this.scorerRows = new MemorySegment[bulkCapacity];
     } else {
       this.scorerArena = null;
       this.queryScratchSeg = null;
+      this.scorerRows = null;
     }
     this.scorerFactory = useDefaultScorer ? this::defaultScorer : factory;
   }
@@ -211,7 +219,23 @@ public final class HnswSearcher {
       final int dim = v.dimension();
       final MemorySegment qs = queryScratchSeg;
       MemorySegment.copy(query, 0, qs, ValueLayout.JAVA_FLOAT, 0L, dim);
-      return nodeId -> sim.compare(qs, v.vectorSegment(nodeId), dim);
+      final MemorySegment[] rows = scorerRows;
+      final float[] scratch = scorerOut;
+      return new NodeScorer() {
+        @Override
+        public float score(int nodeId) {
+          // Greedy/single path: score directly from the mmap slice, no float[] copy.
+          return sim.compare(qs, v.vectorSegment(nodeId), dim);
+        }
+
+        @Override
+        public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+          // Gather zero-copy row slices into the reusable per-searcher scratch (no per-call
+          // allocation), then fused-GEMV score all of them with the query loaded once per 4 rows.
+          for (int i = 0; i < count; i++) rows[i] = v.vectorSegment(nodeIds[offset + i]);
+          FusedSimilarity.bulkCompareSegments(sim, query, rows, dim, scratch, outScores, count);
+        }
+      };
     }
     if (v.sharesReturnBuffer()) {
       // Shared-buffer impls can't safely be pooled for fused scoring; fall back to scalar.

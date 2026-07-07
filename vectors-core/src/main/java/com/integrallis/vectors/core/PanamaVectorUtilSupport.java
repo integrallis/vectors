@@ -1054,4 +1054,178 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       out[r] = squareDistance(query, 0, matrix[r], 0, dim);
     }
   }
+
+  /**
+   * Off-heap SIMD 4-row-unrolled fused GEMV for dot product. Mirrors {@link #matVecDot(float[],
+   * float[][], float[], int)} exactly, but reads each of the 4 rows from a {@link MemorySegment}
+   * (zero-copy mmap/off-heap slice) via {@code FloatVector.fromMemorySegment} instead of {@code
+   * fromArray}. The query is still loaded once per 4-row group from the on-heap {@code float[]}, so
+   * the segment-scoring path gets the same 4× query-load amortization as the {@code float[][]}
+   * path.
+   */
+  @Override
+  public void matVecDot(float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    int rowGroup = count & ~3;
+    int limit = FLOAT_SPECIES.loopBound(dim);
+
+    for (int r = 0; r < rowGroup; r += 4) {
+      MemorySegment r0 = rows[r], r1 = rows[r + 1], r2 = rows[r + 2], r3 = rows[r + 3];
+      FloatVector acc0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc3 = FloatVector.zero(FLOAT_SPECIES);
+
+      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+        long byteOff = (long) i * Float.BYTES;
+        FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i);
+        acc0 =
+            fma(
+                qv,
+                FloatVector.fromMemorySegment(FLOAT_SPECIES, r0, byteOff, ByteOrder.LITTLE_ENDIAN),
+                acc0);
+        acc1 =
+            fma(
+                qv,
+                FloatVector.fromMemorySegment(FLOAT_SPECIES, r1, byteOff, ByteOrder.LITTLE_ENDIAN),
+                acc1);
+        acc2 =
+            fma(
+                qv,
+                FloatVector.fromMemorySegment(FLOAT_SPECIES, r2, byteOff, ByteOrder.LITTLE_ENDIAN),
+                acc2);
+        acc3 =
+            fma(
+                qv,
+                FloatVector.fromMemorySegment(FLOAT_SPECIES, r3, byteOff, ByteOrder.LITTLE_ENDIAN),
+                acc3);
+      }
+
+      float s0 = acc0.reduceLanes(VectorOperators.ADD);
+      float s1 = acc1.reduceLanes(VectorOperators.ADD);
+      float s2 = acc2.reduceLanes(VectorOperators.ADD);
+      float s3 = acc3.reduceLanes(VectorOperators.ADD);
+
+      // Scalar tail (remaining elements after SIMD loop bound)
+      for (int i = limit; i < dim; i++) {
+        float q = query[i];
+        s0 = MathUtil.fma(q, r0.getAtIndex(ValueLayout.JAVA_FLOAT, i), s0);
+        s1 = MathUtil.fma(q, r1.getAtIndex(ValueLayout.JAVA_FLOAT, i), s1);
+        s2 = MathUtil.fma(q, r2.getAtIndex(ValueLayout.JAVA_FLOAT, i), s2);
+        s3 = MathUtil.fma(q, r3.getAtIndex(ValueLayout.JAVA_FLOAT, i), s3);
+      }
+
+      out[r] = s0;
+      out[r + 1] = s1;
+      out[r + 2] = s2;
+      out[r + 3] = s3;
+    }
+
+    // Tail rows (0-3 remaining)
+    for (int r = rowGroup; r < count; r++) {
+      out[r] = dotArraySeg(query, rows[r], dim, limit);
+    }
+  }
+
+  /**
+   * Off-heap SIMD 4-row-unrolled fused GEMV for squared L2 distance. Mirrors {@link
+   * #matVecSquaredL2(float[], float[][], float[], int)}, reading rows from {@link MemorySegment}s.
+   */
+  @Override
+  public void matVecSquaredL2(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    int rowGroup = count & ~3;
+    int limit = FLOAT_SPECIES.loopBound(dim);
+
+    for (int r = 0; r < rowGroup; r += 4) {
+      MemorySegment r0 = rows[r], r1 = rows[r + 1], r2 = rows[r + 2], r3 = rows[r + 3];
+      FloatVector acc0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc3 = FloatVector.zero(FLOAT_SPECIES);
+
+      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+        long byteOff = (long) i * Float.BYTES;
+        FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i);
+        FloatVector d0 =
+            qv.sub(
+                FloatVector.fromMemorySegment(FLOAT_SPECIES, r0, byteOff, ByteOrder.LITTLE_ENDIAN));
+        FloatVector d1 =
+            qv.sub(
+                FloatVector.fromMemorySegment(FLOAT_SPECIES, r1, byteOff, ByteOrder.LITTLE_ENDIAN));
+        FloatVector d2 =
+            qv.sub(
+                FloatVector.fromMemorySegment(FLOAT_SPECIES, r2, byteOff, ByteOrder.LITTLE_ENDIAN));
+        FloatVector d3 =
+            qv.sub(
+                FloatVector.fromMemorySegment(FLOAT_SPECIES, r3, byteOff, ByteOrder.LITTLE_ENDIAN));
+        acc0 = fma(d0, d0, acc0);
+        acc1 = fma(d1, d1, acc1);
+        acc2 = fma(d2, d2, acc2);
+        acc3 = fma(d3, d3, acc3);
+      }
+
+      float s0 = acc0.reduceLanes(VectorOperators.ADD);
+      float s1 = acc1.reduceLanes(VectorOperators.ADD);
+      float s2 = acc2.reduceLanes(VectorOperators.ADD);
+      float s3 = acc3.reduceLanes(VectorOperators.ADD);
+
+      for (int i = limit; i < dim; i++) {
+        float q = query[i];
+        float e0 = q - r0.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+        s0 = MathUtil.fma(e0, e0, s0);
+        float e1 = q - r1.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+        s1 = MathUtil.fma(e1, e1, s1);
+        float e2 = q - r2.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+        s2 = MathUtil.fma(e2, e2, s2);
+        float e3 = q - r3.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+        s3 = MathUtil.fma(e3, e3, s3);
+      }
+
+      out[r] = s0;
+      out[r + 1] = s1;
+      out[r + 2] = s2;
+      out[r + 3] = s3;
+    }
+
+    for (int r = rowGroup; r < count; r++) {
+      out[r] = squaredL2ArraySeg(query, rows[r], dim, limit);
+    }
+  }
+
+  /** Single-row {@code float[]}-query vs {@code MemorySegment}-row dot product (GEMV tail rows). */
+  private float dotArraySeg(float[] query, MemorySegment row, int dim, int limit) {
+    FloatVector acc = FloatVector.zero(FLOAT_SPECIES);
+    for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+      acc =
+          fma(
+              FloatVector.fromArray(FLOAT_SPECIES, query, i),
+              FloatVector.fromMemorySegment(
+                  FLOAT_SPECIES, row, (long) i * Float.BYTES, ByteOrder.LITTLE_ENDIAN),
+              acc);
+    }
+    float s = acc.reduceLanes(VectorOperators.ADD);
+    for (int i = limit; i < dim; i++) {
+      s = MathUtil.fma(query[i], row.getAtIndex(ValueLayout.JAVA_FLOAT, i), s);
+    }
+    return s;
+  }
+
+  /** Single-row {@code float[]}-query vs {@code MemorySegment}-row squared L2 (GEMV tail rows). */
+  private float squaredL2ArraySeg(float[] query, MemorySegment row, int dim, int limit) {
+    FloatVector acc = FloatVector.zero(FLOAT_SPECIES);
+    for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+      FloatVector d =
+          FloatVector.fromArray(FLOAT_SPECIES, query, i)
+              .sub(
+                  FloatVector.fromMemorySegment(
+                      FLOAT_SPECIES, row, (long) i * Float.BYTES, ByteOrder.LITTLE_ENDIAN));
+      acc = fma(d, d, acc);
+    }
+    float s = acc.reduceLanes(VectorOperators.ADD);
+    for (int i = limit; i < dim; i++) {
+      float e = query[i] - row.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+      s = MathUtil.fma(e, e, s);
+    }
+    return s;
+  }
 }

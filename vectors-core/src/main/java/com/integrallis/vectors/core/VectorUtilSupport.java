@@ -16,6 +16,7 @@
 package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 
 /**
  * Interface for all SIMD-accelerable vector operations. Implementations are selected at runtime by
@@ -134,6 +135,60 @@ public interface VectorUtilSupport {
   default void matVecSquaredL2(float[] query, float[][] matrix, float[] out, int numRows) {
     for (int i = 0; i < numRows; i++) {
       out[i] = squareDistance(query, 0, matrix[i], 0, query.length);
+    }
+  }
+
+  /**
+   * Off-heap fused matrix-vector dot product: fills {@code out[i] = dot(query, rows[i])} for {@code
+   * i in [0, count)}, where each {@code rows[i]} is a {@link MemorySegment} holding {@code dim}
+   * little-endian float32s (typically a zero-copy mmap/off-heap slice).
+   *
+   * <p>This is the segment-scoring analogue of {@link #matVecDot(float[], float[][], float[],
+   * int)}: the query is still an on-heap {@code float[]} (uploaded once by the caller); only the
+   * matrix rows come from segments. The default implementation is a scalar per-row loop. SIMD
+   * subclasses override this to load each query SIMD chunk <em>once</em> and apply it to 4 segment
+   * rows simultaneously, giving the zero-copy path the same 4× query-load amortization as the
+   * {@code float[][]} path.
+   *
+   * @param query the query vector (length = {@code dim})
+   * @param rows the matrix rows as off-heap segments (each holds {@code dim} little-endian floats)
+   * @param dim the number of float elements per row
+   * @param out the output array (must have length &ge; {@code count})
+   * @param count the number of rows to process (must be &le; {@code rows.length})
+   */
+  default void matVecDot(float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    for (int i = 0; i < count; i++) {
+      MemorySegment row = rows[i];
+      float s = 0f;
+      for (int d = 0; d < dim; d++) {
+        s = MathUtil.fma(query[d], row.getAtIndex(ValueLayout.JAVA_FLOAT, d), s);
+      }
+      out[i] = s;
+    }
+  }
+
+  /**
+   * Off-heap fused matrix-vector squared L2 distance: fills {@code out[i] = squaredL2(query,
+   * rows[i])} for {@code i in [0, count)}. Segment-scoring analogue of {@link
+   * #matVecSquaredL2(float[], float[][], float[], int)}; see {@link #matVecDot(float[],
+   * MemorySegment[], int, float[], int)} for the query-load amortization rationale.
+   *
+   * @param query the query vector
+   * @param rows the matrix rows as off-heap segments
+   * @param dim the number of float elements per row
+   * @param out the output array (must have length &ge; {@code count})
+   * @param count the number of rows to process
+   */
+  default void matVecSquaredL2(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    for (int i = 0; i < count; i++) {
+      MemorySegment row = rows[i];
+      float s = 0f;
+      for (int d = 0; d < dim; d++) {
+        float e = query[d] - row.getAtIndex(ValueLayout.JAVA_FLOAT, d);
+        s = MathUtil.fma(e, e, s);
+      }
+      out[i] = s;
     }
   }
 
