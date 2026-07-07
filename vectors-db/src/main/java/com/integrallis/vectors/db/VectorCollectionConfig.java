@@ -42,6 +42,12 @@ import java.util.Objects;
  * @param quantizerParams build-time quantizer parameters. Must be {@code null} when {@code
  *     quantizerKind == NONE}. When non-NONE, may be {@code null} to use defaults. When non-null,
  *     the record type must match the quantizer kind.
+ * @param preserveOriginalVectors when {@code false} (the default) and {@link #metric()} is {@link
+ *     SimilarityFunction#COSINE}, vectors are L2-unit-normalized at ingest and the index scores
+ *     them with {@link SimilarityFunction#DOT_PRODUCT} — cosine of unit vectors equals their dot
+ *     product, so this is rank- and score-identical to cosine while running the cheaper single
+ *     reduction kernel (see {@link #indexMetric()}). When {@code true}, vectors are stored verbatim
+ *     and scored with the true cosine kernel. Ignored for non-COSINE metrics.
  */
 public record VectorCollectionConfig(
     int dimension,
@@ -55,7 +61,30 @@ public record VectorCollectionConfig(
     QuantizerParams quantizerParams,
     IvfParams ivfParams,
     CuVsParams cuvsParams,
-    IvfPqParams ivfPqParams) {
+    IvfPqParams ivfPqParams,
+    boolean preserveOriginalVectors) {
+
+  /**
+   * Returns {@code true} when vectors should be L2-unit-normalized at ingest/search so the index
+   * can score them with {@link SimilarityFunction#DOT_PRODUCT} instead of the true {@link
+   * SimilarityFunction#COSINE} kernel. This is exactly {@code metric == COSINE &&
+   * !preserveOriginalVectors}. For unit vectors {@code cosine == dot}, so the substitution is rank-
+   * and score-identical while doing one reduction instead of three.
+   */
+  public boolean normalizeForCosine() {
+    return metric == SimilarityFunction.COSINE && !preserveOriginalVectors;
+  }
+
+  /**
+   * The similarity function the index is actually built and searched with. Returns {@link
+   * SimilarityFunction#DOT_PRODUCT} when {@link #normalizeForCosine()} (the stored vectors are
+   * unit-length, so dot equals cosine), otherwise the true {@link #metric()}. Public callers that
+   * need the collection's declared metric must use {@link #metric()}, which always reports the true
+   * metric (e.g. COSINE) regardless of this internal optimization.
+   */
+  public SimilarityFunction indexMetric() {
+    return normalizeForCosine() ? SimilarityFunction.DOT_PRODUCT : metric;
+  }
 
   public VectorCollectionConfig {
     if (dimension <= 0) {
@@ -135,6 +164,40 @@ public record VectorCollectionConfig(
               + quantizerKind
               + ")");
     }
+  }
+
+  /**
+   * 12-arg convenience constructor that defaults {@link #preserveOriginalVectors()} to {@code
+   * false} (the #A cosine-normalization optimization is on by default). Preserves the shape of
+   * every call site written before {@code preserveOriginalVectors} was added.
+   */
+  public VectorCollectionConfig(
+      int dimension,
+      SimilarityFunction metric,
+      IndexType indexType,
+      QuantizerKind quantizerKind,
+      int autoCommitThreshold,
+      Path storageRoot,
+      HnswParams hnswParams,
+      VamanaParams vamanaParams,
+      QuantizerParams quantizerParams,
+      IvfParams ivfParams,
+      CuVsParams cuvsParams,
+      IvfPqParams ivfPqParams) {
+    this(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        autoCommitThreshold,
+        storageRoot,
+        hnswParams,
+        vamanaParams,
+        quantizerParams,
+        ivfParams,
+        cuvsParams,
+        ivfPqParams,
+        false);
   }
 
   /**

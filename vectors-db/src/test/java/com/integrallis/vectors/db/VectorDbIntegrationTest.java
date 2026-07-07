@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.within;
 
 import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.MetadataValue;
@@ -331,8 +332,11 @@ class VectorDbIntegrationTest {
         int[] expected = bruteForceTopK(data, query, 10, sim);
         for (int i = 0; i < 10; i++) {
           assertThat(result.hits().get(i).id()).isEqualTo("doc-" + expected[i]);
-          // And the score must equal metric.compare exactly.
-          assertThat(result.hits().get(i).score()).isEqualTo(sim.compare(query, data[expected[i]]));
+          // Score matches metric.compare. COSINE is scored via normalize->dot (#A), which rounds
+          // slightly differently than the direct cosine kernel (ranking is unaffected), so allow a
+          // tight fp tolerance rather than bit-exact equality.
+          assertThat(result.hits().get(i).score())
+              .isCloseTo(sim.compare(query, data[expected[i]]), within(1e-4f));
         }
       }
     }

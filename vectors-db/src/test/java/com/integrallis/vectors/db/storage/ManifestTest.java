@@ -228,10 +228,12 @@ class ManifestTest {
     }
 
     @Test
-    void nonZeroFlagsRejected() {
+    void unknownFlagsRejected() {
       byte[] encoded = sample().toBytes();
       ByteBuffer buf = ByteBuffer.wrap(encoded).order(ByteOrder.LITTLE_ENDIAN);
-      buf.putInt(12, 0x1);
+      // 0x1 (bit 0 = vectorsNormalized, #A) is a defined flag now; use an undefined bit to trip
+      // the "unknown flags" rejection.
+      buf.putInt(12, 0x2);
       long selfCrc = Checksums.ofBytes(encoded, 0, Manifest.SELF_CRC_OFFSET);
       buf.putInt(Manifest.SELF_CRC_OFFSET, (int) selfCrc);
       assertThatIOException()
