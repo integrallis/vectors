@@ -136,4 +136,32 @@ public final class MemorySegmentRandomAccessVectors
   public boolean sharesReturnBuffer() {
     return true;
   }
+
+  /**
+   * This adapter is mmap-backed and can serve zero-copy segment views, so segment scoring is
+   * supported. Overrides the {@code false} default from {@code hnsw.RandomAccessVectors}.
+   */
+  @Override
+  public boolean supportsSegments() {
+    return true;
+  }
+
+  /**
+   * Returns a zero-copy {@link MemorySegment} view into the mmap'd page for the given ordinal,
+   * delegating to {@link MemorySegmentVectors#vectorSlice(int)}. Unlike {@link #getVector(int)},
+   * this performs NO copy — the returned slice reads directly from the memory-mapped {@code
+   * vectors.bin}.
+   *
+   * <p>The slice is stable for as long as the backing {@link java.lang.foreign.Arena} is open:
+   * {@code MemorySegmentVectors} slices an immutable mmap, so distinct ordinals yield distinct,
+   * independently valid views (no shared-scratch aliasing, unlike {@link #getVector(int)}).
+   *
+   * @param ordinal the 0-based vector index
+   * @return zero-copy {@code MemorySegment} view of {@code dimension * 4} bytes
+   * @throws IndexOutOfBoundsException if {@code ordinal} is out of range
+   */
+  @Override
+  public MemorySegment vectorSegment(int ordinal) {
+    return mapped.vectorSlice(ordinal);
+  }
 }

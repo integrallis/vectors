@@ -18,9 +18,9 @@ package com.integrallis.vectors.db;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.integrallis.vectors.core.Document;
-import com.integrallis.vectors.core.filter.Filters;
 import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.filter.Filters;
 import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
 import java.nio.file.Path;
 import java.util.Map;

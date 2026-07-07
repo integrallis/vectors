@@ -18,6 +18,10 @@ package com.integrallis.vectors.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.util.Random;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -125,5 +129,70 @@ class SimilarityFunctionTest {
     byte[] b = {4, 5, 6};
     float score = SimilarityFunction.COSINE.compare(a, b);
     assertThat(score).isBetween(0.0f, 1.0f);
+  }
+
+  // --- MemorySegment (zero-copy) vs float[] parity ---
+  //
+  // Proves the new compare(MemorySegment, MemorySegment, int) overload produces the SAME score as
+  // compare(float[], float[]) for every metric, across several dims and random vectors. This is the
+  // correctness contract that lets HnswSearcher SIMD-score directly from an mmap slice with no copy
+  // and NOT regress recall.
+
+  @Test
+  void segmentCompare_matchesFloatArray_allMetrics() {
+    int[] dims = {8, 128, 768};
+    Random rnd = new Random(1234567L);
+    try (Arena arena = Arena.ofConfined()) {
+      for (int dim : dims) {
+        for (int trial = 0; trial < 8; trial++) {
+          float[] a = randomVector(rnd, dim);
+          float[] b = randomVector(rnd, dim);
+          MemorySegment segA = toSegment(arena, a);
+          MemorySegment segB = toSegment(arena, b);
+
+          for (SimilarityFunction sim : SimilarityFunction.values()) {
+            float expected = sim.compare(a, b);
+            float actual = sim.compare(segA, segB, dim);
+            // Tight relative tolerance: same kernels + same float32 accumulation, so any diff is
+            // pure fp reassociation noise, not a semantic divergence.
+            float tol = Math.max(1e-5f, Math.abs(expected) * 1e-5f);
+            assertThat(actual)
+                .as("%s dim=%d trial=%d segment-vs-float[] parity", sim, dim, trial)
+                .isCloseTo(expected, within(tol));
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void segmentCompare_identicalVectors_matchesFloatArray() {
+    int dim = 128;
+    Random rnd = new Random(42L);
+    try (Arena arena = Arena.ofConfined()) {
+      float[] v = randomVector(rnd, dim);
+      MemorySegment seg = toSegment(arena, v);
+      for (SimilarityFunction sim : SimilarityFunction.values()) {
+        float expected = sim.compare(v, v);
+        float actual = sim.compare(seg, seg, dim);
+        assertThat(actual)
+            .as("%s identical-vector segment parity", sim)
+            .isCloseTo(expected, within(1e-5f));
+      }
+    }
+  }
+
+  private static float[] randomVector(Random rnd, int dim) {
+    float[] v = new float[dim];
+    for (int i = 0; i < dim; i++) {
+      v[i] = rnd.nextFloat() * 2f - 1f; // [-1, 1)
+    }
+    return v;
+  }
+
+  private static MemorySegment toSegment(Arena arena, float[] v) {
+    MemorySegment seg = arena.allocate((long) v.length * Float.BYTES);
+    MemorySegment.copy(v, 0, seg, ValueLayout.JAVA_FLOAT, 0L, v.length);
+    return seg;
   }
 }

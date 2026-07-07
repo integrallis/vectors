@@ -653,11 +653,11 @@ public final class VectorCollectionBuilder {
 
   /**
    * Backs this collection with an object-storage durable floor — Amazon S3, Cloudflare R2, Google
-   * Cloud Storage, MinIO, or any S3-compatible endpoint — using the local {@link #storagePath(Path)}
-   * as its cache. On {@link #build()} the current generation is hydrated from {@code backend} under
-   * {@code keyPrefix} into the local cache; every commit is shipped back to {@code backend}. The
-   * full collection API — metadata, filters, and text — is preserved; object storage is only the
-   * durable tier. Requires an absolute {@link #storagePath(Path)}.
+   * Cloud Storage, MinIO, or any S3-compatible endpoint — using the local {@link
+   * #storagePath(Path)} as its cache. On {@link #build()} the current generation is hydrated from
+   * {@code backend} under {@code keyPrefix} into the local cache; every commit is shipped back to
+   * {@code backend}. The full collection API — metadata, filters, and text — is preserved; object
+   * storage is only the durable tier. Requires an absolute {@link #storagePath(Path)}.
    *
    * @param backend the object-storage backend (for example {@code S3StorageBackend.create(...)})
    * @param keyPrefix key prefix (namespace) under which this collection's generations live

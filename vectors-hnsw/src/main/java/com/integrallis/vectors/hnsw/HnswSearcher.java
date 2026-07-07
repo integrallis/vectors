@@ -17,6 +17,9 @@ package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
@@ -135,6 +138,27 @@ public final class HnswSearcher {
    */
   private static NodeScorerFactory defaultFullPrecisionFactory(
       RandomAccessVectors vectors, SimilarityFunction sim) {
+    if (vectors.supportsSegments()) {
+      // Zero-copy path: SIMD-score directly from the mmap slice, no per-neighbor float[] copy.
+      // The QUERY is uploaded into an off-heap segment exactly ONCE per query (inside the factory
+      // lambda, NOT inside score()), then every neighbor score reads the query segment plus a
+      // zero-copy vectorSegment() view of the stored vector.
+      final int dim = vectors.dimension();
+      return query -> {
+        // Per-query (per-scorer) allocation via Arena.ofAuto() — GC reclaims it when the scorer is
+        // unreachable. This is NOT per-neighbor: it runs once when the scorer is created for a
+        // query.
+        Arena arena = Arena.ofAuto();
+        MemorySegment querySeg = arena.allocate((long) dim * Float.BYTES);
+        MemorySegment.copy(query, 0, querySeg, ValueLayout.JAVA_FLOAT, 0L, dim);
+        // score(nodeId): zero-copy — no getVector, no memcpy. bulkScore falls back to the
+        // NodeScorer
+        // default (a scalar loop over score()), so the batch path is still zero-copy per neighbor.
+        // TODO: fuse 4 neighbor segments into a single GEMV (segment-based FusedSimilarity) to
+        // amortise the query load across rows, mirroring the heap float[][] fused path below.
+        return nodeId -> sim.compare(querySeg, vectors.vectorSegment(nodeId), dim);
+      };
+    }
     if (vectors.sharesReturnBuffer()) {
       // Shared-buffer impls can't safely be pooled for fused scoring; fall back to scalar.
       return query -> nodeId -> sim.compare(query, vectors.getVector(nodeId));
