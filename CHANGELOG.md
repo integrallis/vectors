@@ -15,6 +15,14 @@ All notable changes to java-vectors are documented here.
   HNSW compaction/merge, and every LangChain4j cache-store mutation overload.
 - A claims-controlled JVM community launch brief and release-day demonstration
   contract.
+- COSINE search performance: vectors are unit-normalized at ingest and scored via
+  dot product (cosine of unit vectors equals their dot product), collapsing the hot
+  kernel from three reductions plus a sqrt/divide to a single fused dot product
+  (~1.29x QPS on the HNSW cosine path). Opt out with
+  `VectorCollectionBuilder.preserveOriginalVectors(true)`.
+- Zero-copy `MemorySegment` scoring on the persistent/mmap search path, a 4x-unrolled
+  `MemorySegment` cosine kernel (parity with the `float[]` kernel), and HNSW searcher
+  allocation hygiene (batched greedy descent, per-searcher reuse of scorer scratch).
 
 ### Fixed
 
