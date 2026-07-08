@@ -306,9 +306,19 @@ public final class VectorUtil {
       throw new IllegalArgumentException(
           "out.length must be >= numRows: " + out.length + " < " + numRows);
     }
+    // Lazy failure messages: building "matrix[" + i + "]" eagerly per row (Objects.requireNonNull
+    // evaluates its message arg unconditionally) cost ~18% of search time in a JFR profile — the
+    // string concatenation ran on every batch-score call. Only construct the message on failure.
+    int qlen = query.length;
     for (int i = 0; i < numRows; i++) {
-      float[] row = Objects.requireNonNull(matrix[i], "matrix[" + i + "]");
-      checkDimensions(query.length, row.length);
+      float[] row = matrix[i];
+      if (row == null) {
+        throw new NullPointerException("matrix[" + i + "]");
+      }
+      if (row.length != qlen) {
+        throw new IllegalArgumentException(
+            "Vector dimensions differ at row " + i + ": " + qlen + " != " + row.length);
+      }
     }
   }
 
@@ -326,8 +336,11 @@ public final class VectorUtil {
       throw new IllegalArgumentException(
           "out.length must be >= count: " + out.length + " < " + count);
     }
+    // Lazy message (see checkBatchArguments): don't build "rows[i]" per row on the success path.
     for (int i = 0; i < count; i++) {
-      Objects.requireNonNull(rows[i], "rows[" + i + "]");
+      if (rows[i] == null) {
+        throw new NullPointerException("rows[" + i + "]");
+      }
     }
   }
 }
