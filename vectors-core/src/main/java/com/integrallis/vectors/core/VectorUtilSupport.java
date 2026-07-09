@@ -17,6 +17,7 @@ package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 
 /**
  * Interface for all SIMD-accelerable vector operations. Implementations are selected at runtime by
@@ -26,6 +27,12 @@ import java.lang.foreign.ValueLayout;
  * VectorUtilSupport}, combining the best patterns from both.
  */
 public interface VectorUtilSupport {
+
+  ValueLayout.OfShort GGUF_LE_SHORT =
+      ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+  int GGUF_Q_BLOCK_SIZE = 32;
+  int GGUF_Q4_0_BLOCK_BYTES = 18;
+  int GGUF_Q8_0_BLOCK_BYTES = 34;
 
   // --- Float distance kernels ---
 
@@ -137,6 +144,77 @@ public interface VectorUtilSupport {
   default void matVecDot(float[] query, float[] rowMajorMatrix, int rows, int cols, float[] out) {
     for (int row = 0; row < rows; row++) {
       out[row] = dotProduct(query, 0, rowMajorMatrix, row * cols, cols);
+    }
+  }
+
+  /**
+   * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
+   *
+   * <p>Q4_0 stores each 32-value block as a little-endian binary16 scale followed by 16 packed
+   * unsigned nibbles. Each nibble is centered by subtracting 8, then multiplied by the block scale.
+   * This kernel fuses dequantization and dot product without materializing a temporary float row.
+   */
+  default float ggufQ4_0DotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    float sum = 0f;
+    int blocks = dimensions / GGUF_Q_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      long nibbleOffset = blockOffset + Short.BYTES;
+      int queryOffset = block * GGUF_Q_BLOCK_SIZE;
+      for (int i = 0; i < 16; i++) {
+        int packed = qWeight.get(ValueLayout.JAVA_BYTE, nibbleOffset + i) & 0xFF;
+        int lo = (packed & 0x0F) - 8;
+        int hi = ((packed >>> 4) & 0x0F) - 8;
+        sum = MathUtil.fma(query[queryOffset + i * 2], lo * scale, sum);
+        sum = MathUtil.fma(query[queryOffset + i * 2 + 1], hi * scale, sum);
+      }
+    }
+    return sum;
+  }
+
+  /**
+   * Dot product of a full-precision query with one GGUF Q8_0 quantized row.
+   *
+   * <p>Q8_0 stores each 32-value block as a little-endian binary16 scale followed by 32 signed int8
+   * values. This kernel fuses dequantization and dot product without materializing a temporary
+   * float row.
+   */
+  default float ggufQ8_0DotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    float sum = 0f;
+    int blocks = dimensions / GGUF_Q_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      long quantOffset = blockOffset + Short.BYTES;
+      int queryOffset = block * GGUF_Q_BLOCK_SIZE;
+      for (int i = 0; i < GGUF_Q_BLOCK_SIZE; i++) {
+        byte quant = qWeight.get(ValueLayout.JAVA_BYTE, quantOffset + i);
+        sum = MathUtil.fma(query[queryOffset + i], quant * scale, sum);
+      }
+    }
+    return sum;
+  }
+
+  /** Batched row-major GEMV over GGUF Q4_0 rows. */
+  default void ggufQ4_0MatVecDot(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    long rowBytes = ggufQ4_0RowBytes(cols);
+    for (int row = 0; row < rows; row++) {
+      out[row] = ggufQ4_0DotProduct(query, qWeight, row * rowBytes, cols);
+    }
+  }
+
+  /** Batched row-major GEMV over GGUF Q8_0 rows. */
+  default void ggufQ8_0MatVecDot(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    long rowBytes = ggufQ8_0RowBytes(cols);
+    for (int row = 0; row < rows; row++) {
+      out[row] = ggufQ8_0DotProduct(query, qWeight, row * rowBytes, cols);
     }
   }
 
@@ -296,6 +374,23 @@ public interface VectorUtilSupport {
       sum += table[m][codes[codesOffset + m] & 0xFF];
     }
     return sum;
+  }
+
+  private static void checkGgufBlockAligned(int dimensions) {
+    if (dimensions % GGUF_Q_BLOCK_SIZE != 0) {
+      throw new IllegalArgumentException(
+          "GGUF quantized dimensions must be a multiple of 32: " + dimensions);
+    }
+  }
+
+  private static long ggufQ4_0RowBytes(int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    return (long) (dimensions / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
+  }
+
+  private static long ggufQ8_0RowBytes(int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    return (long) (dimensions / GGUF_Q_BLOCK_SIZE) * GGUF_Q8_0_BLOCK_BYTES;
   }
 
   /**
