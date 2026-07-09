@@ -128,6 +128,13 @@ public final class VectorUtil {
     IMPL.addInPlace(v1, v2);
   }
 
+  /** Adds {@code vector[vectorOffset..] * scale} into {@code out[outOffset..]} in place. */
+  public static void addScaledInPlace(
+      float[] out, int outOffset, float[] vector, int vectorOffset, int length, float scale) {
+    checkSubVectorArguments(out, outOffset, vector, vectorOffset, length);
+    IMPL.addScaledInPlace(out, outOffset, vector, vectorOffset, length, scale);
+  }
+
   /** Subtracts v2 from v1 element-wise in place. */
   public static void subInPlace(float[] v1, float[] v2) {
     checkDimensions(v1.length, v2.length);
@@ -422,6 +429,39 @@ public final class VectorUtil {
     if (out.length < rows) {
       throw new IllegalArgumentException(
           "out.length must be >= rows: " + out.length + " < " + rows);
+    }
+  }
+
+  private static void checkSubVectorArguments(
+      float[] out, int outOffset, float[] vector, int vectorOffset, int length) {
+    Objects.requireNonNull(out, "out");
+    Objects.requireNonNull(vector, "vector");
+    if (outOffset < 0) {
+      throw new IllegalArgumentException("outOffset must be >= 0: " + outOffset);
+    }
+    if (vectorOffset < 0) {
+      throw new IllegalArgumentException("vectorOffset must be >= 0: " + vectorOffset);
+    }
+    if (length < 0) {
+      throw new IllegalArgumentException("length must be >= 0: " + length);
+    }
+    if ((long) outOffset + length > out.length) {
+      throw new IllegalArgumentException(
+          "outOffset + length must be <= out.length: "
+              + outOffset
+              + " + "
+              + length
+              + " > "
+              + out.length);
+    }
+    if ((long) vectorOffset + length > vector.length) {
+      throw new IllegalArgumentException(
+          "vectorOffset + length must be <= vector.length: "
+              + vectorOffset
+              + " + "
+              + length
+              + " > "
+              + vector.length);
     }
   }
 

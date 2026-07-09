@@ -838,6 +838,23 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void addScaledInPlace(
+      float[] out, int outOffset, float[] vector, int vectorOffset, int length, float scale) {
+    int i = 0;
+    int limit = FLOAT_SPECIES.loopBound(length);
+    FloatVector scaleVector = FloatVector.broadcast(FLOAT_SPECIES, scale);
+    for (; i < limit; i += FLOAT_SPECIES.length()) {
+      FloatVector outVector = FloatVector.fromArray(FLOAT_SPECIES, out, outOffset + i);
+      FloatVector addend = FloatVector.fromArray(FLOAT_SPECIES, vector, vectorOffset + i);
+      fma(addend, scaleVector, outVector).intoArray(out, outOffset + i);
+    }
+    for (; i < length; i++) {
+      int outIndex = outOffset + i;
+      out[outIndex] = MathUtil.fma(vector[vectorOffset + i], scale, out[outIndex]);
+    }
+  }
+
+  @Override
   public void subInPlace(float[] v1, float[] v2) {
     int i = 0;
     int limit = FLOAT_SPECIES.loopBound(v1.length);

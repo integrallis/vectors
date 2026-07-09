@@ -99,6 +99,37 @@ class VectorUtilTest {
   }
 
   @Test
+  void addScaledInPlace_withOffsets() {
+    float[] out = {99.0f, 1.0f, 2.0f, 3.0f, 98.0f};
+    float[] vector = {97.0f, 4.0f, 5.0f, 6.0f, 96.0f};
+
+    VectorUtil.addScaledInPlace(out, 1, vector, 1, 3, 0.5f);
+
+    assertThat(out).containsExactly(99.0f, 3.0f, 4.5f, 6.0f, 98.0f);
+  }
+
+  @Test
+  void addScaledInPlace_rejectsInvalidArguments() {
+    float[] out = {1.0f, 2.0f};
+    float[] vector = {3.0f, 4.0f};
+
+    assertThatThrownBy(() -> VectorUtil.addScaledInPlace(null, 0, vector, 0, 1, 1.0f))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> VectorUtil.addScaledInPlace(out, 0, null, 0, 1, 1.0f))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> VectorUtil.addScaledInPlace(out, -1, vector, 0, 1, 1.0f))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.addScaledInPlace(out, 0, vector, -1, 1, 1.0f))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.addScaledInPlace(out, 0, vector, 0, -1, 1.0f))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.addScaledInPlace(out, 1, vector, 0, 2, 1.0f))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.addScaledInPlace(out, 0, vector, 1, 2, 1.0f))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
   void subInPlace_knownValues() {
     float[] a = {10.0f, 20.0f, 30.0f};
     float[] b = {1.0f, 2.0f, 3.0f};

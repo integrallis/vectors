@@ -86,6 +86,15 @@ public interface VectorUtilSupport {
   /** Adds v2 to v1 element-wise, storing the result in v1. */
   void addInPlace(float[] v1, float[] v2);
 
+  /** Adds {@code vector * scale} to {@code out} over the requested sub-vector range. */
+  default void addScaledInPlace(
+      float[] out, int outOffset, float[] vector, int vectorOffset, int length, float scale) {
+    for (int i = 0; i < length; i++) {
+      int outIndex = outOffset + i;
+      out[outIndex] = MathUtil.fma(vector[vectorOffset + i], scale, out[outIndex]);
+    }
+  }
+
   /** Subtracts v2 from v1 element-wise, storing the result in v1. */
   void subInPlace(float[] v1, float[] v2);
 
