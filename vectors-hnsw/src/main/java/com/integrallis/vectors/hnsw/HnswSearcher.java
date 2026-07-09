@@ -47,7 +47,13 @@ public final class HnswSearcher {
   private final NodeScorerFactory scorerFactory;
 
   // Scratch buffers reused across searches — zero allocation per search.
-  private final BitSet visited;
+  // Version-stamped visited set (hnswlib-style): a node is "visited" iff
+  // visitedTag[id]==visitedGen.
+  // Resetting between searches is an O(1) generation bump, not an O(graph.size()) BitSet.clear()
+  // that
+  // zeroed all ~N bits every query (a real cost at N=1.18M — most of which are never touched).
+  private final int[] visitedTag;
+  private int visitedGen;
   private final NodeQueue candidates;
   private final NodeQueue results;
   // Scratch buffer for rescore(): avoids allocating a new NodeQueue on every two-pass call.
@@ -159,7 +165,8 @@ public final class HnswSearcher {
     this.vectors = vectors;
     this.similarityFunction = similarityFunction;
     int graphSize = Math.max(1, graph.size());
-    this.visited = new BitSet(graphSize);
+    this.visitedTag = new int[graphSize];
+    this.visitedGen = 0;
     // Initial heap capacity of 256 matches the typical ef (50-200) plus headroom — a query that
     // hits the top of that range never needs to grow the heap. The NodeQueue grows geometrically
     // on overflow, so a wrong guess just costs one realloc per ef-doubling, not per-insert.
@@ -599,16 +606,28 @@ public final class HnswSearcher {
     return current;
   }
 
+  /**
+   * Begins a new visited generation in O(1) amortized time (replacing an O(graph.size()) clear). On
+   * the rare {@code int} wraparound, resets the tag array so a stale tag can't alias the new
+   * generation.
+   */
+  private void nextVisitedGeneration() {
+    if (++visitedGen == 0) {
+      java.util.Arrays.fill(visitedTag, 0);
+      visitedGen = 1;
+    }
+  }
+
   /** Beam search at a given layer using candidate max-heap and result min-heap. */
   NeighborArray beamSearch(int[] entryPoints, int ef, int layer, NodeScorer scorer) {
-    visited.clear();
+    nextVisitedGeneration();
     candidates.clear();
     results.clear();
 
     // Seed with entry points
     for (int ep : entryPoints) {
-      if (!visited.get(ep)) {
-        visited.set(ep);
+      if (visitedTag[ep] != visitedGen) {
+        visitedTag[ep] = visitedGen;
         float score = scorer.score(ep);
         candidates.add(ep, score);
         results.add(ep, score);
@@ -654,8 +673,8 @@ public final class HnswSearcher {
         scorer.scoreNeighborBatch(candidateId, n, bulkScores);
         for (int i = 0; i < n; i++) {
           int neighborId = neighbors.node(i);
-          if (visited.get(neighborId)) continue;
-          visited.set(neighborId);
+          if (visitedTag[neighborId] == visitedGen) continue;
+          visitedTag[neighborId] = visitedGen;
           ingestOne(neighborId, bulkScores[i], ef);
         }
       } else {
@@ -663,8 +682,8 @@ public final class HnswSearcher {
         int batchCount = 0;
         for (int i = 0; i < n; i++) {
           int neighborId = neighbors.node(i);
-          if (visited.get(neighborId)) continue;
-          visited.set(neighborId);
+          if (visitedTag[neighborId] == visitedGen) continue;
+          visitedTag[neighborId] = visitedGen;
           bulkIds[batchCount++] = neighborId;
           if (batchCount == BULK_BATCH) {
             scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
@@ -710,14 +729,14 @@ public final class HnswSearcher {
    */
   NeighborArray beamSearchFiltered(
       int[] entryPoints, int ef, int layer, NodeScorer scorer, IntPredicate predicate) {
-    visited.clear();
+    nextVisitedGeneration();
     candidates.clear();
     results.clear();
 
     // Seed with entry points.
     for (int ep : entryPoints) {
-      if (!visited.get(ep)) {
-        visited.set(ep);
+      if (visitedTag[ep] != visitedGen) {
+        visitedTag[ep] = visitedGen;
         float score = scorer.score(ep);
         candidates.add(ep, score);
         // Only matching entry points go into results.
@@ -761,8 +780,8 @@ public final class HnswSearcher {
         scorer.scoreNeighborBatch(candidateId, n, bulkScores);
         for (int i = 0; i < n; i++) {
           int neighborId = neighbors.node(i);
-          if (visited.get(neighborId)) continue;
-          visited.set(neighborId);
+          if (visitedTag[neighborId] == visitedGen) continue;
+          visitedTag[neighborId] = visitedGen;
           ingestOneFiltered(neighborId, bulkScores[i], ef, predicate);
         }
       } else {
@@ -770,8 +789,8 @@ public final class HnswSearcher {
         int batchCount = 0;
         for (int i = 0; i < n; i++) {
           int neighborId = neighbors.node(i);
-          if (visited.get(neighborId)) continue;
-          visited.set(neighborId);
+          if (visitedTag[neighborId] == visitedGen) continue;
+          visitedTag[neighborId] = visitedGen;
           bulkIds[batchCount++] = neighborId;
           if (batchCount == BULK_BATCH) {
             scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
