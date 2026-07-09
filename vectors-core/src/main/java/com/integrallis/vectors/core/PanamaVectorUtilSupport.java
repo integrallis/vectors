@@ -997,6 +997,58 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   /**
+   * SIMD 4-row-unrolled fused GEMV for a flat row-major matrix. This is the dense-tensor variant of
+   * {@link #matVecDot(float[], float[][], float[], int)} and avoids allocating per-row arrays when
+   * the caller already stores rows contiguously.
+   */
+  @Override
+  public void matVecDot(float[] query, float[] rowMajorMatrix, int rows, int cols, float[] out) {
+    int rowGroup = rows & ~3;
+    int limit = FLOAT_SPECIES.loopBound(cols);
+
+    for (int r = 0; r < rowGroup; r += 4) {
+      int base0 = r * cols;
+      int base1 = base0 + cols;
+      int base2 = base1 + cols;
+      int base3 = base2 + cols;
+      FloatVector acc0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc3 = FloatVector.zero(FLOAT_SPECIES);
+
+      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+        FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i);
+        acc0 = fma(qv, FloatVector.fromArray(FLOAT_SPECIES, rowMajorMatrix, base0 + i), acc0);
+        acc1 = fma(qv, FloatVector.fromArray(FLOAT_SPECIES, rowMajorMatrix, base1 + i), acc1);
+        acc2 = fma(qv, FloatVector.fromArray(FLOAT_SPECIES, rowMajorMatrix, base2 + i), acc2);
+        acc3 = fma(qv, FloatVector.fromArray(FLOAT_SPECIES, rowMajorMatrix, base3 + i), acc3);
+      }
+
+      float s0 = acc0.reduceLanes(VectorOperators.ADD);
+      float s1 = acc1.reduceLanes(VectorOperators.ADD);
+      float s2 = acc2.reduceLanes(VectorOperators.ADD);
+      float s3 = acc3.reduceLanes(VectorOperators.ADD);
+
+      for (int i = limit; i < cols; i++) {
+        float q = query[i];
+        s0 = MathUtil.fma(q, rowMajorMatrix[base0 + i], s0);
+        s1 = MathUtil.fma(q, rowMajorMatrix[base1 + i], s1);
+        s2 = MathUtil.fma(q, rowMajorMatrix[base2 + i], s2);
+        s3 = MathUtil.fma(q, rowMajorMatrix[base3 + i], s3);
+      }
+
+      out[r] = s0;
+      out[r + 1] = s1;
+      out[r + 2] = s2;
+      out[r + 3] = s3;
+    }
+
+    for (int r = rowGroup; r < rows; r++) {
+      out[r] = dotProduct(query, 0, rowMajorMatrix, r * cols, cols);
+    }
+  }
+
+  /**
    * SIMD 4-row-unrolled fused GEMV for squared L2 distance.
    *
    * <p>Same strategy as {@link #matVecDot}: loads each query SIMD chunk once and accumulates

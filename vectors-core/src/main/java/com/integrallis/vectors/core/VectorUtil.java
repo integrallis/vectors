@@ -170,6 +170,19 @@ public final class VectorUtil {
   }
 
   /**
+   * Fused GEMV dot product over a flat row-major matrix. Fills {@code out[row]} with the dot
+   * product of {@code query} and {@code rowMajorMatrix[row * cols .. row * cols + cols)}.
+   *
+   * <p>This is the preferred call shape for dense inference tensors because it avoids materializing
+   * {@code float[][]} row wrappers around contiguous row-major weights.
+   */
+  public static void batchDotProduct(
+      float[] query, float[] rowMajorMatrix, int rows, int cols, float[] out) {
+    checkRowMajorBatchArguments(query, rowMajorMatrix, rows, cols, out);
+    IMPL.matVecDot(query, rowMajorMatrix, rows, cols, out);
+  }
+
+  /**
    * Fills {@code out[i]} with the squared L2 distance from {@code query} to {@code matrix[i]} for
    * all rows {@code i} in {@code [0, matrix.length)}. {@code out.length} must be &ge; {@code
    * matrix.length}.
@@ -341,6 +354,32 @@ public final class VectorUtil {
       if (rows[i] == null) {
         throw new NullPointerException("rows[" + i + "]");
       }
+    }
+  }
+
+  private static void checkRowMajorBatchArguments(
+      float[] query, float[] rowMajorMatrix, int rows, int cols, float[] out) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(rowMajorMatrix, "rowMajorMatrix");
+    Objects.requireNonNull(out, "out");
+    if (rows < 0) {
+      throw new IllegalArgumentException("rows must be >= 0: " + rows);
+    }
+    if (cols < 0) {
+      throw new IllegalArgumentException("cols must be >= 0: " + cols);
+    }
+    checkDimensions(query.length, cols);
+    long required = (long) rows * cols;
+    if (required > rowMajorMatrix.length) {
+      throw new IllegalArgumentException(
+          "rowMajorMatrix.length must be >= rows * cols: "
+              + rowMajorMatrix.length
+              + " < "
+              + required);
+    }
+    if (out.length < rows) {
+      throw new IllegalArgumentException(
+          "out.length must be >= rows: " + out.length + " < " + rows);
     }
   }
 }

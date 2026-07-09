@@ -121,6 +121,26 @@ public interface VectorUtilSupport {
   }
 
   /**
+   * Fused matrix-vector dot product over a flat row-major matrix: fills {@code out[row] =
+   * dot(query, matrix[row])} for {@code row in [0, rows)}.
+   *
+   * <p>This is the allocation-free shape used by dense model tensors and mmap-backed loaders that
+   * expose row-major tensor payloads as a single contiguous buffer. SIMD subclasses override this
+   * with the same 4-row query-load amortization used by the {@code float[][]} batch kernel.
+   *
+   * @param query the query vector (length = {@code cols})
+   * @param rowMajorMatrix flat row-major matrix of length at least {@code rows * cols}
+   * @param rows the number of matrix rows to process
+   * @param cols the number of float elements per row
+   * @param out the output array (must have length &ge; {@code rows})
+   */
+  default void matVecDot(float[] query, float[] rowMajorMatrix, int rows, int cols, float[] out) {
+    for (int row = 0; row < rows; row++) {
+      out[row] = dotProduct(query, 0, rowMajorMatrix, row * cols, cols);
+    }
+  }
+
+  /**
    * Fused matrix-vector squared L2 distance: fills {@code out[i] = squaredL2(query, matrix[i])} for
    * {@code i in [0, numRows)}.
    *
