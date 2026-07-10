@@ -25,6 +25,14 @@ All notable changes to java-vectors are documented here.
 - Zero-copy `MemorySegment` scoring on the persistent/mmap search path, a 4x-unrolled
   `MemorySegment` cosine kernel (parity with the `float[]` kernel), and HNSW searcher
   allocation hygiene (batched greedy descent, per-searcher reuse of scorer scratch).
+- HNSW search hot-path: batch-scoring argument validation now builds its failure messages
+  lazily instead of eagerly constructing `"matrix[" + i + "]"` on every row of every batch
+  (which ran on the success path — ~18% of search time in a JFR profile), for a measured
+  1.2-1.4x QPS speedup with recall and results bit-identical.
+- HNSW search: the per-searcher visited set is now a version-stamped `int[]` tag array with an
+  O(1) generation-bump reset, replacing a `java.util.BitSet` whose per-query `clear()` zeroed
+  all `graph.size()` bits every search (an O(N) cost that scales with corpus size). Mirrors
+  hnswlib's `visited_list_pool`; recall/results bit-identical.
 
 ### Fixed
 

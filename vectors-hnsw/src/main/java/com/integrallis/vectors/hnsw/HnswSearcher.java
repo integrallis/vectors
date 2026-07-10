@@ -36,8 +36,9 @@ import java.util.function.IntPredicate;
  * <p>Scoring is delegated to a {@link NodeScorerFactory}, enabling both full-precision and
  * quantized scoring to share the same search algorithm.
  *
- * <p>Not thread-safe — owns scratch buffers (NodeQueue, BitSet). For concurrent queries, create a
- * separate {@code HnswSearcher} per thread via {@link HnswIndex#searcher()}.
+ * <p>Not thread-safe — owns per-search scratch buffers (NodeQueues plus a version-stamped visited
+ * tag array reset in O(1) per query). For concurrent queries, create a separate {@code
+ * HnswSearcher} per thread via {@link HnswIndex#searcher()}.
  */
 public final class HnswSearcher {
 
