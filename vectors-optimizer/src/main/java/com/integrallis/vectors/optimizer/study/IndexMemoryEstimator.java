@@ -25,6 +25,7 @@ final class IndexMemoryEstimator {
 
   private static final int IVF_DEFAULT_HARMONY_KEY_DIMS = 0;
   private static final int RABIT_CORRECTION_FLOATS = 5;
+  private static final int EXT_RABIT_CORRECTION_FLOATS = 6;
   private static final int BBQ_CORRECTION_FLOATS = 3;
   private static final int NVQ_METADATA_FLOATS_PER_SUBVECTOR = 4;
 
@@ -70,6 +71,8 @@ final class IndexMemoryEstimator {
       case TURBOQUANT -> turboQuantizedBytes(config.quantizerParams(), physicalSize, dimension);
       // fp16: two bytes per coordinate, no quantizer state.
       case FP16 -> (long) physicalSize * dimension * Short.BYTES;
+      case EXTENDED_RABITQ ->
+          extRaBitQuantizedBytes(config.quantizerParams(), physicalSize, dimension);
     };
   }
 
@@ -114,6 +117,25 @@ final class IndexMemoryEstimator {
     long centroids = rawVectorBytes(1, dimension) + rawVectorBytes(1, paddedDimension);
     long givensRotation = (long) (paddedDimension / 2) * 2L * Float.BYTES;
     return (long) physicalSize * codeBytesPerVector + corrections + centroids + givensRotation;
+  }
+
+  private static long extRaBitQuantizedBytes(
+      QuantizerParams params, int physicalSize, int dimension) {
+    QuantizerParams.ExtRaBitParams ep =
+        params instanceof QuantizerParams.ExtRaBitParams p ? p : null;
+    int bits = ep != null ? ep.bits() : VectorCollectionBuilder.DEFAULT_EXTRABIT_BITS;
+    int paddedDimension = ((dimension + 63) / 64) * 64;
+    // Per vector: sign bits (paddedDim/8) + packed magnitude codes ((paddedDim*bits+7)/8) + 6
+    // correction floats. Quantizer state: centroid + Givens rotation (cos/sin arrays).
+    long signBytesPerVector = (long) paddedDimension / 8;
+    long magBytesPerVector = (long) (paddedDimension * bits + 7) / 8;
+    long corrections = (long) physicalSize * EXT_RABIT_CORRECTION_FLOATS * Float.BYTES;
+    long centroid = rawVectorBytes(1, dimension);
+    long givensRotation = (long) (paddedDimension / 2) * 2L * Float.BYTES;
+    return (long) physicalSize * (signBytesPerVector + magBytesPerVector)
+        + corrections
+        + centroid
+        + givensRotation;
   }
 
   private static long turboQuantizedBytes(QuantizerParams params, int physicalSize, int dimension) {
