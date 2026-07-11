@@ -48,5 +48,16 @@ public enum QuantizerKind {
    * <p>Appended last so the existing ordinals stay stable on disk ({@code quantized.bin} stores the
    * ordinal).
    */
-  FP16
+  FP16,
+
+  /**
+   * Extended RaBitQ (SIGMOD 2025): sign bits + multi-bit magnitude codes (2-8 bits/dim) with
+   * per-vector correction factors. Correction-based scoring reconstructs nothing per score, so it
+   * is cheap enough to <em>navigate</em> an HNSW graph on the codes and rerank survivors in full
+   * precision — the shared-code tier behind the object-storage index (matches full-precision recall
+   * ≈0.99 on the codes at ~1/8th the footprint of raw float32).
+   *
+   * <p>Appended after {@link #FP16} so existing on-disk ordinals stay stable.
+   */
+  EXTENDED_RABITQ
 }

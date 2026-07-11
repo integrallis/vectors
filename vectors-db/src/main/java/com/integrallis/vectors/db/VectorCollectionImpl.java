@@ -62,6 +62,7 @@ import com.integrallis.vectors.quantization.ArrayVectorDataset;
 import com.integrallis.vectors.quantization.BinaryMode;
 import com.integrallis.vectors.quantization.BinaryQuantizer;
 import com.integrallis.vectors.quantization.CompressedVectors;
+import com.integrallis.vectors.quantization.ExtendedRaBitQuantizer;
 import com.integrallis.vectors.quantization.Fp16Quantizer;
 import com.integrallis.vectors.quantization.NVQuantizer;
 import com.integrallis.vectors.quantization.ProductQuantizer;
@@ -1757,6 +1758,15 @@ final class VectorCollectionImpl implements VectorCollection {
                 : TurboQuantizer.train(dataset, t.bits(), t.seed());
           }
           case FP16 -> Fp16Quantizer.train(dataset);
+          case EXTENDED_RABITQ -> {
+            QuantizerParams.ExtRaBitParams e =
+                params instanceof QuantizerParams.ExtRaBitParams ep
+                    ? ep
+                    : new QuantizerParams.ExtRaBitParams(
+                        VectorCollectionBuilder.DEFAULT_EXTRABIT_BITS,
+                        VectorCollectionBuilder.DEFAULT_EXTRABIT_SEED);
+            yield ExtendedRaBitQuantizer.train(dataset, e.bits(), e.seed());
+          }
         };
     @SuppressWarnings("rawtypes")
     CompressedVectors compressed = ((Quantizer) quantizer).encodeAll(dataset);

@@ -72,6 +72,12 @@ public final class VectorCollectionBuilder {
   /** Default RaBitQ random seed. */
   public static final long DEFAULT_RABIT_SEED = 42L;
 
+  /** Default Extended RaBitQ magnitude bit-width (matches full-precision recall, compact). */
+  public static final int DEFAULT_EXTRABIT_BITS = 4;
+
+  /** Default Extended RaBitQ rotation seed. */
+  public static final long DEFAULT_EXTRABIT_SEED = 42L;
+
   /** Default TurboQuant per-coordinate bit-width. */
   public static final int DEFAULT_TURBO_BITS = 8;
 
@@ -169,6 +175,8 @@ public final class VectorCollectionBuilder {
   private Integer turboBits;
   private Long turboSeed;
   private Boolean turboUnbiased;
+  private Integer extRaBitBits;
+  private Long extRaBitSeed;
 
   VectorCollectionBuilder() {}
 
@@ -605,6 +613,29 @@ public final class VectorCollectionBuilder {
   }
 
   /**
+   * Sets the Extended RaBitQ magnitude bit-width. Only used when {@link #quantizer(QuantizerKind)}
+   * is {@link QuantizerKind#EXTENDED_RABITQ}. Must be in {@code [2, 8]}. Default: {@value
+   * #DEFAULT_EXTRABIT_BITS}.
+   */
+  public VectorCollectionBuilder extRaBitBits(int bits) {
+    if (bits < 2 || bits > 8) {
+      throw new IllegalArgumentException("Extended RaBitQ bits must be in [2, 8]: " + bits);
+    }
+    this.extRaBitBits = bits;
+    return this;
+  }
+
+  /**
+   * Sets the random seed for Extended RaBitQ's rotation. Only used when {@link
+   * #quantizer(QuantizerKind)} is {@link QuantizerKind#EXTENDED_RABITQ}. Default: {@value
+   * #DEFAULT_EXTRABIT_SEED}.
+   */
+  public VectorCollectionBuilder extRaBitSeed(long seed) {
+    this.extRaBitSeed = seed;
+    return this;
+  }
+
+  /**
    * Sets the staging buffer size at which {@code add}/{@code addAll} auto-commit before returning.
    * Must be positive. Pass {@link Integer#MAX_VALUE} to disable auto-commit (the default), which
    * forces the caller to drive {@link VectorCollection#commit()} explicitly.
@@ -847,6 +878,10 @@ public final class VectorCollectionBuilder {
               turboBits != null ? turboBits : DEFAULT_TURBO_BITS,
               turboSeed != null ? turboSeed : DEFAULT_TURBO_SEED,
               turboUnbiased != null ? turboUnbiased : DEFAULT_TURBO_UNBIASED);
+      case EXTENDED_RABITQ ->
+          new QuantizerParams.ExtRaBitParams(
+              extRaBitBits != null ? extRaBitBits : DEFAULT_EXTRABIT_BITS,
+              extRaBitSeed != null ? extRaBitSeed : DEFAULT_EXTRABIT_SEED);
     };
   }
 }

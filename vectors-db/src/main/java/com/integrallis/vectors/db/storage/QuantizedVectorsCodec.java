@@ -20,6 +20,8 @@ import com.integrallis.vectors.quantization.BinaryMode;
 import com.integrallis.vectors.quantization.BinaryQuantizedVectors;
 import com.integrallis.vectors.quantization.BinaryQuantizer;
 import com.integrallis.vectors.quantization.CompressedVectors;
+import com.integrallis.vectors.quantization.ExtendedRaBitQuantizedVectors;
+import com.integrallis.vectors.quantization.ExtendedRaBitQuantizer;
 import com.integrallis.vectors.quantization.Fp16QuantizedVectors;
 import com.integrallis.vectors.quantization.Fp16Quantizer;
 import com.integrallis.vectors.quantization.GivensRotation;
@@ -44,8 +46,9 @@ import java.nio.ByteOrder;
 import java.util.Objects;
 
 /**
- * Binary codec for the {@code quantized.bin} file. Serializes and deserializes all 8 quantizer
- * kinds (SQ8, SQ4, PQ, BQ, RABITQ, NVQ, TURBOQUANT, FP16) using a tagged-union wire format.
+ * Binary codec for the {@code quantized.bin} file. Serializes and deserializes all 9 quantizer
+ * kinds (SQ8, SQ4, PQ, BQ, RABITQ, NVQ, TURBOQUANT, FP16, EXTENDED_RABITQ) using a tagged-union
+ * wire format.
  *
  * <p>Layout (little-endian throughout):
  *
@@ -74,6 +77,9 @@ public final class QuantizedVectorsCodec {
 
   private static final int ROTATION_TAG_GIVENS = 1;
   private static final int ROTATION_TAG_QUATERNION = 2;
+
+  /** Per-vector correction float count for Extended RaBitQ (sqrX, x0, ppc, ip, error, xipNorm). */
+  private static final int EXT_RABITQ_CORRECTIONS = 6;
 
   private QuantizedVectorsCodec() {}
 
@@ -106,6 +112,9 @@ public final class QuantizedVectorsCodec {
       case TURBOQUANT ->
           encodeTurboQuant((TurboQuantizedVectors) compressed, (TurboQuantizer) quantizer);
       case FP16 -> encodeFp16((Fp16QuantizedVectors) compressed, (Fp16Quantizer) quantizer);
+      case EXTENDED_RABITQ ->
+          encodeExtRaBitQ(
+              (ExtendedRaBitQuantizedVectors) compressed, (ExtendedRaBitQuantizer) quantizer);
       case NONE -> throw new AssertionError("unreachable");
     };
   }
@@ -175,6 +184,7 @@ public final class QuantizedVectorsCodec {
       case NVQ -> decodeNVQ(buf, dimension, vectorCount);
       case TURBOQUANT -> decodeTurboQuant(buf, dimension, vectorCount);
       case FP16 -> decodeFp16(buf, dimension, vectorCount);
+      case EXTENDED_RABITQ -> decodeExtRaBitQ(buf, dimension, vectorCount);
       case NONE -> throw new AssertionError("unreachable");
     };
   }
@@ -590,6 +600,108 @@ public final class QuantizedVectorsCodec {
     }
 
     return new RaBitQuantizedVectors(quantizer, codes, corrections, dimension);
+  }
+
+  // ---- Extended RaBitQ ----
+
+  private static byte[] encodeExtRaBitQ(
+      ExtendedRaBitQuantizedVectors compressed, ExtendedRaBitQuantizer quantizer) {
+    int dimension = quantizer.dimension();
+    int vectorCount = compressed.size();
+    int paddedDimension = quantizer.paddedDimension();
+    int bits = quantizer.bits();
+    float[] centroid = quantizer.centroid();
+    Rotation rotation = quantizer.rotation();
+    int numLongs = quantizer.numLongs();
+    int magBytes = quantizer.magByteSize();
+
+    // Quantizer state: paddedDimension(4) + bits(4) + centroid(D*4) + rotation state
+    long rotationSize = rotationEncodedSize(rotation);
+    long quantizerStateSize = 8L + (long) dimension * Float.BYTES + rotationSize;
+
+    // Per-vector: sign longs + magnitude bytes + 6 correction floats
+    long perVector =
+        (long) numLongs * Long.BYTES + magBytes + (long) EXT_RABITQ_CORRECTIONS * Float.BYTES;
+    long vectorDataSize = (long) vectorCount * perVector;
+    long totalSize = COMMON_HEADER_SIZE + quantizerStateSize + vectorDataSize;
+    checkSize(totalSize);
+
+    byte[] out = new byte[(int) totalSize];
+    ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
+
+    writeCommonHeader(buf, QuantizerKind.EXTENDED_RABITQ, dimension, vectorCount);
+
+    // Quantizer state
+    buf.putInt(paddedDimension);
+    buf.putInt(bits);
+    for (int d = 0; d < dimension; d++) {
+      buf.putFloat(centroid[d]);
+    }
+    encodeRotation(buf, rotation);
+
+    // Per-vector data
+    for (int i = 0; i < vectorCount; i++) {
+      long[] sign = compressed.getSignCodes(i);
+      for (long c : sign) {
+        buf.putLong(c);
+      }
+      buf.put(compressed.getMagCodes(i));
+      float[] corrections = compressed.getCorrections(i);
+      for (int j = 0; j < EXT_RABITQ_CORRECTIONS; j++) {
+        buf.putFloat(corrections[j]);
+      }
+    }
+
+    return out;
+  }
+
+  private static ExtendedRaBitQuantizedVectors decodeExtRaBitQ(
+      ByteBuffer buf, int dimension, int vectorCount) throws IOException {
+    ensureRemaining(buf, 8, "ExtRaBitQ paddedDimension+bits");
+
+    int paddedDimension = buf.getInt();
+    if (paddedDimension <= 0 || paddedDimension % 64 != 0) {
+      throw new IOException(
+          "quantized.bin ExtRaBitQ paddedDimension must be positive multiple of 64: "
+              + paddedDimension);
+    }
+    int bits = buf.getInt();
+    if (bits < 2 || bits > 8) {
+      throw new IOException("quantized.bin ExtRaBitQ bits must be in [2, 8]: " + bits);
+    }
+
+    ensureRemaining(buf, (long) dimension * Float.BYTES, "ExtRaBitQ centroid");
+    float[] centroid = new float[dimension];
+    for (int d = 0; d < dimension; d++) {
+      centroid[d] = buf.getFloat();
+    }
+
+    Rotation rotation = decodeRotation(buf, paddedDimension);
+
+    ExtendedRaBitQuantizer quantizer =
+        ExtendedRaBitQuantizer.fromState(dimension, paddedDimension, bits, centroid, rotation);
+
+    int numLongs = paddedDimension >> 6;
+    int magBytes = (paddedDimension * bits + 7) / 8;
+    long perVector =
+        (long) numLongs * Long.BYTES + magBytes + (long) EXT_RABITQ_CORRECTIONS * Float.BYTES;
+    ensureRemaining(buf, perVector * vectorCount, "ExtRaBitQ vector data");
+
+    long[][] signCodes = new long[vectorCount][numLongs];
+    byte[][] magCodes = new byte[vectorCount][magBytes];
+    float[][] corrections = new float[vectorCount][EXT_RABITQ_CORRECTIONS];
+    for (int i = 0; i < vectorCount; i++) {
+      for (int j = 0; j < numLongs; j++) {
+        signCodes[i][j] = buf.getLong();
+      }
+      buf.get(magCodes[i]);
+      for (int j = 0; j < EXT_RABITQ_CORRECTIONS; j++) {
+        corrections[i][j] = buf.getFloat();
+      }
+    }
+
+    return new ExtendedRaBitQuantizedVectors(
+        quantizer, signCodes, magCodes, corrections, dimension);
   }
 
   // ---- TurboQuant ----

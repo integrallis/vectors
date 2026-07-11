@@ -130,4 +130,20 @@ public sealed interface QuantizerParams {
       }
     }
   }
+
+  /**
+   * Parameters for Extended RaBitQ ({@link QuantizerKind#EXTENDED_RABITQ}).
+   *
+   * @param bits magnitude bit-width. Must be in {@code [2, 8]} (use {@link QuantizerKind#RABITQ}
+   *     for 1-bit). 4 bits is the object-storage-index default — it matches full-precision recall
+   *     while staying compact.
+   * @param seed random seed for the rotation. Default: 42L for reproducibility.
+   */
+  record ExtRaBitParams(int bits, long seed) implements QuantizerParams {
+    public ExtRaBitParams {
+      if (bits < 2 || bits > 8) {
+        throw new IllegalArgumentException("Extended RaBitQ bits must be in [2, 8]: " + bits);
+      }
+    }
+  }
 }
