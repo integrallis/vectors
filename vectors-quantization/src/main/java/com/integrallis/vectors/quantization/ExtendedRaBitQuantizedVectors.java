@@ -58,7 +58,17 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
   private final float[][] corrections; // [size][6]
   private final int dimension;
 
-  ExtendedRaBitQuantizedVectors(
+  /**
+   * Constructs compressed vectors from a trained quantizer and per-vector codes. Public so the
+   * {@code quantized.bin} codec can reconstruct instances on decode.
+   *
+   * @param quantizer the quantizer that produced (or matches) these codes
+   * @param signCodes per-vector sign-bit codes {@code [size][numLongs]}
+   * @param magCodes per-vector magnitude codes {@code [size][magByteSize]}
+   * @param corrections per-vector correction factors {@code [size][6]}
+   * @param dimension original vector dimension
+   */
+  public ExtendedRaBitQuantizedVectors(
       ExtendedRaBitQuantizer quantizer,
       long[][] signCodes,
       byte[][] magCodes,
