@@ -16,6 +16,7 @@
 package com.integrallis.vectors.db;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.SimilarityFunction;
@@ -187,7 +188,10 @@ class CosineNormalizationTest {
       Map<String, Float> after = topK(reopened, queries[i], k);
       assertThat(after.keySet()).containsExactlyElementsOf(before.get(i).keySet());
       for (Map.Entry<String, Float> e : before.get(i).entrySet()) {
-        assertThat(after.get(e.getKey())).isEqualTo(e.getValue());
+        // Scores match across the persist round-trip modulo the in-memory float[] vs reopened
+        // segment-kernel SIMD reduction order (one ULP) — the normalize decision is what's under
+        // test.
+        assertThat(after.get(e.getKey())).isCloseTo(e.getValue(), within(1e-4f));
       }
     }
     reopened.close();

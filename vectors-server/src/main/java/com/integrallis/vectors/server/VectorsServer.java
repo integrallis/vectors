@@ -82,7 +82,8 @@ public final class VectorsServer implements Callable<Integer> {
 
   @Option(
       names = "--s3-endpoint",
-      description = "S3-compatible endpoint for MinIO/R2/etc.; omit for AWS S3 (env VECTORS_S3_ENDPOINT)")
+      description =
+          "S3-compatible endpoint for MinIO/R2/etc.; omit for AWS S3 (env VECTORS_S3_ENDPOINT)")
   private String s3Endpoint;
 
   @Option(names = "--s3-region", description = "Object-storage region (env VECTORS_S3_REGION)")

@@ -36,11 +36,7 @@ public final class ObjectStoreSupport {
   public static StorageBackend open(ServerConfig.ObjectStore cfg) {
     if (cfg.endpoint() != null && !cfg.endpoint().isBlank()) {
       return S3StorageBackend.create(
-          URI.create(cfg.endpoint()),
-          cfg.bucket(),
-          cfg.region(),
-          cfg.accessKey(),
-          cfg.secretKey());
+          URI.create(cfg.endpoint()), cfg.bucket(), cfg.region(), cfg.accessKey(), cfg.secretKey());
     }
     return S3StorageBackend.create(cfg.bucket(), cfg.region());
   }
