@@ -17,6 +17,8 @@ package com.integrallis.vectors.quantization;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 /**
  * Compressed vector storage produced by {@link ExtendedRaBitQuantizer}. Stores 1-bit sign codes
@@ -280,6 +282,60 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
         pq.sqrY(),
         pq.queryNorm(),
         bits);
+  }
+
+  // --- Packed-code bridge for the co-located block index (P2/P3) ---
+
+  /** Number of 64-bit words in each vector's sign code (fixed for this quantizer). */
+  public int signCodeLongs() {
+    return size() == 0 ? 0 : signCodes[0].length;
+  }
+
+  /** Number of magnitude-code bytes per vector (fixed for this quantizer). */
+  public int magCodeByteSize() {
+    return size() == 0 ? 0 : magCodes[0].length;
+  }
+
+  /** Byte size of one packed code: sign words + magnitude bytes + corrections. */
+  public int packedCodeByteSize() {
+    return signCodeLongs() * Long.BYTES
+        + magCodeByteSize()
+        + ExtendedRaBitQuantizer.NUM_CORRECTIONS * Float.BYTES;
+  }
+
+  /**
+   * Serializes the ordinal's code (sign words | magnitude bytes | correction floats, little-endian)
+   * into {@code dst} at {@code offset} — the contiguous {@code byte[]} a co-located block stores.
+   */
+  public void packCode(int ordinal, byte[] dst, int offset) {
+    ByteBuffer b = ByteBuffer.wrap(dst, offset, dst.length - offset).order(ByteOrder.LITTLE_ENDIAN);
+    for (long w : signCodes[ordinal]) {
+      b.putLong(w);
+    }
+    b.put(magCodes[ordinal]);
+    for (float f : corrections[ordinal]) {
+      b.putFloat(f);
+    }
+  }
+
+  /**
+   * Scores a query (via {@code scorer}) against a packed code read straight from a block — the
+   * co-located block search path, with no ordinal lookup. Inverse of {@link #packCode}.
+   */
+  public float scorePacked(RawCodeScorer scorer, byte[] packed, int offset) {
+    ByteBuffer b =
+        ByteBuffer.wrap(packed, offset, packed.length - offset).order(ByteOrder.LITTLE_ENDIAN);
+    long[] sc = new long[signCodeLongs()];
+    for (int i = 0; i < sc.length; i++) {
+      sc[i] = b.getLong();
+    }
+    byte[] mc = new byte[magCodeByteSize()];
+    b.get(mc);
+    float[] corr = new float[ExtendedRaBitQuantizer.NUM_CORRECTIONS];
+    for (int i = 0; i < corr.length; i++) {
+      corr[i] = b.getFloat();
+    }
+    return scorer.score(sc, mc, corr);
   }
 
   /**

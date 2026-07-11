@@ -77,4 +77,46 @@ class ExtendedRaBitQRawScorerTest {
       }
     }
   }
+
+  @Test
+  void packedCodeScoresIdenticallyToOrdinal() {
+    int n = 200;
+    int dim = 48;
+    Random r = new Random(23);
+    float[][] vecs = new float[n][dim];
+    for (int i = 0; i < n; i++) {
+      for (int d = 0; d < dim; d++) {
+        vecs[i][d] = r.nextFloat() * 2f - 1f;
+      }
+    }
+    ArrayVectorDataset ds = new ArrayVectorDataset(vecs);
+    float[] query = new float[dim];
+    for (int d = 0; d < dim; d++) {
+      query[d] = r.nextFloat() * 2f - 1f;
+    }
+    for (int bits : new int[] {2, 4, 7}) {
+      ExtendedRaBitQuantizedVectors codes =
+          ExtendedRaBitQuantizer.train(ds, bits, 5L).encodeAll(ds);
+      int cb = codes.packedCodeByteSize();
+      byte[][] packed = new byte[n][cb];
+      for (int ord = 0; ord < n; ord++) {
+        codes.packCode(ord, packed[ord], 0);
+      }
+      for (SimilarityFunction metric :
+          new SimilarityFunction[] {
+            SimilarityFunction.EUCLIDEAN,
+            SimilarityFunction.DOT_PRODUCT,
+            SimilarityFunction.COSINE,
+            SimilarityFunction.MAXIMUM_INNER_PRODUCT
+          }) {
+        ScoreFunction byOrdinal = codes.scoreFunctionFor(query, metric);
+        ExtendedRaBitQuantizedVectors.RawCodeScorer rs = codes.rawScorerFor(query, metric);
+        for (int ord = 0; ord < n; ord++) {
+          assertThat(codes.scorePacked(rs, packed[ord], 0))
+              .as("bits=%d metric=%s ord=%d", bits, metric, ord)
+              .isEqualTo(byOrdinal.score(ord));
+        }
+      }
+    }
+  }
 }
