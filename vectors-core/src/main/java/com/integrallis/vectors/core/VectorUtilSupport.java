@@ -199,8 +199,8 @@ public interface VectorUtilSupport {
         int packed = qWeight.get(ValueLayout.JAVA_BYTE, nibbleOffset + i) & 0xFF;
         int lo = (packed & 0x0F) - 8;
         int hi = ((packed >>> 4) & 0x0F) - 8;
-        sum = MathUtil.fma(query[queryOffset + i * 2], lo * scale, sum);
-        sum = MathUtil.fma(query[queryOffset + i * 2 + 1], hi * scale, sum);
+        sum = MathUtil.fma(query[queryOffset + i], lo * scale, sum);
+        sum = MathUtil.fma(query[queryOffset + i + 16], hi * scale, sum);
       }
     }
     return sum;

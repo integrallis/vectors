@@ -72,8 +72,8 @@ class GgufQuantizedDotTest {
     float expected = 0f;
     for (int i = 0; i < query.length; i++) {
       query[i] = (i % 7) - 3.0f;
-      int packed = block[2 + (i >>> 1)] & 0xFF;
-      int nibble = (i & 1) == 0 ? packed & 0x0F : (packed >>> 4) & 0x0F;
+      int packed = block[2 + (i & 0x0F)] & 0xFF;
+      int nibble = i < 16 ? packed & 0x0F : (packed >>> 4) & 0x0F;
       expected = Math.fma(query[i], (nibble - 8) * 0.5f, expected);
     }
 
@@ -83,6 +83,20 @@ class GgufQuantizedDotTest {
       float actual = VectorUtil.ggufQ4_0DotProduct(query, segment, 0, query.length);
 
       assertThat(actual).isCloseTo(expected, within(1e-5f));
+    }
+  }
+
+  @Test
+  void q4_0DotProduct_usesGgmlSplitNibbleLayout() {
+    float[] query = new float[32];
+    query[16] = 1.0f;
+    byte[] block = q4Block(0.5f, query, (lo, hi) -> lo == 0 ? 0x98 : 0x88);
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, block);
+
+      assertThat(VectorUtil.ggufQ4_0DotProduct(query, segment, 0, query.length))
+          .isCloseTo(0.5f, within(1e-5f));
     }
   }
 
@@ -211,7 +225,7 @@ class GgufQuantizedDotTest {
     ByteBuffer.wrap(block).order(ByteOrder.LITTLE_ENDIAN).putShort(0, Float.floatToFloat16(scale));
     for (int i = 0; i < 16; i++) {
       if (factory != null) {
-        block[2 + i] = (byte) factory.packed(i * 2, i * 2 + 1);
+        block[2 + i] = (byte) factory.packed(i, i + 16);
       } else {
         int lo = i & 0x0F;
         int hi = 15 - i;
