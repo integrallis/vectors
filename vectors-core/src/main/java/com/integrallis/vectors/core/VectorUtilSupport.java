@@ -30,6 +30,8 @@ public interface VectorUtilSupport {
 
   ValueLayout.OfShort GGUF_LE_SHORT =
       ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+  ValueLayout.OfFloat GGUF_LE_FLOAT =
+      ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
   int GGUF_Q_BLOCK_SIZE = 32;
   int GGUF_Q4_0_BLOCK_BYTES = 18;
   int GGUF_Q8_0_BLOCK_BYTES = 34;
@@ -161,6 +163,21 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Batched row-major GEMV over little-endian GGUF F32 rows without copying mapped weights. */
+  default void ggufF32MatVecDot(
+      float[] query, MemorySegment weight, int rows, int cols, float[] out) {
+    long rowBytes = (long) cols * Float.BYTES;
+    for (int row = 0; row < rows; row++) {
+      long rowOffset = row * rowBytes;
+      float sum = 0.0f;
+      for (int col = 0; col < cols; col++) {
+        float value = weight.get(GGUF_LE_FLOAT, rowOffset + (long) col * Float.BYTES);
+        sum = MathUtil.fma(query[col], value, sum);
+      }
+      out[row] = sum;
+    }
+  }
+
   /**
    * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
    *
@@ -182,8 +199,8 @@ public interface VectorUtilSupport {
         int packed = qWeight.get(ValueLayout.JAVA_BYTE, nibbleOffset + i) & 0xFF;
         int lo = (packed & 0x0F) - 8;
         int hi = ((packed >>> 4) & 0x0F) - 8;
-        sum = MathUtil.fma(query[queryOffset + i * 2], lo * scale, sum);
-        sum = MathUtil.fma(query[queryOffset + i * 2 + 1], hi * scale, sum);
+        sum = MathUtil.fma(query[queryOffset + i], lo * scale, sum);
+        sum = MathUtil.fma(query[queryOffset + i + 16], hi * scale, sum);
       }
     }
     return sum;

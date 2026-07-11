@@ -190,6 +190,17 @@ public final class VectorUtil {
   }
 
   /**
+   * Fused GEMV over a little-endian GGUF F32 matrix stored in mapped or off-heap memory.
+   *
+   * <p>This avoids copying the full matrix to a temporary heap array before each projection.
+   */
+  public static void ggufF32BatchDotProduct(
+      float[] query, MemorySegment weight, int rows, int cols, float[] out) {
+    checkGgufF32BatchArguments(query, weight, rows, cols, out);
+    IMPL.ggufF32MatVecDot(query, weight, rows, cols, out);
+  }
+
+  /**
    * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
    *
    * <p>The operation fuses Q4_0 dequantization and dot-product accumulation without allocating a
@@ -457,6 +468,32 @@ public final class VectorUtil {
               + rowMajorMatrix.length
               + " < "
               + required);
+    }
+    if (out.length < rows) {
+      throw new IllegalArgumentException(
+          "out.length must be >= rows: " + out.length + " < " + rows);
+    }
+  }
+
+  private static void checkGgufF32BatchArguments(
+      float[] query, MemorySegment weight, int rows, int cols, float[] out) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(weight, "weight");
+    Objects.requireNonNull(out, "out");
+    if (rows < 0) {
+      throw new IllegalArgumentException("rows must be >= 0: " + rows);
+    }
+    if (cols < 0) {
+      throw new IllegalArgumentException("cols must be >= 0: " + cols);
+    }
+    checkDimensions(query.length, cols);
+    long requiredBytes = (long) rows * cols * Float.BYTES;
+    if (requiredBytes > weight.byteSize()) {
+      throw new IllegalArgumentException(
+          "weight byteSize must be >= rows * cols * 4: "
+              + weight.byteSize()
+              + " < "
+              + requiredBytes);
     }
     if (out.length < rows) {
       throw new IllegalArgumentException(

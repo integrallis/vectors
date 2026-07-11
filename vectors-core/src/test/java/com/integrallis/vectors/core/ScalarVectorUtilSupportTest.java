@@ -19,6 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import org.junit.jupiter.api.Test;
 
 class ScalarVectorUtilSupportTest {
@@ -111,6 +113,20 @@ class ScalarVectorUtilSupportTest {
     float[] adc = new float[5];
     scalar.batchAssembleAndSum(table, packed, 0, adc, 5, 2);
     assertThat(adc).containsExactly(13f, 11f, 12f, 12f, 12f);
+  }
+
+  @Test
+  void mappedF32GgufKernelReadsLittleEndianRows() {
+    float[] query = {1f, 2f, 3f};
+    ByteBuffer matrix = ByteBuffer.allocate(6 * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+    for (float value : new float[] {1f, 0f, -1f, 0.5f, 1f, 2f}) {
+      matrix.putFloat(value);
+    }
+    float[] out = new float[2];
+
+    scalar.ggufF32MatVecDot(query, MemorySegment.ofArray(matrix.array()), 2, 3, out);
+
+    assertThat(out).containsExactly(-2f, 8.5f);
   }
 
   private static float referenceDot(float[] a, int ao, float[] b, int bo, int length) {
