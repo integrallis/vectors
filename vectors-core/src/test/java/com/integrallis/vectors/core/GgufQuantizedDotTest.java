@@ -32,6 +32,39 @@ import org.junit.jupiter.api.Test;
 class GgufQuantizedDotTest {
 
   @Test
+  void f32BatchDotProduct_readsLittleEndianMappedRows() {
+    float[] query = {1.5f, -2.0f, 0.25f, 4.0f, -0.5f};
+    float[] matrix = {
+      0.5f, 1.0f, -3.0f, 0.25f, 2.0f,
+      -1.0f, 0.5f, 2.0f, -0.75f, 4.0f
+    };
+    float[] out = new float[2];
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, f32Bytes(matrix));
+
+      VectorUtil.ggufF32BatchDotProduct(query, segment, 2, 5, out);
+
+      assertThat(out[0]).isCloseTo(-2.0f, within(1e-5f));
+      assertThat(out[1]).isCloseTo(-7.0f, within(1e-5f));
+    }
+  }
+
+  @Test
+  void f32BatchDotProduct_rejectsTruncatedMatrix() {
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = arena.allocate(7 * Float.BYTES);
+
+      assertThatThrownBy(
+              () ->
+                  VectorUtil.ggufF32BatchDotProduct(
+                      new float[] {1, 2, 3, 4}, segment, 2, 4, new float[2]))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("byteSize");
+    }
+  }
+
+  @Test
   void q4_0DotProduct_matchesDecodedReference() {
     float[] query = new float[32];
     byte[] block = q4Block(0.5f, query, null);
@@ -195,6 +228,15 @@ class GgufQuantizedDotTest {
       block[2 + i] = (byte) (i - 16);
     }
     return block;
+  }
+
+  private static byte[] f32Bytes(float[] values) {
+    ByteBuffer buffer =
+        ByteBuffer.allocate(values.length * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+    for (float value : values) {
+      buffer.putFloat(value);
+    }
+    return buffer.array();
   }
 
   private static byte[] q6KBlock(
