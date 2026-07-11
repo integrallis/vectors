@@ -163,6 +163,36 @@ class VectorDbQuantizationTest {
     }
 
     @Test
+    void extendedRaBitQProducesHighRecall() {
+      // Ext-RaBitQ 4-bit navigates the HNSW graph on the codes and reranks survivors in full
+      // precision (two-pass) — the object-storage shared-code tier. Its correction-factor scoring
+      // is markedly more accurate than 1-bit RaBitQ, so recall should be high with modest
+      // overquery.
+      List<Document> docs = generateDocs(500, SEED);
+      float[] query = randomVector(new Random(999L));
+
+      VectorCollection coll =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.HNSW)
+              .quantizer(QuantizerKind.EXTENDED_RABITQ)
+              .extRaBitBits(4)
+              .build();
+      coll.addAll(docs);
+      coll.commit();
+
+      SearchResult result =
+          coll.search(
+              SearchRequest.builder(query, 10).searchListSize(100).overQueryFactor(3.0f).build());
+
+      Set<String> gt = bruteForceTopKIds(docs, query, 10);
+      double r = recall(gt, result);
+      assertThat(r).as("Extended RaBitQ HNSW recall").isGreaterThanOrEqualTo(0.90);
+      coll.close();
+    }
+
+    @Test
     void overQueryFactorImprovesRecallOrMaintainsIt() {
       List<Document> docs = generateDocs(500, SEED);
       float[] query = randomVector(new Random(999L));
@@ -492,6 +522,20 @@ class VectorDbQuantizationTest {
     @Test
     void fp16RoundTrips(@TempDir Path dir) {
       assertQuantizedPersistentHnswRoundTrip(dir, QuantizerKind.FP16, null);
+    }
+
+    @Test
+    void extendedRaBitQRoundTrips(@TempDir Path dir) {
+      // 4-bit magnitude codes exercise sub-byte packing + the sign/mag/correction tri-partite
+      // per-vector layout in the codec, plus fromState rotation/centroid reconstruction on decode.
+      VectorCollectionBuilder b =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.HNSW)
+              .quantizer(QuantizerKind.EXTENDED_RABITQ)
+              .extRaBitBits(4);
+      assertQuantizedPersistentRoundTrip(dir, b);
     }
 
     private void assertQuantizedPersistentHnswRoundTrip(

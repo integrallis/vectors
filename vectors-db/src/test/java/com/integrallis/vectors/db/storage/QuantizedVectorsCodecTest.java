@@ -25,6 +25,8 @@ import com.integrallis.vectors.quantization.BinaryMode;
 import com.integrallis.vectors.quantization.BinaryQuantizedVectors;
 import com.integrallis.vectors.quantization.BinaryQuantizer;
 import com.integrallis.vectors.quantization.CompressedVectors;
+import com.integrallis.vectors.quantization.ExtendedRaBitQuantizedVectors;
+import com.integrallis.vectors.quantization.ExtendedRaBitQuantizer;
 import com.integrallis.vectors.quantization.Fp16QuantizedVectors;
 import com.integrallis.vectors.quantization.Fp16Quantizer;
 import com.integrallis.vectors.quantization.NVQuantizedVectors;
@@ -309,6 +311,58 @@ class QuantizedVectorsCodecTest {
 
       byte[] first = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.RABITQ);
       byte[] second = QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.RABITQ);
+      assertThat(first).isEqualTo(second);
+    }
+  }
+
+  @Nested
+  class ExtendedRaBitQRoundTrip {
+
+    @Test
+    void roundTripProducesIdenticalScoresEveryMetricAndBits() throws IOException {
+      VectorDataset data = dataset();
+      float[] query = randomVectors(1, DIM, 99L)[0];
+      SimilarityFunction[] metrics = {
+        SimilarityFunction.EUCLIDEAN,
+        SimilarityFunction.DOT_PRODUCT,
+        SimilarityFunction.COSINE,
+        SimilarityFunction.MAXIMUM_INNER_PRODUCT
+      };
+      for (int bits : new int[] {2, 4, 7}) {
+        ExtendedRaBitQuantizer quantizer = ExtendedRaBitQuantizer.train(data, bits, SEED);
+        ExtendedRaBitQuantizedVectors original = quantizer.encodeAll(data);
+
+        byte[] encoded =
+            QuantizedVectorsCodec.encode(original, quantizer, QuantizerKind.EXTENDED_RABITQ);
+        CompressedVectors decoded = QuantizedVectorsCodec.decode(encoded);
+
+        assertThat(decoded).isInstanceOf(ExtendedRaBitQuantizedVectors.class);
+        ExtendedRaBitQuantizedVectors eq = (ExtendedRaBitQuantizedVectors) decoded;
+        assertThat(eq.size()).isEqualTo(original.size());
+        assertThat(eq.dimension()).isEqualTo(DIM);
+
+        for (SimilarityFunction metric : metrics) {
+          ScoreFunction origScorer = original.scoreFunctionFor(query, metric);
+          ScoreFunction decodedScorer = eq.scoreFunctionFor(query, metric);
+          for (int i = 0; i < NUM_VECTORS; i++) {
+            assertThat(decodedScorer.score(i))
+                .as("bits=%d metric=%s ordinal=%d", bits, metric, i)
+                .isEqualTo(origScorer.score(i));
+          }
+        }
+      }
+    }
+
+    @Test
+    void encodeTwiceProducesSameBytes() {
+      VectorDataset data = dataset();
+      ExtendedRaBitQuantizer quantizer = ExtendedRaBitQuantizer.train(data, 4, SEED);
+      ExtendedRaBitQuantizedVectors compressed = quantizer.encodeAll(data);
+
+      byte[] first =
+          QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.EXTENDED_RABITQ);
+      byte[] second =
+          QuantizedVectorsCodec.encode(compressed, quantizer, QuantizerKind.EXTENDED_RABITQ);
       assertThat(first).isEqualTo(second);
     }
   }
