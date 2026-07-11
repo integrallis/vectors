@@ -1065,6 +1065,96 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
   }
 
+  /** SIMD 4-row-unrolled GEMV over little-endian mapped GGUF F32 weights. */
+  @Override
+  public void ggufF32MatVecDot(
+      float[] query, MemorySegment weight, int rows, int cols, float[] out) {
+    int rowGroup = rows & ~3;
+    int limit = FLOAT_SPECIES.loopBound(cols);
+    long rowBytes = (long) cols * Float.BYTES;
+
+    for (int row = 0; row < rowGroup; row += 4) {
+      long base0 = row * rowBytes;
+      long base1 = base0 + rowBytes;
+      long base2 = base1 + rowBytes;
+      long base3 = base2 + rowBytes;
+      FloatVector acc0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector acc3 = FloatVector.zero(FLOAT_SPECIES);
+
+      for (int col = 0; col < limit; col += FLOAT_SPECIES.length()) {
+        FloatVector queryVector = FloatVector.fromArray(FLOAT_SPECIES, query, col);
+        long byteOffset = (long) col * Float.BYTES;
+        acc0 =
+            fma(
+                queryVector,
+                FloatVector.fromMemorySegment(
+                    FLOAT_SPECIES, weight, base0 + byteOffset, ByteOrder.LITTLE_ENDIAN),
+                acc0);
+        acc1 =
+            fma(
+                queryVector,
+                FloatVector.fromMemorySegment(
+                    FLOAT_SPECIES, weight, base1 + byteOffset, ByteOrder.LITTLE_ENDIAN),
+                acc1);
+        acc2 =
+            fma(
+                queryVector,
+                FloatVector.fromMemorySegment(
+                    FLOAT_SPECIES, weight, base2 + byteOffset, ByteOrder.LITTLE_ENDIAN),
+                acc2);
+        acc3 =
+            fma(
+                queryVector,
+                FloatVector.fromMemorySegment(
+                    FLOAT_SPECIES, weight, base3 + byteOffset, ByteOrder.LITTLE_ENDIAN),
+                acc3);
+      }
+
+      float sum0 = acc0.reduceLanes(VectorOperators.ADD);
+      float sum1 = acc1.reduceLanes(VectorOperators.ADD);
+      float sum2 = acc2.reduceLanes(VectorOperators.ADD);
+      float sum3 = acc3.reduceLanes(VectorOperators.ADD);
+      for (int col = limit; col < cols; col++) {
+        float queryValue = query[col];
+        long byteOffset = (long) col * Float.BYTES;
+        sum0 = MathUtil.fma(queryValue, weight.get(GGUF_LE_FLOAT, base0 + byteOffset), sum0);
+        sum1 = MathUtil.fma(queryValue, weight.get(GGUF_LE_FLOAT, base1 + byteOffset), sum1);
+        sum2 = MathUtil.fma(queryValue, weight.get(GGUF_LE_FLOAT, base2 + byteOffset), sum2);
+        sum3 = MathUtil.fma(queryValue, weight.get(GGUF_LE_FLOAT, base3 + byteOffset), sum3);
+      }
+
+      out[row] = sum0;
+      out[row + 1] = sum1;
+      out[row + 2] = sum2;
+      out[row + 3] = sum3;
+    }
+
+    for (int row = rowGroup; row < rows; row++) {
+      long base = row * rowBytes;
+      FloatVector accumulator = FloatVector.zero(FLOAT_SPECIES);
+      for (int col = 0; col < limit; col += FLOAT_SPECIES.length()) {
+        accumulator =
+            fma(
+                FloatVector.fromArray(FLOAT_SPECIES, query, col),
+                FloatVector.fromMemorySegment(
+                    FLOAT_SPECIES,
+                    weight,
+                    base + (long) col * Float.BYTES,
+                    ByteOrder.LITTLE_ENDIAN),
+                accumulator);
+      }
+      float sum = accumulator.reduceLanes(VectorOperators.ADD);
+      for (int col = limit; col < cols; col++) {
+        sum =
+            MathUtil.fma(
+                query[col], weight.get(GGUF_LE_FLOAT, base + (long) col * Float.BYTES), sum);
+      }
+      out[row] = sum;
+    }
+  }
+
   /**
    * SIMD 4-row-unrolled fused GEMV for squared L2 distance.
    *
