@@ -159,6 +159,38 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
     return new ExtendedRaBitQuantizer(dim, paddedDim, bits, centroid, rotation);
   }
 
+  /**
+   * Reconstructs a trained quantizer from persisted state (used by the {@code quantized.bin}
+   * codec). No training is performed; the caller supplies the exact centroid and rotation captured
+   * at encode time so decoded scores are bit-identical to the original.
+   *
+   * @param dimension original vector dimension
+   * @param paddedDimension dimension rounded up to a multiple of 64 (must match {@code rotation})
+   * @param bits magnitude bit-width (2-8)
+   * @param centroid the dataset centroid (length == dimension)
+   * @param rotation the rotation strategy (dimension == paddedDimension)
+   * @return a quantizer equivalent to the one that produced the persisted codes
+   * @throws IllegalArgumentException if bits, dimensions, or rotation are inconsistent
+   */
+  public static ExtendedRaBitQuantizer fromState(
+      int dimension, int paddedDimension, int bits, float[] centroid, Rotation rotation) {
+    validateBits(bits);
+    int expectedPadded = ((dimension + 63) / 64) * 64;
+    if (paddedDimension != expectedPadded) {
+      throw new IllegalArgumentException(
+          "paddedDimension " + paddedDimension + " must equal " + expectedPadded);
+    }
+    if (rotation.dimension() != paddedDimension) {
+      throw new IllegalArgumentException(
+          "Rotation dimension " + rotation.dimension() + " must match " + paddedDimension);
+    }
+    if (centroid.length != dimension) {
+      throw new IllegalArgumentException(
+          "Centroid length " + centroid.length + " must equal dimension " + dimension);
+    }
+    return new ExtendedRaBitQuantizer(dimension, paddedDimension, bits, centroid, rotation);
+  }
+
   private static void validateBits(int bits) {
     if (bits < 2 || bits > 8) {
       throw new IllegalArgumentException(
@@ -381,17 +413,17 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
   // --- Accessors ---
 
   /** Returns the padded dimension (rounded up to the next multiple of 64). */
-  int paddedDimension() {
+  public int paddedDimension() {
     return paddedDimension;
   }
 
   /** Returns the magnitude bit-width. */
-  int bits() {
+  public int bits() {
     return bits;
   }
 
   /** Returns the dataset centroid. */
-  float[] centroid() {
+  public float[] centroid() {
     return centroid;
   }
 
@@ -401,7 +433,7 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
   }
 
   /** Returns the rotation strategy. */
-  Rotation rotation() {
+  public Rotation rotation() {
     return rotation;
   }
 
@@ -411,7 +443,7 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
   }
 
   /** Returns the number of bytes for the magnitude-code portion. */
-  int magByteSize() {
+  public int magByteSize() {
     return (paddedDimension * bits + 7) / 8;
   }
 
@@ -421,7 +453,7 @@ public final class ExtendedRaBitQuantizer implements Quantizer<ExtendedRaBitQuan
   }
 
   /** Returns the number of longs needed to store the sign-bit codes. */
-  int numLongs() {
+  public int numLongs() {
     return paddedDimension >> 6;
   }
 
