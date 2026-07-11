@@ -17,6 +17,9 @@ package com.integrallis.vectors.studio.web.routing;
 
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.sidecart.SidecartRegistry;
+import com.integrallis.vectors.studio.web.dataset.DatasetCatalog;
+import com.integrallis.vectors.studio.web.dataset.DatasetLoadJobManager;
+import com.integrallis.vectors.studio.web.embed.ProviderRegistry;
 import com.integrallis.vectors.studio.web.optimize.OptimizeJobManager;
 import com.integrallis.vectors.studio.web.projection.ProjectionJobManager;
 import com.integrallis.vectors.studio.web.view.JteEngineFactory;
@@ -33,10 +36,13 @@ public final class StudioRouting {
   private final OptimizeJobManager optimizeJobs;
   private final SidecartRegistry sidecart;
   private final ViewRenderer renderer;
+  private final DatasetCatalog datasetCatalog;
+  private final DatasetLoadJobManager datasetJobs;
+  private final ProviderRegistry providerRegistry;
 
   public StudioRouting(
       StudioSession session, ProjectionJobManager jobs, OptimizeJobManager optimizeJobs) {
-    this(session, jobs, optimizeJobs, SidecartRegistry.empty());
+    this(session, jobs, optimizeJobs, SidecartRegistry.empty(), null);
   }
 
   public StudioRouting(
@@ -44,12 +50,25 @@ public final class StudioRouting {
       ProjectionJobManager jobs,
       OptimizeJobManager optimizeJobs,
       SidecartRegistry sidecart) {
+    this(session, jobs, optimizeJobs, sidecart, null);
+  }
+
+  public StudioRouting(
+      StudioSession session,
+      ProjectionJobManager jobs,
+      OptimizeJobManager optimizeJobs,
+      SidecartRegistry sidecart,
+      ProviderRegistry providerRegistry) {
     this.session = session;
     this.jobs = jobs;
     this.optimizeJobs = optimizeJobs;
     this.sidecart = sidecart == null ? SidecartRegistry.empty() : sidecart;
     TemplateEngine engine = JteEngineFactory.create();
     this.renderer = new ViewRenderer(engine);
+    this.datasetCatalog = DatasetCatalog.load();
+    // Daemon-threaded; the JVM exit reclaims it, so no explicit shutdown wiring is required.
+    this.datasetJobs = new DatasetLoadJobManager();
+    this.providerRegistry = providerRegistry == null ? ProviderRegistry.load() : providerRegistry;
   }
 
   /** Applies all Studio routes to {@code rules}. */
@@ -57,14 +76,16 @@ public final class StudioRouting {
   public void apply(HttpRouting.Builder rules) {
     rules
         .register("/static", StaticContentService.create("/static"))
-        .register(new HomeRoutes(session, renderer))
+        .register(new HomeRoutes(session, renderer, datasetCatalog))
         .register(new CollectionRoutes(session, renderer))
         .register(new SearchRoutes(renderer))
         .register(new DocumentRoutes(session, renderer))
         .register(new BlobRoutes(session, sidecart))
         .register(new ProjectorRoutes(session, jobs, renderer))
         .register(new OptimizeRoutes(session, optimizeJobs, renderer))
-        .register(new ApiRoutes(session, jobs))
+        .register(new ApiRoutes(session, jobs, datasetCatalog, providerRegistry))
+        .register(new DatasetRoutes(session, renderer, datasetCatalog, datasetJobs))
+        .register(new ProvidersRoutes(renderer, providerRegistry))
         .register(new HealthRoutes());
   }
 }

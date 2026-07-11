@@ -50,9 +50,9 @@ public record ServerConfig(
 
   /**
    * Object-storage durable-floor configuration for the server's collections. An {@code endpoint} of
-   * {@code null} targets AWS S3 with the default credential chain; a non-null endpoint (with
-   * {@code accessKey}/{@code secretKey}) targets an S3-compatible service — Cloudflare R2, MinIO, or
-   * any other. Each collection lives under {@code prefix + name + "/"}.
+   * {@code null} targets AWS S3 with the default credential chain; a non-null endpoint (with {@code
+   * accessKey}/{@code secretKey}) targets an S3-compatible service — Cloudflare R2, MinIO, or any
+   * other. Each collection lives under {@code prefix + name + "/"}.
    *
    * @param endpoint S3-compatible endpoint URI, or {@code null} for AWS S3
    * @param bucket bucket name

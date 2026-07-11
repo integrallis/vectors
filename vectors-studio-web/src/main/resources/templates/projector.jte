@@ -116,6 +116,15 @@
                 <span>Neighbors</span>
                 <input type="number" id="ins-k" min="1" max="200" step="1" value="10">
               </label>
+              <label class="projector-checkbox">
+                <input type="checkbox" id="ins-mmr">
+                <span>MMR diversity</span>
+              </label>
+              <label class="projector-field projector-field--inline" id="ins-mmr-lambda-field" hidden>
+                <span>&#955; relevance&#8211;diversity</span>
+                <input type="range" id="ins-mmr-lambda" min="0" max="1" step="0.05" value="0.5">
+                <output id="ins-mmr-lambda-out">0.50</output>
+              </label>
               <div class="projector-actions">
                 <button type="button" class="btn btn-primary" id="ins-search">Search</button>
                 <button type="button" class="btn" id="ins-lasso" aria-pressed="false">Lasso</button>

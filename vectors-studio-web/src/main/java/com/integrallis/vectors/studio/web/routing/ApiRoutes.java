@@ -17,11 +17,18 @@ package com.integrallis.vectors.studio.web.routing;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.hybrid.MaximalMarginalRelevance;
+import com.integrallis.vectors.optimizer.embed.EmbeddingProvider;
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.core.projection.ProjectionAlgorithm;
 import com.integrallis.vectors.studio.core.projection.ProjectionParams;
 import com.integrallis.vectors.studio.core.projection.ProjectionRequest;
+import com.integrallis.vectors.studio.core.search.SearchHit;
+import com.integrallis.vectors.studio.web.dataset.DatasetCatalog;
+import com.integrallis.vectors.studio.web.dataset.DatasetCatalogEntry;
 import com.integrallis.vectors.studio.web.dto.ProjectionRequestDto;
+import com.integrallis.vectors.studio.web.embed.ProviderRegistry;
 import com.integrallis.vectors.studio.web.projection.ProjectionEvent;
 import com.integrallis.vectors.studio.web.projection.ProjectionJob;
 import com.integrallis.vectors.studio.web.projection.ProjectionJobManager;
@@ -39,6 +46,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
 
@@ -49,10 +57,18 @@ public final class ApiRoutes implements HttpService {
 
   private final StudioSession session;
   private final ProjectionJobManager jobs;
+  private final DatasetCatalog catalog;
+  private final ProviderRegistry providerRegistry;
 
-  public ApiRoutes(StudioSession session, ProjectionJobManager jobs) {
+  public ApiRoutes(
+      StudioSession session,
+      ProjectionJobManager jobs,
+      DatasetCatalog catalog,
+      ProviderRegistry providerRegistry) {
     this.session = session;
     this.jobs = jobs;
+    this.catalog = catalog;
+    this.providerRegistry = providerRegistry;
   }
 
   @Override
@@ -96,7 +112,8 @@ public final class ApiRoutes implements HttpService {
         rows.subList(dto.sampleSize(), rows.size()).clear();
       }
       float[][] data = rows.toArray(new float[0][]);
-      if (Boolean.TRUE.equals(dto.sphereize())) {
+      boolean sphereize = Boolean.TRUE.equals(dto.sphereize());
+      if (sphereize) {
         sphereize(data);
       }
       ProjectionRequest pr =
@@ -106,7 +123,7 @@ public final class ApiRoutes implements HttpService {
               dto.dimensions(),
               dto.sampleSize(),
               paramsFrom(dto.algorithm(), dto.dimensions(), dto.params()));
-      String jobId = jobs.submit(session, pr, data, ids.toArray(new String[0]));
+      String jobId = jobs.submit(session, pr, data, ids.toArray(new String[0]), sphereize);
       res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
       res.status(Status.ACCEPTED_202)
           .send(MAPPER.writeValueAsBytes(Map.of("jobId", jobId, "n", ids.size())));
@@ -217,21 +234,56 @@ public final class ApiRoutes implements HttpService {
       String id = (String) body.get("id");
       String query = (String) body.get("query");
       int k = asInt(body.get("k"), 10);
+      double mmr = asDouble(body.get("mmr"), -1.0); // >= 0 enables MMR diversity re-ranking
+      Float mmrLambda = mmr >= 0 ? (float) Math.min(1.0, mmr) : null;
       List<Map<String, Object>> out;
+      // For a text query on a collection that has a cached PCA projection we return the query
+      // vector's exact coordinates so the client can render it as its own point; otherwise null
+      // (the client approximates from the hit centroid, or shows nothing).
+      Object queryProjection = null;
       if (id != null && !id.isEmpty()) {
-        out = searchByVector(name, id, k);
+        out = searchByVector(name, id, k, mmrLambda);
       } else if (query != null && !query.isEmpty()) {
-        // Text search needs an embedding model to vectorise the query; the embedded Studio backend
-        // has none, so reject rather than fabricate a meaningless query vector.
-        res.status(Status.BAD_REQUEST_400)
-            .send("text search requires an embedding model, which this Studio backend lacks");
-        return;
+        // Free-text search: embed the query with the collection's configured model, then k-NN.
+        DatasetCatalogEntry entry = catalog.byId(name).orElse(null);
+        if (entry == null || entry.queryModel() == null) {
+          res.status(Status.CONFLICT_409).send("text search isn't configured for this collection");
+          return;
+        }
+        Optional<EmbeddingProvider> provider =
+            providerRegistry.providerFor(entry.queryModel(), entry.queryDimensions());
+        if (provider.isEmpty()) {
+          res.status(Status.CONFLICT_409)
+              .send(
+                  "no embedding provider configured for model "
+                      + entry.queryModel()
+                      + " — add one on /providers");
+          return;
+        }
+        String prefix = entry.queryPrefix() == null ? "" : entry.queryPrefix();
+        float[] vec = provider.get().embed(prefix + query);
+        out = searchByRawVector(name, vec, k, mmrLambda, null);
+        // If a PCA projection has been run for this collection, project the query vector into the
+        // SAME fitted space so it lands correctly among the rendered points. Sphereize must match.
+        var cached = jobs.queryProjectionFor(name).orElse(null);
+        if (cached != null && cached.projector() != null) {
+          float[] qv = vec;
+          if (cached.sphereize()) {
+            qv = vec.clone();
+            normalize(qv);
+          }
+          float[] coords = cached.projector().project(qv);
+          queryProjection = Map.of("coords", coords, "exact", true);
+        }
       } else {
         res.status(Status.BAD_REQUEST_400).send("missing id or query");
         return;
       }
       res.headers().set(HeaderNames.CONTENT_TYPE, "application/json");
-      res.send(MAPPER.writeValueAsBytes(Map.of("hits", out)));
+      Map<String, Object> resp = new java.util.LinkedHashMap<>();
+      resp.put("hits", out);
+      resp.put("queryProjection", queryProjection);
+      res.send(MAPPER.writeValueAsBytes(resp));
     } catch (IllegalArgumentException e) {
       res.status(Status.NOT_FOUND_404).send(String.valueOf(e.getMessage()));
     } catch (Exception e) {
@@ -239,22 +291,71 @@ public final class ApiRoutes implements HttpService {
     }
   }
 
-  private List<Map<String, Object>> searchByVector(String name, String id, int k) {
+  private static final int MMR_FETCH_MULTIPLIER = 4;
+
+  private List<Map<String, Object>> searchByVector(String name, String id, int k, Float mmrLambda) {
     var doc = session.backend().getDocument(name, id);
     if (doc == null || doc.vector() == null) {
       throw new IllegalArgumentException("unknown id: " + id);
     }
+    // Search from the document's own vector, excluding the query point itself from the results.
+    return searchByRawVector(name, doc.vector(), k, mmrLambda, id);
+  }
+
+  /**
+   * k-NN (optionally MMR-diversified) from a raw query vector. When {@code excludeId} is non-null
+   * the matching document is dropped from the candidate pool (search-by-id excludes itself;
+   * free-text search passes null so no hit is filtered).
+   */
+  private List<Map<String, Object>> searchByRawVector(
+      String name, float[] queryVec, int k, Float mmrLambda, String excludeId) {
+    int want = Math.max(1, k);
+    boolean useMmr = mmrLambda != null;
+    // MMR needs the candidate vectors and a bigger pool to diversify from.
+    int fetch = useMmr ? want * MMR_FETCH_MULTIPLIER + 1 : want + 1;
     var spec =
         new com.integrallis.vectors.studio.core.search.SearchSpec(
-            doc.vector(), null, Math.max(1, k) + 1, null, false, false, false);
+            queryVec, null, fetch, null, useMmr, false, false);
     var hits = session.backend().search(name, spec);
-    List<Map<String, Object>> out = new ArrayList<>(hits.size());
+
+    List<SearchHit> pool = new ArrayList<>(hits.size());
     for (var h : hits) {
-      if (h.id().equals(id)) continue; // skip the query point itself
+      if (excludeId == null || !h.id().equals(excludeId)) {
+        pool.add(h);
+      }
+    }
+
+    List<SearchHit> ranked;
+    if (useMmr && !pool.isEmpty()) {
+      SimilarityFunction metric = parseMetric(session.backend().describe(name).metric());
+      float[][] candidates = new float[pool.size()][];
+      for (int i = 0; i < pool.size(); i++) {
+        candidates[i] = pool.get(i).vector();
+      }
+      int[] selected =
+          MaximalMarginalRelevance.select(
+              queryVec, candidates, Math.min(want, pool.size()), mmrLambda, metric);
+      ranked = new ArrayList<>(selected.length);
+      for (int idx : selected) {
+        ranked.add(pool.get(idx));
+      }
+    } else {
+      ranked = pool.subList(0, Math.min(want, pool.size()));
+    }
+
+    List<Map<String, Object>> out = new ArrayList<>(ranked.size());
+    for (var h : ranked) {
       out.add(Map.of("id", h.id(), "score", h.score()));
-      if (out.size() >= k) break;
     }
     return out;
+  }
+
+  private static SimilarityFunction parseMetric(String name) {
+    try {
+      return SimilarityFunction.valueOf(name);
+    } catch (IllegalArgumentException | NullPointerException e) {
+      return SimilarityFunction.COSINE; // embeddings default; MMR ordering is robust to this
+    }
   }
 
   /**
@@ -320,13 +421,18 @@ public final class ApiRoutes implements HttpService {
   /** L2-normalises each row in place (TF Embedding Projector "Sphereize data"). */
   private static void sphereize(float[][] data) {
     for (float[] row : data) {
-      double n = 0.0;
-      for (float f : row) n += (double) f * f;
-      n = Math.sqrt(n);
-      if (n == 0.0) continue;
-      float inv = (float) (1.0 / n);
-      for (int i = 0; i < row.length; i++) row[i] *= inv;
+      normalize(row);
     }
+  }
+
+  /** L2-normalises a single vector in place (same rule as {@link #sphereize}). */
+  private static void normalize(float[] row) {
+    double n = 0.0;
+    for (float f : row) n += (double) f * f;
+    n = Math.sqrt(n);
+    if (n == 0.0) return;
+    float inv = (float) (1.0 / n);
+    for (int i = 0; i < row.length; i++) row[i] *= inv;
   }
 
   /** Builds typed {@link ProjectionParams} from a flat JSON map, defaulting any missing keys. */

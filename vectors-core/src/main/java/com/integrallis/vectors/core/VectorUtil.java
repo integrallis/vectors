@@ -128,6 +128,13 @@ public final class VectorUtil {
     IMPL.addInPlace(v1, v2);
   }
 
+  /** Adds {@code vector[vectorOffset..] * scale} into {@code out[outOffset..]} in place. */
+  public static void addScaledInPlace(
+      float[] out, int outOffset, float[] vector, int vectorOffset, int length, float scale) {
+    checkSubVectorArguments(out, outOffset, vector, vectorOffset, length);
+    IMPL.addScaledInPlace(out, outOffset, vector, vectorOffset, length, scale);
+  }
+
   /** Subtracts v2 from v1 element-wise in place. */
   public static void subInPlace(float[] v1, float[] v2) {
     checkDimensions(v1.length, v2.length);
@@ -170,6 +177,93 @@ public final class VectorUtil {
   }
 
   /**
+   * Fused GEMV dot product over a flat row-major matrix. Fills {@code out[row]} with the dot
+   * product of {@code query} and {@code rowMajorMatrix[row * cols .. row * cols + cols)}.
+   *
+   * <p>This is the preferred call shape for dense inference tensors because it avoids materializing
+   * {@code float[][]} row wrappers around contiguous row-major weights.
+   */
+  public static void batchDotProduct(
+      float[] query, float[] rowMajorMatrix, int rows, int cols, float[] out) {
+    checkRowMajorBatchArguments(query, rowMajorMatrix, rows, cols, out);
+    IMPL.matVecDot(query, rowMajorMatrix, rows, cols, out);
+  }
+
+  /**
+   * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
+   *
+   * <p>The operation fuses Q4_0 dequantization and dot-product accumulation without allocating a
+   * temporary decoded row.
+   */
+  public static float ggufQ4_0DotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufQuantizedDotArguments(
+        query, qWeight, byteOffset, dimensions, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    return IMPL.ggufQ4_0DotProduct(query, qWeight, byteOffset, dimensions);
+  }
+
+  /**
+   * Dot product of a full-precision query with one GGUF Q8_0 quantized row.
+   *
+   * <p>The operation fuses Q8_0 dequantization and dot-product accumulation without allocating a
+   * temporary decoded row.
+   */
+  public static float ggufQ8_0DotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufQuantizedDotArguments(
+        query, qWeight, byteOffset, dimensions, VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    return IMPL.ggufQ8_0DotProduct(query, qWeight, byteOffset, dimensions);
+  }
+
+  /**
+   * Dot product of a full-precision query with one GGUF Q6_K quantized row.
+   *
+   * <p>The operation fuses Q6_K dequantization and dot-product accumulation without allocating a
+   * temporary decoded row.
+   */
+  public static float ggufQ6_KDotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufQuantizedDotArguments(
+        query,
+        qWeight,
+        byteOffset,
+        dimensions,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_BYTES);
+    return IMPL.ggufQ6_KDotProduct(query, qWeight, byteOffset, dimensions);
+  }
+
+  /** Batched row-major GEMV over GGUF Q4_0 rows. */
+  public static void ggufQ4_0BatchDotProduct(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    checkGgufQuantizedBatchArguments(
+        query, qWeight, rows, cols, out, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    IMPL.ggufQ4_0MatVecDot(query, qWeight, rows, cols, out);
+  }
+
+  /** Batched row-major GEMV over GGUF Q8_0 rows. */
+  public static void ggufQ8_0BatchDotProduct(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    checkGgufQuantizedBatchArguments(
+        query, qWeight, rows, cols, out, VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    IMPL.ggufQ8_0MatVecDot(query, qWeight, rows, cols, out);
+  }
+
+  /** Batched row-major GEMV over GGUF Q6_K rows. */
+  public static void ggufQ6_KBatchDotProduct(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    checkGgufQuantizedBatchArguments(
+        query,
+        qWeight,
+        rows,
+        cols,
+        out,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_BYTES);
+    IMPL.ggufQ6_KMatVecDot(query, qWeight, rows, cols, out);
+  }
+
+  /**
    * Fills {@code out[i]} with the squared L2 distance from {@code query} to {@code matrix[i]} for
    * all rows {@code i} in {@code [0, matrix.length)}. {@code out.length} must be &ge; {@code
    * matrix.length}.
@@ -189,6 +283,59 @@ public final class VectorUtil {
   public static void batchSquaredL2(float[] query, float[][] matrix, float[] out, int numRows) {
     checkBatchArguments(query, matrix, out, numRows);
     IMPL.matVecSquaredL2(query, matrix, out, numRows);
+  }
+
+  /**
+   * Off-heap fused GEMV dot product: fills {@code out[i]} with the dot product of {@code query} and
+   * the off-heap row {@code rows[i]} for {@code i in [0, count)}. Each {@code rows[i]} is a {@link
+   * MemorySegment} holding {@code dim} little-endian float32s (typically a zero-copy mmap slice).
+   *
+   * <p>Delegates to {@link VectorUtilSupport#matVecDot(float[], MemorySegment[], int, float[],
+   * int)}, which SIMD implementations override with a fused 4-row kernel that loads each query SIMD
+   * chunk once and applies it to 4 segment rows simultaneously — the zero-copy analogue of {@link
+   * #batchDotProduct(float[], float[][], float[], int)}.
+   */
+  public static void batchDotProduct(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    checkBatchSegmentArguments(query, rows, dim, out, count);
+    IMPL.matVecDot(query, rows, dim, out, count);
+  }
+
+  /**
+   * Off-heap fused GEMV squared-L2: fills {@code out[i]} with the squared L2 distance from {@code
+   * query} to the off-heap row {@code rows[i]} for {@code i in [0, count)}. Zero-copy analogue of
+   * {@link #batchSquaredL2(float[], float[][], float[], int)}.
+   */
+  public static void batchSquaredL2(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    checkBatchSegmentArguments(query, rows, dim, out, count);
+    IMPL.matVecSquaredL2(query, rows, dim, out, count);
+  }
+
+  /**
+   * Fills {@code out[i]} with the raw cosine similarity (in {@code [-1, 1]}) of {@code query} and
+   * {@code rows[i]} for {@code i in [0, count)}. Callers apply the {@code (1+cos)/2} score
+   * transform.
+   *
+   * <p>Delegates to {@link VectorUtilSupport#batchCosine(float[], float[][], float[], int)}, which
+   * SIMD implementations override with a fused 4-row kernel that computes the query norm once and
+   * loads each query SIMD chunk once for 4 rows — the cosine analogue of {@link
+   * #batchDotProduct(float[], float[][], float[], int)}.
+   */
+  public static void batchCosine(float[] query, float[][] rows, float[] out, int count) {
+    checkBatchArguments(query, rows, out, count);
+    IMPL.batchCosine(query, rows, out, count);
+  }
+
+  /**
+   * Off-heap fused GEMV cosine: fills {@code out[i]} with the raw cosine similarity of {@code
+   * query} and the off-heap row {@code rows[i]} for {@code i in [0, count)}. Zero-copy analogue of
+   * {@link #batchCosine(float[], float[][], float[], int)}.
+   */
+  public static void batchCosine(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    checkBatchSegmentArguments(query, rows, dim, out, count);
+    IMPL.batchCosine(query, rows, dim, out, count);
   }
 
   // --- PQ ADC (Asymmetric Distance Computation) kernels ---
@@ -253,9 +400,185 @@ public final class VectorUtil {
       throw new IllegalArgumentException(
           "out.length must be >= numRows: " + out.length + " < " + numRows);
     }
+    // Lazy failure messages: building "matrix[" + i + "]" eagerly per row (Objects.requireNonNull
+    // evaluates its message arg unconditionally) cost ~18% of search time in a JFR profile — the
+    // string concatenation ran on every batch-score call. Only construct the message on failure.
+    int qlen = query.length;
     for (int i = 0; i < numRows; i++) {
-      float[] row = Objects.requireNonNull(matrix[i], "matrix[" + i + "]");
-      checkDimensions(query.length, row.length);
+      float[] row = matrix[i];
+      if (row == null) {
+        throw new NullPointerException("matrix[" + i + "]");
+      }
+      if (row.length != qlen) {
+        throw new IllegalArgumentException(
+            "Vector dimensions differ at row " + i + ": " + qlen + " != " + row.length);
+      }
     }
+  }
+
+  private static void checkBatchSegmentArguments(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(rows, "rows");
+    Objects.requireNonNull(out, "out");
+    checkDimensions(query.length, dim);
+    if (count < 0 || count > rows.length) {
+      throw new IllegalArgumentException(
+          "count must be in [0, rows.length]: " + count + " for " + rows.length);
+    }
+    if (out.length < count) {
+      throw new IllegalArgumentException(
+          "out.length must be >= count: " + out.length + " < " + count);
+    }
+    // Lazy message (see checkBatchArguments): don't build "rows[i]" per row on the success path.
+    for (int i = 0; i < count; i++) {
+      if (rows[i] == null) {
+        throw new NullPointerException("rows[" + i + "]");
+      }
+    }
+  }
+
+  private static void checkRowMajorBatchArguments(
+      float[] query, float[] rowMajorMatrix, int rows, int cols, float[] out) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(rowMajorMatrix, "rowMajorMatrix");
+    Objects.requireNonNull(out, "out");
+    if (rows < 0) {
+      throw new IllegalArgumentException("rows must be >= 0: " + rows);
+    }
+    if (cols < 0) {
+      throw new IllegalArgumentException("cols must be >= 0: " + cols);
+    }
+    checkDimensions(query.length, cols);
+    long required = (long) rows * cols;
+    if (required > rowMajorMatrix.length) {
+      throw new IllegalArgumentException(
+          "rowMajorMatrix.length must be >= rows * cols: "
+              + rowMajorMatrix.length
+              + " < "
+              + required);
+    }
+    if (out.length < rows) {
+      throw new IllegalArgumentException(
+          "out.length must be >= rows: " + out.length + " < " + rows);
+    }
+  }
+
+  private static void checkSubVectorArguments(
+      float[] out, int outOffset, float[] vector, int vectorOffset, int length) {
+    Objects.requireNonNull(out, "out");
+    Objects.requireNonNull(vector, "vector");
+    if (outOffset < 0) {
+      throw new IllegalArgumentException("outOffset must be >= 0: " + outOffset);
+    }
+    if (vectorOffset < 0) {
+      throw new IllegalArgumentException("vectorOffset must be >= 0: " + vectorOffset);
+    }
+    if (length < 0) {
+      throw new IllegalArgumentException("length must be >= 0: " + length);
+    }
+    if ((long) outOffset + length > out.length) {
+      throw new IllegalArgumentException(
+          "outOffset + length must be <= out.length: "
+              + outOffset
+              + " + "
+              + length
+              + " > "
+              + out.length);
+    }
+    if ((long) vectorOffset + length > vector.length) {
+      throw new IllegalArgumentException(
+          "vectorOffset + length must be <= vector.length: "
+              + vectorOffset
+              + " + "
+              + length
+              + " > "
+              + vector.length);
+    }
+  }
+
+  private static void checkGgufQuantizedDotArguments(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions, int blockBytes) {
+    checkGgufQuantizedDotArguments(
+        query, qWeight, byteOffset, dimensions, VectorUtilSupport.GGUF_Q_BLOCK_SIZE, blockBytes);
+  }
+
+  private static void checkGgufQuantizedDotArguments(
+      float[] query,
+      MemorySegment qWeight,
+      long byteOffset,
+      int dimensions,
+      int blockSize,
+      int blockBytes) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(qWeight, "qWeight");
+    if (byteOffset < 0) {
+      throw new IllegalArgumentException("byteOffset must be >= 0: " + byteOffset);
+    }
+    checkGgufQuantizedDimensions(query, dimensions, blockSize);
+    long required = byteOffset + ggufQuantizedRowBytes(dimensions, blockSize, blockBytes);
+    if (required < byteOffset || required > qWeight.byteSize()) {
+      throw new IllegalArgumentException(
+          "qWeight byteSize is too small for requested row: "
+              + qWeight.byteSize()
+              + " < "
+              + required);
+    }
+  }
+
+  private static void checkGgufQuantizedBatchArguments(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out, int blockBytes) {
+    checkGgufQuantizedBatchArguments(
+        query, qWeight, rows, cols, out, VectorUtilSupport.GGUF_Q_BLOCK_SIZE, blockBytes);
+  }
+
+  private static void checkGgufQuantizedBatchArguments(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      int blockSize,
+      int blockBytes) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(qWeight, "qWeight");
+    Objects.requireNonNull(out, "out");
+    if (rows < 0) {
+      throw new IllegalArgumentException("rows must be >= 0: " + rows);
+    }
+    checkGgufQuantizedDimensions(query, cols, blockSize);
+    if (out.length < rows) {
+      throw new IllegalArgumentException(
+          "out.length must be >= rows: " + out.length + " < " + rows);
+    }
+    long rowBytes = ggufQuantizedRowBytes(cols, blockSize, blockBytes);
+    long required = rowBytes * rows;
+    if (rows != 0 && required / rows != rowBytes) {
+      throw new IllegalArgumentException("rows * rowBytes overflows: " + rows + " * " + rowBytes);
+    }
+    if (required > qWeight.byteSize()) {
+      throw new IllegalArgumentException(
+          "qWeight byteSize must be >= rows * rowBytes: " + qWeight.byteSize() + " < " + required);
+    }
+  }
+
+  private static void checkGgufQuantizedDimensions(float[] query, int dimensions) {
+    checkGgufQuantizedDimensions(query, dimensions, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+  }
+
+  private static void checkGgufQuantizedDimensions(float[] query, int dimensions, int blockSize) {
+    checkDimensions(query.length, dimensions);
+    if (dimensions % blockSize != 0) {
+      throw new IllegalArgumentException(
+          "GGUF quantized dimensions must be a multiple of " + blockSize + ": " + dimensions);
+    }
+  }
+
+  private static long ggufQuantizedRowBytes(int dimensions, int blockBytes) {
+    return ggufQuantizedRowBytes(dimensions, VectorUtilSupport.GGUF_Q_BLOCK_SIZE, blockBytes);
+  }
+
+  private static long ggufQuantizedRowBytes(int dimensions, int blockSize, int blockBytes) {
+    return (long) (dimensions / blockSize) * blockBytes;
   }
 }

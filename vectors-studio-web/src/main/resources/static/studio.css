@@ -171,6 +171,20 @@ h2 { font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.01em; margin:
 /* Categorical pills — enum tokens; uppercase via the base .pill rule. */
 .pill-metric { color: var(--kind-json);   border-color: rgba(31, 111, 235, .25); background: rgba(31, 111, 235, .06); }
 .pill-index  { color: var(--kind-image);  border-color: rgba(111, 79, 203, .25); background: rgba(111, 79, 203, .06); }
+/* "sample" tag on catalog-backed collections + the loaded state on the datasets tab. */
+.pill-sample { margin-left: var(--sp-2); color: var(--color-brand); border-color: rgba(18, 110, 34, .25); background: var(--color-brand-soft); }
+/* "missing key" provider status — same shape as .pill-sample, red. */
+.pill-error  { color: var(--color-danger); border-color: rgba(201, 37, 45, .25); background: var(--color-danger-soft); }
+
+/* Page header row: title on the left, primary action on the right. */
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
+
+/* Sample-datasets tab */
+.datasets-table td { vertical-align: top; }
+.dataset-name { font-weight: 600; }
+.dataset-desc { margin-top: 2px; max-width: 46ch; }
+.ds-progress { width: 140px; height: 8px; vertical-align: middle; }
+.ds-progress-label { margin-left: var(--sp-2); font-variant-numeric: tabular-nums; }
 
 /* Collection meta line (under <h1>) — keeps numeric facts as muted text and
    surfaces metric/index as pills on the same baseline. */
@@ -298,18 +312,36 @@ form.search-form > button[type="submit"] { flex: 0 0 auto; }
 }
 .projector-canvas { position: absolute; inset: 0; }
 .projector-canvas canvas { display: block; }
-.projector-tooltip {
+/* shadcn-style hover-card shown on point hover / single row-select. */
+.projector-hovercard {
   position: absolute; display: none; pointer-events: none;
   max-width: 280px;
-  padding: 4px 8px;
-  font: 500 var(--fs-xs)/1.3 var(--font-mono);
+  padding: 12px;
   color: var(--color-fg);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  z-index: 2;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  white-space: normal; overflow-wrap: anywhere;
+  z-index: 3;
+}
+.projector-hovercard-id {
+  font: 500 var(--fs-xs)/1.2 var(--font-mono);
+  color: var(--color-fg-muted);
+  margin-bottom: 4px;
+}
+.projector-hovercard-text {
+  font: 500 var(--fs-sm)/1.4 var(--font-sans);
+  color: var(--color-fg);
+}
+/* Query point hover-card: mark the id slot and italicise the text as the query. */
+.projector-hovercard-id.is-query {
+  color: #2563eb;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.projector-hovercard-text.is-query {
+  font-style: italic;
 }
 .projector-status {
   position: absolute; left: var(--sp-3); bottom: var(--sp-3);

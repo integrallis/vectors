@@ -81,6 +81,25 @@ List<EmbeddingMatch<TextSegment>> matches = store.search(
     .matches();
 ----
 
+=== Diversity re-ranking (MMR)
+
+Enable **Maximal Marginal Relevance** on the store to return diverse-but-relevant results — so
+near-duplicate segments don't crowd the LLM context window — without a second datastore or an
+external rerank API:
+
+[source,java]
+----
+EmbeddingStore<TextSegment> store = JavaVectorsEmbeddingStore.builder(collection)
+    .mmr(0.6f)   // lambda: 1.0 = pure relevance, 0.0 = max diversity; typical 0.5-0.7
+    .build();
+
+// Every search() now over-fetches maxResults x 4 candidates and re-ranks them down to
+// maxResults diverse results using the collection's metric.
+----
+
+Use `.mmr(lambda, fetchMultiplier)` to control the candidate-pool size (default multiplier `4`). MMR
+runs server-side over the small over-fetched pool via the fused-SIMD kernels.
+
 === Deleting
 
 [source,java]

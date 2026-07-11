@@ -7,8 +7,11 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const BG = 0xfcfcfd;
 const POINT_COLOR = 0x126e22;
+const HIT_COLOR = 0xf5820b; // search-result hits render in this orange
+const QUERY_COLOR = "#2563eb"; // the projected query point (blue — distinct from orange hits)
 const POINT_SIZE_2D = 4;   // screen pixels
 const POINT_SIZE_3D = 5;   // screen pixels
+const QUERY_HOVER_INDEX = -2; // sentinel index passed to onHover when the query point is hovered
 
 // Crisp solid disc — small filled circle with a 1px anti-aliased rim. Matches
 // the tight pin-prick dots the TF Embedding Projector renders.
@@ -21,6 +24,29 @@ function makePointSprite() {
   g.arc(16, 16, 14, 0, Math.PI * 2);
   g.closePath();
   g.fill();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  return tex;
+}
+
+// Query-point texture: a filled blue dot with a thin surrounding ring, on a
+// transparent canvas. Drawn onto a THREE.Sprite so it always faces the camera.
+// This is a *point* (rendered ~1.6× a normal point), NOT the old bullseye target.
+function makeQueryPointTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, 64, 64);
+  const cx = 32, cy = 32;
+  g.fillStyle = QUERY_COLOR;
+  g.strokeStyle = QUERY_COLOR;
+  // Thin ring.
+  g.lineWidth = 3;
+  g.beginPath(); g.arc(cx, cy, 24, 0, Math.PI * 2); g.stroke();
+  // Filled center dot.
+  g.beginPath(); g.arc(cx, cy, 14, 0, Math.PI * 2); g.fill();
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.minFilter = THREE.LinearFilter;
@@ -113,8 +139,16 @@ export function createScene(host, { onHover, onClick } = {}) {
     ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
     ndc.y = -(((ev.clientY - rect.top) / rect.height) * 2 - 1);
     raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObject(points, false);
-    const idx = hits.length ? hits[0].index : -1;
+    // The query point sprite (drawn on top) takes hover priority over the cloud.
+    let idx = -1;
+    if (queryPoint && queryPoint.visible) {
+      const qhit = raycaster.intersectObject(queryPoint, false);
+      if (qhit.length) idx = QUERY_HOVER_INDEX;
+    }
+    if (idx === -1) {
+      const hits = raycaster.intersectObject(points, false);
+      idx = hits.length ? hits[0].index : -1;
+    }
     if (idx !== hoverIndex) {
       hoverIndex = idx;
       onHover(idx, ev.clientX, ev.clientY);
@@ -190,6 +224,9 @@ export function createScene(host, { onHover, onClick } = {}) {
   let positions = new Float32Array(0);
   let baseColors = null;            // pristine column-derived colors
   let selection = new Set();        // indices currently selected
+  let hits = new Set();             // search-result hits, rendered orange
+  let queryPoint = null;            // THREE.Sprite for the projected query, or null when hidden
+  let queryText = "";               // the raw query text shown on hover of the query point
   let isolated = false;             // when true, only selected points render
   let is2D = false;                 // tracks current projection dimensionality
   let autoRotateOn = true;          // user-facing toggle, gated by is2D + selection
@@ -227,6 +264,8 @@ export function createScene(host, { onHover, onClick } = {}) {
     axes.position.set(cx, cy, cz);
     axes.scale.setScalar(r * 1.2);
     axes.visible = !is2D;
+    // A new projection invalidates any prior query point (coords are in the old frame).
+    setQueryPoint(null);
   }
 
   function setColors(colors) {
@@ -236,25 +275,49 @@ export function createScene(host, { onHover, onClick } = {}) {
 
   function applyDisplay() {
     if (!pointCount) return;
-    if (baseColors) {
+    const hasHits = hits.size > 0;
+    // We need per-vertex colors whenever a column drives the palette OR there
+    // are search hits to paint orange (orange takes precedence over base/dim).
+    if (baseColors || hasHits) {
       const out = new Float32Array(pointCount * 3);
       const hasSel = selection.size > 0;
       const bg = ((BG >> 16) & 0xff) / 255;
       const bgg = ((BG >> 8) & 0xff) / 255;
       const bgb = (BG & 0xff) / 255;
+      // Fallback base green, used when no column palette is set.
+      const gr = ((POINT_COLOR >> 16) & 0xff) / 255;
+      const gg = ((POINT_COLOR >> 8) & 0xff) / 255;
+      const gb = (POINT_COLOR & 0xff) / 255;
+      // Orange for search hits.
+      const hr = ((HIT_COLOR >> 16) & 0xff) / 255;
+      const hg = ((HIT_COLOR >> 8) & 0xff) / 255;
+      const hb = (HIT_COLOR & 0xff) / 255;
       for (let i = 0; i < pointCount; i++) {
+        if (hasHits && hits.has(i)) {
+          out[i * 3 + 0] = hr;
+          out[i * 3 + 1] = hg;
+          out[i * 3 + 2] = hb;
+          continue;
+        }
+        const br = baseColors ? baseColors[i * 3 + 0] : gr;
+        const bgn = baseColors ? baseColors[i * 3 + 1] : gg;
+        const bbn = baseColors ? baseColors[i * 3 + 2] : gb;
         const sel = selection.has(i);
         const dim = hasSel && !sel;
         const f = dim ? DIM_FACTOR : 1.0;
-        out[i * 3 + 0] = baseColors[i * 3 + 0] * f + bg * (1 - f);
-        out[i * 3 + 1] = baseColors[i * 3 + 1] * f + bgg * (1 - f);
-        out[i * 3 + 2] = baseColors[i * 3 + 2] * f + bgb * (1 - f);
+        out[i * 3 + 0] = br * f + bg * (1 - f);
+        out[i * 3 + 1] = bgn * f + bgg * (1 - f);
+        out[i * 3 + 2] = bbn * f + bgb * (1 - f);
       }
       geometry.setAttribute("color", new THREE.BufferAttribute(out, 3));
       material.vertexColors = true;
+      // With vertexColors, THREE multiplies vertex color × material.color — so the
+      // base must be white or the orange hits (and column palette) get tinted green.
+      material.color.setHex(0xffffff);
     } else {
       geometry.deleteAttribute("color");
       material.vertexColors = false;
+      material.color.setHex(POINT_COLOR);
     }
     if (isolated && selection.size > 0) {
       const idx = new Uint32Array(selection.size);
@@ -275,6 +338,63 @@ export function createScene(host, { onHover, onClick } = {}) {
   }
 
   function setIsolated(v) { isolated = !!v; applyDisplay(); }
+
+  // Search-result hits: colored orange (distinct from green base/selection).
+  // Pass an empty set to clear.
+  function setHits(indices) {
+    hits = new Set(indices);
+    applyDisplay();
+  }
+
+  // World position [x,y,z] of a point index, read straight from the internal
+  // positions buffer. Returns null for out-of-range indices.
+  function positionOf(index) {
+    if (index == null || index < 0 || index >= pointCount) return null;
+    return [positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2]];
+  }
+
+  // On-screen client coordinates {x,y} of a point index (via camera.project),
+  // suitable for anchoring DOM overlays. Returns null for out-of-range indices.
+  function screenPositionOf(index) {
+    if (index == null || index < 0 || index >= pointCount) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    _v.set(positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2]);
+    _v.project(camera);
+    return {
+      x: rect.left + (_v.x * 0.5 + 0.5) * rect.width,
+      y: rect.top + (-_v.y * 0.5 + 0.5) * rect.height,
+    };
+  }
+
+  // Draws the query as its OWN camera-facing point at world pos [x,y,z] (rendered
+  // on top), labelled with `text` shown on hover; hides it when pos is null. Sized
+  // ~1.6× a normal point so it reads as a distinct query point, not a target.
+  function setQueryPoint(pos, text) {
+    if (!pos) {
+      queryText = "";
+      if (queryPoint) queryPoint.visible = false;
+      return;
+    }
+    queryText = text == null ? "" : String(text);
+    if (!queryPoint) {
+      const mat = new THREE.SpriteMaterial({
+        map: makeQueryPointTexture(),
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      queryPoint = new THREE.Sprite(mat);
+      queryPoint.renderOrder = 999; // draw over the point cloud
+      scene.add(queryPoint);
+    }
+    queryPoint.position.set(pos[0], pos[1], pos[2]);
+    // Scale so the sprite reads ~1.6× the on-screen size of a normal point. Points
+    // are sizeAttenuation:false (fixed pixels); sprites scale in world units, so we
+    // derive a small world size from the cloud radius.
+    const r = geometry.boundingSphere?.radius || 1;
+    queryPoint.scale.setScalar(r * 0.03);
+    queryPoint.visible = true;
+  }
 
   // items: Array<{ index: number, text: string, primary?: boolean }>.
   // Pass [] (or omit) to clear all labels.
@@ -349,6 +469,10 @@ export function createScene(host, { onHover, onClick } = {}) {
     controls.dispose();
     geometry.dispose();
     material.dispose();
+    if (queryPoint) {
+      queryPoint.material.map?.dispose();
+      queryPoint.material.dispose();
+    }
     axes.geometry.dispose();
     axes.material.dispose();
     renderer.dispose();
@@ -360,8 +484,10 @@ export function createScene(host, { onHover, onClick } = {}) {
 
   return {
     setPositions, setColors, setSelection, setIsolated, setLabels,
+    setHits, setQueryPoint, positionOf, screenPositionOf,
     projectAll, setControlsEnabled, setAutoRotate,
     get pointCount() { return pointCount; },
+    get queryText() { return queryText; },
     canvas: renderer.domElement,
     dispose,
   };

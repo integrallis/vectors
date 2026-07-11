@@ -96,6 +96,28 @@ collection, and validates at build time that the model's dimension matches the c
 `similaritySearch` embeds the query, translates any filter expression, and maps hits back to Spring
 AI `Document` instances with their similarity `score` populated.
 
+=== Diversity re-ranking (MMR)
+
+RAG retrieval often returns several near-duplicate chunks that waste the LLM context window. Enable
+**Maximal Marginal Relevance** on the store to trade a little relevance for diversity — no second
+datastore, no external rerank API:
+
+[source,java]
+----
+VectorStore vectorStore = JavaVectorsVectorStore.builder(embeddingModel, collection)
+    .mmr(0.6f)   // lambda: 1.0 = pure relevance, 0.0 = max diversity; typical 0.5-0.7
+    .build();
+
+// Every similaritySearch now over-fetches topK x 4 candidates and re-ranks them down to
+// topK diverse-but-relevant results using the collection's metric.
+List<Document> results = vectorStore.similaritySearch(
+    SearchRequest.builder().query("hello").topK(5).build());
+----
+
+Use `.mmr(lambda, fetchMultiplier)` to control the candidate-pool size (default multiplier `4`).
+MMR is computed server-side over the over-fetched pool via the fused-SIMD kernels — it runs on a
+small candidate set, not the whole corpus, so the overhead is sub-millisecond for typical `topK`.
+
 == Spring Boot Properties
 
 When using the starter, configure via `application.yml`:

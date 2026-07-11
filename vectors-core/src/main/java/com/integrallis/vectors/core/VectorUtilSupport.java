@@ -16,6 +16,8 @@
 package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 
 /**
  * Interface for all SIMD-accelerable vector operations. Implementations are selected at runtime by
@@ -25,6 +27,17 @@ import java.lang.foreign.MemorySegment;
  * VectorUtilSupport}, combining the best patterns from both.
  */
 public interface VectorUtilSupport {
+
+  ValueLayout.OfShort GGUF_LE_SHORT =
+      ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+  int GGUF_Q_BLOCK_SIZE = 32;
+  int GGUF_Q4_0_BLOCK_BYTES = 18;
+  int GGUF_Q8_0_BLOCK_BYTES = 34;
+  int GGUF_Q6_K_BLOCK_SIZE = 256;
+  int GGUF_Q6_K_BLOCK_BYTES = 210;
+  int GGUF_Q6_K_QL_BYTES = 128;
+  int GGUF_Q6_K_QH_BYTES = 64;
+  int GGUF_Q6_K_SCALES = 16;
 
   // --- Float distance kernels ---
 
@@ -78,6 +91,15 @@ public interface VectorUtilSupport {
   /** Adds v2 to v1 element-wise, storing the result in v1. */
   void addInPlace(float[] v1, float[] v2);
 
+  /** Adds {@code vector * scale} to {@code out} over the requested sub-vector range. */
+  default void addScaledInPlace(
+      float[] out, int outOffset, float[] vector, int vectorOffset, int length, float scale) {
+    for (int i = 0; i < length; i++) {
+      int outIndex = outOffset + i;
+      out[outIndex] = MathUtil.fma(vector[vectorOffset + i], scale, out[outIndex]);
+    }
+  }
+
   /** Subtracts v2 from v1 element-wise, storing the result in v1. */
   void subInPlace(float[] v1, float[] v2);
 
@@ -120,6 +142,162 @@ public interface VectorUtilSupport {
   }
 
   /**
+   * Fused matrix-vector dot product over a flat row-major matrix: fills {@code out[row] =
+   * dot(query, matrix[row])} for {@code row in [0, rows)}.
+   *
+   * <p>This is the allocation-free shape used by dense model tensors and mmap-backed loaders that
+   * expose row-major tensor payloads as a single contiguous buffer. SIMD subclasses override this
+   * with the same 4-row query-load amortization used by the {@code float[][]} batch kernel.
+   *
+   * @param query the query vector (length = {@code cols})
+   * @param rowMajorMatrix flat row-major matrix of length at least {@code rows * cols}
+   * @param rows the number of matrix rows to process
+   * @param cols the number of float elements per row
+   * @param out the output array (must have length &ge; {@code rows})
+   */
+  default void matVecDot(float[] query, float[] rowMajorMatrix, int rows, int cols, float[] out) {
+    for (int row = 0; row < rows; row++) {
+      out[row] = dotProduct(query, 0, rowMajorMatrix, row * cols, cols);
+    }
+  }
+
+  /**
+   * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
+   *
+   * <p>Q4_0 stores each 32-value block as a little-endian binary16 scale followed by 16 packed
+   * unsigned nibbles. Each nibble is centered by subtracting 8, then multiplied by the block scale.
+   * This kernel fuses dequantization and dot product without materializing a temporary float row.
+   */
+  default float ggufQ4_0DotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    float sum = 0f;
+    int blocks = dimensions / GGUF_Q_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      long nibbleOffset = blockOffset + Short.BYTES;
+      int queryOffset = block * GGUF_Q_BLOCK_SIZE;
+      for (int i = 0; i < 16; i++) {
+        int packed = qWeight.get(ValueLayout.JAVA_BYTE, nibbleOffset + i) & 0xFF;
+        int lo = (packed & 0x0F) - 8;
+        int hi = ((packed >>> 4) & 0x0F) - 8;
+        sum = MathUtil.fma(query[queryOffset + i * 2], lo * scale, sum);
+        sum = MathUtil.fma(query[queryOffset + i * 2 + 1], hi * scale, sum);
+      }
+    }
+    return sum;
+  }
+
+  /**
+   * Dot product of a full-precision query with one GGUF Q8_0 quantized row.
+   *
+   * <p>Q8_0 stores each 32-value block as a little-endian binary16 scale followed by 32 signed int8
+   * values. This kernel fuses dequantization and dot product without materializing a temporary
+   * float row.
+   */
+  default float ggufQ8_0DotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    float sum = 0f;
+    int blocks = dimensions / GGUF_Q_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      long quantOffset = blockOffset + Short.BYTES;
+      int queryOffset = block * GGUF_Q_BLOCK_SIZE;
+      for (int i = 0; i < GGUF_Q_BLOCK_SIZE; i++) {
+        byte quant = qWeight.get(ValueLayout.JAVA_BYTE, quantOffset + i);
+        sum = MathUtil.fma(query[queryOffset + i], quant * scale, sum);
+      }
+    }
+    return sum;
+  }
+
+  /**
+   * Dot product of a full-precision query with one GGUF Q6_K quantized row.
+   *
+   * <p>Q6_K stores each 256-value super-block as lower 4-bit quants, upper 2-bit quants, sixteen
+   * signed int8 sub-block scales, and one little-endian binary16 super-block scale. This kernel
+   * follows the upstream GGML bit layout and fuses dequantization and dot product without
+   * materializing a temporary float row.
+   */
+  default float ggufQ6_KDotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufQ6_KBlockAligned(dimensions);
+    float sum = 0f;
+    int blocks = dimensions / GGUF_Q6_K_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+      float d =
+          Float.float16ToFloat(
+              qWeight.get(
+                  GGUF_LE_SHORT,
+                  blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES));
+      long qlOffset = blockOffset;
+      long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+      long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+      int queryOffset = block * GGUF_Q6_K_BLOCK_SIZE;
+
+      for (int superBlock = 0; superBlock < 2; superBlock++) {
+        long qlBase = qlOffset + (long) superBlock * 64;
+        long qhBase = qhOffset + (long) superBlock * 32;
+        long scaleBase = scaleOffset + (long) superBlock * 8;
+        int outBase = queryOffset + superBlock * 128;
+
+        for (int l = 0; l < 32; l++) {
+          int is = l / 16;
+          int ql1 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + l) & 0xFF;
+          int ql2 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + 32L + l) & 0xFF;
+          int qh = qWeight.get(ValueLayout.JAVA_BYTE, qhBase + l) & 0xFF;
+          int q1 = ((ql1 & 0x0F) | ((qh & 0x03) << 4)) - 32;
+          int q2 = ((ql2 & 0x0F) | (((qh >>> 2) & 0x03) << 4)) - 32;
+          int q3 = ((ql1 >>> 4) | (((qh >>> 4) & 0x03) << 4)) - 32;
+          int q4 = ((ql2 >>> 4) | (((qh >>> 6) & 0x03) << 4)) - 32;
+
+          float d1 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + is);
+          float d2 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + is + 2L);
+          float d3 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + is + 4L);
+          float d4 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + is + 6L);
+
+          sum = MathUtil.fma(query[outBase + l], d1 * q1, sum);
+          sum = MathUtil.fma(query[outBase + l + 32], d2 * q2, sum);
+          sum = MathUtil.fma(query[outBase + l + 64], d3 * q3, sum);
+          sum = MathUtil.fma(query[outBase + l + 96], d4 * q4, sum);
+        }
+      }
+    }
+    return sum;
+  }
+
+  /** Batched row-major GEMV over GGUF Q4_0 rows. */
+  default void ggufQ4_0MatVecDot(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    long rowBytes = ggufQ4_0RowBytes(cols);
+    for (int row = 0; row < rows; row++) {
+      out[row] = ggufQ4_0DotProduct(query, qWeight, row * rowBytes, cols);
+    }
+  }
+
+  /** Batched row-major GEMV over GGUF Q6_K rows. */
+  default void ggufQ6_KMatVecDot(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    long rowBytes = ggufQ6_KRowBytes(cols);
+    for (int row = 0; row < rows; row++) {
+      out[row] = ggufQ6_KDotProduct(query, qWeight, row * rowBytes, cols);
+    }
+  }
+
+  /** Batched row-major GEMV over GGUF Q8_0 rows. */
+  default void ggufQ8_0MatVecDot(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    long rowBytes = ggufQ8_0RowBytes(cols);
+    for (int row = 0; row < rows; row++) {
+      out[row] = ggufQ8_0DotProduct(query, qWeight, row * rowBytes, cols);
+    }
+  }
+
+  /**
    * Fused matrix-vector squared L2 distance: fills {@code out[i] = squaredL2(query, matrix[i])} for
    * {@code i in [0, numRows)}.
    *
@@ -134,6 +312,121 @@ public interface VectorUtilSupport {
   default void matVecSquaredL2(float[] query, float[][] matrix, float[] out, int numRows) {
     for (int i = 0; i < numRows; i++) {
       out[i] = squareDistance(query, 0, matrix[i], 0, query.length);
+    }
+  }
+
+  /**
+   * Off-heap fused matrix-vector dot product: fills {@code out[i] = dot(query, rows[i])} for {@code
+   * i in [0, count)}, where each {@code rows[i]} is a {@link MemorySegment} holding {@code dim}
+   * little-endian float32s (typically a zero-copy mmap/off-heap slice).
+   *
+   * <p>This is the segment-scoring analogue of {@link #matVecDot(float[], float[][], float[],
+   * int)}: the query is still an on-heap {@code float[]} (uploaded once by the caller); only the
+   * matrix rows come from segments. The default implementation is a scalar per-row loop. SIMD
+   * subclasses override this to load each query SIMD chunk <em>once</em> and apply it to 4 segment
+   * rows simultaneously, giving the zero-copy path the same 4× query-load amortization as the
+   * {@code float[][]} path.
+   *
+   * @param query the query vector (length = {@code dim})
+   * @param rows the matrix rows as off-heap segments (each holds {@code dim} little-endian floats)
+   * @param dim the number of float elements per row
+   * @param out the output array (must have length &ge; {@code count})
+   * @param count the number of rows to process (must be &le; {@code rows.length})
+   */
+  default void matVecDot(float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    for (int i = 0; i < count; i++) {
+      MemorySegment row = rows[i];
+      float s = 0f;
+      for (int d = 0; d < dim; d++) {
+        s = MathUtil.fma(query[d], row.getAtIndex(ValueLayout.JAVA_FLOAT, d), s);
+      }
+      out[i] = s;
+    }
+  }
+
+  /**
+   * Off-heap fused matrix-vector squared L2 distance: fills {@code out[i] = squaredL2(query,
+   * rows[i])} for {@code i in [0, count)}. Segment-scoring analogue of {@link
+   * #matVecSquaredL2(float[], float[][], float[], int)}; see {@link #matVecDot(float[],
+   * MemorySegment[], int, float[], int)} for the query-load amortization rationale.
+   *
+   * @param query the query vector
+   * @param rows the matrix rows as off-heap segments
+   * @param dim the number of float elements per row
+   * @param out the output array (must have length &ge; {@code count})
+   * @param count the number of rows to process
+   */
+  default void matVecSquaredL2(
+      float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    for (int i = 0; i < count; i++) {
+      MemorySegment row = rows[i];
+      float s = 0f;
+      for (int d = 0; d < dim; d++) {
+        float e = query[d] - row.getAtIndex(ValueLayout.JAVA_FLOAT, d);
+        s = MathUtil.fma(e, e, s);
+      }
+      out[i] = s;
+    }
+  }
+
+  /**
+   * Fused matrix-vector cosine similarity: fills {@code out[i] = cosine(query, matrix[i])} for
+   * {@code i in [0, count)}, returning the RAW cosine value in {@code [-1, 1]} (callers apply the
+   * {@code (1+cos)/2} score transform).
+   *
+   * <p>The query norm {@code ‖query‖²} is constant for the whole batch, so it is computed once
+   * (single reduction over {@code query}); only the per-row dot product and row norm vary. The
+   * default implementation is a per-row loop over {@link #cosine(float[], float[])}. SIMD
+   * subclasses override this to load each query SIMD chunk <em>once</em> per 4-row group and
+   * accumulate {@code dot[r]} and {@code ‖row[r]‖²} for 4 rows simultaneously — the
+   * query-load-amortized analogue of {@link #matVecDot(float[], float[][], float[], int)}, carrying
+   * a second (row-norm) accumulator set plus the single shared query norm.
+   *
+   * <p>Zero-vector behavior matches {@link #cosine(float[], float[])}: a zero row (or zero query)
+   * yields {@code 0/0 = NaN}, identical to the per-row reference.
+   *
+   * @param query the query vector (length = {@code matrix[0].length})
+   * @param rows the matrix rows (each row must have the same length as {@code query})
+   * @param out the output array (must have length &ge; {@code count})
+   * @param count the number of rows to process (must be &le; {@code rows.length})
+   */
+  default void batchCosine(float[] query, float[][] rows, float[] out, int count) {
+    for (int i = 0; i < count; i++) {
+      out[i] = cosine(query, rows[i]);
+    }
+  }
+
+  /**
+   * Off-heap fused matrix-vector cosine similarity: fills {@code out[i] = cosine(query, rows[i])}
+   * for {@code i in [0, count)}, where each {@code rows[i]} is a {@link MemorySegment} holding
+   * {@code dim} little-endian float32s (typically a zero-copy mmap/off-heap slice). Returns RAW
+   * cosine values in {@code [-1, 1]}.
+   *
+   * <p>Segment-scoring analogue of {@link #batchCosine(float[], float[][], float[], int)}: the
+   * query stays an on-heap {@code float[]} (its norm computed once); only the matrix rows come from
+   * segments. The default implementation is a scalar per-row loop. SIMD subclasses override with
+   * the 4-row fused kernel.
+   *
+   * @param query the query vector (length = {@code dim})
+   * @param rows the matrix rows as off-heap segments (each holds {@code dim} little-endian floats)
+   * @param dim the number of float elements per row
+   * @param out the output array (must have length &ge; {@code count})
+   * @param count the number of rows to process (must be &le; {@code rows.length})
+   */
+  default void batchCosine(float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
+    for (int i = 0; i < count; i++) {
+      MemorySegment row = rows[i];
+      float dot = 0f;
+      float qn = 0f;
+      float rn = 0f;
+      for (int d = 0; d < dim; d++) {
+        float q = query[d];
+        float rv = row.getAtIndex(ValueLayout.JAVA_FLOAT, d);
+        dot = MathUtil.fma(q, rv, dot);
+        qn = MathUtil.fma(q, q, qn);
+        rn = MathUtil.fma(rv, rv, rn);
+      }
+      out[i] = (float) (dot / Math.sqrt((double) qn * (double) rn));
     }
   }
 
@@ -160,6 +453,35 @@ public interface VectorUtilSupport {
       sum += table[m][codes[codesOffset + m] & 0xFF];
     }
     return sum;
+  }
+
+  private static void checkGgufBlockAligned(int dimensions) {
+    if (dimensions % GGUF_Q_BLOCK_SIZE != 0) {
+      throw new IllegalArgumentException(
+          "GGUF quantized dimensions must be a multiple of 32: " + dimensions);
+    }
+  }
+
+  private static void checkGgufQ6_KBlockAligned(int dimensions) {
+    if (dimensions % GGUF_Q6_K_BLOCK_SIZE != 0) {
+      throw new IllegalArgumentException(
+          "GGUF Q6_K dimensions must be a multiple of 256: " + dimensions);
+    }
+  }
+
+  private static long ggufQ4_0RowBytes(int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    return (long) (dimensions / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
+  }
+
+  private static long ggufQ8_0RowBytes(int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    return (long) (dimensions / GGUF_Q_BLOCK_SIZE) * GGUF_Q8_0_BLOCK_BYTES;
+  }
+
+  private static long ggufQ6_KRowBytes(int dimensions) {
+    checkGgufQ6_KBlockAligned(dimensions);
+    return (long) (dimensions / GGUF_Q6_K_BLOCK_SIZE) * GGUF_Q6_K_BLOCK_BYTES;
   }
 
   /**

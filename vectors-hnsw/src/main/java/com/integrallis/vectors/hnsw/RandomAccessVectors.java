@@ -51,4 +51,38 @@ public interface RandomAccessVectors {
   default boolean sharesReturnBuffer() {
     return true;
   }
+
+  /**
+   * {@code true} when this implementation can hand out a zero-copy {@link
+   * java.lang.foreign.MemorySegment} view of a stored vector via {@link #vectorSegment(int)}.
+   * Off-heap / mmap-backed implementations that store contiguous little-endian float32 rows should
+   * override this to return {@code true}, enabling the searcher to SIMD-score directly from the
+   * segment with no intermediate {@code float[]} copy.
+   *
+   * <p>The default is {@code false} — heap-backed implementations (e.g. {@code InMemoryVectors})
+   * have no off-heap view to offer and stay on the {@code float[]} path.
+   */
+  default boolean supportsSegments() {
+    return false;
+  }
+
+  /**
+   * Returns a zero-copy {@link java.lang.foreign.MemorySegment} view of the vector at the given
+   * ordinal, or {@code null} when {@link #supportsSegments()} is {@code false}. The segment covers
+   * exactly {@code dimension() * 4} bytes of little-endian float32 data and is intended to be fed
+   * directly to {@code VectorUtil.dotProduct(MemorySegment, MemorySegment, int)} (and friends).
+   *
+   * <p><b>Lifetime.</b> When an implementation reuses a single scratch view, the returned segment
+   * is only valid until the next {@link #vectorSegment(int)} access on the same thread. However,
+   * slices into an immutable mmap'd region (the intended off-heap backing) are <i>stable</i>:
+   * distinct ordinals return distinct, independently valid views that may be held and compared
+   * freely for as long as the backing arena is open. Callers on the search path score-then-discard
+   * immediately, so either contract is satisfied.
+   *
+   * @param ordinal the 0-based vector index
+   * @return a zero-copy segment view, or {@code null} if segments are unsupported
+   */
+  default java.lang.foreign.MemorySegment vectorSegment(int ordinal) {
+    return null;
+  }
 }

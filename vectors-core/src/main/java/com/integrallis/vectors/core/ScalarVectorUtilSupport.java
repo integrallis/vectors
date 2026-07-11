@@ -227,6 +227,25 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void addScaledInPlace(
+      float[] out, int outOffset, float[] vector, int vectorOffset, int length, float scale) {
+    int i = 0;
+    int upperBound = length & ~3;
+    for (; i < upperBound; i += 4) {
+      int outIndex = outOffset + i;
+      int vectorIndex = vectorOffset + i;
+      out[outIndex] = MathUtil.fma(vector[vectorIndex], scale, out[outIndex]);
+      out[outIndex + 1] = MathUtil.fma(vector[vectorIndex + 1], scale, out[outIndex + 1]);
+      out[outIndex + 2] = MathUtil.fma(vector[vectorIndex + 2], scale, out[outIndex + 2]);
+      out[outIndex + 3] = MathUtil.fma(vector[vectorIndex + 3], scale, out[outIndex + 3]);
+    }
+    for (; i < length; i++) {
+      int outIndex = outOffset + i;
+      out[outIndex] = MathUtil.fma(vector[vectorOffset + i], scale, out[outIndex]);
+    }
+  }
+
+  @Override
   public void subInPlace(float[] v1, float[] v2) {
     for (int i = 0; i < v1.length; i++) {
       v1[i] -= v2[i];

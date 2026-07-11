@@ -1,18 +1,19 @@
-# ANN-Benchmarks algorithm config for `vectors`.
+# ANN-Benchmarks algorithm config for `vectors` (EMBEDDED-LIBRARY bench).
 #
-# Schema matches the current ann-benchmarks layout (ann_benchmarks/algorithms/<name>/config.yml):
-# under `float:`, `any:` (all metrics) maps to a LIST of algorithm-definition dicts using
-# UNDERSCORE keys (base_args, docker_tag, run_groups, arg_groups, query_args) and a required
-# `name`. `@metric` is substituted by the harness with the dataset's distance
-# ("euclidean" / "angular"); the adapter maps euclidean->EUCLIDEAN, angular->COSINE.
+# This is the single-node, in-memory recall-vs-QPS head-to-head — the bracket hnswlib / FAISS /
+# Lucene live in. (The DISTRIBUTED object-storage bench — cold/warm latency + $/TB vs turbopuffer —
+# is a different harness: vectors-bench/.../TurbopufferS3Benchmark.java.)
 #
-# List-valued entries in arg_groups expand into a cartesian product (definitions.py uses
-# itertools.product), so one arg_group dict sweeps every M x efConstruction combination.
+# Schema matches ann_benchmarks/algorithms/<name>/config.yml: under `float:`, `any:` maps to a LIST
+# of algorithm-definition dicts using UNDERSCORE keys. `@metric` is substituted with the dataset
+# distance ("euclidean"/"angular"); the adapter maps euclidean->EUCLIDEAN, angular->COSINE.
+# arg_groups expand as a cartesian product (M x efConstruction), so one dict sweeps every combo.
 #
-# - HNSW / VAMANA (graph): the recall-vs-QPS curve is swept at QUERY time via the efSearch
-#   values in query_args.
-# - IVF_PQ: nprobe is a BUILD-time setting in `vectors`, swept via arg_groups (each value
-#   rebuilds the index); query_args carries a single placeholder the adapter ignores.
+# GRID IS DELIBERATELY TRIMMED for a tractable head-to-head (~8 index builds x RUN_COUNT vs the
+# original 18): the ann-benchmarks 1-CPU limit makes each 1M build minutes-long, and build time is
+# reported separately from the QPS/recall curve that is the actual comparison. HNSW is the marquee
+# apples-to-apples vs hnswlib; a lean Vamana + IVF-PQ line show the other index types. Widen the
+# sweeps (commented "full grid" values) for a publication run once the shape looks right.
 float:
   any:
   - name: vectors
@@ -22,14 +23,15 @@ float:
     disabled: false
     base_args: ['@metric']
     run_groups:
-      hnsw:
-        arg_groups: [{indexType: [HNSW], M: [16, 24, 32], efConstruction: [200, 500]}]
-        query_args: [[20, 40, 80, 120, 200, 400, 800]]
-      vamana:
-        arg_groups: [{indexType: [VAMANA], R: [32, 64], L: [128], alpha: [1.2]}]
-        query_args: [[40, 80, 120, 200, 400, 800]]
-      ivfpq:
-        arg_groups:
-          - {indexType: [IVF_PQ], nlist: [256, 1024], nprobe: [8, 16, 32, 64, 128],
-             pqSubspaces: [16], pqClusters: [256], rescore: [4]}
-        query_args: [[0]]
+      # QUICK head-to-head: 2 HNSW builds only (each 1M-vector build is ~50 min at the 1-CPU
+      # ann-benchmarks limit, so build count dominates wall time). A low+high (M,efC) pair still
+      # traces a recall-vs-QPS curve via the 5 efSearch points. Re-add the vamana/ivfpq groups and
+      # widen M/efC for a fuller publication run once this confirms the pipeline end-to-end.
+      # Two SEPARATE run_groups = two distinct configs. (Multiple dicts inside one arg_groups list
+      # are passed as multiple constructor args, not separate configs — that's the TypeError trap.)
+      hnsw_fast:
+        arg_groups: [{indexType: [HNSW], M: [16], efConstruction: [200]}]
+        query_args: [[40, 80, 120, 200, 400]]
+      hnsw_hi:
+        arg_groups: [{indexType: [HNSW], M: [32], efConstruction: [500]}]
+        query_args: [[40, 80, 120, 200, 400]]

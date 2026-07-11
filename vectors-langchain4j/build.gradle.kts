@@ -7,6 +7,7 @@ val langchain4jVersion = providers.gradleProperty("langchain4jVersion").getOrEls
 
 dependencies {
     api(project(":vectors-db"))
+    implementation(project(":vectors-hybrid"))
     compileOnly("dev.langchain4j:langchain4j-core:$langchain4jVersion")
     testImplementation("dev.langchain4j:langchain4j-core:$langchain4jVersion")
 }

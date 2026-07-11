@@ -16,6 +16,8 @@
 package com.integrallis.vectors.db;
 
 import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.VectorUtil;
 import com.integrallis.vectors.core.filter.Filter;
 import com.integrallis.vectors.db.cache.QvCache;
 import com.integrallis.vectors.db.cache.QvCacheKey;
@@ -297,6 +299,18 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   private final VectorCollectionConfig config;
+
+  /**
+   * #A: whether vectors are L2-unit-normalized at ingest/search so the index scores them with
+   * {@link SimilarityFunction#DOT_PRODUCT} instead of the true COSINE kernel. Initialized from
+   * {@link VectorCollectionConfig#normalizeForCosine()} for a fresh collection; for a reopened
+   * persistent collection it is overridden in {@link #bootstrapPersistent(Path)} from the recovered
+   * manifest's {@code vectorsNormalized} flag so the reopened collection honors however the on-disk
+   * vectors were actually written. Assigned once during construction (before the initial {@code
+   * generation} is published) and never mutated afterward, so it is safe to read lock-free.
+   */
+  private boolean normalizeForCosine;
+
   private final ReentrantLock writerLock = new ReentrantLock();
 
   /**
@@ -383,6 +397,9 @@ final class VectorCollectionImpl implements VectorCollection {
       long compactionIntervalMillis,
       int retainGenerations) {
     this.config = Objects.requireNonNull(config, "config must not be null");
+    // #A: default from config; bootstrapPersistent() overrides from the recovered manifest so a
+    // reopened collection matches however its on-disk vectors were written.
+    this.normalizeForCosine = config.normalizeForCosine();
     this.queryCache = Objects.requireNonNull(cache, "cache must not be null");
     this.subscribers = java.util.List.copyOf(subscribers);
     this.compactionIntervalMillis = compactionIntervalMillis;
@@ -424,7 +441,7 @@ final class VectorCollectionImpl implements VectorCollection {
 
   private Generation bootstrapInMemory() {
     IndexSpi emptySpi = newInMemoryAdapter();
-    emptySpi.build(new float[0][], config.metric());
+    emptySpi.build(new float[0][], indexMetric());
     return new Generation(
         emptySpi,
         new InMemoryIdMapper(),
@@ -435,6 +452,32 @@ final class VectorCollectionImpl implements VectorCollection {
         null,
         null,
         null);
+  }
+
+  /**
+   * #A: the similarity function the index is actually built/searched with. Returns {@link
+   * SimilarityFunction#DOT_PRODUCT} when {@link #normalizeForCosine} (stored vectors are unit
+   * length, so dot equals cosine), otherwise the collection's true {@code config.metric()}. Every
+   * index build/adapter/decode site uses this; public metric reporting still uses {@code
+   * config.metric()} (the true metric, e.g. COSINE).
+   */
+  private SimilarityFunction indexMetric() {
+    return normalizeForCosine ? SimilarityFunction.DOT_PRODUCT : config.metric();
+  }
+
+  /**
+   * #A: when {@link #normalizeForCosine}, returns a Document whose vector is an L2-unit-normalized
+   * <i>copy</i> of the input (the caller's array is never mutated; zero-norm vectors are left
+   * as-is). Otherwise returns the document unchanged. Applied at the single ingest choke point so
+   * the persisted {@code vectors.bin}, the in-memory arrays, and {@code get}/{@code search}
+   * projections all hold unit vectors.
+   */
+  private Document maybeNormalizeForCosine(Document doc) {
+    if (!normalizeForCosine || doc.vector() == null) {
+      return doc;
+    }
+    float[] normalized = VectorUtil.l2normalize(doc.vector().clone(), false);
+    return new Document(doc.id(), normalized, doc.text(), doc.metadata());
   }
 
   private IndexSpi newInMemoryAdapter() {
@@ -499,6 +542,11 @@ final class VectorCollectionImpl implements VectorCollection {
 
     GenerationDirectory.RecoveryResult rr =
         GenerationDirectory.recover(storageRoot, bootstrapSource, bootstrap);
+    // #A: restore the normalize/DOT-scoring decision from the recovered manifest BEFORE any index
+    // adapter is built in openGeneration(), so a reopened collection honors however its on-disk
+    // vectors.bin was actually written (rather than whatever the reopening builder happened to
+    // pass). For a fresh collection this equals config.normalizeForCosine() by construction.
+    this.normalizeForCosine = rr.manifest().vectorsNormalized();
     return openGeneration(rr.generationDir(), rr.manifest());
   }
 
@@ -532,23 +580,23 @@ final class VectorCollectionImpl implements VectorCollection {
 
       IndexSpi spi =
           switch (manifest.indexType()) {
-            case FLAT -> new MappedFlatScanAdapter(mapped, config.metric());
+            case FLAT -> new MappedFlatScanAdapter(mapped, indexMetric());
             case HNSW ->
                 manifest.graphBinLength() > 0L
                     ? openHnswAdapter(genDir, manifest, mapped)
-                    : new MappedFlatScanAdapter(mapped, config.metric());
+                    : new MappedFlatScanAdapter(mapped, indexMetric());
             case VAMANA ->
                 manifest.graphBinLength() > 0L
                     ? openVamanaAdapter(genDir, manifest, mapped, arena)
-                    : new MappedFlatScanAdapter(mapped, config.metric());
+                    : new MappedFlatScanAdapter(mapped, indexMetric());
             case IVF_FLAT ->
                 manifest.graphBinLength() > 0L
                     ? openIvfFlatAdapter(genDir, manifest, mapped)
-                    : new MappedFlatScanAdapter(mapped, config.metric());
+                    : new MappedFlatScanAdapter(mapped, indexMetric());
             case IVF_PQ ->
                 manifest.graphBinLength() > 0L
                     ? openIvfPqAdapter(genDir, manifest, mapped)
-                    : new MappedFlatScanAdapter(mapped, config.metric());
+                    : new MappedFlatScanAdapter(mapped, indexMetric());
             case CUVS_BRUTEFORCE, CUVS_CAGRA ->
                 throw new UnsupportedOperationException(
                     "CUVS_* index types do not support persistent storage yet: "
@@ -561,7 +609,7 @@ final class VectorCollectionImpl implements VectorCollection {
         try {
           CompressedVectors compressed = QuantizedVectorsCodec.decode(quantizedBytes);
           if (spi instanceof MappedFlatScanAdapter fa) {
-            spi = new QuantizedFlatScanAdapter(fa, fa, config.metric(), compressed);
+            spi = new QuantizedFlatScanAdapter(fa, fa, indexMetric(), compressed);
           } else if (spi instanceof MappedHnswIndexAdapter ha) {
             ha.enableQuantization(compressed);
           } else if (spi instanceof MappedVamanaPagedIndexAdapter vp) {
@@ -606,7 +654,7 @@ final class VectorCollectionImpl implements VectorCollection {
     byte[] graphBytes = java.nio.file.Files.readAllBytes(graphFile);
     HnswGraph graph = HnswGraphCodec.decode(graphBytes);
     MemorySegmentRandomAccessVectors vectors = new MemorySegmentRandomAccessVectors(mapped);
-    return new MappedHnswIndexAdapter(graph, vectors, config.metric());
+    return new MappedHnswIndexAdapter(graph, vectors, indexMetric());
   }
 
   private IndexSpi openVamanaAdapter(
@@ -626,7 +674,7 @@ final class VectorCollectionImpl implements VectorCollection {
     }
     PagedVamanaTopology topology = PagedVamanaTopology.open(graphSeg);
     MemorySegmentRandomAccessVectors vectors = new MemorySegmentRandomAccessVectors(mapped);
-    return new MappedVamanaPagedIndexAdapter(topology, vectors, config.metric());
+    return new MappedVamanaPagedIndexAdapter(topology, vectors, indexMetric());
   }
 
   private IndexSpi openIvfFlatAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
@@ -644,7 +692,7 @@ final class VectorCollectionImpl implements VectorCollection {
       java.lang.foreign.MemorySegment.copy(
           mapped.vectorSlice(i), java.lang.foreign.ValueLayout.JAVA_FLOAT, 0L, matrix[i], 0, dim);
     }
-    IvfIndex ivfIndex = IvfIndex.decode(ivfBytes, matrix, config.metric());
+    IvfIndex ivfIndex = IvfIndex.decode(ivfBytes, matrix, indexMetric());
     VectorCollectionConfig.IvfParams p = config.ivfParams();
     return new MappedIvfFlatAdapter(ivfIndex, p.nprobe(), p.gamma(), dim);
   }
@@ -663,7 +711,7 @@ final class VectorCollectionImpl implements VectorCollection {
       java.lang.foreign.MemorySegment.copy(
           mapped.vectorSlice(i), java.lang.foreign.ValueLayout.JAVA_FLOAT, 0L, matrix[i], 0, dim);
     }
-    IvfIndex ivfIndex = IvfIndex.decode(ivfBytes, matrix, config.metric());
+    IvfIndex ivfIndex = IvfIndex.decode(ivfBytes, matrix, indexMetric());
     VectorCollectionConfig.IvfPqParams p = config.ivfPqParams();
     return new MappedIvfPqAdapter(ivfIndex, p.nprobe(), p.gamma(), p.rescoreFactor(), dim);
   }
@@ -765,7 +813,7 @@ final class VectorCollectionImpl implements VectorCollection {
     if (liveAndNotTombstoned || staging.contains(id)) {
       throw new IllegalArgumentException("Duplicate id: " + id);
     }
-    staging.append(doc);
+    staging.append(maybeNormalizeForCosine(doc));
   }
 
   private void maybeAutoCommit() {
@@ -871,7 +919,7 @@ final class VectorCollectionImpl implements VectorCollection {
       }
 
       // Stage new document (gets a new ordinal at the end).
-      staging.append(doc);
+      staging.append(maybeNormalizeForCosine(doc));
       maybeAutoCommit();
     } finally {
       writerLock.unlock();
@@ -1000,7 +1048,7 @@ final class VectorCollectionImpl implements VectorCollection {
     }
 
     IndexSpi newSpi = newInMemoryAdapter();
-    newSpi.build(next, config.metric());
+    newSpi.build(next, indexMetric());
 
     // Train quantizer if configured.
     if (config.quantizerKind() != QuantizerKind.NONE
@@ -1011,7 +1059,7 @@ final class VectorCollectionImpl implements VectorCollection {
         VectorDataset dataset = new ArrayVectorDataset(liveVectors);
         TrainedQuantization tq = trainQuantizer(dataset, config);
         if (newSpi instanceof FlatScanAdapter fa) {
-          newSpi = new QuantizedFlatScanAdapter(fa, fa, config.metric(), tq.compressed());
+          newSpi = new QuantizedFlatScanAdapter(fa, fa, indexMetric(), tq.compressed());
         } else if (newSpi instanceof HnswIndexAdapter ha) {
           ha.enableQuantization(tq.compressed());
         } else if (newSpi instanceof VamanaIndexAdapter va) {
@@ -1358,9 +1406,9 @@ final class VectorCollectionImpl implements VectorCollection {
         && newSpi instanceof HnswIndexAdapter ha
         && oldGen.spi instanceof HnswIndexAdapter oldHa
         && oldHa.graph() != null) {
-      ha.mergeFrom(oldHa.graph(), next, oldToNew, config.metric());
+      ha.mergeFrom(oldHa.graph(), next, oldToNew, indexMetric());
     } else {
-      newSpi.build(next, config.metric());
+      newSpi.build(next, indexMetric());
     }
 
     // Retrain quantizer on compacted data.
@@ -1368,7 +1416,7 @@ final class VectorCollectionImpl implements VectorCollection {
       VectorDataset dataset = new ArrayVectorDataset(next);
       TrainedQuantization tq = trainQuantizer(dataset, config);
       if (newSpi instanceof FlatScanAdapter fa) {
-        newSpi = new QuantizedFlatScanAdapter(fa, fa, config.metric(), tq.compressed());
+        newSpi = new QuantizedFlatScanAdapter(fa, fa, indexMetric(), tq.compressed());
       } else if (newSpi instanceof HnswIndexAdapter ha) {
         ha.enableQuantization(tq.compressed());
       } else if (newSpi instanceof VamanaIndexAdapter va) {
@@ -1452,7 +1500,7 @@ final class VectorCollectionImpl implements VectorCollection {
           VectorCollectionConfig.HnswParams hp = config.hnswParams();
           HnswGraph merged =
               HnswGraphMerger.merge(
-                  oldGraph, matrix, oldToNew, config.metric(), hp.m(), hp.efConstruction());
+                  oldGraph, matrix, oldToNew, indexMetric(), hp.m(), hp.efConstruction());
           graphBin = merged != null ? HnswGraphCodec.encode(merged) : null;
         } else {
           graphBin = encodeGraphBytes(matrix);
@@ -1607,7 +1655,7 @@ final class VectorCollectionImpl implements VectorCollection {
       case HNSW -> {
         VectorCollectionConfig.HnswParams hp = config.hnswParams();
         HnswIndexAdapter adapter = new HnswIndexAdapter(hp.m(), hp.efConstruction(), hp.threads());
-        adapter.build(matrix, config.metric());
+        adapter.build(matrix, indexMetric());
         HnswGraph graph = adapter.graph();
         yield graph == null ? null : HnswGraphCodec.encode(graph);
       }
@@ -1616,7 +1664,7 @@ final class VectorCollectionImpl implements VectorCollection {
         VamanaIndexAdapter adapter =
             new VamanaIndexAdapter(
                 vp.maxDegree(), vp.searchListSize(), vp.alpha(), vp.seed(), vp.threads());
-        adapter.build(matrix, config.metric());
+        adapter.build(matrix, indexMetric());
         VamanaGraph graph = adapter.graph();
         yield graph == null ? null : VamanaGraphCodec.encode(graph);
       }
@@ -1627,7 +1675,7 @@ final class VectorCollectionImpl implements VectorCollection {
         VectorCollectionConfig.IvfParams p = config.ivfParams();
         int effectiveK = Math.min(p.k(), matrix.length);
         IvfBuildParams bp = new IvfBuildParams(effectiveK, p.maxIter(), 0f, p.soar(), p.seed(), 0);
-        IvfIndex idx = IvfIndex.build(matrix, null, config.metric(), bp);
+        IvfIndex idx = IvfIndex.build(matrix, null, indexMetric(), bp);
         yield idx.encode();
       }
       case IVF_PQ -> {
@@ -1640,7 +1688,7 @@ final class VectorCollectionImpl implements VectorCollection {
             new IvfBuildParams(effectiveK, p.maxIter(), 0f, p.soar(), p.seed(), 0);
         IvfBuildParams bp =
             base.withPq(p.pqSubspaces(), p.pqClusters(), p.pqAnisotropicThreshold());
-        IvfIndex idx = IvfIndex.build(matrix, null, config.metric(), bp);
+        IvfIndex idx = IvfIndex.build(matrix, null, indexMetric(), bp);
         yield idx.encode();
       }
       case FLAT ->
@@ -1756,6 +1804,15 @@ final class VectorCollectionImpl implements VectorCollection {
     Filter filter = request.filter();
     boolean hasFilter = filter != null && !(filter instanceof Filter.All);
 
+    // #A: when the collection normalizes for cosine, the index scores with DOT over unit vectors,
+    // so the query must be unit-normalized to match. Normalize a COPY — never mutate the caller's
+    // array. The resulting (1+dot)/2 score equals the true (1+cosine)/2 cosine score exactly.
+    // Zero-norm queries are left as-is (l2normalize(..., false)).
+    float[] query =
+        normalizeForCosine
+            ? VectorUtil.l2normalize(request.query().clone(), false)
+            : request.query();
+
     // QvCache: only cache results that do not embed vectors (ids + scores + text + metadata are
     // stable across snapshots; vectors require mmap reads that callers may store separately).
     // Build the key once (quantize + filter-hash) and reuse it for both the get and the put below,
@@ -1763,7 +1820,7 @@ final class VectorCollectionImpl implements VectorCollection {
     boolean cacheEligible = !request.includeVector() && queryCache.isEnabled();
     QvCacheKey cacheKey = null;
     if (cacheEligible) {
-      cacheKey = queryCache.buildKey(request.query(), request.k(), filter);
+      cacheKey = queryCache.buildKey(query, request.k(), filter);
       var cached = queryCache.get(cacheKey);
       if (cached.isPresent()) return cached.get();
     }
@@ -1807,11 +1864,7 @@ final class VectorCollectionImpl implements VectorCollection {
         }
         outcome =
             gen.spi.searchWithPredicate(
-                request.query(),
-                candidateK,
-                candidateSearchListSize,
-                request.overQueryFactor(),
-                pred);
+                query, candidateK, candidateSearchListSize, request.overQueryFactor(), pred);
       } else {
         // Post-filter path: expand the candidate pool so the filter has enough to choose from.
         if (hasFilter) {
@@ -1824,15 +1877,14 @@ final class VectorCollectionImpl implements VectorCollection {
         if (request.searchMultiStart() > 1) {
           outcome =
               gen.spi.search(
-                  request.query(),
+                  query,
                   candidateK,
                   candidateSearchListSize,
                   request.overQueryFactor(),
                   request.searchMultiStart());
         } else {
           outcome =
-              gen.spi.search(
-                  request.query(), candidateK, candidateSearchListSize, request.overQueryFactor());
+              gen.spi.search(query, candidateK, candidateSearchListSize, request.overQueryFactor());
         }
       }
 

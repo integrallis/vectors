@@ -1,10 +1,15 @@
 @import java.util.List
+@import java.util.Set
 @import com.integrallis.vectors.studio.core.connection.CollectionSummary
 @param List<CollectionSummary> collections
+@param Set<String> sampleIds
 @template.layout(
     title = "Collections",
     body = @`
-      <h1>Collections</h1>
+      <div class="page-head">
+        <h1>Collections</h1>
+        <a class="btn" href="/datasets">Browse sample datasets</a>
+      </div>
       @if(collections.isEmpty())
         <p class="muted">No collections yet.</p>
       @else
@@ -17,7 +22,12 @@
           <tbody>
             @for(CollectionSummary c : collections)
               <tr id="row-${c.name()}">
-                <td><a href="/collections/${c.name()}">${c.name()}</a></td>
+                <td>
+                  <a href="/collections/${c.name()}">${c.name()}</a>
+                  @if(sampleIds.contains(c.name()))
+                    <span class="pill pill-sample" title="loaded from the sample-dataset catalog">sample</span>
+                  @endif
+                </td>
                 <td>
                   <span class="pill pill-dim" title="dimension">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

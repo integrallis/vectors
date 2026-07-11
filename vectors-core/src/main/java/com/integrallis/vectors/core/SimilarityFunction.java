@@ -15,6 +15,8 @@
  */
 package com.integrallis.vectors.core;
 
+import java.lang.foreign.MemorySegment;
+
 /**
  * Similarity scoring functions that convert raw distance/similarity values to a normalized score
  * where higher values indicate greater similarity.
@@ -41,6 +43,11 @@ public enum SimilarityFunction {
     public float compare(byte[] v1, byte[] v2) {
       return 1f / (1f + VectorUtil.squareDistance(v1, v2));
     }
+
+    @Override
+    public float compare(MemorySegment v1, MemorySegment v2, int dimensions) {
+      return 1f / (1f + VectorUtil.squareDistance(v1, v2, dimensions));
+    }
   },
 
   /**
@@ -59,6 +66,11 @@ public enum SimilarityFunction {
       // Byte vectors: scale by max possible magnitude (127*127*dims)
       return 0.5f + dot / (float) (2 * v1.length * 127 * 127);
     }
+
+    @Override
+    public float compare(MemorySegment v1, MemorySegment v2, int dimensions) {
+      return (1f + VectorUtil.dotProduct(v1, v2, dimensions)) / 2f;
+    }
   },
 
   /**
@@ -74,6 +86,11 @@ public enum SimilarityFunction {
     @Override
     public float compare(byte[] v1, byte[] v2) {
       return (1f + VectorUtil.cosine(v1, v2)) / 2f;
+    }
+
+    @Override
+    public float compare(MemorySegment v1, MemorySegment v2, int dimensions) {
+      return (1f + VectorUtil.cosine(v1, v2, dimensions)) / 2f;
     }
   },
 
@@ -94,6 +111,12 @@ public enum SimilarityFunction {
       float dot = VectorUtil.dotProduct(v1, v2);
       return scaleMaxInnerProductScore(dot);
     }
+
+    @Override
+    public float compare(MemorySegment v1, MemorySegment v2, int dimensions) {
+      float dot = VectorUtil.dotProduct(v1, v2, dimensions);
+      return scaleMaxInnerProductScore(dot);
+    }
   };
 
   /**
@@ -107,6 +130,23 @@ public enum SimilarityFunction {
    * similarity.
    */
   public abstract float compare(byte[] v1, byte[] v2);
+
+  /**
+   * Computes the similarity score between two float vectors stored off-heap in {@link
+   * MemorySegment}s. Higher values indicate greater similarity.
+   *
+   * <p>This is the zero-copy scoring entry point: the segments are read directly by the {@link
+   * VectorUtil} SIMD kernels via {@code FloatVector.fromMemorySegment} — no intermediate {@code
+   * float[]} copy. Numerically it mirrors {@link #compare(float[], float[])} exactly (same
+   * transform, same kernels, same float32 accumulation), so it preserves ranking/recall.
+   *
+   * @param v1 first vector as an off-heap segment holding {@code dimensions} little-endian float32s
+   * @param v2 second vector as an off-heap segment holding {@code dimensions} little-endian
+   *     float32s
+   * @param dimensions the number of float elements in each segment
+   * @return the similarity score (higher means more similar)
+   */
+  public abstract float compare(MemorySegment v1, MemorySegment v2, int dimensions);
 
   /**
    * Scales a raw inner product score to a non-negative value. Piecewise function ensures monotonic

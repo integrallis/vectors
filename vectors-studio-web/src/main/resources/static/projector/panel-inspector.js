@@ -16,7 +16,7 @@ function pointInPolygon(x, y, poly) {
   return inside;
 }
 
-export function createInspectorPanel({ root, collection, scene, dataPanel, canvasHost, onReset }) {
+export function createInspectorPanel({ root, collection, scene, dataPanel, canvasHost, onReset, revealPoint }) {
   const queryEl = root.querySelector("#ins-query");
   const kEl = root.querySelector("#ins-k");
   const searchBtn = root.querySelector("#ins-search");
@@ -26,6 +26,10 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
   const showAllBtn = root.querySelector("#ins-show-all");
   const hitsEl = root.querySelector("#ins-hits");
   const statusEl = root.querySelector("#ins-status");
+  const mmrEl = root.querySelector("#ins-mmr");
+  const mmrLambdaEl = root.querySelector("#ins-mmr-lambda");
+  const mmrLambdaField = root.querySelector("#ins-mmr-lambda-field");
+  const mmrLambdaOut = root.querySelector("#ins-mmr-lambda-out");
 
   // SVG overlay used by the lasso tool. Lives alongside the WebGL canvas.
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -59,6 +63,7 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       right.textContent = h.score != null ? h.score.toFixed(3) : "";
       li.appendChild(left); li.appendChild(right);
       li.addEventListener("click", (e) => onHitClick(e, h));
+      li.addEventListener("dblclick", (e) => onHitDblClick(e, h));
       hitsEl.appendChild(li);
     }
   }
@@ -66,21 +71,33 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
   function onHitClick(e, h) {
     if (h.index == null) return;
     if (e.shiftKey) {
+      // Shift-click still accumulates a multi-selection.
       if (selection.has(h.index)) selection.delete(h.index); else selection.add(h.index);
       scene.setSelection(selection);
-    } else {
-      // Single-click in the hit list re-pivots: pick this hit as the new query.
-      selectByIndex(h.index);
+      refreshButtons();
+      renderHits();
       return;
     }
+    // Plain single-click reveals ONLY this row (no re-pivot): focus that one
+    // point in the scene and pop its hover-card at its on-screen position.
+    selection = new Set([h.index]);
+    scene.setSelection(selection);
+    revealPoint?.(h.index);
     refreshButtons();
     renderHits();
   }
 
+  function onHitDblClick(e, h) {
+    if (h.index == null) return;
+    // Double-click a row re-pivots: make this hit the new query.
+    selectByIndex(h.index);
+  }
+
   // Posts the given JSON payload to the search API and applies the result to
   // the scene + hit list. queryIndex is the optional pivot index (set when
-  // searching by doc id) to render a primary label.
-  async function postSearch(payload, queryIndex) {
+  // searching by doc id) to render a primary label. queryText, when non-null
+  // (free-text search), is the raw text placed as the query point's hover label.
+  async function postSearch(payload, queryIndex, queryText) {
     statusEl.textContent = `searching…`;
     try {
       const res = await fetch(`/api/collections/${encodeURIComponent(collection)}/search`, {
@@ -89,11 +106,14 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
         body: JSON.stringify(payload),
       });
       if (!res.ok) { statusEl.textContent = `error ${res.status}`; return null; }
-      const { hits } = await res.json();
+      const { hits, queryProjection } = await res.json();
       lastHits = hits.map((h) => ({ ...h, index: dataPanel.indexOfId?.(h.id) ?? null }));
       selection = new Set(queryIndex != null ? [queryIndex] : []);
       for (const h of lastHits) if (h.index != null) selection.add(h.index);
       scene.setSelection(selection);
+      // Paint the neighbour hits orange and render the query as its own point.
+      scene.setHits?.(new Set(lastHits.map((h) => h.index).filter((i) => i != null)));
+      updateQueryPoint(queryProjection, queryText);
       applyLabels(queryIndex);
       refreshButtons();
       renderHits();
@@ -102,27 +122,61 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
     } catch (e) { statusEl.textContent = `network error`; return null; }
   }
 
+  // When MMR is enabled, pass the lambda so the backend over-fetches and diversity-re-ranks the
+  // neighbours — visible in the scene as the highlighted hits spreading out instead of clustering.
+  function mmrPayload() {
+    return mmrEl && mmrEl.checked ? { mmr: parseFloat(mmrLambdaEl.value) } : {};
+  }
+
   async function searchById(id, k) {
-    return postSearch({ id, k }, dataPanel.indexOfId?.(id));
+    // Pivoting around an existing doc: it's already a real, labelled point, so no
+    // separate query point (queryText null clears any prior one).
+    return postSearch({ id, k, ...mmrPayload() }, dataPanel.indexOfId?.(id), null);
   }
 
   async function searchByQuery(query, k) {
-    return postSearch({ query, k }, null);
+    return postSearch({ query, k, ...mmrPayload() }, null, query);
   }
 
   function applyLabels(primaryIndex) {
     if (!scene.setLabels) return;
+    // Only the pivot/query point keeps a persistent label. The K neighbour hits
+    // no longer show always-on text — their text appears on hover / single
+    // row-select via the hover-card instead.
     const items = [];
     if (primaryIndex != null) {
       const txt = dataPanel.labelAt(primaryIndex) ?? dataPanel.idAt(primaryIndex);
       if (txt != null) items.push({ index: primaryIndex, text: String(txt), primary: true });
     }
-    for (const h of lastHits) {
-      if (h.index == null || h.index === primaryIndex) continue;
-      const txt = dataPanel.labelAt(h.index) ?? h.id;
-      if (txt != null) items.push({ index: h.index, text: String(txt) });
-    }
     scene.setLabels(items);
+  }
+
+  // Renders the query as its own point, labelled with the raw query text. PCA
+  // returns exact out-of-sample coords from the backend (queryProjection.coords);
+  // t-SNE/UMAP have no transform, so we approximate the query position as the
+  // score-weighted centroid of the hit points' world positions. queryText null
+  // (e.g. an id pivot, or a clear) hides the query point.
+  function updateQueryPoint(queryProjection, queryText) {
+    if (!scene.setQueryPoint) return;
+    if (queryText == null) { scene.setQueryPoint(null); return; }
+    if (queryProjection && queryProjection.coords) {
+      scene.setQueryPoint(queryProjection.coords, queryText);
+      return;
+    }
+    if (!scene.positionOf) { scene.setQueryPoint(null); return; }
+    let wx = 0, wy = 0, wz = 0, sum = 0;
+    let ux = 0, uy = 0, uz = 0, n = 0;
+    for (const h of lastHits) {
+      if (h.index == null) continue;
+      const p = scene.positionOf(h.index);
+      if (!p) continue;
+      ux += p[0]; uy += p[1]; uz += p[2]; n += 1;
+      const w = h.score != null && h.score > 0 ? h.score : 0;
+      wx += p[0] * w; wy += p[1] * w; wz += p[2] * w; sum += w;
+    }
+    if (n === 0) { scene.setQueryPoint(null); return; }
+    if (sum > 0) scene.setQueryPoint([wx / sum, wy / sum, wz / sum], queryText);
+    else scene.setQueryPoint([ux / n, uy / n, uz / n], queryText); // fall back to plain centroid
   }
 
   async function doSearch() {
@@ -142,6 +196,9 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       lastHits = [];
       scene.setSelection(selection);
       scene.setLabels?.([]);
+      scene.setHits?.(new Set());
+      scene.setQueryPoint?.(null);
+      revealPoint?.(-1);
       refreshButtons();
       renderHits();
       statusEl.textContent = "";
@@ -206,6 +263,9 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
       selection = new Set(); lastHits = [];
       scene.setSelection(selection); scene.setIsolated(false);
       scene.setLabels?.([]);
+      scene.setHits?.(new Set());
+      scene.setQueryPoint?.(null);
+      revealPoint?.(-1);
       queryEl.value = "";
       if (kEl.defaultValue !== "") kEl.value = kEl.defaultValue;
       if (lassoOn) setLasso(false);
@@ -218,6 +278,21 @@ export function createInspectorPanel({ root, collection, scene, dataPanel, canva
     svg.addEventListener("pointermove", onMove);
     svg.addEventListener("pointerup", onUp);
     svg.addEventListener("pointerleave", onUp);
+    // MMR toggle + lambda slider: reveal the slider and re-run the current query live so the
+    // diversity effect is immediately visible in the projection.
+    const rerun = () => { if (queryEl.value.trim()) doSearch(); };
+    if (mmrEl) {
+      mmrEl.addEventListener("change", () => {
+        if (mmrLambdaField) mmrLambdaField.hidden = !mmrEl.checked;
+        rerun();
+      });
+    }
+    if (mmrLambdaEl) {
+      mmrLambdaEl.addEventListener("input", () => {
+        if (mmrLambdaOut) mmrLambdaOut.textContent = parseFloat(mmrLambdaEl.value).toFixed(2);
+        if (mmrEl && mmrEl.checked) rerun();
+      });
+    }
   }
 
   return { mount, selectByIndex };

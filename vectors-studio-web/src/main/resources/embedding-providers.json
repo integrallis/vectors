@@ -1,0 +1,19 @@
+{
+  "_comment": "Embedding-provider catalog for the Studio. Bundled defaults; users can EXTEND this by pointing VECTORS_STUDIO_PROVIDERS at their own JSON file (same schema) — its entries are merged over these by id. 'type' is openai | openai-compatible; 'apiKeyEnv' names the environment variable (resolved via process env, JVM system properties, or the repo .env) holding the API key — the value itself is never persisted or exposed. A null apiKeyEnv means no key is required (e.g. a local Ollama server). 'models' lists the embedding model ids this provider can serve.",
+  "providers": [
+    {
+      "id": "openai",
+      "type": "openai",
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "models": ["text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"]
+    },
+    {
+      "id": "ollama",
+      "type": "openai-compatible",
+      "baseUrl": "http://localhost:11434/v1",
+      "apiKeyEnv": null,
+      "models": ["mxbai-embed-large", "nomic-embed-text", "bge-m3"]
+    }
+  ]
+}

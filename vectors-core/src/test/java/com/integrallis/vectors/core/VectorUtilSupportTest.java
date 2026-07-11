@@ -561,6 +561,23 @@ class VectorUtilSupportTest {
 
     @ParameterizedTest(name = "dim={0}")
     @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
+    void addScaledInPlacePanamaMatchesScalar(int dim) {
+      Random rng = new Random(SEED);
+      float[] out1 = randomFloats(dim + 2, rng);
+      float[] vector = randomFloats(dim + 4, rng);
+      float[] out2 = out1.clone();
+      float multiplier = rng.nextFloat() * 4f - 2f;
+
+      scalar.addScaledInPlace(out1, 1, vector, 2, dim, multiplier);
+      panama.addScaledInPlace(out2, 1, vector, 2, dim, multiplier);
+
+      for (int i = 0; i < out1.length; i++) {
+        assertThat(out2[i]).as("element %d", i).isCloseTo(out1[i], within(FLOAT_EPSILON));
+      }
+    }
+
+    @ParameterizedTest(name = "dim={0}")
+    @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
     void subInPlacePanamaMatchesScalar(int dim) {
       Random rng = new Random(SEED);
       float[] a1 = randomFloats(dim, rng);

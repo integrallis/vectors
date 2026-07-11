@@ -17,6 +17,9 @@ package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
@@ -33,8 +36,9 @@ import java.util.function.IntPredicate;
  * <p>Scoring is delegated to a {@link NodeScorerFactory}, enabling both full-precision and
  * quantized scoring to share the same search algorithm.
  *
- * <p>Not thread-safe — owns scratch buffers (NodeQueue, BitSet). For concurrent queries, create a
- * separate {@code HnswSearcher} per thread via {@link HnswIndex#searcher()}.
+ * <p>Not thread-safe — owns per-search scratch buffers (NodeQueues plus a version-stamped visited
+ * tag array reset in O(1) per query). For concurrent queries, create a separate {@code
+ * HnswSearcher} per thread via {@link HnswIndex#searcher()}.
  */
 public final class HnswSearcher {
 
@@ -44,7 +48,13 @@ public final class HnswSearcher {
   private final NodeScorerFactory scorerFactory;
 
   // Scratch buffers reused across searches — zero allocation per search.
-  private final BitSet visited;
+  // Version-stamped visited set (hnswlib-style): a node is "visited" iff
+  // visitedTag[id]==visitedGen.
+  // Resetting between searches is an O(1) generation bump, not an O(graph.size()) BitSet.clear()
+  // that
+  // zeroed all ~N bits every query (a real cost at N=1.18M — most of which are never touched).
+  private final int[] visitedTag;
+  private int visitedGen;
   private final NodeQueue candidates;
   private final NodeQueue results;
   // Scratch buffer for rescore(): avoids allocating a new NodeQueue on every two-pass call.
@@ -66,6 +76,41 @@ public final class HnswSearcher {
   private final int[] bulkIds;
   private final float[] bulkScores;
   private final int bulkCapacity;
+
+  // Scorer scratch reused across queries. This searcher is per-thread (owns its scratch), so the
+  // default full-precision scorer closes over these fields instead of allocating a fresh pool per
+  // query. Sized to bulkCapacity (>= BULK_BATCH) so the fused GEMV path can score a full neighbor
+  // list — including greedy descent's per-node batch — in one call without overflowing the pool.
+  // For typical M (<= 31) bulkCapacity == BULK_BATCH (64); it only grows past 64 to preserve this
+  // bound when M is large.
+  private final float[][] scorerPool;
+  private final float[] scorerOut;
+  // Searcher-lifetime reusable off-heap query segment for the zero-copy (segment) scoring path.
+  // Allocated ONCE in the constructor and refilled per query via MemorySegment.copy — NOT a new
+  // Arena/segment per query. Null unless this searcher uses the default scorer AND the underlying
+  // vectors support segments.
+  private final Arena scorerArena;
+  private final MemorySegment queryScratchSeg;
+  // Reusable per-searcher scratch of zero-copy row-segment slices for the fused segment GEMV
+  // (bulkScore on the zero-copy path). Sized to bulkCapacity and refilled with vectorSegment()
+  // views per bulkScore call — NEVER re-allocated per call. Null unless the segment scorer is used.
+  private final MemorySegment[] scorerRows;
+  // True when scorerFactory == this::defaultScorer (stateful — bound to this searcher's scratch).
+  // Multi-start workers must then build their OWN default scorer rather than share this one, so a
+  // worker never touches another thread's scorer scratch.
+  private final boolean usesDefaultScorer;
+  // Reusable single-entry-point array — avoids the per-search new int[]{ep} allocation in search /
+  // searchFiltered / pickSeeds / per-worker seeding. Set [0] immediately before each call.
+  private final int[] singleEntry = new int[1];
+  // Reusable beam-search result array (grow-if-needed + clear per call).
+  //
+  // SAFETY INVARIANT: the array returned by beamSearch/beamSearchFiltered is fully consumed (by
+  // extractTopK, pickSeeds, or the multi-start merge) BEFORE the next beamSearch on the SAME
+  // searcher. Single-start (search/searchFiltered) consumes it immediately via extractTopK.
+  // Multi-start's Phase-2 pickSeeds beamSearch is drained into the seeds int[] before any further
+  // beamSearch, and the parallel workers each use a SEPARATE per-worker searcher (own scratch), so
+  // per-worker results never alias. No call site violates this invariant.
+  private NeighborArray reusableResult;
 
   /**
    * Optional SSD prefetch hook — called for each neighbor id before the scoring loop in {@link
@@ -96,12 +141,33 @@ public final class HnswSearcher {
       RandomAccessVectors vectors,
       SimilarityFunction similarityFunction,
       NodeScorerFactory scorerFactory) {
+    this(graph, vectors, similarityFunction, scorerFactory, false);
+  }
+
+  /** Creates a searcher using full-precision scoring backed by this searcher's own scratch. */
+  HnswSearcher(
+      HnswGraph graph, RandomAccessVectors vectors, SimilarityFunction similarityFunction) {
+    this(graph, vectors, similarityFunction, null, true);
+  }
+
+  /**
+   * Shared constructor. When {@code useDefaultScorer} is true, the searcher's {@code scorerFactory}
+   * is bound to {@link #defaultScorer(float[])} (which closes over this searcher's reusable
+   * scratch) and {@code factory} is ignored; otherwise the pluggable {@code factory} is used
+   * verbatim.
+   */
+  private HnswSearcher(
+      HnswGraph graph,
+      RandomAccessVectors vectors,
+      SimilarityFunction similarityFunction,
+      NodeScorerFactory factory,
+      boolean useDefaultScorer) {
     this.graph = graph;
     this.vectors = vectors;
     this.similarityFunction = similarityFunction;
-    this.scorerFactory = scorerFactory;
     int graphSize = Math.max(1, graph.size());
-    this.visited = new BitSet(graphSize);
+    this.visitedTag = new int[graphSize];
+    this.visitedGen = 0;
     // Initial heap capacity of 256 matches the typical ef (50-200) plus headroom — a query that
     // hits the top of that range never needs to grow the heap. The NodeQueue grows geometrically
     // on overflow, so a wrong guess just costs one realloc per ef-doubling, not per-insert.
@@ -115,46 +181,88 @@ public final class HnswSearcher {
     this.bulkCapacity = Math.max(BULK_BATCH, graph.maxConnections0() + 2);
     this.bulkIds = new int[bulkCapacity];
     this.bulkScores = new float[bulkCapacity];
-  }
 
-  /** Creates a searcher using full-precision scoring. */
-  HnswSearcher(
-      HnswGraph graph, RandomAccessVectors vectors, SimilarityFunction similarityFunction) {
-    this(
-        graph,
-        vectors,
-        similarityFunction,
-        defaultFullPrecisionFactory(vectors, similarityFunction));
+    // Scorer scratch is searcher-owned (reused across queries), sized to bulkCapacity so the fused
+    // GEMV path can score a full neighbor-list batch in one call. Only the default scorer uses it.
+    this.scorerPool = new float[bulkCapacity][];
+    this.scorerOut = new float[bulkCapacity];
+    this.usesDefaultScorer = useDefaultScorer;
+    if (useDefaultScorer && vectors.supportsSegments()) {
+      // Off-heap query segment allocated ONCE for this searcher's lifetime — refilled per query
+      // (MemorySegment.copy) inside defaultScorer, never re-allocated per query.
+      this.scorerArena = Arena.ofAuto();
+      this.queryScratchSeg = scorerArena.allocate((long) vectors.dimension() * Float.BYTES);
+      // Reusable row-segment scratch for the fused segment GEMV — sized to bulkCapacity like the
+      // float[][] scorerPool, allocated ONCE here, refilled per bulkScore call.
+      this.scorerRows = new MemorySegment[bulkCapacity];
+    } else {
+      this.scorerArena = null;
+      this.queryScratchSeg = null;
+      this.scorerRows = null;
+    }
+    this.scorerFactory = useDefaultScorer ? this::defaultScorer : factory;
   }
 
   /**
-   * Default full-precision scorer factory. When the underlying {@link RandomAccessVectors} returns
-   * stable references (i.e. {@code !sharesReturnBuffer()}), the returned scorer overrides {@link
+   * Default full-precision scorer bound to this searcher's reusable scratch (segment path: the
+   * once-allocated {@link #queryScratchSeg}; fused path: {@link #scorerPool} / {@link #scorerOut}).
+   * This replaces the former per-query allocation of an {@code Arena}/{@code float[64][]} pool.
+   *
+   * <p>When the underlying {@link RandomAccessVectors} returns stable references (i.e. {@code
+   * !sharesReturnBuffer()} and no segments), the returned scorer overrides {@link
    * NodeScorer#bulkScore} with a fused GEMV path (via {@link FusedSimilarity}) that aliases
-   * neighbor references into a reusable pool — amortising query loads across 4 rows at a time.
+   * neighbor references into the reusable pool — amortising query loads across 4 rows at a time.
+   *
+   * <p>Not thread-safe: this scorer aliases searcher-owned scratch, so it must only be used by the
+   * thread that owns this searcher. Multi-start workers build their own via their own searcher.
    */
-  private static NodeScorerFactory defaultFullPrecisionFactory(
-      RandomAccessVectors vectors, SimilarityFunction sim) {
-    if (vectors.sharesReturnBuffer()) {
-      // Shared-buffer impls can't safely be pooled for fused scoring; fall back to scalar.
-      return query -> nodeId -> sim.compare(query, vectors.getVector(nodeId));
+  private NodeScorer defaultScorer(float[] query) {
+    final SimilarityFunction sim = similarityFunction;
+    final RandomAccessVectors v = vectors;
+    if (v.supportsSegments()) {
+      // Zero-copy path: SIMD-score directly from the mmap slice, no per-neighbor float[] copy. The
+      // QUERY is uploaded into the searcher's reusable off-heap segment exactly ONCE per query
+      // here (NOT inside score()), then every neighbor score reads the query segment plus a
+      // zero-copy vectorSegment() view of the stored vector.
+      final int dim = v.dimension();
+      final MemorySegment qs = queryScratchSeg;
+      MemorySegment.copy(query, 0, qs, ValueLayout.JAVA_FLOAT, 0L, dim);
+      final MemorySegment[] rows = scorerRows;
+      final float[] scratch = scorerOut;
+      return new NodeScorer() {
+        @Override
+        public float score(int nodeId) {
+          // Greedy/single path: score directly from the mmap slice, no float[] copy.
+          return sim.compare(qs, v.vectorSegment(nodeId), dim);
+        }
+
+        @Override
+        public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+          // Gather zero-copy row slices into the reusable per-searcher scratch (no per-call
+          // allocation), then fused-GEMV score all of them with the query loaded once per 4 rows.
+          for (int i = 0; i < count; i++) rows[i] = v.vectorSegment(nodeIds[offset + i]);
+          FusedSimilarity.bulkCompareSegments(sim, query, rows, dim, scratch, outScores, count);
+        }
+      };
     }
-    return query ->
-        new NodeScorer() {
-          private final float[][] pool = new float[64][];
-          private final float[] out = new float[64];
+    if (v.sharesReturnBuffer()) {
+      // Shared-buffer impls can't safely be pooled for fused scoring; fall back to scalar.
+      return nodeId -> sim.compare(query, v.getVector(nodeId));
+    }
+    final float[][] pool = scorerPool;
+    final float[] out = scorerOut;
+    return new NodeScorer() {
+      @Override
+      public float score(int nodeId) {
+        return sim.compare(query, v.getVector(nodeId));
+      }
 
-          @Override
-          public float score(int nodeId) {
-            return sim.compare(query, vectors.getVector(nodeId));
-          }
-
-          @Override
-          public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
-            for (int i = 0; i < count; i++) pool[i] = vectors.getVector(nodeIds[offset + i]);
-            FusedSimilarity.bulkCompare(sim, query, pool, out, outScores, count);
-          }
-        };
+      @Override
+      public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+        for (int i = 0; i < count; i++) pool[i] = v.getVector(nodeIds[offset + i]);
+        FusedSimilarity.bulkCompare(sim, query, pool, out, outScores, count);
+      }
+    };
   }
 
   /**
@@ -185,7 +293,8 @@ public final class HnswSearcher {
     }
 
     // Phase 2: Beam search at layer 0
-    NeighborArray beamResults = beamSearch(new int[] {currentBest}, efSearch, 0, scorer);
+    singleEntry[0] = currentBest;
+    NeighborArray beamResults = beamSearch(singleEntry, efSearch, 0, scorer);
 
     return extractTopK(beamResults, k);
   }
@@ -259,7 +368,8 @@ public final class HnswSearcher {
       return new int[] {entry};
     }
     int seedEf = Math.max(2, 2 * nStarts);
-    NeighborArray seedResults = beamSearch(new int[] {entry}, seedEf, 1, scorer);
+    singleEntry[0] = entry;
+    NeighborArray seedResults = beamSearch(singleEntry, seedEf, 1, scorer);
     int count = Math.min(nStarts, seedResults.size());
     if (count <= 0) {
       return new int[] {entry};
@@ -285,10 +395,17 @@ public final class HnswSearcher {
         futures.add(
             exec.submit(
                 () -> {
+                  // Each worker owns its scratch. When this searcher uses the default (stateful,
+                  // scratch-bound) scorer, the worker MUST build its own default scorer via the
+                  // 3-arg constructor — never share this searcher's query segment / pool across
+                  // threads. Pluggable factories are stateless per query, so they are shared.
                   HnswSearcher worker =
-                      new HnswSearcher(graph, vectors, similarityFunction, scorerFactory);
-                  NodeScorer ws = scorerFactory.scorer(query);
-                  return worker.beamSearch(new int[] {s}, efSearch, 0, ws);
+                      usesDefaultScorer
+                          ? new HnswSearcher(graph, vectors, similarityFunction)
+                          : new HnswSearcher(graph, vectors, similarityFunction, scorerFactory);
+                  NodeScorer ws = worker.scorerFactory.scorer(query);
+                  worker.singleEntry[0] = s;
+                  return worker.beamSearch(worker.singleEntry, efSearch, 0, ws);
                 }));
       }
       for (Future<NeighborArray> f : futures) {
@@ -392,8 +509,8 @@ public final class HnswSearcher {
     }
 
     // Phase 2: Predicate-aware beam search at layer 0.
-    NeighborArray beamResults =
-        beamSearchFiltered(new int[] {currentBest}, efSearch, 0, scorer, predicate);
+    singleEntry[0] = currentBest;
+    NeighborArray beamResults = beamSearchFiltered(singleEntry, efSearch, 0, scorer, predicate);
 
     return extractTopK(beamResults, k);
   }
@@ -432,7 +549,20 @@ public final class HnswSearcher {
     return new SearchResult(nodeIds, scores);
   }
 
-  /** Greedy descent: walk to the best neighbor at the given layer. */
+  /**
+   * Greedy descent: walk to the best neighbor at the given layer.
+   *
+   * <p>Neighbor ids are gathered into the searcher's reusable {@code bulkIds} scratch and scored in
+   * a single {@link NodeScorer#bulkScore} call, routing descent through the fused (in-memory) /
+   * zero-copy-segment (mmap) path instead of one virtual {@code score()} per neighbor. Semantics
+   * are identical to the per-node loop: we move to the highest-scoring neighbor that beats {@code
+   * currentScore} (first occurrence on ties — the score comparison is strict {@code >}), and keep
+   * walking while an improvement was found.
+   *
+   * <p>A layer-&ge;1 neighbor list is bounded by {@code graph.maxConnections() <= bulkCapacity},
+   * but {@code count} is clamped to {@code bulkCapacity} defensively; any overflow tail falls back
+   * to per-node {@code score()}.
+   */
   int greedyDescend(int entryPoint, int layer, NodeScorer scorer) {
     int current = entryPoint;
     float currentScore = scorer.score(current);
@@ -443,29 +573,62 @@ public final class HnswSearcher {
       NeighborArray neighbors = graph.getNeighbors(current, layer);
       if (neighbors == null) break;
 
-      for (int i = 0; i < neighbors.size(); i++) {
+      int n = neighbors.size();
+      int batch = Math.min(n, bulkCapacity);
+      for (int i = 0; i < batch; i++) {
+        bulkIds[i] = neighbors.node(i);
+      }
+      scorer.bulkScore(bulkIds, 0, batch, bulkScores);
+
+      int bestId = current;
+      float bestScore = currentScore;
+      for (int i = 0; i < batch; i++) {
+        if (bulkScores[i] > bestScore) {
+          bestScore = bulkScores[i];
+          bestId = neighbors.node(i);
+        }
+      }
+      // Defensive overflow tail: only reached if a neighbor list exceeds bulkCapacity.
+      for (int i = batch; i < n; i++) {
         int neighborId = neighbors.node(i);
         float score = scorer.score(neighborId);
-        if (score > currentScore) {
-          current = neighborId;
-          currentScore = score;
-          improved = true;
+        if (score > bestScore) {
+          bestScore = score;
+          bestId = neighborId;
         }
+      }
+
+      if (bestId != current) {
+        current = bestId;
+        currentScore = bestScore;
+        improved = true;
       }
     }
     return current;
   }
 
+  /**
+   * Begins a new visited generation in O(1) amortized time (replacing an O(graph.size()) clear). On
+   * the rare {@code int} wraparound, resets the tag array so a stale tag can't alias the new
+   * generation.
+   */
+  private void nextVisitedGeneration() {
+    if (++visitedGen == 0) {
+      java.util.Arrays.fill(visitedTag, 0);
+      visitedGen = 1;
+    }
+  }
+
   /** Beam search at a given layer using candidate max-heap and result min-heap. */
   NeighborArray beamSearch(int[] entryPoints, int ef, int layer, NodeScorer scorer) {
-    visited.clear();
+    nextVisitedGeneration();
     candidates.clear();
     results.clear();
 
     // Seed with entry points
     for (int ep : entryPoints) {
-      if (!visited.get(ep)) {
-        visited.set(ep);
+      if (visitedTag[ep] != visitedGen) {
+        visitedTag[ep] = visitedGen;
         float score = scorer.score(ep);
         candidates.add(ep, score);
         results.add(ep, score);
@@ -511,8 +674,8 @@ public final class HnswSearcher {
         scorer.scoreNeighborBatch(candidateId, n, bulkScores);
         for (int i = 0; i < n; i++) {
           int neighborId = neighbors.node(i);
-          if (visited.get(neighborId)) continue;
-          visited.set(neighborId);
+          if (visitedTag[neighborId] == visitedGen) continue;
+          visitedTag[neighborId] = visitedGen;
           ingestOne(neighborId, bulkScores[i], ef);
         }
       } else {
@@ -520,8 +683,8 @@ public final class HnswSearcher {
         int batchCount = 0;
         for (int i = 0; i < n; i++) {
           int neighborId = neighbors.node(i);
-          if (visited.get(neighborId)) continue;
-          visited.set(neighborId);
+          if (visitedTag[neighborId] == visitedGen) continue;
+          visitedTag[neighborId] = visitedGen;
           bulkIds[batchCount++] = neighborId;
           if (batchCount == BULK_BATCH) {
             scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
@@ -539,7 +702,7 @@ public final class HnswSearcher {
     // Convert results min-heap to sorted NeighborArray (descending).
     // Reuse pre-allocated tmpNodes/tmpScores scratch fields — no allocation per search.
     int resultSize = results.size();
-    var resultArray = new NeighborArray(resultSize == 0 ? 1 : resultSize);
+    NeighborArray resultArray = obtainResultArray(resultSize == 0 ? 1 : resultSize);
     for (int i = resultSize - 1; i >= 0; i--) {
       long entry = results.poll();
       tmpNodes[i] = NodeQueue.nodeId(entry);
@@ -567,14 +730,14 @@ public final class HnswSearcher {
    */
   NeighborArray beamSearchFiltered(
       int[] entryPoints, int ef, int layer, NodeScorer scorer, IntPredicate predicate) {
-    visited.clear();
+    nextVisitedGeneration();
     candidates.clear();
     results.clear();
 
     // Seed with entry points.
     for (int ep : entryPoints) {
-      if (!visited.get(ep)) {
-        visited.set(ep);
+      if (visitedTag[ep] != visitedGen) {
+        visitedTag[ep] = visitedGen;
         float score = scorer.score(ep);
         candidates.add(ep, score);
         // Only matching entry points go into results.
@@ -618,8 +781,8 @@ public final class HnswSearcher {
         scorer.scoreNeighborBatch(candidateId, n, bulkScores);
         for (int i = 0; i < n; i++) {
           int neighborId = neighbors.node(i);
-          if (visited.get(neighborId)) continue;
-          visited.set(neighborId);
+          if (visitedTag[neighborId] == visitedGen) continue;
+          visitedTag[neighborId] = visitedGen;
           ingestOneFiltered(neighborId, bulkScores[i], ef, predicate);
         }
       } else {
@@ -627,8 +790,8 @@ public final class HnswSearcher {
         int batchCount = 0;
         for (int i = 0; i < n; i++) {
           int neighborId = neighbors.node(i);
-          if (visited.get(neighborId)) continue;
-          visited.set(neighborId);
+          if (visitedTag[neighborId] == visitedGen) continue;
+          visitedTag[neighborId] = visitedGen;
           bulkIds[batchCount++] = neighborId;
           if (batchCount == BULK_BATCH) {
             scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
@@ -645,7 +808,7 @@ public final class HnswSearcher {
 
     // Convert results min-heap to sorted NeighborArray (descending).
     int resultSize = results.size();
-    var resultArray = new NeighborArray(resultSize == 0 ? 1 : resultSize);
+    NeighborArray resultArray = obtainResultArray(resultSize == 0 ? 1 : resultSize);
     for (int i = resultSize - 1; i >= 0; i--) {
       long entry = results.poll();
       tmpNodes[i] = NodeQueue.nodeId(entry);
@@ -697,6 +860,21 @@ public final class HnswSearcher {
     for (int i = 0; i < count; i++) {
       ingestOneFiltered(bulkIds[i], bulkScores[i], ef, predicate);
     }
+  }
+
+  /**
+   * Returns the reusable beam-search result array cleared and sized to hold at least {@code
+   * capacity} entries. Grown (reallocated) only when the previous array is too small; otherwise the
+   * same array is cleared and reused. See the {@link #reusableResult} field for the consumption
+   * safety invariant.
+   */
+  private NeighborArray obtainResultArray(int capacity) {
+    if (reusableResult == null || reusableResult.maxSize() < capacity) {
+      reusableResult = new NeighborArray(capacity);
+    } else {
+      reusableResult.clear();
+    }
+    return reusableResult;
   }
 
   /** Extracts the top-k results from a sorted NeighborArray. */

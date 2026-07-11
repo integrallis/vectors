@@ -43,6 +43,14 @@ class VectorUtilBatchTest {
     return v;
   }
 
+  private float[] flatten(float[][] matrix, int rows, int cols) {
+    float[] flat = new float[rows * cols];
+    for (int row = 0; row < rows; row++) {
+      System.arraycopy(matrix[row], 0, flat, row * cols, cols);
+    }
+    return flat;
+  }
+
   @Test
   void batchDotProduct_matchesScalarResults() {
     float[] query = randomVector(DIM, 1L);
@@ -106,6 +114,35 @@ class VectorUtilBatchTest {
   }
 
   @Test
+  void rowMajorBatchDotProduct_matchesMatrixRows() {
+    int rows = 17;
+    int cols = 129;
+    float[] query = randomVector(cols, 701L);
+    float[][] matrix = randomMatrix(rows, cols, 702L);
+    float[] rowMajor = flatten(matrix, rows, cols);
+    float[] expected = new float[rows];
+    float[] actual = new float[rows];
+
+    VectorUtil.batchDotProduct(query, matrix, expected);
+    VectorUtil.batchDotProduct(query, rowMajor, rows, cols, actual);
+
+    for (int row = 0; row < rows; row++) {
+      assertThat(actual[row]).isCloseTo(expected[row], within(1e-4f));
+    }
+  }
+
+  @Test
+  void rowMajorBatchDotProduct_emptyMatrix_noOp() {
+    float[] query = randomVector(8, 703L);
+    float[] rowMajor = new float[0];
+    float[] out = new float[0];
+
+    VectorUtil.batchDotProduct(query, rowMajor, 0, 8, out);
+
+    assertThat(out).isEmpty();
+  }
+
+  @Test
   void batchDotProductRejectsInvalidArguments() {
     float[] query = randomVector(4, 8L);
     float[][] matrix = new float[][] {randomVector(4, 9L)};
@@ -118,6 +155,12 @@ class VectorUtilBatchTest {
             () ->
                 VectorUtil.batchDotProduct(
                     query, new float[][] {randomVector(3, 10L)}, new float[1]))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.batchDotProduct(query, new float[3], 1, 4, new float[1]))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.batchDotProduct(query, new float[4], 1, 3, new float[1]))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.batchDotProduct(query, new float[4], 1, 4, new float[0]))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

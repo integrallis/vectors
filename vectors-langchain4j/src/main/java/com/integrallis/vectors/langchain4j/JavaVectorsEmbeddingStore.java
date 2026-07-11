@@ -17,6 +17,7 @@ package com.integrallis.vectors.langchain4j;
 
 import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.VectorCollection;
+import com.integrallis.vectors.hybrid.MaximalMarginalRelevance;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
@@ -61,10 +62,14 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
 
   private final VectorCollection collection;
   private final boolean commitAfterAdd;
+  private final Float mmrLambda; // null = MMR disabled
+  private final int mmrFetchMultiplier;
 
   private JavaVectorsEmbeddingStore(Builder builder) {
     this.collection = builder.collection;
     this.commitAfterAdd = builder.commitAfterAdd;
+    this.mmrLambda = builder.mmrLambda;
+    this.mmrFetchMultiplier = builder.mmrFetchMultiplier;
   }
 
   /**
@@ -168,9 +173,13 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
 
   @Override
   public EmbeddingSearchResult<TextSegment> search(EmbeddingSearchRequest request) {
-    var jvRequestBuilder =
-        com.integrallis.vectors.db.SearchRequest.builder(
-            request.queryEmbedding().vector(), request.maxResults());
+    float[] query = request.queryEmbedding().vector();
+    int maxResults = request.maxResults();
+    boolean useMmr = mmrLambda != null;
+    // With MMR on, over-fetch a larger candidate pool, then diversify down to maxResults.
+    int fetch = useMmr ? Math.multiplyExact(maxResults, mmrFetchMultiplier) : maxResults;
+
+    var jvRequestBuilder = com.integrallis.vectors.db.SearchRequest.builder(query, fetch);
 
     if (request.minScore() > 0.0) {
       jvRequestBuilder.minScore((float) request.minScore());
@@ -181,9 +190,14 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
     }
 
     com.integrallis.vectors.db.SearchResult jvResult = collection.search(jvRequestBuilder.build());
+    List<com.integrallis.vectors.db.SearchResult.Hit> hits = jvResult.hits();
 
-    List<EmbeddingMatch<TextSegment>> matches = new ArrayList<>(jvResult.hits().size());
-    for (com.integrallis.vectors.db.SearchResult.Hit hit : jvResult.hits()) {
+    if (useMmr && hits.size() > maxResults) {
+      hits = applyMmr(query, hits, maxResults);
+    }
+
+    List<EmbeddingMatch<TextSegment>> matches = new ArrayList<>(hits.size());
+    for (com.integrallis.vectors.db.SearchResult.Hit hit : hits) {
       com.integrallis.vectors.core.Document jvDoc = hit.document();
 
       TextSegment segment = null;
@@ -197,6 +211,26 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
       matches.add(new EmbeddingMatch<>((double) hit.score(), hit.id(), embedding, segment));
     }
     return new EmbeddingSearchResult<>(matches);
+  }
+
+  private List<com.integrallis.vectors.db.SearchResult.Hit> applyMmr(
+      float[] query, List<com.integrallis.vectors.db.SearchResult.Hit> hits, int maxResults) {
+    float[][] candidateVectors = new float[hits.size()][];
+    for (int i = 0; i < hits.size(); i++) {
+      candidateVectors[i] = hits.get(i).document().vector();
+      if (candidateVectors[i] == null) {
+        // Vectors not returned (e.g. stripped by config) — fall back to relevance order.
+        return hits.subList(0, maxResults);
+      }
+    }
+    int[] selected =
+        MaximalMarginalRelevance.select(
+            query, candidateVectors, maxResults, mmrLambda, collection.config().metric());
+    List<com.integrallis.vectors.db.SearchResult.Hit> reranked = new ArrayList<>(selected.length);
+    for (int idx : selected) {
+      reranked.add(hits.get(idx));
+    }
+    return reranked;
   }
 
   /**
@@ -237,6 +271,8 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
 
     private final VectorCollection collection;
     private boolean commitAfterAdd = true;
+    private Float mmrLambda = null; // null = MMR disabled
+    private int mmrFetchMultiplier = 4;
 
     private Builder(VectorCollection collection) {
       this.collection = Objects.requireNonNull(collection, "collection must not be null");
@@ -251,6 +287,35 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
      */
     public Builder commitAfterAdd(boolean commitAfterAdd) {
       this.commitAfterAdd = commitAfterAdd;
+      return this;
+    }
+
+    /**
+     * Enables Maximal Marginal Relevance diversity re-ranking. {@code search()} over-fetches {@code
+     * maxResults * fetchMultiplier} candidates and re-ranks them down to {@code maxResults}
+     * diverse-but-relevant results using the collection's metric — so near-duplicate segments don't
+     * crowd the LLM context window. Disabled by default.
+     *
+     * @param lambda relevance/diversity trade-off in {@code [0, 1]} (1 = pure relevance, 0 = max
+     *     diversity; typical RAG values 0.5–0.7)
+     */
+    public Builder mmr(float lambda) {
+      return mmr(lambda, this.mmrFetchMultiplier);
+    }
+
+    /**
+     * Enables MMR with an explicit over-fetch multiplier (pool = {@code maxResults * multiplier}).
+     */
+    public Builder mmr(float lambda, int fetchMultiplier) {
+      if (lambda < 0f || lambda > 1f) {
+        throw new IllegalArgumentException("mmr lambda must be in [0, 1], got " + lambda);
+      }
+      if (fetchMultiplier < 1) {
+        throw new IllegalArgumentException(
+            "mmr fetchMultiplier must be >= 1, got " + fetchMultiplier);
+      }
+      this.mmrLambda = lambda;
+      this.mmrFetchMultiplier = fetchMultiplier;
       return this;
     }
 

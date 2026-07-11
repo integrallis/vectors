@@ -41,7 +41,8 @@ import java.util.Objects;
  *   0      4    magic                       FileFormat.MAGIC_MANIFEST
  *   4      4    format version              FileFormat.VERSION_MANIFEST (= 4)
  *   8      4    header length               bytes from offset 0 to end of header (= 164)
- *  12      4    flags                        reserved, must be 0
+ *  12      4    flags                        bit 0 = vectorsNormalized (#A cosine unit-norm);
+ *                                            all other bits reserved, must be 0
  *  16      4    dimension                   vector dimension
  *  20      4    metric ordinal              SimilarityFunction.ordinal()
  *  24      4    index type ordinal          IndexType.ordinal()
@@ -98,13 +99,67 @@ public record Manifest(
     long quantizedBinCrc32,
     long tombstoneCount,
     long tombstonesBinLength,
-    long tombstonesBinCrc32) {
+    long tombstonesBinCrc32,
+    boolean vectorsNormalized) {
 
   /** Total fixed header size on disk, including the self CRC. */
   public static final int HEADER_SIZE = 164;
 
   /** Offset in bytes at which the self-CRC32 word lives. */
   public static final int SELF_CRC_OFFSET = 160;
+
+  /** {@code flags} bit set when {@code vectors.bin} holds L2-unit-normalized vectors (#A). */
+  public static final int FLAG_VECTORS_NORMALIZED = 0x1;
+
+  /**
+   * Backward-compatible constructor without {@code vectorsNormalized}, defaulting it to {@code
+   * false} (the pre-#A behavior: vectors stored verbatim). Preserves every call site written before
+   * the #A cosine unit-normalization optimization was added.
+   */
+  public Manifest(
+      int dimension,
+      SimilarityFunction metric,
+      IndexType indexType,
+      QuantizerKind quantizerKind,
+      long generationNumber,
+      long createdEpochMillis,
+      long liveCount,
+      long vectorsBinLength,
+      long vectorsBinCrc32,
+      long metadataBinLength,
+      long metadataBinCrc32,
+      long idmapBinLength,
+      long idmapBinCrc32,
+      long graphBinLength,
+      long graphBinCrc32,
+      long quantizedBinLength,
+      long quantizedBinCrc32,
+      long tombstoneCount,
+      long tombstonesBinLength,
+      long tombstonesBinCrc32) {
+    this(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        generationNumber,
+        createdEpochMillis,
+        liveCount,
+        vectorsBinLength,
+        vectorsBinCrc32,
+        metadataBinLength,
+        metadataBinCrc32,
+        idmapBinLength,
+        idmapBinCrc32,
+        graphBinLength,
+        graphBinCrc32,
+        quantizedBinLength,
+        quantizedBinCrc32,
+        tombstoneCount,
+        tombstonesBinLength,
+        tombstonesBinCrc32,
+        false);
+  }
 
   public Manifest {
     if (dimension <= 0) {
@@ -274,7 +329,10 @@ public record Manifest(
         quantizedBinCrc32,
         tombstoneCount,
         tombstonesBinLength,
-        tombstonesBinCrc32);
+        tombstonesBinCrc32,
+        // #A: record whether vectors.bin holds unit-normalized vectors so a reopened collection
+        // restores the same normalize/DOT-scoring decision. config.metric() stays the TRUE metric.
+        config.normalizeForCosine());
   }
 
   /**
@@ -328,7 +386,7 @@ public record Manifest(
     buf.putInt(FileFormat.MAGIC_MANIFEST);
     buf.putInt(FileFormat.VERSION_MANIFEST);
     buf.putInt(HEADER_SIZE);
-    buf.putInt(0); // flags reserved
+    buf.putInt(vectorsNormalized ? FLAG_VECTORS_NORMALIZED : 0); // flags: bit 0 = vectorsNormalized
     buf.putInt(dimension);
     buf.putInt(metric.ordinal());
     buf.putInt(indexType.ordinal());
@@ -388,9 +446,12 @@ public record Manifest(
           "Manifest header length mismatch: expected " + HEADER_SIZE + ", got " + headerLength);
     }
     int flags = buf.getInt();
-    if (flags != 0) {
-      throw new IOException("Manifest flags must be 0 in version 4, got " + flags);
+    if ((flags & ~FLAG_VECTORS_NORMALIZED) != 0) {
+      throw new IOException(
+          "Manifest flags has unknown bits set (only bit 0 = vectorsNormalized is defined): "
+              + flags);
     }
+    boolean vectorsNormalized = (flags & FLAG_VECTORS_NORMALIZED) != 0;
 
     int dimension = buf.getInt();
     int metricOrdinal = buf.getInt();
@@ -448,7 +509,8 @@ public record Manifest(
         quantizedBinCrc32,
         tombstoneCount,
         tombstonesBinLength,
-        tombstonesBinCrc32);
+        tombstonesBinCrc32,
+        vectorsNormalized);
   }
 
   /**

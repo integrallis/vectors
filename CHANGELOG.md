@@ -15,6 +15,24 @@ All notable changes to java-vectors are documented here.
   HNSW compaction/merge, and every LangChain4j cache-store mutation overload.
 - A claims-controlled JVM community launch brief and release-day demonstration
   contract.
+- COSINE search performance: by default vectors are stored verbatim (a retrieved
+  vector equals the original input) and scored with a fused cosine kernel. Opt into
+  `VectorCollectionBuilder.normalizeCosineVectors(true)` to unit-normalize vectors at
+  ingest and score them via dot product (cosine of unit vectors equals their dot
+  product), collapsing the hot kernel from three reductions plus a sqrt/divide to a
+  single fused dot product for a ~1-6% QPS edge on the HNSW cosine path — at the cost
+  of returning normalized (not verbatim) vectors on retrieval.
+- Zero-copy `MemorySegment` scoring on the persistent/mmap search path, a 4x-unrolled
+  `MemorySegment` cosine kernel (parity with the `float[]` kernel), and HNSW searcher
+  allocation hygiene (batched greedy descent, per-searcher reuse of scorer scratch).
+- HNSW search hot-path: batch-scoring argument validation now builds its failure messages
+  lazily instead of eagerly constructing `"matrix[" + i + "]"` on every row of every batch
+  (which ran on the success path — ~18% of search time in a JFR profile), for a measured
+  1.2-1.4x QPS speedup with recall and results bit-identical.
+- HNSW search: the per-searcher visited set is now a version-stamped `int[]` tag array with an
+  O(1) generation-bump reset, replacing a `java.util.BitSet` whose per-query `clear()` zeroed
+  all `graph.size()` bits every search (an O(N) cost that scales with corpus size). Mirrors
+  hnswlib's `visited_list_pool`; recall/results bit-identical.
 
 ### Fixed
 

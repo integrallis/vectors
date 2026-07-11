@@ -16,25 +16,56 @@ if (!shell) {
 const collection = shell.dataset.collection;
 const canvasHost = shell.querySelector(".projector-canvas");
 const statusEl = shell.querySelector(".projector-status");
-const tooltipEl = document.createElement("div");
-tooltipEl.className = "projector-tooltip";
-canvasHost.appendChild(tooltipEl);
+// shadcn-style hover-card: an id (muted, small) stacked above the point's text.
+const hoverEl = document.createElement("div");
+hoverEl.className = "projector-hovercard";
+const hoverIdEl = document.createElement("div");
+hoverIdEl.className = "projector-hovercard-id";
+const hoverTextEl = document.createElement("div");
+hoverTextEl.className = "projector-hovercard-text";
+hoverEl.appendChild(hoverIdEl);
+hoverEl.appendChild(hoverTextEl);
+canvasHost.appendChild(hoverEl);
 
 const setStatus = (msg) => { statusEl.textContent = msg; };
 
 let lastDim = 3;
 
-function showTooltip(idx, x, y) {
-  if (idx < 0) { tooltipEl.style.display = "none"; return; }
+// Show the hover-card for point `idx` anchored near client coords (x, y).
+// idx < 0 hides it. idx === -2 is the sentinel for the projected query point:
+// show the raw query text (from the scene) instead of a dataset row.
+function showHoverCard(idx, x, y) {
+  if (idx === -2) {
+    const q = scene.queryText || "";
+    hoverIdEl.textContent = "query";
+    hoverIdEl.classList.add("is-query");
+    hoverTextEl.textContent = q;
+    hoverTextEl.style.display = q ? "block" : "none";
+    hoverTextEl.classList.add("is-query");
+    const rect = canvasHost.getBoundingClientRect();
+    hoverEl.style.left = `${x - rect.left + 12}px`;
+    hoverEl.style.top = `${y - rect.top + 12}px`;
+    hoverEl.style.display = "block";
+    return;
+  }
+  hoverIdEl.classList.remove("is-query");
+  hoverTextEl.classList.remove("is-query");
+  if (idx < 0) { hoverEl.style.display = "none"; return; }
   const id = dataPanel.idAt(idx);
+  if (id == null) { hoverEl.style.display = "none"; return; }
   const label = dataPanel.labelAt(idx);
-  if (id == null) { tooltipEl.style.display = "none"; return; }
-  const display = label != null && label !== "" ? `${id} · ${label}` : id;
-  tooltipEl.textContent = display;
+  hoverIdEl.textContent = id;
+  if (label != null && label !== "") {
+    hoverTextEl.textContent = label;
+    hoverTextEl.style.display = "block";
+  } else {
+    hoverTextEl.textContent = "";
+    hoverTextEl.style.display = "none";
+  }
   const rect = canvasHost.getBoundingClientRect();
-  tooltipEl.style.left = `${x - rect.left + 12}px`;
-  tooltipEl.style.top = `${y - rect.top + 12}px`;
-  tooltipEl.style.display = "block";
+  hoverEl.style.left = `${x - rect.left + 12}px`;
+  hoverEl.style.top = `${y - rect.top + 12}px`;
+  hoverEl.style.display = "block";
 }
 
 function onPointClick(idx) {
@@ -42,7 +73,7 @@ function onPointClick(idx) {
   inspectorPanel?.selectByIndex(idx < 0 ? null : idx);
 }
 
-const scene = createScene(canvasHost, { onHover: showTooltip, onClick: onPointClick });
+const scene = createScene(canvasHost, { onHover: showHoverCard, onClick: onPointClick });
 
 function applyColors() {
   const values = dataPanel.columnValues();
@@ -77,6 +108,14 @@ const inspectorPanel = createInspectorPanel({
   scene,
   dataPanel,
   canvasHost,
+  // Reveal a single point (row single-click): pop its hover-card at the point's
+  // on-screen position. idx < 0 hides the card.
+  revealPoint: (idx) => {
+    if (idx == null || idx < 0) { showHoverCard(-1); return; }
+    const sp = scene.screenPositionOf(idx);
+    if (sp) showHoverCard(idx, sp.x, sp.y);
+    else showHoverCard(-1);
+  },
   onReset: () => {
     dataPanel.reset();
     applyColors();

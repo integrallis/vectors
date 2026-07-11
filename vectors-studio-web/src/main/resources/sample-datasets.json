@@ -1,0 +1,85 @@
+{
+  "_comment": "Sample-dataset catalog for the Studio. Bundled defaults; users can EXTEND this by pointing VECTORS_STUDIO_DATASETS at their own JSON file (same schema) — its entries are merged over these by id. Each entry loads via the HuggingFace datasets-server /rows API (the dataset must have the HF dataset viewer enabled). vectorColumn must be a numeric-array column; textColumn/idColumn are optional. metric is one of COSINE/EUCLIDEAN/DOT_PRODUCT/MAXIMUM_INNER_PRODUCT.",
+  "datasets": [
+    {
+      "id": "dbpedia-ada002",
+      "name": "DBpedia · OpenAI ada-002",
+      "description": "1M Wikipedia entities (title + text), embedded with OpenAI text-embedding-ada-002. The canonical vector-search benchmark corpus.",
+      "domain": "Wikipedia", "model": "openai-text-embedding-ada-002", "dimension": 1536,
+      "hfDataset": "KShivendu/dbpedia-entities-openai-1M", "config": "default", "split": "train",
+      "vectorColumn": "openai", "textColumn": "text", "idColumn": "_id",
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "text-embedding-ada-002", "queryPrefix": ""
+    },
+    {
+      "id": "dbpedia-3small",
+      "name": "DBpedia · OpenAI 3-small",
+      "description": "DBpedia entities embedded with OpenAI text-embedding-3-small (100K subset).",
+      "domain": "Wikipedia", "model": "openai-text-embedding-3-small", "dimension": 1536,
+      "hfDataset": "Qdrant/dbpedia-entities-openai3-text-embedding-3-small-1536-100K", "config": "default", "split": "train",
+      "vectorColumn": "openai", "textColumn": "text", "idColumn": "_id",
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "text-embedding-3-small", "queryPrefix": ""
+    },
+    {
+      "id": "dbpedia-3large-1536",
+      "name": "DBpedia · OpenAI 3-large (1536)",
+      "description": "DBpedia entities embedded with OpenAI text-embedding-3-large at 1536 dims.",
+      "domain": "Wikipedia", "model": "openai-text-embedding-3-large", "dimension": 1536,
+      "hfDataset": "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-1536-1M", "config": "default", "split": "train",
+      "vectorColumn": "text-embedding-3-large-1536-embedding", "textColumn": "text", "idColumn": "_id",
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "text-embedding-3-large", "queryDimensions": 1536, "queryPrefix": ""
+    },
+    {
+      "id": "dbpedia-3large-3072",
+      "name": "DBpedia · OpenAI 3-large (3072)",
+      "description": "DBpedia entities embedded with OpenAI text-embedding-3-large at full 3072 dims — a high-dimensional stress case.",
+      "domain": "Wikipedia", "model": "openai-text-embedding-3-large", "dimension": 3072,
+      "hfDataset": "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-3072-1M", "config": "default", "split": "train",
+      "vectorColumn": "text-embedding-3-large-3072-embedding", "textColumn": "text", "idColumn": "_id",
+      "metric": "COSINE", "defaultLimit": 1500,
+      "queryModel": "text-embedding-3-large", "queryDimensions": 3072, "queryPrefix": ""
+    },
+    {
+      "id": "dbpedia-ada002-alt",
+      "name": "DBpedia · ada-002 (same corpus as 3-large)",
+      "description": "The same DBpedia corpus as 'DBpedia · OpenAI 3-large' but the ada-002 column — load both to SEE how the embedding model changes the clustering in the projector.",
+      "domain": "Wikipedia", "model": "openai-text-embedding-ada-002", "dimension": 1536,
+      "hfDataset": "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-3072-1M", "config": "default", "split": "train",
+      "vectorColumn": "text-embedding-ada-002-1536-embedding", "textColumn": "text", "idColumn": "_id",
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "text-embedding-ada-002", "queryPrefix": ""
+    },
+    {
+      "id": "arxiv-titles-instructorxl",
+      "name": "arXiv titles · InstructorXL",
+      "description": "arXiv paper titles embedded with hkunlp/instructor-xl (768 dims). Dense scientific-domain clusters.",
+      "domain": "arXiv", "model": "instructor-xl", "dimension": 768,
+      "hfDataset": "Qdrant/arxiv-titles-instructorxl-embeddings", "config": "default", "split": "train",
+      "vectorColumn": "vector", "textColumn": "title", "idColumn": "id",
+      "metric": "COSINE", "defaultLimit": 3000,
+      "queryModel": "instructor-xl", "queryPrefix": "Represent the Science title for retrieving relevant documents: "
+    },
+    {
+      "id": "arxiv-abstracts-instructorxl",
+      "name": "arXiv abstracts · InstructorXL",
+      "description": "arXiv paper abstracts embedded with hkunlp/instructor-xl (768 dims). Longer text than titles — good MMR demo.",
+      "domain": "arXiv", "model": "instructor-xl", "dimension": 768,
+      "hfDataset": "Qdrant/arxiv-abstracts-instructorxl-embeddings", "config": "default", "split": "train",
+      "vectorColumn": "vector", "textColumn": "abstract", "idColumn": "id",
+      "metric": "COSINE", "defaultLimit": 3000,
+      "queryModel": "instructor-xl", "queryPrefix": "Represent the Science abstract for retrieving relevant documents: "
+    },
+    {
+      "id": "wikipedia-mxbai",
+      "name": "Wikipedia (2023-11) · mxbai-embed-large",
+      "description": "English Wikipedia passages embedded with mixedbread-ai/mxbai-embed-large-v1 (1024 dims).",
+      "domain": "Wikipedia", "model": "mxbai-embed-large-v1", "dimension": 1024,
+      "hfDataset": "mixedbread-ai/wikipedia-embed-en-2023-11", "config": "default", "split": "train",
+      "vectorColumn": "emb", "textColumn": "text", "idColumn": "_id",
+      "metric": "COSINE", "defaultLimit": 2000,
+      "queryModel": "mxbai-embed-large", "queryPrefix": "Represent this sentence for searching relevant passages: "
+    }
+  ]
+}

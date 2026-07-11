@@ -14,6 +14,7 @@
 # backend's build knobs. For graph indexes (HNSW/VAMANA) the recall-vs-QPS curve
 # is swept at query time via efSearch; for IVF, nprobe is a build-time setting in
 # `vectors`, so it is swept by rebuilding (arg-groups) instead.
+import http.client
 import json
 import os
 import subprocess
@@ -59,6 +60,7 @@ class Vectors(BaseANN):
         self._ef_search = None
         self._base = f"http://127.0.0.1:{_PORT}"
         self._proc = None
+        self._qconn = None  # lazy keep-alive connection for the query path
         self.name = f"vectors({self._index}, {self._build_label()})"
         self._start_server()
 
@@ -171,11 +173,42 @@ class Vectors(BaseANN):
             self.name = f"vectors({self._index}, {self._build_label()})"
 
     def query(self, v, n):
-        body = {"queryVector": _to_list(v), "k": n}
+        # Only the hit ids are used for recall, so tell the server to skip serializing the vector,
+        # text, and metadata payloads (the largest part of the response). Combined with the
+        # keep-alive connection in _search_post, this is the dominant QPS-harness win.
+        body = {
+            "queryVector": _to_list(v),
+            "k": n,
+            "includeVector": False,
+            "includeText": False,
+            "includeMetadata": False,
+        }
         if self._ef_search is not None:
             body["efSearch"] = self._ef_search
-        resp = self._post(f"/v1/collections/{_COLLECTION}/search", body)
+        resp = self._search_post(body)
         return [int(hit["id"]) for hit in resp["hits"]]
+
+    def _search_post(self, body):
+        # Persistent keep-alive connection for the hot query path (a new urlopen per query pays TCP
+        # connect + teardown on every call). One reconnect retry covers a dropped keep-alive socket.
+        data = json.dumps(body).encode("utf-8")
+        path = f"/v1/collections/{_COLLECTION}/search"
+        for attempt in (0, 1):
+            try:
+                if self._qconn is None:
+                    self._qconn = http.client.HTTPConnection("127.0.0.1", _PORT, timeout=300)
+                self._qconn.request("POST", path, data, {"Content-Type": "application/json"})
+                raw = self._qconn.getresponse().read()
+                return json.loads(raw)
+            except (http.client.HTTPException, OSError):
+                if self._qconn is not None:
+                    try:
+                        self._qconn.close()
+                    except OSError:
+                        pass
+                self._qconn = None
+                if attempt == 1:
+                    raise
 
     def __str__(self):
         return self.name

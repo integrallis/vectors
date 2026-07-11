@@ -9,6 +9,7 @@ val micrometerObservationVersion =
 
 dependencies {
     api(project(":vectors-db"))
+    implementation(project(":vectors-hybrid"))
     compileOnly("org.springframework.ai:spring-ai-vector-store:$springAiVersion")
     compileOnly("org.springframework.ai:spring-ai-model:$springAiVersion")
     compileOnly("io.micrometer:micrometer-observation:$micrometerObservationVersion")

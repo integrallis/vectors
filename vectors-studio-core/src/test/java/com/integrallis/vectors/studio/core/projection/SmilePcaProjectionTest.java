@@ -16,6 +16,7 @@
 package com.integrallis.vectors.studio.core.projection;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.integrallis.vectors.studio.core.projection.smile.SmilePcaProjection;
 import java.util.Random;
@@ -38,6 +39,33 @@ class SmilePcaProjectionTest {
     assertThat(r.varianceExplained()).isNotNull().hasSize(2);
     double sum = r.varianceExplained()[0] + r.varianceExplained()[1];
     assertThat(sum).isBetween(0.20, 1.0);
+  }
+
+  @Test
+  void queryProjectorReprojectsTrainingRowToItsInSampleCoords() {
+    float[][] data = ThreeClusterData.generate(120, 16, 999L);
+    SmilePcaProjection p =
+        new SmilePcaProjection(new ProjectionParams.PcaParams(2, true, false), 2);
+    ProjectionResult r = p.run(data, ProgressListener.noop());
+
+    QueryProjector qp = r.queryProjector();
+    assertThat(qp).isNotNull();
+
+    // PCA is a linear out-of-sample transform: projecting a training row through the retained
+    // projector must reproduce that row's in-sample coordinates (same fitted PCA, same frame).
+    int row = 42;
+    float[] projected = qp.project(data[row]);
+    assertThat(projected).hasSize(2);
+    assertThat((double) projected[0]).isCloseTo(r.coords()[row][0], within(1e-3));
+    assertThat((double) projected[1]).isCloseTo(r.coords()[row][1], within(1e-3));
+
+    // A novel (non-training) vector projects to finite coords of the right dimension.
+    float[] novel = new float[16];
+    for (int i = 0; i < novel.length; i++) novel[i] = (float) (Math.sin(i) * 3.0);
+    float[] novelCoords = qp.project(novel);
+    assertThat(novelCoords).hasSize(2);
+    assertThat(Float.isFinite(novelCoords[0])).isTrue();
+    assertThat(Float.isFinite(novelCoords[1])).isTrue();
   }
 
   @Test

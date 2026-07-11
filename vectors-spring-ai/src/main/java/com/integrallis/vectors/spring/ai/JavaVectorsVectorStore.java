@@ -17,6 +17,7 @@ package com.integrallis.vectors.spring.ai;
 
 import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.VectorCollection;
+import com.integrallis.vectors.hybrid.MaximalMarginalRelevance;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -59,12 +60,16 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
   private final VectorCollection collection;
   private final String collectionName;
   private final boolean commitAfterAdd;
+  private final Float mmrLambda; // null = MMR disabled
+  private final int mmrFetchMultiplier;
 
   private JavaVectorsVectorStore(Builder builder) {
     super(builder);
     this.collection = builder.collection;
     this.collectionName = builder.collectionName;
     this.commitAfterAdd = builder.commitAfterAdd;
+    this.mmrLambda = builder.mmrLambda;
+    this.mmrFetchMultiplier = builder.mmrFetchMultiplier;
   }
 
   /**
@@ -115,9 +120,12 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
   @Override
   public List<Document> doSimilaritySearch(SearchRequest request) {
     float[] queryEmbedding = this.embeddingModel.embed(request.getQuery());
+    int topK = request.getTopK();
+    boolean useMmr = mmrLambda != null;
+    // With MMR on, over-fetch a larger candidate pool, then diversify down to topK.
+    int fetch = useMmr ? Math.multiplyExact(topK, mmrFetchMultiplier) : topK;
 
-    var jvRequestBuilder =
-        com.integrallis.vectors.db.SearchRequest.builder(queryEmbedding, request.getTopK());
+    var jvRequestBuilder = com.integrallis.vectors.db.SearchRequest.builder(queryEmbedding, fetch);
 
     if (request.getSimilarityThreshold() > 0.0) {
       jvRequestBuilder.minScore((float) request.getSimilarityThreshold());
@@ -128,9 +136,14 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
     }
 
     com.integrallis.vectors.db.SearchResult jvResult = collection.search(jvRequestBuilder.build());
+    List<com.integrallis.vectors.db.SearchResult.Hit> hits = jvResult.hits();
 
-    List<Document> results = new ArrayList<>(jvResult.hits().size());
-    for (com.integrallis.vectors.db.SearchResult.Hit hit : jvResult.hits()) {
+    if (useMmr && hits.size() > topK) {
+      hits = applyMmr(queryEmbedding, hits, topK);
+    }
+
+    List<Document> results = new ArrayList<>(hits.size());
+    for (com.integrallis.vectors.db.SearchResult.Hit hit : hits) {
       com.integrallis.vectors.core.Document jvDoc = hit.document();
       Map<String, Object> springMetadata = MetadataConverter.toSpringAi(jvDoc.metadata());
 
@@ -144,6 +157,26 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
       results.add(springDoc);
     }
     return results;
+  }
+
+  private List<com.integrallis.vectors.db.SearchResult.Hit> applyMmr(
+      float[] query, List<com.integrallis.vectors.db.SearchResult.Hit> hits, int topK) {
+    float[][] candidateVectors = new float[hits.size()][];
+    for (int i = 0; i < hits.size(); i++) {
+      candidateVectors[i] = hits.get(i).document().vector();
+      if (candidateVectors[i] == null) {
+        // Vectors not returned (e.g. stripped by config) — fall back to relevance order.
+        return hits.subList(0, topK);
+      }
+    }
+    int[] selected =
+        MaximalMarginalRelevance.select(
+            query, candidateVectors, topK, mmrLambda, collection.config().metric());
+    List<com.integrallis.vectors.db.SearchResult.Hit> reranked = new ArrayList<>(selected.length);
+    for (int idx : selected) {
+      reranked.add(hits.get(idx));
+    }
+    return reranked;
   }
 
   @Override
@@ -166,6 +199,8 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
     private final VectorCollection collection;
     private String collectionName = "default";
     private boolean commitAfterAdd = true;
+    private Float mmrLambda = null; // null = MMR disabled
+    private int mmrFetchMultiplier = 4;
 
     private Builder(EmbeddingModel embeddingModel, VectorCollection collection) {
       super(embeddingModel);
@@ -188,6 +223,36 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
      */
     public Builder commitAfterAdd(boolean commitAfterAdd) {
       this.commitAfterAdd = commitAfterAdd;
+      return this;
+    }
+
+    /**
+     * Enables Maximal Marginal Relevance diversity re-ranking. The store over-fetches {@code topK *
+     * fetchMultiplier} candidates and re-ranks them down to {@code topK} diverse-but-relevant
+     * results using the collection's metric — so near-duplicate chunks don't crowd the LLM context
+     * window. Disabled by default.
+     *
+     * @param lambda relevance/diversity trade-off in {@code [0, 1]} (1 = pure relevance, 0 = max
+     *     diversity; typical RAG values 0.5–0.7)
+     */
+    public Builder mmr(float lambda) {
+      return mmr(lambda, this.mmrFetchMultiplier);
+    }
+
+    /**
+     * Enables MMR with an explicit over-fetch multiplier (candidate pool size = {@code topK *
+     * fetchMultiplier}).
+     */
+    public Builder mmr(float lambda, int fetchMultiplier) {
+      if (lambda < 0f || lambda > 1f) {
+        throw new IllegalArgumentException("mmr lambda must be in [0, 1], got " + lambda);
+      }
+      if (fetchMultiplier < 1) {
+        throw new IllegalArgumentException(
+            "mmr fetchMultiplier must be >= 1, got " + fetchMultiplier);
+      }
+      this.mmrLambda = lambda;
+      this.mmrFetchMultiplier = fetchMultiplier;
       return this;
     }
 

@@ -17,6 +17,7 @@ package com.integrallis.vectors.studio.web.routing;
 
 import com.integrallis.vectors.studio.core.StudioSession;
 import com.integrallis.vectors.studio.core.connection.CollectionSummary;
+import com.integrallis.vectors.studio.web.dataset.DatasetCatalog;
 import com.integrallis.vectors.studio.web.view.ViewRenderer;
 import io.helidon.http.Status;
 import io.helidon.webserver.http.HttpRules;
@@ -31,10 +32,12 @@ public final class HomeRoutes implements HttpService {
 
   private final StudioSession session;
   private final ViewRenderer renderer;
+  private final DatasetCatalog datasetCatalog;
 
-  public HomeRoutes(StudioSession session, ViewRenderer renderer) {
+  public HomeRoutes(StudioSession session, ViewRenderer renderer, DatasetCatalog datasetCatalog) {
     this.session = session;
     this.renderer = renderer;
+    this.datasetCatalog = datasetCatalog;
   }
 
   @Override
@@ -51,7 +54,8 @@ public final class HomeRoutes implements HttpService {
 
   private void collections(ServerRequest req, ServerResponse res) {
     List<CollectionSummary> all = session.backend().listCollections();
-    renderer.render(res, "collections.jte", Map.of("collections", all));
+    renderer.render(
+        res, "collections.jte", Map.of("collections", all, "sampleIds", datasetCatalog.ids()));
   }
 
   private void deleteCollection(ServerRequest req, ServerResponse res) {

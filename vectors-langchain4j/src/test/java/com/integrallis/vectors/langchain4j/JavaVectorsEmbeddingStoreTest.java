@@ -545,4 +545,57 @@ class JavaVectorsEmbeddingStoreTest {
       store = null; // prevent double close in tearDown
     }
   }
+
+  @Nested
+  @Tag("unit")
+  class MmrDiversity {
+    // "a","b" near-duplicates + highly relevant; "c" diverse + moderately relevant. Query
+    // ~[1,0,..].
+    private void createMmr(Float lambda) {
+      collection =
+          VectorCollection.builder()
+              .dimension(DIMENSION)
+              .metric(SimilarityFunction.COSINE)
+              .indexType(IndexType.FLAT)
+              .autoCommitThreshold(Integer.MAX_VALUE)
+              .build();
+      var b = JavaVectorsEmbeddingStore.builder(collection).commitAfterAdd(true);
+      if (lambda != null) {
+        b.mmr(lambda, 4);
+      }
+      store = b.build();
+      store.addAll(
+          List.of("a", "b", "c"),
+          List.of(
+              Embedding.from(vec(1f, 0.05f, 0f, 0f)),
+              Embedding.from(vec(1f, 0.06f, 0f, 0f)),
+              Embedding.from(vec(0.6f, 0.8f, 0f, 0f))),
+          List.of(TextSegment.from("a"), TextSegment.from("b"), TextSegment.from("c")));
+    }
+
+    private List<String> topIds(int maxResults) {
+      return store
+          .search(
+              EmbeddingSearchRequest.builder()
+                  .queryEmbedding(Embedding.from(vec(1f, 0f, 0f, 0f)))
+                  .maxResults(maxResults)
+                  .build())
+          .matches()
+          .stream()
+          .map(EmbeddingMatch::embeddingId)
+          .toList();
+    }
+
+    @Test
+    void withoutMmr_top2AreTheRedundantPair() {
+      createMmr(null);
+      assertThat(topIds(2)).containsExactly("a", "b"); // relevance order; diverse c excluded
+    }
+
+    @Test
+    void withMmr_diverseSegmentReplacesRedundantNeighbor() {
+      createMmr(0.3f);
+      assertThat(topIds(2)).containsExactly("a", "c"); // a, then diverse c; redundant b dropped
+    }
+  }
 }
