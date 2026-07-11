@@ -33,6 +33,11 @@ public interface VectorUtilSupport {
   int GGUF_Q_BLOCK_SIZE = 32;
   int GGUF_Q4_0_BLOCK_BYTES = 18;
   int GGUF_Q8_0_BLOCK_BYTES = 34;
+  int GGUF_Q6_K_BLOCK_SIZE = 256;
+  int GGUF_Q6_K_BLOCK_BYTES = 210;
+  int GGUF_Q6_K_QL_BYTES = 128;
+  int GGUF_Q6_K_QH_BYTES = 64;
+  int GGUF_Q6_K_SCALES = 16;
 
   // --- Float distance kernels ---
 
@@ -209,12 +214,77 @@ public interface VectorUtilSupport {
     return sum;
   }
 
+  /**
+   * Dot product of a full-precision query with one GGUF Q6_K quantized row.
+   *
+   * <p>Q6_K stores each 256-value super-block as lower 4-bit quants, upper 2-bit quants, sixteen
+   * signed int8 sub-block scales, and one little-endian binary16 super-block scale. This kernel
+   * follows the upstream GGML bit layout and fuses dequantization and dot product without
+   * materializing a temporary float row.
+   */
+  default float ggufQ6_KDotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufQ6_KBlockAligned(dimensions);
+    float sum = 0f;
+    int blocks = dimensions / GGUF_Q6_K_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+      float d =
+          Float.float16ToFloat(
+              qWeight.get(
+                  GGUF_LE_SHORT,
+                  blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES));
+      long qlOffset = blockOffset;
+      long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+      long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+      int queryOffset = block * GGUF_Q6_K_BLOCK_SIZE;
+
+      for (int superBlock = 0; superBlock < 2; superBlock++) {
+        long qlBase = qlOffset + (long) superBlock * 64;
+        long qhBase = qhOffset + (long) superBlock * 32;
+        long scaleBase = scaleOffset + (long) superBlock * 8;
+        int outBase = queryOffset + superBlock * 128;
+
+        for (int l = 0; l < 32; l++) {
+          int is = l / 16;
+          int ql1 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + l) & 0xFF;
+          int ql2 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + 32L + l) & 0xFF;
+          int qh = qWeight.get(ValueLayout.JAVA_BYTE, qhBase + l) & 0xFF;
+          int q1 = ((ql1 & 0x0F) | ((qh & 0x03) << 4)) - 32;
+          int q2 = ((ql2 & 0x0F) | (((qh >>> 2) & 0x03) << 4)) - 32;
+          int q3 = ((ql1 >>> 4) | (((qh >>> 4) & 0x03) << 4)) - 32;
+          int q4 = ((ql2 >>> 4) | (((qh >>> 6) & 0x03) << 4)) - 32;
+
+          float d1 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + is);
+          float d2 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + is + 2L);
+          float d3 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + is + 4L);
+          float d4 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + is + 6L);
+
+          sum = MathUtil.fma(query[outBase + l], d1 * q1, sum);
+          sum = MathUtil.fma(query[outBase + l + 32], d2 * q2, sum);
+          sum = MathUtil.fma(query[outBase + l + 64], d3 * q3, sum);
+          sum = MathUtil.fma(query[outBase + l + 96], d4 * q4, sum);
+        }
+      }
+    }
+    return sum;
+  }
+
   /** Batched row-major GEMV over GGUF Q4_0 rows. */
   default void ggufQ4_0MatVecDot(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
     long rowBytes = ggufQ4_0RowBytes(cols);
     for (int row = 0; row < rows; row++) {
       out[row] = ggufQ4_0DotProduct(query, qWeight, row * rowBytes, cols);
+    }
+  }
+
+  /** Batched row-major GEMV over GGUF Q6_K rows. */
+  default void ggufQ6_KMatVecDot(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    long rowBytes = ggufQ6_KRowBytes(cols);
+    for (int row = 0; row < rows; row++) {
+      out[row] = ggufQ6_KDotProduct(query, qWeight, row * rowBytes, cols);
     }
   }
 
@@ -392,6 +462,13 @@ public interface VectorUtilSupport {
     }
   }
 
+  private static void checkGgufQ6_KBlockAligned(int dimensions) {
+    if (dimensions % GGUF_Q6_K_BLOCK_SIZE != 0) {
+      throw new IllegalArgumentException(
+          "GGUF Q6_K dimensions must be a multiple of 256: " + dimensions);
+    }
+  }
+
   private static long ggufQ4_0RowBytes(int dimensions) {
     checkGgufBlockAligned(dimensions);
     return (long) (dimensions / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
@@ -400,6 +477,11 @@ public interface VectorUtilSupport {
   private static long ggufQ8_0RowBytes(int dimensions) {
     checkGgufBlockAligned(dimensions);
     return (long) (dimensions / GGUF_Q_BLOCK_SIZE) * GGUF_Q8_0_BLOCK_BYTES;
+  }
+
+  private static long ggufQ6_KRowBytes(int dimensions) {
+    checkGgufQ6_KBlockAligned(dimensions);
+    return (long) (dimensions / GGUF_Q6_K_BLOCK_SIZE) * GGUF_Q6_K_BLOCK_BYTES;
   }
 
   /**

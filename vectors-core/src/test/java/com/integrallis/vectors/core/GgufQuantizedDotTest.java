@@ -24,6 +24,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.function.IntUnaryOperator;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -73,6 +74,27 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q6_KDotProduct_matchesDecodedReference() {
+    float[] query = patternedQuery(256);
+    byte[] block = q6KBlock(0.125f, i -> (i % 64) - 32, i -> (i % 7) - 3);
+
+    float expected = 0f;
+    for (int i = 0; i < query.length; i++) {
+      int quant = (i % 64) - 32;
+      int subScale = (i / 16) % 7 - 3;
+      expected = Math.fma(query[i], 0.125f * subScale * quant, expected);
+    }
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, block);
+
+      float actual = VectorUtil.ggufQ6_KDotProduct(query, segment, 0, query.length);
+
+      assertThat(actual).isCloseTo(expected, within(1e-5f));
+    }
+  }
+
+  @Test
   void q4_0BatchDotProduct_respectsRowOffsets() {
     float[] query = ones(32);
     byte[] row0 = q4Block(1.0f, query, (lo, hi) -> 0x98);
@@ -113,10 +135,31 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q6_KBatchDotProduct_respectsRowOffsets() {
+    float[] query = patternedQuery(256);
+    byte[] row0 = q6KBlock(0.125f, i -> (i % 64) - 32, i -> (i % 7) - 3);
+    byte[] row1 = q6KBlock(-0.25f, i -> 31 - (i % 64), i -> (i % 5) - 2);
+    byte[] matrix = concat(row0, row1);
+    float[] out = new float[2];
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, matrix);
+
+      VectorUtil.ggufQ6_KBatchDotProduct(query, segment, 2, 256, out);
+
+      assertThat(out[0])
+          .isCloseTo(VectorUtil.ggufQ6_KDotProduct(query, segment, 0, 256), within(1e-5f));
+      assertThat(out[1])
+          .isCloseTo(VectorUtil.ggufQ6_KDotProduct(query, segment, 210, 256), within(1e-5f));
+    }
+  }
+
+  @Test
   void quantizedDotRejectsNonBlockAlignedDimensions() {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment q4 = copy(arena, q4Block(1.0f, ones(32), null));
       MemorySegment q8 = copy(arena, q8Block(1.0f));
+      MemorySegment q6 = copy(arena, q6KBlock(1.0f, i -> 0, i -> 1));
 
       assertThatThrownBy(() -> VectorUtil.ggufQ4_0DotProduct(ones(31), q4, 0, 31))
           .isInstanceOf(IllegalArgumentException.class)
@@ -124,6 +167,9 @@ class GgufQuantizedDotTest {
       assertThatThrownBy(() -> VectorUtil.ggufQ8_0DotProduct(ones(31), q8, 0, 31))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("multiple of 32");
+      assertThatThrownBy(() -> VectorUtil.ggufQ6_KDotProduct(ones(255), q6, 0, 255))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("multiple of 256");
     }
   }
 
@@ -151,6 +197,38 @@ class GgufQuantizedDotTest {
     return block;
   }
 
+  private static byte[] q6KBlock(
+      float scale, IntUnaryOperator quantFactory, IntUnaryOperator scaleFactory) {
+    byte[] block = new byte[210];
+    for (int i = 0; i < 16; i++) {
+      block[192 + i] = (byte) scaleFactory.applyAsInt(i);
+    }
+    ByteBuffer.wrap(block)
+        .order(ByteOrder.LITTLE_ENDIAN)
+        .putShort(208, Float.floatToFloat16(scale));
+
+    for (int superBlock = 0; superBlock < 2; superBlock++) {
+      int positionBase = superBlock * 128;
+      int qlBase = superBlock * 64;
+      int qhBase = 128 + superBlock * 32;
+      for (int l = 0; l < 32; l++) {
+        int q1 = quantFactory.applyAsInt(positionBase + l) + 32;
+        int q2 = quantFactory.applyAsInt(positionBase + l + 32) + 32;
+        int q3 = quantFactory.applyAsInt(positionBase + l + 64) + 32;
+        int q4 = quantFactory.applyAsInt(positionBase + l + 96) + 32;
+        block[qlBase + l] = (byte) ((q1 & 0x0F) | ((q3 & 0x0F) << 4));
+        block[qlBase + 32 + l] = (byte) ((q2 & 0x0F) | ((q4 & 0x0F) << 4));
+        block[qhBase + l] =
+            (byte)
+                (((q1 >>> 4) & 0x03)
+                    | (((q2 >>> 4) & 0x03) << 2)
+                    | (((q3 >>> 4) & 0x03) << 4)
+                    | (((q4 >>> 4) & 0x03) << 6));
+      }
+    }
+    return block;
+  }
+
   private static MemorySegment copy(Arena arena, byte[] bytes) {
     MemorySegment segment = arena.allocate(bytes.length);
     MemorySegment.copy(bytes, 0, segment, ValueLayout.JAVA_BYTE, 0, bytes.length);
@@ -167,6 +245,14 @@ class GgufQuantizedDotTest {
   private static float[] ones(int length) {
     float[] out = new float[length];
     java.util.Arrays.fill(out, 1.0f);
+    return out;
+  }
+
+  private static float[] patternedQuery(int length) {
+    float[] out = new float[length];
+    for (int i = 0; i < length; i++) {
+      out[i] = (i % 11) * 0.25f - 1.25f;
+    }
     return out;
   }
 
