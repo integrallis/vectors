@@ -220,6 +220,69 @@ public final class ExtendedRaBitQuantizedVectors implements CompressedVectors {
   }
 
   /**
+   * Scores a query against <b>raw</b> Ext-RaBitQ code components (sign + magnitude + corrections)
+   * rather than by ordinal — the primitive the co-located block search uses to score neighbor codes
+   * read straight from a block, with no ordinal&rarr;code lookup. Returns exactly what {@link
+   * #scoreFunctionFor} returns for the same code (identical {@link #estimateL2Multi}). Not
+   * thread-safe; create one per thread.
+   */
+  public interface RawCodeScorer {
+    /** Approximate similarity (higher = closer) for the vector with the given code components. */
+    float score(long[] signCode, byte[] magCode, float[] corrections);
+  }
+
+  /** Builds a {@link RawCodeScorer} for the query (query prepared once, captured by the scorer). */
+  public RawCodeScorer rawScorerFor(float[] query, SimilarityFunction similarityFunction) {
+    if (query.length != dimension) {
+      throw new IllegalArgumentException(
+          "Expected query dimension " + dimension + ", got " + query.length);
+    }
+    int bits = quantizer.bits();
+    PreparedQuery pq = prepareQuery(query);
+    return switch (similarityFunction) {
+      case EUCLIDEAN -> (sc, mc, corr) -> 1f / (1f + Math.max(rawDist(pq, bits, sc, mc, corr), 0f));
+      case DOT_PRODUCT ->
+          (sc, mc, corr) -> {
+            float dist = rawDist(pq, bits, sc, mc, corr);
+            float sqrX = corr[ExtendedRaBitQuantizer.IDX_SQR_X];
+            float approxDot = (pq.sqrY() + sqrX - dist) / 2f;
+            return Math.max((1f + approxDot) / 2f, 0f);
+          };
+      case COSINE ->
+          (sc, mc, corr) -> {
+            float dist = rawDist(pq, bits, sc, mc, corr);
+            float sqrX = corr[ExtendedRaBitQuantizer.IDX_SQR_X];
+            float vecNorm = (float) Math.sqrt(sqrX);
+            if (pq.queryNorm() == 0f || vecNorm == 0f) return 0f;
+            float approxDot = (pq.sqrY() + sqrX - dist) / 2f;
+            float cosine = approxDot / (pq.queryNorm() * vecNorm);
+            return Math.max((1f + cosine) / 2f, 0f);
+          };
+      case MAXIMUM_INNER_PRODUCT ->
+          (sc, mc, corr) -> {
+            float dist = rawDist(pq, bits, sc, mc, corr);
+            float sqrX = corr[ExtendedRaBitQuantizer.IDX_SQR_X];
+            float approxDot = (pq.sqrY() + sqrX - dist) / 2f;
+            return SimilarityFunction.scaleMaxInnerProductScore(approxDot);
+          };
+    };
+  }
+
+  private static float rawDist(PreparedQuery pq, int bits, long[] sc, byte[] mc, float[] corr) {
+    return estimateL2Multi(
+        sc,
+        mc,
+        corr,
+        pq.queryBytes(),
+        pq.vl(),
+        pq.widthOver255(),
+        pq.sumQ(),
+        pq.sqrY(),
+        pq.queryNorm(),
+        bits);
+  }
+
+  /**
    * Returns a cheap Layer 1 score function that uses <b>only sign-bit codes</b> (no magnitude
    * unpacking). This produces the same distance estimate as 1-bit RaBitQ — less accurate than the
    * full multi-bit estimate from {@link #scoreFunctionFor}, but cheaper to compute.
