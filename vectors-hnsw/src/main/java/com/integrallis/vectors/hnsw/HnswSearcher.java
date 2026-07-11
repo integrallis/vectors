@@ -55,6 +55,9 @@ public final class HnswSearcher {
   // zeroed all ~N bits every query (a real cost at N=1.18M — most of which are never touched).
   private final int[] visitedTag;
   private int visitedGen;
+  // EXPERIMENT: monotonic node-expansion counter (= object-store GETs in the co-located block
+  // design).
+  long nodesVisited;
   private final NodeQueue candidates;
   private final NodeQueue results;
   // Scratch buffer for rescore(): avoids allocating a new NodeQueue on every two-pass call.
@@ -656,6 +659,7 @@ public final class HnswSearcher {
 
       NeighborArray neighbors = graph.getNeighbors(candidateId, layer);
       if (neighbors == null) continue;
+      nodesVisited++;
 
       // SSD prefetch pass: issue async touch-reads for all neighbors before scoring.
       // For mmap-backed vector stores this causes the OS to page-in the relevant 4 KiB pages

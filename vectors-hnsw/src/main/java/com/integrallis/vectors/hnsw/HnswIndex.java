@@ -279,6 +279,13 @@ public final class HnswIndex {
   }
 
   /**
+   * EXPERIMENT: monotonic total node-expansions on this thread's searcher (read deltas per query).
+   */
+  public long nodesVisitedTotal() {
+    return threadLocalSearcher.get().nodesVisited;
+  }
+
+  /**
    * Returns the underlying {@link HnswGraph}. Exposed for persistence paths that need to serialize
    * the graph topology to disk. The returned graph aliases the index's internal reference; callers
    * must not mutate it through {@link HnswGraph#initNode} or {@link HnswGraph#setEntryNode}, which
