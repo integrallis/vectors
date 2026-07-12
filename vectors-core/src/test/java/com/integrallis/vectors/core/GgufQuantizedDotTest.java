@@ -142,6 +142,72 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_KDotProduct_matchesDecodedReferenceWithPackedScalesAndMins() {
+    float[] query = patternedQuery(256);
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] block = q4KBlock(0.125f, 0.0625f, i -> i % 16, scales, mins);
+
+    float expected = 0f;
+    for (int i = 0; i < query.length; i++) {
+      int group = i / 32;
+      float weight = 0.125f * scales[group] * (i % 16) - 0.0625f * mins[group];
+      expected = Math.fma(query[i], weight, expected);
+    }
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, block);
+
+      float actual = VectorUtil.ggufQ4_KDotProduct(query, segment, 0, query.length);
+
+      assertThat(actual).isCloseTo(expected, within(1e-4f));
+    }
+  }
+
+  @Test
+  void q4_KDequantize_matchesDecodedReferenceAtOutputOffset() {
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] block = q4KBlock(0.125f, 0.0625f, i -> i % 16, scales, mins);
+    float[] decoded = new float[258];
+    decoded[0] = 99.0f;
+    decoded[257] = 98.0f;
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, block);
+
+      VectorUtil.ggufQ4_KDequantize(segment, 0, decoded, 1, 256);
+    }
+
+    assertThat(decoded[0]).isEqualTo(99.0f);
+    assertThat(decoded[257]).isEqualTo(98.0f);
+    for (int index = 0; index < 256; index++) {
+      int group = index / 32;
+      float expected = 0.125f * scales[group] * (index % 16) - 0.0625f * mins[group];
+      assertThat(decoded[index + 1]).isCloseTo(expected, within(1e-6f));
+    }
+  }
+
+  @Test
+  void q5_0DotProduct_matchesDecodedReferenceWithHighBitMask() {
+    float[] query = patternedQuery(32);
+    byte[] block = q5Block(0.25f, i -> (i * 7) % 32 - 16);
+
+    float expected = 0.0f;
+    for (int i = 0; i < query.length; i++) {
+      expected = Math.fma(query[i], 0.25f * ((i * 7) % 32 - 16), expected);
+    }
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, block);
+
+      float actual = VectorUtil.ggufQ5_0DotProduct(query, segment, 0, query.length);
+
+      assertThat(actual).isCloseTo(expected, within(1e-5f));
+    }
+  }
+
+  @Test
   void q4_0BatchDotProduct_respectsRowOffsets() {
     float[] query = ones(32);
     byte[] row0 = q4Block(1.0f, query, (lo, hi) -> 0x98);
@@ -233,6 +299,10 @@ class GgufQuantizedDotTest {
   void activationQuantizedBatchDotProducts_rejectUndersizedScratch() {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment q4 = copy(arena, q4Block(1.0f, ones(32), null));
+      MemorySegment q4K =
+          copy(
+              arena,
+              q4KBlock(1.0f, 0.0f, ignored -> 1, new int[] {1, 1, 1, 1, 1, 1, 1, 1}, new int[8]));
       MemorySegment q8 = copy(arena, q8Block(1.0f));
       MemorySegment q6 = copy(arena, q6KBlock(1.0f, ignored -> 1, ignored -> 1));
 
@@ -254,6 +324,19 @@ class GgufQuantizedDotTest {
                       ones(256), q6, 1, 256, new float[1], new byte[255], new float[1]))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("q8Quants.length");
+      assertThatThrownBy(
+              () ->
+                  VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+                      ones(256),
+                      q4K,
+                      1,
+                      256,
+                      new float[1],
+                      new byte[256],
+                      new float[1],
+                      new short[15]))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("q8Sums.length");
     }
   }
 
@@ -301,10 +384,93 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_KQ8_KBatchDotProduct_quantizesTheQueryOnceUsingGgmlSemantics() {
+    float[] query = new float[256];
+    query[0] = 1.0f;
+    query[1] = 0.49f;
+    int[] unitScales = {1, 1, 1, 1, 1, 1, 1, 1};
+    int[] zeroMins = new int[8];
+    byte[] row0 = q4KBlock(1.0f, 0.0f, ignored -> 1, unitScales, zeroMins);
+    byte[] row1 = q4KBlock(1.0f, 0.0f, ignored -> 2, unitScales, zeroMins);
+    float[] out = new float[2];
+    byte[] q8Quants = new byte[query.length];
+    float[] q8Scales = new float[query.length / 256];
+    short[] q8Sums = new short[query.length / 16];
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, concat(row0, row1));
+
+      VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+          query, segment, 2, query.length, out, q8Quants, q8Scales, q8Sums);
+
+      assertThat(out[0]).isCloseTo(189.0f / 127.0f, within(1e-6f));
+      assertThat(out[1]).isCloseTo(378.0f / 127.0f, within(1e-6f));
+      assertThat(out[0]).isNotEqualTo(1.49f);
+    }
+  }
+
+  @Test
+  void q4_KQ8_KBatchDotProduct_matchesDequantizedReferenceWithMins() {
+    float[] query = patternedQuery(256);
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] row = q4KBlock(0.125f, 0.0625f, i -> i % 16, scales, mins);
+    float[] out = new float[1];
+    byte[] q8Quants = new byte[query.length];
+    float[] q8Scales = new float[1];
+    short[] q8Sums = new short[16];
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, row);
+
+      VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+          query, segment, 1, query.length, out, q8Quants, q8Scales, q8Sums);
+    }
+
+    float expected = 0.0f;
+    for (int index = 0; index < query.length; index++) {
+      int group = index / 32;
+      float weight = 0.125f * scales[group] * (index % 16) - 0.0625f * mins[group];
+      float activation = q8Scales[0] * q8Quants[index];
+      expected = Math.fma(weight, activation, expected);
+    }
+    assertThat(out[0]).isCloseTo(expected, within(1e-3f));
+  }
+
+  @Test
+  void q5_0Q8_0BatchDotProduct_quantizesTheQueryOnceUsingGgmlSemantics() {
+    float[] query = new float[32];
+    query[0] = 1.0f;
+    query[1] = 0.49f;
+    byte[] row0 = q5Block(1.0f, ignored -> 1);
+    byte[] row1 = q5Block(1.0f, ignored -> 2);
+    float[] out = new float[2];
+    byte[] q8Quants = new byte[query.length];
+    float[] q8Scales = new float[query.length / 32];
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, concat(row0, row1));
+
+      VectorUtil.ggufQ5_0Q8_0BatchDotProduct(
+          query, segment, 2, query.length, out, q8Quants, q8Scales);
+
+      float q8Scale = Float.float16ToFloat(Float.floatToFloat16(1.0f / 127.0f));
+      assertThat(out[0]).isCloseTo(189.0f * q8Scale, within(1e-6f));
+      assertThat(out[1]).isCloseTo(378.0f * q8Scale, within(1e-6f));
+      assertThat(out[0]).isNotEqualTo(1.49f);
+    }
+  }
+
+  @Test
   void quantizedDotRejectsNonBlockAlignedDimensions() {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment q4 = copy(arena, q4Block(1.0f, ones(32), null));
+      MemorySegment q4K =
+          copy(
+              arena,
+              q4KBlock(1.0f, 0.0f, ignored -> 1, new int[] {1, 1, 1, 1, 1, 1, 1, 1}, new int[8]));
       MemorySegment q8 = copy(arena, q8Block(1.0f));
+      MemorySegment q5 = copy(arena, q5Block(1.0f, ignored -> 1));
       MemorySegment q6 = copy(arena, q6KBlock(1.0f, i -> 0, i -> 1));
 
       assertThatThrownBy(() -> VectorUtil.ggufQ4_0DotProduct(ones(31), q4, 0, 31))
@@ -313,7 +479,13 @@ class GgufQuantizedDotTest {
       assertThatThrownBy(() -> VectorUtil.ggufQ8_0DotProduct(ones(31), q8, 0, 31))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("multiple of 32");
+      assertThatThrownBy(() -> VectorUtil.ggufQ5_0DotProduct(ones(31), q5, 0, 31))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("multiple of 32");
       assertThatThrownBy(() -> VectorUtil.ggufQ6_KDotProduct(ones(255), q6, 0, 255))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("multiple of 256");
+      assertThatThrownBy(() -> VectorUtil.ggufQ4_KDotProduct(ones(255), q4K, 0, 255))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("multiple of 256");
     }
@@ -344,6 +516,22 @@ class GgufQuantizedDotTest {
     for (int i = 0; i < 32; i++) {
       block[2 + i] = (byte) quantFactory.applyAsInt(i);
     }
+    return block;
+  }
+
+  private static byte[] q5Block(float scale, IntUnaryOperator quantFactory) {
+    byte[] block = new byte[22];
+    ByteBuffer buffer = ByteBuffer.wrap(block).order(ByteOrder.LITTLE_ENDIAN);
+    buffer.putShort(0, Float.floatToFloat16(scale));
+    int highBits = 0;
+    for (int index = 0; index < 16; index++) {
+      int lowQuant = quantFactory.applyAsInt(index) + 16;
+      int highQuant = quantFactory.applyAsInt(index + 16) + 16;
+      block[6 + index] = (byte) ((lowQuant & 0x0F) | ((highQuant & 0x0F) << 4));
+      highBits |= ((lowQuant >>> 4) & 1) << index;
+      highBits |= ((highQuant >>> 4) & 1) << (index + 16);
+    }
+    buffer.putInt(2, highBits);
     return block;
   }
 
@@ -383,6 +571,34 @@ class GgufQuantizedDotTest {
                     | (((q2 >>> 4) & 0x03) << 2)
                     | (((q3 >>> 4) & 0x03) << 4)
                     | (((q4 >>> 4) & 0x03) << 6));
+      }
+    }
+    return block;
+  }
+
+  private static byte[] q4KBlock(
+      float scale, float minScale, IntUnaryOperator quantFactory, int[] scales, int[] mins) {
+    byte[] block = new byte[144];
+    ByteBuffer buffer = ByteBuffer.wrap(block).order(ByteOrder.LITTLE_ENDIAN);
+    buffer.putShort(0, Float.floatToFloat16(scale));
+    buffer.putShort(2, Float.floatToFloat16(minScale));
+
+    for (int group = 0; group < 4; group++) {
+      block[4 + group] = (byte) scales[group];
+      block[8 + group] = (byte) mins[group];
+    }
+    for (int group = 4; group < 8; group++) {
+      block[4 + group + 4] = (byte) ((scales[group] & 0x0F) | ((mins[group] & 0x0F) << 4));
+      block[4 + group - 4] |= (byte) ((scales[group] >>> 4) << 6);
+      block[4 + group] |= (byte) ((mins[group] >>> 4) << 6);
+    }
+
+    for (int group = 0; group < 8; group++) {
+      int byteOffset = 16 + (group >>> 1) * 32;
+      int shift = (group & 1) * 4;
+      for (int index = 0; index < 32; index++) {
+        block[byteOffset + index] |=
+            (byte) ((quantFactory.applyAsInt(group * 32 + index) & 0x0F) << shift);
       }
     }
     return block;

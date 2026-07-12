@@ -30,11 +30,18 @@ public interface VectorUtilSupport {
 
   ValueLayout.OfShort GGUF_LE_SHORT =
       ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
+  ValueLayout.OfInt GGUF_LE_INT = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
   ValueLayout.OfFloat GGUF_LE_FLOAT =
       ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
   int GGUF_Q_BLOCK_SIZE = 32;
   int GGUF_Q4_0_BLOCK_BYTES = 18;
+  int GGUF_Q5_0_BLOCK_BYTES = 22;
   int GGUF_Q8_0_BLOCK_BYTES = 34;
+  int GGUF_Q4_K_BLOCK_SIZE = 256;
+  int GGUF_Q4_K_BLOCK_BYTES = 144;
+  int GGUF_Q4_K_SCALES_OFFSET = 4;
+  int GGUF_Q4_K_QUANTS_OFFSET = 16;
+  int GGUF_Q8_K_SUM_BLOCK_SIZE = 16;
   int GGUF_Q6_K_BLOCK_SIZE = 256;
   int GGUF_Q6_K_BLOCK_BYTES = 210;
   int GGUF_Q6_K_QL_BYTES = 128;
@@ -207,6 +214,105 @@ public interface VectorUtilSupport {
   }
 
   /**
+   * Dot product of a full-precision query with one GGUF Q4_K quantized row.
+   *
+   * <p>Each 256-value super-block stores binary16 scale and minimum factors, eight packed 6-bit
+   * scale/minimum pairs, and eight groups of 32 unsigned 4-bit quants. This follows GGML's Q4_K
+   * layout and fuses dequantization with accumulation.
+   */
+  default float ggufQ4_KDotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufQ4_KBlockAligned(dimensions);
+    float sum = 0.0f;
+    int blocks = dimensions / GGUF_Q4_K_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
+      float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      float dMin = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES));
+      long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
+      long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
+      int queryOffset = block * GGUF_Q4_K_BLOCK_SIZE;
+
+      for (int group = 0; group < 8; group++) {
+        int scale = q4KScale(qWeight, scalesOffset, group);
+        int min = q4KMin(qWeight, scalesOffset, group);
+        float scaledD = d * scale;
+        float minimum = dMin * min;
+        long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+        int shift = (group & 1) * 4;
+        int groupQueryOffset = queryOffset + group * 32;
+
+        for (int index = 0; index < 32; index++) {
+          int packed = qWeight.get(ValueLayout.JAVA_BYTE, packedOffset + index) & 0xFF;
+          int quant = (packed >>> shift) & 0x0F;
+          float weight = scaledD * quant - minimum;
+          sum = MathUtil.fma(query[groupQueryOffset + index], weight, sum);
+        }
+      }
+    }
+    return sum;
+  }
+
+  /** Dequantizes GGUF Q4_K blocks into a caller-owned float array. */
+  default void ggufQ4_KDequantize(
+      MemorySegment qWeight, long byteOffset, float[] out, int outOffset, int dimensions) {
+    checkGgufQ4_KBlockAligned(dimensions);
+    int blocks = dimensions / GGUF_Q4_K_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
+      float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      float dMin = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES));
+      long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
+      long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
+      int outputOffset = outOffset + block * GGUF_Q4_K_BLOCK_SIZE;
+
+      for (int group = 0; group < 8; group++) {
+        int scale = q4KScale(qWeight, scalesOffset, group);
+        int min = q4KMin(qWeight, scalesOffset, group);
+        float scaledD = d * scale;
+        float minimum = dMin * min;
+        long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+        int shift = (group & 1) * 4;
+        int groupOutputOffset = outputOffset + group * 32;
+
+        for (int index = 0; index < 32; index++) {
+          int packed = qWeight.get(ValueLayout.JAVA_BYTE, packedOffset + index) & 0xFF;
+          int quant = (packed >>> shift) & 0x0F;
+          out[groupOutputOffset + index] = scaledD * quant - minimum;
+        }
+      }
+    }
+  }
+
+  /**
+   * Dot product of a full-precision query with one GGUF Q5_0 quantized row.
+   *
+   * <p>Each 32-value block stores a binary16 scale, a 32-bit high-bit mask, and 16 split low
+   * nibbles. The reconstructed unsigned 5-bit value is centered by subtracting 16.
+   */
+  default float ggufQ5_0DotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    float sum = 0.0f;
+    int blocks = dimensions / GGUF_Q_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q5_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      int highBits = qWeight.get(GGUF_LE_INT, blockOffset + Short.BYTES);
+      long quantsOffset = blockOffset + Short.BYTES + Integer.BYTES;
+      int queryOffset = block * GGUF_Q_BLOCK_SIZE;
+      for (int index = 0; index < 16; index++) {
+        int packed = qWeight.get(ValueLayout.JAVA_BYTE, quantsOffset + index) & 0xFF;
+        int low = (packed & 0x0F) | (((highBits >>> index) & 1) << 4);
+        int high = (packed >>> 4) | (((highBits >>> (index + 16)) & 1) << 4);
+        sum = MathUtil.fma(query[queryOffset + index], (low - 16) * scale, sum);
+        sum = MathUtil.fma(query[queryOffset + index + 16], (high - 16) * scale, sum);
+      }
+    }
+    return sum;
+  }
+
+  /**
    * Dot product of a full-precision query with one GGUF Q8_0 quantized row.
    *
    * <p>Q8_0 stores each 32-value block as a little-endian binary16 scale followed by 32 signed int8
@@ -325,6 +431,116 @@ public interface VectorUtilSupport {
           int hi = ((packed >>> 4) & 0x0F) - 8;
           integerSum += lo * q8Quants[quantOffset + index];
           integerSum += hi * q8Quants[quantOffset + index + 16];
+        }
+        sum = MathUtil.fma(scale, integerSum, sum);
+      }
+      out[row] = sum;
+    }
+  }
+
+  /** Batched row-major GEMV over GGUF Q4_K rows. */
+  default void ggufQ4_KMatVecDot(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    long rowBytes = ggufQ4_KRowBytes(cols);
+    for (int row = 0; row < rows; row++) {
+      out[row] = ggufQ4_KDotProduct(query, qWeight, row * rowBytes, cols);
+    }
+  }
+
+  /** GGML-compatible Q4_K by Q8_K GEMV. The activation is quantized once and reused across rows. */
+  default void ggufQ4_KQ8_KMatVecDot(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
+
+    long rowBytes = ggufQ4_KRowBytes(cols);
+    int blocks = cols / GGUF_Q4_K_BLOCK_SIZE;
+    for (int row = 0; row < rows; row++) {
+      float sum = 0.0f;
+      long rowOffset = row * rowBytes;
+
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
+        float q8Scale = q8Scales[block];
+        float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
+        float dMin =
+            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES)) * q8Scale;
+        long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
+        long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
+        int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
+        int quantizedSum = 0;
+        int minimumSum = 0;
+
+        for (int group = 0; group < 8; group++) {
+          int scale = q4KScale(qWeight, scalesOffset, group);
+          int min = q4KMin(qWeight, scalesOffset, group);
+          long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+          int shift = (group & 1) * 4;
+          int groupActivationOffset = activationOffset + group * 32;
+          int groupDot = 0;
+
+          for (int index = 0; index < 32; index++) {
+            int packed = qWeight.get(ValueLayout.JAVA_BYTE, packedOffset + index) & 0xFF;
+            int quant = (packed >>> shift) & 0x0F;
+            groupDot += quant * q8Quants[groupActivationOffset + index];
+          }
+          quantizedSum += scale * groupDot;
+          int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+          minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
+        }
+
+        sum = MathUtil.fma(d, quantizedSum, sum);
+        sum = MathUtil.fma(-dMin, minimumSum, sum);
+      }
+      out[row] = sum;
+    }
+  }
+
+  /** Batched row-major GEMV over GGUF Q5_0 rows. */
+  default void ggufQ5_0MatVecDot(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    long rowBytes = ggufQ5_0RowBytes(cols);
+    for (int row = 0; row < rows; row++) {
+      out[row] = ggufQ5_0DotProduct(query, qWeight, row * rowBytes, cols);
+    }
+  }
+
+  /** GGML-compatible Q5_0 by Q8_0 GEMV. The activation is quantized once and reused across rows. */
+  default void ggufQ5_0Q8_0MatVecDot(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = ggufQ5_0RowBytes(cols);
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int row = 0; row < rows; row++) {
+      float sum = 0.0f;
+      long rowOffset = row * rowBytes;
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = rowOffset + (long) block * GGUF_Q5_0_BLOCK_BYTES;
+        float scale =
+            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+        int highBits = qWeight.get(GGUF_LE_INT, blockOffset + Short.BYTES);
+        long quantsOffset = blockOffset + Short.BYTES + Integer.BYTES;
+        int activationOffset = block * GGUF_Q_BLOCK_SIZE;
+        int integerSum = 0;
+        for (int index = 0; index < 16; index++) {
+          int packed = qWeight.get(ValueLayout.JAVA_BYTE, quantsOffset + index) & 0xFF;
+          int low = (packed & 0x0F) | (((highBits >>> index) & 1) << 4);
+          int high = (packed >>> 4) | (((highBits >>> (index + 16)) & 1) << 4);
+          integerSum += (low - 16) * q8Quants[activationOffset + index];
+          integerSum += (high - 16) * q8Quants[activationOffset + index + 16];
         }
         sum = MathUtil.fma(scale, integerSum, sum);
       }
@@ -630,14 +846,31 @@ public interface VectorUtilSupport {
     }
   }
 
+  private static void checkGgufQ4_KBlockAligned(int dimensions) {
+    if (dimensions % GGUF_Q4_K_BLOCK_SIZE != 0) {
+      throw new IllegalArgumentException(
+          "GGUF Q4_K dimensions must be a multiple of 256: " + dimensions);
+    }
+  }
+
   private static long ggufQ4_0RowBytes(int dimensions) {
     checkGgufBlockAligned(dimensions);
     return (long) (dimensions / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
   }
 
+  private static long ggufQ5_0RowBytes(int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    return (long) (dimensions / GGUF_Q_BLOCK_SIZE) * GGUF_Q5_0_BLOCK_BYTES;
+  }
+
   private static long ggufQ8_0RowBytes(int dimensions) {
     checkGgufBlockAligned(dimensions);
     return (long) (dimensions / GGUF_Q_BLOCK_SIZE) * GGUF_Q8_0_BLOCK_BYTES;
+  }
+
+  private static long ggufQ4_KRowBytes(int dimensions) {
+    checkGgufQ4_KBlockAligned(dimensions);
+    return (long) (dimensions / GGUF_Q4_K_BLOCK_SIZE) * GGUF_Q4_K_BLOCK_BYTES;
   }
 
   private static long ggufQ6_KRowBytes(int dimensions) {
@@ -646,6 +879,11 @@ public interface VectorUtilSupport {
   }
 
   private static void quantizeQ8_K(float[] query, int dimensions, byte[] quants, float[] scales) {
+    quantizeQ8_K(query, dimensions, quants, scales, null);
+  }
+
+  private static void quantizeQ8_K(
+      float[] query, int dimensions, byte[] quants, float[] scales, short[] sums) {
     int blocks = dimensions / GGUF_Q6_K_BLOCK_SIZE;
     for (int block = 0; block < blocks; block++) {
       int offset = block * GGUF_Q6_K_BLOCK_SIZE;
@@ -662,17 +900,51 @@ public interface VectorUtilSupport {
 
       if (absoluteMax == 0.0f) {
         java.util.Arrays.fill(quants, offset, offset + GGUF_Q6_K_BLOCK_SIZE, (byte) 0);
+        if (sums != null) {
+          java.util.Arrays.fill(
+              sums,
+              offset / GGUF_Q8_K_SUM_BLOCK_SIZE,
+              (offset + GGUF_Q6_K_BLOCK_SIZE) / GGUF_Q8_K_SUM_BLOCK_SIZE,
+              (short) 0);
+        }
         scales[block] = 0.0f;
         continue;
       }
 
       float inverseScale = -127.0f / max;
+      int sum = 0;
       for (int index = 0; index < GGUF_Q6_K_BLOCK_SIZE; index++) {
         int quant = ggmlNearestInt(inverseScale * query[offset + index]);
-        quants[offset + index] = (byte) Math.min(127, quant);
+        byte stored = (byte) Math.min(127, quant);
+        quants[offset + index] = stored;
+        if (sums != null) {
+          sum += stored;
+          if ((index + 1) % GGUF_Q8_K_SUM_BLOCK_SIZE == 0) {
+            sums[(offset + index) / GGUF_Q8_K_SUM_BLOCK_SIZE] = (short) sum;
+            sum = 0;
+          }
+        }
       }
       scales[block] = 1.0f / inverseScale;
     }
+  }
+
+  private static int q4KScale(MemorySegment qWeight, long scalesOffset, int group) {
+    if (group < 4) {
+      return qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group) & 0x3F;
+    }
+    int low = qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group + 4L) & 0x0F;
+    int high = (qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group - 4L) & 0xFF) >>> 6;
+    return low | (high << 4);
+  }
+
+  private static int q4KMin(MemorySegment qWeight, long scalesOffset, int group) {
+    if (group < 4) {
+      return qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group + 4L) & 0x3F;
+    }
+    int low = (qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group + 4L) & 0xFF) >>> 4;
+    int high = (qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group) & 0xFF) >>> 6;
+    return low | (high << 4);
   }
 
   private static void quantizeQ8_0(float[] query, int dimensions, byte[] quants, float[] scales) {
