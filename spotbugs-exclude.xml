@@ -169,6 +169,7 @@
             <Class name="com.integrallis.vectors.quantization.ProductQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.BinaryQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.RaBitQuantizer"/>
+            <Class name="com.integrallis.vectors.quantization.ExtendedRaBitQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.NVQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.OptimizedProductQuantizer"/>
             <Class name="com.integrallis.vectors.quantization.TurboQuantizer"/>
@@ -211,6 +212,7 @@
             <Class name="com.integrallis.vectors.quantization.PQVectors"/>
             <Class name="com.integrallis.vectors.quantization.BinaryQuantizedVectors"/>
             <Class name="com.integrallis.vectors.quantization.RaBitQuantizedVectors"/>
+            <Class name="com.integrallis.vectors.quantization.ExtendedRaBitQuantizedVectors"/>
             <Class name="com.integrallis.vectors.quantization.NVQuantizedVectors"/>
             <Class name="com.integrallis.vectors.quantization.TurboQuantizedVectors"/>
         </Or>
