@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.db.storage;
 
+import com.integrallis.vectors.core.observability.RangedGetEvent;
 import com.integrallis.vectors.storage.backend.StorageBackend;
 import com.integrallis.vectors.storage.memory.AlignmentUtil;
 import java.io.IOException;
@@ -177,15 +178,24 @@ public final class ObjectStoreRandomAccessVectors
   /** Fetches one vector's raw little-endian float32 bytes via a single ranged GET. */
   private byte[] rangeBytes(int ordinal) {
     Objects.checkIndex(ordinal, size);
+    long offset = ordinal * stride;
+    RangedGetEvent event = new RangedGetEvent();
+    event.begin(); // no-op unless the event is enabled in an active recording
     byte[] raw;
     try {
-      raw = backend.getRange(key, ordinal * stride, rawVectorByteSize);
+      raw = backend.getRange(key, offset, rawVectorByteSize);
     } catch (IOException e) {
       throw new UncheckedIOException("ranged GET failed for " + key + " ordinal " + ordinal, e);
     }
     if (raw == null) {
       throw new UncheckedIOException(
           "object not found: " + key, new IOException("getRange returned null"));
+    }
+    if (event.shouldCommit()) {
+      event.key = key;
+      event.offset = offset;
+      event.length = rawVectorByteSize;
+      event.commit();
     }
     return raw;
   }

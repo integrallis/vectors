@@ -16,6 +16,7 @@
 package com.integrallis.vectors.db.storage;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.observability.QueryEvent;
 import com.integrallis.vectors.db.index.IndexSpi;
 import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.hnsw.HnswIndex;
@@ -118,13 +119,25 @@ public final class MappedHnswIndexAdapter implements IndexSpi {
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
     int efSearch = Math.max(searchListSize, k);
+    QueryEvent event = new QueryEvent();
+    event.begin(); // no-op unless enabled in an active recording
     SearchResult result;
     if (overQueryFactor > 1.0f && index.isQuantizationEnabled()) {
       result = index.searchTwoPass(query, k, efSearch, overQueryFactor);
     } else {
       result = index.search(query, k, efSearch);
     }
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    SearchOutcome outcome = new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    if (event.shouldCommit()) {
+      event.k = k;
+      event.efSearch = efSearch;
+      event.overQueryFactor = overQueryFactor;
+      event.results = outcome.ordinals().length;
+      // getsIssued / bytesFetched are captured per-fetch by RangedGetEvent; correlate by
+      // thread/time.
+      event.commit();
+    }
+    return outcome;
   }
 
   /**
