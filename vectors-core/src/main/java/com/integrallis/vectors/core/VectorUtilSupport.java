@@ -296,6 +296,42 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** GGML-compatible Q4_0 by Q8_0 GEMV. The activation is quantized once and reused across rows. */
+  default void ggufQ4_0Q8_0MatVecDot(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = ggufQ4_0RowBytes(cols);
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int row = 0; row < rows; row++) {
+      float sum = 0.0f;
+      long rowOffset = row * rowBytes;
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+        float scale =
+            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+        long nibbleOffset = blockOffset + Short.BYTES;
+        int quantOffset = block * GGUF_Q_BLOCK_SIZE;
+        int integerSum = 0;
+        for (int index = 0; index < 16; index++) {
+          int packed = qWeight.get(ValueLayout.JAVA_BYTE, nibbleOffset + index) & 0xFF;
+          int lo = (packed & 0x0F) - 8;
+          int hi = ((packed >>> 4) & 0x0F) - 8;
+          integerSum += lo * q8Quants[quantOffset + index];
+          integerSum += hi * q8Quants[quantOffset + index + 16];
+        }
+        sum = MathUtil.fma(scale, integerSum, sum);
+      }
+      out[row] = sum;
+    }
+  }
+
   /** Batched row-major GEMV over GGUF Q6_K rows. */
   default void ggufQ6_KMatVecDot(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
@@ -305,12 +341,120 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** GGML-compatible Q6_K by Q8_K GEMV. The activation is quantized once and reused across rows. */
+  default void ggufQ6_KQ8_KMatVecDot(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    quantizeQ8_K(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = ggufQ6_KRowBytes(cols);
+    int blocks = cols / GGUF_Q6_K_BLOCK_SIZE;
+    int[] integerSums = new int[8];
+    float[] laneSums = new float[8];
+    for (int row = 0; row < rows; row++) {
+      java.util.Arrays.fill(laneSums, 0.0f);
+      long rowOffset = row * rowBytes;
+
+      for (int block = 0; block < blocks; block++) {
+        java.util.Arrays.fill(integerSums, 0);
+        long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+        float d =
+            Float.float16ToFloat(
+                    qWeight.get(
+                        GGUF_LE_SHORT,
+                        blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES))
+                * q8Scales[block];
+        long qlOffset = blockOffset;
+        long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+        long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+        int queryOffset = block * GGUF_Q6_K_BLOCK_SIZE;
+
+        for (int superBlock = 0; superBlock < 2; superBlock++) {
+          long qlBase = qlOffset + (long) superBlock * 64;
+          long qhBase = qhOffset + (long) superBlock * 32;
+          long scaleBase = scaleOffset + (long) superBlock * 8;
+          int quantBase = queryOffset + superBlock * 128;
+
+          for (int index = 0; index < 32; index++) {
+            int scaleIndex = index / 16;
+            int ql1 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + index) & 0xFF;
+            int ql2 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + 32L + index) & 0xFF;
+            int qh = qWeight.get(ValueLayout.JAVA_BYTE, qhBase + index) & 0xFF;
+            int q1 = ((ql1 & 0x0F) | ((qh & 0x03) << 4)) - 32;
+            int q2 = ((ql2 & 0x0F) | (((qh >>> 2) & 0x03) << 4)) - 32;
+            int q3 = ((ql1 >>> 4) | (((qh >>> 4) & 0x03) << 4)) - 32;
+            int q4 = ((ql2 >>> 4) | (((qh >>> 6) & 0x03) << 4)) - 32;
+            int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
+            int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
+            int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
+            int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
+            int lane = index & 7;
+
+            integerSums[lane] += s1 * q1 * q8Quants[quantBase + index];
+            integerSums[lane] += s2 * q2 * q8Quants[quantBase + index + 32];
+            integerSums[lane] += s3 * q3 * q8Quants[quantBase + index + 64];
+            integerSums[lane] += s4 * q4 * q8Quants[quantBase + index + 96];
+          }
+        }
+
+        for (int lane = 0; lane < laneSums.length; lane++) {
+          laneSums[lane] = MathUtil.fma(d, integerSums[lane], laneSums[lane]);
+        }
+      }
+
+      float sum = 0.0f;
+      for (float laneSum : laneSums) {
+        sum += laneSum;
+      }
+      out[row] = sum;
+    }
+  }
+
   /** Batched row-major GEMV over GGUF Q8_0 rows. */
   default void ggufQ8_0MatVecDot(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
     long rowBytes = ggufQ8_0RowBytes(cols);
     for (int row = 0; row < rows; row++) {
       out[row] = ggufQ8_0DotProduct(query, qWeight, row * rowBytes, cols);
+    }
+  }
+
+  /** GGML-compatible Q8_0 by Q8_0 GEMV. The activation is quantized once and reused across rows. */
+  default void ggufQ8_0Q8_0MatVecDot(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = ggufQ8_0RowBytes(cols);
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int row = 0; row < rows; row++) {
+      float sum = 0.0f;
+      long rowOffset = row * rowBytes;
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+        float scale =
+            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+        long quantOffset = blockOffset + Short.BYTES;
+        int queryOffset = block * GGUF_Q_BLOCK_SIZE;
+        int integerSum = 0;
+        for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
+          integerSum +=
+              qWeight.get(ValueLayout.JAVA_BYTE, quantOffset + index)
+                  * q8Quants[queryOffset + index];
+        }
+        sum = MathUtil.fma(scale, integerSum, sum);
+      }
+      out[row] = sum;
     }
   }
 
@@ -499,6 +643,59 @@ public interface VectorUtilSupport {
   private static long ggufQ6_KRowBytes(int dimensions) {
     checkGgufQ6_KBlockAligned(dimensions);
     return (long) (dimensions / GGUF_Q6_K_BLOCK_SIZE) * GGUF_Q6_K_BLOCK_BYTES;
+  }
+
+  private static void quantizeQ8_K(float[] query, int dimensions, byte[] quants, float[] scales) {
+    int blocks = dimensions / GGUF_Q6_K_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      int offset = block * GGUF_Q6_K_BLOCK_SIZE;
+      float max = 0.0f;
+      float absoluteMax = 0.0f;
+      for (int index = 0; index < GGUF_Q6_K_BLOCK_SIZE; index++) {
+        float value = query[offset + index];
+        float absolute = Math.abs(value);
+        if (absolute > absoluteMax) {
+          absoluteMax = absolute;
+          max = value;
+        }
+      }
+
+      if (absoluteMax == 0.0f) {
+        java.util.Arrays.fill(quants, offset, offset + GGUF_Q6_K_BLOCK_SIZE, (byte) 0);
+        scales[block] = 0.0f;
+        continue;
+      }
+
+      float inverseScale = -127.0f / max;
+      for (int index = 0; index < GGUF_Q6_K_BLOCK_SIZE; index++) {
+        int quant = ggmlNearestInt(inverseScale * query[offset + index]);
+        quants[offset + index] = (byte) Math.min(127, quant);
+      }
+      scales[block] = 1.0f / inverseScale;
+    }
+  }
+
+  private static void quantizeQ8_0(float[] query, int dimensions, byte[] quants, float[] scales) {
+    int blocks = dimensions / GGUF_Q_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      int offset = block * GGUF_Q_BLOCK_SIZE;
+      float absoluteMax = 0.0f;
+      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
+        absoluteMax = Math.max(absoluteMax, Math.abs(query[offset + index]));
+      }
+
+      float scale = absoluteMax / 127.0f;
+      float inverseScale = absoluteMax == 0.0f ? 0.0f : 127.0f / absoluteMax;
+      scales[block] = Float.float16ToFloat(Float.floatToFloat16(scale));
+      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
+        quants[offset + index] = (byte) ggmlNearestInt(query[offset + index] * inverseScale);
+      }
+    }
+  }
+
+  private static int ggmlNearestInt(float value) {
+    int bits = Float.floatToRawIntBits(value + 12_582_912.0f);
+    return (bits & 0x007F_FFFF) - 0x0040_0000;
   }
 
   /**
