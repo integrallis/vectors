@@ -693,6 +693,7 @@
             <Class name="com.integrallis.vectors.studio.web.routing.ApiRoutes"/>
             <Class name="com.integrallis.vectors.studio.web.routing.BlobRoutes"/>
             <Class name="com.integrallis.vectors.studio.web.routing.CollectionRoutes"/>
+            <Class name="com.integrallis.vectors.studio.web.routing.DatasetRoutes"/>
             <Class name="com.integrallis.vectors.studio.web.routing.DocumentRoutes"/>
             <Class name="com.integrallis.vectors.studio.web.routing.HomeRoutes"/>
             <Class name="com.integrallis.vectors.studio.web.routing.ProjectorRoutes"/>

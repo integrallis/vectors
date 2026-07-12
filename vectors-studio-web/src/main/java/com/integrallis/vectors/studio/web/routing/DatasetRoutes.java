@@ -216,9 +216,12 @@ public final class DatasetRoutes implements HttpService {
   }
 
   private static SimilarityFunction parseMetric(String name) {
+    if (name == null) {
+      return SimilarityFunction.COSINE;
+    }
     try {
       return SimilarityFunction.valueOf(name);
-    } catch (IllegalArgumentException | NullPointerException e) {
+    } catch (IllegalArgumentException e) {
       return SimilarityFunction.COSINE;
     }
   }

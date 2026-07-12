@@ -351,10 +351,13 @@ public final class ApiRoutes implements HttpService {
   }
 
   private static SimilarityFunction parseMetric(String name) {
+    if (name == null) {
+      return SimilarityFunction.COSINE; // embeddings default; MMR ordering is robust to this
+    }
     try {
       return SimilarityFunction.valueOf(name);
-    } catch (IllegalArgumentException | NullPointerException e) {
-      return SimilarityFunction.COSINE; // embeddings default; MMR ordering is robust to this
+    } catch (IllegalArgumentException e) {
+      return SimilarityFunction.COSINE;
     }
   }
 
