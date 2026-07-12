@@ -33,6 +33,7 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
 
 /** Compares GGUF GEMV with F32 activations against GGML-compatible Q8 activations. */
 @BenchmarkMode(Mode.AverageTime)
@@ -79,39 +80,39 @@ public class GgufQuantizedMatVecBenchmark {
   }
 
   @Benchmark
-  public float[] q4_0WithF32Activation() {
+  public void q4_0WithF32Activation(Blackhole blackhole) {
     VectorUtil.ggufQ4_0BatchDotProduct(query, q4Weights, rows, cols, out);
-    return out;
+    blackhole.consume(out);
   }
 
   @Benchmark
-  public float[] q4_0WithQ8_0Activation() {
+  public void q4_0WithQ8_0Activation(Blackhole blackhole) {
     VectorUtil.ggufQ4_0Q8_0BatchDotProduct(query, q4Weights, rows, cols, out, q8Quants, q8Scales);
-    return out;
+    blackhole.consume(out);
   }
 
   @Benchmark
-  public float[] q8_0WithF32Activation() {
+  public void q8_0WithF32Activation(Blackhole blackhole) {
     VectorUtil.ggufQ8_0BatchDotProduct(query, q8Weights, rows, cols, out);
-    return out;
+    blackhole.consume(out);
   }
 
   @Benchmark
-  public float[] q8_0WithQ8_0Activation() {
+  public void q8_0WithQ8_0Activation(Blackhole blackhole) {
     VectorUtil.ggufQ8_0Q8_0BatchDotProduct(query, q8Weights, rows, cols, out, q8Quants, q8Scales);
-    return out;
+    blackhole.consume(out);
   }
 
   @Benchmark
-  public float[] q6_KWithF32Activation() {
+  public void q6_KWithF32Activation(Blackhole blackhole) {
     VectorUtil.ggufQ6_KBatchDotProduct(query, q6Weights, rows, cols, out);
-    return out;
+    blackhole.consume(out);
   }
 
   @Benchmark
-  public float[] q6_KWithQ8_KActivation() {
+  public void q6_KWithQ8_KActivation(Blackhole blackhole) {
     VectorUtil.ggufQ6_KQ8_KBatchDotProduct(query, q6Weights, rows, cols, out, q8Quants, q8Scales);
-    return out;
+    blackhole.consume(out);
   }
 
   private static byte[] randomBlocks(
