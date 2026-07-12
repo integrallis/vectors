@@ -599,20 +599,12 @@ public final class VectorUtil {
     }
   }
 
-  private static void checkGgufQuantizedDimensions(float[] query, int dimensions) {
-    checkGgufQuantizedDimensions(query, dimensions, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
-  }
-
   private static void checkGgufQuantizedDimensions(float[] query, int dimensions, int blockSize) {
     checkDimensions(query.length, dimensions);
     if (dimensions % blockSize != 0) {
       throw new IllegalArgumentException(
           "GGUF quantized dimensions must be a multiple of " + blockSize + ": " + dimensions);
     }
-  }
-
-  private static long ggufQuantizedRowBytes(int dimensions, int blockBytes) {
-    return ggufQuantizedRowBytes(dimensions, VectorUtilSupport.GGUF_Q_BLOCK_SIZE, blockBytes);
   }
 
   private static long ggufQuantizedRowBytes(int dimensions, int blockSize, int blockBytes) {
