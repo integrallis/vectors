@@ -18,6 +18,8 @@ package com.integrallis.vectors.storage.backend;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 
@@ -41,6 +43,21 @@ public interface StorageBackend {
    * @throws IOException on storage failure
    */
   void put(String key, byte[] value) throws IOException;
+
+  /**
+   * Writes the entire contents of {@code file} under {@code key} as a single object. The default
+   * reads the file into memory and delegates to {@link #put(String, byte[])} — fine for objects
+   * under ~2 GB. Backends that must store larger single objects (e.g. a 100M-vector {@code
+   * vectors.bin}) override this: {@code S3StorageBackend} streams the file via multipart upload and
+   * {@code LocalFileStorageBackend} copies it, so neither materializes a >2 GB {@code byte[]}. The
+   * object must remain a single addressable blob because the query path issues ranged GETs into it
+   * at {@code ordinal * stride}.
+   *
+   * @throws IOException on storage failure
+   */
+  default void putFile(String key, Path file) throws IOException {
+    put(key, Files.readAllBytes(file));
+  }
 
   /**
    * Returns the value stored under {@code key}, or {@code null} if the key does not exist.

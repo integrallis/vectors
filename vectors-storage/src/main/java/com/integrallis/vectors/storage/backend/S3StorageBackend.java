@@ -19,6 +19,11 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -28,6 +33,11 @@ import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.AbortMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadRequest;
+import software.amazon.awssdk.services.s3.model.CompletedMultipartUpload;
+import software.amazon.awssdk.services.s3.model.CompletedPart;
+import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
@@ -38,6 +48,8 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.S3Object;
+import software.amazon.awssdk.services.s3.model.UploadPartRequest;
+import software.amazon.awssdk.services.s3.model.UploadPartResponse;
 
 /**
  * {@link StorageBackend} backed by an S3-compatible object store using AWS SDK v2.
@@ -118,6 +130,88 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
           PutObjectRequest.builder().bucket(bucket).key(key).build(), RequestBody.fromBytes(value));
     } catch (SdkException e) {
       throw new IOException("S3 put failed for key: " + key, e);
+    }
+  }
+
+  /** Part size for multipart uploads. 256 MiB × 10000-part cap = 2.5 TB, ample for a 100M {@code vectors.bin}. */
+  private static final int PART_SIZE = 256 << 20;
+
+  /**
+   * Uploads {@code file} as a single S3 object, streaming it so no {@code byte[]} of the whole file
+   * is ever allocated. Files at or below one part go via a single {@code putObject}; larger files
+   * use a multipart upload (create → uploadPart per {@value #PART_SIZE}-byte slice → complete),
+   * aborting the upload on any failure. This is the 100M-scale {@code vectors.bin} path — one
+   * addressable object the query tier reads with ranged GETs.
+   */
+  @Override
+  public void putFile(String key, Path file) throws IOException {
+    long size = Files.size(file);
+    if (size <= PART_SIZE) {
+      try {
+        s3.putObject(
+            PutObjectRequest.builder().bucket(bucket).key(key).build(), RequestBody.fromFile(file));
+      } catch (SdkException e) {
+        throw new IOException("S3 putFile failed for key: " + key, e);
+      }
+      return;
+    }
+    String uploadId;
+    try {
+      uploadId =
+          s3.createMultipartUpload(
+                  CreateMultipartUploadRequest.builder().bucket(bucket).key(key).build())
+              .uploadId();
+    } catch (SdkException e) {
+      throw new IOException("S3 createMultipartUpload failed for key: " + key, e);
+    }
+    List<CompletedPart> parts = new ArrayList<>();
+    try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+      long pos = 0;
+      int partNumber = 1;
+      while (pos < size) {
+        int len = (int) Math.min(PART_SIZE, size - pos);
+        byte[] part = new byte[len];
+        ByteBuffer bb = ByteBuffer.wrap(part);
+        long p = pos;
+        while (bb.hasRemaining()) {
+          int r = ch.read(bb, p);
+          if (r < 0) {
+            throw new IOException("unexpected EOF reading " + file + " at " + p);
+          }
+          p += r;
+        }
+        UploadPartResponse resp =
+            s3.uploadPart(
+                UploadPartRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .uploadId(uploadId)
+                    .partNumber(partNumber)
+                    .build(),
+                RequestBody.fromBytes(part));
+        parts.add(CompletedPart.builder().partNumber(partNumber).eTag(resp.eTag()).build());
+        pos += len;
+        partNumber++;
+      }
+      s3.completeMultipartUpload(
+          CompleteMultipartUploadRequest.builder()
+              .bucket(bucket)
+              .key(key)
+              .uploadId(uploadId)
+              .multipartUpload(CompletedMultipartUpload.builder().parts(parts).build())
+              .build());
+    } catch (IOException | RuntimeException e) {
+      try {
+        s3.abortMultipartUpload(
+            AbortMultipartUploadRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .uploadId(uploadId)
+                .build());
+      } catch (SdkException ignore) {
+        // best-effort cleanup of the dangling upload
+      }
+      throw new IOException("S3 multipart putFile failed for key: " + key, e);
     }
   }
 
