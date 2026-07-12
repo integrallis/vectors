@@ -67,6 +67,11 @@ class ObjectStoreQueryableIndexTest {
         gp + FileFormat.QUANTIZED_FILE,
         QuantizedVectorsCodec.encode(codes, quantizer, QuantizerKind.EXTENDED_RABITQ));
     backend.put(gp + FileFormat.VECTORS_FILE, encodeVectorsBin(vecs, dim));
+    java.util.List<String> ids = new java.util.ArrayList<>(n);
+    for (int i = 0; i < n; i++) {
+      ids.add("doc-" + i);
+    }
+    backend.put(gp + FileFormat.IDMAP_FILE, MappedIdMapper.Writer.toBytes(ids));
     backend.put(
         FileFormat.CURRENT_FILE,
         ByteBuffer.allocate(Long.BYTES).order(ByteOrder.LITTLE_ENDIAN).putLong(gen).array());
@@ -95,6 +100,15 @@ class ObjectStoreQueryableIndexTest {
           .as("index opened straight from object storage must match the in-RAM path")
           .isEqualTo(nq);
       assertThat(hit / (double) (nq * k)).as("recall@10 over object storage").isGreaterThan(0.95);
+
+      // searchIds returns external document ids (ordinal i -> "doc-i"), score-aligned with
+      // search().
+      SearchOutcome ordOut = idx.search(queries[0], k, 100, over);
+      var idHits = idx.searchIds(queries[0], k, 100, over);
+      assertThat(idHits).hasSize(ordOut.ordinals().length);
+      for (int i = 0; i < idHits.size(); i++) {
+        assertThat(idHits.get(i).id()).isEqualTo("doc-" + ordOut.ordinals()[i]);
+      }
     }
   }
 

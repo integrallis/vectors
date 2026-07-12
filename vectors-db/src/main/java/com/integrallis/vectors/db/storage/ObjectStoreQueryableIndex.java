@@ -16,13 +16,17 @@
 package com.integrallis.vectors.db.storage;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.db.id.IdMapper;
 import com.integrallis.vectors.db.index.IndexSpi.SearchOutcome;
 import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.quantization.CompressedVectors;
 import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -48,12 +52,18 @@ public final class ObjectStoreQueryableIndex implements AutoCloseable {
   private final MappedHnswIndexAdapter adapter;
   private final int dimension;
   private final int size;
+  private final IdMapper idMapper; // null if the generation shipped no idmap.bin
 
-  private ObjectStoreQueryableIndex(MappedHnswIndexAdapter adapter, int dimension, int size) {
+  private ObjectStoreQueryableIndex(
+      MappedHnswIndexAdapter adapter, int dimension, int size, IdMapper idMapper) {
     this.adapter = adapter;
     this.dimension = dimension;
     this.size = size;
+    this.idMapper = idMapper;
   }
+
+  /** A search result: the external document id and its full-precision similarity score. */
+  public record Hit(String id, float score) {}
 
   /**
    * Opens the generation referenced by {@code <prefix>CURRENT} for object-storage querying.
@@ -111,7 +121,14 @@ public final class ObjectStoreQueryableIndex implements AutoCloseable {
 
     MappedHnswIndexAdapter adapter = new MappedHnswIndexAdapter(graph, vectors, metric);
     adapter.enableQuantization(codes);
-    return new ObjectStoreQueryableIndex(adapter, dimension, size);
+
+    // idmap.bin is small — load it into RAM so results can be returned as document ids. Optional:
+    // a generation may ship without it (then only ordinal-level search() is available).
+    byte[] idmapBytes = backend.get(gp + FileFormat.IDMAP_FILE);
+    IdMapper idMapper =
+        idmapBytes == null ? null : MappedIdMapper.open(MemorySegment.ofArray(idmapBytes));
+
+    return new ObjectStoreQueryableIndex(adapter, dimension, size, idMapper);
   }
 
   /**
@@ -121,6 +138,27 @@ public final class ObjectStoreQueryableIndex implements AutoCloseable {
    */
   public SearchOutcome search(float[] query, int k, int efSearch, float overQueryFactor) {
     return adapter.search(query, k, efSearch, overQueryFactor);
+  }
+
+  /**
+   * Like {@link #search}, but returns external document ids (mapped through the generation's {@code
+   * idmap.bin}) with their scores — the complete query API. Descending score order.
+   *
+   * @throws IllegalStateException if the generation shipped no {@code idmap.bin}
+   */
+  public List<Hit> searchIds(float[] query, int k, int efSearch, float overQueryFactor) {
+    if (idMapper == null) {
+      throw new IllegalStateException(
+          "generation has no idmap.bin; use search() for ordinal-level results");
+    }
+    SearchOutcome out = adapter.search(query, k, efSearch, overQueryFactor);
+    int[] ordinals = out.ordinals();
+    float[] scores = out.scores();
+    List<Hit> hits = new ArrayList<>(ordinals.length);
+    for (int i = 0; i < ordinals.length; i++) {
+      hits.add(new Hit(idMapper.idOf(ordinals[i]), scores[i]));
+    }
+    return hits;
   }
 
   /** Number of vectors in the generation. */
@@ -136,6 +174,9 @@ public final class ObjectStoreQueryableIndex implements AutoCloseable {
   @Override
   public void close() {
     adapter.close();
+    if (idMapper != null) {
+      idMapper.close();
+    }
   }
 
   private static String normalizePrefix(String prefix) {
