@@ -252,12 +252,58 @@ public final class VectorUtil {
     IMPL.ggufQ4_0MatVecDot(query, qWeight, rows, cols, out);
   }
 
+  /**
+   * GGML-compatible GEMV over Q4_0 rows using a Q8_0-quantized activation vector.
+   *
+   * <p>The query is quantized once per call into caller-owned scratch arrays, then reused for every
+   * matrix row.
+   *
+   * @param q8Quants scratch space with at least {@code cols} entries
+   * @param q8Scales scratch space with at least {@code cols / 32} entries
+   */
+  public static void ggufQ4_0Q8_0BatchDotProduct(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    checkGgufQuantizedBatchArguments(
+        query, qWeight, rows, cols, out, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    IMPL.ggufQ4_0Q8_0MatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales);
+  }
+
   /** Batched row-major GEMV over GGUF Q8_0 rows. */
   public static void ggufQ8_0BatchDotProduct(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
     checkGgufQuantizedBatchArguments(
         query, qWeight, rows, cols, out, VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
     IMPL.ggufQ8_0MatVecDot(query, qWeight, rows, cols, out);
+  }
+
+  /**
+   * GGML-compatible GEMV over Q8_0 rows using a Q8_0-quantized activation vector.
+   *
+   * <p>The query is quantized once per call into caller-owned scratch arrays, then reused for every
+   * matrix row.
+   *
+   * @param q8Quants scratch space with at least {@code cols} entries
+   * @param q8Scales scratch space with at least {@code cols / 32} entries
+   */
+  public static void ggufQ8_0Q8_0BatchDotProduct(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    checkGgufQuantizedBatchArguments(
+        query, qWeight, rows, cols, out, VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    IMPL.ggufQ8_0Q8_0MatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales);
   }
 
   /** Batched row-major GEMV over GGUF Q6_K rows. */
@@ -272,6 +318,36 @@ public final class VectorUtil {
         VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE,
         VectorUtilSupport.GGUF_Q6_K_BLOCK_BYTES);
     IMPL.ggufQ6_KMatVecDot(query, qWeight, rows, cols, out);
+  }
+
+  /**
+   * GGML-compatible GEMV over Q6_K rows using a Q8_K-quantized activation vector.
+   *
+   * <p>The query is quantized once per call into caller-owned scratch arrays, then reused for every
+   * matrix row. This matches GGML's Q6_K matrix multiplication semantics while keeping the hot path
+   * free of large temporary allocations.
+   *
+   * @param q8Quants scratch space with at least {@code cols} entries
+   * @param q8Scales scratch space with at least {@code cols / 256} entries
+   */
+  public static void ggufQ6_KQ8_KBatchDotProduct(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    checkGgufQuantizedBatchArguments(
+        query,
+        qWeight,
+        rows,
+        cols,
+        out,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_BYTES);
+    checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE);
+    IMPL.ggufQ6_KQ8_KMatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales);
   }
 
   /**
@@ -604,6 +680,26 @@ public final class VectorUtil {
     if (dimensions % blockSize != 0) {
       throw new IllegalArgumentException(
           "GGUF quantized dimensions must be a multiple of " + blockSize + ": " + dimensions);
+    }
+  }
+
+  private static void checkGgufActivationScratch(
+      byte[] q8Quants, float[] q8Scales, int dimensions, int blockSize) {
+    Objects.requireNonNull(q8Quants, "q8Quants");
+    Objects.requireNonNull(q8Scales, "q8Scales");
+    if (q8Quants.length < dimensions) {
+      throw new IllegalArgumentException(
+          "q8Quants.length must be >= dimensions: " + q8Quants.length + " < " + dimensions);
+    }
+    int blocks = dimensions / blockSize;
+    if (q8Scales.length < blocks) {
+      throw new IllegalArgumentException(
+          "q8Scales.length must be >= dimensions / "
+              + blockSize
+              + ": "
+              + q8Scales.length
+              + " < "
+              + blocks);
     }
   }
 
