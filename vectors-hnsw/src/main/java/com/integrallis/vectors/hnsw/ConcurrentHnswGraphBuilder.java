@@ -17,6 +17,9 @@ package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
@@ -54,6 +57,11 @@ public final class ConcurrentHnswGraphBuilder {
 
   // Fused bulk scoring is safe only when the backing store returns stable vector references.
   private final boolean useBulk;
+  // Zero-copy segment scoring: when the store exposes stable mmap slices (MappedBuildVectors), score
+  // directly off the slice instead of allocating a fresh float[dim] per candidate. This is what makes
+  // an mmap-backed build viable — the naive getVector() path allocates ~10^8 float[] and is GC-bound.
+  private final boolean useSegments;
+  private final int dimension;
 
   private ConcurrentHnswGraphBuilder(
       int maxConnections,
@@ -67,6 +75,20 @@ public final class ConcurrentHnswGraphBuilder {
     this.similarityFunction = similarityFunction;
     this.levelGenerator = new RandomLevelGenerator(maxConnections, seed);
     this.useBulk = !vectors.sharesReturnBuffer();
+    this.useSegments = vectors.supportsSegments();
+    this.dimension = vectors.dimension();
+  }
+
+  /**
+   * Scores {@code query} against the vector at {@code nodeId}. On the zero-copy segment path this
+   * reads the stored vector's mmap slice directly (no per-candidate {@code float[]} allocation);
+   * otherwise it falls back to the heap-array path. The query segment is uploaded once per insert
+   * into {@code ctx.queryScratchSeg}.
+   */
+  private float scoreNode(float[] query, WorkContext ctx, int nodeId) {
+    return useSegments
+        ? similarityFunction.compare(ctx.queryScratchSeg, vectors.vectorSegment(nodeId), dimension)
+        : similarityFunction.compare(query, vectors.getVector(nodeId));
   }
 
   /**
@@ -132,7 +154,9 @@ public final class ConcurrentHnswGraphBuilder {
     final int finalEntry = entryNode;
     final int finalMaxLevel = maxLevel;
     int maxNbrs = graph.maxConnections0() + 1;
-    var threadCtx = ThreadLocal.withInitial(() -> new WorkContext(n, efConstruction, maxNbrs));
+    var threadCtx =
+        ThreadLocal.withInitial(
+            () -> new WorkContext(n, efConstruction, maxNbrs, dimension, useSegments));
 
     try (ExecutorService exec = Executors.newFixedThreadPool(parallelism)) {
       List<Future<?>> futures = new ArrayList<>(n);
@@ -165,8 +189,13 @@ public final class ConcurrentHnswGraphBuilder {
     final float[] kernelOut;
     final int[] batchIds;
     final float[] batchScores;
+    // Zero-copy segment-scoring scratch (null unless the store supports segments). queryScratchSeg is
+    // an off-heap copy of the current insert's query (refilled once per insert, not per candidate);
+    // rowSegs holds reusable zero-copy vectorSegment() slices for the fused segment GEMV.
+    final MemorySegment queryScratchSeg;
+    final MemorySegment[] rowSegs;
 
-    WorkContext(int maxNodes, int ef, int maxNeighbors) {
+    WorkContext(int maxNodes, int ef, int maxNeighbors, int dimension, boolean useSegments) {
       visited = new BitSet(maxNodes);
       candidates = new NodeQueue(ef * 2, false);
       results = new NodeQueue(ef * 2, true);
@@ -175,6 +204,14 @@ public final class ConcurrentHnswGraphBuilder {
       kernelOut = new float[maxNeighbors];
       batchIds = new int[maxNeighbors];
       batchScores = new float[maxNeighbors];
+      if (useSegments) {
+        // Arena.ofAuto(): GC-managed, lives as long as this per-thread WorkContext. Allocated ONCE.
+        this.queryScratchSeg = Arena.ofAuto().allocate((long) dimension * Float.BYTES);
+        this.rowSegs = new MemorySegment[maxNeighbors];
+      } else {
+        this.queryScratchSeg = null;
+        this.rowSegs = null;
+      }
     }
   }
 
@@ -192,6 +229,11 @@ public final class ConcurrentHnswGraphBuilder {
       WorkContext ctx) {
 
     float[] query = vectors.getVector(nodeId);
+    if (useSegments) {
+      // Upload the query into the off-heap scratch ONCE per insert; every candidate score below
+      // reads it against a zero-copy mmap slice, so no float[] is allocated per candidate.
+      MemorySegment.copy(query, 0, ctx.queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dimension);
+    }
 
     // Phase 1: greedy descent from epLevel down to level+1
     int currentBest = ep;
@@ -277,7 +319,7 @@ public final class ConcurrentHnswGraphBuilder {
       WorkContext ctx,
       int self) {
     int current = entry;
-    float currentScore = similarityFunction.compare(query, vectors.getVector(current));
+    float currentScore = scoreNode(query, ctx, current);
     boolean improved = true;
     while (improved) {
       improved = false;
@@ -285,7 +327,7 @@ public final class ConcurrentHnswGraphBuilder {
       for (int i = 0; i < nCount; i++) {
         int nbr = ctx.tmpIds[i];
         if (nbr == self) continue;
-        float s = similarityFunction.compare(query, vectors.getVector(nbr));
+        float s = scoreNode(query, ctx, nbr);
         if (s > currentScore) {
           currentScore = s;
           current = nbr;
@@ -320,7 +362,7 @@ public final class ConcurrentHnswGraphBuilder {
     for (int ep : entryPoints) {
       if (!ctx.visited.get(ep)) {
         ctx.visited.set(ep);
-        float score = similarityFunction.compare(query, vectors.getVector(ep));
+        float score = scoreNode(query, ctx, ep);
         ctx.candidates.add(ep, score);
         ctx.results.add(ep, score);
       }
@@ -341,11 +383,16 @@ public final class ConcurrentHnswGraphBuilder {
         if (ctx.visited.get(nbr)) continue;
         ctx.visited.set(nbr);
         ctx.batchIds[batch] = nbr;
-        if (useBulk) ctx.pool[batch] = vectors.getVector(nbr);
+        if (useSegments) ctx.rowSegs[batch] = vectors.vectorSegment(nbr);
+        else if (useBulk) ctx.pool[batch] = vectors.getVector(nbr);
         batch++;
       }
       if (batch == 0) continue;
-      if (useBulk) {
+      if (useSegments) {
+        // Zero-copy fused GEMV: score all gathered mmap slices against the query in one SIMD pass.
+        FusedSimilarity.bulkCompareSegments(
+            similarityFunction, query, ctx.rowSegs, dimension, ctx.kernelOut, ctx.batchScores, batch);
+      } else if (useBulk) {
         FusedSimilarity.bulkCompare(
             similarityFunction, query, ctx.pool, ctx.kernelOut, ctx.batchScores, batch);
       } else {

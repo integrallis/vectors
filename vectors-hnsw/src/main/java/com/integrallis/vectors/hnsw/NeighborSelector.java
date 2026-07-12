@@ -16,6 +16,7 @@
 package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import java.lang.foreign.MemorySegment;
 
 /**
  * Diversity-based neighbor selection (Algorithm 4 from the HNSW paper). Selects up to {@code
@@ -62,8 +63,14 @@ final class NeighborSelector {
     // Scratch buffer only needed for shared-buffer stores (e.g. mmap-backed) whose getVector()
     // may overwrite the previous return. Stable-array stores (InMemoryVectors) can compare against
     // getVector(id) directly, eliding the per-candidate copy.
+    // Zero-copy segment path for mmap-backed stores (MappedBuildVectors): score stored-vs-stored
+    // vectors directly off their slices, allocating no float[] per candidate — the same GC-avoidance
+    // that makes the mmap build viable. Otherwise use the heap path (with a scratch copy for
+    // shared-buffer stores whose getVector() aliases the previous return).
+    boolean useSegments = vectors.supportsSegments();
     boolean sharedBuffer = vectors.sharesReturnBuffer();
-    float[] scratch = sharedBuffer ? new float[vectors.dimension()] : null;
+    int dim = vectors.dimension();
+    float[] scratch = (!useSegments && sharedBuffer) ? new float[dim] : null;
 
     // Track which candidates are blocked (pruned)
     boolean[] blocked = new boolean[candidates.size()];
@@ -73,19 +80,25 @@ final class NeighborSelector {
       int candidateId = candidates.node(i);
       float scoreToQuery = candidates.score(i);
 
-      float[] candidateVec = vectors.getVector(candidateId);
-      if (sharedBuffer) {
-        // Copy candidate vector before subsequent getVector() calls alias the shared buffer.
-        System.arraycopy(candidateVec, 0, scratch, 0, scratch.length);
-        candidateVec = scratch;
+      MemorySegment candidateSeg = useSegments ? vectors.vectorSegment(candidateId) : null;
+      float[] candidateVec = null;
+      if (!useSegments) {
+        candidateVec = vectors.getVector(candidateId);
+        if (sharedBuffer) {
+          // Copy candidate vector before subsequent getVector() calls alias the shared buffer.
+          System.arraycopy(candidateVec, 0, scratch, 0, dim);
+          candidateVec = scratch;
+        }
       }
 
       boolean isBlocked = false;
       // Check against already-selected neighbors
       for (int j = 0; j < result.size(); j++) {
         int selectedId = result.node(j);
-        float[] selectedVec = vectors.getVector(selectedId);
-        float scoreER = similarityFunction.compare(candidateVec, selectedVec);
+        float scoreER =
+            useSegments
+                ? similarityFunction.compare(candidateSeg, vectors.vectorSegment(selectedId), dim)
+                : similarityFunction.compare(candidateVec, vectors.getVector(selectedId));
 
         if (scoreER >= scoreToQuery) {
           isBlocked = true;
