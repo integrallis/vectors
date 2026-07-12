@@ -22,7 +22,13 @@ import java.io.UncheckedIOException;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Object-storage-backed {@link com.integrallis.vectors.hnsw.RandomAccessVectors} — the query-time
@@ -110,6 +116,66 @@ public final class ObjectStoreRandomAccessVectors
    */
   @Override
   public float[] getVector(int ordinal) {
+    float[] dst = scratch.get();
+    ByteBuffer.wrap(rangeBytes(ordinal)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(dst);
+    return dst;
+  }
+
+  /**
+   * Bulk-fetches candidate vectors <b>concurrently</b> (one virtual thread per ranged GET), each
+   * into its own array. This is the rerank hot path: the two-pass search hands the whole over-query
+   * candidate set here at once, so issuing the independent GETs in parallel collapses N serial
+   * round-trips into roughly one — the difference between ~4 s and ~150 ms per query on
+   * internet-latency object storage. The backend's HTTP connection pool bounds real concurrency.
+   */
+  @Override
+  public float[][] getVectors(int[] ordinals) {
+    if (ordinals.length == 0) {
+      return new float[0][];
+    }
+    if (ordinals.length == 1) {
+      float[] one = new float[dimension];
+      ByteBuffer.wrap(rangeBytes(ordinals[0]))
+          .order(ByteOrder.LITTLE_ENDIAN)
+          .asFloatBuffer()
+          .get(one);
+      return new float[][] {one};
+    }
+    float[][] out = new float[ordinals.length][];
+    List<Callable<Void>> tasks = new ArrayList<>(ordinals.length);
+    for (int i = 0; i < ordinals.length; i++) {
+      final int idx = i;
+      final int ord = ordinals[i];
+      tasks.add(
+          () -> {
+            float[] dst = new float[dimension];
+            ByteBuffer.wrap(rangeBytes(ord))
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .asFloatBuffer()
+                .get(dst);
+            out[idx] = dst;
+            return null;
+          });
+    }
+    try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+      for (Future<Void> f : exec.invokeAll(tasks)) {
+        f.get(); // propagate the first failure
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new UncheckedIOException(new IOException("interrupted during bulk ranged GET", e));
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof UncheckedIOException u) {
+        throw u;
+      }
+      throw new UncheckedIOException(new IOException("bulk ranged GET failed", cause));
+    }
+    return out;
+  }
+
+  /** Fetches one vector's raw little-endian float32 bytes via a single ranged GET. */
+  private byte[] rangeBytes(int ordinal) {
     Objects.checkIndex(ordinal, size);
     byte[] raw;
     try {
@@ -121,9 +187,7 @@ public final class ObjectStoreRandomAccessVectors
       throw new UncheckedIOException(
           "object not found: " + key, new IOException("getRange returned null"));
     }
-    float[] dst = scratch.get();
-    ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(dst);
-    return dst;
+    return raw;
   }
 
   /**
