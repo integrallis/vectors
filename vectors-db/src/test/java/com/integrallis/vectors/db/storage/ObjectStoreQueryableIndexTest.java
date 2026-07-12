@@ -112,6 +112,78 @@ class ObjectStoreQueryableIndexTest {
     }
   }
 
+  @Test
+  void queriesChunkedGraphShippedToObjectStorage() throws Exception {
+    int n = 2000;
+    int dim = 64;
+    int k = 10;
+    int nq = 30;
+    float over = 3.0f;
+    SimilarityFunction sim = SimilarityFunction.EUCLIDEAN;
+
+    float[][] vecs = random(n, dim, 1L);
+    float[][] queries = random(nq, dim, 2L);
+
+    HnswGraph graph =
+        HnswIndex.builder(vecs, sim).maxConnections(32).efConstruction(200).build().graph();
+    ArrayVectorDataset ds = new ArrayVectorDataset(vecs);
+    ExtendedRaBitQuantizer quantizer = ExtendedRaBitQuantizer.train(ds, 4);
+    ExtendedRaBitQuantizedVectors codes = quantizer.encodeAll(ds);
+
+    HeapStorageBackend backend = new HeapStorageBackend();
+    long gen = 7L;
+    String gp = FileFormat.generationDirName(gen) + "/";
+    // Ship graph.bin CHUNKED (500-byte chunks force many graph.bin.NNNNN objects) — the >2 GB path.
+    long total = ChunkedGraphBlob.writeGraph(backend, gp, graph, 500);
+    assertThat(total).isEqualTo(HnswGraphCodec.encode(graph).length);
+    assertThat(backend.list(gp).stream().filter(key -> key.contains(FileFormat.GRAPH_FILE + ".")))
+        .as("graph shipped as multiple chunk objects")
+        .hasSizeGreaterThan(1);
+    // Ship codes CHUNKED too (500-byte chunks) — the >2 GB (~50 GB at 100M) codes path.
+    ChunkedBlob.writeStream(
+        backend,
+        gp + FileFormat.QUANTIZED_FILE,
+        os -> QuantizedVectorsCodec.encode(codes, quantizer, QuantizerKind.EXTENDED_RABITQ, os),
+        500);
+    assertThat(backend.list(gp).stream().filter(key -> key.contains(FileFormat.QUANTIZED_FILE + ".")))
+        .as("codes shipped as multiple chunk objects")
+        .hasSizeGreaterThan(1);
+    backend.put(gp + FileFormat.VECTORS_FILE, encodeVectorsBin(vecs, dim));
+    java.util.List<String> ids = new java.util.ArrayList<>(n);
+    for (int i = 0; i < n; i++) {
+      ids.add("doc-" + i);
+    }
+    backend.put(gp + FileFormat.IDMAP_FILE, MappedIdMapper.Writer.toBytes(ids));
+    backend.put(
+        FileFormat.CURRENT_FILE,
+        ByteBuffer.allocate(Long.BYTES).order(ByteOrder.LITTLE_ENDIAN).putLong(gen).array());
+
+    MappedHnswIndexAdapter local =
+        new MappedHnswIndexAdapter(graph, new InMemoryVectors(vecs), sim);
+    local.enableQuantization(codes);
+
+    try (ObjectStoreQueryableIndex idx = ObjectStoreQueryableIndex.openCurrent(backend, "", sim)) {
+      assertThat(idx.size()).isEqualTo(n);
+      int match = 0;
+      int hit = 0;
+      for (float[] q : queries) {
+        int[] exact = brute(vecs, q, k, sim);
+        SearchOutcome lo = local.search(q, k, 100, over);
+        SearchOutcome ro = idx.search(q, k, 100, over);
+        if (Arrays.equals(lo.ordinals(), ro.ordinals())) {
+          match++;
+        }
+        hit += overlap(ro.ordinals(), exact);
+      }
+      assertThat(match)
+          .as("chunked-graph index must match the in-RAM path node-for-node")
+          .isEqualTo(nq);
+      assertThat(hit / (double) (nq * k))
+          .as("recall@10 over chunked object-storage graph")
+          .isGreaterThan(0.95);
+    }
+  }
+
   private static byte[] encodeVectorsBin(float[][] vectors, int dim) {
     long stride = AlignmentUtil.alignUp((long) dim * Float.BYTES, AlignmentUtil.VECTOR_ALIGNMENT);
     byte[] blob = new byte[(int) (stride * vectors.length)];

@@ -101,18 +101,27 @@ public final class ObjectStoreQueryableIndex implements AutoCloseable {
     Objects.requireNonNull(metric, "metric");
     String gp = generationPrefix.endsWith("/") ? generationPrefix : generationPrefix + "/";
 
-    byte[] graphBytes = backend.get(gp + FileFormat.GRAPH_FILE);
-    if (graphBytes == null) {
+    HnswGraph graph = ChunkedGraphBlob.openGraph(backend, gp);
+    if (graph == null) {
       throw new IOException("missing " + gp + FileFormat.GRAPH_FILE);
     }
-    HnswGraph graph = HnswGraphCodec.decode(graphBytes);
 
-    byte[] quantizedBytes = backend.get(gp + FileFormat.QUANTIZED_FILE);
-    if (quantizedBytes == null) {
-      throw new IOException(
-          "object-storage query requires quantization; missing " + gp + FileFormat.QUANTIZED_FILE);
+    CompressedVectors codes;
+    try (java.io.InputStream codeChunks =
+        ChunkedBlob.openStream(backend, gp + FileFormat.QUANTIZED_FILE)) {
+      if (codeChunks != null) {
+        codes = QuantizedVectorsCodec.decode(codeChunks);
+      } else {
+        byte[] quantizedBytes = backend.get(gp + FileFormat.QUANTIZED_FILE); // legacy single object
+        if (quantizedBytes == null) {
+          throw new IOException(
+              "object-storage query requires quantization; missing "
+                  + gp
+                  + FileFormat.QUANTIZED_FILE);
+        }
+        codes = QuantizedVectorsCodec.decode(quantizedBytes);
+      }
     }
-    CompressedVectors codes = QuantizedVectorsCodec.decode(quantizedBytes);
 
     int size = codes.size();
     int dimension = codes.dimension();
