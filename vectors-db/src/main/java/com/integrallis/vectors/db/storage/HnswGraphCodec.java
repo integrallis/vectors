@@ -17,7 +17,12 @@ package com.integrallis.vectors.db.storage;
 
 import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.hnsw.NeighborArray;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.BitSet;
@@ -507,6 +512,386 @@ public final class HnswGraphCodec {
                 + " contains duplicate neighbor "
                 + neighborId);
       }
+    }
+  }
+
+  // ==========================================================================
+  // Streaming codec — no 2 GB byte[] ceiling. Same wire format as the byte[]
+  // codec above (cross-verified in HnswGraphCodecStreamingTest), but reads/writes
+  // sequentially so a graph larger than Integer.MAX_VALUE bytes (>~8M nodes at
+  // M=32) can round-trip to/from a file or a chunked object-storage blob.
+  // ==========================================================================
+
+  /** Buffer size for the internal Buffered{Input,Output}Stream wrappers. */
+  private static final int STREAM_BUFFER = 1 << 20; // 1 MiB
+
+  /**
+   * Returns the exact number of bytes {@link #encode(HnswGraph)} would produce, without
+   * materializing them — for recording {@code graphBinLength} or sizing footprints on graphs whose
+   * encoded form exceeds 2 GB.
+   */
+  public static long encodedLength(HnswGraph graph) {
+    Objects.requireNonNull(graph, "graph must not be null");
+    int numNodes = graph.size();
+    int maxLevel = graph.maxLevel();
+    long total = HEADER_SIZE;
+    total += 4L * numNodes; // nodeLevels
+    for (int i = 0; i < numNodes; i++) {
+      NeighborArray layer0 = graph.getNeighbors(i, 0);
+      if (layer0 == null) {
+        throw new IllegalStateException("layer 0 neighbor list missing for live node " + i);
+      }
+      total += 4L + 4L * layer0.size();
+    }
+    for (int layer = 1; layer <= maxLevel; layer++) {
+      total += 4L; // numNodesAtLayer
+      for (int i = 0; i < numNodes; i++) {
+        NeighborArray neighbors = graph.getNeighbors(i, layer);
+        if (neighbors != null) {
+          total += 4L + 4L + 4L * neighbors.size(); // nodeId + degree + neighbors
+        }
+      }
+    }
+    return total;
+  }
+
+  /**
+   * Streams {@code graph} to {@code rawOut} in the {@code graph.bin} wire format. Unlike {@link
+   * #encode(HnswGraph)} this has no size ceiling — use it for graphs whose encoded form exceeds 2
+   * GB. The stream is flushed but not closed. Returns the number of bytes written (equal to what
+   * {@link #encode(HnswGraph)} would have produced), so callers can record {@code graphBinLength}
+   * without materializing the bytes.
+   */
+  public static long encode(HnswGraph graph, OutputStream rawOut) throws IOException {
+    Objects.requireNonNull(graph, "graph must not be null");
+    Objects.requireNonNull(rawOut, "output stream must not be null");
+    int numNodes = graph.size();
+    int maxConnections = graph.maxConnections();
+    int entryNode = graph.entryNode();
+    int maxLevel = graph.maxLevel();
+    if (numNodes < 0) {
+      throw new IllegalStateException("graph.size() is negative: " + numNodes);
+    }
+    if (maxConnections <= 0) {
+      throw new IllegalStateException("graph.maxConnections() must be positive: " + maxConnections);
+    }
+
+    // Upper-layer node counts (one pass; int[maxLevel] only, no giant allocation).
+    int[] upperLayerCounts = new int[Math.max(0, maxLevel)];
+    for (int layer = 1; layer <= maxLevel; layer++) {
+      int count = 0;
+      for (int i = 0; i < numNodes; i++) {
+        if (graph.getNeighbors(i, layer) != null) {
+          count++;
+        }
+      }
+      upperLayerCounts[layer - 1] = count;
+    }
+
+    CountingOutputStream counting = new CountingOutputStream(rawOut);
+    OutputStream out = new BufferedOutputStream(counting, STREAM_BUFFER);
+
+    // Header.
+    putIntLE(out, FileFormat.MAGIC_GRAPH);
+    putIntLE(out, FileFormat.VERSION_GRAPH);
+    putIntLE(out, HEADER_SIZE);
+    putIntLE(out, 0); // flags reserved
+    putIntLE(out, numNodes);
+    putIntLE(out, maxConnections);
+    putIntLE(out, entryNode);
+    putIntLE(out, maxLevel);
+
+    // nodeLevels.
+    for (int i = 0; i < numNodes; i++) {
+      putIntLE(out, graph.nodeLevel(i));
+    }
+
+    BitSet seen = new BitSet(numNodes);
+
+    // Layer 0.
+    for (int i = 0; i < numNodes; i++) {
+      NeighborArray layer0 = graph.getNeighbors(i, 0);
+      if (layer0 == null) {
+        throw new IllegalStateException(
+            "layer 0 neighbor list missing for live node " + i + " (graph is corrupt)");
+      }
+      int degree = layer0.size();
+      putIntLE(out, degree);
+      seen.clear();
+      for (int k = 0; k < degree; k++) {
+        int neighborId = layer0.node(k);
+        if (neighborId < 0 || neighborId >= numNodes) {
+          throw new IllegalStateException(
+              "layer 0 neighbor " + neighborId + " for node " + i + " out of range");
+        }
+        if (neighborId == i) {
+          throw new IllegalStateException("layer 0 self-loop on node " + i);
+        }
+        if (seen.get(neighborId)) {
+          throw new IllegalStateException(
+              "layer 0 duplicate neighbor " + neighborId + " in node " + i);
+        }
+        seen.set(neighborId);
+        putIntLE(out, neighborId);
+      }
+    }
+
+    // Upper layers.
+    for (int layer = 1; layer <= maxLevel; layer++) {
+      putIntLE(out, upperLayerCounts[layer - 1]);
+      for (int i = 0; i < numNodes; i++) {
+        NeighborArray neighbors = graph.getNeighbors(i, layer);
+        if (neighbors == null) {
+          continue;
+        }
+        putIntLE(out, i);
+        int degree = neighbors.size();
+        putIntLE(out, degree);
+        seen.clear();
+        for (int k = 0; k < degree; k++) {
+          int neighborId = neighbors.node(k);
+          if (neighborId < 0 || neighborId >= numNodes) {
+            throw new IllegalStateException(
+                "layer " + layer + " neighbor " + neighborId + " for node " + i + " out of range");
+          }
+          if (neighborId == i) {
+            throw new IllegalStateException("layer " + layer + " self-loop on node " + i);
+          }
+          if (seen.get(neighborId)) {
+            throw new IllegalStateException(
+                "layer " + layer + " duplicate neighbor " + neighborId + " in node " + i);
+          }
+          seen.set(neighborId);
+          putIntLE(out, neighborId);
+        }
+      }
+    }
+
+    out.flush();
+    return counting.count();
+  }
+
+  /**
+   * Decodes a {@code graph.bin} image read sequentially from {@code rawIn}. Unlike {@link
+   * #decode(byte[])} this has no size ceiling. The stream is read up to and including the last graph
+   * byte and is not closed; it must position exactly at end-of-graph (trailing bytes are an error).
+   */
+  public static HnswGraph decode(InputStream rawIn) throws IOException {
+    Objects.requireNonNull(rawIn, "input stream must not be null");
+    InputStream in = new BufferedInputStream(rawIn, STREAM_BUFFER);
+
+    int magic = getIntLE(in);
+    if (magic != FileFormat.MAGIC_GRAPH) {
+      throw new IOException(
+          String.format(
+              "graph.bin magic mismatch: expected 0x%08x, got 0x%08x",
+              FileFormat.MAGIC_GRAPH, magic));
+    }
+    int version = getIntLE(in);
+    if (version != FileFormat.VERSION_GRAPH) {
+      throw new IOException(
+          "graph.bin version mismatch: expected " + FileFormat.VERSION_GRAPH + ", got " + version);
+    }
+    int headerLength = getIntLE(in);
+    if (headerLength != HEADER_SIZE) {
+      throw new IOException(
+          "graph.bin header length mismatch: expected " + HEADER_SIZE + ", got " + headerLength);
+    }
+    int flags = getIntLE(in);
+    if (flags != 0) {
+      throw new IOException("graph.bin flags must be 0 in version 1, got " + flags);
+    }
+    int numNodes = getIntLE(in);
+    if (numNodes < 0) {
+      throw new IOException("graph.bin numNodes must be >= 0, got " + numNodes);
+    }
+    int maxConnections = getIntLE(in);
+    if (maxConnections <= 0) {
+      throw new IOException("graph.bin maxConnections must be positive, got " + maxConnections);
+    }
+    int entryNode = getIntLE(in);
+    int maxLevel = getIntLE(in);
+
+    if (numNodes == 0) {
+      if (entryNode != -1 || maxLevel != -1) {
+        throw new IOException(
+            "graph.bin empty graph must have entryNode=-1 and maxLevel=-1, got entryNode="
+                + entryNode
+                + ", maxLevel="
+                + maxLevel);
+      }
+      if (in.read() != -1) {
+        throw new IOException("graph.bin empty graph must have no body");
+      }
+      return new HnswGraph(1, maxConnections);
+    }
+    if (entryNode < 0 || entryNode >= numNodes) {
+      throw new IOException(
+          "graph.bin entryNode " + entryNode + " out of range [0, " + numNodes + ")");
+    }
+    if (maxLevel < 0) {
+      throw new IOException("graph.bin maxLevel must be >= 0 when numNodes > 0, got " + maxLevel);
+    }
+
+    int[] nodeLevels = new int[numNodes];
+    for (int i = 0; i < numNodes; i++) {
+      int level = getIntLE(in);
+      if (level < 0 || level > maxLevel) {
+        throw new IOException(
+            "graph.bin nodeLevels[" + i + "]=" + level + " out of range [0, " + maxLevel + "]");
+      }
+      nodeLevels[i] = level;
+    }
+    if (nodeLevels[entryNode] != maxLevel) {
+      throw new IOException(
+          "graph.bin entryNode "
+              + entryNode
+              + " lives at level "
+              + nodeLevels[entryNode]
+              + " but maxLevel is "
+              + maxLevel);
+    }
+
+    HnswGraph graph = new HnswGraph(numNodes, maxConnections);
+    for (int i = 0; i < numNodes; i++) {
+      graph.initNode(i, nodeLevels[i]);
+    }
+    graph.setEntryNode(entryNode, maxLevel);
+    int maxConnections0 = 2 * maxConnections;
+
+    // Layer 0.
+    for (int i = 0; i < numNodes; i++) {
+      int degree = readNonNegativeInt(in, "layer 0 degree for node " + i);
+      if (degree > maxConnections0) {
+        throw new IOException(
+            "graph.bin layer 0 degree " + degree + " for node " + i + " exceeds 2*M = "
+                + maxConnections0);
+      }
+      loadNeighborsInOrder(in, graph.getNeighbors(i, 0), degree, numNodes, i, 0);
+    }
+
+    // Upper layers.
+    for (int layer = 1; layer <= maxLevel; layer++) {
+      int numNodesAtLayer = readNonNegativeInt(in, "numNodesAtLayer for layer " + layer);
+      if (numNodesAtLayer > numNodes) {
+        throw new IOException(
+            "graph.bin numNodesAtLayer " + numNodesAtLayer + " for layer " + layer
+                + " exceeds numNodes " + numNodes);
+      }
+      int lastNodeId = -1;
+      for (int j = 0; j < numNodesAtLayer; j++) {
+        int nodeId = readNonNegativeInt(in, "upper-layer nodeId at layer " + layer);
+        if (nodeId >= numNodes) {
+          throw new IOException(
+              "graph.bin layer " + layer + " references nodeId " + nodeId + " out of range [0, "
+                  + numNodes + ")");
+        }
+        if (nodeId <= lastNodeId) {
+          throw new IOException(
+              "graph.bin layer " + layer + " nodeIds must be strictly increasing, got " + nodeId
+                  + " after " + lastNodeId);
+        }
+        lastNodeId = nodeId;
+        if (nodeLevels[nodeId] < layer) {
+          throw new IOException(
+              "graph.bin layer " + layer + " contains node " + nodeId
+                  + " whose nodeLevels entry is only " + nodeLevels[nodeId]);
+        }
+        int degree = readNonNegativeInt(in, "upper-layer degree for node " + nodeId);
+        if (degree > maxConnections) {
+          throw new IOException(
+              "graph.bin layer " + layer + " degree " + degree + " for node " + nodeId
+                  + " exceeds M = " + maxConnections);
+        }
+        loadNeighborsInOrder(in, graph.getNeighbors(nodeId, layer), degree, numNodes, nodeId, layer);
+      }
+    }
+
+    if (in.read() != -1) {
+      throw new IOException("graph.bin has trailing bytes after full decode");
+    }
+    return graph;
+  }
+
+  private static void loadNeighborsInOrder(
+      InputStream in, NeighborArray dst, int degree, int numNodes, int ownerNode, int layer)
+      throws IOException {
+    if (dst == null) {
+      throw new IOException("graph.bin layer " + layer + " slot missing for node " + ownerNode);
+    }
+    for (int k = 0; k < degree; k++) {
+      int neighborId = getIntLE(in);
+      if (neighborId < 0 || neighborId >= numNodes) {
+        throw new IOException(
+            "graph.bin layer " + layer + " node " + ownerNode + " neighbor " + neighborId
+                + " out of range [0, " + numNodes + ")");
+      }
+      if (neighborId == ownerNode) {
+        throw new IOException(
+            "graph.bin layer " + layer + " node " + ownerNode + " contains a self-loop");
+      }
+      if (!dst.insert(neighborId, (float) (degree - k))) {
+        throw new IOException(
+            "graph.bin layer " + layer + " node " + ownerNode + " contains duplicate neighbor "
+                + neighborId);
+      }
+    }
+  }
+
+  private static int readNonNegativeInt(InputStream in, String what) throws IOException {
+    int value = getIntLE(in);
+    if (value < 0) {
+      throw new IOException("graph.bin " + what + " must be >= 0, got " + value);
+    }
+    return value;
+  }
+
+  private static void putIntLE(OutputStream out, int v) throws IOException {
+    out.write(v & 0xFF);
+    out.write((v >>> 8) & 0xFF);
+    out.write((v >>> 16) & 0xFF);
+    out.write((v >>> 24) & 0xFF);
+  }
+
+  private static int getIntLE(InputStream in) throws IOException {
+    int b0 = in.read();
+    int b1 = in.read();
+    int b2 = in.read();
+    int b3 = in.read();
+    if ((b0 | b1 | b2 | b3) < 0) {
+      throw new EOFException("graph.bin truncated (unexpected end of stream)");
+    }
+    return (b0 & 0xFF) | ((b1 & 0xFF) << 8) | ((b2 & 0xFF) << 16) | ((b3 & 0xFF) << 24);
+  }
+
+  /** Counts bytes written so streaming encode can report the graph.bin length. */
+  private static final class CountingOutputStream extends OutputStream {
+    private final OutputStream delegate;
+    private long count;
+
+    CountingOutputStream(OutputStream delegate) {
+      this.delegate = delegate;
+    }
+
+    long count() {
+      return count;
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+      delegate.write(b);
+      count++;
+    }
+
+    @Override
+    public void write(byte[] b, int off, int len) throws IOException {
+      delegate.write(b, off, len);
+      count += len;
+    }
+
+    @Override
+    public void flush() throws IOException {
+      delegate.flush();
     }
   }
 

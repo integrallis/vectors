@@ -40,7 +40,12 @@ import com.integrallis.vectors.quantization.ScalarQuantizedVectors;
 import com.integrallis.vectors.quantization.ScalarQuantizer;
 import com.integrallis.vectors.quantization.TurboQuantizedVectors;
 import com.integrallis.vectors.quantization.TurboQuantizer;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
@@ -117,6 +122,263 @@ public final class QuantizedVectorsCodec {
               (ExtendedRaBitQuantizedVectors) compressed, (ExtendedRaBitQuantizer) quantizer);
       case NONE -> throw new AssertionError("unreachable");
     };
+  }
+
+  // ==========================================================================
+  // Streaming codec (EXTENDED_RABITQ only) — no 2 GB byte[] ceiling. Same wire
+  // format as the byte[] codec above; used for the chunked quantized.bin path so
+  // the ~50 GB of codes at 100M vectors can ship/read without materializing one
+  // array. Only EXTENDED_RABITQ is supported because that is the sole quantizer
+  // the object-storage tier serves.
+  // ==========================================================================
+
+  private static final int STREAM_BUFFER = 1 << 20; // 1 MiB
+
+  /**
+   * Streams {@code compressed} to {@code out} in the {@code quantized.bin} wire format. Only {@link
+   * QuantizerKind#EXTENDED_RABITQ} is supported. The stream is flushed, not closed. Returns the
+   * number of bytes written (equal to what {@link #encode(CompressedVectors, Quantizer,
+   * QuantizerKind)} would produce).
+   */
+  public static long encode(
+      CompressedVectors compressed, Quantizer<?> quantizer, QuantizerKind kind, OutputStream out)
+      throws IOException {
+    Objects.requireNonNull(compressed, "compressed must not be null");
+    Objects.requireNonNull(quantizer, "quantizer must not be null");
+    Objects.requireNonNull(out, "out must not be null");
+    if (kind != QuantizerKind.EXTENDED_RABITQ) {
+      throw new IllegalArgumentException(
+          "streaming encode supports only EXTENDED_RABITQ, got " + kind);
+    }
+    return encodeExtRaBitQ(
+        (ExtendedRaBitQuantizedVectors) compressed, (ExtendedRaBitQuantizer) quantizer, out);
+  }
+
+  private static long encodeExtRaBitQ(
+      ExtendedRaBitQuantizedVectors compressed,
+      ExtendedRaBitQuantizer quantizer,
+      OutputStream rawOut)
+      throws IOException {
+    int dimension = quantizer.dimension();
+    int vectorCount = compressed.size();
+    int paddedDimension = quantizer.paddedDimension();
+    int bits = quantizer.bits();
+    float[] centroid = quantizer.centroid();
+    Rotation rotation = quantizer.rotation();
+
+    // Header region (common header + quantizer state + rotation) is small (rotation <= a few MB);
+    // build it via ByteBuffer to reuse writeCommonHeader/encodeRotation, then write it to the stream.
+    long rotationSize = rotationEncodedSize(rotation);
+    long headerSize = COMMON_HEADER_SIZE + 8L + (long) dimension * Float.BYTES + rotationSize;
+    checkSize(headerSize);
+    byte[] hdr = new byte[(int) headerSize];
+    ByteBuffer hb = ByteBuffer.wrap(hdr).order(ByteOrder.LITTLE_ENDIAN);
+    writeCommonHeader(hb, QuantizerKind.EXTENDED_RABITQ, dimension, vectorCount);
+    hb.putInt(paddedDimension);
+    hb.putInt(bits);
+    for (int d = 0; d < dimension; d++) {
+      hb.putFloat(centroid[d]);
+    }
+    encodeRotation(hb, rotation);
+
+    CountingOutputStream counting = new CountingOutputStream(rawOut);
+    OutputStream out = new BufferedOutputStream(counting, STREAM_BUFFER);
+    out.write(hdr);
+
+    // Per-vector data — the ~50 GB bulk at 100M, streamed.
+    for (int i = 0; i < vectorCount; i++) {
+      for (long c : compressed.getSignCodes(i)) {
+        putLongLE(out, c);
+      }
+      out.write(compressed.getMagCodes(i));
+      float[] corr = compressed.getCorrections(i);
+      for (int j = 0; j < EXT_RABITQ_CORRECTIONS; j++) {
+        putIntLE(out, Float.floatToRawIntBits(corr[j]));
+      }
+    }
+    out.flush();
+    return counting.count();
+  }
+
+  /**
+   * Decodes a {@code quantized.bin} image read sequentially from {@code rawIn}. Only {@link
+   * QuantizerKind#EXTENDED_RABITQ} is supported. The stream is read to end-of-image and not closed.
+   */
+  public static CompressedVectors decode(InputStream rawIn) throws IOException {
+    Objects.requireNonNull(rawIn, "input stream must not be null");
+    InputStream in = new BufferedInputStream(rawIn, STREAM_BUFFER);
+
+    int magic = getIntLE(in);
+    if (magic != FileFormat.MAGIC_QUANTIZED) {
+      throw new IOException(
+          String.format(
+              "quantized.bin magic mismatch: expected 0x%08x, got 0x%08x",
+              FileFormat.MAGIC_QUANTIZED, magic));
+    }
+    int version = getIntLE(in);
+    if (version != FileFormat.VERSION_QUANTIZED) {
+      throw new IOException(
+          "quantized.bin version mismatch: expected "
+              + FileFormat.VERSION_QUANTIZED
+              + ", got "
+              + version);
+    }
+    int kindOrdinal = getIntLE(in);
+    QuantizerKind[] kinds = QuantizerKind.values();
+    if (kindOrdinal < 0 || kindOrdinal >= kinds.length) {
+      throw new IOException("quantized.bin invalid quantizerKind ordinal: " + kindOrdinal);
+    }
+    QuantizerKind kind = kinds[kindOrdinal];
+    if (kind != QuantizerKind.EXTENDED_RABITQ) {
+      throw new IOException("streaming decode supports only EXTENDED_RABITQ, got " + kind);
+    }
+    int dimension = getIntLE(in);
+    if (dimension <= 0) {
+      throw new IOException("quantized.bin dimension must be positive, got " + dimension);
+    }
+    int vectorCount = getIntLE(in);
+    if (vectorCount < 0) {
+      throw new IOException("quantized.bin vectorCount must be >= 0, got " + vectorCount);
+    }
+
+    int paddedDimension = getIntLE(in);
+    if (paddedDimension <= 0 || paddedDimension % 64 != 0) {
+      throw new IOException(
+          "quantized.bin ExtRaBitQ paddedDimension must be positive multiple of 64: "
+              + paddedDimension);
+    }
+    int bits = getIntLE(in);
+    if (bits < 2 || bits > 8) {
+      throw new IOException("quantized.bin ExtRaBitQ bits must be in [2, 8]: " + bits);
+    }
+    float[] centroid = new float[dimension];
+    for (int d = 0; d < dimension; d++) {
+      centroid[d] = Float.intBitsToFloat(getIntLE(in));
+    }
+
+    // Rotation: read tag+dim, compute the data size from (tag, dim), read it, and decode via the
+    // existing ByteBuffer path (rotation is small, so a transient byte[] is fine).
+    int tag = getIntLE(in);
+    int rotDim = getIntLE(in);
+    long dataSize = rotationDataSize(tag, rotDim);
+    long rotBytesLen = 8L + dataSize;
+    checkSize(rotBytesLen);
+    byte[] rotBytes = new byte[(int) rotBytesLen];
+    ByteBuffer rb = ByteBuffer.wrap(rotBytes).order(ByteOrder.LITTLE_ENDIAN);
+    rb.putInt(tag);
+    rb.putInt(rotDim);
+    readFully(in, rotBytes, 8, (int) dataSize);
+    rb.position(0);
+    Rotation rotation = decodeRotation(rb, paddedDimension);
+
+    ExtendedRaBitQuantizer quantizer =
+        ExtendedRaBitQuantizer.fromState(dimension, paddedDimension, bits, centroid, rotation);
+    int numLongs = paddedDimension >> 6;
+    int magBytes = (paddedDimension * bits + 7) / 8;
+
+    long[][] signCodes = new long[vectorCount][numLongs];
+    byte[][] magCodes = new byte[vectorCount][magBytes];
+    float[][] corrections = new float[vectorCount][EXT_RABITQ_CORRECTIONS];
+    for (int i = 0; i < vectorCount; i++) {
+      for (int j = 0; j < numLongs; j++) {
+        signCodes[i][j] = getLongLE(in);
+      }
+      readFully(in, magCodes[i], 0, magBytes);
+      for (int j = 0; j < EXT_RABITQ_CORRECTIONS; j++) {
+        corrections[i][j] = Float.intBitsToFloat(getIntLE(in));
+      }
+    }
+    if (in.read() != -1) {
+      throw new IOException("quantized.bin has trailing bytes after full decode");
+    }
+    return new ExtendedRaBitQuantizedVectors(quantizer, signCodes, magCodes, corrections, dimension);
+  }
+
+  private static long rotationDataSize(int tag, int dim) throws IOException {
+    return switch (tag) {
+      case ROTATION_TAG_RANDOM -> 2L * dim * dim * Float.BYTES;
+      case ROTATION_TAG_GIVENS -> 2L * (dim / 2) * Float.BYTES;
+      case ROTATION_TAG_QUATERNION -> 2L * (dim / 4) * 4 * Float.BYTES;
+      default -> throw new IOException("quantized.bin unknown rotation tag: " + tag);
+    };
+  }
+
+  private static void putIntLE(OutputStream out, int v) throws IOException {
+    out.write(v & 0xFF);
+    out.write((v >>> 8) & 0xFF);
+    out.write((v >>> 16) & 0xFF);
+    out.write((v >>> 24) & 0xFF);
+  }
+
+  private static void putLongLE(OutputStream out, long v) throws IOException {
+    for (int i = 0; i < 8; i++) {
+      out.write((int) (v >>> (8 * i)) & 0xFF);
+    }
+  }
+
+  private static int getIntLE(InputStream in) throws IOException {
+    int b0 = in.read();
+    int b1 = in.read();
+    int b2 = in.read();
+    int b3 = in.read();
+    if ((b0 | b1 | b2 | b3) < 0) {
+      throw new EOFException("quantized.bin truncated (unexpected end of stream)");
+    }
+    return (b0 & 0xFF) | ((b1 & 0xFF) << 8) | ((b2 & 0xFF) << 16) | ((b3 & 0xFF) << 24);
+  }
+
+  private static long getLongLE(InputStream in) throws IOException {
+    long v = 0;
+    for (int i = 0; i < 8; i++) {
+      int b = in.read();
+      if (b < 0) {
+        throw new EOFException("quantized.bin truncated (unexpected end of stream)");
+      }
+      v |= ((long) (b & 0xFF)) << (8 * i);
+    }
+    return v;
+  }
+
+  private static void readFully(InputStream in, byte[] dst, int off, int len) throws IOException {
+    int n = 0;
+    while (n < len) {
+      int r = in.read(dst, off + n, len - n);
+      if (r < 0) {
+        throw new EOFException("quantized.bin truncated (unexpected end of stream)");
+      }
+      n += r;
+    }
+  }
+
+  /** Counts bytes written so streaming encode can report the quantized.bin length. */
+  private static final class CountingOutputStream extends OutputStream {
+    private final OutputStream delegate;
+    private long count;
+
+    CountingOutputStream(OutputStream delegate) {
+      this.delegate = delegate;
+    }
+
+    long count() {
+      return count;
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+      delegate.write(b);
+      count++;
+    }
+
+    @Override
+    public void write(byte[] b, int off, int len) throws IOException {
+      delegate.write(b, off, len);
+      count += len;
+    }
+
+    @Override
+    public void flush() throws IOException {
+      delegate.flush();
+    }
   }
 
   /**
