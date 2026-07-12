@@ -62,6 +62,8 @@ public final class ConcurrentHnswGraphBuilder {
   // an mmap-backed build viable — the naive getVector() path allocates ~10^8 float[] and is GC-bound.
   private final boolean useSegments;
   private final int dimension;
+  // Set for the duration of a segment-backed build; shared across worker threads. Null otherwise.
+  private AsyncVectorPrefetcher prefetcher;
 
   private ConcurrentHnswGraphBuilder(
       int maxConnections,
@@ -158,6 +160,19 @@ public final class ConcurrentHnswGraphBuilder {
         ThreadLocal.withInitial(
             () -> new WorkContext(n, efConstruction, maxNbrs, dimension, useSegments));
 
+    // Async prefetch: when vectors are mmap-backed, page-in each popped candidate's neighbors on an
+    // I/O pool so the NVMe reads overlap the SIMD scoring instead of faulting synchronously. This is
+    // what keeps the build from becoming NVMe-latency-bound once vectors.bin exceeds page cache
+    // (307 GB at 100M). No-op-cheap when vectors are already resident.
+    // Default OFF: a fault measurement (400K, ~25% page cache) showed async prefetch made the
+    // memory-constrained mmap build ~15% SLOWER (638s vs 554s) — under a small cache the prefetched
+    // pages evict before use and the I/O threads contend with the compute threads. Kept as an opt-in
+    // toggle for regimes it might help (fast NVMe + higher cache ratio), but not on by default.
+    boolean prefetchEnabled =
+        Boolean.parseBoolean(System.getProperty("vectors.hnsw.buildPrefetch", "false"));
+    if (useSegments && prefetchEnabled) {
+      prefetcher = new AsyncVectorPrefetcher(vectors, Math.max(2, parallelism));
+    }
     try (ExecutorService exec = Executors.newFixedThreadPool(parallelism)) {
       List<Future<?>> futures = new ArrayList<>(n);
       for (int i = 0; i < n; i++) {
@@ -171,6 +186,11 @@ public final class ConcurrentHnswGraphBuilder {
                         nodeId, level, finalEntry, finalMaxLevel, graph, locks, threadCtx.get())));
       }
       awaitAll(futures);
+    } finally {
+      if (prefetcher != null) {
+        prefetcher.close();
+        prefetcher = null;
+      }
     }
     return graph;
   }
@@ -376,6 +396,14 @@ public final class ConcurrentHnswGraphBuilder {
       if (ctx.results.size() >= ef && candScore < NodeQueue.score(ctx.results.peek())) break;
 
       int nCount = snapshotNeighbors(candId, layer, graph, locks, ctx.tmpIds);
+      // Async-prefetch this candidate's neighbors so their mmap pages page-in on the I/O pool while
+      // the gather + SIMD scoring below run — converting serial page faults into overlapped reads.
+      AsyncVectorPrefetcher pf = prefetcher;
+      if (pf != null) {
+        // One task touches the whole neighbor list — batching keeps the pool submit rate low enough
+        // that a 32-thread build doesn't serialise on the queue.
+        pf.prefetch(ctx.tmpIds, nCount);
+      }
       // Gather unvisited neighbours into a batch, then fused-score them in one SIMD call.
       int batch = 0;
       for (int i = 0; i < nCount; i++) {

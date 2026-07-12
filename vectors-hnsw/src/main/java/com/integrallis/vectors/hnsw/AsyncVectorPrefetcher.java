@@ -15,6 +15,9 @@
  */
 package com.integrallis.vectors.hnsw;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -55,6 +58,19 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
   private final AtomicLong failedCount = new AtomicLong();
   private final AtomicReference<Throwable> lastFailure = new AtomicReference<>();
   private final Consumer<Throwable> failureSink;
+  // Zero-copy touch path: when the store exposes stable mmap slices, page-in by reading one byte per
+  // 4 KiB page off the slice instead of calling getVector() — which on a build-safe store allocates
+  // a fresh float[dim] per touch and would reintroduce GC churn on the I/O pool at 100M scale.
+  private final boolean useSegments;
+  private final int rawVectorBytes;
+  private static final long PAGE = 4096;
+  // In-flight (submitted but not yet completed) touch tasks. Prefetch requests are dropped when this
+  // exceeds maxPending, which bounds memory AND queue pressure under a sustained fault load without
+  // the lock contention of a bounded blocking queue: keeping ~maxPending reads outstanding already
+  // saturates the NVMe queue depth, so dropping the excess costs nothing (a missed prefetch is just a
+  // later synchronous fault). A dropped request is graceful degradation, never an error.
+  private final AtomicLong pending = new AtomicLong();
+  private final long maxPending;
 
   /**
    * Creates a prefetcher backed by the given vector source with no failure callback.
@@ -78,8 +94,15 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
   public AsyncVectorPrefetcher(
       RandomAccessVectors vectors, int ioThreads, Consumer<Throwable> failureSink) {
     this.vectors = vectors;
+    // A plain fixed pool (LinkedBlockingQueue, separate put/take locks). Memory and queue depth are
+    // bounded by the pending-drop guard in prefetch(), not by a single-lock bounded queue — the
+    // latter serialises a many-thread build on the queue lock. Keep the submit rate low by batching
+    // a whole neighbor list into one task (see prefetch(int[], int)).
     this.ioPool = Executors.newFixedThreadPool(ioThreads, new PrefetchThreadFactory());
+    this.maxPending = (long) ioThreads * 4;
     this.failureSink = failureSink;
+    this.useSegments = vectors.supportsSegments();
+    this.rawVectorBytes = vectors.dimension() * Float.BYTES;
   }
 
   /**
@@ -97,26 +120,76 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
    */
   public void prefetch(int ordinal) {
     if (ordinal < 0 || ordinal >= vectors.size()) return;
+    if (pending.get() >= maxPending) return; // I/O already saturated — drop (graceful)
+    pending.incrementAndGet();
     submittedCount.incrementAndGet();
     ioPool.submit(
         () -> {
           try {
-            // Touch-read: return value discarded; only the memory access matters.
-            vectors.getVector(ordinal);
+            touch(ordinal);
           } catch (Throwable t) {
-            failedCount.incrementAndGet();
-            lastFailure.set(t);
-            Consumer<Throwable> sink = failureSink;
-            if (sink != null) {
-              try {
-                sink.accept(t);
-              } catch (Throwable sinkFailure) {
-                // A broken sink must not corrupt the pool thread; the failure is already
-                // counted via failedCount/lastFailure for observers.
-              }
-            }
+            record(t);
+          } finally {
+            pending.decrementAndGet();
           }
         });
+  }
+
+  /**
+   * Submits a single async touch for a whole neighbor list — one pool task touches all {@code count}
+   * ordinals in {@code ordinals}. Batching keeps the submit rate ~1/degree of per-neighbor
+   * prefetching, which is what makes prefetch viable during a many-threaded build: per-neighbor
+   * submits at 10^8+ scale serialise every worker on the pool queue. The array is copied because the
+   * caller reuses it after this returns.
+   *
+   * @param ordinals neighbor ordinals to prefetch
+   * @param count number of valid entries at the front of {@code ordinals}
+   */
+  public void prefetch(int[] ordinals, int count) {
+    if (count <= 0) return;
+    if (pending.get() >= maxPending) return; // I/O already saturated — drop (graceful)
+    int[] ids = Arrays.copyOf(ordinals, count);
+    pending.incrementAndGet();
+    submittedCount.incrementAndGet();
+    ioPool.submit(
+        () -> {
+          try {
+            for (int ord : ids) {
+              touch(ord);
+            }
+          } catch (Throwable t) {
+            record(t);
+          } finally {
+            pending.decrementAndGet();
+          }
+        });
+  }
+
+  /** Pages in the vector at {@code ordinal} — zero-copy off the mmap slice when the store supports it. */
+  private void touch(int ordinal) {
+    if (ordinal < 0 || ordinal >= vectors.size()) return;
+    if (useSegments) {
+      MemorySegment seg = vectors.vectorSegment(ordinal);
+      for (long off = 0; off < rawVectorBytes; off += PAGE) {
+        seg.get(ValueLayout.JAVA_BYTE, off);
+      }
+      seg.get(ValueLayout.JAVA_BYTE, rawVectorBytes - 1L);
+    } else {
+      vectors.getVector(ordinal); // in-RAM / non-segment: cheap array access, return discarded
+    }
+  }
+
+  private void record(Throwable t) {
+    failedCount.incrementAndGet();
+    lastFailure.set(t);
+    Consumer<Throwable> sink = failureSink;
+    if (sink != null) {
+      try {
+        sink.accept(t);
+      } catch (Throwable sinkFailure) {
+        // A broken sink must not corrupt the pool thread; already counted via failedCount.
+      }
+    }
   }
 
   /**
