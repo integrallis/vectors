@@ -37,11 +37,11 @@ import org.slf4j.LoggerFactory;
  * <h2>BuoyIndex gossip protocol</h2>
  *
  * <p>Each node holds a local copy of the BuoyIndex. When a node trains or receives a new index, it
- * calls {@link #announceVersion(String)} with the new version hash. {@code GossipClusterMembership}
- * records the new hash, compares it with the previously known cluster version, and — if different —
- * fans out a {@link MembershipEvent.BuoyIndexUpdated} event to all registered listeners on all
- * nodes. Listeners should reload the BuoyIndex from the shared store (S3 or coordinator) when they
- * receive this event.
+ * calls {@link #announceVersion(long, String)} with the new index's monotonic generation and
+ * content hash. {@code GossipClusterMembership} accepts it only if its generation is newer than the
+ * cluster's current one (rejecting stale/reordered announces), and — if accepted — fans out a {@link
+ * MembershipEvent.BuoyIndexUpdated} event to all registered listeners on all nodes. Listeners should
+ * reload the BuoyIndex from the shared store (S3 or coordinator) when they receive this event.
  *
  * <h2>Node join / leave</h2>
  *
@@ -61,8 +61,17 @@ public final class GossipClusterMembership implements ClusterMembership {
   /** The set of live nodes — held in a thread-safe, effectively immutable wrapper. */
   private volatile Set<NodeId> liveNodes;
 
-  /** The cluster-wide "current" BuoyIndex version hash (empty string = no index yet). */
-  private final AtomicReference<String> clusterVersionHash = new AtomicReference<>("");
+  /**
+   * The cluster-wide "current" BuoyIndex version, as a monotonic {@code generation} paired with its
+   * opaque content hash. The generation gives a total order so a delayed/stale announce of an older
+   * index can be rejected rather than clobbering a newer one (the hash alone is unordered). The
+   * sentinel {@code (Long.MIN_VALUE, "")} means "no index yet".
+   */
+  private final AtomicReference<VersionStamp> clusterVersion =
+      new AtomicReference<>(new VersionStamp(Long.MIN_VALUE, ""));
+
+  /** A cluster BuoyIndex version: a monotonic generation plus its opaque content hash. */
+  private record VersionStamp(long generation, String hash) {}
 
   /** All registered change listeners across all nodes sharing this membership instance. */
   private final List<Consumer<MembershipEvent>> listeners = new CopyOnWriteArrayList<>();
@@ -95,22 +104,52 @@ public final class GossipClusterMembership implements ClusterMembership {
   // ---- Gossip primitives ----
 
   /**
-   * Announces that this node has a new BuoyIndex with the given version hash.
+   * Announces that this node has a new BuoyIndex, identified by a monotonic {@code generation} and
+   * its content {@code versionHash}.
    *
-   * <p>If the announced version differs from the cluster-wide known version, a {@link
-   * MembershipEvent.BuoyIndexUpdated} event is fanned out to all registered listeners. Idempotent:
-   * announcing the same version twice produces only one event.
+   * <p><b>Monotonic guard (max-wins):</b> the announcement is accepted only if its {@code generation}
+   * is strictly greater than the cluster's current generation; a stale/delayed announce of an older
+   * generation is ignored so it cannot clobber a newer index (which would tell listeners to reload a
+   * stale one). On acceptance a {@link MembershipEvent.BuoyIndexUpdated} event is fanned out to all
+   * listeners. This is the standard gossip rule (cf. Cassandra generation/version, SWIM incarnation
+   * numbers): the caller must assign a strictly increasing generation per committed index (e.g. the
+   * collection's monotonic commit generation).
    *
-   * @param newVersionHash opaque version identifier (e.g. SHA-256 of serialised centroid bytes)
+   * <p>Idempotent: re-announcing the current generation produces no event. A different hash at the
+   * <em>same</em> generation indicates two distinct indexes claiming one generation — a
+   * monotonicity violation upstream — and is logged and ignored (first-writer-wins), never applied.
+   *
+   * @param generation monotonic, strictly-increasing per committed index (e.g. the commit generation)
+   * @param versionHash opaque content identifier (e.g. SHA-256 of serialised centroid bytes)
    */
-  public void announceVersion(String newVersionHash) {
-    Objects.requireNonNull(newVersionHash, "newVersionHash must not be null");
-    String prev = clusterVersionHash.getAndUpdate(cur -> newVersionHash);
-    if (!newVersionHash.equals(prev)) {
-      LOG.debug(
-          "BuoyIndex version updated: {} → {}", prev.isEmpty() ? "<none>" : prev, newVersionHash);
-      fireEvent(new MembershipEvent.BuoyIndexUpdated(newVersionHash));
-    }
+  public void announceVersion(long generation, String versionHash) {
+    Objects.requireNonNull(versionHash, "versionHash must not be null");
+    VersionStamp next = new VersionStamp(generation, versionHash);
+    VersionStamp prev;
+    do {
+      prev = clusterVersion.get();
+      if (generation < prev.generation()) {
+        LOG.debug(
+            "Ignoring stale BuoyIndex announce: gen {} < current gen {}",
+            generation,
+            prev.generation());
+        return;
+      }
+      if (generation == prev.generation()) {
+        if (!versionHash.equals(prev.hash())) {
+          LOG.warn(
+              "BuoyIndex generation {} announced with conflicting hashes ({} vs {}); keeping the"
+                  + " first and ignoring the later — the generation source is not monotonic",
+              generation,
+              prev.hash(),
+              versionHash);
+        }
+        return; // same generation → idempotent no-op (no event)
+      }
+    } while (!clusterVersion.compareAndSet(prev, next));
+    LOG.debug(
+        "BuoyIndex version updated: gen {} → {} ({})", prev.generation(), generation, versionHash);
+    fireEvent(new MembershipEvent.BuoyIndexUpdated(versionHash));
   }
 
   /**
@@ -118,7 +157,15 @@ public final class GossipClusterMembership implements ClusterMembership {
    * been announced yet.
    */
   public String currentVersionHash() {
-    return clusterVersionHash.get();
+    return clusterVersion.get().hash();
+  }
+
+  /**
+   * Returns the current cluster-wide BuoyIndex generation, or {@link Long#MIN_VALUE} if no version
+   * has been announced yet.
+   */
+  public long currentGeneration() {
+    return clusterVersion.get().generation();
   }
 
   /**

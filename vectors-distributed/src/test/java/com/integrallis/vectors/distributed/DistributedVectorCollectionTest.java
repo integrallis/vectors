@@ -451,7 +451,7 @@ class DistributedVectorCollectionTest {
 
     // One node announces a new BuoyIndex version (simulates completing a k-means training pass)
     String newHash = "sha256-buoy-v2-abc123";
-    gossip.announceVersion(newHash);
+    gossip.announceVersion(2L, newHash);
 
     // All 3 listeners must have received the event within 500 ms
     boolean converged = latch.await(500, TimeUnit.MILLISECONDS);
@@ -477,11 +477,37 @@ class DistributedVectorCollectionTest {
           }
         });
 
-    gossip.announceVersion("v1");
-    gossip.announceVersion("v1"); // duplicate — must not fire a second event
-    gossip.announceVersion("v2"); // new version — must fire
+    gossip.announceVersion(1L, "v1");
+    gossip.announceVersion(1L, "v1"); // same generation — must not fire a second event
+    gossip.announceVersion(2L, "v2"); // newer generation — must fire
 
     assertThat(receivedHashes).containsExactly("v1", "v2");
+  }
+
+  /**
+   * Regression (audit distributed #1): a stale/reordered announce of an OLDER generation used to
+   * unconditionally clobber the newer version and fire {@code BuoyIndexUpdated(oldVersion)}, telling
+   * listeners to reload a stale index. The monotonic guard must reject it (max-wins).
+   */
+  @Test
+  void buoyIndexGossip_rejectsStaleGeneration() {
+    GossipClusterMembership gossip = new GossipClusterMembership(Set.of(new NodeId("mono-n1")));
+    List<String> received = new CopyOnWriteArrayList<>();
+    gossip.registerChangeListener(
+        event -> {
+          if (event instanceof ClusterMembership.MembershipEvent.BuoyIndexUpdated bu) {
+            received.add(bu.newVersionHash());
+          }
+        });
+
+    gossip.announceVersion(5L, "v5"); // accepted
+    gossip.announceVersion(3L, "v3"); // STALE (older gen) — must be ignored, no event, no clobber
+    gossip.announceVersion(5L, "v5b"); // same gen, conflicting hash — ignored (first-writer-wins)
+    gossip.announceVersion(6L, "v6"); // newer gen — accepted
+
+    assertThat(received).as("only strictly-newer generations fire").containsExactly("v5", "v6");
+    assertThat(gossip.currentVersionHash()).isEqualTo("v6");
+    assertThat(gossip.currentGeneration()).isEqualTo(6L);
   }
 
   /** Node join and leave events are propagated to all registered listeners. */
