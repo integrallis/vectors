@@ -16,9 +16,11 @@
 package com.integrallis.vectors.ingest.sources;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.ingest.IngestDoc;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -84,5 +86,43 @@ class DirectorySourceTest {
   void missingDirectoryYieldsEmpty(@TempDir Path tmp) {
     DirectorySource src = new DirectorySource("d", tmp.resolve("nope"));
     assertThat(src.iterator().hasNext()).isFalse();
+  }
+
+  @Test
+  void rejectsFilesLargerThanTheCap(@TempDir Path tmp) throws IOException {
+    // Regression (audit ingest #18): next() used to readAllBytes() unconditionally, so a single
+    // oversized file OOM'd the heap. It now stats the file first and fails fast past the cap.
+    Files.writeString(tmp.resolve("small.txt"), "ok", StandardCharsets.UTF_8); // 2 bytes
+    Files.write(tmp.resolve("big.bin"), new byte[64]); // 64 bytes > 16-byte cap
+    DirectorySource src = new DirectorySource("d", tmp, 0L, "application/octet-stream", false, 16L);
+
+    assertThatThrownBy(() -> src.forEach(d -> {}))
+        .isInstanceOf(UncheckedIOException.class)
+        .hasMessageContaining("per-file cap")
+        .hasMessageContaining("big.bin");
+  }
+
+  @Test
+  void filesAtOrUnderCapAreRead(@TempDir Path tmp) throws IOException {
+    Files.write(tmp.resolve("a.bin"), new byte[16]); // exactly at the cap → allowed
+    DirectorySource src = new DirectorySource("d", tmp, 0L, "application/octet-stream", false, 16L);
+
+    List<IngestDoc> docs = new ArrayList<>();
+    src.forEach(docs::add);
+
+    assertThat(docs).hasSize(1);
+    assertThat(docs.get(0).blob()).hasSize(16);
+  }
+
+  @Test
+  void defaultCapMatchesTurbopufferDocumentLimit() {
+    assertThat(DirectorySource.DEFAULT_MAX_FILE_BYTES).isEqualTo(64L * 1024 * 1024);
+  }
+
+  @Test
+  void rejectsNonPositiveCap(@TempDir Path tmp) {
+    assertThatThrownBy(() -> new DirectorySource("d", tmp, 0L, "text/plain", true, 0L))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("maxFileBytes");
   }
 }

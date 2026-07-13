@@ -41,17 +41,34 @@ import java.util.stream.Stream;
  */
 public final class DirectorySource implements IngestSource {
 
+  /**
+   * Default per-file size cap: 64 MiB. Each file is loaded whole into heap as one {@link IngestDoc},
+   * so an unbounded read of a multi-GB file would OOM the JVM (and no amount of horizontal
+   * worker-partitioning helps — a single file always lands whole on one worker; only streaming or
+   * pre-chunking raises the single-file ceiling). 64 MiB matches TurboPuffer's max-document limit,
+   * and is far above any sane text-embedding unit (embedding models cap at a few thousand tokens),
+   * so it rejects only pathological inputs. Raise it via the {@code maxFileBytes} constructor
+   * parameter for large-blob ingests, or pre-chunk the input.
+   */
+  public static final long DEFAULT_MAX_FILE_BYTES = 64L * 1024 * 1024;
+
   private final String name;
   private final Path root;
   private final long startOffset;
   private final String mime;
   private final boolean asText;
+  private final long maxFileBytes;
 
   public DirectorySource(String name, Path root) {
     this(name, root, 0L, "text/plain", true);
   }
 
   public DirectorySource(String name, Path root, long startOffset, String mime, boolean asText) {
+    this(name, root, startOffset, mime, asText, DEFAULT_MAX_FILE_BYTES);
+  }
+
+  public DirectorySource(
+      String name, Path root, long startOffset, String mime, boolean asText, long maxFileBytes) {
     Objects.requireNonNull(name, "name");
     if (name.isBlank()) {
       throw new IllegalArgumentException("name must be non-blank");
@@ -61,11 +78,15 @@ public final class DirectorySource implements IngestSource {
     if (startOffset < 0) {
       throw new IllegalArgumentException("startOffset must be >= 0");
     }
+    if (maxFileBytes <= 0) {
+      throw new IllegalArgumentException("maxFileBytes must be > 0: " + maxFileBytes);
+    }
     this.name = name;
     this.root = root;
     this.startOffset = startOffset;
     this.mime = mime;
     this.asText = asText;
+    this.maxFileBytes = maxFileBytes;
   }
 
   @Override
@@ -133,6 +154,20 @@ public final class DirectorySource implements IngestSource {
       Path p = inner.next();
       String id = root.relativize(p).toString().replace('\\', '/');
       try {
+        // Stat before reading: a whole-file readAllBytes on a multi-GB file would OOM the heap.
+        // Reject oversized files with a clear, actionable error instead.
+        long size = Files.size(p);
+        if (size > maxFileBytes) {
+          throw new IOException(
+              "file '"
+                  + id
+                  + "' is "
+                  + size
+                  + " bytes, exceeding the per-file cap of "
+                  + maxFileBytes
+                  + " bytes; raise it via the DirectorySource maxFileBytes parameter or pre-chunk"
+                  + " the file into embeddable segments");
+        }
         byte[] bytes = Files.readAllBytes(p);
         if (asText) {
           return new IngestDoc(
