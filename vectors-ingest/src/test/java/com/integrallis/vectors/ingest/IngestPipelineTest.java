@@ -120,6 +120,53 @@ class IngestPipelineTest {
   }
 
   @Test
+  void resumesFromPersistedCursor() throws Exception {
+    // Regression (audit ingest #2): commitBatch wrote cursor.save(...) but the pipeline never called
+    // cursor.load(), so a restart re-ingested the whole source from offset 0 despite durable
+    // progress. With a cursor showing offsets 0..5 already committed, a fresh source must resume at
+    // offset 6.
+    InMemoryCursor cursor = new InMemoryCursor();
+    cursor.save("resume-src", 5L); // last committed 0-based offset
+
+    List<IngestDoc> docs = new ArrayList<>();
+    for (int i = 0; i < 10; i++) docs.add(IngestDoc.text("id-" + i, "x"));
+    IngestSource src = IterableSource.of("resume-src", docs); // fresh source, its own startOffset 0
+    var vs = new CapturingSinks.CapturingVectorSink();
+    var ss = new CapturingSinks.CapturingSidecartSink();
+    BatchPolicy bp = new BatchPolicy(100, 1024L * 1024L, Duration.ofSeconds(5));
+    IngestPipeline p =
+        pipeline(src, new CapturingSinks.FakeEmbedder(2), vs, ss, cursor, bp, ErrorHandler.failFast());
+
+    IngestResult r = p.run();
+
+    assertThat(r.docsCommitted()).as("only offsets 6..9 remain").isEqualTo(4L);
+    assertThat(r.lastCursor()).isEqualTo(9L);
+    assertThat(vs.committed.get(0).docs().get(0).sourceOffset()).isEqualTo(6L);
+    assertThat(vs.committed.get(0).docs().get(0).doc().id()).isEqualTo("id-6");
+  }
+
+  @Test
+  void freshCursorDoesNotSkipAnyDocs() throws Exception {
+    // A brand-new (empty) cursor must not be mistaken for "offset 0 committed" — a fresh run ingests
+    // every doc from the start.
+    InMemoryCursor cursor = new InMemoryCursor();
+    IngestPipeline p =
+        pipeline(
+            source(5),
+            new CapturingSinks.FakeEmbedder(2),
+            new CapturingSinks.CapturingVectorSink(),
+            new CapturingSinks.CapturingSidecartSink(),
+            cursor,
+            new BatchPolicy(100, 1024L * 1024L, Duration.ofSeconds(5)),
+            ErrorHandler.failFast());
+
+    IngestResult r = p.run();
+
+    assertThat(r.docsCommitted()).isEqualTo(5L);
+    assertThat(cursor.load("test")).isEqualTo(4L);
+  }
+
+  @Test
   void embedderFailureSurfacesAndAbortsRun() {
     var vs = new CapturingSinks.CapturingVectorSink();
     var ss = new CapturingSinks.CapturingSidecartSink();

@@ -112,14 +112,22 @@ final class IngestPipeline {
     LinkedBlockingQueue<EmbeddedDoc> queue = new LinkedBlockingQueue<>(queueCapacity);
     AtomicReference<Throwable> producerError = new AtomicReference<>();
     BatchAccumulator accumulator = new BatchAccumulator(batchPolicy);
-    long startOffset = source.startOffset();
-    long lastSavedOffset = startOffset;
+    long sourceStart = source.startOffset();
+    // Durable resume: seed from the persisted cursor so a restart does not re-ingest from the start.
+    // The cursor holds the last committed 0-based offset (0 is also the "no cursor" default), so we
+    // resume at cursor+1 when there is real progress, never earlier than the source's own baseline.
+    long persisted = cursor.load(source.name());
+    long startOffset = Math.max(sourceStart, persisted > 0 ? persisted + 1 : 0);
+    // Docs already committed in a prior run beyond the source's own skip — advanced past in the
+    // producer so they are not re-embedded/re-committed.
+    long resumeSkip = startOffset - sourceStart;
+    long lastSavedOffset = persisted > 0 ? persisted : sourceStart;
 
     try (ExecutorService embedExec = Executors.newVirtualThreadPerTaskExecutor()) {
       Thread producer =
           Thread.ofVirtual()
               .name("ingest-producer-" + source.name())
-              .start(() -> runProducer(queue, embedExec, producerError, startOffset));
+              .start(() -> runProducer(queue, embedExec, producerError, startOffset, resumeSkip));
       try {
         long pollTimeoutNs = Math.max(1_000_000L, batchPolicy.maxLatency().toNanos() / 4);
         while (true) {
@@ -175,10 +183,17 @@ final class IngestPipeline {
       LinkedBlockingQueue<EmbeddedDoc> queue,
       ExecutorService embedExec,
       AtomicReference<Throwable> errorSlot,
-      long startOffset) {
+      long startOffset,
+      long resumeSkip) {
     Iterator<IngestDoc> it = null;
     try {
       it = source.iterator();
+      // The source iterator has already skipped source.startOffset(); advance past any additional
+      // already-committed docs (durable resume) so they are not re-ingested. These are not counted
+      // in docsRead — they were read and committed on the prior run.
+      for (long i = 0; i < resumeSkip && it.hasNext(); i++) {
+        it.next();
+      }
       long offset = startOffset;
       Deque<Future<List<EmbeddedDoc>>> pending = new ArrayDeque<>();
       int maxInFlight = Math.max(1, embeddingConcurrency * 2);
