@@ -51,4 +51,30 @@ public interface RandomAccessVectors {
   default boolean sharesReturnBuffer() {
     return true;
   }
+
+  /**
+   * {@code true} when {@link #vectorSegment(int)} returns a zero-copy {@link
+   * java.lang.foreign.MemorySegment} view of the stored vector (e.g. an mmap-backed store). The
+   * searcher then scores directly off the segment via {@code
+   * VectorUtil.squareDistance(MemorySegment, MemorySegment, int)} / {@code
+   * FusedSimilarity.bulkCompareSegments}, avoiding the per-candidate mmap→{@code float[]} copy that
+   * {@link #getVector(int)} incurs. Mirrors the HNSW {@code RandomAccessVectors} contract.
+   *
+   * <p>Default {@code false}; heap {@code float[][]} stores stay on the {@link #getVector(int)} path.
+   */
+  default boolean supportsSegments() {
+    return false;
+  }
+
+  /**
+   * Returns a zero-copy {@link java.lang.foreign.MemorySegment} view of the vector at {@code
+   * ordinal}, or {@code null} when {@link #supportsSegments()} is {@code false}. When supported, the
+   * segment is a live view into backing storage; callers must not retain it beyond the current scan.
+   *
+   * @param ordinal the 0-based vector index
+   * @return a segment view of the vector, or {@code null} if segments are unsupported
+   */
+  default java.lang.foreign.MemorySegment vectorSegment(int ordinal) {
+    return null;
+  }
 }

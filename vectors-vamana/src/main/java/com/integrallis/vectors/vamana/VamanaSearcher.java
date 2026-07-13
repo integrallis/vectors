@@ -111,6 +111,35 @@ public final class VamanaSearcher {
    */
   private static NodeScorerFactory defaultFullPrecisionFactory(
       RandomAccessVectors vectors, SimilarityFunction sim) {
+    if (vectors.supportsSegments()) {
+      // Zero-copy path (mmap-backed, e.g. MemorySegmentRandomAccessVectors): score directly off the
+      // stored vector's MemorySegment slice — no per-candidate mmap→float[] copy. The scratch is
+      // allocated ONCE here (this factory is built once per searcher) and reused across queries; the
+      // query is uploaded into an off-heap segment exactly once per query, not per candidate. Ports
+      // the segment scorer already used by HnswSearcher.
+      final int dim = vectors.dimension();
+      final java.lang.foreign.Arena arena = java.lang.foreign.Arena.ofAuto();
+      final java.lang.foreign.MemorySegment queryScratchSeg =
+          arena.allocate((long) dim * Float.BYTES);
+      final java.lang.foreign.MemorySegment[] rows = new java.lang.foreign.MemorySegment[BULK_BATCH];
+      final float[] segScratch = new float[BULK_BATCH];
+      return query -> {
+        java.lang.foreign.MemorySegment.copy(
+            query, 0, queryScratchSeg, java.lang.foreign.ValueLayout.JAVA_FLOAT, 0L, dim);
+        return new NodeScorer() {
+          @Override
+          public float score(int nodeId) {
+            return sim.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
+          }
+
+          @Override
+          public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+            for (int i = 0; i < count; i++) rows[i] = vectors.vectorSegment(nodeIds[offset + i]);
+            FusedSimilarity.bulkCompareSegments(sim, query, rows, dim, segScratch, outScores, count);
+          }
+        };
+      };
+    }
     if (vectors.sharesReturnBuffer()) {
       return query -> nodeId -> sim.compare(query, vectors.getVector(nodeId));
     }
