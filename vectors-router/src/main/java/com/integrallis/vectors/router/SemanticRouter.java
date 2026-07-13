@@ -56,6 +56,12 @@ public final class SemanticRouter {
     int detectedDimension = -1;
 
     for (Route route : routes) {
+      // Fail fast on a duplicate route name: a second same-named route would otherwise silently
+      // overwrite the first here and its embeddings below, discarding exemplars we already paid to
+      // embed. A duplicate name is a caller error, not a valid last-wins configuration.
+      if (this.routes.containsKey(route.getName())) {
+        throw new IllegalArgumentException("duplicate route name: '" + route.getName() + "'");
+      }
       this.routes.put(route.getName(), route);
       List<float[]> embeddings = new ArrayList<>();
       for (String reference : route.getReferences()) {
