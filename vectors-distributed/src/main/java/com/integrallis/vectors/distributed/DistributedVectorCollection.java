@@ -52,6 +52,7 @@ public final class DistributedVectorCollection implements VectorCollection {
   private final NodeDirectory directory;
   private final NodeId localNodeId;
   private final NodeCallContext nodeCallContext;
+  private final Duration timeout;
 
   private DistributedVectorCollection(
       VectorCollection localCollection,
@@ -65,6 +66,7 @@ public final class DistributedVectorCollection implements VectorCollection {
     this.directory = directory;
     this.allNodes = List.copyOf(allNodes);
     this.nodeCallContext = nodeCallContext;
+    this.timeout = timeout;
     this.executor = new ScatterGatherExecutor(directory, timeout, nodeCallContext);
   }
 
@@ -146,22 +148,89 @@ public final class DistributedVectorCollection implements VectorCollection {
     return localCollection.documents();
   }
 
-  /** Aggregates sizes across all nodes in the directory. */
+  /**
+   * Aggregates document counts across all nodes. Unlike the old sequential loop (no timeout, no
+   * error handling — one down/slow node hung or failed the whole call), this fans out in parallel
+   * under {@code timeout} and, if any node times out or throws, fails fast with a {@link
+   * PartialResultException} carrying the partial sum and the unreachable nodes. The call is always
+   * bounded by {@code timeout}.
+   *
+   * @throws PartialResultException if one or more nodes were unreachable within the timeout
+   */
   @Override
   public int size() {
-    int total = 0;
-    for (NodeId node : allNodes) {
-      total += directory.clientFor(node).size(nodeCallContext);
-    }
-    return total;
+    return aggregate(c -> c.size(nodeCallContext), "size");
   }
 
-  /** Aggregates physical sizes across all nodes. */
+  /**
+   * Aggregates physical (tombstone-inclusive) document counts across all nodes. Same fault-tolerant,
+   * timeout-bounded semantics as {@link #size()}.
+   *
+   * @throws PartialResultException if one or more nodes were unreachable within the timeout
+   */
   @Override
   public int physicalSize() {
-    int total = 0;
+    return aggregate(c -> c.physicalSize(nodeCallContext), "physicalSize");
+  }
+
+  /**
+   * Fans {@code call} out to every node in parallel, waits up to {@code timeout}, and sums the
+   * successful responses. Timed-out or thrown responses are collected as unreachable nodes; if any
+   * exist the whole aggregate throws {@link PartialResultException} (a partial <em>count</em> is
+   * misleading, so we signal degradation rather than silently under-report) while still carrying the
+   * partial sum and the missing nodes for callers willing to accept a partial answer.
+   */
+  private int aggregate(java.util.function.ToIntFunction<NodeSearchClient> call, String op) {
+    List<java.util.concurrent.Callable<Integer>> tasks = new ArrayList<>(allNodes.size());
     for (NodeId node : allNodes) {
-      total += directory.clientFor(node).physicalSize(nodeCallContext);
+      tasks.add(() -> call.applyAsInt(directory.clientFor(node)));
+    }
+    int total = 0;
+    java.util.Set<NodeId> missing = new java.util.LinkedHashSet<>();
+    try (var vt = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      List<java.util.concurrent.Future<Integer>> futures;
+      try {
+        futures =
+            vt.invokeAll(tasks, timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new PartialResultException(
+            op + " interrupted before completion", 0, java.util.Set.copyOf(allNodes));
+      }
+      for (int i = 0; i < futures.size(); i++) {
+        NodeId node = allNodes.get(i);
+        java.util.concurrent.Future<Integer> f = futures.get(i);
+        if (f.isCancelled()) {
+          missing.add(node); // timed out
+          continue;
+        }
+        try {
+          total += f.get();
+        } catch (java.util.concurrent.ExecutionException e) {
+          Throwable cause = e.getCause();
+          // A security/auth failure is a systematic misconfiguration the caller must see (e.g. a
+          // wrong node bearer token fails on every node), not a transient per-node availability
+          // issue to mask as "unreachable". Propagate it (and any Error) directly.
+          if (cause instanceof SecurityException se) throw se;
+          if (cause instanceof Error err) throw err;
+          missing.add(node); // ordinary/transient failure → exclude this node
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          missing.add(node);
+        }
+      }
+    }
+    if (!missing.isEmpty()) {
+      throw new PartialResultException(
+          op
+              + " incomplete: "
+              + missing.size()
+              + " of "
+              + allNodes.size()
+              + " nodes unreachable within "
+              + timeout,
+          total,
+          missing);
     }
     return total;
   }
