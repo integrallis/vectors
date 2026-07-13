@@ -16,6 +16,8 @@
 package com.integrallis.vectors.optimizer.study;
 
 import com.integrallis.vectors.bench.report.LatencyCollector;
+import com.integrallis.vectors.optimizer.objective.Objective;
+import com.integrallis.vectors.optimizer.objective.ObjectiveWeights;
 import com.integrallis.vectors.optimizer.space.Trial;
 import com.integrallis.vectors.router.RouteMatch;
 import com.integrallis.vectors.router.SemanticRouter;
@@ -51,12 +53,28 @@ public final class RouterThresholdStudy {
 
   private final RouterFactory factory;
   private final List<LabeledQuery> labeled;
+  private final ObjectiveWeights weights;
 
+  /**
+   * Uses default (recall-only) {@link ObjectiveWeights}, so the objective score equals accuracy —
+   * preserving the historical behaviour for callers that do not care about latency/cost trade-offs.
+   */
   public RouterThresholdStudy(RouterFactory factory, List<LabeledQuery> labeled) {
+    this(factory, labeled, ObjectiveWeights.builder().build());
+  }
+
+  /**
+   * @param weights per-axis weights and reference scales used to fold accuracy and measured latency/
+   *     build cost into the composite objective score. With non-zero latency/build weights, faster
+   *     thresholds are preferred among equally-accurate ones.
+   */
+  public RouterThresholdStudy(
+      RouterFactory factory, List<LabeledQuery> labeled, ObjectiveWeights weights) {
     this.factory = Objects.requireNonNull(factory, "factory");
     Objects.requireNonNull(labeled, "labeled");
     if (labeled.isEmpty()) throw new IllegalArgumentException("labeled must be non-empty");
     this.labeled = List.copyOf(labeled);
+    this.weights = Objects.requireNonNull(weights, "weights");
   }
 
   /**
@@ -80,6 +98,11 @@ public final class RouterThresholdStudy {
     }
     lc.compute();
     double accuracy = (double) correct / labeled.size();
+    // Fold accuracy + measured latency/build cost into the composite through the configured weights
+    // instead of hardcoding objectiveScore=accuracy (which silently ignored latency/cost weights).
+    // With default (recall-only) weights this still equals accuracy.
+    double objectiveScore =
+        Objective.score(accuracy, accuracy, accuracy, accuracy, 0.0, lc.p95Us(), buildTimeMs, 0L, weights);
     return new TrialResult(
         trial,
         startedAt,
@@ -94,7 +117,7 @@ public final class RouterThresholdStudy {
         lc.p99Us(),
         buildTimeMs,
         0L,
-        accuracy);
+        objectiveScore);
   }
 
   private static Map<String, Double> extractThresholds(Trial trial) {

@@ -17,6 +17,8 @@ package com.integrallis.vectors.optimizer.study;
 
 import com.integrallis.vectors.bench.report.LatencyCollector;
 import com.integrallis.vectors.cache.SemanticCache;
+import com.integrallis.vectors.optimizer.objective.Objective;
+import com.integrallis.vectors.optimizer.objective.ObjectiveWeights;
 import com.integrallis.vectors.optimizer.space.Trial;
 import java.time.Instant;
 import java.util.List;
@@ -49,9 +51,28 @@ public final class CacheThresholdStudy<V> {
   private final Map<String, float[]> seeds;
   private final List<LabeledQuery> probes;
   private final V seedValue;
+  private final ObjectiveWeights weights;
 
+  /**
+   * Uses default (recall-only) {@link ObjectiveWeights}, so the objective score equals accuracy —
+   * preserving the historical behaviour for callers that do not weight latency/cost.
+   */
   public CacheThresholdStudy(
       CacheFactory<V> factory, Map<String, float[]> seeds, List<LabeledQuery> probes, V seedValue) {
+    this(factory, seeds, probes, seedValue, ObjectiveWeights.builder().build());
+  }
+
+  /**
+   * @param weights per-axis weights and reference scales used to fold accuracy and measured latency/
+   *     build cost into the composite objective score (previously hardcoded to accuracy, silently
+   *     ignoring latency/cost weights).
+   */
+  public CacheThresholdStudy(
+      CacheFactory<V> factory,
+      Map<String, float[]> seeds,
+      List<LabeledQuery> probes,
+      V seedValue,
+      ObjectiveWeights weights) {
     this.factory = Objects.requireNonNull(factory, "factory");
     Objects.requireNonNull(seeds, "seeds");
     Objects.requireNonNull(probes, "probes");
@@ -59,6 +80,7 @@ public final class CacheThresholdStudy<V> {
     this.seeds = Map.copyOf(seeds);
     this.probes = List.copyOf(probes);
     this.seedValue = seedValue;
+    this.weights = Objects.requireNonNull(weights, "weights");
   }
 
   /** Executes one trial: build the cache, seed it, probe it, score accuracy. */
@@ -101,6 +123,12 @@ public final class CacheThresholdStudy<V> {
       }
       lc.compute();
       double accuracy = (double) correct / probes.size();
+      // Route the composite through the configured weights rather than hardcoding it to accuracy,
+      // so latency/build-cost weights actually influence which threshold wins. Default (recall-only)
+      // weights keep objectiveScore == accuracy.
+      double objectiveScore =
+          Objective.score(
+              accuracy, accuracy, accuracy, accuracy, 0.0, lc.p95Us(), buildTimeMs, 0L, weights);
       return new TrialResult(
           trial,
           startedAt,
@@ -115,7 +143,7 @@ public final class CacheThresholdStudy<V> {
           lc.p99Us(),
           buildTimeMs,
           0L,
-          accuracy);
+          objectiveScore);
     }
   }
 }
