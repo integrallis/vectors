@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A WAL-durable, multi-cluster vector collection that coordinates {@link TieredCluster}s routed by
@@ -47,6 +49,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * committed state survives a crash.
  */
 public final class DistributedVectorCollection implements AutoCloseable {
+
+  private static final Logger LOG = LoggerFactory.getLogger(DistributedVectorCollection.class);
 
   // ─── WAL record tags ─────────────────────────────────────────────────────
   private static final byte TAG_ADD = 1;
@@ -518,7 +522,9 @@ public final class DistributedVectorCollection implements AutoCloseable {
       try {
         clusters[c].evictToTier(tiers.get(c), t3Backend);
       } catch (java.io.IOException e) {
-        // Log and continue — tier promotion/demotion failure should not break commit
+        // Tier promotion/demotion failure must not break commit, but it must be visible: a cluster
+        // that silently fails to persist/demote is otherwise invisible to operators.
+        LOG.warn("tier eviction failed for cluster {} (continuing commit)", c, e);
       }
     }
   }

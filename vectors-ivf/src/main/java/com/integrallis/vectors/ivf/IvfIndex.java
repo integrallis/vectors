@@ -200,7 +200,11 @@ public final class IvfIndex implements Closeable {
         float lb = centroidL2 - radii[cid];
         if (lb > 0f) {
           float lbSq = lb * lb;
-          if (lbSq >= -heap.worst()) break; // route() sorted ascending, so no later cluster fits
+          // Skip (don't break) this cluster: with SOAR spill (gamma>0), routeWithSpillDistances
+          // appends spill clusters after the primaries WITHOUT preserving ascending distance order,
+          // so a nearer cluster can appear later. Breaking here would drop true neighbors living in a
+          // late-but-near spill cluster; continue only prunes the individual cluster that can't win.
+          if (lbSq >= -heap.worst()) continue;
         }
       }
 
@@ -265,7 +269,11 @@ public final class IvfIndex implements Closeable {
         if (euclidean) {
           score = -out[j];
         } else if (cosine) {
-          score = (float) (out[j] / Math.sqrt((double) queryNormSq * (double) vectorNormsSq[ord]));
+          // Guard the zero-norm case: a zero query or zero stored vector makes the denominator 0,
+          // which yields NaN. NaN then slips past `score < minScore` (always false for NaN) and
+          // poisons TopKHeap ordering. Convention: cosine of a zero vector is 0 (no direction).
+          double denom = Math.sqrt((double) queryNormSq * (double) vectorNormsSq[ord]);
+          score = denom > 0.0 ? (float) (out[j] / denom) : 0f;
         } else {
           score = out[j];
         }
