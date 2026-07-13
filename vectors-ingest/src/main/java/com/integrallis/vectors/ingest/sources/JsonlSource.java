@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.integrallis.vectors.ingest.IngestDoc;
 import com.integrallis.vectors.ingest.IngestSource;
 import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -102,7 +103,15 @@ public final class JsonlSource implements IngestSource {
     return new Iter(reader, startOffset, skipMalformed, malformedLineObserver);
   }
 
-  private static final class Iter implements Iterator<IngestDoc> {
+  /**
+   * Iterator over the JSONL file. Implements {@link Closeable} so a caller that abandons iteration
+   * early (a chunk/batch limit, a downstream error, a {@code break}) can release the file descriptor
+   * deterministically — the previous behavior closed the reader only on natural EOF or an
+   * {@code IOException}, leaking one FD per aborted source. The pipeline closes it in a {@code
+   * finally}; {@link #close()} is idempotent and, once closed, {@link #hasNext()} short-circuits to
+   * {@code false} rather than touching the closed reader.
+   */
+  private static final class Iter implements Iterator<IngestDoc>, Closeable {
     private final BufferedReader reader;
     private final boolean skipMalformed;
     private final LongConsumer malformedObserver;
@@ -110,6 +119,7 @@ public final class JsonlSource implements IngestSource {
     private long emitted;
     private long skipRemaining;
     private IngestDoc next;
+    private boolean closed;
 
     Iter(BufferedReader reader, long skip, boolean skipMalformed, LongConsumer obs) {
       this.reader = reader;
@@ -121,6 +131,7 @@ public final class JsonlSource implements IngestSource {
     @Override
     public boolean hasNext() {
       if (next != null) return true;
+      if (closed) return false;
       try {
         String line;
         while ((line = reader.readLine()) != null) {
@@ -144,13 +155,10 @@ public final class JsonlSource implements IngestSource {
           next = parsed;
           return true;
         }
-        reader.close();
+        closeQuietly();
         return false;
       } catch (IOException e) {
-        try {
-          reader.close();
-        } catch (IOException ignored) {
-        }
+        closeQuietly();
         throw new UncheckedIOException(e);
       }
     }
@@ -161,6 +169,24 @@ public final class JsonlSource implements IngestSource {
       IngestDoc out = next;
       next = null;
       return out;
+    }
+
+    @Override
+    public void close() throws IOException {
+      if (closed) return;
+      closed = true;
+      reader.close();
+    }
+
+    /** Idempotent best-effort close used on the internal EOF / error paths. */
+    private void closeQuietly() {
+      if (closed) return;
+      closed = true;
+      try {
+        reader.close();
+      } catch (IOException ignored) {
+        // best effort — the caller is already handling EOF or propagating the original IOException
+      }
     }
   }
 

@@ -19,12 +19,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.integrallis.vectors.ingest.IngestDoc;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Tag;
@@ -126,5 +128,52 @@ class JsonlSourceTest {
     src.forEach(docs::add);
     assertThat(docs).extracting(IngestDoc::id).containsExactly("a", "b");
     assertThat(observed.get()).isEqualTo(2L);
+  }
+
+  @Test
+  void earlyCloseReleasesFileDescriptor(@TempDir Path tmp) throws Exception {
+    // Regression: the reader used to close only on natural EOF or IOException; abandoning iteration
+    // after reading a prefix leaked one FD. The iterator is now Closeable and close() releases the
+    // underlying reader deterministically. We reflect the private reader to prove the FD is gone
+    // (a read on a closed BufferedReader throws "Stream closed") — an FD count is not portable.
+    Path file = tmp.resolve("docs.jsonl");
+    Files.writeString(
+        file,
+        "{\"id\":\"a\",\"text\":\"x\"}\n{\"id\":\"b\",\"text\":\"y\"}\n{\"id\":\"c\",\"text\":\"z\"}\n",
+        StandardCharsets.UTF_8);
+    JsonlSource src = new JsonlSource("d", file);
+
+    Iterator<IngestDoc> it = src.iterator();
+    assertThat(it).isInstanceOf(Closeable.class);
+    assertThat(it.next().id()).isEqualTo("a"); // consume only a prefix, then abandon
+
+    java.lang.reflect.Field readerField = it.getClass().getDeclaredField("reader");
+    readerField.setAccessible(true);
+    java.io.BufferedReader reader = (java.io.BufferedReader) readerField.get(it);
+
+    ((Closeable) it).close();
+
+    assertThatThrownBy(reader::read)
+        .as("reader must be closed after Iter.close()")
+        .isInstanceOf(IOException.class)
+        .hasMessageContaining("Stream closed");
+  }
+
+  @Test
+  void closeIsIdempotentAndStopsIteration(@TempDir Path tmp) throws Exception {
+    Path file = tmp.resolve("docs.jsonl");
+    Files.writeString(
+        file, "{\"id\":\"a\",\"text\":\"x\"}\n{\"id\":\"b\",\"text\":\"y\"}\n", StandardCharsets.UTF_8);
+    JsonlSource src = new JsonlSource("d", file);
+
+    Iterator<IngestDoc> it = src.iterator();
+    assertThat(it.next().id()).isEqualTo("a"); // consume the buffered doc so `next` is cleared
+
+    Closeable c = (Closeable) it;
+    c.close();
+    c.close(); // second close must not throw
+
+    assertThat(it.hasNext()).as("closed iterator yields nothing further").isFalse();
+    assertThatThrownBy(it::next).isInstanceOf(java.util.NoSuchElementException.class);
   }
 }

@@ -138,4 +138,98 @@ class IngestPipelineTest {
       assertThat(e).hasMessageContaining("simulated embed failure");
     }
   }
+
+  @Test
+  void producerClosesSourceIteratorOnHappyPath() throws Exception {
+    // Regression: a source whose iterator holds a resource (e.g. JsonlSource's file descriptor) is
+    // only self-closed on natural EOF by some implementations. The producer must close it too.
+    var src = new TrackingCloseableSource(10);
+    var vs = new CapturingSinks.CapturingVectorSink();
+    var ss = new CapturingSinks.CapturingSidecartSink();
+    var emb = new CapturingSinks.FakeEmbedder(3);
+    BatchPolicy bp = new BatchPolicy(4, 1024L * 1024L, Duration.ofSeconds(5));
+    IngestPipeline p =
+        pipeline(src, emb, vs, ss, new InMemoryCursor(), bp, ErrorHandler.failFast());
+
+    p.run();
+
+    assertThat(src.iteratorClosed()).as("source iterator closed after a clean run").isTrue();
+  }
+
+  @Test
+  void producerClosesSourceIteratorOnEarlyAbort() {
+    // The leak scenario: iteration is abandoned mid-stream because embedding fails. The producer's
+    // finally block must still close the iterator, releasing its resources.
+    var src = new TrackingCloseableSource(40);
+    var vs = new CapturingSinks.CapturingVectorSink();
+    var ss = new CapturingSinks.CapturingSidecartSink();
+    var emb = new CapturingSinks.FakeEmbedder(2);
+    emb.failNext = true;
+    BatchPolicy bp = new BatchPolicy(4, 1024L * 1024L, Duration.ofSeconds(5));
+    IngestPipeline p =
+        pipeline(src, emb, vs, ss, new InMemoryCursor(), bp, ErrorHandler.failFast());
+
+    try {
+      p.run();
+    } catch (Exception ignored) {
+      // abort is expected; the point is the iterator still gets closed
+    }
+
+    assertThat(src.iteratorClosed()).as("source iterator closed even on early abort").isTrue();
+  }
+
+  /** An {@link IngestSource} whose iterator is {@link java.io.Closeable} and records close(). */
+  private static final class TrackingCloseableSource implements IngestSource {
+    private final List<IngestDoc> docs;
+    private final java.util.concurrent.atomic.AtomicBoolean closed =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    TrackingCloseableSource(int n) {
+      docs = new ArrayList<>(n);
+      for (int i = 0; i < n; i++) docs.add(IngestDoc.text("id-" + i, "text-" + i));
+    }
+
+    boolean iteratorClosed() {
+      return closed.get();
+    }
+
+    @Override
+    public String name() {
+      return "tracking";
+    }
+
+    @Override
+    public java.util.Iterator<IngestDoc> iterator() {
+      return new CloseableIterator(docs.iterator(), closed);
+    }
+
+    /** Iterator + Closeable (a named type, so it is actually {@code instanceof AutoCloseable}). */
+    private static final class CloseableIterator
+        implements java.util.Iterator<IngestDoc>, java.io.Closeable {
+      private final java.util.Iterator<IngestDoc> inner;
+      private final java.util.concurrent.atomic.AtomicBoolean closed;
+
+      CloseableIterator(
+          java.util.Iterator<IngestDoc> inner,
+          java.util.concurrent.atomic.AtomicBoolean closed) {
+        this.inner = inner;
+        this.closed = closed;
+      }
+
+      @Override
+      public boolean hasNext() {
+        return inner.hasNext();
+      }
+
+      @Override
+      public IngestDoc next() {
+        return inner.next();
+      }
+
+      @Override
+      public void close() {
+        closed.set(true);
+      }
+    }
+  }
 }

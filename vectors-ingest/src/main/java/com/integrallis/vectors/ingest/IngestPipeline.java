@@ -176,8 +176,9 @@ final class IngestPipeline {
       ExecutorService embedExec,
       AtomicReference<Throwable> errorSlot,
       long startOffset) {
+    Iterator<IngestDoc> it = null;
     try {
-      Iterator<IngestDoc> it = source.iterator();
+      it = source.iterator();
       long offset = startOffset;
       Deque<Future<List<EmbeddedDoc>>> pending = new ArrayDeque<>();
       int maxInFlight = Math.max(1, embeddingConcurrency * 2);
@@ -205,6 +206,16 @@ final class IngestPipeline {
       errorSlot.compareAndSet(null, t);
       lastError.compareAndSet(null, t.getMessage() != null ? t.getMessage() : t.toString());
     } finally {
+      // Release the source iterator's resources (e.g. a JsonlSource file descriptor) whether we
+      // drained it to EOF or aborted early on error/backpressure. Without this, a source whose
+      // iterator only self-closes on natural EOF leaks one FD per aborted ingest.
+      if (it instanceof AutoCloseable ac) {
+        try {
+          ac.close();
+        } catch (Exception closeError) {
+          log.warn("Failed to close source iterator for '{}'", source.name(), closeError);
+        }
+      }
       try {
         queue.put(EOS_SENTINEL);
       } catch (InterruptedException ie) {
