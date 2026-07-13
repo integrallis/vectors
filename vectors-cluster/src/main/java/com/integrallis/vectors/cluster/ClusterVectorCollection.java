@@ -139,6 +139,18 @@ public final class ClusterVectorCollection implements VectorCollection {
 
   // ---- Commit / durability: fan out (no cross-shard atomicity) ----
 
+  /**
+   * Commits each shard's staged writes. <b>NOT cross-shard atomic</b> — this overrides the {@link
+   * VectorCollection#commit()} contract's "atomically installs a new generation" guarantee, which
+   * holds only at the single-shard tier. Shards are committed sequentially with no rollback: if a
+   * shard's {@code commit()} throws part-way through the fan-out, the shards committed before it are
+   * already on their new generation while the rest (including the failed one) remain on the old one,
+   * leaving the cluster in a <em>mixed-generation</em> state. This is an intentional trade-off (a
+   * cross-shard atomic commit would require a two-phase protocol the object-storage tier does not
+   * provide); callers that need all-or-nothing semantics must coordinate at a higher level or retry
+   * the commit (individual shard commits are idempotent enough to re-drive). The exception from the
+   * failing shard propagates so the caller learns the commit did not fully succeed.
+   */
   @Override
   public void commit() {
     for (VectorCollection shard : shards) {
