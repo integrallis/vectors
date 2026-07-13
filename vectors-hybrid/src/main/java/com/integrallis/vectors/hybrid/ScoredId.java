@@ -27,5 +27,10 @@ public record ScoredId(String id, float score) {
 
   public ScoredId {
     Objects.requireNonNull(id, "id");
+    // Reject NaN at the source: a NaN score silently poisons min/max/range in fusion and sorts as
+    // the largest value under Float.compare, wedging garbage at the top of the fused ranking.
+    if (Float.isNaN(score)) {
+      throw new IllegalArgumentException("score must not be NaN for id: " + id);
+    }
   }
 }
