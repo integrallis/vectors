@@ -89,6 +89,26 @@ class DirectorySourceTest {
   }
 
   @Test
+  void fileListIsSnapshotOnFirstAccessNotDoubleWalked(@TempDir Path tmp) throws IOException {
+    // Regression (audit ingest #18, double-walk): estimatedSize() and iterator() each used to
+    // full-walk+sort the tree. The list is now walked once and reused. Observable via a file added
+    // after first access: it must NOT appear (the snapshot is pinned), and both estimatedSize() and
+    // iteration reflect the same snapshot.
+    Files.writeString(tmp.resolve("a.txt"), "a", StandardCharsets.UTF_8);
+    Files.writeString(tmp.resolve("b.txt"), "b", StandardCharsets.UTF_8);
+    DirectorySource src = new DirectorySource("d", tmp);
+
+    assertThat(src.estimatedSize()).hasValue(2); // first walk snapshots {a, b}
+
+    Files.writeString(tmp.resolve("c.txt"), "c", StandardCharsets.UTF_8); // added after the snapshot
+    assertThat(src.estimatedSize()).as("snapshot is reused, not re-walked").hasValue(2);
+
+    List<IngestDoc> docs = new ArrayList<>();
+    src.forEach(docs::add);
+    assertThat(docs).extracting(IngestDoc::id).containsExactly("a.txt", "b.txt");
+  }
+
+  @Test
   void rejectsFilesLargerThanTheCap(@TempDir Path tmp) throws IOException {
     // Regression (audit ingest #18): next() used to readAllBytes() unconditionally, so a single
     // oversized file OOM'd the heap. It now stats the file first and fails fast past the cap.

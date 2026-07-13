@@ -58,6 +58,11 @@ public final class DirectorySource implements IngestSource {
   private final String mime;
   private final boolean asText;
   private final long maxFileBytes;
+  // Snapshot of the walked+sorted file list, computed once and reused. Without it, estimatedSize()
+  // and iterator() each full-walk+sort the tree (and every re-iteration for resume walks again).
+  // Snapshotting also pins a stable file set/order across re-iterations, which is exactly what
+  // resume-by-offset relies on. Volatile with a benign compute race (the walk is idempotent).
+  private volatile List<Path> cachedFiles;
 
   public DirectorySource(String name, Path root) {
     this(name, root, 0L, "text/plain", true);
@@ -123,17 +128,25 @@ public final class DirectorySource implements IngestSource {
   }
 
   private List<Path> listFiles() throws IOException {
+    List<Path> cached = cachedFiles;
+    if (cached != null) {
+      return cached;
+    }
+    List<Path> snapshot;
     if (!Files.exists(root)) {
-      return List.of();
+      snapshot = List.of();
+    } else {
+      try (Stream<Path> walk = Files.walk(root)) {
+        List<Path> all = new ArrayList<>();
+        walk.filter(Files::isRegularFile)
+            .filter(p -> !p.getFileName().toString().startsWith("."))
+            .forEach(all::add);
+        all.sort((a, b) -> root.relativize(a).toString().compareTo(root.relativize(b).toString()));
+        snapshot = List.copyOf(all);
+      }
     }
-    try (Stream<Path> walk = Files.walk(root)) {
-      List<Path> all = new ArrayList<>();
-      walk.filter(Files::isRegularFile)
-          .filter(p -> !p.getFileName().toString().startsWith("."))
-          .forEach(all::add);
-      all.sort((a, b) -> root.relativize(a).toString().compareTo(root.relativize(b).toString()));
-      return all;
-    }
+    cachedFiles = snapshot;
+    return snapshot;
   }
 
   private final class Iter implements Iterator<IngestDoc> {
