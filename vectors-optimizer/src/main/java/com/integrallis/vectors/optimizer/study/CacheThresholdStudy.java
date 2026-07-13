@@ -114,12 +114,16 @@ public final class CacheThresholdStudy<V> {
         long t0 = System.nanoTime();
         Optional<SemanticCache.Hit<V>> hit = cache.lookup(q.embedding());
         lc.record(System.nanoTime() - t0);
-        // A "hit" matches the expected label by convention: the seed was put under that key,
-        // and lookup returning the same key counts as success. Since lookup returns Hit<V>
-        // (value only), we infer correctness via threshold semantics: if expected != null we
-        // expect a hit; if expected == null we expect a miss.
-        boolean expectsHit = q.expectedLabel() != null;
-        if (hit.isPresent() == expectsHit) correct++;
+        // Score the CORRECT key, not merely "some hit". A miss is correct iff no label was
+        // expected; a hit is correct iff its matched key equals the expected label. This rejects a
+        // threshold that returns a wrong cached answer (a hit for the wrong key), which "any hit
+        // counts" would have scored as success and silently optimized for hit-rate over accuracy.
+        String expected = q.expectedLabel();
+        boolean correctThisProbe =
+            expected == null
+                ? hit.isEmpty()
+                : hit.isPresent() && expected.equals(hit.get().key());
+        if (correctThisProbe) correct++;
       }
       lc.compute();
       double accuracy = (double) correct / probes.size();

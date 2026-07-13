@@ -81,11 +81,13 @@ public interface SemanticCache<V> extends AutoCloseable {
   /**
    * A semantic-cache hit.
    *
+   * @param key the exact key of the matched entry (the key it was {@link #put} under); lets callers
+   *     tell <em>which</em> cached entry answered a near-duplicate lookup, not just its payload
    * @param value the stored payload
    * @param score similarity score between the lookup embedding and the matched entry
    * @param <V> payload type
    */
-  record Hit<V>(V value, double score) {}
+  record Hit<V>(String key, V value, double score) {}
 
   /**
    * A semantic-cache entry to insert.

@@ -112,4 +112,28 @@ class CacheThresholdStudyTest {
     // so any threshold in (0.80, 0.95] gives perfect accuracy. The mid-range optimum is ~0.875.
     assertThat(bestThreshold).isBetween(0.80, 0.95);
   }
+
+  @Test
+  void scoresCorrectKeyNotAnyHit() {
+    // Regression (audit optimizer #9): scoring counted any present hit as correct, never comparing
+    // the matched key to the expected label. With two seeded keys, a probe co-located with key-B
+    // but LABELED key-A returns key-B — a wrong cached answer. "Any hit counts" scores it correct
+    // (accuracy 1.0); correct-key scoring rejects it (accuracy 0.5).
+    Map<String, float[]> seeds = new LinkedHashMap<>();
+    seeds.put("key-A", new float[] {1f, 0f, 0f, 0f});
+    seeds.put("key-B", new float[] {0f, 1f, 0f, 0f});
+    List<LabeledQuery> probes =
+        List.of(
+            LabeledQuery.cacheProbe("near-A", new float[] {1f, 0f, 0f, 0f}, "key-A"), // → key-A ✓
+            LabeledQuery.cacheProbe("near-B", new float[] {0f, 1f, 0f, 0f}, "key-A")); // → key-B ✗
+
+    CacheThresholdStudy<String> study =
+        new CacheThresholdStudy<>(factory(), seeds, probes, "value");
+    // threshold 0.5 admits both hits (both score 1.0); the second returns the wrong key.
+    TrialResult tr = study.runOne(new Trial("t", Map.of("threshold", 0.5)));
+
+    assertThat(tr.recallAtK())
+        .as("only the correct-key probe counts; the wrong-key hit does not")
+        .isEqualTo(0.5);
+  }
 }
