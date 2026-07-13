@@ -134,4 +134,79 @@ class R2KeyCursorTest {
     R2KeyCursor c = new R2KeyCursor(backend);
     assertThatThrownBy(() -> c.save("s", -1L)).isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  void inMemoryOffsetNotAdvancedWhenDurableWriteThrows() throws Exception {
+    // Regression: save() used to advance the in-memory map BEFORE the durable conditionalPut, and
+    // the rollback lived only on the CAS-failure branch. If conditionalPut threw an IOException the
+    // map was left ahead of storage, so load() would report an offset that was never persisted —
+    // a later unrelated save could then persist it, silently skipping un-ingested docs.
+    HeapStorageBackend delegate = new HeapStorageBackend();
+    ThrowingOnPutBackend backend = new ThrowingOnPutBackend(delegate);
+
+    R2KeyCursor c = new R2KeyCursor(backend);
+    backend.failPuts = false;
+    c.save("s", 5L); // establish a durable baseline of 5
+    assertThat(c.load("s")).isEqualTo(5L);
+
+    backend.failPuts = true;
+    assertThatThrownBy(() -> c.save("s", 50L)).isInstanceOf(java.io.IOException.class);
+
+    // The failed durable write must NOT have advanced the in-memory offset.
+    assertThat(c.load("s")).as("offset stays at last durable value after a failed put").isEqualTo(5L);
+
+    // And a fresh cursor (reading only durable state) agrees the offset is still 5.
+    backend.failPuts = false;
+    assertThat(new R2KeyCursor(backend).load("s")).isEqualTo(5L);
+  }
+
+  /** Forwards to a real backend but can be toggled to throw {@link java.io.IOException} on put. */
+  private static final class ThrowingOnPutBackend
+      implements com.integrallis.vectors.storage.backend.StorageBackend {
+    private final com.integrallis.vectors.storage.backend.StorageBackend delegate;
+    boolean failPuts;
+
+    ThrowingOnPutBackend(com.integrallis.vectors.storage.backend.StorageBackend delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public ConditionalPutResult conditionalPut(String key, byte[] value, String expectedEtag)
+        throws java.io.IOException {
+      if (failPuts) {
+        throw new java.io.IOException("simulated durable-write failure");
+      }
+      return delegate.conditionalPut(key, value, expectedEtag);
+    }
+
+    @Override
+    public void put(String key, byte[] value) throws java.io.IOException {
+      delegate.put(key, value);
+    }
+
+    @Override
+    public byte[] get(String key) throws java.io.IOException {
+      return delegate.get(key);
+    }
+
+    @Override
+    public StoredValue getWithEtag(String key) throws java.io.IOException {
+      return delegate.getWithEtag(key);
+    }
+
+    @Override
+    public byte[] getRange(String key, long offset, int length) throws java.io.IOException {
+      return delegate.getRange(key, offset, length);
+    }
+
+    @Override
+    public java.util.List<String> list(String prefix) throws java.io.IOException {
+      return delegate.list(prefix);
+    }
+
+    @Override
+    public void delete(String key) throws java.io.IOException {
+      delegate.delete(key);
+    }
+  }
 }

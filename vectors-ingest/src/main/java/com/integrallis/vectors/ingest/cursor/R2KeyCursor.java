@@ -74,18 +74,18 @@ public final class R2KeyCursor implements IngestCursor {
     }
     synchronized (writeLock) {
       ensureLoaded();
-      Long previous = offsets.put(sourceName, offset);
-      byte[] payload = serialise();
+      // Build the payload from a snapshot that includes the pending (sourceName, offset) WITHOUT
+      // mutating the shared map. The in-memory state is advanced only after the durable write
+      // succeeds, so any failure — a CAS conflict OR an IOException thrown by conditionalPut —
+      // leaves the map exactly matching durable storage (no rollback needed, no window where
+      // load() reports an offset that was never persisted).
+      byte[] payload = serialiseWith(sourceName, offset);
       StorageBackend.ConditionalPutResult r = backend.conditionalPut(key, payload, etag);
       if (!r.succeeded()) {
-        if (previous == null) {
-          offsets.remove(sourceName);
-        } else {
-          offsets.put(sourceName, previous);
-        }
         throw new ConcurrentModificationException(
             "cursor key '" + key + "' was modified by another writer");
       }
+      offsets.put(sourceName, offset);
       etag = r.newEtag();
     }
   }
@@ -111,8 +111,20 @@ public final class R2KeyCursor implements IngestCursor {
   }
 
   private byte[] serialise() {
+    return serialiseWith(null, 0L);
+  }
+
+  /**
+   * Serialises the committed offsets, optionally overlaying a pending {@code (extraKey,
+   * extraOffset)} entry without mutating the shared map. Passing a {@code null} key serialises the
+   * committed state as-is.
+   */
+  private byte[] serialiseWith(String extraKey, long extraOffset) {
     ObjectNode root = MAPPER.createObjectNode();
     offsets.forEach(root::put);
+    if (extraKey != null) {
+      root.put(extraKey, extraOffset);
+    }
     try {
       return MAPPER.writeValueAsBytes(root);
     } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
