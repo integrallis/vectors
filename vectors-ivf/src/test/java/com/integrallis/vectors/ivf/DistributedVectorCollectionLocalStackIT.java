@@ -163,7 +163,7 @@ class DistributedVectorCollectionLocalStackIT {
     try (var col = build(vecs, ids(80), walDir, t3Backend)) {
       col.commit();
     }
-    List<String> keys = t3Backend.list("cluster-");
+    List<String> keys = t3Backend.list("gen-");
     assertThat(keys).isNotEmpty();
   }
 
@@ -182,9 +182,9 @@ class DistributedVectorCollectionLocalStackIT {
       col.commit();
     }
 
-    // The cluster-0 key was written by the commit; a conditional put asserting it does not exist
-    // must fail.
-    String key = "cluster-0";
+    // The gen-0/cluster-0 key was written by the commit; a conditional put asserting it does not
+    // exist must fail.
+    String key = "gen-0/cluster-0";
     byte[] originalBytes = t3Backend.get(key);
     assertThat(originalBytes).isNotNull();
 

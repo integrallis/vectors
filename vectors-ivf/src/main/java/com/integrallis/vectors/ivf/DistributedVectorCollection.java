@@ -73,7 +73,9 @@ public final class DistributedVectorCollection implements AutoCloseable {
    */
   private static final String MANIFEST_KEY = "_manifest";
 
-  private static final String MANIFEST_COLLECTION_ENTRY = "collection";
+  /** Manifest entry key prefix for a cluster's committed generation ({@code cluster-<id>}). */
+  private static final String MANIFEST_CLUSTER_PREFIX = "cluster-";
+
   private static final int MAX_MANIFEST_ATTEMPTS = 16;
   private static final String DEFAULT_WRITER = "dartvault";
 
@@ -156,7 +158,7 @@ public final class DistributedVectorCollection implements AutoCloseable {
       String writerId,
       GenerationAnnouncer announcer,
       long generation,
-      int vectorCount,
+      Map<String, Long> clusterGenerations,
       long committedAtEpochMs)
       throws IOException {
     ManifestStore store = new ManifestStore(backend, MANIFEST_KEY);
@@ -169,8 +171,8 @@ public final class DistributedVectorCollection implements AutoCloseable {
       StorageManifest next =
           new StorageManifest(
               generation,
-              contentHash(generation, vectorCount),
-              Map.of(MANIFEST_COLLECTION_ENTRY, generation),
+              contentHash(generation, clusterGenerations),
+              clusterGenerations,
               committedAtEpochMs,
               writerId);
       if (store.compareAndPut(next, loaded.etag()) != null) {
@@ -187,9 +189,24 @@ public final class DistributedVectorCollection implements AutoCloseable {
             + " attempts");
   }
 
-  /** Cheap, deterministic fingerprint of the committed state for the manifest content hash. */
-  private static String contentHash(long generation, int vectorCount) {
-    return Integer.toHexString(31 * vectorCount + Long.hashCode(generation));
+  /**
+   * The per-cluster committed generations ({@code cluster-<id> → generation}) for this collection's
+   * current state — the manifest entry map. Only clusters rewritten by a commit advance; a reader
+   * fetches each cluster's payload from its own generation's key.
+   */
+  private Map<String, Long> clusterGenerations() {
+    Map<String, Long> entries = new java.util.TreeMap<>();
+    for (int c = 0; c < k; c++) {
+      entries.put(MANIFEST_CLUSTER_PREFIX + c, clusters[c].t3Generation());
+    }
+    return entries;
+  }
+
+  /**
+   * Cheap, deterministic fingerprint (generation + per-cluster generations) for the content hash.
+   */
+  private static String contentHash(long generation, Map<String, Long> clusterGenerations) {
+    return Integer.toHexString(Long.hashCode(generation) ^ clusterGenerations.hashCode());
   }
 
   /**
@@ -223,12 +240,13 @@ public final class DistributedVectorCollection implements AutoCloseable {
       clusterOrdinals.get(cid).add(i);
     }
 
-    // Build TieredClusters and store T3 snapshots
+    // Build TieredClusters and store T3 snapshots under generation-0 keys.
     float[][] centroids = routingIndex.buoyVectors();
     TieredCluster[] clusters = new TieredCluster[k];
     for (int c = 0; c < k; c++) {
       int[] ords = clusterOrdinals.get(c).stream().mapToInt(Integer::intValue).toArray();
       clusters[c] = new TieredCluster(ClusterPartition.of(c, centroids[c], ords), vectors, metric);
+      clusters[c].setT3Generation(0L);
       clusters[c].storeT3(t3Backend);
     }
 
@@ -246,9 +264,12 @@ public final class DistributedVectorCollection implements AutoCloseable {
     }
     wal.append(encodeCommit(0L));
 
-    // Publish the durable generation-0 manifest so a remote reader can discover the collection.
+    // Publish the durable generation-0 manifest (every cluster at generation 0) so a remote reader
+    // can discover the collection and resolve each cluster's generation-scoped payload key.
+    Map<String, Long> gen0 = new java.util.TreeMap<>();
+    for (int c = 0; c < k; c++) gen0.put(MANIFEST_CLUSTER_PREFIX + c, 0L);
     publishManifest(
-        t3Backend, DEFAULT_WRITER, GenerationAnnouncer.NONE, 0L, n, System.currentTimeMillis());
+        t3Backend, DEFAULT_WRITER, GenerationAnnouncer.NONE, 0L, gen0, System.currentTimeMillis());
 
     return new DistributedVectorCollection(
         routingIndex,
@@ -332,6 +353,15 @@ public final class DistributedVectorCollection implements AutoCloseable {
     StorageManifest manifest = new ManifestStore(t3Backend, MANIFEST_KEY).load().manifest();
     if (!manifest.isEmpty()) {
       resolvedGeneration = Math.max(resolvedGeneration, manifest.generation());
+      // Point each cluster's payload key at the generation the manifest recorded it under, so
+      // read-through fetches the correct generation-scoped object (only rewritten clusters
+      // advanced).
+      for (int c = 0; c < k; c++) {
+        Long clusterGen = manifest.entries().get(MANIFEST_CLUSTER_PREFIX + c);
+        if (clusterGen != null) {
+          clusters[c].setT3Generation(clusterGen);
+        }
+      }
     }
 
     return new DistributedVectorCollection(
@@ -400,7 +430,7 @@ public final class DistributedVectorCollection implements AutoCloseable {
           writerId,
           generationAnnouncer,
           generation,
-          allVectors.size(),
+          clusterGenerations(),
           System.currentTimeMillis());
       applyTierPolicy();
       return;
@@ -422,7 +452,13 @@ public final class DistributedVectorCollection implements AutoCloseable {
     staging.clear();
     stagingIds.clear();
 
-    // Rebuild only clusters that received new vectors
+    // The generation the rewritten clusters are stored under. Only dirty clusters advance to it;
+    // untouched clusters keep their prior generation-scoped objects — so a crash before the
+    // manifest
+    // CAS leaves the live generation's objects intact and orphans only the just-written gen-N ones.
+    generation++;
+
+    // Rebuild only clusters that received new vectors, storing under the new generation's keys.
     float[][] newVecArray = allVectors.toArray(new float[0][]);
     float[][] centroids = routingIndex.buoyVectors();
     for (int c = 0; c < k; c++) {
@@ -433,18 +469,20 @@ public final class DistributedVectorCollection implements AutoCloseable {
       clusters[c] =
           new TieredCluster(
               ClusterPartition.of(c, centroids[c], ords), newVecArray, metric, prevCount);
+      clusters[c].setT3Generation(generation);
       clusters[c].storeT3(t3Backend);
       if (hadT1) clusters[c].materializeT1();
     }
 
-    generation++;
     wal.append(encodeCommit(generation));
+    // Manifest CAS is the object-storage commit point: it atomically switches the per-cluster
+    // generation set (dirty → new, untouched → prior) that readers resolve payload keys from.
     publishManifest(
         t3Backend,
         writerId,
         generationAnnouncer,
         generation,
-        allVectors.size(),
+        clusterGenerations(),
         System.currentTimeMillis());
     applyTierPolicy();
   }

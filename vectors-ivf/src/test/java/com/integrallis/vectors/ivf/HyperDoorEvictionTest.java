@@ -73,7 +73,7 @@ class HyperDoorEvictionTest {
     HeapStorageBackend backend = new HeapStorageBackend();
     tc.evictToTier(TierPolicy.Tier.T2, backend);
 
-    assertThat(backend.get("cluster-T2-7")).isNotNull();
+    assertThat(backend.get("gen-0/cluster-T2-7")).isNotNull();
     assertThat(tc.hasT1()).isFalse();
   }
 
@@ -91,7 +91,7 @@ class HyperDoorEvictionTest {
     HeapStorageBackend backend = new HeapStorageBackend();
     tc.evictToTier(TierPolicy.Tier.T3, backend);
 
-    assertThat(backend.get("cluster-3")).isNotNull();
+    assertThat(backend.get("gen-0/cluster-3")).isNotNull();
     assertThat(tc.hasT1()).isFalse();
   }
 

@@ -113,12 +113,20 @@ class TieredClusterTest {
   }
 
   @Test
-  void storeT3_usesClusterIdAsKey() throws IOException {
+  void storeT3_usesGenerationScopedClusterKey() throws IOException {
     float[][] vecs = randomVecs(10, DIM, 7L);
     TieredCluster tc = new TieredCluster(makePartition(42, 10), vecs, METRIC);
     HeapStorageBackend backend = new HeapStorageBackend();
     tc.storeT3(backend);
-    assertThat(backend.get("cluster-42")).isNotNull();
+    // Payload keys are generation-scoped (gen-<N>/cluster-<id>); a fresh cluster is at generation
+    // 0.
+    assertThat(backend.get("gen-0/cluster-42")).isNotNull();
+    // Advancing the generation redirects the key so the prior generation's object is never
+    // clobbered.
+    tc.setT3Generation(3L);
+    tc.storeT3(backend);
+    assertThat(backend.get("gen-3/cluster-42")).isNotNull();
+    assertThat(backend.get("gen-0/cluster-42")).as("prior generation preserved").isNotNull();
   }
 
   // ─── scan ─────────────────────────────────────────────────────────────────

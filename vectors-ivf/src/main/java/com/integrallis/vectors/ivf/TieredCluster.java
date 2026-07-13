@@ -57,6 +57,17 @@ public final class TieredCluster {
   private final SimilarityFunction metric;
   private final AtomicInteger accessCount;
 
+  /**
+   * The generation this cluster's object-storage payloads are keyed under. Payload keys are
+   * generation-scoped ({@code gen-<N>/cluster-<id>}) so a commit that rewrites only the dirty
+   * clusters never overwrites the live generation's objects: the manifest CAS atomically switches
+   * which per-cluster generation is current, and a partial write leaves the prior generation's
+   * objects intact (crash-atomic, and time-travel readable). Set at store time and on open from the
+   * manifest's per-cluster entry. Volatile: written under the collection write lock, read on the
+   * lock-free read-through path.
+   */
+  private volatile long t3Generation;
+
   /** T1: SQ8-encoded representation; null when not materialised. */
   private volatile CompressedVectors t1Data;
 
@@ -117,6 +128,20 @@ public final class TieredCluster {
   /** Returns the total number of times this cluster has been probed. */
   public int accessCount() {
     return accessCount.get();
+  }
+
+  /** The generation this cluster's object-storage payloads are keyed under. */
+  public long t3Generation() {
+    return t3Generation;
+  }
+
+  /**
+   * Sets the generation for this cluster's object-storage payload keys. Called before {@link
+   * #storeT3} at commit (the new generation) and on {@code open} from the manifest's per-cluster
+   * entry, so reads and writes target the same generation-scoped key.
+   */
+  public void setT3Generation(long generation) {
+    this.t3Generation = generation;
   }
 
   // ─── T1 materialization ───────────────────────────────────────────────────
@@ -306,11 +331,11 @@ public final class TieredCluster {
   // ─── internals ─────────────────────────────────────────────────────────────
 
   private String t3Key() {
-    return "cluster-" + partition.clusterId();
+    return "gen-" + t3Generation + "/cluster-" + partition.clusterId();
   }
 
   private String t2Key() {
-    return "cluster-T2-" + partition.clusterId();
+    return "gen-" + t3Generation + "/cluster-T2-" + partition.clusterId();
   }
 
   /**

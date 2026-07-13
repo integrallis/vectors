@@ -125,8 +125,8 @@ class DistributedVectorCollectionIT {
     try (var col = build(vecs, ids(80), walDir, t3)) {
       col.commit();
     }
-    // Each cluster should have a snapshot stored in T3
-    List<String> keys = t3.list("cluster-");
+    // Each cluster should have a snapshot stored in T3 under a generation-scoped key
+    List<String> keys = t3.list("gen-");
     assertThat(keys).isNotEmpty();
   }
 
@@ -152,7 +152,7 @@ class DistributedVectorCollectionIT {
     }
 
     // Verify the cluster key is already present (written by build → commit → storeT3)
-    String key = "cluster-0";
+    String key = "gen-0/cluster-0";
     byte[] firstBytes = t3.get(key);
     assertThat(firstBytes).isNotNull();
 

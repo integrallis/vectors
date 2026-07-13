@@ -53,6 +53,13 @@ All notable changes to java-vectors are documented here.
   across concurrent writers, with an optional gossip announce bridge (`setGenerationAnnouncer`) into
   `announceVersion`. The WAL remains the authority for local crash recovery; the manifest is the
   discoverable, race-safe object-storage pointer.
+- **DartVault** now writes cluster payloads under **generation-scoped keys** (`gen-<N>/cluster-<id>`)
+  and the manifest records a per-cluster generation map. A commit rewrites only the clusters it
+  dirtied — advancing just those to the new generation (no write amplification) — and the manifest
+  CAS is the atomic commit point that switches the live per-cluster generation set. A crash after the
+  new-generation objects are written but before the manifest CAS therefore leaves the prior
+  generation's objects intact and merely orphans the unreferenced new ones (content-addressed-payload
+  commit, as in Iceberg/Delta/Lance); `open()` resolves each cluster's payload key from the manifest.
 
 ### Fixed
 

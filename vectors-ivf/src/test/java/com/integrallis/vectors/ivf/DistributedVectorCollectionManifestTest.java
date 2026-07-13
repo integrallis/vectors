@@ -75,7 +75,35 @@ class DistributedVectorCollectionManifestTest {
       StorageManifest m = manifest(t3);
       assertThat(m.isEmpty()).isFalse();
       assertThat(m.generation()).isEqualTo(0L);
-      assertThat(m.entries()).containsEntry("collection", 0L);
+      // Per-cluster entries: k=4 clusters (min(params.k()=4, n=20)), all at generation 0.
+      assertThat(m.entries()).containsOnlyKeys("cluster-0", "cluster-1", "cluster-2", "cluster-3");
+      assertThat(m.entries().values()).allMatch(g -> g == 0L);
+    }
+  }
+
+  @Test
+  void commitAdvancesOnlyTheClustersItRewrites(@TempDir Path tmp) throws IOException {
+    HeapStorageBackend t3 = new HeapStorageBackend();
+    try (var col = build(t3, tmp, 20)) {
+      // Add a single vector: only its owning cluster is dirty and advances to generation 1; the
+      // rest
+      // stay at generation 0 (no write amplification, and their gen-0 objects remain intact).
+      col.add("solo", randomVectors(1, 77L)[0]);
+      col.commit();
+
+      StorageManifest m = manifest(t3);
+      assertThat(m.generation()).isEqualTo(1L);
+      long advanced = m.entries().values().stream().filter(g -> g == 1L).count();
+      long unchanged = m.entries().values().stream().filter(g -> g == 0L).count();
+      assertThat(advanced).as("exactly the dirty clusters advanced").isBetween(1L, 4L);
+      assertThat(advanced + unchanged).isEqualTo(4L);
+      assertThat(unchanged)
+          .as("untouched clusters kept their generation-0 objects")
+          .isGreaterThan(0L);
+
+      // The prior generation's payload objects are still present (crash-atomic / time-travel):
+      // a partial write of the new generation could never have clobbered them.
+      assertThat(t3.get("gen-0/cluster-0")).isNotNull();
     }
   }
 
