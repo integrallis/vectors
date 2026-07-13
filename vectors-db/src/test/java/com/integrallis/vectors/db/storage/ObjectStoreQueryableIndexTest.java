@@ -145,7 +145,8 @@ class ObjectStoreQueryableIndexTest {
         gp + FileFormat.QUANTIZED_FILE,
         os -> QuantizedVectorsCodec.encode(codes, quantizer, QuantizerKind.EXTENDED_RABITQ, os),
         500);
-    assertThat(backend.list(gp).stream().filter(key -> key.contains(FileFormat.QUANTIZED_FILE + ".")))
+    assertThat(
+            backend.list(gp).stream().filter(key -> key.contains(FileFormat.QUANTIZED_FILE + ".")))
         .as("codes shipped as multiple chunk objects")
         .hasSizeGreaterThan(1);
     backend.put(gp + FileFormat.VECTORS_FILE, encodeVectorsBin(vecs, dim));

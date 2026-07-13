@@ -39,9 +39,10 @@ import org.slf4j.LoggerFactory;
  * <p>Each node holds a local copy of the BuoyIndex. When a node trains or receives a new index, it
  * calls {@link #announceVersion(long, String)} with the new index's monotonic generation and
  * content hash. {@code GossipClusterMembership} accepts it only if its generation is newer than the
- * cluster's current one (rejecting stale/reordered announces), and — if accepted — fans out a {@link
- * MembershipEvent.BuoyIndexUpdated} event to all registered listeners on all nodes. Listeners should
- * reload the BuoyIndex from the shared store (S3 or coordinator) when they receive this event.
+ * cluster's current one (rejecting stale/reordered announces), and — if accepted — fans out a
+ * {@link MembershipEvent.BuoyIndexUpdated} event to all registered listeners on all nodes.
+ * Listeners should reload the BuoyIndex from the shared store (S3 or coordinator) when they receive
+ * this event.
  *
  * <h2>Node join / leave</h2>
  *
@@ -107,19 +108,20 @@ public final class GossipClusterMembership implements ClusterMembership {
    * Announces that this node has a new BuoyIndex, identified by a monotonic {@code generation} and
    * its content {@code versionHash}.
    *
-   * <p><b>Monotonic guard (max-wins):</b> the announcement is accepted only if its {@code generation}
-   * is strictly greater than the cluster's current generation; a stale/delayed announce of an older
-   * generation is ignored so it cannot clobber a newer index (which would tell listeners to reload a
-   * stale one). On acceptance a {@link MembershipEvent.BuoyIndexUpdated} event is fanned out to all
-   * listeners. This is the standard gossip rule (cf. Cassandra generation/version, SWIM incarnation
-   * numbers): the caller must assign a strictly increasing generation per committed index (e.g. the
-   * collection's monotonic commit generation).
+   * <p><b>Monotonic guard (max-wins):</b> the announcement is accepted only if its {@code
+   * generation} is strictly greater than the cluster's current generation; a stale/delayed announce
+   * of an older generation is ignored so it cannot clobber a newer index (which would tell
+   * listeners to reload a stale one). On acceptance a {@link MembershipEvent.BuoyIndexUpdated}
+   * event is fanned out to all listeners. This is the standard gossip rule (cf. Cassandra
+   * generation/version, SWIM incarnation numbers): the caller must assign a strictly increasing
+   * generation per committed index (e.g. the collection's monotonic commit generation).
    *
    * <p>Idempotent: re-announcing the current generation produces no event. A different hash at the
    * <em>same</em> generation indicates two distinct indexes claiming one generation — a
    * monotonicity violation upstream — and is logged and ignored (first-writer-wins), never applied.
    *
-   * @param generation monotonic, strictly-increasing per committed index (e.g. the commit generation)
+   * @param generation monotonic, strictly-increasing per committed index (e.g. the commit
+   *     generation)
    * @param versionHash opaque content identifier (e.g. SHA-256 of serialised centroid bytes)
    */
   public void announceVersion(long generation, String versionHash) {

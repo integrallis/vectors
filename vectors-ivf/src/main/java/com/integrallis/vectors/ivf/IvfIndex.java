@@ -202,8 +202,10 @@ public final class IvfIndex implements Closeable {
           float lbSq = lb * lb;
           // Skip (don't break) this cluster: with SOAR spill (gamma>0), routeWithSpillDistances
           // appends spill clusters after the primaries WITHOUT preserving ascending distance order,
-          // so a nearer cluster can appear later. Breaking here would drop true neighbors living in a
-          // late-but-near spill cluster; continue only prunes the individual cluster that can't win.
+          // so a nearer cluster can appear later. Breaking here would drop true neighbors living in
+          // a
+          // late-but-near spill cluster; continue only prunes the individual cluster that can't
+          // win.
           if (lbSq >= -heap.worst()) continue;
         }
       }

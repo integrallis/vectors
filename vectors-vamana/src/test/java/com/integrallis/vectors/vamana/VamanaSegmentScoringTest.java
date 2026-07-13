@@ -33,8 +33,8 @@ import org.junit.jupiter.api.Test;
  * #1). The store below reports {@code supportsSegments() == true} and serves {@link
  * #vectorSegment(int)} from an off-heap segment, while its {@link #getVector(int)} THROWS — so a
  * search that reaches this store MUST use the segment path. Without the fix (no segment branch in
- * the scorer factory, and no {@code supportsSegments()} on the vamana interface), the searcher would
- * fall back to {@code getVector} and the search would blow up.
+ * the scorer factory, and no {@code supportsSegments()} on the vamana interface), the searcher
+ * would fall back to {@code getVector} and the search would blow up.
  */
 @Tag("unit")
 class VamanaSegmentScoringTest {
@@ -151,7 +151,8 @@ class VamanaSegmentScoringTest {
       segRecall /= nQueries;
       fltRecall /= nQueries;
 
-      // The zero-copy path must be as accurate as the float[][] path (identical graph, near-identical
+      // The zero-copy path must be as accurate as the float[][] path (identical graph,
+      // near-identical
       // kernels) and genuinely high-recall — proving it computed real distances, not garbage.
       assertThat(segRecall).as("segment-path recall").isGreaterThan(0.95);
       assertThat(segRecall)

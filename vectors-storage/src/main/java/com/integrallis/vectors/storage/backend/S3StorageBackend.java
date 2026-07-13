@@ -133,7 +133,10 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
     }
   }
 
-  /** Part size for multipart uploads. 256 MiB × 10000-part cap = 2.5 TB, ample for a 100M {@code vectors.bin}. */
+  /**
+   * Part size for multipart uploads. 256 MiB × 10000-part cap = 2.5 TB, ample for a 100M {@code
+   * vectors.bin}.
+   */
   private static final int PART_SIZE = 256 << 20;
 
   /**

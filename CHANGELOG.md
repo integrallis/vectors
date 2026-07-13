@@ -33,6 +33,16 @@ All notable changes to java-vectors are documented here.
   O(1) generation-bump reset, replacing a `java.util.BitSet` whose per-query `clear()` zeroed
   all `graph.size()` bits every search (an O(N) cost that scales with corpus size). Mirrors
   hnswlib's `visited_list_pool`; recall/results bit-identical.
+- Zero-copy `MemorySegment` scoring on the **Vamana** disk/mmap search path (parity with the
+  existing HNSW segment path): scores directly off the stored vector's segment slice instead of
+  copying each candidate mmap→`float[]`. Adds `supportsSegments()`/`vectorSegment()` to the Vamana
+  `RandomAccessVectors` interface.
+- `SemanticCache.Hit` now exposes the matched entry's `key`, so callers can tell *which* cached
+  entry answered a near-duplicate lookup, not just its payload.
+- A configurable per-file size cap on `DirectorySource` (`maxFileBytes`, default 64 MiB — matching
+  TurboPuffer's max-document limit) that fails fast on an oversized file instead of OOMing the heap.
+- `PartialResultException` (carrying the partial total plus the unreachable-node set), thrown by the
+  now fault-tolerant, timeout-bounded distributed `size()`/`physicalSize()`.
 
 ### Fixed
 
@@ -51,9 +61,35 @@ All notable changes to java-vectors are documented here.
 - Changed the VCR end-to-end demo to strict playback, migrated its cassettes to
   the current framed local-storage format, and proved default tests do not
   rewrite tracked source fixtures.
+- **Ingest durability/correctness** (module audit): retry no longer duplicates a partially-staged
+  batch (`DistributedVectorSink.addAll` is idempotent); the persisted resume cursor is now loaded on
+  start, so a restart resumes instead of re-ingesting from offset 0; `R2KeyCursor` advances its
+  in-memory offset only *after* the durable write succeeds; `JsonlSource` closes its reader on early
+  abort (FD leak) and the ingest producer closes the source iterator in a `finally`; `DirectorySource`
+  walks the tree once (memoized) instead of once per `estimatedSize()`/`iterator()` call.
+- **Distributed/cluster availability & consistency**: `size()`/`physicalSize()` are now
+  timeout-bounded and fault-tolerant (parallel fan-out, partial-with-signal on node failure) instead
+  of a hang-prone sequential loop; BuoyIndex version gossip applies a monotonic max-wins guard so a
+  stale/reordered announce can no longer clobber a newer index or trigger a stale reload.
+- **Search-quality guards**: hybrid fusion rejects NaN scores at the source (`ScoredId`), preventing
+  top-k poisoning; IVF COSINE search guards a zero stored/query norm (no NaN into the heap, no crash
+  on a zero query); `SemanticRouter` rejects duplicate route names instead of silently overwriting
+  exemplars.
+- **Optimizer**: `GridSampler` log-scale `IntRange` enumerates distinct grid points (no duplicate
+  trials / over-reported `total()`); the router/cache threshold studies now fold accuracy and
+  measured latency/cost through the configured `ObjectiveWeights` instead of hardcoding the objective
+  to accuracy, and `CacheThresholdStudy` scores the correct matched key against the expected label
+  rather than "any hit".
 
 ### Changed
 
 - Rewrote release-facing documentation around the implemented single-process
   CPU scope and removed unsupported performance, scale, distributed, and GPU
   claims.
+- `GossipClusterMembership.announceVersion(String)` → `announceVersion(long generation, String hash)`
+  to carry the monotonic generation the version guard compares on.
+- The router/cache threshold optimizer studies take an `ObjectiveWeights`; the prior constructors
+  delegate with a recall-only default, preserving the previous accuracy-only behaviour.
+- `ClusterVectorCollection.commit()`'s javadoc now documents that it is **not** cross-shard atomic (a
+  mid-fan-out failure can leave shards on different generations) — reconciling the overridden
+  `VectorCollection.commit()` "atomically installs a new generation" contract.

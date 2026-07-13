@@ -39,9 +39,12 @@ public final class GridSampler implements ParamSampler {
   private final long[] strides;
   private final int[] sizes;
   // Per-axis enumerated distinct values, in grid order. Precomputing (instead of computing valueAt
-  // from cardinality on the fly) is what makes a log-scale IntRange correct: rounding log-interpolated
-  // integers collapses many linear indices onto the same value, so the real grid is the DISTINCT set,
-  // not max-min+1 points. sizes[i]/total are derived from these lists so total() never over-reports.
+  // from cardinality on the fly) is what makes a log-scale IntRange correct: rounding
+  // log-interpolated
+  // integers collapses many linear indices onto the same value, so the real grid is the DISTINCT
+  // set,
+  // not max-min+1 points. sizes[i]/total are derived from these lists so total() never
+  // over-reports.
   private final List<List<Object>> axisValues;
   private long cursor;
 
@@ -87,7 +90,8 @@ public final class GridSampler implements ParamSampler {
           for (long idx = 0; idx <= steps; idx++) {
             double t = steps == 0 ? 0.0 : (double) idx / steps;
             int v = (int) Math.round(Math.exp(logMin + t * (logMax - logMin)));
-            // Log interpolation is monotonic non-decreasing, so a consecutive-dedup is a full dedup.
+            // Log interpolation is monotonic non-decreasing, so a consecutive-dedup is a full
+            // dedup.
             if (v != prev) {
               vals.add(v);
               prev = v;

@@ -113,7 +113,8 @@ final class IngestPipeline {
     AtomicReference<Throwable> producerError = new AtomicReference<>();
     BatchAccumulator accumulator = new BatchAccumulator(batchPolicy);
     long sourceStart = source.startOffset();
-    // Durable resume: seed from the persisted cursor so a restart does not re-ingest from the start.
+    // Durable resume: seed from the persisted cursor so a restart does not re-ingest from the
+    // start.
     // The cursor holds the last committed 0-based offset (0 is also the "no cursor" default), so we
     // resume at cursor+1 when there is real progress, never earlier than the source's own baseline.
     long persisted = cursor.load(source.name());

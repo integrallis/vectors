@@ -163,8 +163,8 @@ public final class DistributedVectorCollection implements VectorCollection {
   }
 
   /**
-   * Aggregates physical (tombstone-inclusive) document counts across all nodes. Same fault-tolerant,
-   * timeout-bounded semantics as {@link #size()}.
+   * Aggregates physical (tombstone-inclusive) document counts across all nodes. Same
+   * fault-tolerant, timeout-bounded semantics as {@link #size()}.
    *
    * @throws PartialResultException if one or more nodes were unreachable within the timeout
    */
@@ -177,8 +177,8 @@ public final class DistributedVectorCollection implements VectorCollection {
    * Fans {@code call} out to every node in parallel, waits up to {@code timeout}, and sums the
    * successful responses. Timed-out or thrown responses are collected as unreachable nodes; if any
    * exist the whole aggregate throws {@link PartialResultException} (a partial <em>count</em> is
-   * misleading, so we signal degradation rather than silently under-report) while still carrying the
-   * partial sum and the missing nodes for callers willing to accept a partial answer.
+   * misleading, so we signal degradation rather than silently under-report) while still carrying
+   * the partial sum and the missing nodes for callers willing to accept a partial answer.
    */
   private int aggregate(java.util.function.ToIntFunction<NodeSearchClient> call, String op) {
     List<java.util.concurrent.Callable<Integer>> tasks = new ArrayList<>(allNodes.size());

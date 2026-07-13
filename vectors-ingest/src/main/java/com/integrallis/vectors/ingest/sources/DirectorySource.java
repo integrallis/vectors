@@ -42,13 +42,13 @@ import java.util.stream.Stream;
 public final class DirectorySource implements IngestSource {
 
   /**
-   * Default per-file size cap: 64 MiB. Each file is loaded whole into heap as one {@link IngestDoc},
-   * so an unbounded read of a multi-GB file would OOM the JVM (and no amount of horizontal
-   * worker-partitioning helps — a single file always lands whole on one worker; only streaming or
-   * pre-chunking raises the single-file ceiling). 64 MiB matches TurboPuffer's max-document limit,
-   * and is far above any sane text-embedding unit (embedding models cap at a few thousand tokens),
-   * so it rejects only pathological inputs. Raise it via the {@code maxFileBytes} constructor
-   * parameter for large-blob ingests, or pre-chunk the input.
+   * Default per-file size cap: 64 MiB. Each file is loaded whole into heap as one {@link
+   * IngestDoc}, so an unbounded read of a multi-GB file would OOM the JVM (and no amount of
+   * horizontal worker-partitioning helps — a single file always lands whole on one worker; only
+   * streaming or pre-chunking raises the single-file ceiling). 64 MiB matches TurboPuffer's
+   * max-document limit, and is far above any sane text-embedding unit (embedding models cap at a
+   * few thousand tokens), so it rejects only pathological inputs. Raise it via the {@code
+   * maxFileBytes} constructor parameter for large-blob ingests, or pre-chunk the input.
    */
   public static final long DEFAULT_MAX_FILE_BYTES = 64L * 1024 * 1024;
 

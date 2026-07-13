@@ -64,7 +64,8 @@ final class NeighborSelector {
     // may overwrite the previous return. Stable-array stores (InMemoryVectors) can compare against
     // getVector(id) directly, eliding the per-candidate copy.
     // Zero-copy segment path for mmap-backed stores (MappedBuildVectors): score stored-vs-stored
-    // vectors directly off their slices, allocating no float[] per candidate — the same GC-avoidance
+    // vectors directly off their slices, allocating no float[] per candidate — the same
+    // GC-avoidance
     // that makes the mmap build viable. Otherwise use the heap path (with a scratch copy for
     // shared-buffer stores whose getVector() aliases the previous return).
     boolean useSegments = vectors.supportsSegments();

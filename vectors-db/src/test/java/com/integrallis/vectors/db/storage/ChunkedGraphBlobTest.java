@@ -65,9 +65,7 @@ class ChunkedGraphBlobTest {
     assertThat(total).as("reported total bytes").isEqualTo(expected);
 
     long chunkObjects =
-        backend.list(prefix).stream()
-            .filter(k -> k.contains(FileFormat.GRAPH_FILE + "."))
-            .count();
+        backend.list(prefix).stream().filter(k -> k.contains(FileFormat.GRAPH_FILE + ".")).count();
     assertThat(chunkObjects).as("multiple chunk objects written").isGreaterThan(1);
 
     HnswGraph decoded = ChunkedGraphBlob.openGraph(backend, prefix);

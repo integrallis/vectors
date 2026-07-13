@@ -105,9 +105,9 @@ public final class JsonlSource implements IngestSource {
 
   /**
    * Iterator over the JSONL file. Implements {@link Closeable} so a caller that abandons iteration
-   * early (a chunk/batch limit, a downstream error, a {@code break}) can release the file descriptor
-   * deterministically — the previous behavior closed the reader only on natural EOF or an
-   * {@code IOException}, leaking one FD per aborted source. The pipeline closes it in a {@code
+   * early (a chunk/batch limit, a downstream error, a {@code break}) can release the file
+   * descriptor deterministically — the previous behavior closed the reader only on natural EOF or
+   * an {@code IOException}, leaking one FD per aborted source. The pipeline closes it in a {@code
    * finally}; {@link #close()} is idempotent and, once closed, {@link #hasNext()} short-circuits to
    * {@code false} rather than touching the closed reader.
    */

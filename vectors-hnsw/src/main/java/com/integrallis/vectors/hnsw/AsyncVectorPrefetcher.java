@@ -58,16 +58,19 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
   private final AtomicLong failedCount = new AtomicLong();
   private final AtomicReference<Throwable> lastFailure = new AtomicReference<>();
   private final Consumer<Throwable> failureSink;
-  // Zero-copy touch path: when the store exposes stable mmap slices, page-in by reading one byte per
+  // Zero-copy touch path: when the store exposes stable mmap slices, page-in by reading one byte
+  // per
   // 4 KiB page off the slice instead of calling getVector() — which on a build-safe store allocates
   // a fresh float[dim] per touch and would reintroduce GC churn on the I/O pool at 100M scale.
   private final boolean useSegments;
   private final int rawVectorBytes;
   private static final long PAGE = 4096;
-  // In-flight (submitted but not yet completed) touch tasks. Prefetch requests are dropped when this
+  // In-flight (submitted but not yet completed) touch tasks. Prefetch requests are dropped when
+  // this
   // exceeds maxPending, which bounds memory AND queue pressure under a sustained fault load without
   // the lock contention of a bounded blocking queue: keeping ~maxPending reads outstanding already
-  // saturates the NVMe queue depth, so dropping the excess costs nothing (a missed prefetch is just a
+  // saturates the NVMe queue depth, so dropping the excess costs nothing (a missed prefetch is just
+  // a
   // later synchronous fault). A dropped request is graceful degradation, never an error.
   private final AtomicLong pending = new AtomicLong();
   private final long maxPending;
@@ -136,11 +139,11 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
   }
 
   /**
-   * Submits a single async touch for a whole neighbor list — one pool task touches all {@code count}
-   * ordinals in {@code ordinals}. Batching keeps the submit rate ~1/degree of per-neighbor
+   * Submits a single async touch for a whole neighbor list — one pool task touches all {@code
+   * count} ordinals in {@code ordinals}. Batching keeps the submit rate ~1/degree of per-neighbor
    * prefetching, which is what makes prefetch viable during a many-threaded build: per-neighbor
-   * submits at 10^8+ scale serialise every worker on the pool queue. The array is copied because the
-   * caller reuses it after this returns.
+   * submits at 10^8+ scale serialise every worker on the pool queue. The array is copied because
+   * the caller reuses it after this returns.
    *
    * @param ordinals neighbor ordinals to prefetch
    * @param count number of valid entries at the front of {@code ordinals}
@@ -165,7 +168,10 @@ public final class AsyncVectorPrefetcher implements AutoCloseable {
         });
   }
 
-  /** Pages in the vector at {@code ordinal} — zero-copy off the mmap slice when the store supports it. */
+  /**
+   * Pages in the vector at {@code ordinal} — zero-copy off the mmap slice when the store supports
+   * it.
+   */
   private void touch(int ordinal) {
     if (ordinal < 0 || ordinal >= vectors.size()) return;
     if (useSegments) {

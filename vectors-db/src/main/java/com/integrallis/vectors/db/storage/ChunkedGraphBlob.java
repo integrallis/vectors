@@ -49,12 +49,14 @@ public final class ChunkedGraphBlob {
       throws IOException {
     Objects.requireNonNull(graph, "graph");
     String base = keyPrefix + FileFormat.GRAPH_FILE;
-    return ChunkedBlob.writeStream(backend, base, out -> HnswGraphCodec.encode(graph, out), chunkSize);
+    return ChunkedBlob.writeStream(
+        backend, base, out -> HnswGraphCodec.encode(graph, out), chunkSize);
   }
 
   /**
    * Decodes the graph under {@code keyPrefix + "graph.bin"}, reading chunk objects lazily. Returns
-   * {@code null} if no graph is present (neither a {@code .00000} chunk nor a legacy single object).
+   * {@code null} if no graph is present (neither a {@code .00000} chunk nor a legacy single
+   * object).
    */
   public static HnswGraph openGraph(StorageBackend backend, String keyPrefix) throws IOException {
     Objects.requireNonNull(backend, "backend");

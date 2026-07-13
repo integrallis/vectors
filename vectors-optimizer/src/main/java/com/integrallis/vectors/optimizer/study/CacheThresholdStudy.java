@@ -63,9 +63,9 @@ public final class CacheThresholdStudy<V> {
   }
 
   /**
-   * @param weights per-axis weights and reference scales used to fold accuracy and measured latency/
-   *     build cost into the composite objective score (previously hardcoded to accuracy, silently
-   *     ignoring latency/cost weights).
+   * @param weights per-axis weights and reference scales used to fold accuracy and measured
+   *     latency/ build cost into the composite objective score (previously hardcoded to accuracy,
+   *     silently ignoring latency/cost weights).
    */
   public CacheThresholdStudy(
       CacheFactory<V> factory,
@@ -120,15 +120,14 @@ public final class CacheThresholdStudy<V> {
         // counts" would have scored as success and silently optimized for hit-rate over accuracy.
         String expected = q.expectedLabel();
         boolean correctThisProbe =
-            expected == null
-                ? hit.isEmpty()
-                : hit.isPresent() && expected.equals(hit.get().key());
+            expected == null ? hit.isEmpty() : hit.isPresent() && expected.equals(hit.get().key());
         if (correctThisProbe) correct++;
       }
       lc.compute();
       double accuracy = (double) correct / probes.size();
       // Route the composite through the configured weights rather than hardcoding it to accuracy,
-      // so latency/build-cost weights actually influence which threshold wins. Default (recall-only)
+      // so latency/build-cost weights actually influence which threshold wins. Default
+      // (recall-only)
       // weights keep objectiveScore == accuracy.
       double objectiveScore =
           Objective.score(

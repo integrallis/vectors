@@ -167,7 +167,8 @@ public final class QuantizedVectorsCodec {
     Rotation rotation = quantizer.rotation();
 
     // Header region (common header + quantizer state + rotation) is small (rotation <= a few MB);
-    // build it via ByteBuffer to reuse writeCommonHeader/encodeRotation, then write it to the stream.
+    // build it via ByteBuffer to reuse writeCommonHeader/encodeRotation, then write it to the
+    // stream.
     long rotationSize = rotationEncodedSize(rotation);
     long headerSize = COMMON_HEADER_SIZE + 8L + (long) dimension * Float.BYTES + rotationSize;
     checkSize(headerSize);
@@ -291,7 +292,8 @@ public final class QuantizedVectorsCodec {
     if (in.read() != -1) {
       throw new IOException("quantized.bin has trailing bytes after full decode");
     }
-    return new ExtendedRaBitQuantizedVectors(quantizer, signCodes, magCodes, corrections, dimension);
+    return new ExtendedRaBitQuantizedVectors(
+        quantizer, signCodes, magCodes, corrections, dimension);
   }
 
   private static long rotationDataSize(int tag, int dim) throws IOException {

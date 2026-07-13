@@ -673,8 +673,9 @@ public final class HnswGraphCodec {
 
   /**
    * Decodes a {@code graph.bin} image read sequentially from {@code rawIn}. Unlike {@link
-   * #decode(byte[])} this has no size ceiling. The stream is read up to and including the last graph
-   * byte and is not closed; it must position exactly at end-of-graph (trailing bytes are an error).
+   * #decode(byte[])} this has no size ceiling. The stream is read up to and including the last
+   * graph byte and is not closed; it must position exactly at end-of-graph (trailing bytes are an
+   * error).
    */
   public static HnswGraph decode(InputStream rawIn) throws IOException {
     Objects.requireNonNull(rawIn, "input stream must not be null");
@@ -764,7 +765,11 @@ public final class HnswGraphCodec {
       int degree = readNonNegativeInt(in, "layer 0 degree for node " + i);
       if (degree > maxConnections0) {
         throw new IOException(
-            "graph.bin layer 0 degree " + degree + " for node " + i + " exceeds 2*M = "
+            "graph.bin layer 0 degree "
+                + degree
+                + " for node "
+                + i
+                + " exceeds 2*M = "
                 + maxConnections0);
       }
       loadNeighborsInOrder(in, graph.getNeighbors(i, 0), degree, numNodes, i, 0);
@@ -775,35 +780,59 @@ public final class HnswGraphCodec {
       int numNodesAtLayer = readNonNegativeInt(in, "numNodesAtLayer for layer " + layer);
       if (numNodesAtLayer > numNodes) {
         throw new IOException(
-            "graph.bin numNodesAtLayer " + numNodesAtLayer + " for layer " + layer
-                + " exceeds numNodes " + numNodes);
+            "graph.bin numNodesAtLayer "
+                + numNodesAtLayer
+                + " for layer "
+                + layer
+                + " exceeds numNodes "
+                + numNodes);
       }
       int lastNodeId = -1;
       for (int j = 0; j < numNodesAtLayer; j++) {
         int nodeId = readNonNegativeInt(in, "upper-layer nodeId at layer " + layer);
         if (nodeId >= numNodes) {
           throw new IOException(
-              "graph.bin layer " + layer + " references nodeId " + nodeId + " out of range [0, "
-                  + numNodes + ")");
+              "graph.bin layer "
+                  + layer
+                  + " references nodeId "
+                  + nodeId
+                  + " out of range [0, "
+                  + numNodes
+                  + ")");
         }
         if (nodeId <= lastNodeId) {
           throw new IOException(
-              "graph.bin layer " + layer + " nodeIds must be strictly increasing, got " + nodeId
-                  + " after " + lastNodeId);
+              "graph.bin layer "
+                  + layer
+                  + " nodeIds must be strictly increasing, got "
+                  + nodeId
+                  + " after "
+                  + lastNodeId);
         }
         lastNodeId = nodeId;
         if (nodeLevels[nodeId] < layer) {
           throw new IOException(
-              "graph.bin layer " + layer + " contains node " + nodeId
-                  + " whose nodeLevels entry is only " + nodeLevels[nodeId]);
+              "graph.bin layer "
+                  + layer
+                  + " contains node "
+                  + nodeId
+                  + " whose nodeLevels entry is only "
+                  + nodeLevels[nodeId]);
         }
         int degree = readNonNegativeInt(in, "upper-layer degree for node " + nodeId);
         if (degree > maxConnections) {
           throw new IOException(
-              "graph.bin layer " + layer + " degree " + degree + " for node " + nodeId
-                  + " exceeds M = " + maxConnections);
+              "graph.bin layer "
+                  + layer
+                  + " degree "
+                  + degree
+                  + " for node "
+                  + nodeId
+                  + " exceeds M = "
+                  + maxConnections);
         }
-        loadNeighborsInOrder(in, graph.getNeighbors(nodeId, layer), degree, numNodes, nodeId, layer);
+        loadNeighborsInOrder(
+            in, graph.getNeighbors(nodeId, layer), degree, numNodes, nodeId, layer);
       }
     }
 
@@ -823,8 +852,15 @@ public final class HnswGraphCodec {
       int neighborId = getIntLE(in);
       if (neighborId < 0 || neighborId >= numNodes) {
         throw new IOException(
-            "graph.bin layer " + layer + " node " + ownerNode + " neighbor " + neighborId
-                + " out of range [0, " + numNodes + ")");
+            "graph.bin layer "
+                + layer
+                + " node "
+                + ownerNode
+                + " neighbor "
+                + neighborId
+                + " out of range [0, "
+                + numNodes
+                + ")");
       }
       if (neighborId == ownerNode) {
         throw new IOException(
@@ -832,7 +868,11 @@ public final class HnswGraphCodec {
       }
       if (!dst.insert(neighborId, (float) (degree - k))) {
         throw new IOException(
-            "graph.bin layer " + layer + " node " + ownerNode + " contains duplicate neighbor "
+            "graph.bin layer "
+                + layer
+                + " node "
+                + ownerNode
+                + " contains duplicate neighbor "
                 + neighborId);
       }
     }

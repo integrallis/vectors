@@ -163,7 +163,9 @@ class JsonlSourceTest {
   void closeIsIdempotentAndStopsIteration(@TempDir Path tmp) throws Exception {
     Path file = tmp.resolve("docs.jsonl");
     Files.writeString(
-        file, "{\"id\":\"a\",\"text\":\"x\"}\n{\"id\":\"b\",\"text\":\"y\"}\n", StandardCharsets.UTF_8);
+        file,
+        "{\"id\":\"a\",\"text\":\"x\"}\n{\"id\":\"b\",\"text\":\"y\"}\n",
+        StandardCharsets.UTF_8);
     JsonlSource src = new JsonlSource("d", file);
 
     Iterator<IngestDoc> it = src.iterator();

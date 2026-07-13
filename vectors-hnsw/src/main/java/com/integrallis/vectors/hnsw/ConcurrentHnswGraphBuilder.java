@@ -57,9 +57,12 @@ public final class ConcurrentHnswGraphBuilder {
 
   // Fused bulk scoring is safe only when the backing store returns stable vector references.
   private final boolean useBulk;
-  // Zero-copy segment scoring: when the store exposes stable mmap slices (MappedBuildVectors), score
-  // directly off the slice instead of allocating a fresh float[dim] per candidate. This is what makes
-  // an mmap-backed build viable — the naive getVector() path allocates ~10^8 float[] and is GC-bound.
+  // Zero-copy segment scoring: when the store exposes stable mmap slices (MappedBuildVectors),
+  // score
+  // directly off the slice instead of allocating a fresh float[dim] per candidate. This is what
+  // makes
+  // an mmap-backed build viable — the naive getVector() path allocates ~10^8 float[] and is
+  // GC-bound.
   private final boolean useSegments;
   private final int dimension;
   // Set for the duration of a segment-backed build; shared across worker threads. Null otherwise.
@@ -161,12 +164,14 @@ public final class ConcurrentHnswGraphBuilder {
             () -> new WorkContext(n, efConstruction, maxNbrs, dimension, useSegments));
 
     // Async prefetch: when vectors are mmap-backed, page-in each popped candidate's neighbors on an
-    // I/O pool so the NVMe reads overlap the SIMD scoring instead of faulting synchronously. This is
+    // I/O pool so the NVMe reads overlap the SIMD scoring instead of faulting synchronously. This
+    // is
     // what keeps the build from becoming NVMe-latency-bound once vectors.bin exceeds page cache
     // (307 GB at 100M). No-op-cheap when vectors are already resident.
     // Default OFF: a fault measurement (400K, ~25% page cache) showed async prefetch made the
     // memory-constrained mmap build ~15% SLOWER (638s vs 554s) — under a small cache the prefetched
-    // pages evict before use and the I/O threads contend with the compute threads. Kept as an opt-in
+    // pages evict before use and the I/O threads contend with the compute threads. Kept as an
+    // opt-in
     // toggle for regimes it might help (fast NVMe + higher cache ratio), but not on by default.
     boolean prefetchEnabled =
         Boolean.parseBoolean(System.getProperty("vectors.hnsw.buildPrefetch", "false"));
@@ -209,7 +214,8 @@ public final class ConcurrentHnswGraphBuilder {
     final float[] kernelOut;
     final int[] batchIds;
     final float[] batchScores;
-    // Zero-copy segment-scoring scratch (null unless the store supports segments). queryScratchSeg is
+    // Zero-copy segment-scoring scratch (null unless the store supports segments). queryScratchSeg
+    // is
     // an off-heap copy of the current insert's query (refilled once per insert, not per candidate);
     // rowSegs holds reusable zero-copy vectorSegment() slices for the fused segment GEMV.
     final MemorySegment queryScratchSeg;
@@ -419,7 +425,13 @@ public final class ConcurrentHnswGraphBuilder {
       if (useSegments) {
         // Zero-copy fused GEMV: score all gathered mmap slices against the query in one SIMD pass.
         FusedSimilarity.bulkCompareSegments(
-            similarityFunction, query, ctx.rowSegs, dimension, ctx.kernelOut, ctx.batchScores, batch);
+            similarityFunction,
+            query,
+            ctx.rowSegs,
+            dimension,
+            ctx.kernelOut,
+            ctx.batchScores,
+            batch);
       } else if (useBulk) {
         FusedSimilarity.bulkCompare(
             similarityFunction, query, ctx.pool, ctx.kernelOut, ctx.batchScores, batch);

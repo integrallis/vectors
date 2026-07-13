@@ -23,8 +23,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Regression for the COSINE zero-norm defect: a zero-norm stored vector (or a zero query) made the
- * bulk-scan divide by zero → NaN, which slipped past the {@code score < minScore} filter (NaN &lt; x
- * is false) and poisoned {@code TopKHeap} ordering. Every returned score must now be finite.
+ * bulk-scan divide by zero → NaN, which slipped past the {@code score < minScore} filter (NaN &lt;
+ * x is false) and poisoned {@code TopKHeap} ordering. Every returned score must now be finite.
  */
 @Tag("unit")
 class IvfCosineZeroNormTest {
@@ -47,7 +47,8 @@ class IvfCosineZeroNormTest {
     // and (pre-fix) its NaN score would be admitted to the result set.
     IvfSearchResult r =
         idx.search(
-            new IvfSearchRequest(new float[] {1f, 1f, 0f, 0f}, data.length, 2, 0f, -Float.MAX_VALUE));
+            new IvfSearchRequest(
+                new float[] {1f, 1f, 0f, 0f}, data.length, 2, 0f, -Float.MAX_VALUE));
 
     assertThat(r.hits()).isNotEmpty();
     for (IvfHit h : r.hits()) {

@@ -64,9 +64,9 @@ public final class RouterThresholdStudy {
   }
 
   /**
-   * @param weights per-axis weights and reference scales used to fold accuracy and measured latency/
-   *     build cost into the composite objective score. With non-zero latency/build weights, faster
-   *     thresholds are preferred among equally-accurate ones.
+   * @param weights per-axis weights and reference scales used to fold accuracy and measured
+   *     latency/ build cost into the composite objective score. With non-zero latency/build
+   *     weights, faster thresholds are preferred among equally-accurate ones.
    */
   public RouterThresholdStudy(
       RouterFactory factory, List<LabeledQuery> labeled, ObjectiveWeights weights) {
@@ -102,7 +102,8 @@ public final class RouterThresholdStudy {
     // instead of hardcoding objectiveScore=accuracy (which silently ignored latency/cost weights).
     // With default (recall-only) weights this still equals accuracy.
     double objectiveScore =
-        Objective.score(accuracy, accuracy, accuracy, accuracy, 0.0, lc.p95Us(), buildTimeMs, 0L, weights);
+        Objective.score(
+            accuracy, accuracy, accuracy, accuracy, 0.0, lc.p95Us(), buildTimeMs, 0L, weights);
     return new TrialResult(
         trial,
         startedAt,

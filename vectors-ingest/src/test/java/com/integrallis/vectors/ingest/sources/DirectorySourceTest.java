@@ -100,7 +100,8 @@ class DirectorySourceTest {
 
     assertThat(src.estimatedSize()).hasValue(2); // first walk snapshots {a, b}
 
-    Files.writeString(tmp.resolve("c.txt"), "c", StandardCharsets.UTF_8); // added after the snapshot
+    Files.writeString(
+        tmp.resolve("c.txt"), "c", StandardCharsets.UTF_8); // added after the snapshot
     assertThat(src.estimatedSize()).as("snapshot is reused, not re-walked").hasValue(2);
 
     List<IngestDoc> docs = new ArrayList<>();

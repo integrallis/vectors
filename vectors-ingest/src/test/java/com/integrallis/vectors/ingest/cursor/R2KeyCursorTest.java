@@ -153,7 +153,9 @@ class R2KeyCursorTest {
     assertThatThrownBy(() -> c.save("s", 50L)).isInstanceOf(java.io.IOException.class);
 
     // The failed durable write must NOT have advanced the in-memory offset.
-    assertThat(c.load("s")).as("offset stays at last durable value after a failed put").isEqualTo(5L);
+    assertThat(c.load("s"))
+        .as("offset stays at last durable value after a failed put")
+        .isEqualTo(5L);
 
     // And a fresh cursor (reading only durable state) agrees the offset is still 5.
     backend.failPuts = false;

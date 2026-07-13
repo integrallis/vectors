@@ -116,7 +116,8 @@ class HnswGraphCodecStreamingTest {
         NeighborArray nb = b.getNeighbors(i, layer);
         assertThat(nb.size()).as("degree node " + i + " layer " + layer).isEqualTo(na.size());
         for (int k = 0; k < na.size(); k++) {
-          assertThat(nb.node(k)).as("neighbor " + k + " of node " + i + " layer " + layer)
+          assertThat(nb.node(k))
+              .as("neighbor " + k + " of node " + i + " layer " + layer)
               .isEqualTo(na.node(k));
         }
       }

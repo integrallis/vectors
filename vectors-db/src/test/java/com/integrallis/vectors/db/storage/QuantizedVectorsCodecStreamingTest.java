@@ -31,8 +31,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Proves the streaming {@code quantized.bin} codec (Ext-RaBitQ) matches the {@code byte[]} codec and
- * round-trips through a chunked stream — the >2 GB (~50 GB at 100M) codes path.
+ * Proves the streaming {@code quantized.bin} codec (Ext-RaBitQ) matches the {@code byte[]} codec
+ * and round-trips through a chunked stream — the >2 GB (~50 GB at 100M) codes path.
  */
 @Tag("unit")
 class QuantizedVectorsCodecStreamingTest {
@@ -57,7 +57,8 @@ class QuantizedVectorsCodecStreamingTest {
   @Test
   void streamingEncodeIsByteIdenticalToArrayEncode() throws Exception {
     Fixture f = sample();
-    byte[] arrayForm = QuantizedVectorsCodec.encode(f.codes, f.quant, QuantizerKind.EXTENDED_RABITQ);
+    byte[] arrayForm =
+        QuantizedVectorsCodec.encode(f.codes, f.quant, QuantizerKind.EXTENDED_RABITQ);
 
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     long written =
@@ -74,7 +75,8 @@ class QuantizedVectorsCodecStreamingTest {
 
     CompressedVectors viaArray = QuantizedVectorsCodec.decode(form);
     CompressedVectors viaStream = QuantizedVectorsCodec.decode(new ByteArrayInputStream(form));
-    assertCodesEqual((ExtendedRaBitQuantizedVectors) viaArray, (ExtendedRaBitQuantizedVectors) viaStream);
+    assertCodesEqual(
+        (ExtendedRaBitQuantizedVectors) viaArray, (ExtendedRaBitQuantizedVectors) viaStream);
     assertCodesEqual(f.codes, (ExtendedRaBitQuantizedVectors) viaStream);
   }
 
@@ -92,7 +94,8 @@ class QuantizedVectorsCodecStreamingTest {
             os -> QuantizedVectorsCodec.encode(f.codes, f.quant, QuantizerKind.EXTENDED_RABITQ, os),
             700);
     assertThat(total)
-        .isEqualTo(QuantizedVectorsCodec.encode(f.codes, f.quant, QuantizerKind.EXTENDED_RABITQ).length);
+        .isEqualTo(
+            QuantizedVectorsCodec.encode(f.codes, f.quant, QuantizerKind.EXTENDED_RABITQ).length);
     assertThat(backend.list("gen-0000000000000001/").stream().filter(k -> k.contains(base + ".")))
         .as("codes shipped as multiple chunk objects")
         .hasSizeGreaterThan(1);

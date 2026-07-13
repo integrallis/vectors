@@ -121,7 +121,8 @@ class IngestPipelineTest {
 
   @Test
   void resumesFromPersistedCursor() throws Exception {
-    // Regression (audit ingest #2): commitBatch wrote cursor.save(...) but the pipeline never called
+    // Regression (audit ingest #2): commitBatch wrote cursor.save(...) but the pipeline never
+    // called
     // cursor.load(), so a restart re-ingested the whole source from offset 0 despite durable
     // progress. With a cursor showing offsets 0..5 already committed, a fresh source must resume at
     // offset 6.
@@ -135,7 +136,8 @@ class IngestPipelineTest {
     var ss = new CapturingSinks.CapturingSidecartSink();
     BatchPolicy bp = new BatchPolicy(100, 1024L * 1024L, Duration.ofSeconds(5));
     IngestPipeline p =
-        pipeline(src, new CapturingSinks.FakeEmbedder(2), vs, ss, cursor, bp, ErrorHandler.failFast());
+        pipeline(
+            src, new CapturingSinks.FakeEmbedder(2), vs, ss, cursor, bp, ErrorHandler.failFast());
 
     IngestResult r = p.run();
 
@@ -147,7 +149,8 @@ class IngestPipelineTest {
 
   @Test
   void freshCursorDoesNotSkipAnyDocs() throws Exception {
-    // A brand-new (empty) cursor must not be mistaken for "offset 0 committed" — a fresh run ingests
+    // A brand-new (empty) cursor must not be mistaken for "offset 0 committed" — a fresh run
+    // ingests
     // every doc from the start.
     InMemoryCursor cursor = new InMemoryCursor();
     IngestPipeline p =
@@ -257,8 +260,7 @@ class IngestPipelineTest {
       private final java.util.concurrent.atomic.AtomicBoolean closed;
 
       CloseableIterator(
-          java.util.Iterator<IngestDoc> inner,
-          java.util.concurrent.atomic.AtomicBoolean closed) {
+          java.util.Iterator<IngestDoc> inner, java.util.concurrent.atomic.AtomicBoolean closed) {
         this.inner = inner;
         this.closed = closed;
       }

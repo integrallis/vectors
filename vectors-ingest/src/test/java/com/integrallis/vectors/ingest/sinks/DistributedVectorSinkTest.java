@@ -161,7 +161,9 @@ class DistributedVectorSinkTest {
       sink.addAll(b);
       sink.addAll(b); // simulate a retry re-running the stage
       sink.commit();
-      assertThat(sink.committedCount()).as("no duplication from a retried bootstrap stage").isEqualTo(16L);
+      assertThat(sink.committedCount())
+          .as("no duplication from a retried bootstrap stage")
+          .isEqualTo(16L);
       assertThat(sink.collection().size()).isEqualTo(16);
     }
   }

@@ -486,8 +486,8 @@ class DistributedVectorCollectionTest {
 
   /**
    * Regression (audit distributed #1): a stale/reordered announce of an OLDER generation used to
-   * unconditionally clobber the newer version and fire {@code BuoyIndexUpdated(oldVersion)}, telling
-   * listeners to reload a stale index. The monotonic guard must reject it (max-wins).
+   * unconditionally clobber the newer version and fire {@code BuoyIndexUpdated(oldVersion)},
+   * telling listeners to reload a stale index. The monotonic guard must reject it (max-wins).
    */
   @Test
   void buoyIndexGossip_rejectsStaleGeneration() {

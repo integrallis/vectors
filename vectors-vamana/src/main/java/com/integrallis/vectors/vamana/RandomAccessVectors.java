@@ -60,7 +60,8 @@ public interface RandomAccessVectors {
    * FusedSimilarity.bulkCompareSegments}, avoiding the per-candidate mmap→{@code float[]} copy that
    * {@link #getVector(int)} incurs. Mirrors the HNSW {@code RandomAccessVectors} contract.
    *
-   * <p>Default {@code false}; heap {@code float[][]} stores stay on the {@link #getVector(int)} path.
+   * <p>Default {@code false}; heap {@code float[][]} stores stay on the {@link #getVector(int)}
+   * path.
    */
   default boolean supportsSegments() {
     return false;
@@ -68,8 +69,9 @@ public interface RandomAccessVectors {
 
   /**
    * Returns a zero-copy {@link java.lang.foreign.MemorySegment} view of the vector at {@code
-   * ordinal}, or {@code null} when {@link #supportsSegments()} is {@code false}. When supported, the
-   * segment is a live view into backing storage; callers must not retain it beyond the current scan.
+   * ordinal}, or {@code null} when {@link #supportsSegments()} is {@code false}. When supported,
+   * the segment is a live view into backing storage; callers must not retain it beyond the current
+   * scan.
    *
    * @param ordinal the 0-based vector index
    * @return a segment view of the vector, or {@code null} if segments are unsupported
