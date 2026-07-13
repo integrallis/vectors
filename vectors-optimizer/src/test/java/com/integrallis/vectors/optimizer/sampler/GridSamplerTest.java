@@ -51,6 +51,31 @@ class GridSamplerTest {
   }
 
   @Test
+  void logScaleIntRangeEnumeratesDistinctValuesWithoutDuplicates() {
+    // Regression: a log-scale IntRange used to interpolate over max-min+1 linear indices and round,
+    // collapsing many indices onto the same low integer (duplicate trials, wasted budget) while
+    // total() over-reported a full 1000-point sweep. The grid must be the DISTINCT log-spaced ints.
+    SearchSpace space = new SearchSpace(List.of(new ParamSpec.IntRange("ef", 1, 1000, true)));
+    GridSampler g = new GridSampler(space);
+
+    long total = g.total();
+    assertThat(total)
+        .as("log grid has far fewer distinct points than the 1000 linear indices")
+        .isLessThan(1000L);
+
+    List<Integer> values = new ArrayList<>();
+    for (long i = 0; i < total; i++) {
+      values.add((Integer) g.next(List.of()).params().get("ef"));
+    }
+
+    assertThat(values).as("no duplicate grid points").doesNotHaveDuplicates();
+    assertThat(values).as("total() matches the enumerated count").hasSize((int) total);
+    assertThat(values).isSorted();
+    assertThat(values.get(0)).as("covers min").isEqualTo(1);
+    assertThat(values.get(values.size() - 1)).as("covers max").isEqualTo(1000);
+  }
+
+  @Test
   void throwsWhenExhausted() {
     SearchSpace space = new SearchSpace(List.of(new ParamSpec.Categorical("x", List.of("a", "b"))));
     GridSampler g = new GridSampler(space);

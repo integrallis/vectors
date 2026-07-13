@@ -19,6 +19,7 @@ import com.integrallis.vectors.optimizer.space.ParamSpec;
 import com.integrallis.vectors.optimizer.space.ScoredTrial;
 import com.integrallis.vectors.optimizer.space.SearchSpace;
 import com.integrallis.vectors.optimizer.space.Trial;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,11 @@ public final class GridSampler implements ParamSampler {
   private final long total;
   private final long[] strides;
   private final int[] sizes;
+  // Per-axis enumerated distinct values, in grid order. Precomputing (instead of computing valueAt
+  // from cardinality on the fly) is what makes a log-scale IntRange correct: rounding log-interpolated
+  // integers collapses many linear indices onto the same value, so the real grid is the DISTINCT set,
+  // not max-min+1 points. sizes[i]/total are derived from these lists so total() never over-reports.
+  private final List<List<Object>> axisValues;
   private long cursor;
 
   public GridSampler(SearchSpace space) {
@@ -44,6 +50,7 @@ public final class GridSampler implements ParamSampler {
     int n = space.axes().size();
     this.sizes = new int[n];
     this.strides = new long[n];
+    this.axisValues = new ArrayList<>(n);
     long product = 1L;
     for (int i = 0; i < n; i++) {
       ParamSpec<?> a = space.axes().get(i);
@@ -53,12 +60,49 @@ public final class GridSampler implements ParamSampler {
                 + a.name()
                 + "; wrap discrete values in ParamSpec.Discrete");
       }
-      long card = a.cardinality().orElseThrow();
-      sizes[i] = Math.toIntExact(card);
+      List<Object> vals = enumerate(a);
+      axisValues.add(vals);
+      sizes[i] = vals.size();
       strides[i] = product;
-      product = Math.multiplyExact(product, card);
+      product = Math.multiplyExact(product, vals.size());
     }
     this.total = product;
+  }
+
+  /** Enumerates an axis's distinct grid values in order (log-scale IntRange values are deduped). */
+  private static List<Object> enumerate(ParamSpec<?> a) {
+    List<Object> vals = new ArrayList<>();
+    switch (a) {
+      case ParamSpec.Categorical c -> vals.addAll(c.values());
+      case ParamSpec.Discrete<?> d -> vals.addAll(d.values());
+      case ParamSpec.FixedString f -> vals.add(f.value());
+      case ParamSpec.FixedInt f -> vals.add(f.value());
+      case ParamSpec.FixedDouble f -> vals.add(f.value());
+      case ParamSpec.IntRange r -> {
+        if (r.logScale()) {
+          long steps = (long) r.max() - r.min();
+          double logMin = Math.log(r.min());
+          double logMax = Math.log(r.max());
+          int prev = Integer.MIN_VALUE;
+          for (long idx = 0; idx <= steps; idx++) {
+            double t = steps == 0 ? 0.0 : (double) idx / steps;
+            int v = (int) Math.round(Math.exp(logMin + t * (logMax - logMin)));
+            // Log interpolation is monotonic non-decreasing, so a consecutive-dedup is a full dedup.
+            if (v != prev) {
+              vals.add(v);
+              prev = v;
+            }
+          }
+        } else {
+          for (int v = r.min(); v <= r.max(); v++) {
+            vals.add(v);
+          }
+        }
+      }
+      case ParamSpec.DoubleRange ignored ->
+          throw new AssertionError("DoubleRange should have been rejected in constructor");
+    }
+    return vals;
   }
 
   @Override
@@ -70,32 +114,11 @@ public final class GridSampler implements ParamSampler {
     Map<String, Object> params = new LinkedHashMap<>();
     for (int i = 0; i < sizes.length; i++) {
       int idx = (int) ((c / strides[i]) % sizes[i]);
-      ParamSpec<?> a = space.axes().get(i);
-      params.put(a.name(), valueAt(a, idx));
+      params.put(space.axes().get(i).name(), axisValues.get(i).get(idx));
     }
     int width = Math.max(4, Long.toString(total).length());
     String trialId = String.format("grid-%0" + width + "d", c);
     return new Trial(trialId, params);
-  }
-
-  private static Object valueAt(ParamSpec<?> a, int idx) {
-    return switch (a) {
-      case ParamSpec.Categorical c -> c.values().get(idx);
-      case ParamSpec.IntRange r -> {
-        if (r.logScale()) {
-          double t = r.cardinality().getAsLong() == 1 ? 0.0 : (double) idx / (r.max() - r.min());
-          double v = Math.exp(Math.log(r.min()) + t * (Math.log(r.max()) - Math.log(r.min())));
-          yield (int) Math.round(v);
-        }
-        yield r.min() + idx;
-      }
-      case ParamSpec.Discrete<?> d -> d.values().get(idx);
-      case ParamSpec.FixedString f -> f.value();
-      case ParamSpec.FixedInt f -> f.value();
-      case ParamSpec.FixedDouble f -> f.value();
-      case ParamSpec.DoubleRange ignored ->
-          throw new AssertionError("DoubleRange should have been rejected in constructor");
-    };
   }
 
   /** Total number of trials this sampler will produce. */
