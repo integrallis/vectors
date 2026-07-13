@@ -142,6 +142,28 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q6_KDequantize_matchesDecodedReferenceAtOutputOffset() {
+    byte[] block = q6KBlock(0.125f, i -> (i % 64) - 32, i -> (i % 7) - 3);
+    float[] decoded = new float[258];
+    decoded[0] = 99.0f;
+    decoded[257] = 98.0f;
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, block);
+
+      VectorUtil.ggufQ6_KDequantize(segment, 0, decoded, 1, 256);
+    }
+
+    assertThat(decoded[0]).isEqualTo(99.0f);
+    assertThat(decoded[257]).isEqualTo(98.0f);
+    for (int index = 0; index < 256; index++) {
+      int quant = (index % 64) - 32;
+      int subScale = (index / 16) % 7 - 3;
+      assertThat(decoded[index + 1]).isCloseTo(0.125f * subScale * quant, within(1e-6f));
+    }
+  }
+
+  @Test
   void q4_KDotProduct_matchesDecodedReferenceWithPackedScalesAndMins() {
     float[] query = patternedQuery(256);
     int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};

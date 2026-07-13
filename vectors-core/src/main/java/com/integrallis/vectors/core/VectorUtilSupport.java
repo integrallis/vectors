@@ -393,6 +393,53 @@ public interface VectorUtilSupport {
     return sum;
   }
 
+  /** Dequantizes GGUF Q6_K blocks into a caller-owned float array. */
+  default void ggufQ6_KDequantize(
+      MemorySegment qWeight, long byteOffset, float[] out, int outOffset, int dimensions) {
+    checkGgufQ6_KBlockAligned(dimensions);
+    int blocks = dimensions / GGUF_Q6_K_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+      float d =
+          Float.float16ToFloat(
+              qWeight.get(
+                  GGUF_LE_SHORT,
+                  blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES));
+      long qlOffset = blockOffset;
+      long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+      long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+      int outputOffset = outOffset + block * GGUF_Q6_K_BLOCK_SIZE;
+
+      for (int superBlock = 0; superBlock < 2; superBlock++) {
+        long qlBase = qlOffset + (long) superBlock * 64;
+        long qhBase = qhOffset + (long) superBlock * 32;
+        long scaleBase = scaleOffset + (long) superBlock * 8;
+        int outBase = outputOffset + superBlock * 128;
+
+        for (int index = 0; index < 32; index++) {
+          int scaleIndex = index / 16;
+          int ql1 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + index) & 0xFF;
+          int ql2 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + 32L + index) & 0xFF;
+          int qh = qWeight.get(ValueLayout.JAVA_BYTE, qhBase + index) & 0xFF;
+          int q1 = ((ql1 & 0x0F) | ((qh & 0x03) << 4)) - 32;
+          int q2 = ((ql2 & 0x0F) | (((qh >>> 2) & 0x03) << 4)) - 32;
+          int q3 = ((ql1 >>> 4) | (((qh >>> 4) & 0x03) << 4)) - 32;
+          int q4 = ((ql2 >>> 4) | (((qh >>> 6) & 0x03) << 4)) - 32;
+
+          float d1 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
+          float d2 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
+          float d3 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
+          float d4 = d * qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
+
+          out[outBase + index] = d1 * q1;
+          out[outBase + index + 32] = d2 * q2;
+          out[outBase + index + 64] = d3 * q3;
+          out[outBase + index + 96] = d4 * q4;
+        }
+      }
+    }
+  }
+
   /** Batched row-major GEMV over GGUF Q4_0 rows. */
   default void ggufQ4_0MatVecDot(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
