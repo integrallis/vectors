@@ -150,6 +150,45 @@ class DistributedVectorSinkTest {
   }
 
   @Test
+  void retriedAddAllDoesNotDuplicateOnBootstrap(@TempDir Path tmp) throws IOException {
+    // Regression (audit ingest #1): commitBatch wraps addAll in retryPolicy.execute, so a failed
+    // stage re-runs addAll(batch) from the top. The bootstrap buffer used to APPEND, so a retry
+    // double-buffered the batch and build() emitted every doc twice. addAll must be idempotent.
+    HeapStorageBackend t3 = new HeapStorageBackend();
+    try (DistributedVectorSink sink =
+        DistributedVectorSink.bootstrapping(tmp, t3, params(), splitter(), policy(), METRIC)) {
+      Batch b = batch(0, 16, 0, 1L);
+      sink.addAll(b);
+      sink.addAll(b); // simulate a retry re-running the stage
+      sink.commit();
+      assertThat(sink.committedCount()).as("no duplication from a retried bootstrap stage").isEqualTo(16L);
+      assertThat(sink.collection().size()).isEqualTo(16);
+    }
+  }
+
+  @Test
+  void retriedAddAllDoesNotDuplicateOnLiveCollection(@TempDir Path tmp) throws IOException {
+    // Same regression on the live-collection path: a retried addAll used to append the batch's docs
+    // to the collection's staging a second time, so commit() persisted them twice.
+    HeapStorageBackend t3 = new HeapStorageBackend();
+    try (DistributedVectorSink sink =
+        DistributedVectorSink.bootstrapping(tmp, t3, params(), splitter(), policy(), METRIC)) {
+      sink.addAll(batch(0, 16, 0, 1L));
+      sink.commit(); // bootstrap → collection now live
+      assertThat(sink.committedCount()).isEqualTo(16L);
+
+      Batch b2 = batch(1, 8, 16, 2L);
+      sink.addAll(b2);
+      sink.addAll(b2); // simulate a retry re-running the stage
+      sink.commit();
+      assertThat(sink.committedCount())
+          .as("no duplication from a retried live-collection stage")
+          .isEqualTo(24L);
+      assertThat(sink.collection().size()).isEqualTo(24);
+    }
+  }
+
+  @Test
   void closeIsIdempotent(@TempDir Path tmp) throws IOException {
     HeapStorageBackend t3 = new HeapStorageBackend();
     DistributedVectorSink sink =

@@ -156,11 +156,17 @@ public final class DistributedVectorSink implements VectorSink {
   @Override
   public void addAll(Batch batch) {
     if (closed) throw new IllegalStateException("sink is closed");
+    // addAll must be idempotent: commitBatch wraps it in retryPolicy.execute, so a mid-loop failure
+    // re-runs addAll(batch) from the top. Staging is never durable until commit(), so we discard any
+    // docs staged by a failed prior attempt before re-staging — otherwise a retry appends the
+    // already-staged prefix again, duplicating those vectors in the committed generation.
     if (collection == null) {
-      // Bootstrap path: buffer until commit() does build().
+      // Bootstrap path: replace (not append) the pending first-batch buffer.
+      bootstrapBuffer.clear();
       bootstrapBuffer.addAll(batch.docs());
       return;
     }
+    collection.discardStaging();
     for (EmbeddedDoc d : batch.docs()) {
       collection.add(d.doc().id(), d.vector());
     }

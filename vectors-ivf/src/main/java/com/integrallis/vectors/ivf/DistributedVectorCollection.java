@@ -262,6 +262,23 @@ public final class DistributedVectorCollection implements AutoCloseable {
   }
 
   /**
+   * Discards all staged-but-uncommitted vectors (the buffer that {@link #add} appends to and {@link
+   * #commit} consumes). Nothing durable is affected — staged vectors were never written to the WAL
+   * or the tiered clusters. This lets a caller that re-runs a partially-applied {@code add()} loop
+   * (e.g. a retried batch stage) start from a clean slate instead of double-staging the docs it had
+   * already added on the failed attempt.
+   */
+  public void discardStaging() {
+    rwLock.writeLock().lock();
+    try {
+      staging.clear();
+      stagingIds.clear();
+    } finally {
+      rwLock.writeLock().unlock();
+    }
+  }
+
+  /**
    * Commits all staged vectors: assigns to nearest cluster, writes WAL (ADD* + COMMIT), rebuilds
    * {@link TieredCluster}s, updates T3, and applies the {@link TierPolicy}.
    */
