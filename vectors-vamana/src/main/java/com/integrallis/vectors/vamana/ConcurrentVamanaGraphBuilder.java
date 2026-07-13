@@ -145,8 +145,13 @@ public final class ConcurrentVamanaGraphBuilder {
     final NeighborArray pruneResult;
     final NeighborArray backlinkCandidates;
     final NeighborArray backlinkResult;
+    // Per-thread stable copy of the current query. A shared-buffer store overwrites its returned
+    // array on every getVector() call, so `query` must be copied here before the beam search (which
+    // calls getVector() repeatedly) aliases it. Null for stable float[][] stores. Each thread owns
+    // its own WorkContext, so this row is never shared across threads.
+    final float[] queryScratch;
 
-    WorkContext(int maxNodes, int searchListSize, int maxDegree) {
+    WorkContext(int maxNodes, int searchListSize, int maxDegree, int dim, boolean sharedBuffer) {
       visited = new BitSet(maxNodes);
       candidates = new NodeQueue(Math.max(64, searchListSize * 2), false);
       results = new NodeQueue(Math.max(64, searchListSize * 2), true);
@@ -155,6 +160,7 @@ public final class ConcurrentVamanaGraphBuilder {
       pruneResult = new NeighborArray(maxDegree + 1);
       backlinkCandidates = new NeighborArray(maxDegree + 1);
       backlinkResult = new NeighborArray(maxDegree + 1);
+      queryScratch = sharedBuffer ? new float[dim] : null;
     }
   }
 
@@ -177,7 +183,13 @@ public final class ConcurrentVamanaGraphBuilder {
         futures.add(
             exec.submit(
                 () -> {
-                  var ctx = new WorkContext(vectors.size(), searchListSize, maxDegree);
+                  var ctx =
+                      new WorkContext(
+                          vectors.size(),
+                          searchListSize,
+                          maxDegree,
+                          vectors.dimension(),
+                          vectors.sharesReturnBuffer());
                   for (int node : chunk) {
                     processNodeConcurrent(node, graph, locks, passAlpha, ctx);
                   }
@@ -190,6 +202,11 @@ public final class ConcurrentVamanaGraphBuilder {
   private void processNodeConcurrent(
       int node, VamanaGraph graph, ReentrantLock[] locks, float passAlpha, WorkContext ctx) {
     float[] query = vectors.getVector(node);
+    if (ctx.queryScratch != null) {
+      // Shared-buffer store: stabilize the query before searchConcurrent/getVector aliases it.
+      System.arraycopy(query, 0, ctx.queryScratch, 0, ctx.queryScratch.length);
+      query = ctx.queryScratch;
+    }
 
     // Beam search from medoid — reads under per-node locks
     SearchResult searchResult = searchConcurrent(query, graph.medoid(), graph, locks, ctx);
@@ -364,18 +381,28 @@ public final class ConcurrentVamanaGraphBuilder {
     int n = vectors.size();
     int numRandom = Math.min(maxDegree, n - 1);
     int[] candidates = n > 1 ? new int[n - 1] : new int[0];
+    // See VamanaGraphBuilder.initializeRandomGraph: on a shared-buffer store the two getVector()
+    // calls alias the same array, so compare(getVector(node), getVector(nbr)) == compare(x, x) == 0
+    // for every seed edge. Stabilize the node vector in a scratch row first.
+    boolean sharedBuffer = vectors.sharesReturnBuffer();
+    float[] nodeScratch = sharedBuffer ? new float[vectors.dimension()] : null;
 
     for (int node = 0; node < n; node++) {
       var neighbors = graph.getNeighbors(node);
       int idx = 0;
       for (int i = 0; i < n; i++) if (i != node) candidates[idx++] = i;
+      float[] nodeVec = vectors.getVector(node);
+      if (sharedBuffer) {
+        System.arraycopy(nodeVec, 0, nodeScratch, 0, nodeScratch.length);
+        nodeVec = nodeScratch;
+      }
       for (int i = 0; i < numRandom; i++) {
         int j = i + random.nextInt(candidates.length - i);
         int tmp = candidates[i];
         candidates[i] = candidates[j];
         candidates[j] = tmp;
         int nbr = candidates[i];
-        float score = sim.compare(vectors.getVector(node), vectors.getVector(nbr));
+        float score = sim.compare(nodeVec, vectors.getVector(nbr));
         neighbors.insert(nbr, score);
       }
     }

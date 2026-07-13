@@ -177,6 +177,12 @@ public final class VamanaGraphBuilder {
     // Allocating new int[n-1] inside the loop produces O(n²) total allocation:
     // for n=10,000 that is ~400 MB of short-lived arrays; for n=100,000 it is ~40 GB.
     int[] candidates = n > 1 ? new int[n - 1] : new int[0];
+    // On a shared-buffer store, getVector(node) and getVector(neighborId) would return the SAME
+    // array, so compare(getVector(node), getVector(neighborId)) evaluates to compare(x, x) == 0 for
+    // every initial edge (the second getVector overwrites the first before compare reads it),
+    // corrupting the seed graph. Copy the node vector into a stable scratch row first.
+    boolean sharedBuffer = vectors.sharesReturnBuffer();
+    float[] nodeScratch = sharedBuffer ? new float[vectors.dimension()] : null;
 
     for (int node = 0; node < n; node++) {
       var neighbors = graph.getNeighbors(node);
@@ -187,6 +193,12 @@ public final class VamanaGraphBuilder {
         if (i != node) candidates[idx++] = i;
       }
 
+      float[] nodeVec = vectors.getVector(node);
+      if (sharedBuffer) {
+        System.arraycopy(nodeVec, 0, nodeScratch, 0, nodeScratch.length);
+        nodeVec = nodeScratch;
+      }
+
       // Fisher-Yates partial shuffle — pick numRandomNeighbors unique neighbors.
       for (int i = 0; i < numRandomNeighbors; i++) {
         int j = i + random.nextInt(candidates.length - i);
@@ -195,7 +207,7 @@ public final class VamanaGraphBuilder {
         candidates[j] = tmp;
 
         int neighborId = candidates[i];
-        float score = sim.compare(vectors.getVector(node), vectors.getVector(neighborId));
+        float score = sim.compare(nodeVec, vectors.getVector(neighborId));
         neighbors.insert(neighborId, score);
       }
     }
@@ -224,10 +236,22 @@ public final class VamanaGraphBuilder {
     // maxDegree existing neighbors + 1 new backlink = maxDegree+1 entries at most.
     var backlinkCandidates = new NeighborArray(maxDegree + 1);
     var backlinkResult = new NeighborArray(maxDegree + 1);
+    // A shared-buffer store (sharesReturnBuffer()==true, e.g. mmap-backed MappedBuildVectors)
+    // overwrites the array returned by getVector() on every subsequent call. `query` is held across
+    // the beam search (which calls getVector() many times) and the neighbor compare below, so on
+    // such a store it must be copied into a stable scratch row first — otherwise `query` silently
+    // aliases whatever vector was fetched last, corrupting every candidate score. Stable float[][]
+    // stores (InMemoryVectors) skip the copy. RobustPruner already guards the same way.
+    boolean sharedBuffer = vectors.sharesReturnBuffer();
+    float[] queryScratch = sharedBuffer ? new float[vectors.dimension()] : null;
 
     for (int iter = 0; iter < n; iter++) {
       int node = order[iter];
       float[] query = vectors.getVector(node);
+      if (sharedBuffer) {
+        System.arraycopy(query, 0, queryScratch, 0, queryScratch.length);
+        query = queryScratch;
+      }
 
       // Beam search from medoid to find candidates
       SearchResult searchResult = searcher.search(query, searchListSize, searchListSize);
