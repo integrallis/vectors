@@ -52,10 +52,9 @@ try (VectorCollection collection = VectorCollection.builder()
         .indexType(IndexType.HNSW)
         .build()) {
 
-    collection.addAll(List.of(
-        Document.of("a", embedding1, "hello world"),
-        Document.of("b", embedding2, "goodbye world")));
-    collection.commit();
+    collection.add("a", embedding1, "hello world")
+              .add("b", embedding2, "goodbye world")
+              .commit();
 
     SearchResult result = collection.search(
         SearchRequest.builder(queryEmbedding, 5).build());

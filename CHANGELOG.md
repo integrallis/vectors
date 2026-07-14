@@ -6,6 +6,19 @@ All notable changes to java-vectors are documented here.
 
 ### Added
 
+- `com.integrallis:vectors` — a single umbrella dependency that re-exports `vectors-db` (core,
+  storage, quantization, and the HNSW/Vamana/IVF index backends), so applications can depend on just
+  `vectors` instead of `vectors-db`.
+- `Documents` — a fluent, `List<Document>` batch builder (`Documents.of("a", vec, "hello").add("b",
+  vec2)`) that collapses the verbose `List.of(Document.of(...), Document.of(...))` form and drops
+  straight into `VectorCollection.addAll(...)`.
+- Fluent `VectorCollection.add(String id, float[] vector)` / `add(id, vector, text)` overloads that
+  return the collection, so inserts chain: `collection.add("a", e1, "hello").add("b", e2).commit()`.
+  Added as `default` interface methods delegating to `add(Document)` — additive and backward-compatible
+  across every implementor.
+- MFCQI-styled documentation site: the Antora docs get the `integrallis/mfcqi-java` look and feel
+  (Space Grotesk / Inter / JetBrains Mono, monochrome palette) with a dark/light theme switch, and a
+  hand-crafted marketing landing page fronts the docs on GitHub Pages (`/` landing, `/docs` Antora).
 - Maven Central staging and JReleaser release automation based on the proven
   `integrallis/mfcqi-java` pipeline.
 - Explicit 0.1.x publication allowlist, strict staged-artifact validation,

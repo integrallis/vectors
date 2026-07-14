@@ -37,6 +37,7 @@ val publishedModuleNames = setOf(
     "vectors-vamana",
     "vectors-ivf",
     "vectors-db",
+    "vectors",
     "vectors-hybrid",
     "vectors-spring-ai",
     "vectors-langchain4j",
