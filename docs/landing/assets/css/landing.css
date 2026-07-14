@@ -95,13 +95,16 @@ img { max-width: 100%; height: auto; }
 .nav.scrolled { background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(12px); border-bottom-color: var(--border); }
 .nav-container { max-width: 1120px; margin: 0 auto; padding: 0 24px; display: flex; justify-content: space-between; align-items: center; }
 .nav-brand { display: flex; align-items: center; gap: 10px; }
+.nav-brand a { text-decoration: none; }
+.nav-brand .brand-mark { display: inline-flex; align-items: center; }
 .nav-brand .ilogo { height: 24px; width: auto; }
 /* Integrallis logo is color-on-light; in dark mode flip lightness while keeping the orange hue. */
 [data-theme="dark"] .nav-brand .ilogo { filter: invert(1) hue-rotate(180deg); }
 .footer-by .ilogo { height: 18px; width: auto; vertical-align: middle; }
 [data-theme="dark"] .footer-by .ilogo { filter: invert(1) hue-rotate(180deg); }
 .nav-brand .sep { color: var(--subtle); font-weight: 300; }
-.nav-brand .product { font-family: var(--font-mono); font-size: 15px; font-weight: 500; color: var(--fg); }
+.nav-brand .product { font-family: var(--font-mono); font-size: 15px; font-weight: 500; color: var(--fg); transition: color var(--transition); }
+.nav-brand .product:hover { color: var(--accent-orange); }
 .nav-right { display: flex; align-items: center; gap: 8px; }
 .nav-links { display: flex; align-items: center; gap: 26px; margin-right: 10px; }
 .nav-links a { font-size: 14px; font-weight: 500; color: var(--muted); transition: var(--transition); }
@@ -135,7 +138,9 @@ img { max-width: 100%; height: auto; }
 /* Force selected lines onto a single line on wide viewports; wrap again when narrow. */
 .oneline { white-space: nowrap; }
 .section-title.oneline { font-size: clamp(1.1rem, 2.5vw, 1.6rem); }
-.section-description.oneline { max-width: none; }
+/* A one-line title/description can be wider than the centred 680px header; let the header grow to
+   the full container so text-align:center keeps the line centred instead of overflowing left. */
+.section-header:has(.oneline) { max-width: none; }
 @media (max-width: 720px) { .oneline { white-space: normal; } }
 
 /* Code showcase (hero): usage tabs over a multi-line code panel */
@@ -145,19 +150,19 @@ img { max-width: 100%; height: auto; }
 .code-panel { display: none; }
 .code-panel.active { display: block; }
 /* the "// title" caption above each snippet: slightly larger, orange slashes */
-.code-title { padding: 14px 18px 2px; font-family: var(--font-mono); font-size: 13.5px; color: var(--muted); }
-.code-title .sl { color: var(--accent-orange); font-weight: 700; }
-.code-panel pre { margin: 0; padding: 10px 18px 16px; overflow-x: auto; scrollbar-width: thin; }
-.code-panel code { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.65; white-space: pre; color: var(--fg); background: none; }
-/* highlight.js tokens (MFCQI palette, theme-aware) */
-.code-panel .hljs-comment, .code-panel .hljs-quote { color: var(--hl-comment); font-style: italic; }
-.code-panel .hljs-keyword, .code-panel .hljs-selector-tag, .code-panel .hljs-literal { color: var(--hl-keyword); }
-.code-panel .hljs-string, .code-panel .hljs-doctag { color: var(--hl-string); }
-.code-panel .hljs-number { color: var(--hl-number); }
-.code-panel .hljs-title, .code-panel .hljs-section, .code-panel .hljs-selector-id { color: var(--hl-title); }
-.code-panel .hljs-type, .code-panel .hljs-class .hljs-title { color: var(--hl-type); font-weight: 500; }
-.code-panel .hljs-built_in, .code-panel .hljs-builtin-name { color: var(--hl-builtin); }
-.code-panel .hljs-meta { color: var(--muted); }
+.code-title { padding: 14px 18px 2px; font-family: var(--font-mono); font-size: 13.5px; color: var(--hl-comment); font-style: italic; }
+.code-title .sl { color: inherit; }
+.code-panel pre { margin: 0; padding: 8px 18px 14px; overflow-x: auto; scrollbar-width: thin; line-height: 1.25; }
+.code-panel code { font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.25; white-space: pre; color: var(--fg); background: none; }
+/* highlight.js tokens (MFCQI palette, theme-aware) — applies to every highlighted block */
+.hljs-comment, .hljs-quote { color: var(--hl-comment); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal { color: var(--hl-keyword); }
+.hljs-string, .hljs-doctag { color: var(--hl-string); }
+.hljs-number { color: var(--hl-number); }
+.hljs-title, .hljs-section, .hljs-selector-id { color: var(--hl-title); }
+.hljs-type, .hljs-class .hljs-title { color: var(--hl-type); font-weight: 500; }
+.hljs-built_in, .hljs-builtin-name { color: var(--hl-builtin); }
+.hljs-meta { color: var(--muted); }
 
 /* Connective line between the code showcase and the dependency block */
 .hero-connector { max-width: 720px; margin: 2px auto 20px; font-size: 14px; color: var(--muted); line-height: 1.6; }
@@ -183,7 +188,7 @@ img { max-width: 100%; height: auto; }
 .install-tab.active { color: var(--fg); background: var(--card); }
 .install-tab.active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--fg); }
 .install-cmd { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; min-height: 50px; }
-.install-cmd code { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 12px; color: var(--fg); white-space: nowrap; overflow-x: auto; text-align: left; scrollbar-width: none; }
+.install-cmd code { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.25; color: var(--fg); white-space: nowrap; overflow-x: auto; text-align: left; scrollbar-width: none; }
 .install-cmd code::-webkit-scrollbar { display: none; }
 .install-cmd .prompt { color: var(--subtle); user-select: none; }
 .install-copy { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; background: transparent; border: 1px solid var(--border); color: var(--muted); cursor: pointer; transition: var(--transition); }
@@ -215,18 +220,20 @@ img { max-width: 100%; height: auto; }
 .section-divider { border-top: 1px solid var(--border); }
 .section-header { text-align: center; max-width: 680px; margin: 0 auto 56px; }
 .section-label { display: inline-block; font-family: var(--font-mono); font-size: 12px; font-weight: 500; text-transform: lowercase; letter-spacing: 0.02em; color: var(--subtle); margin-bottom: 14px; }
-.section-label::before { content: '// '; }
+.section-label::before { content: '// '; color: var(--accent-orange); font-weight: 700; }
 .section-title { font-family: var(--font-display); font-size: clamp(1.7rem, 3.2vw, 2.4rem); font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; margin-bottom: 16px; }
 .section-description { font-size: 1.05rem; color: var(--muted); line-height: 1.7; }
 
 /* The "how it works" / Drake analogy block */
 .equations { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 880px; margin: 0 auto 28px; }
 @media (max-width: 720px) { .equations { grid-template-columns: 1fr; } }
-.equation { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 26px 28px; }
-.equation .eq-label { font-family: var(--font-mono); font-size: 12px; color: var(--subtle); margin-bottom: 14px; }
-.equation .eq { font-family: var(--font-mono); font-size: 1.05rem; color: var(--fg); letter-spacing: 0.01em; }
-.equation .eq .dim { color: var(--subtle); }
-.equation .eq-note { font-size: 0.9rem; color: var(--muted); margin-top: 14px; line-height: 1.6; }
+.equation { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 26px 28px; display: flex; flex-direction: column; }
+.equation .eq-label { font-family: var(--font-mono); font-size: 12px; color: var(--hl-comment); font-style: italic; margin-bottom: 12px; }
+.equation .eq { font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; color: var(--fg); margin: 0; overflow-x: auto; scrollbar-width: thin; }
+.equation .eq code { font-family: var(--font-mono); white-space: pre; background: none; }
+/* the descriptive note sits at the bottom, so the two boxes align regardless of code length */
+.equation .eq-note { font-size: 0.9rem; color: var(--muted); margin-top: auto; padding-top: 18px; line-height: 1.6; }
+.equation .eq-note code { font-family: var(--font-mono); font-size: 0.85em; color: var(--fg); background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
 .analogy { max-width: 720px; margin: 0 auto; text-align: center; color: var(--muted); font-size: 1.05rem; line-height: 1.8; }
 .analogy strong { color: var(--fg); font-weight: 600; }
 

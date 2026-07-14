@@ -27,11 +27,11 @@
     <!-- Navigation -->
     <nav class="nav">
         <div class="nav-container">
-            <a href="https://integrallis.com" class="nav-brand" aria-label="Integrallis">
-                <img class="ilogo" src="assets/images/integrallis-logo.png" alt="Integrallis">
+            <div class="nav-brand">
+                <a href="https://integrallis.com" class="brand-mark" aria-label="Integrallis"><img class="ilogo" src="assets/images/integrallis-logo.png" alt="Integrallis"></a>
                 <span class="sep">/</span>
-                <span class="product">vectors</span>
-            </a>
+                <a href="#top" class="product">vectors</a>
+            </div>
             <div class="nav-right">
                 <div class="nav-links">
                     <a href="#how">How it works</a>
@@ -70,8 +70,8 @@
                 </div>
                 <div class="code-panels">
                     <div class="code-panel active" data-code="java">
-                        <div class="code-title"><span class="sl">//</span> Pure Java — no framework, no service</div>
-                        <pre><code class="language-java">try (var collection = VectorCollection.builder()
+                        <div class="code-title"><span class="sl">//</span> Pure Java</div>
+                        <pre><code class="language-java hljs" data-lang="java">try (var collection = VectorCollection.builder()
         .dimension(384)
         .metric(SimilarityFunction.COSINE)
         .indexType(IndexType.HNSW)
@@ -87,7 +87,7 @@
                     </div>
                     <div class="code-panel" data-code="spring">
                         <div class="code-title"><span class="sl">//</span> Spring AI — drop-in VectorStore</div>
-                        <pre><code class="language-java">VectorStore store = JavaVectorsVectorStore
+                        <pre><code class="language-java hljs" data-lang="java">VectorStore store = JavaVectorsVectorStore
         .builder(embeddingModel, collection)
         .commitAfterAdd(true)
         .build();
@@ -99,7 +99,7 @@ List&lt;Document&gt; hits = store.similaritySearch(
                     </div>
                     <div class="code-panel" data-code="lc4j">
                         <div class="code-title"><span class="sl">//</span> LangChain4j — EmbeddingStore backend</div>
-                        <pre><code class="language-java">EmbeddingStore&lt;TextSegment&gt; store =
+                        <pre><code class="language-java hljs" data-lang="java">EmbeddingStore&lt;TextSegment&gt; store =
         JavaVectorsEmbeddingStore.builder(collection).build();
 
 store.add(model.embed(segment).content(), segment);
@@ -157,12 +157,19 @@ var matches = store.search(EmbeddingSearchRequest.builder()
             <div class="equations">
                 <div class="equation reveal">
                     <div class="eq-label">// 1 — build a collection</div>
-                    <div class="eq" style="font-size:.9rem;line-height:1.7">VectorCollection.builder()<br>&nbsp;&nbsp;.dimension(384)<br>&nbsp;&nbsp;.metric(COSINE)<br>&nbsp;&nbsp;.indexType(HNSW)<br>&nbsp;&nbsp;.build()</div>
+                    <pre class="eq"><code class="language-java hljs" data-lang="java">VectorCollection.builder()
+    .dimension(384)
+    .metric(COSINE)
+    .indexType(HNSW)
+    .build()</code></pre>
                     <p class="eq-note">One builder unifies every index and quantizer behind a single API. Vectors are stored off-heap via <code>MemorySegment</code>, so large collections don't pressure the GC.</p>
                 </div>
                 <div class="equation reveal">
                     <div class="eq-label">// 2 — add, commit, search</div>
-                    <div class="eq" style="font-size:.9rem;line-height:1.7">collection.addAll(docs);<br>collection.commit();<br>collection.search(q, 10);</div>
+                    <pre class="eq"><code class="language-java hljs" data-lang="java">collection.add("a", vec, "hello")
+          .add("b", vec, "bye")
+          .commit();
+collection.search(query, 10);</code></pre>
                     <p class="eq-note">Commits are atomic and generation-based; the memory-mapped store recovers on restart, with tombstone deletes and background compaction.</p>
                 </div>
             </div>
@@ -233,7 +240,7 @@ var matches = store.search(EmbeddingSearchRequest.builder()
             <div class="dartvault-card reveal">
                 <div class="dartvault-tag"><span class="dot"></span> You own your data</div>
                 <h3 class="dartvault-title">Distributed vector search on object storage</h3>
-                <p class="dartvault-desc">Point it at your own S3 or R2 bucket and scale reads and writes across nodes independently. Durable, generation-based commits with a CAS-published manifest — your vectors stay in your account, and you own them.</p>
+                <p class="dartvault-desc">Point it at your own S3 or R2 bucket and scale reads and writes across nodes independently. Durable, generation-based commits with a CAS-published manifest — your vectors stay in your account.</p>
                 <div class="hero-cta">
                     <a href="https://dartvault.io" class="btn btn-marketplace">DartVault on AWS Marketplace →</a>
                     <a href="https://dartvault.io" class="btn btn-secondary">Learn more</a>

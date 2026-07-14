@@ -1,10 +1,10 @@
 <header class="navbar" role="banner">
   <div class="navbar-brand">
-    <a class="vc-brand" href="https://integrallis.com" aria-label="Integrallis">
-      <img class="vc-ilogo" src="{{uiRootPath}}/img/integrallis-logo.png" alt="Integrallis">
+    <div class="vc-brand">
+      <a class="vc-mark" href="https://integrallis.com" aria-label="Integrallis"><img class="vc-ilogo" src="{{uiRootPath}}/img/integrallis-logo.png" alt="Integrallis"></a>
       <span class="vc-sep">/</span>
-      <span class="vc-product">vectors</span>
-    </a>
+      <a class="vc-product" href="{{{siteRootPath}}}/../">vectors</a>
+    </div>
     <div class="vc-nav-right">
       <button id="vc-theme-toggle" class="vc-icon-btn" type="button" aria-label="Toggle dark/light theme" title="Toggle theme">
         <svg class="vc-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
@@ -21,10 +21,11 @@
     </div>
   </div>
   <div id="topbar-nav" class="navbar-menu">
-    {{#if site.homeUrl}}
     <div class="navbar-end">
-      <a class="navbar-item" href="{{site.homeUrl}}">Home</a>
+      {{! The docs deploy nests the Antora site under /docs of the Pages root; the landing page is
+          one level above the site root. siteRootPath points at the site root, so ../ reaches the
+          landing at any page depth (and in the local combined preview). }}
+      <a class="navbar-item" href="{{{siteRootPath}}}/../">Home</a>
     </div>
-    {{/if}}
   </div>
 </header>

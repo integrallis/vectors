@@ -1,0 +1,53 @@
+= Semantic Routing
+:navtitle: Semantic Routing
+
+A semantic router classifies an incoming query into one of several named routes by embedding
+similarity — useful for intent detection, tool selection, and guardrails, without training a
+classifier. You define each route with a handful of example utterances; the router embeds them once
+and, at query time, returns the nearest route (or no match if nothing clears the threshold).
+
+NOTE: `vectors-router` is source-available in the repository and not yet published to Maven Central.
+
+== Defining routes
+
+A `Route` has a name, reference utterances, and a cosine-distance threshold (lower distance = more
+similar). Build a `SemanticRouter` from an embedding function and the routes; all reference
+utterances are embedded and L2-normalized once, at construction:
+
+[source,java]
+----
+Route sports = Route.builder()
+    .name("sports")
+    .references(List.of("football game", "basketball score", "soccer match"))
+    .distanceThreshold(0.2)
+    .build();
+
+Route food = Route.builder()
+    .name("food")
+    .references(List.of("pasta recipe", "sushi restaurant", "baking bread"))
+    .distanceThreshold(0.2)
+    .build();
+
+SemanticRouter router = new SemanticRouter(embeddingFunction, List.of(sports, food));
+----
+
+== Routing a query
+
+`route(String)` embeds the query and returns the best `RouteMatch`; `route(float[])` accepts a
+pre-computed embedding. A match beyond every route's threshold returns a no-match (`getName()` is
+`null`):
+
+[source,java]
+----
+RouteMatch match = router.route("who won the game last night?");
+
+if (match.getName() != null) {
+  System.out.println("route: " + match.getName() + " (distance " + match.getDistance() + ")");
+} else {
+  System.out.println("no route matched — fall back to a default handler");
+}
+----
+
+Each route carries its own `distanceThreshold`, so a tightly-scoped route can demand a closer match
+than a broad catch-all. Similarity is computed with the same SIMD-accelerated cosine kernel as the
+rest of the library.

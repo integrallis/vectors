@@ -3,17 +3,8 @@
 // docs use ('vectors-theme') so a choice made here carries over to the docs and back.
 
 document.addEventListener('DOMContentLoaded', () => {
-  // ---- Java syntax highlighting (highlight.js, bundled locally) ---------
-  if (window.hljs) {
-    const paint = window.hljs.highlightElement || window.hljs.highlightBlock;
-    document.querySelectorAll('.code-panel pre code').forEach((el) => {
-      try {
-        paint.call(window.hljs, el);
-      } catch (e) {
-        /* leave the block un-highlighted rather than break the page */
-      }
-    });
-  }
+  // Java syntax highlighting: the bundled highlight.js is a self-contained IIFE that
+  // auto-highlights every `pre code.hljs[data-lang]` element when it loads — no call needed here.
 
   // ---- Theme toggle (persisted; defaults to system preference) ----------
   const root = document.documentElement;
@@ -95,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     maven: {
       copy: '<dependency>\n  <groupId>com.integrallis</groupId>\n  <artifactId>vectors</artifactId>\n  <version>0.1.0</version>\n</dependency>',
-      show: '<dependency> com.integrallis:vectors:0.1.0 </dependency>',
+      show: '<dependency>com.integrallis:vectors:0.1.0</dependency>',
     },
     sbt: {
       copy: 'libraryDependencies += "com.integrallis" % "vectors" % "0.1.0"',

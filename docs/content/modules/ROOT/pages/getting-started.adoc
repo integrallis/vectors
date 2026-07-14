@@ -10,7 +10,7 @@ This guide takes you from an empty project to a running vector search.
 
 == Add the Dependency
 
-Start with `vectors-db`, the embedded database facade. It pulls in the core kernels, storage, quantization, and index modules transitively, so a single dependency is enough for most applications.
+Start with `vectors`, the single umbrella dependency. It re-exports the embedded database facade (`vectors-db`) and, transitively, the core kernels, storage, quantization, and index modules — so one dependency is enough for most applications.
 
 === Gradle (Kotlin DSL)
 
@@ -19,7 +19,7 @@ Add the dependency to `build.gradle.kts`:
 [source,kotlin,subs="attributes+"]
 ----
 dependencies {
-    implementation("com.integrallis:vectors-db:{vectors-version}")
+    implementation("com.integrallis:vectors:{vectors-version}")
 }
 ----
 
@@ -46,7 +46,7 @@ tasks.withType<JavaExec> {
 ----
 <dependency>
     <groupId>com.integrallis</groupId>
-    <artifactId>vectors-db</artifactId>
+    <artifactId>vectors</artifactId>
     <version>{vectors-version}</version>
 </dependency>
 ----

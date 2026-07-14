@@ -10,6 +10,13 @@
 * xref:sizing.adoc[Sizing & Tuning]
 * xref:migration-from-simplevectorstore.adoc[Migrating from SimpleVectorStore]
 
+.Advanced Features
+* xref:hybrid-search.adoc[Hybrid Search]
+* xref:routing.adoc[Semantic Routing]
+* xref:caching.adoc[Semantic Caching]
+* xref:ingestion.adoc[Bulk Ingestion]
+* xref:optimization.adoc[Optimization]
+
 .Distributed Database
 * xref:distributed.adoc[Overview]
 

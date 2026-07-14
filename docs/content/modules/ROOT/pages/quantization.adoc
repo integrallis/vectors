@@ -75,7 +75,7 @@ VectorCollection collection = VectorCollection.builder()
     .build();
 ----
 
-Available `QuantizerKind` values: `NONE`, `SQ8`, `SQ4`, `FP16`, `PQ`, `BQ`, `RABITQ`, `NVQ`, `TURBOQUANT`.
+Available `QuantizerKind` values: `NONE`, `SQ8`, `SQ4`, `FP16`, `PQ`, `BQ`, `RABITQ`, `EXTENDED_RABITQ`, `NVQ`, `TURBOQUANT`.
 
 BBQ is a mode of the binary quantizer and Extended RaBitQ is the multi-bit form of RaBitQ.
 Both are configured through their respective quantizer families rather than as standalone `QuantizerKind` values.

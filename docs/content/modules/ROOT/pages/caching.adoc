@@ -1,0 +1,121 @@
+= Semantic Caching
+:navtitle: Semantic Caching
+
+Vectors ships a small caching layer built for AI workloads: an exact-match cache for embeddings, and
+a **semantic cache** that answers a query from a *near-duplicate* earlier query instead of only an
+identical one. The common payoff is skipping an expensive embedding or LLM call when a semantically
+equivalent request has already been served.
+
+There are two interfaces:
+
+* `VectorCache<K, V>` — an exact-key cache with a Caffeine default and a JSR-107 (JCache) backend.
+* `SemanticCache<V>` — a similarity cache: `lookup(queryEmbedding)` returns a hit when a stored
+  entry is within a cosine threshold, so paraphrases hit the same cached answer.
+
+== Dependencies
+
+[cols="2,3"]
+|===
+| Artifact | Use it for
+
+| `com.integrallis:vectors-cache`
+| The core SPI (`VectorCache`, `SemanticCache`, `CacheStats`) and the Caffeine-backed cache.
+
+| `com.integrallis:vectors-cache-semantic-db`
+| A `SemanticCache` backed by a `VectorCollection` — the similarity-based LLM-response cache.
+
+| `com.integrallis:vectors-cache-jcache`
+| A `VectorCache` over any JSR-107 provider (Ehcache, Hazelcast, Infinispan, Caffeine-JCache).
+
+| `com.integrallis:vectors-cache-spring-ai`
+| Caching decorators for Spring AI `EmbeddingModel` / `ChatModel` — see xref:spring-ai.adoc[Spring AI].
+
+| `com.integrallis:vectors-cache-langchain4j`
+| Caching decorators for LangChain4j models and stores — see xref:langchain4j.adoc[LangChain4j].
+|===
+
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors-cache:{vectors-version}")
+}
+----
+
+== Exact-match cache
+
+`CaffeineVectorCache` is the default `VectorCache` — a bounded, optionally expiring cache with hit,
+miss, and eviction stats. `getOrCompute` is the single-flight hot path: on a miss it invokes the
+loader once, even under concurrency.
+
+[source,java]
+----
+try (VectorCache<String, float[]> cache =
+    CaffeineVectorCache.<String, float[]>builder()
+        .maximumSize(10_000)
+        .expireAfterWrite(Duration.ofMinutes(5))
+        .build()) {
+
+  float[] embedding = cache.getOrCompute("hello world", text -> embeddingModel.embed(text));
+
+  CacheStats stats = cache.stats();   // hits, misses, evictions, hitRate()
+}
+----
+
+== Semantic (similarity) cache
+
+`VectorDbSemanticCache` implements `SemanticCache<V>` over a `VectorCollection`. `put` stores an
+embedding and a serialized payload; `lookup` runs a top-1 search and returns a hit only when the
+score clears the configured threshold (default cosine `0.92`). This is the LLM-response cache: a
+paraphrased prompt whose embedding is close enough to a cached one returns the stored answer.
+
+[source,java]
+----
+VectorCollection collection = VectorCollection.builder()
+    .dimension(embeddingModel.dimensions())
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.FLAT)
+    .build();
+
+try (SemanticCache<String> cache =
+    VectorDbSemanticCache.builder(collection, PayloadCodec.identity())
+        .threshold(0.92)                 // cosine; higher is stricter
+        .closeCollectionOnClose(true)
+        .build()) {
+
+  // Cache an answer keyed by its prompt embedding
+  cache.put("q1", embeddingModel.embed("How do I reset my password?"), "Go to Settings → Security…");
+
+  // A paraphrase hits the same entry when within threshold
+  Optional<SemanticCache.Hit<String>> hit =
+      cache.lookup(embeddingModel.embed("password reset steps?"));
+  hit.ifPresent(h -> System.out.println(h.value() + " (score " + h.score() + ")"));
+}
+----
+
+`PayloadCodec<V>` serializes the cached value; `PayloadCodec.identity()` handles `String` payloads,
+and you supply an encode/decode pair for richer types. Use `thresholdRaw(threshold, higherIsBetter)`
+for Euclidean metrics (where lower is better), and `admissionPolicy(...)` to gate which values are
+allowed into the cache.
+
+== JCache (JSR-107) backend
+
+`JCacheVectorCache` wraps any JSR-107 `Cache`, so an existing Ehcache / Hazelcast / Infinispan
+deployment can back the exact-match cache. Stats report hits and misses; eviction count and size are
+left to the underlying provider.
+
+[source,java]
+----
+Cache<String, float[]> backing = cacheManager.createCache("embeddings",
+    new MutableConfiguration<String, float[]>().setTypes(String.class, float[].class));
+
+VectorCache<String, float[]> cache = new JCacheVectorCache<>(backing);
+cache.put("hello", embeddingModel.embed("hello"));
+----
+
+== Framework decorators
+
+For Spring AI and LangChain4j, the cache is applied as a drop-in decorator around the model or store
+— no call-site changes. Those are documented with each integration:
+
+* **Spring AI** — `CachingEmbeddingModel` / `CachingChatModel`: xref:spring-ai.adoc[Spring AI Integration].
+* **LangChain4j** — `CachingEmbeddingModel` and `CachingEmbeddingStore`: xref:langchain4j.adoc[LangChain4j Integration].

@@ -1,0 +1,72 @@
+= Hyperparameter Optimization
+:navtitle: Optimization
+
+Index parameters trade recall, latency, build time, and memory against one another — and the best
+`m` / `efConstruction` / `efSearch` depend on your data and your objective. `vectors-optimizer`
+searches that space for you: it defines a parameter space, runs trials with a sampler (Grid, Random,
+or TPE), scores each against a weighted objective on your own corpus and relevance judgments, and
+persists the results so you can pick the winner.
+
+NOTE: `vectors-optimizer` is source-available in the repository and not yet published to Maven Central.
+
+== Defining the search
+
+A `SearchSpace` is a list of parameter axes — fixed values, integer/double ranges (optionally
+log-scaled), or categoricals. An `ObjectiveWeights` says what "good" means: a weighted blend of
+recall, NDCG, p95 latency, build time, and memory, each measured against a reference value.
+
+[source,java]
+----
+SearchSpace space = new SearchSpace(List.of(
+    new ParamSpec.FixedString("metric", "EUCLIDEAN"),
+    new ParamSpec.FixedString("indexType", "HNSW"),
+    new ParamSpec.IntRange("m", 8, 64, true),                 // log-scaled
+    new ParamSpec.IntRange("efConstruction", 40, 300, true),
+    new ParamSpec.IntRange("efSearch", 16, 200, true)));
+
+ObjectiveWeights weights = ObjectiveWeights.builder()
+    .recallWeight(1.0)
+    .ndcgWeight(0.5)
+    .latencyP95Weight(0.5).latencyP95ReferenceUs(500.0)
+    .buildTimeWeight(0.3).buildTimeReferenceMs(15_000.0)
+    .build();
+----
+
+== Running a study
+
+`StudyConfig` binds the space, the weights, a sampler, and your corpus / queries / relevance judgments
+(`Qrels`). `StudyRunner` drives the trial budget, consulting the sampler between trials and persisting
+each result through a `StudyStore`:
+
+[source,java]
+----
+StudyConfig cfg = StudyConfig.builder()
+    .searchSpace(space)
+    .objectiveWeights(weights)
+    .samplerKind(StudyConfig.SamplerKind.TPE)   // GRID | RANDOM | TPE
+    .corpusSource(dataset::corpus)
+    .qrelsSource(dataset::qrels)
+    .queriesSource(dataset::queries)
+    .nTrials(40)
+    .kForMetrics(10)
+    .seed(42L)
+    .build();
+
+StudyStore store = StudyStore.defaultRoot();   // ~/.vectors/optimizer/studies/<id>.jsonl
+try (StudyRunner runner =
+    new StudyRunner("hnsw-tuning", new IndexStudy(cfg, dataset.embedder()), cfg, store)) {
+  runner.runBlocking();
+}
+
+// Pick the best trial by objective score
+List<TrialResult> trials = store.loadAll("hnsw-tuning");
+trials.sort(Comparator.comparingDouble(TrialResult::objectiveScore).reversed());
+TrialResult best = trials.get(0);
+int bestM = ((Number) best.trial().params().get("m")).intValue();
+----
+
+The **TPE** sampler learns from earlier trials to focus the search (a random startup phase precedes
+Parzen estimation); **Grid** is exhaustive over discrete axes; **Random** is a robust baseline. The
+same machinery drives `RouterThresholdStudy` and `CacheThresholdStudy` for tuning the semantic
+router and semantic-cache thresholds. Results are streamed via `runner.publisher()` for live
+progress, and the JSONL store lets you resume or analyze a study after the fact.

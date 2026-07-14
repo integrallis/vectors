@@ -1,14 +1,47 @@
 = The Distributed Vector Database
 :navtitle: Distributed Database
 
-The embedded engine documented in the rest of this guide is a library: it runs in your
-application process and stores data on local disk. The **distributed tier** is the same engine
-with a different storage floor — it makes cloud **object storage (S3, GCS, Cloudflare R2, MinIO)**
-the durable source of truth, turning `vectors` into an object-storage-backed vector database that
-scales to billions of vectors at object-storage cost.
+The embedded engine documented in the rest of this guide is a **free, Apache-licensed library**: it
+runs inside your application process and stores data on local disk — or, with an S3-compatible
+backend, persists a **single node** to object storage you own.
 
-It is the same `VectorCollection` API. You start embedded, and grow into the distributed tier
-without rewriting your application.
+Scaling that into a **distributed, multi-node vector database on object storage** — the tier that
+serves billions of vectors from cheap storage behind a hot SSD/RAM cache — is **DartVault**, a
+commercial product that runs on object storage *you* own. This page explains the divide, and the
+economics behind it.
+
+[NOTE]
+====
+It is the same `VectorCollection` API throughout. You start embedded and free, and grow into
+DartVault without rewriting your application.
+====
+
+== Free library vs. DartVault
+
+[cols="1,2,2"]
+|===
+| | Embedded library — free (Apache-2.0) | DartVault — commercial
+
+| Runs
+| In-process, inside your JVM
+| Distributed and multi-node — managed, on object storage you own
+
+| Storage floor
+| Local disk, or single-node persistence to your own S3/R2 bucket
+| Object storage as the durable source of truth, with a tiered SSD/RAM cache across nodes
+
+| Scale
+| One node's memory and disk
+| Billions of vectors at object-storage cost; storage and compute scale independently
+
+| Get it
+| `implementation("com.integrallis:vectors:{vectors-version}")`
+| https://dartvault.io[dartvault.io] · AWS Marketplace
+|===
+
+The library is the on-ramp; DartVault is the destination when a single node is no longer enough. The
+rest of this page is about DartVault — what it is, why object storage, and how it compares — followed
+by the one piece that ships free: single-node persistence to your own object store.
 
 == Why object storage
 
@@ -18,12 +51,12 @@ once replication and SSD are included. Object storage costs about **$0.02/GB-mon
 SSD, only ~4–5× slower than RAM, about $0.10/GB. Serving from object storage with an SSD/RAM
 cache lands near **$70/TB-month**: 10–100× cheaper than keeping everything in memory.
 
-This is not a bet. The market has already moved: turbopuffer, Pinecone Serverless, Chroma Cloud,
-and Milvus all made object storage the durable tier specifically to escape RAM-bound economics.
-What none of them offer is that model as an **open-core library you can embed and self-host, on
-the JVM**. That is the gap this tier fills.
+This is not a bet. The market has already moved: a wave of serverless and open-source vector
+databases has made object storage the durable tier specifically to escape RAM-bound economics.
+What none of them offer is that model **managed for you on object storage you own, on the JVM** —
+your vectors never leave your account. That is the gap DartVault fills.
 
-== Architecture
+== How DartVault works
 
 Object storage is the source of truth; RAM and local SSD are caches in front of it.
 
@@ -35,51 +68,33 @@ Object storage is the source of truth; RAM and local SSD are caches in front of 
   the object store acknowledges it — no synchronous multi-node quorum.
 
 | Tiered cache
-| A four-tier cascade (`TieredCluster`, T0→T3) keeps 1-bit RaBitQ codes hot in JVM heap, warm
-  clusters on local SSD, and full-precision vectors in object storage, promoting and evicting by
-  access frequency. A cold namespace's first query fetches from object storage and warms the
-  cache; subsequent queries are served locally.
+| A four-tier cascade (T0→T3) keeps 1-bit RaBitQ codes hot in JVM heap, warm clusters on local SSD,
+  and full-precision vectors in object storage, promoting and evicting by access frequency. A cold
+  namespace's first query fetches from object storage and warms the cache; subsequent queries are
+  served locally.
 
 | Centroid routing, not a graph
-| Search routes through an IVF centroid hierarchy — `BuoyIndex` (global routing, replicated to
-  every node) then `SubBuoyTree` (hierarchical refinement) — that bounds the number of
-  object-storage round-trips to the height of the tree. This is deliberate: graph indexes like
-  HNSW require many sequential hops, which is fatal over high-latency object storage. It mirrors
-  the centroid-tree approach turbopuffer adopted for the same reason.
+| Search routes through an IVF centroid hierarchy — global routing replicated to every node, then
+  hierarchical refinement — that bounds the number of object-storage round-trips to the height of
+  the tree. This is deliberate: graph indexes like HNSW require many sequential hops, which is fatal
+  over high-latency object storage. It mirrors the centroid-tree approach the object-storage-first
+  vector databases adopt for the same reason.
 
 | Consistency
 | New data is served by scanning the unindexed tail of the log until asynchronous indexing catches
   up, so a write is visible to the next query. Indexing never blocks reads or writes.
 |===
 
-The pieces are real code: `DistributedVectorCollection` and `TieredCluster` (`vectors-ivf`),
-`S3StorageBackend` and `SegmentedWriteAheadLog` (`vectors-storage`), and generation shipping in
-`vectors-db`. They are tested against LocalStack and Cloudflare R2.
-
-== What makes it different
-
-* **Embedded-first.** The same engine and API run in-process as a library or as a distributed,
-  object-storage-backed server. Topology is a builder flag, not a rewrite — code written against
-  one mode works against all of them.
-* **No cluster to operate.** Object storage is the durable floor, so there is no etcd, no message
-  queue, and no Kubernetes commitment (contrast Milvus's distributed mode), and no RAM ceiling to
-  provision against (contrast Redis, and the in-RAM HNSW defaults of Weaviate and Qdrant).
-* **JVM-native.** It runs inside your Java, Kotlin, or Scala application. Every embeddable
-  alternative today is Python-first (Chroma, Milvus Lite, Qdrant's in-process mode) or a separate
-  server process. No sidecar, no language boundary.
-* **Open-core.** The embedded library is Apache-2.0; the distributed tier is source-available and
-  converts to Apache-2.0 on its change date (see <<licensing>>).
-
-=== How it compares
+== How DartVault compares
 
 [cols="1,1,1,1"]
 |===
 | System | Storage model | Runs embedded on the JVM? | License
 
-| *vectors* (distributed tier)
-| Object-storage-first, SSD/RAM cache
-| *Yes* — same engine, in-process or server
-| Apache-2.0 core / source-available tier
+| *DartVault*
+| Object-storage-first, SSD/RAM cache, on storage you own
+| *Yes* — same engine as the free library, at multi-node scale
+| Commercial (free embedded core is Apache-2.0)
 
 | turbopuffer
 | Object-storage-first
@@ -112,102 +127,51 @@ The pieces are real code: `DistributedVectorCollection` and `TieredCluster` (`ve
 | PostgreSQL
 |===
 
-The object-storage systems are proprietary-cloud or cluster-heavy; the embeddable ones are
-RAM-bound and Python-centric. An Apache-cored, object-storage-backed engine that also embeds on
-the JVM sits in the empty intersection.
+The object-storage systems are proprietary-cloud or cluster-heavy; the embeddable ones are RAM-bound
+and Python-centric. A managed, object-storage-backed engine that runs on storage you own — and whose
+core also embeds free on the JVM — sits in the empty intersection.
 
 == Honest trade-offs
 
 Object storage trades latency for cost and scale. Warm queries — served from the SSD/RAM cache —
 are fast. A **cold** query, against a namespace not yet cached, pays object-storage round-trips;
-turbopuffer publishes roughly 874&nbsp;ms cold versus 14&nbsp;ms warm p50 for a million vectors,
-and this tier makes the same bargain. There is also a small consistency-check floor on reads.
+a leading object-storage vector database publishes roughly 874&nbsp;ms cold versus 14&nbsp;ms warm
+p50 for a million vectors, and DartVault makes the same bargain. There is also a small
+consistency-check floor on reads.
 
-So the distributed tier is built for workloads that tolerate cold-start latency in exchange for
-cheap scale: RAG and semantic search, batch and analytical retrieval, and large multi-tenant
-corpora where most data is cold. For a small corpus on a strict single-digit-millisecond hot path,
-an in-memory store is the right tool — the embedded `vectors` engine on local disk, or an in-RAM
-database. This tier does not try to win that fight.
+So DartVault is built for workloads that tolerate cold-start latency in exchange for cheap scale:
+RAG and semantic search, batch and analytical retrieval, and large multi-tenant corpora where most
+data is cold. For a small corpus on a strict single-digit-millisecond hot path, an in-memory store
+is the right tool — the embedded `vectors` engine on local disk. DartVault does not try to win that
+fight.
 
-== Object-storage backends
+== Get DartVault
+
+DartVault is the managed, distributed vector database — running on your own S3 or R2, so your data
+stays in your account. It is available on the AWS Marketplace and other object-storage targets.
+
+* **https://dartvault.io[dartvault.io]** — product overview and getting started
+* **AWS Marketplace** — subscribe and provision against your own storage
+
+== Single-node object-storage persistence (free)
+
+You do not need DartVault to put *one* node on object storage. The free library can point its durable
+tier at an S3-compatible bucket — a single process, persisted to your own storage instead of local
+disk. This is **not** the distributed database: there is no multi-node cache and no
+generation-shipping across nodes. But if you just want one JVM backed by S3/R2, it ships in the
+Apache library.
 
 Any S3-compatible endpoint works — AWS S3, Cloudflare R2, Google Cloud Storage, or a local MinIO —
 because the backend supports an endpoint override, path-style addressing, and static credentials:
 
 [source,java]
 ----
-// Point the durable tier at MinIO (or R2 / S3 / any S3-compatible endpoint)
 StorageBackend objectStore = S3StorageBackend.create(
     URI.create("http://localhost:9000"), // endpoint (omit override for AWS S3)
     "vectors",                            // bucket
     "us-east-1",                          // region
     "minioadmin",                         // access key
     "minioadmin");                        // secret key
-
-// The distributed collection uses it as its durable T3 tier.
-----
-
-[[licensing]]
-== Licensing
-
-The distributed-tier modules — `vectors-distributed`, `vectors-cluster`, `vectors-server`, and
-`vectors-gpu` — are licensed under the Functional Source License (FSL-1.1-ALv2) and convert to
-Apache-2.0 on their change date. The embedded library and its adapters are Apache-2.0. The
-`LICENSING.md` file in the repository carries the module-by-module classification.
-
-== Running it locally
-
-One command brings up a complete object-storage vector database on your machine — MinIO for the
-object store, the `vectors` server, and the Studio web UI:
-
-[source,bash]
-----
-docker compose -f deploy/object-storage/docker-compose.yml up --build
-----
-
-It starts three services:
-
-* *Server* — http://localhost:8287 — the JSON REST API; collections are backed by MinIO.
-* *Studio* — http://localhost:8288 — a web UI to browse collections, inspect vectors, and search.
-* *MinIO* — API http://localhost:9000, console http://localhost:9001 (`minioadmin` / `minioadmin`)
-  — the S3-compatible object store that holds the durable data.
-
-Create a collection, add documents (vectors, text, and metadata), commit, and search:
-
-[source,bash]
-----
-curl -X POST http://localhost:8287/v1/collections \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"demo","dimension":4,"metric":"COSINE","indexType":"HNSW"}'
-
-curl -X POST http://localhost:8287/v1/collections/demo/documents \
-  -H 'Content-Type: application/json' \
-  -d '{"documents":[
-        {"id":"a","vector":[1,0,0,0],"text":"alpha","metadata":{"tag":"x"}},
-        {"id":"b","vector":[0,1,0,0],"text":"beta","metadata":{"tag":"y"}}]}'
-curl -X POST http://localhost:8287/v1/collections/demo/commit
-
-# Nearest-neighbour search, with an optional metadata filter
-curl -X POST http://localhost:8287/v1/collections/demo/search \
-  -H 'Content-Type: application/json' \
-  -d '{"queryVector":[1,0,0,0],"k":10,"filter":{"field":"tag","eq":"x"}}'
-----
-
-The committed data lands in the MinIO bucket under `vectors/demo/gen-.../` (browse it in the
-console), and the collection is reopened from object storage when the server restarts. Point the
-same stack at *Cloudflare R2* or *AWS S3* by changing the `VECTORS_S3_*` values in the compose file
-— drop `VECTORS_S3_ENDPOINT` entirely for AWS S3, which uses the default credential chain.
-
-=== Embedding it in a JVM application
-
-The same durable floor is available to the embedded library — no server required. Build a
-`StorageBackend` for your object store and hand it to the collection builder; everything else (the
-`VectorCollection` API, metadata, filters, text) is unchanged:
-
-[source,java]
-----
-StorageBackend objectStore = S3StorageBackend.create(
-    URI.create("http://localhost:9000"), "vectors", "us-east-1", "minioadmin", "minioadmin");
 
 try (VectorCollection collection = VectorCollection.builder()
     .dimension(4)
@@ -222,5 +186,15 @@ try (VectorCollection collection = VectorCollection.builder()
 }
 ----
 
-On `build()` the collection hydrates its local cache from the object store, so a fresh process (or
-a scaled-out replica) picks up the committed data automatically.
+On `build()` the collection hydrates its local cache from the object store, so a fresh process picks
+up the committed data automatically. When one node stops being enough, the same API grows into
+DartVault.
+
+[[licensing]]
+== Licensing
+
+The embedded library and its adapters are **Apache-2.0 and free**. The distributed tier — the
+DartVault engine (`vectors-distributed`, `vectors-cluster`, `vectors-server`, `vectors-gpu`) — is
+licensed under the Functional Source License (**FSL-1.1-ALv2**): its source is available, and it
+converts to Apache-2.0 on its change date. The `LICENSING.md` file in the repository carries the
+module-by-module classification.

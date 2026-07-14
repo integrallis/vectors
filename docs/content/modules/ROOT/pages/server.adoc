@@ -213,3 +213,29 @@ int port = handle.port();
 // ... run tests against http://localhost:<port> ...
 handle.stop();
 ----
+
+== Java Client
+
+`vectors-server-client` is a typed Java client for the REST API, built on the JDK `HttpClient` with
+Jackson — no extra HTTP dependency. `VectorsServerClient` is thread-safe and `AutoCloseable`, and
+maps 4xx/5xx responses to a `VectorsServerException`.
+
+NOTE: `vectors-server-client` is source-available in the repository and not yet published to Maven Central.
+
+[source,java]
+----
+try (VectorsServerClient client = new VectorsServerClient("http://localhost:8287")) {
+  client.createCollection("demo", 384, "COSINE", "HNSW", Map.of());
+  client.upsertDocuments("demo", List.of(
+      new DocumentPayload("a", vectorA, "alpha", Map.of(), null)));
+  client.commit("demo");
+
+  List<SearchHit> hits = client.search("demo", queryVector, 10, null, Map.of());
+  // hybrid (server-side RRF fusion of vector + text):
+  List<SearchHit> hybrid = client.hybridSearch("demo", queryVector, "alpha", 10, "RRF");
+}
+----
+
+The client also covers collection lifecycle (`listCollections`, `describe`, `deleteCollection`),
+bulk reads (`previewDocuments`, `vectorsBatch`, `sample`), blob retrieval (`getBlob`), and a
+`isHealthy()` probe. Pass an API key to the constructor for bearer-token auth.

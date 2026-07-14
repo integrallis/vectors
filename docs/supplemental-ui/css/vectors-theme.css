@@ -79,6 +79,8 @@
   /* Compact header. The default UI navbar is 3.5rem and several elements are
      positioned off it; slim it to 3rem and re-derive the coupled offsets below. */
   --nav-h: 3rem;
+  /* Integrallis brand accent (matches the landing page) */
+  --accent-orange: #f15a24;
 }
 
 html,
@@ -155,8 +157,12 @@ body {
   padding: 0 0.5rem 0 1rem;
   text-decoration: none;
 }
-.vc-brand:hover {
+.vc-brand a {
   text-decoration: none;
+}
+.vc-brand .vc-mark {
+  display: inline-flex;
+  align-items: center;
 }
 .vc-brand .vc-ilogo {
   height: 22px;
@@ -179,6 +185,10 @@ body {
   font-weight: 500;
   font-size: 0.95rem;
   letter-spacing: -0.01em;
+  transition: color 0.15s ease;
+}
+.vc-brand .vc-product:hover {
+  color: var(--accent-orange);
 }
 
 .vc-nav-right {
@@ -311,6 +321,8 @@ body {
 /* ── article / document body ───────────────────────────────────────────────── */
 .doc {
   color: var(--fg);
+  font-size: 15px;
+  line-height: 24px;
 }
 .doc h1,
 .doc h2,

@@ -1,0 +1,55 @@
+= Bulk Ingestion
+:navtitle: Bulk Ingestion
+
+Loading a large corpus means embedding a stream of documents and committing them in batches.
+`vectors-ingest` is a streaming pipeline that does exactly that: it pulls from a source, embeds in
+parallel on virtual threads, and commits in single-threaded batches — with a durable cursor so an
+interrupted run resumes instead of restarting.
+
+NOTE: `vectors-ingest` is source-available in the repository and not yet published to Maven Central.
+
+== The pipeline
+
+`BulkIngestor` wires three things together: an `IngestSource` (where documents come from), an
+`Embedder` (how they become vectors), and a `VectorSink` (where they land, e.g. a `VectorCollection`).
+Embedding runs concurrently; commits are batched by a `BatchPolicy` and applied on one thread to
+respect the write lock.
+
+[source,java]
+----
+try (BulkIngestor ingestor = BulkIngestor.builder()
+    .vectorSink(vectorSink)                 // required — where vectors go
+    .embedder(new LangChain4jEmbedder(embeddingModel))
+    .batchPolicy(new BatchPolicy(1024, 32L * 1024 * 1024, Duration.ofSeconds(1)))
+    .embeddingConcurrency(8)                 // virtual-thread embed pool
+    .queueCapacity(64)                       // bounded producer/consumer queue
+    .cursor(cursor)                          // durable resume state
+    .retryPolicy(retryPolicy)
+    .build()) {
+
+  IngestResult result = ingestor.ingest(source);
+  System.out.printf("committed %d docs in %d batches%n",
+      result.docsCommitted(), result.batchesCommitted());
+}
+----
+
+* **`BatchPolicy(maxDocs, maxBytes, maxLatency)`** flushes a batch when any bound is hit;
+  `BatchPolicy.defaults()` is 1024 docs / 32 MiB / 1 s.
+* **`embeddingConcurrency`** sizes the virtual-thread pool that calls the embedder in parallel;
+  commits stay single-threaded.
+* **`cursor`** persists progress scoped to `source.name()`, so a restart resumes from
+  `source.startOffset()` rather than re-ingesting from the beginning.
+
+== Embedders and sources
+
+`Embedder` is the embedding SPI (`int dimension()`, `List<float[]> embedAll(List<IngestDoc>)`).
+`LangChain4jEmbedder` adapts any LangChain4j `EmbeddingModel`:
+
+[source,java]
+----
+Embedder embedder = new LangChain4jEmbedder(embeddingModel);   // uses model dimension + name
+----
+
+Implement `IngestSource` to stream from your own store, or feed an in-memory list; the source's
+`name()` scopes the resume cursor and its `estimatedSize()` drives progress reporting. An optional
+`SidecartSink` stores fat payloads (raw text, blobs) outside the index.
