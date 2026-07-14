@@ -170,6 +170,71 @@ class IngestPipelineTest {
   }
 
   @Test
+  void continueOnErrorDoesNotAdvanceCursorPastADroppedBatch() throws Exception {
+    // 15 docs, batch size 5 → source offsets 0-4, 5-9, 10-14. The vector sink fails to commit the
+    // SECOND batch (5-9); continueOnError drops it and proceeds to the third (10-14).
+    var delegate = new CapturingSinks.CapturingVectorSink();
+    VectorSink failsSecondCommit =
+        new VectorSink() {
+          int commits = 0;
+
+          @Override
+          public void addAll(Batch batch) throws java.io.IOException {
+            delegate.addAll(batch);
+          }
+
+          @Override
+          public void commit() throws java.io.IOException {
+            if (++commits == 2) throw new java.io.IOException("injected commit failure on batch 2");
+            delegate.commit();
+          }
+
+          @Override
+          public long committedCount() {
+            return delegate.committedCount();
+          }
+        };
+    var ss = new CapturingSinks.CapturingSidecartSink();
+    var emb = new CapturingSinks.FakeEmbedder(3);
+    var cursor = new InMemoryCursor();
+    BatchPolicy bp = new BatchPolicy(5, 1024L * 1024L, Duration.ofSeconds(5));
+
+    IngestResult r =
+        pipeline(
+                source(15),
+                emb,
+                failsSecondCommit,
+                ss,
+                cursor,
+                bp,
+                ErrorHandler.continueOnError(c -> {}))
+            .run();
+
+    // Batches 1 and 3 committed (10 docs); batch 2 was dropped.
+    assertThat(r.docsCommitted()).isEqualTo(10L);
+    // The durable cursor must stay at the last contiguously-committed offset (4) — it must NOT jump
+    // to 14 on the back of the third batch, or a restart would skip the dropped 5-9 forever. Before
+    // the fix, batch 3 saved cursor = 14 (this assertion failed with 14).
+    assertThat(cursor.load("test")).isEqualTo(4L);
+
+    // Resume with a fresh sink + the same cursor: the dropped docs (5-9) are re-processed, not
+    // lost.
+    var vs2 = new CapturingSinks.CapturingVectorSink();
+    pipeline(
+            source(15),
+            emb,
+            vs2,
+            new CapturingSinks.CapturingSidecartSink(),
+            cursor,
+            bp,
+            ErrorHandler.failFast())
+        .run();
+    List<String> reingested =
+        vs2.committed.stream().flatMap(b -> b.docs().stream()).map(d -> d.doc().id()).toList();
+    assertThat(reingested).contains("id-5", "id-6", "id-7", "id-8", "id-9");
+  }
+
+  @Test
   void embedderFailureSurfacesAndAbortsRun() {
     var vs = new CapturingSinks.CapturingVectorSink();
     var ss = new CapturingSinks.CapturingSidecartSink();

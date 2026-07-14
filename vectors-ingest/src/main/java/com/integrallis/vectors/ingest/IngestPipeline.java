@@ -77,6 +77,15 @@ final class IngestPipeline {
   private final AtomicReference<Throwable> firstError = new AtomicReference<>();
   private volatile int currentQueueDepth;
 
+  // Resume-cursor gap tracking. Only the single commit thread (run()/commitBatch) touches these, but
+  // they're marked volatile so the 64-bit writes are atomic (the class spawns a producer thread).
+  // Once a batch is dropped under continueOnError, the durable cursor must not advance past the
+  // dropped range, or a restart would skip it forever (silent doc loss). Set in run() before the
+  // commit loop.
+  private volatile long sourceBaseline;
+  private volatile long resumeCeiling;
+  private volatile long lastCommittedOffset;
+
   IngestPipeline(
       IngestSource source,
       Embedder embedder,
@@ -123,6 +132,11 @@ final class IngestPipeline {
     // producer so they are not re-embedded/re-committed.
     long resumeSkip = startOffset - sourceStart;
     long lastSavedOffset = persisted > 0 ? persisted : sourceStart;
+    // Resume-cursor gap tracking (see commitBatch): the last contiguously-committed offset is the
+    // safe resume point; resumeCeiling caps how far the cursor may advance once a gap opens.
+    this.sourceBaseline = sourceStart;
+    this.resumeCeiling = Long.MAX_VALUE;
+    this.lastCommittedOffset = persisted > 0 ? persisted : sourceStart - 1;
 
     try (ExecutorService embedExec = Executors.newVirtualThreadPerTaskExecutor()) {
       Thread producer =
@@ -298,7 +312,17 @@ final class IngestPipeline {
             sidecartSink.writeAll(batch);
             return null;
           });
-      cursor.save(source.name(), batch.lastSourceOffset());
+      // Advance the durable resume cursor — but never past a gap left by an earlier dropped batch.
+      // `resumeCeiling` freezes at the last contiguously-committed offset once a batch is dropped,
+      // so
+      // a later successful batch cannot push the cursor beyond the dropped range (which would make
+      // a
+      // restart skip those docs forever). Persist only a real advance at/above the source baseline.
+      long safe = Math.min(batch.lastSourceOffset(), resumeCeiling);
+      if (safe >= sourceBaseline) {
+        cursor.save(source.name(), safe);
+        lastCommittedOffset = safe;
+      }
     } catch (Exception e) {
       lastError.compareAndSet(null, e.getMessage() != null ? e.getMessage() : e.toString());
       ErrorHandler.IngestErrorContext ctx =
@@ -310,6 +334,10 @@ final class IngestPipeline {
         if (e instanceof RuntimeException re) throw re;
         throw new IOException("commit failed for batch " + batch.batchId(), e);
       }
+      // continueOnError: this batch's docs were NOT committed. Freeze the resume cursor at the last
+      // contiguously-committed offset so the dropped range is re-processed on restart instead of
+      // being skipped past by the next successful batch (which is what silently lost docs before).
+      resumeCeiling = Math.min(resumeCeiling, lastCommittedOffset);
       log.warn("ingest: continuing past commit failure on batch {}", batch.batchId(), e);
       return batch.lastSourceOffset();
     }
