@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vectors — Embedded vector search for Java 25</title>
+    <meta name="description" content="Vectors is an in-process vector search and persistence engine for Java 25, built on the JDK Vector API for SIMD distance kernels — five index types, quantization, and durable memory-mapped storage, with no separate service to deploy.">
+    <meta property="og:title" content="Vectors — Embedded vector search for Java 25">
+    <meta property="og:description" content="In-process vector search for the JVM: SIMD kernels, five index types, quantization, and durable storage. No service, no network hop.">
+    <meta property="og:type" content="website">
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('vectors-theme');
+                if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', t);
+            } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+        })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/landing.css">
+    <link rel="icon" type="image/png" href="assets/images/favicon-32x32.png">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="https://integrallis.com" class="nav-brand" aria-label="Integrallis">
+                <img class="ilogo" src="assets/images/integrallis-logo.png" alt="Integrallis">
+                <span class="sep">/</span>
+                <span class="product">vectors</span>
+            </a>
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="#how">How it works</a>
+                    <a href="#features">Features</a>
+                    <a href="#dartvault">DartVault</a>
+                    <a href="docs/">Docs</a>
+                </div>
+                <button id="theme-toggle" class="icon-btn" aria-label="Toggle theme" title="Toggle theme">
+                    <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                    <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                </button>
+                <a class="icon-btn" href="https://github.com/integrallis/java-vectors" aria-label="GitHub repository" title="GitHub">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.37.5 0 5.78 0 12.292c0 5.211 3.438 9.63 8.205 11.188.6.111.82-.254.82-.567 0-.28-.01-1.022-.015-2.005-3.338.711-4.042-1.582-4.042-1.582-.546-1.361-1.335-1.725-1.335-1.725-1.087-.731.084-.716.084-.716 1.205.082 1.838 1.215 1.838 1.215 1.07 1.803 2.809 1.282 3.495.981.108-.763.417-1.282.76-1.577-2.665-.295-5.466-1.309-5.466-5.827 0-1.287.465-2.339 1.235-3.164-.135-.298-.54-1.497.105-3.121 0 0 1.005-.316 3.3 1.209.96-.262 1.98-.392 3-.397 1.02.005 2.04.135 3 .397 2.28-1.525 3.285-1.209 3.285-1.209.645 1.624.24 2.823.12 3.121.765.825 1.23 1.877 1.23 3.164 0 4.53-2.805 5.527-5.475 5.817.42.354.81 1.077.81 2.182 0 1.578-.015 2.846-.015 3.229 0 .309.21.678.825.561C20.565 21.917 24 17.495 24 12.292 24 5.78 18.627.5 12 .5Z"/></svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero" id="top">
+        <div class="hero-content">
+            <img src="assets/images/vectors-logo.png" alt="Vectors" class="hero-logo reveal">
+            <div class="hero-eyebrow reveal"><span class="dot"></span> Embedded vector search · Java 25</div>
+            <h1 class="hero-title reveal">Vector search that runs inside your JVM</h1>
+            <p class="hero-subtitle reveal">
+                In-process similarity search and durable persistence, built on the JDK Vector API for
+                SIMD distance kernels. No service to deploy, no network hop, no serialization boundary.
+            </p>
+
+            <!-- Code showcase: usage across frameworks -->
+            <div class="code-showcase reveal">
+                <div class="install-tabs" role="tablist">
+                    <button class="install-tab code-tab active" data-code="java">Java</button>
+                    <button class="install-tab code-tab" data-code="spring">Spring AI</button>
+                    <button class="install-tab code-tab" data-code="lc4j">LangChain4j</button>
+                </div>
+                <div class="code-panels">
+                    <div class="code-panel active" data-code="java">
+                        <div class="code-title"><span class="sl">//</span> Pure Java — no framework, no service</div>
+                        <pre><code class="language-java">try (var collection = VectorCollection.builder()
+        .dimension(384)
+        .metric(SimilarityFunction.COSINE)
+        .indexType(IndexType.HNSW)
+        .build()) {
+
+    collection.add("a", embedding1, "hello world")
+              .add("b", embedding2, "goodbye world")
+              .commit();
+
+    SearchResult result = collection.search(
+        SearchRequest.builder(query, 5).build());
+}</code></pre>
+                    </div>
+                    <div class="code-panel" data-code="spring">
+                        <div class="code-title"><span class="sl">//</span> Spring AI — drop-in VectorStore</div>
+                        <pre><code class="language-java">VectorStore store = JavaVectorsVectorStore
+        .builder(embeddingModel, collection)
+        .commitAfterAdd(true)
+        .build();
+
+store.add(List.of(new Document("hello world")));
+
+List&lt;Document&gt; hits = store.similaritySearch(
+        SearchRequest.builder().query("hello").topK(5).build());</code></pre>
+                    </div>
+                    <div class="code-panel" data-code="lc4j">
+                        <div class="code-title"><span class="sl">//</span> LangChain4j — EmbeddingStore backend</div>
+                        <pre><code class="language-java">EmbeddingStore&lt;TextSegment&gt; store =
+        JavaVectorsEmbeddingStore.builder(collection).build();
+
+store.add(model.embed(segment).content(), segment);
+
+var matches = store.search(EmbeddingSearchRequest.builder()
+        .queryEmbedding(model.embed("hello").content())
+        .maxResults(5)
+        .build());</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dependency coordinates -->
+            <p class="hero-connector reveal">Bring your own embeddings — one dependency and you're indexing in-process, no service to run.</p>
+            <p class="install-label reveal"><span class="accent-tick"></span>Add the dependency</p>
+            <div class="install reveal">
+                <div class="install-tabs" role="tablist">
+                    <button class="install-tab active" data-target="gradle-kts">Gradle (Kotlin)</button>
+                    <button class="install-tab" data-target="gradle-groovy">Gradle (Groovy)</button>
+                    <button class="install-tab" data-target="maven">Maven</button>
+                    <button class="install-tab" data-target="sbt">sbt</button>
+                </div>
+                <div class="install-cmd">
+                    <code><span class="prompt" id="install-prompt" style="display:none">$ </span><span id="install-text">implementation("com.integrallis:vectors:0.1.0")</span></code>
+                    <button class="install-copy" id="install-copy" aria-label="Copy dependency" title="Copy">
+                        <svg class="clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                        <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    </button>
+                </div>
+            </div>
+            <p class="install-note reveal">Requires JDK 25 · run with <code>--add-modules jdk.incubator.vector</code></p>
+
+            <div class="hero-cta reveal">
+                <a href="docs/" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                    Read the docs
+                </a>
+                <a href="https://github.com/integrallis/java-vectors" class="btn btn-secondary">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.37.5 0 5.78 0 12.292c0 5.211 3.438 9.63 8.205 11.188.6.111.82-.254.82-.567 0-.28-.01-1.022-.015-2.005-3.338.711-4.042-1.582-4.042-1.582-.546-1.361-1.335-1.725-1.335-1.725-1.087-.731.084-.716.084-.716 1.205.082 1.838 1.215 1.838 1.215 1.07 1.803 2.809 1.282 3.495.981.108-.763.417-1.282.76-1.577-2.665-.295-5.466-1.309-5.466-5.827 0-1.287.465-2.339 1.235-3.164-.135-.298-.54-1.497.105-3.121 0 0 1.005-.316 3.3 1.209.96-.262 1.98-.392 3-.397 1.02.005 2.04.135 3 .397 2.28-1.525 3.285-1.209 3.285-1.209.645 1.624.24 2.823.12 3.121.765.825 1.23 1.877 1.23 3.164 0 4.53-2.805 5.527-5.475 5.817.42.354.81 1.077.81 2.182 0 1.578-.015 2.846-.015 3.229 0 .309.21.678.825.561C20.565 21.917 24 17.495 24 12.292 24 5.78 18.627.5 12 .5Z"/></svg>
+                    View source
+                </a>
+            </div>
+        </div>
+        <div class="scroll-indicator"><div class="scroll-line"></div></div>
+    </section>
+
+    <!-- How it works -->
+    <section class="section section-divider" id="how">
+        <div class="container">
+            <div class="section-header reveal">
+                <span class="section-label">how it works</span>
+                <h2 class="section-title oneline">No service. No network hop. No serialization boundary.</h2>
+                <p class="section-description oneline">Vectors runs in-process. You create a collection, add documents, and search — all inside the JVM.</p>
+            </div>
+            <div class="equations">
+                <div class="equation reveal">
+                    <div class="eq-label">// 1 — build a collection</div>
+                    <div class="eq" style="font-size:.9rem;line-height:1.7">VectorCollection.builder()<br>&nbsp;&nbsp;.dimension(384)<br>&nbsp;&nbsp;.metric(COSINE)<br>&nbsp;&nbsp;.indexType(HNSW)<br>&nbsp;&nbsp;.build()</div>
+                    <p class="eq-note">One builder unifies every index and quantizer behind a single API. Vectors are stored off-heap via <code>MemorySegment</code>, so large collections don't pressure the GC.</p>
+                </div>
+                <div class="equation reveal">
+                    <div class="eq-label">// 2 — add, commit, search</div>
+                    <div class="eq" style="font-size:.9rem;line-height:1.7">collection.addAll(docs);<br>collection.commit();<br>collection.search(q, 10);</div>
+                    <p class="eq-note">Commits are atomic and generation-based; the memory-mapped store recovers on restart, with tombstone deletes and background compaction.</p>
+                </div>
+            </div>
+            <p class="analogy reveal">
+                The whole engine lives in your application process. There is <strong>no separate database to run</strong>,
+                no client/server protocol, and nothing crossing a serialization boundary between your code and the index —
+                just method calls on a JVM object.
+            </p>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section section-divider" id="features">
+        <div class="container">
+            <div class="section-header reveal">
+                <span class="section-label">features</span>
+                <h2 class="section-title">What it does</h2>
+            </div>
+            <div class="cards-grid">
+                <div class="card reveal">
+                    <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+                    <h3 class="card-title">SIMD distance kernels</h3>
+                    <p class="card-description">Dot product, L2, and cosine vectorized with the Java Vector API (<code>jdk.incubator.vector</code>), with a pure-scalar fallback.</p>
+                </div>
+                <div class="card reveal">
+                    <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 6.5 10 11m4 0 3-4.5M7 17.5 10 13m4 0 3 4.5"/></svg></div>
+                    <h3 class="card-title">Five index types</h3>
+                    <p class="card-description">FLAT (exact), HNSW, Vamana / DiskANN, IVF_FLAT, and IVF_PQ — pick recall vs. speed vs. footprint per collection.</p>
+                </div>
+                <div class="card reveal">
+                    <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v3"/><path d="M3 16v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M7 12h10"/><path d="M7 8v8m4-8v8m4-8v8"/></svg></div>
+                    <h3 class="card-title">Vector quantization</h3>
+                    <p class="card-description">Scalar (SQ8/SQ4), product (PQ), binary (BQ/BBQ), RaBitQ, NVQ, and TurboQuant — shrink footprint, keep recall.</p>
+                </div>
+                <div class="card reveal">
+                    <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg></div>
+                    <h3 class="card-title">Durable persistence</h3>
+                    <p class="card-description">Memory-mapped storage with atomic, generation-based commits, crash recovery, tombstone deletes, and background compaction.</p>
+                </div>
+                <div class="card reveal">
+                    <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10h10V2Z"/><path d="M22 12h-10v10h10V12Z"/><path d="M12 12H2v10h10V12Z"/><path d="M22 2h-10v10h10V2Z"/></svg></div>
+                    <h3 class="card-title">Framework adapters</h3>
+                    <p class="card-description">Spring AI <code>VectorStore</code>, LangChain4j <code>EmbeddingStore</code>, a Spring Boot starter, and semantic-cache modules.</p>
+                </div>
+                <div class="card reveal">
+                    <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></div>
+                    <h3 class="card-title">Off-heap memory</h3>
+                    <p class="card-description">Vectors live in <code>MemorySegment</code> / <code>Arena</code> via the Foreign Function &amp; Memory API — large collections don't pressure the garbage collector.</p>
+                </div>
+            </div>
+            <div class="hero-cta reveal" style="justify-content:center;margin-top:2.5rem">
+                <a href="docs/" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+                    Read the documentation
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- DartVault (distributed, self-owned object storage) -->
+    <section class="section section-divider" id="dartvault">
+        <div class="container">
+            <div class="section-header reveal">
+                <span class="section-label">scale up</span>
+                <h2 class="section-title oneline">Outgrow a single JVM? Meet DartVault</h2>
+                <p class="section-description oneline">The same engine as a distributed vector database on object storage you own — bring your own S3 or R2.</p>
+            </div>
+            <div class="dartvault-card reveal">
+                <div class="dartvault-tag"><span class="dot"></span> You own your data</div>
+                <h3 class="dartvault-title">Distributed vector search on object storage</h3>
+                <p class="dartvault-desc">Point it at your own S3 or R2 bucket and scale reads and writes across nodes independently. Durable, generation-based commits with a CAS-published manifest — your vectors stay in your account, and you own them.</p>
+                <div class="hero-cta">
+                    <a href="https://dartvault.io" class="btn btn-marketplace">DartVault on AWS Marketplace →</a>
+                    <a href="https://dartvault.io" class="btn btn-secondary">Learn more</a>
+                </div>
+            </div>
+            <p class="install-note reveal">The embedded <code>vectors</code> library is Apache-2.0. DartVault is licensed under the Functional Source License (FSL-1.1-ALv2).</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="docs/">Documentation</a>
+                    <a href="https://github.com/integrallis/java-vectors">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.37.5 0 5.78 0 12.292c0 5.211 3.438 9.63 8.205 11.188.6.111.82-.254.82-.567 0-.28-.01-1.022-.015-2.005-3.338.711-4.042-1.582-4.042-1.582-.546-1.361-1.335-1.725-1.335-1.725-1.087-.731.084-.716.084-.716 1.205.082 1.838 1.215 1.838 1.215 1.07 1.803 2.809 1.282 3.495.981.108-.763.417-1.282.76-1.577-2.665-.295-5.466-1.309-5.466-5.827 0-1.287.465-2.339 1.235-3.164-.135-.298-.54-1.497.105-3.121 0 0 1.005-.316 3.3 1.209.96-.262 1.98-.392 3-.397 1.02.005 2.04.135 3 .397 2.28-1.525 3.285-1.209 3.285-1.209.645 1.624.24 2.823.12 3.121.765.825 1.23 1.877 1.23 3.164 0 4.53-2.805 5.527-5.475 5.817.42.354.81 1.077.81 2.182 0 1.578-.015 2.846-.015 3.229 0 .309.21.678.825.561C20.565 21.917 24 17.495 24 12.292 24 5.78 18.627.5 12 .5Z"/></svg>
+                        GitHub
+                    </a>
+                    <a href="https://central.sonatype.com/namespace/com.integrallis">Maven Central</a>
+                </div>
+                <p class="footer-by">Built by <a href="https://integrallis.com"><img class="ilogo" src="assets/images/integrallis-logo.png" alt="Integrallis"></a></p>
+                <p class="footer-copyright">© 2026 Integrallis Software, LLC</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="assets/js/highlight.js"></script>
+    <script src="assets/js/landing.js"></script>
+</body>
+</html>
