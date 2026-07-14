@@ -268,6 +268,56 @@ public final class VectorUtil {
     IMPL.ggufQ4_KDequantize(qWeight, byteOffset, out, outOffset, dimensions);
   }
 
+  /** Dot product of a full-precision query with one GGUF Q5_K quantized row. */
+  public static float ggufQ5_KDotProduct(
+      float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
+    checkGgufQuantizedDotArguments(
+        query,
+        qWeight,
+        byteOffset,
+        dimensions,
+        VectorUtilSupport.GGUF_Q5_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q5_K_BLOCK_BYTES);
+    return IMPL.ggufQ5_KDotProduct(query, qWeight, byteOffset, dimensions);
+  }
+
+  /** Dequantizes GGUF Q5_K blocks into a caller-owned float array. */
+  public static void ggufQ5_KDequantize(
+      MemorySegment qWeight, long byteOffset, float[] out, int outOffset, int dimensions) {
+    Objects.requireNonNull(qWeight, "qWeight");
+    Objects.requireNonNull(out, "out");
+    if (byteOffset < 0) {
+      throw new IllegalArgumentException("byteOffset must be >= 0: " + byteOffset);
+    }
+    if (outOffset < 0 || dimensions < 0 || outOffset > out.length - dimensions) {
+      throw new IllegalArgumentException(
+          "out range is invalid: offset="
+              + outOffset
+              + ", dimensions="
+              + dimensions
+              + ", length="
+              + out.length);
+    }
+    if (dimensions % VectorUtilSupport.GGUF_Q5_K_BLOCK_SIZE != 0) {
+      throw new IllegalArgumentException(
+          "GGUF Q5_K dimensions must be a multiple of 256: " + dimensions);
+    }
+    long required =
+        byteOffset
+            + ggufQuantizedRowBytes(
+                dimensions,
+                VectorUtilSupport.GGUF_Q5_K_BLOCK_SIZE,
+                VectorUtilSupport.GGUF_Q5_K_BLOCK_BYTES);
+    if (required < byteOffset || required > qWeight.byteSize()) {
+      throw new IllegalArgumentException(
+          "qWeight byteSize is too small for requested values: "
+              + qWeight.byteSize()
+              + " < "
+              + required);
+    }
+    IMPL.ggufQ5_KDequantize(qWeight, byteOffset, out, outOffset, dimensions);
+  }
+
   /** Dot product of a full-precision query with one GGUF Q5_0 quantized row. */
   public static float ggufQ5_0DotProduct(
       float[] query, MemorySegment qWeight, long byteOffset, int dimensions) {
@@ -417,18 +467,51 @@ public final class VectorUtil {
         VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE,
         VectorUtilSupport.GGUF_Q4_K_BLOCK_BYTES);
     checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE);
-    Objects.requireNonNull(q8Sums, "q8Sums");
-    int requiredSums = cols / VectorUtilSupport.GGUF_Q8_K_SUM_BLOCK_SIZE;
-    if (q8Sums.length < requiredSums) {
-      throw new IllegalArgumentException(
-          "q8Sums.length must be >= dimensions / "
-              + VectorUtilSupport.GGUF_Q8_K_SUM_BLOCK_SIZE
-              + ": "
-              + q8Sums.length
-              + " < "
-              + requiredSums);
-    }
+    checkGgufQ8KSums(q8Sums, cols);
     IMPL.ggufQ4_KQ8_KMatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales, q8Sums);
+  }
+
+  /** Batched row-major GEMV over GGUF Q5_K rows. */
+  public static void ggufQ5_KBatchDotProduct(
+      float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
+    checkGgufQuantizedBatchArguments(
+        query,
+        qWeight,
+        rows,
+        cols,
+        out,
+        VectorUtilSupport.GGUF_Q5_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q5_K_BLOCK_BYTES);
+    IMPL.ggufQ5_KMatVecDot(query, qWeight, rows, cols, out);
+  }
+
+  /**
+   * GGML-compatible GEMV over Q5_K rows using a Q8_K-quantized activation vector.
+   *
+   * @param q8Quants scratch space with at least {@code cols} entries
+   * @param q8Scales scratch space with at least {@code cols / 256} entries
+   * @param q8Sums scratch space with at least {@code cols / 16} entries
+   */
+  public static void ggufQ5_KQ8_KBatchDotProduct(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    checkGgufQuantizedBatchArguments(
+        query,
+        qWeight,
+        rows,
+        cols,
+        out,
+        VectorUtilSupport.GGUF_Q5_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q5_K_BLOCK_BYTES);
+    checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q5_K_BLOCK_SIZE);
+    checkGgufQ8KSums(q8Sums, cols);
+    IMPL.ggufQ5_KQ8_KMatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales, q8Sums);
   }
 
   /** Batched row-major GEMV over GGUF Q5_0 rows. */
@@ -884,6 +967,20 @@ public final class VectorUtil {
               + q8Scales.length
               + " < "
               + blocks);
+    }
+  }
+
+  private static void checkGgufQ8KSums(short[] q8Sums, int dimensions) {
+    Objects.requireNonNull(q8Sums, "q8Sums");
+    int requiredSums = dimensions / VectorUtilSupport.GGUF_Q8_K_SUM_BLOCK_SIZE;
+    if (q8Sums.length < requiredSums) {
+      throw new IllegalArgumentException(
+          "q8Sums.length must be >= dimensions / "
+              + VectorUtilSupport.GGUF_Q8_K_SUM_BLOCK_SIZE
+              + ": "
+              + q8Sums.length
+              + " < "
+              + requiredSums);
     }
   }
 
