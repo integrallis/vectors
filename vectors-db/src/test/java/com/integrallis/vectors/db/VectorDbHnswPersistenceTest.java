@@ -385,6 +385,40 @@ class VectorDbHnswPersistenceTest {
     }
 
     @Test
+    void getHydratesVectorFromMmapAfterReopen(@TempDir Path tempDir) {
+      // Regression: get(id) must return a fully-hydrated Document — including the vector — even for
+      // persistent generations where the vector lives in the mmap store, not embedded in the
+      // metadata store. documents() already hydrates; get(id) must be consistent with it (otherwise
+      // get(id).vector() is silently null after a reopen, breaking any vector-by-id consumer).
+      Path storageRoot = tempDir.resolve("col");
+      List<Document> docs = generateDocs(50, SEED);
+
+      try (var col = openPersistentHnsw(storageRoot)) {
+        col.addAll(docs);
+        col.commit();
+      }
+
+      try (var col = openPersistentHnsw(storageRoot)) {
+        // documents() as the control — it hydrates correctly.
+        Map<String, float[]> viaDocuments = new HashMap<>();
+        for (Document d : col.documents()) {
+          viaDocuments.put(d.id(), d.vector());
+        }
+
+        for (Document original : docs) {
+          Document got = col.get(original.id());
+          assertThat(got).as("get(%s)", original.id()).isNotNull();
+          assertThat(got.vector())
+              .as("get(%s).vector() must be hydrated from mmap", original.id())
+              .isNotNull()
+              .containsExactly(original.vector());
+          // get(id) and documents() must agree on the vector.
+          assertThat(got.vector()).containsExactly(viaDocuments.get(original.id()));
+        }
+      }
+    }
+
+    @Test
     void reopenedSearchMatchesBruteForceRecall(@TempDir Path tempDir) {
       // Behavior assertion: after a persistence round-trip the HNSW recall vs brute force should
       // remain within tolerance. A constant-scoring stub would pass a hit-count check but fail
