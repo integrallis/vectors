@@ -1,6 +1,8 @@
 site:
   title: Vectors Documentation
   start_page: vectors::index.adoc
+  keys:
+    repo_url: https://github.com/integrallis/java-vectors
 
 content:
   sources:
@@ -21,6 +23,12 @@ ui:
       contents: ./supplemental-ui/partials/header-content.hbs
     - path: partials/head-meta.hbs
       contents: ./supplemental-ui/partials/head-meta.hbs
+    - path: css/vectors-theme.css
+      contents: ./supplemental-ui/css/vectors-theme.css
+    - path: js/vectors-theme.js
+      contents: ./supplemental-ui/js/vectors-theme.js
+    - path: img/integrallis-logo.png
+      contents: ./supplemental-ui/img/integrallis-logo.png
     - path: img/java-vectors-logo.png
       contents: ./supplemental-ui/img/java-vectors-logo.png
     - path: img/favicon.ico

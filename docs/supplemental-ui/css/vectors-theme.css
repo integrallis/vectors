@@ -1,0 +1,519 @@
+/*
+ * Vectors documentation theme — ports the MFCQI-java look & feel onto the default
+ * Antora UI bundle and adds dark/light switching.
+ *
+ * The bundle's site.css uses hard-coded colors (no CSS variables), so the strategy is:
+ *   1. define the MFCQI monochrome palette + fonts as custom properties, keyed on
+ *      [data-theme] on <html>;
+ *   2. override each hard-coded surface exactly once using var(--…) so a single ruleset
+ *      serves both themes and only the variable values swap.
+ * This file is linked from head-meta.hbs, which the bundle's head.hbs includes AFTER
+ * css/site.css — so these rules win.
+ */
+
+/* ── palette (dark is the default, matching MFCQI) ─────────────────────────── */
+:root,
+[data-theme='dark'] {
+  --bg: #0b0b0c;
+  --bg-2: #100f11;
+  --card: #151517;
+  --border: #26262a;
+  --border-strong: #34343a;
+  --fg: #ededef;
+  --muted: #9a9aa3;
+  --subtle: #66666f;
+  --code-bg: #141416;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --grid: rgba(255, 255, 255, 0.022);
+  --nav-bg: rgba(11, 11, 12, 0.72);
+  --accent: #6ea8fe;
+  --accent-hover: #8fbcff;
+  --selection: rgba(110, 168, 254, 0.28);
+
+  /* syntax-highlight tokens tuned for a dark surface */
+  --hl-comment: #6a6a72;
+  --hl-keyword: #c792ea;
+  --hl-string: #9ece6a;
+  --hl-number: #ff9e64;
+  --hl-title: #7aa2f7;
+  --hl-type: #2ac3de;
+  --hl-attr: #7dcfff;
+  --hl-builtin: #73daca;
+  --hl-literal: #ff9e64;
+}
+
+[data-theme='light'] {
+  --bg: #ffffff;
+  --bg-2: #f7f7f8;
+  --card: #fbfbfc;
+  --border: #e6e6e9;
+  --border-strong: #d2d2d7;
+  --fg: #15151a;
+  --muted: #57575f;
+  --subtle: #8a8a93;
+  --code-bg: #f5f5f6;
+  --shadow: rgba(0, 0, 0, 0.08);
+  --grid: rgba(0, 0, 0, 0.035);
+  --nav-bg: rgba(255, 255, 255, 0.72);
+  --accent: #2f6fed;
+  --accent-hover: #1b56c9;
+  --selection: rgba(47, 111, 237, 0.18);
+
+  /* syntax-highlight tokens tuned for a light surface (GitHub-ish) */
+  --hl-comment: #6e7781;
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-number: #0550ae;
+  --hl-title: #6639ba;
+  --hl-type: #953800;
+  --hl-attr: #0550ae;
+  --hl-builtin: #0086b3;
+  --hl-literal: #0550ae;
+}
+
+/* ── fonts ─────────────────────────────────────────────────────────────────── */
+:root {
+  --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Compact header. The default UI navbar is 3.5rem and several elements are
+     positioned off it; slim it to 3rem and re-derive the coupled offsets below. */
+  --nav-h: 3rem;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+body {
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+::selection {
+  background: var(--selection);
+}
+
+/* ── top navbar / header (MFCQI-style frosted bar) ─────────────────────────── */
+.navbar {
+  height: var(--nav-h);
+  min-height: var(--nav-h);
+  max-height: var(--nav-h);
+  /* The default UI leaves .navbar as display:block, which lets the brand and menu
+     stack and float — the source of the extra space above the logo. Force a single
+     centered flex row so the logo is vertically centered in exactly --nav-h. */
+  display: flex;
+  align-items: center;
+  background: var(--nav-bg) !important;
+  color: var(--fg);
+  border-bottom: 1px solid transparent;
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  backdrop-filter: saturate(180%) blur(12px);
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+.navbar-brand {
+  height: var(--nav-h);
+  align-items: center;
+  margin: 0;
+}
+.navbar.is-scrolled {
+  border-bottom-color: var(--border);
+}
+/* Re-derive every offset the default UI hangs off the 3.5rem navbar height. */
+body {
+  padding-top: var(--nav-h);
+}
+.toolbar {
+  top: var(--nav-h);
+}
+.nav-container {
+  top: var(--nav-h);
+}
+.toc.sidebar .toc-menu {
+  top: calc(var(--nav-h) + 2.5rem);
+}
+.toc.sidebar .toc-menu ul {
+  max-height: calc(100vh - var(--nav-h) - 5rem);
+}
+@media screen and (min-width: 1024px) {
+  .nav {
+    top: var(--nav-h);
+    height: calc(100vh - var(--nav-h));
+  }
+}
+
+.vc-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 0 0.5rem 0 1rem;
+  text-decoration: none;
+}
+.vc-brand:hover {
+  text-decoration: none;
+}
+.vc-brand .vc-ilogo {
+  height: 22px;
+  width: auto;
+  display: block;
+}
+[data-theme='dark'] .vc-brand .vc-ilogo {
+  filter: invert(1) hue-rotate(180deg);
+}
+.vc-brand .vc-sep {
+  color: var(--subtle);
+  font-family: var(--font-display);
+  font-weight: 300;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.vc-brand .vc-product {
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+
+.vc-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-right: 0.75rem;
+  height: 100%;
+}
+.vc-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+.vc-icon-btn:hover {
+  color: var(--fg);
+  background: var(--card);
+  border-color: var(--border);
+}
+.vc-icon-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+/* sun in dark mode, moon in light mode */
+#vc-theme-toggle .vc-moon {
+  display: none;
+}
+[data-theme='light'] #vc-theme-toggle .vc-sun {
+  display: none;
+}
+[data-theme='light'] #vc-theme-toggle .vc-moon {
+  display: block;
+}
+
+/* ── left navigation sidebar ───────────────────────────────────────────────── */
+.nav {
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+}
+.nav-panel-menu,
+.nav-panel-explore {
+  background: var(--bg-2);
+}
+.nav a {
+  color: var(--muted);
+}
+.nav a:hover {
+  color: var(--fg);
+}
+.nav .is-current-page > .nav-link,
+.nav .is-active.nav-link,
+.nav .is-current-page > a {
+  color: var(--accent);
+  font-weight: 600;
+}
+.nav-menu h3.title {
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+.nav-panel-explore .context {
+  color: var(--muted);
+  box-shadow: 0 -1px 0 var(--border);
+  background: var(--bg-2);
+}
+.nav-panel-explore .components {
+  background: var(--bg);
+  box-shadow: inset 0 1px 5px var(--shadow);
+}
+.nav-panel-explore .component .version a {
+  background: var(--card);
+  color: var(--fg);
+}
+.nav-panel-explore .component .is-current a {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── toolbar (breadcrumbs bar) ─────────────────────────────────────────────── */
+.toolbar {
+  background-color: var(--bg-2);
+  color: var(--muted);
+  box-shadow: 0 1px 0 var(--border);
+}
+.toolbar a {
+  color: inherit;
+}
+.toolbar .edit-this-page a {
+  color: var(--subtle);
+}
+.page-versions .versions-menu-toggle {
+  color: var(--muted);
+}
+
+/* ── right-hand table of contents ──────────────────────────────────────────── */
+.toc-menu {
+  color: var(--muted);
+}
+.toc .toc-menu h3 {
+  color: var(--fg);
+  font-family: var(--font-display);
+}
+.toc .toc-menu a {
+  color: var(--muted);
+  border-left: 2px solid var(--border);
+}
+.toc .toc-menu a:hover {
+  color: var(--accent);
+}
+.toc .toc-menu a.is-active {
+  color: var(--fg);
+  border-left-color: var(--accent);
+}
+.toc .toc-menu a:focus {
+  background: var(--bg-2);
+}
+
+/* ── article / document body ───────────────────────────────────────────────── */
+.doc {
+  color: var(--fg);
+}
+.doc h1,
+.doc h2,
+.doc h3,
+.doc h4,
+.doc h5,
+.doc h6 {
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.doc h1.page {
+  font-weight: 700;
+}
+.doc h1.sect0 {
+  background: var(--bg-2);
+}
+.doc .sect1 + .sect1 {
+  border-top: 1px solid var(--border);
+}
+.doc a {
+  color: var(--accent);
+}
+.doc a:hover {
+  color: var(--accent-hover);
+}
+.doc a.unresolved {
+  color: #f7768e;
+}
+
+/* inline code */
+.doc .colist > table code,
+.doc p code,
+.doc li code,
+.doc td code,
+.doc thead code,
+.doc dt code {
+  color: var(--fg);
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.25em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+/* code blocks — the bundle sets `code,kbd,pre{font-family:Roboto Mono}`; the block
+   text lives in a nested <code>, so target code/pre/kbd broadly (the `.doc` prefix
+   out-specifies the bundle rule) to put JetBrains Mono everywhere code appears. */
+.doc pre,
+.doc code,
+.doc kbd,
+.doc pre code,
+.doc pre.highlight code,
+.doc .hljs {
+  font-family: var(--font-mono);
+}
+.doc .listingblock pre:not(.highlight),
+.doc .literalblock pre,
+.doc pre.highlight > code {
+  background: var(--code-bg);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: 6px;
+}
+.doc .listingblock .title,
+.doc .literalblock .title,
+.doc .openblock .title,
+.doc .videoblock .title,
+.doc table.tableblock caption {
+  color: var(--muted);
+}
+
+/* ── tables ────────────────────────────────────────────────────────────────── */
+.doc table.tableblock {
+  color: var(--fg);
+}
+.doc table.tableblock th {
+  color: var(--fg);
+}
+.doc table.tableblock td,
+.doc table.tableblock th {
+  border-color: var(--border) !important;
+}
+.doc table.tableblock,
+.doc table.tableblock > * > tr > * {
+  border-color: var(--border);
+}
+.doc table.stripes-all > tbody > tr,
+.doc table.stripes-even > tbody > tr:nth-of-type(2n),
+.doc table.stripes-hover > tbody > tr:hover,
+.doc table.stripes-odd > tbody > tr:nth-of-type(odd) {
+  background: var(--bg-2);
+}
+.doc table.tableblock > tfoot {
+  background: var(--bg-2);
+}
+
+/* ── admonitions (keep the colored icons, retheme the body) ────────────────── */
+.doc .admonitionblock td.content {
+  background: var(--bg-2);
+  color: var(--fg);
+  border-left: 3px solid var(--border-strong);
+}
+.doc .admonitionblock td.content > .title {
+  color: var(--muted);
+}
+
+/* ── quotes, sidebars, hr, kbd ─────────────────────────────────────────────── */
+.doc .quoteblock,
+.doc .verseblock {
+  color: var(--muted);
+}
+.doc .quoteblock blockquote {
+  border-left: 3px solid var(--border-strong);
+}
+.doc .sidebarblock {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+}
+.doc hr,
+.doc .dlist .hdlist1 {
+  border-color: var(--border);
+}
+.doc kbd {
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  color: var(--fg);
+  box-shadow: 0 1px 0 var(--border-strong);
+}
+.doc b,
+.doc strong {
+  color: var(--fg);
+}
+
+/* ── footer ────────────────────────────────────────────────────────────────── */
+footer.footer {
+  background: var(--bg-2);
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+footer.footer a {
+  color: var(--accent);
+}
+
+/* ── syntax highlighting (highlight.js tokens) ─────────────────────────────── */
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-comment);
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-subst {
+  color: var(--hl-keyword);
+  font-weight: 600;
+}
+.hljs-literal,
+.hljs-tag .hljs-attr,
+.hljs-template-variable,
+.hljs-variable {
+  color: var(--hl-literal);
+}
+.hljs-number {
+  color: var(--hl-number);
+}
+.hljs-doctag,
+.hljs-string {
+  color: var(--hl-string);
+}
+.hljs-section,
+.hljs-selector-id,
+.hljs-title {
+  color: var(--hl-title);
+  font-weight: 600;
+}
+.hljs-class .hljs-title,
+.hljs-type {
+  color: var(--hl-type);
+  font-weight: 600;
+}
+.hljs-attribute,
+.hljs-name,
+.hljs-tag {
+  color: var(--hl-attr);
+}
+.hljs-built_in,
+.hljs-builtin-name {
+  color: var(--hl-builtin);
+}
+.hljs-meta {
+  color: var(--muted);
+}
+
+/* ── scrollbars ────────────────────────────────────────────────────────────── */
+html {
+  scrollbar-color: var(--border-strong) var(--bg-2);
+}
+body * {
+  scrollbar-color: var(--border-strong) transparent;
+}
+html::-webkit-scrollbar {
+  background-color: var(--bg-2);
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+}
