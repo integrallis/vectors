@@ -868,6 +868,193 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
+  @Override
+  public void ggufQ4_KQ8_KDualMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    ggufQ4_KQ8_KGroupedMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        secondWeight,
+        0,
+        secondOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+  }
+
+  @Override
+  public void ggufQ4_KQ8_KTripleMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    ggufQ4_KQ8_KGroupedMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+  }
+
+  private static void ggufQ4_KQ8_KGroupedMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
+
+    long rowBytes = (long) (cols / GGUF_Q4_K_BLOCK_SIZE) * GGUF_Q4_K_BLOCK_BYTES;
+    int blocks = cols / GGUF_Q4_K_BLOCK_SIZE;
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    int totalRows = Math.addExact(thirdStart, thirdRows);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        thirdWeight,
+        totalRows,
+        cols,
+        row -> {
+          MemorySegment qWeight;
+          float[] out;
+          int matrixRow;
+          if (row < secondStart) {
+            qWeight = firstWeight;
+            out = firstOut;
+            matrixRow = row;
+          } else if (row < thirdStart) {
+            qWeight = secondWeight;
+            out = secondOut;
+            matrixRow = row - secondStart;
+          } else {
+            qWeight = thirdWeight;
+            out = thirdOut;
+            matrixRow = row - thirdStart;
+          }
+
+          // Keep the SIMD body in this lambda. Extracting Vector values defeats C2 scalarization.
+          if (VECTOR_BITSIZE >= 256) {
+            FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
+            float minimumContribution = 0.0f;
+            long rowOffset = matrixRow * rowBytes;
+            for (int block = 0; block < blocks; block++) {
+              long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
+              float q8Scale = q8Scales[block];
+              float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
+              float dMin =
+                  Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES))
+                      * q8Scale;
+              long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
+              long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
+              int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
+              IntVector blockLanes = IntVector.zero(IntVector.SPECIES_256);
+              int minimumSum = 0;
+
+              for (int group = 0; group < 8; group++) {
+                int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+                int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+                long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+                int shift = (group & 1) * 4;
+                int groupActivationOffset = activationOffset + group * 32;
+                IntVector groupLanes =
+                    q4_KQ8_KIntegerLanes(
+                        qWeight, packedOffset, shift, q8Quants, groupActivationOffset);
+                blockLanes = blockLanes.add(groupLanes.mul(scale));
+                int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+                minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
+              }
+
+              FloatVector products =
+                  (FloatVector)
+                      blockLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
+              accumulator =
+                  fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, d), accumulator);
+              minimumContribution = MathUtil.fma(-dMin, minimumSum, minimumContribution);
+            }
+            out[matrixRow] = accumulator.reduceLanes(VectorOperators.ADD) + minimumContribution;
+            return;
+          }
+
+          float sum = 0.0f;
+          long rowOffset = matrixRow * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
+            float q8Scale = q8Scales[block];
+            float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
+            float dMin =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES))
+                    * q8Scale;
+            long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
+            long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
+            int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
+            int quantizedSum = 0;
+            int minimumSum = 0;
+
+            for (int group = 0; group < 8; group++) {
+              int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+              int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+              long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+              int shift = (group & 1) * 4;
+              int groupActivationOffset = activationOffset + group * 32;
+              int groupDot =
+                  q4_KQ8_KIntegerDot(qWeight, packedOffset, shift, q8Quants, groupActivationOffset);
+              quantizedSum += scale * groupDot;
+              int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+              minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
+            }
+
+            sum = MathUtil.fma(d, quantizedSum, sum);
+            sum = MathUtil.fma(-dMin, minimumSum, sum);
+          }
+          out[matrixRow] = sum;
+        });
+  }
+
   private static int q4_KQ8_KIntegerDot(
       MemorySegment qWeight, long packedOffset, int shift, byte[] q8Quants, int quantOffset) {
     if (VECTOR_BITSIZE >= 256) {
