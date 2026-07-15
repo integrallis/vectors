@@ -380,7 +380,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
               accumulator =
                   fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
             }
-            out[row] = accumulator.reduceLanes(VectorOperators.ADD);
+            out[row] = reduceQ4_0Accumulator(accumulator);
             return;
           }
 
@@ -478,8 +478,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           for (int batch = 0; batch < batchSize; batch++) {
             int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
             out[batch * rows + row] =
-                FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset)
-                    .reduceLanes(VectorOperators.ADD);
+                reduceQ4_0Accumulator(
+                    FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset));
           }
         });
   }
@@ -507,6 +507,15 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset);
     fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator)
         .intoArray(laneScratch, laneOffset);
+  }
+
+  /** Fixed AVX hsum tree; Vector.reduceLanes does not guarantee an evaluation order. */
+  private static float reduceQ4_0Accumulator(FloatVector accumulator) {
+    float even =
+        (accumulator.lane(4) + accumulator.lane(0)) + (accumulator.lane(6) + accumulator.lane(2));
+    float odd =
+        (accumulator.lane(5) + accumulator.lane(1)) + (accumulator.lane(7) + accumulator.lane(3));
+    return even + odd;
   }
 
   private static int q4_0Q8_0IntegerDot(

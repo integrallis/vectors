@@ -464,9 +464,8 @@ class GgufQuantizedDotTest {
 
       VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
           queries, weights, batchSize, rows, cols, actual, batchQuants, batchScales, batchLanes);
+      assertThat(actual).containsExactly(expected);
     }
-
-    assertThat(actual).containsExactly(expected);
   }
 
   @Test
