@@ -186,6 +186,19 @@ class VectorUtilSupportTest {
     }
 
     @Test
+    void dotProductRemainsBitExactAfterJitWarmup() {
+      float[] values = randomFloats(1024, new Random(SEED));
+      float cold = panama.dotProduct(values, values);
+      float hot = cold;
+
+      for (int iteration = 0; iteration < 20_000; iteration++) {
+        hot = panama.dotProduct(values, values);
+      }
+
+      assertThat(Float.floatToRawIntBits(hot)).isEqualTo(Float.floatToRawIntBits(cold));
+    }
+
+    @Test
     void emptyVectors() {
       float[] a = {};
       float[] b = {};

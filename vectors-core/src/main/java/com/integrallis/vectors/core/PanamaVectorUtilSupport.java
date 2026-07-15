@@ -157,7 +157,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     // Reduce 4 accumulators to scalar
     FloatVector res1 = acc1.add(acc2);
     FloatVector res2 = acc3.add(acc4);
-    return res1.add(res2).reduceLanes(VectorOperators.ADD);
+    return reduceAdd(res1.add(res2));
   }
 
   // --- Float square distance (L2): 4x unrolled sub+FMA ---
@@ -380,7 +380,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
               accumulator =
                   fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
             }
-            out[row] = reduceQ4_0Accumulator(accumulator);
+            out[row] = reduceAdd(accumulator);
             return;
           }
 
@@ -478,8 +478,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           for (int batch = 0; batch < batchSize; batch++) {
             int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
             out[batch * rows + row] =
-                reduceQ4_0Accumulator(
-                    FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset));
+                reduceAdd(FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset));
           }
         });
   }
@@ -509,13 +508,32 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         .intoArray(laneScratch, laneOffset);
   }
 
-  /** Fixed AVX hsum tree; Vector.reduceLanes does not guarantee an evaluation order. */
-  private static float reduceQ4_0Accumulator(FloatVector accumulator) {
-    float even =
-        (accumulator.lane(4) + accumulator.lane(0)) + (accumulator.lane(6) + accumulator.lane(2));
-    float odd =
-        (accumulator.lane(5) + accumulator.lane(1)) + (accumulator.lane(7) + accumulator.lane(3));
-    return even + odd;
+  /** Fixed split-half hsum tree; Vector.reduceLanes does not guarantee an evaluation order. */
+  private static float reduceAdd(FloatVector vector) {
+    return switch (vector.length()) {
+      case 1 -> vector.lane(0);
+      case 2 -> vector.lane(1) + vector.lane(0);
+      case 4 -> (vector.lane(2) + vector.lane(0)) + (vector.lane(3) + vector.lane(1));
+      case 8 -> {
+        float even = (vector.lane(4) + vector.lane(0)) + (vector.lane(6) + vector.lane(2));
+        float odd = (vector.lane(5) + vector.lane(1)) + (vector.lane(7) + vector.lane(3));
+        yield even + odd;
+      }
+      case 16 -> {
+        float lane0 = vector.lane(8) + vector.lane(0);
+        float lane1 = vector.lane(9) + vector.lane(1);
+        float lane2 = vector.lane(10) + vector.lane(2);
+        float lane3 = vector.lane(11) + vector.lane(3);
+        float lane4 = vector.lane(12) + vector.lane(4);
+        float lane5 = vector.lane(13) + vector.lane(5);
+        float lane6 = vector.lane(14) + vector.lane(6);
+        float lane7 = vector.lane(15) + vector.lane(7);
+        float even = (lane4 + lane0) + (lane6 + lane2);
+        float odd = (lane5 + lane1) + (lane7 + lane3);
+        yield even + odd;
+      }
+      default -> throw new AssertionError("unsupported float vector length: " + vector.length());
+    };
   }
 
   private static int q4_0Q8_0IntegerDot(
