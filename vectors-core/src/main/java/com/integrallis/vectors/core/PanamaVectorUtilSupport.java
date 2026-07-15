@@ -409,6 +409,115 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return sum;
   }
 
+  /** SIMD Q8_0 by Q8_0 GEMV with one activation quantization shared by all rows. */
+  @Override
+  public void ggufQ8_0Q8_0MatVecDot(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q8_0_BLOCK_BYTES;
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        GgufParallelSupport.Q8_MIN_ELEMENTS,
+        row -> {
+          float sum = 0.0f;
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+            float scale =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+            int integerSum =
+                q8_0Q8_0IntegerDot(
+                    qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
+            sum = MathUtil.fma(scale, integerSum, sum);
+          }
+          out[row] = sum;
+        });
+  }
+
+  private static int q8_0Q8_0IntegerDot(
+      MemorySegment qWeight, long weightOffset, byte[] q8Quants, int quantOffset) {
+    if (VECTOR_BITSIZE >= 512) {
+      IntVector accumulator = IntVector.zero(IntVector.SPECIES_512);
+      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index += 16) {
+        ByteVector weights =
+            ByteVector.fromMemorySegment(
+                ByteVector.SPECIES_128, qWeight, weightOffset + index, ByteOrder.LITTLE_ENDIAN);
+        ByteVector quants =
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + index);
+        IntVector weightInts =
+            (IntVector) weights.convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0);
+        IntVector quantInts =
+            (IntVector) quants.convertShape(VectorOperators.B2I, IntVector.SPECIES_512, 0);
+        accumulator = accumulator.add(weightInts.mul(quantInts));
+      }
+      return accumulator.reduceLanes(VectorOperators.ADD);
+    }
+
+    if (VECTOR_BITSIZE >= 256) {
+      IntVector accumulator = IntVector.zero(IntVector.SPECIES_256);
+      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index += 8) {
+        ByteVector weights =
+            ByteVector.fromMemorySegment(
+                ByteVector.SPECIES_64, qWeight, weightOffset + index, ByteOrder.LITTLE_ENDIAN);
+        ByteVector quants =
+            ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index);
+        IntVector weightInts =
+            (IntVector) weights.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+        IntVector quantInts =
+            (IntVector) quants.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+        accumulator = accumulator.add(weightInts.mul(quantInts));
+      }
+      return accumulator.reduceLanes(VectorOperators.ADD);
+    }
+
+    if (VECTOR_BITSIZE >= 128) {
+      IntVector lowAccumulator = IntVector.zero(IntVector.SPECIES_128);
+      IntVector highAccumulator = IntVector.zero(IntVector.SPECIES_128);
+      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index += 8) {
+        ShortVector weights =
+            (ShortVector)
+                ByteVector.fromMemorySegment(
+                        ByteVector.SPECIES_64,
+                        qWeight,
+                        weightOffset + index,
+                        ByteOrder.LITTLE_ENDIAN)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        ShortVector quants =
+            (ShortVector)
+                ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        IntVector weightLow =
+            (IntVector) weights.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+        IntVector weightHigh =
+            (IntVector) weights.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 1);
+        IntVector quantLow =
+            (IntVector) quants.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+        IntVector quantHigh =
+            (IntVector) quants.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 1);
+        lowAccumulator = lowAccumulator.add(weightLow.mul(quantLow));
+        highAccumulator = highAccumulator.add(weightHigh.mul(quantHigh));
+      }
+      return lowAccumulator.add(highAccumulator).reduceLanes(VectorOperators.ADD);
+    }
+
+    int sum = 0;
+    for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
+      sum +=
+          qWeight.get(ValueLayout.JAVA_BYTE, weightOffset + index) * q8Quants[quantOffset + index];
+    }
+    return sum;
+  }
+
   // --- Byte dot product: widening to avoid overflow ---
   //
   // Tiered widening strategy (B2I = byte-to-int, 4x lane expansion):
