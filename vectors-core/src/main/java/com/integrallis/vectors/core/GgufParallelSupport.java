@@ -16,9 +16,7 @@
 package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
 
 /** Bounded row parallelism for large, thread-shareable GGUF matrices. */
@@ -35,17 +33,6 @@ final class GgufParallelSupport {
   private static final int PARALLELISM =
       Math.max(1, Math.min(PROCESSORS, Integer.getInteger("vectors.gguf.parallelism", PROCESSORS)));
   private static final Thread ACCESS_PROBE = Thread.ofPlatform().unstarted(() -> {});
-  private static final AtomicInteger WORKER_SEQUENCE = new AtomicInteger();
-  private static final ForkJoinPool ROW_POOL =
-      new ForkJoinPool(
-          PARALLELISM,
-          pool -> {
-            var worker = ForkJoinPool.defaultForkJoinWorkerThreadFactory.newThread(pool);
-            worker.setName("vectors-gguf-" + WORKER_SEQUENCE.incrementAndGet());
-            return worker;
-          },
-          null,
-          false);
 
   private GgufParallelSupport() {}
 
@@ -58,7 +45,7 @@ final class GgufParallelSupport {
     boolean shareable = weights.isAccessibleBy(ACCESS_PROBE);
     long effectiveMinElements = Math.max(MIN_ELEMENTS, formatMinElements);
     if (shareable && shouldParallelize(rows, cols, PARALLELISM, ENABLED, effectiveMinElements)) {
-      forEachRowInPool(ROW_POOL, rows, rowOperation);
+      forEachRowParallel(rows, PARALLELISM, rowOperation);
       return;
     }
     for (int row = 0; row < rows; row++) {
@@ -66,8 +53,8 @@ final class GgufParallelSupport {
     }
   }
 
-  static void forEachRowInPool(ForkJoinPool pool, int rows, IntConsumer rowOperation) {
-    pool.invoke(new RowRangeAction(rows, rowOperation, pool.getParallelism()));
+  static void forEachRowParallel(int rows, int parallelism, IntConsumer rowOperation) {
+    new RowRangeAction(rows, rowOperation, parallelism).invoke();
   }
 
   static boolean shouldParallelize(

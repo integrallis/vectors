@@ -20,7 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.lang.foreign.Arena;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import org.junit.jupiter.api.Tag;
@@ -79,20 +78,18 @@ class GgufParallelSupportTest {
   }
 
   @Test
-  void boundedPoolVisitsEveryRowExactlyOnce() {
+  void boundedParallelExecutionVisitsEveryRowExactlyOnce() {
     int rows = 257;
     AtomicIntegerArray visits = new AtomicIntegerArray(rows);
     Set<Thread> threads = ConcurrentHashMap.newKeySet();
 
-    try (ForkJoinPool pool = new ForkJoinPool(3)) {
-      GgufParallelSupport.forEachRowInPool(
-          pool,
-          rows,
-          row -> {
-            visits.incrementAndGet(row);
-            threads.add(Thread.currentThread());
-          });
-    }
+    GgufParallelSupport.forEachRowParallel(
+        rows,
+        3,
+        row -> {
+          visits.incrementAndGet(row);
+          threads.add(Thread.currentThread());
+        });
 
     for (int row = 0; row < rows; row++) {
       assertThat(visits.get(row)).isOne();
