@@ -465,15 +465,19 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                     ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
                         .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0));
 
-    ShortVector lowGroups = sumGroupsOfFour(lowProducts).rearrange(SELECT_LOW_GROUPS);
-    ShortVector highGroups = sumGroupsOfFour(highProducts).rearrange(SELECT_HIGH_GROUPS);
-    ShortVector groups = lowGroups.blend(highGroups, HIGH_GROUP_LANES);
-    return (IntVector) groups.convertShape(VectorOperators.S2I, IntVector.SPECIES_256, 0);
+    return fourProductLanes(lowProducts, highProducts);
   }
 
   private static ShortVector sumGroupsOfFour(ShortVector products) {
     ShortVector pairs = products.add(products.rearrange(SWAP_ADJACENT_SHORTS));
     return pairs.add(pairs.rearrange(SWAP_SHORT_PAIRS));
+  }
+
+  private static IntVector fourProductLanes(ShortVector first, ShortVector second) {
+    ShortVector lowGroups = sumGroupsOfFour(first).rearrange(SELECT_LOW_GROUPS);
+    ShortVector highGroups = sumGroupsOfFour(second).rearrange(SELECT_HIGH_GROUPS);
+    ShortVector groups = lowGroups.blend(highGroups, HIGH_GROUP_LANES);
+    return (IntVector) groups.convertShape(VectorOperators.S2I, IntVector.SPECIES_256, 0);
   }
 
   /** SIMD Q4_K by Q8_K GEMV with one activation quantization shared by all rows. */
@@ -496,6 +500,48 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         rows,
         cols,
         row -> {
+          if (VECTOR_BITSIZE >= 256) {
+            FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
+            float minimumContribution = 0.0f;
+            long rowOffset = row * rowBytes;
+            for (int block = 0; block < blocks; block++) {
+              long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
+              float q8Scale = q8Scales[block];
+              float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
+              float dMin =
+                  Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES))
+                      * q8Scale;
+              long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
+              long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
+              int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
+              IntVector blockLanes = IntVector.zero(IntVector.SPECIES_256);
+              int minimumSum = 0;
+
+              for (int group = 0; group < 8; group++) {
+                int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+                int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+                long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+                int shift = (group & 1) * 4;
+                int groupActivationOffset = activationOffset + group * 32;
+                IntVector groupLanes =
+                    q4_KQ8_KIntegerLanes(
+                        qWeight, packedOffset, shift, q8Quants, groupActivationOffset);
+                blockLanes = blockLanes.add(groupLanes.mul(scale));
+                int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+                minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
+              }
+
+              FloatVector products =
+                  (FloatVector)
+                      blockLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
+              accumulator =
+                  fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, d), accumulator);
+              minimumContribution = MathUtil.fma(-dMin, minimumSum, minimumContribution);
+            }
+            out[row] = accumulator.reduceLanes(VectorOperators.ADD) + minimumContribution;
+            return;
+          }
+
           float sum = 0.0f;
           long rowOffset = row * rowBytes;
           for (int block = 0; block < blocks; block++) {
@@ -575,6 +621,37 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       sum += ((packed >>> shift) & 0x0F) * q8Quants[quantOffset + index];
     }
     return sum;
+  }
+
+  static IntVector q4_KQ8_KIntegerLanes(
+      MemorySegment qWeight, long packedOffset, int shift, byte[] q8Quants, int quantOffset) {
+    ByteVector firstPacked =
+        ByteVector.fromMemorySegment(
+            ByteVector.SPECIES_128, qWeight, packedOffset, ByteOrder.LITTLE_ENDIAN);
+    ByteVector secondPacked =
+        ByteVector.fromMemorySegment(
+            ByteVector.SPECIES_128, qWeight, packedOffset + 16, ByteOrder.LITTLE_ENDIAN);
+    ShortVector firstProducts =
+        ((ShortVector)
+                firstPacked
+                    .lanewise(VectorOperators.LSHR, shift)
+                    .and((byte) 0x0F)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0))
+            .mul(
+                (ShortVector)
+                    ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
+                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0));
+    ShortVector secondProducts =
+        ((ShortVector)
+                secondPacked
+                    .lanewise(VectorOperators.LSHR, shift)
+                    .and((byte) 0x0F)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0))
+            .mul(
+                (ShortVector)
+                    ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
+                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0));
+    return fourProductLanes(firstProducts, secondProducts);
   }
 
   /** SIMD Q8_0 by Q8_0 GEMV with one activation quantization shared by all rows. */

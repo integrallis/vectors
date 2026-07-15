@@ -59,6 +59,30 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q4_KQ8_KIntegerLanesSumFourProductsPerLane() {
+    byte[] packed = new byte[32];
+    byte[] q8 = new byte[32];
+    int[] q4 = new int[32];
+    for (int index = 0; index < packed.length; index++) {
+      int value = (index * 3) % 16;
+      packed[index] = (byte) ((value << 4) | (15 - value));
+      q4[index] = value;
+      q8[index] = (byte) (index - 16);
+    }
+
+    IntVector actual =
+        PanamaVectorUtilSupport.q4_KQ8_KIntegerLanes(MemorySegment.ofArray(packed), 0, 4, q8, 0);
+
+    int[] expected = new int[8];
+    for (int lane = 0; lane < expected.length; lane++) {
+      for (int index = lane * 4; index < lane * 4 + 4; index++) {
+        expected[lane] += q4[index] * q8[index];
+      }
+    }
+    assertThat(actual.toArray()).containsExactly(expected);
+  }
+
+  @Test
   void panamaProviderOwnsQ4_0Q8_0Kernel() {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)
@@ -205,6 +229,9 @@ class PanamaGgufQuantizedDotTest {
     assertThat(actualQuants).containsExactly(expectedQuants);
     assertThat(actualScales).containsExactly(expectedScales);
     assertThat(actualSums).containsExactly(expectedSums);
-    assertThat(actual).containsExactly(expected);
+    assertThat(actual).hasSameSizeAs(expected);
+    for (int row = 0; row < rows; row++) {
+      assertThat(actual[row]).isCloseTo(expected[row], offset(1e-3f));
+    }
   }
 }
