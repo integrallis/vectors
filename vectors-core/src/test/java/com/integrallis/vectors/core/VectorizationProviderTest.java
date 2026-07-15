@@ -45,6 +45,9 @@ class VectorizationProviderTest {
     assertThat(summary).contains("fastVectorFMA=");
     assertThat(summary).contains("fastScalarFMA=");
     assertThat(summary).contains("sve=");
+    assertThat(summary).contains("ggufExecutor=persistent");
+    assertThat(summary).contains("ggufThreads=" + GgufParallelSupport.parallelism());
+    assertThat(summary).contains("ggufChunksPerThread=2");
     assertThat(summary).contains("toggles=[");
     assertThat(summary).endsWith("]");
   }

@@ -67,7 +67,7 @@ class GgufParallelSupportTest {
   @Test
   void executionModePropertyIsValidated() {
     assertThat(GgufParallelSupport.ExecutionMode.parse(null))
-        .isEqualTo(GgufParallelSupport.ExecutionMode.COMMON);
+        .isEqualTo(GgufParallelSupport.ExecutionMode.PERSISTENT);
     assertThat(GgufParallelSupport.ExecutionMode.parse("common"))
         .isEqualTo(GgufParallelSupport.ExecutionMode.COMMON);
     assertThat(GgufParallelSupport.ExecutionMode.parse("dedicated"))

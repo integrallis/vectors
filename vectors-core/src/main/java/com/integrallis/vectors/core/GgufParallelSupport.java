@@ -34,7 +34,7 @@ final class GgufParallelSupport {
   private static final int PARALLELISM =
       positiveIntProperty("vectors.gguf.threads", PROCESSORS, PROCESSORS);
   private static final int CHUNKS_PER_THREAD =
-      positiveIntProperty("vectors.gguf.chunksPerThread", 4, Integer.MAX_VALUE);
+      positiveIntProperty("vectors.gguf.chunksPerThread", 2, Integer.MAX_VALUE);
   private static final ExecutionMode EXECUTION_MODE =
       ExecutionMode.parse(System.getProperty("vectors.gguf.executor"));
   private static final Thread ACCESS_PROBE = Thread.ofPlatform().unstarted(() -> {});
@@ -79,6 +79,10 @@ final class GgufParallelSupport {
     return PARALLELISM;
   }
 
+  static int chunksPerThread() {
+    return CHUNKS_PER_THREAD;
+  }
+
   static GgufRowExecutor newExecutor(
       ExecutionMode mode, int parallelism, int chunksPerThread, String threadNamePrefix) {
     return switch (mode) {
@@ -113,7 +117,7 @@ final class GgufParallelSupport {
 
     static ExecutionMode parse(String configured) {
       if (configured == null || configured.isBlank()) {
-        return COMMON;
+        return PERSISTENT;
       }
       try {
         return valueOf(configured.trim().toUpperCase(Locale.ROOT));

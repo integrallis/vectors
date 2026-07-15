@@ -18,6 +18,7 @@ package com.integrallis.vectors.core;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.logging.Level;
@@ -99,6 +100,9 @@ public final class VectorizationProvider {
     String useScalarFMA = System.getProperty("vectors.useScalarFMA");
     String ggufParallel = System.getProperty("vectors.gguf.parallel");
     String ggufParallelThreshold = System.getProperty("vectors.gguf.parallelThreshold");
+    String ggufExecutor = System.getProperty("vectors.gguf.executor");
+    String ggufThreads = System.getProperty("vectors.gguf.threads");
+    String ggufChunksPerThread = System.getProperty("vectors.gguf.chunksPerThread");
 
     StringBuilder sb = new StringBuilder("vectors-core: provider=");
     sb.append(impl.getClass().getSimpleName());
@@ -110,6 +114,10 @@ public final class VectorizationProvider {
     sb.append(" sve=").append(PanamaConstants.HAS_SVE);
     sb.append(" ggufParallel=").append(GgufParallelSupport.enabled());
     sb.append(" ggufParallelThreshold=").append(GgufParallelSupport.minElements());
+    sb.append(" ggufExecutor=")
+        .append(GgufParallelSupport.executionMode().name().toLowerCase(Locale.ROOT));
+    sb.append(" ggufThreads=").append(GgufParallelSupport.parallelism());
+    sb.append(" ggufChunksPerThread=").append(GgufParallelSupport.chunksPerThread());
     sb.append(" toggles=[");
     boolean first = true;
     if (forceScalar != null) {
@@ -139,6 +147,21 @@ public final class VectorizationProvider {
     if (ggufParallelThreshold != null) {
       if (!first) sb.append(", ");
       sb.append("vectors.gguf.parallelThreshold=").append(ggufParallelThreshold);
+      first = false;
+    }
+    if (ggufExecutor != null) {
+      if (!first) sb.append(", ");
+      sb.append("vectors.gguf.executor=").append(ggufExecutor);
+      first = false;
+    }
+    if (ggufThreads != null) {
+      if (!first) sb.append(", ");
+      sb.append("vectors.gguf.threads=").append(ggufThreads);
+      first = false;
+    }
+    if (ggufChunksPerThread != null) {
+      if (!first) sb.append(", ");
+      sb.append("vectors.gguf.chunksPerThread=").append(ggufChunksPerThread);
       first = false;
     }
     if (first) sb.append("(defaults — no -Dvectors.* overrides)");
