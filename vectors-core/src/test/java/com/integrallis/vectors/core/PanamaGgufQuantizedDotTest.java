@@ -117,6 +117,31 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q5_0Q8_0IntegerLanesDecodeHighBits() {
+    byte[] packed = new byte[16];
+    byte[] q8 = new byte[32];
+    Random random = new Random(0x515048L);
+    random.nextBytes(packed);
+    random.nextBytes(q8);
+    int highBits = 0xA5C33C5A;
+
+    IntVector actual =
+        PanamaVectorUtilSupport.q5_0Q8_0IntegerLanes(
+            MemorySegment.ofArray(packed), 0, highBits, q8, 0);
+
+    int[] expected = new int[8];
+    for (int index = 0; index < packed.length; index++) {
+      int value = packed[index] & 0xFF;
+      int low = (value & 0x0F) | (((highBits >>> index) & 1) << 4);
+      int high = (value >>> 4) | (((highBits >>> (index + 16)) & 1) << 4);
+      int lane = index & 7;
+      expected[lane] += (low - 16) * q8[index];
+      expected[lane] += (high - 16) * q8[index + 16];
+    }
+    assertThat(actual.toArray()).containsExactly(expected);
+  }
+
+  @Test
   void panamaProviderOwnsQ4_0Q8_0Kernel() {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)
@@ -142,6 +167,13 @@ class PanamaGgufQuantizedDotTest {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)
         .contains("ggufQ6_KQ8_KMatVecDot");
+  }
+
+  @Test
+  void panamaProviderOwnsQ5_0Q8_0Kernel() {
+    assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
+        .extracting(Method::getName)
+        .contains("ggufQ5_0Q8_0MatVecDot");
   }
 
   @Test
@@ -315,5 +347,43 @@ class PanamaGgufQuantizedDotTest {
     for (int row = 0; row < rows; row++) {
       assertThat(actual[row]).isCloseTo(expected[row], offset(1e-3f));
     }
+  }
+
+  @Test
+  void q5_0Q8_0KernelMatchesScalarReferenceAcrossRowsAndBlocks() {
+    int rows = 512;
+    int cols = 2048;
+    Random random = new Random(0x515048L);
+    float[] query = new float[cols];
+    for (int index = 0; index < cols; index++) {
+      query[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+
+    byte[] weights = new byte[rows * (cols / 32) * 22];
+    random.nextBytes(weights);
+    ByteBuffer buffer = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < weights.length; offset += 22) {
+      float scale = random.nextFloat() * 0.05f + 0.001f;
+      buffer.putShort(offset, Float.floatToFloat16(scale));
+    }
+
+    float[] expected = new float[rows];
+    float[] actual = new float[rows];
+    byte[] expectedQuants = new byte[cols];
+    byte[] actualQuants = new byte[cols];
+    float[] expectedScales = new float[cols / 32];
+    float[] actualScales = new float[cols / 32];
+    MemorySegment weightSegment = MemorySegment.ofArray(weights);
+
+    new ScalarVectorUtilSupport()
+        .ggufQ5_0Q8_0MatVecDot(
+            query, weightSegment, rows, cols, expected, expectedQuants, expectedScales);
+    new PanamaVectorUtilSupport()
+        .ggufQ5_0Q8_0MatVecDot(
+            query, weightSegment, rows, cols, actual, actualQuants, actualScales);
+
+    assertThat(actualQuants).containsExactly(expectedQuants);
+    assertThat(actualScales).containsExactly(expectedScales);
+    assertThat(actual).containsExactly(expected);
   }
 }

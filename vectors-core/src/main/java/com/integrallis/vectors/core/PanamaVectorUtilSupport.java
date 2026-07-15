@@ -74,6 +74,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           ShortVector.SPECIES_256, 0, 0, 0, 0, 0, 4, 8, 12, 0, 0, 0, 0, 0, 0, 0, 0);
   private static final VectorMask<Short> HIGH_GROUP_LANES =
       VectorMask.fromLong(ShortVector.SPECIES_256, 0xF0L);
+  private static final ByteVector Q5_HIGH_BIT_MASKS =
+      ByteVector.fromArray(
+          ByteVector.SPECIES_64, new byte[] {1, 2, 4, 8, 16, 32, 64, (byte) 0x80}, 0);
 
   // --- Conditional FMA helpers ---
 
@@ -652,6 +655,79 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                     ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
                         .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0));
     return fourProductLanes(firstProducts, secondProducts);
+  }
+
+  /** SIMD Q5_0 by Q8_0 GEMV with one activation quantization shared by all rows. */
+  @Override
+  public void ggufQ5_0Q8_0MatVecDot(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
+    long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q5_0_BLOCK_BYTES;
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          float sum = 0.0f;
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q5_0_BLOCK_BYTES;
+            float scale =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+            int highBits = qWeight.get(GGUF_LE_INT, blockOffset + Short.BYTES);
+            IntVector integerLanes =
+                q5_0Q8_0IntegerLanes(
+                    qWeight,
+                    blockOffset + Short.BYTES + Integer.BYTES,
+                    highBits,
+                    q8Quants,
+                    block * GGUF_Q_BLOCK_SIZE);
+            sum = MathUtil.fma(scale, integerLanes.reduceLanes(VectorOperators.ADD), sum);
+          }
+          out[row] = sum;
+        });
+  }
+
+  static IntVector q5_0Q8_0IntegerLanes(
+      MemorySegment qWeight, long packedOffset, int highBits, byte[] q8Quants, int quantOffset) {
+    IntVector accumulator = IntVector.zero(IntVector.SPECIES_256);
+    for (int index = 0; index < 16; index += 8) {
+      ByteVector packed =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, packedOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ByteVector low = q5Values(packed.and((byte) 0x0F), (byte) (highBits >>> index));
+      ByteVector high =
+          q5Values(
+              packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F),
+              (byte) (highBits >>> (index + 16)));
+      IntVector lowWeights =
+          (IntVector) low.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector highWeights =
+          (IntVector) high.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector lowQuants =
+          (IntVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector highQuants =
+          (IntVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index + 16)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      accumulator = accumulator.add(lowWeights.mul(lowQuants)).add(highWeights.mul(highQuants));
+    }
+    return accumulator;
+  }
+
+  private static ByteVector q5Values(ByteVector lowBits, byte highBits) {
+    VectorMask<Byte> highMask =
+        Q5_HIGH_BIT_MASKS.and(highBits).compare(VectorOperators.NE, (byte) 0);
+    return lowBits.add((byte) 16, highMask).sub((byte) 16);
   }
 
   /** SIMD Q6_K by Q8_K GEMV with one activation quantization shared by all rows. */
