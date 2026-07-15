@@ -431,52 +431,110 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         rows,
         cols,
         row -> {
-          for (int batch = 0; batch < batchSize; batch++) {
-            out[batch * rows + row] = 0.0f;
-          }
           long rowOffset = row * rowBytes;
-          for (int block = 0; block < blocks; block++) {
-            long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
-            float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
-            ByteVector packed =
-                ByteVector.fromMemorySegment(
-                    ByteVector.SPECIES_128,
-                    qWeight,
-                    blockOffset + Short.BYTES,
-                    ByteOrder.LITTLE_ENDIAN);
-            ShortVector low =
-                (ShortVector)
-                    packed
-                        .and((byte) 0x0F)
-                        .sub((byte) 8)
-                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
-            ShortVector high =
-                (ShortVector)
-                    packed
-                        .lanewise(VectorOperators.LSHR, 4)
-                        .and((byte) 0x0F)
-                        .sub((byte) 8)
-                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+          for (int batchBase = 0; batchBase < batchSize; batchBase += 4) {
+            int groupSize = Math.min(4, batchSize - batchBase);
+            FloatVector accumulator0 = FloatVector.zero(FloatVector.SPECIES_256);
+            FloatVector accumulator1 = FloatVector.zero(FloatVector.SPECIES_256);
+            FloatVector accumulator2 = FloatVector.zero(FloatVector.SPECIES_256);
+            FloatVector accumulator3 = FloatVector.zero(FloatVector.SPECIES_256);
 
-            for (int batch = 0; batch < batchSize; batch++) {
-              int quantOffset = batch * cols + block * GGUF_Q_BLOCK_SIZE;
-              ShortVector lowQuants =
+            for (int block = 0; block < blocks; block++) {
+              long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+              float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+              ByteVector packed =
+                  ByteVector.fromMemorySegment(
+                      ByteVector.SPECIES_128,
+                      qWeight,
+                      blockOffset + Short.BYTES,
+                      ByteOrder.LITTLE_ENDIAN);
+              ShortVector low =
                   (ShortVector)
-                      ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
+                      packed
+                          .and((byte) 0x0F)
+                          .sub((byte) 8)
                           .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
-              ShortVector highQuants =
+              ShortVector high =
                   (ShortVector)
-                      ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
+                      packed
+                          .lanewise(VectorOperators.LSHR, 4)
+                          .and((byte) 0x0F)
+                          .sub((byte) 8)
                           .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
-              int integerSum =
-                  fourProductLanes(low.mul(lowQuants), high.mul(highQuants))
-                      .reduceLanes(VectorOperators.ADD);
-              float scale = weightScale * q8Scales[batch * blocks + block];
-              int outputOffset = batch * rows + row;
-              out[outputOffset] = MathUtil.fma(scale, integerSum, out[outputOffset]);
+
+              accumulator0 =
+                  accumulateQ4_0BatchQuery(
+                      accumulator0,
+                      low,
+                      high,
+                      q8Quants,
+                      (batchBase * cols) + block * GGUF_Q_BLOCK_SIZE,
+                      weightScale * q8Scales[batchBase * blocks + block]);
+              if (groupSize > 1) {
+                accumulator1 =
+                    accumulateQ4_0BatchQuery(
+                        accumulator1,
+                        low,
+                        high,
+                        q8Quants,
+                        ((batchBase + 1) * cols) + block * GGUF_Q_BLOCK_SIZE,
+                        weightScale * q8Scales[(batchBase + 1) * blocks + block]);
+              }
+              if (groupSize > 2) {
+                accumulator2 =
+                    accumulateQ4_0BatchQuery(
+                        accumulator2,
+                        low,
+                        high,
+                        q8Quants,
+                        ((batchBase + 2) * cols) + block * GGUF_Q_BLOCK_SIZE,
+                        weightScale * q8Scales[(batchBase + 2) * blocks + block]);
+              }
+              if (groupSize > 3) {
+                accumulator3 =
+                    accumulateQ4_0BatchQuery(
+                        accumulator3,
+                        low,
+                        high,
+                        q8Quants,
+                        ((batchBase + 3) * cols) + block * GGUF_Q_BLOCK_SIZE,
+                        weightScale * q8Scales[(batchBase + 3) * blocks + block]);
+              }
+            }
+
+            out[batchBase * rows + row] = accumulator0.reduceLanes(VectorOperators.ADD);
+            if (groupSize > 1) {
+              out[(batchBase + 1) * rows + row] = accumulator1.reduceLanes(VectorOperators.ADD);
+            }
+            if (groupSize > 2) {
+              out[(batchBase + 2) * rows + row] = accumulator2.reduceLanes(VectorOperators.ADD);
+            }
+            if (groupSize > 3) {
+              out[(batchBase + 3) * rows + row] = accumulator3.reduceLanes(VectorOperators.ADD);
             }
           }
         });
+  }
+
+  private static FloatVector accumulateQ4_0BatchQuery(
+      FloatVector accumulator,
+      ShortVector low,
+      ShortVector high,
+      byte[] q8Quants,
+      int quantOffset,
+      float scale) {
+    ShortVector lowQuants =
+        (ShortVector)
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
+                .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+    ShortVector highQuants =
+        (ShortVector)
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
+                .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+    IntVector integerLanes = fourProductLanes(low.mul(lowQuants), high.mul(highQuants));
+    FloatVector products =
+        (FloatVector) integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
+    return fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
   }
 
   private static int q4_0Q8_0IntegerDot(
