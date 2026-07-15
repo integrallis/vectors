@@ -24,6 +24,7 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Random;
 import java.util.function.IntUnaryOperator;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -422,6 +423,50 @@ class GgufQuantizedDotTest {
 
       assertThat(actual).containsExactly(expected);
     }
+  }
+
+  @Test
+  void q4_0Q8_0BatchedMatmulMatchesGemvAtQwenProjectionScaleAfterWarmup() {
+    int batchSize = 4;
+    int rows = 1024;
+    int cols = 1024;
+    int blocks = cols / 32;
+    Random random = new Random(42L);
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = random.nextFloat() * 8.0f - 4.0f;
+    }
+    byte[] matrix = new byte[rows * blocks * 18];
+    random.nextBytes(matrix);
+    ByteBuffer matrixBuffer = ByteBuffer.wrap(matrix).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < matrix.length; offset += 18) {
+      matrixBuffer.putShort(offset, Float.floatToFloat16(0.001f + random.nextFloat() * 0.1f));
+    }
+
+    MemorySegment weights = MemorySegment.ofArray(matrix);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] query = new float[cols];
+    float[] gemvOut = new float[rows];
+    byte[] gemvQuants = new byte[cols];
+    float[] gemvScales = new float[blocks];
+    byte[] batchQuants = new byte[batchSize * cols];
+    float[] batchScales = new float[batchSize * blocks];
+    float[] batchLanes = new float[batchSize * rows * 8];
+
+    for (int iteration = 0; iteration < 12; iteration++) {
+      for (int batch = 0; batch < batchSize; batch++) {
+        System.arraycopy(queries, batch * cols, query, 0, cols);
+        VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+            query, weights, rows, cols, gemvOut, gemvQuants, gemvScales);
+        System.arraycopy(gemvOut, 0, expected, batch * rows, rows);
+      }
+
+      VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+          queries, weights, batchSize, rows, cols, actual, batchQuants, batchScales, batchLanes);
+    }
+
+    assertThat(actual).containsExactly(expected);
   }
 
   @Test
