@@ -74,6 +74,10 @@ jmh {
     listOf("wal.s3.bucket", "wal.s3.region", "wal.s3.endpoint").forEach { key ->
         (project.findProperty(key) as String?)?.let { jvmArgs.add("-D$key=$it") }
     }
+    // Forward GGUF kernel controls so serial/parallel comparisons use the same JMH harness.
+    listOf("vectors.gguf.parallel", "vectors.gguf.parallelThreshold").forEach { key ->
+        (project.findProperty(key) as String?)?.let { jvmArgs.add("-D$key=$it") }
+    }
     // Time-box overrides for short/dev runs:
     //   -Pjmh.fork=1 -Pjmh.warmup=1 -Pjmh.iterations=2 -Pjmh.timeOnIteration=1s
     (project.findProperty("jmh.fork") as String?)?.let { fork.set(it.toInt()) }
@@ -333,4 +337,3 @@ tasks.register<JavaExec>("pqTrainProbe") {
     standardOutput = System.out
     errorOutput    = System.err
 }
-

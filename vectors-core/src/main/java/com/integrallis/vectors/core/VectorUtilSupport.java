@@ -589,45 +589,50 @@ public interface VectorUtilSupport {
 
     long rowBytes = ggufQ4_KRowBytes(cols);
     int blocks = cols / GGUF_Q4_K_BLOCK_SIZE;
-    for (int row = 0; row < rows; row++) {
-      float sum = 0.0f;
-      long rowOffset = row * rowBytes;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          float sum = 0.0f;
+          long rowOffset = row * rowBytes;
 
-      for (int block = 0; block < blocks; block++) {
-        long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
-        float q8Scale = q8Scales[block];
-        float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
-        float dMin =
-            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES)) * q8Scale;
-        long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
-        long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
-        int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
-        int quantizedSum = 0;
-        int minimumSum = 0;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
+            float q8Scale = q8Scales[block];
+            float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
+            float dMin =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES))
+                    * q8Scale;
+            long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
+            long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
+            int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
+            int quantizedSum = 0;
+            int minimumSum = 0;
 
-        for (int group = 0; group < 8; group++) {
-          int scale = qKScale(qWeight, scalesOffset, group);
-          int min = qKMin(qWeight, scalesOffset, group);
-          long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
-          int shift = (group & 1) * 4;
-          int groupActivationOffset = activationOffset + group * 32;
-          int groupDot = 0;
+            for (int group = 0; group < 8; group++) {
+              int scale = qKScale(qWeight, scalesOffset, group);
+              int min = qKMin(qWeight, scalesOffset, group);
+              long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+              int shift = (group & 1) * 4;
+              int groupActivationOffset = activationOffset + group * 32;
+              int groupDot = 0;
 
-          for (int index = 0; index < 32; index++) {
-            int packed = qWeight.get(ValueLayout.JAVA_BYTE, packedOffset + index) & 0xFF;
-            int quant = (packed >>> shift) & 0x0F;
-            groupDot += quant * q8Quants[groupActivationOffset + index];
+              for (int index = 0; index < 32; index++) {
+                int packed = qWeight.get(ValueLayout.JAVA_BYTE, packedOffset + index) & 0xFF;
+                int quant = (packed >>> shift) & 0x0F;
+                groupDot += quant * q8Quants[groupActivationOffset + index];
+              }
+              quantizedSum += scale * groupDot;
+              int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+              minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
+            }
+
+            sum = MathUtil.fma(d, quantizedSum, sum);
+            sum = MathUtil.fma(-dMin, minimumSum, sum);
           }
-          quantizedSum += scale * groupDot;
-          int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
-          minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
-        }
-
-        sum = MathUtil.fma(d, quantizedSum, sum);
-        sum = MathUtil.fma(-dMin, minimumSum, sum);
-      }
-      out[row] = sum;
-    }
+          out[row] = sum;
+        });
   }
 
   /** Batched row-major GEMV over GGUF Q5_K rows. */
@@ -653,48 +658,53 @@ public interface VectorUtilSupport {
 
     long rowBytes = ggufQ5_KRowBytes(cols);
     int blocks = cols / GGUF_Q5_K_BLOCK_SIZE;
-    for (int row = 0; row < rows; row++) {
-      float sum = 0.0f;
-      long rowOffset = row * rowBytes;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          float sum = 0.0f;
+          long rowOffset = row * rowBytes;
 
-      for (int block = 0; block < blocks; block++) {
-        long blockOffset = rowOffset + (long) block * GGUF_Q5_K_BLOCK_BYTES;
-        float q8Scale = q8Scales[block];
-        float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
-        float dMin =
-            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES)) * q8Scale;
-        long scalesOffset = blockOffset + GGUF_Q5_K_SCALES_OFFSET;
-        long highBitsOffset = blockOffset + GGUF_Q5_K_HIGH_BITS_OFFSET;
-        long quantsOffset = blockOffset + GGUF_Q5_K_QUANTS_OFFSET;
-        int activationOffset = block * GGUF_Q5_K_BLOCK_SIZE;
-        int quantizedSum = 0;
-        int minimumSum = 0;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q5_K_BLOCK_BYTES;
+            float q8Scale = q8Scales[block];
+            float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
+            float dMin =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES))
+                    * q8Scale;
+            long scalesOffset = blockOffset + GGUF_Q5_K_SCALES_OFFSET;
+            long highBitsOffset = blockOffset + GGUF_Q5_K_HIGH_BITS_OFFSET;
+            long quantsOffset = blockOffset + GGUF_Q5_K_QUANTS_OFFSET;
+            int activationOffset = block * GGUF_Q5_K_BLOCK_SIZE;
+            int quantizedSum = 0;
+            int minimumSum = 0;
 
-        for (int group = 0; group < 8; group++) {
-          int scale = qKScale(qWeight, scalesOffset, group);
-          int min = qKMin(qWeight, scalesOffset, group);
-          long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
-          int shift = (group & 1) * 4;
-          int highBit = 1 << group;
-          int groupActivationOffset = activationOffset + group * 32;
-          int groupDot = 0;
+            for (int group = 0; group < 8; group++) {
+              int scale = qKScale(qWeight, scalesOffset, group);
+              int min = qKMin(qWeight, scalesOffset, group);
+              long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+              int shift = (group & 1) * 4;
+              int highBit = 1 << group;
+              int groupActivationOffset = activationOffset + group * 32;
+              int groupDot = 0;
 
-          for (int index = 0; index < 32; index++) {
-            int packed = qWeight.get(ValueLayout.JAVA_BYTE, packedOffset + index) & 0xFF;
-            int highBits = qWeight.get(ValueLayout.JAVA_BYTE, highBitsOffset + index) & 0xFF;
-            int quant = ((packed >>> shift) & 0x0F) | ((highBits & highBit) == 0 ? 0 : 16);
-            groupDot += quant * q8Quants[groupActivationOffset + index];
+              for (int index = 0; index < 32; index++) {
+                int packed = qWeight.get(ValueLayout.JAVA_BYTE, packedOffset + index) & 0xFF;
+                int highBits = qWeight.get(ValueLayout.JAVA_BYTE, highBitsOffset + index) & 0xFF;
+                int quant = ((packed >>> shift) & 0x0F) | ((highBits & highBit) == 0 ? 0 : 16);
+                groupDot += quant * q8Quants[groupActivationOffset + index];
+              }
+              quantizedSum += scale * groupDot;
+              int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+              minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
+            }
+
+            sum = MathUtil.fma(d, quantizedSum, sum);
+            sum = MathUtil.fma(-dMin, minimumSum, sum);
           }
-          quantizedSum += scale * groupDot;
-          int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
-          minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
-        }
-
-        sum = MathUtil.fma(d, quantizedSum, sum);
-        sum = MathUtil.fma(-dMin, minimumSum, sum);
-      }
-      out[row] = sum;
-    }
+          out[row] = sum;
+        });
   }
 
   /** Batched row-major GEMV over GGUF Q5_0 rows. */
@@ -719,28 +729,32 @@ public interface VectorUtilSupport {
 
     long rowBytes = ggufQ5_0RowBytes(cols);
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
-    for (int row = 0; row < rows; row++) {
-      float sum = 0.0f;
-      long rowOffset = row * rowBytes;
-      for (int block = 0; block < blocks; block++) {
-        long blockOffset = rowOffset + (long) block * GGUF_Q5_0_BLOCK_BYTES;
-        float scale =
-            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
-        int highBits = qWeight.get(GGUF_LE_INT, blockOffset + Short.BYTES);
-        long quantsOffset = blockOffset + Short.BYTES + Integer.BYTES;
-        int activationOffset = block * GGUF_Q_BLOCK_SIZE;
-        int integerSum = 0;
-        for (int index = 0; index < 16; index++) {
-          int packed = qWeight.get(ValueLayout.JAVA_BYTE, quantsOffset + index) & 0xFF;
-          int low = (packed & 0x0F) | (((highBits >>> index) & 1) << 4);
-          int high = (packed >>> 4) | (((highBits >>> (index + 16)) & 1) << 4);
-          integerSum += (low - 16) * q8Quants[activationOffset + index];
-          integerSum += (high - 16) * q8Quants[activationOffset + index + 16];
-        }
-        sum = MathUtil.fma(scale, integerSum, sum);
-      }
-      out[row] = sum;
-    }
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          float sum = 0.0f;
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q5_0_BLOCK_BYTES;
+            float scale =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+            int highBits = qWeight.get(GGUF_LE_INT, blockOffset + Short.BYTES);
+            long quantsOffset = blockOffset + Short.BYTES + Integer.BYTES;
+            int activationOffset = block * GGUF_Q_BLOCK_SIZE;
+            int integerSum = 0;
+            for (int index = 0; index < 16; index++) {
+              int packed = qWeight.get(ValueLayout.JAVA_BYTE, quantsOffset + index) & 0xFF;
+              int low = (packed & 0x0F) | (((highBits >>> index) & 1) << 4);
+              int high = (packed >>> 4) | (((highBits >>> (index + 16)) & 1) << 4);
+              integerSum += (low - 16) * q8Quants[activationOffset + index];
+              integerSum += (high - 16) * q8Quants[activationOffset + index + 16];
+            }
+            sum = MathUtil.fma(scale, integerSum, sum);
+          }
+          out[row] = sum;
+        });
   }
 
   /** Batched row-major GEMV over GGUF Q6_K rows. */
@@ -765,65 +779,73 @@ public interface VectorUtilSupport {
 
     long rowBytes = ggufQ6_KRowBytes(cols);
     int blocks = cols / GGUF_Q6_K_BLOCK_SIZE;
-    int[] integerSums = new int[8];
-    float[] laneSums = new float[8];
-    for (int row = 0; row < rows; row++) {
-      java.util.Arrays.fill(laneSums, 0.0f);
-      long rowOffset = row * rowBytes;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          GgufQuantizationSupport.Q6Scratch scratch = GgufQuantizationSupport.q6Scratch();
+          int[] integerSums = scratch.integerSums;
+          float[] laneSums = scratch.laneSums;
+          java.util.Arrays.fill(laneSums, 0.0f);
+          long rowOffset = row * rowBytes;
 
-      for (int block = 0; block < blocks; block++) {
-        java.util.Arrays.fill(integerSums, 0);
-        long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
-        float d =
-            Float.float16ToFloat(
-                    qWeight.get(
-                        GGUF_LE_SHORT,
-                        blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES))
-                * q8Scales[block];
-        long qlOffset = blockOffset;
-        long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
-        long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
-        int queryOffset = block * GGUF_Q6_K_BLOCK_SIZE;
+          for (int block = 0; block < blocks; block++) {
+            java.util.Arrays.fill(integerSums, 0);
+            long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+            float d =
+                Float.float16ToFloat(
+                        qWeight.get(
+                            GGUF_LE_SHORT,
+                            blockOffset
+                                + GGUF_Q6_K_QL_BYTES
+                                + GGUF_Q6_K_QH_BYTES
+                                + GGUF_Q6_K_SCALES))
+                    * q8Scales[block];
+            long qlOffset = blockOffset;
+            long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+            long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+            int queryOffset = block * GGUF_Q6_K_BLOCK_SIZE;
 
-        for (int superBlock = 0; superBlock < 2; superBlock++) {
-          long qlBase = qlOffset + (long) superBlock * 64;
-          long qhBase = qhOffset + (long) superBlock * 32;
-          long scaleBase = scaleOffset + (long) superBlock * 8;
-          int quantBase = queryOffset + superBlock * 128;
+            for (int superBlock = 0; superBlock < 2; superBlock++) {
+              long qlBase = qlOffset + (long) superBlock * 64;
+              long qhBase = qhOffset + (long) superBlock * 32;
+              long scaleBase = scaleOffset + (long) superBlock * 8;
+              int quantBase = queryOffset + superBlock * 128;
 
-          for (int index = 0; index < 32; index++) {
-            int scaleIndex = index / 16;
-            int ql1 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + index) & 0xFF;
-            int ql2 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + 32L + index) & 0xFF;
-            int qh = qWeight.get(ValueLayout.JAVA_BYTE, qhBase + index) & 0xFF;
-            int q1 = ((ql1 & 0x0F) | ((qh & 0x03) << 4)) - 32;
-            int q2 = ((ql2 & 0x0F) | (((qh >>> 2) & 0x03) << 4)) - 32;
-            int q3 = ((ql1 >>> 4) | (((qh >>> 4) & 0x03) << 4)) - 32;
-            int q4 = ((ql2 >>> 4) | (((qh >>> 6) & 0x03) << 4)) - 32;
-            int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
-            int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
-            int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
-            int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
-            int lane = index & 7;
+              for (int index = 0; index < 32; index++) {
+                int scaleIndex = index / 16;
+                int ql1 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + index) & 0xFF;
+                int ql2 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + 32L + index) & 0xFF;
+                int qh = qWeight.get(ValueLayout.JAVA_BYTE, qhBase + index) & 0xFF;
+                int q1 = ((ql1 & 0x0F) | ((qh & 0x03) << 4)) - 32;
+                int q2 = ((ql2 & 0x0F) | (((qh >>> 2) & 0x03) << 4)) - 32;
+                int q3 = ((ql1 >>> 4) | (((qh >>> 4) & 0x03) << 4)) - 32;
+                int q4 = ((ql2 >>> 4) | (((qh >>> 6) & 0x03) << 4)) - 32;
+                int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
+                int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
+                int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
+                int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
+                int lane = index & 7;
 
-            integerSums[lane] += s1 * q1 * q8Quants[quantBase + index];
-            integerSums[lane] += s2 * q2 * q8Quants[quantBase + index + 32];
-            integerSums[lane] += s3 * q3 * q8Quants[quantBase + index + 64];
-            integerSums[lane] += s4 * q4 * q8Quants[quantBase + index + 96];
+                integerSums[lane] += s1 * q1 * q8Quants[quantBase + index];
+                integerSums[lane] += s2 * q2 * q8Quants[quantBase + index + 32];
+                integerSums[lane] += s3 * q3 * q8Quants[quantBase + index + 64];
+                integerSums[lane] += s4 * q4 * q8Quants[quantBase + index + 96];
+              }
+            }
+
+            for (int lane = 0; lane < laneSums.length; lane++) {
+              laneSums[lane] = MathUtil.fma(d, integerSums[lane], laneSums[lane]);
+            }
           }
-        }
 
-        for (int lane = 0; lane < laneSums.length; lane++) {
-          laneSums[lane] = MathUtil.fma(d, integerSums[lane], laneSums[lane]);
-        }
-      }
-
-      float sum = 0.0f;
-      for (float laneSum : laneSums) {
-        sum += laneSum;
-      }
-      out[row] = sum;
-    }
+          float sum = 0.0f;
+          for (float laneSum : laneSums) {
+            sum += laneSum;
+          }
+          out[row] = sum;
+        });
   }
 
   /** Batched row-major GEMV over GGUF Q8_0 rows. */
@@ -848,25 +870,30 @@ public interface VectorUtilSupport {
 
     long rowBytes = ggufQ8_0RowBytes(cols);
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
-    for (int row = 0; row < rows; row++) {
-      float sum = 0.0f;
-      long rowOffset = row * rowBytes;
-      for (int block = 0; block < blocks; block++) {
-        long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
-        float scale =
-            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
-        long quantOffset = blockOffset + Short.BYTES;
-        int queryOffset = block * GGUF_Q_BLOCK_SIZE;
-        int integerSum = 0;
-        for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
-          integerSum +=
-              qWeight.get(ValueLayout.JAVA_BYTE, quantOffset + index)
-                  * q8Quants[queryOffset + index];
-        }
-        sum = MathUtil.fma(scale, integerSum, sum);
-      }
-      out[row] = sum;
-    }
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        GgufParallelSupport.Q8_MIN_ELEMENTS,
+        row -> {
+          float sum = 0.0f;
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+            float scale =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+            long quantOffset = blockOffset + Short.BYTES;
+            int queryOffset = block * GGUF_Q_BLOCK_SIZE;
+            int integerSum = 0;
+            for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
+              integerSum +=
+                  qWeight.get(ValueLayout.JAVA_BYTE, quantOffset + index)
+                      * q8Quants[queryOffset + index];
+            }
+            sum = MathUtil.fma(scale, integerSum, sum);
+          }
+          out[row] = sum;
+        });
   }
 
   /**
@@ -1155,21 +1182,7 @@ public interface VectorUtilSupport {
   }
 
   private static void quantizeQ8_0(float[] query, int dimensions, byte[] quants, float[] scales) {
-    int blocks = dimensions / GGUF_Q_BLOCK_SIZE;
-    for (int block = 0; block < blocks; block++) {
-      int offset = block * GGUF_Q_BLOCK_SIZE;
-      float absoluteMax = 0.0f;
-      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
-        absoluteMax = Math.max(absoluteMax, Math.abs(query[offset + index]));
-      }
-
-      float scale = absoluteMax / 127.0f;
-      float inverseScale = absoluteMax == 0.0f ? 0.0f : 127.0f / absoluteMax;
-      scales[block] = Float.float16ToFloat(Float.floatToFloat16(scale));
-      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
-        quants[offset + index] = (byte) ggmlNearestInt(query[offset + index] * inverseScale);
-      }
-    }
+    GgufQuantizationSupport.quantizeQ8_0(query, dimensions, quants, scales);
   }
 
   private static int ggmlNearestInt(float value) {

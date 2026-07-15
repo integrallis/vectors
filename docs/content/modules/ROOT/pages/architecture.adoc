@@ -160,6 +160,17 @@ Distance kernels use the Java Vector API (`jdk.incubator.vector`):
 * **Scalar tail** for dimensions not divisible by the lane width
 * A pure-scalar fallback (`ScalarVectorUtilSupport`) is always available
 
+GGUF matrix-vector kernels quantize each activation once and reuse it across every weight row.
+Large Q4_0, Q4_K, Q5_0, Q5_K, Q6_K, and Q8_0 matrices distribute independent rows across the
+bounded common fork-join pool. Parallel execution is used only for memory segments that are
+accessible from worker threads; confined segments stay on their owner thread. The default
+crossover is 1,048,576 matrix elements, with a 4,194,304-element floor for Q8_0 because smaller
+Q8_0 matrices are memory-bandwidth and scheduling limited.
+
+Set `-Dvectors.gguf.parallel=false` to force serial GGUF execution, or raise the global crossover
+with `-Dvectors.gguf.parallelThreshold=<elements>`. The active values are included in the
+`vectors-core` startup diagnostic line.
+
 == Memory Model
 
 * **Vectors** are stored off-heap via `MemorySegment` in persistent mode, or as `float[][]` on the heap in memory mode.
