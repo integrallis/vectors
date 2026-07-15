@@ -16,6 +16,7 @@
 package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
+import java.util.Locale;
 import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 
@@ -30,6 +31,12 @@ final class GgufParallelSupport {
   private static final long MIN_ELEMENTS =
       Math.max(1L, Long.getLong("vectors.gguf.parallelThreshold", DEFAULT_MIN_ELEMENTS));
   private static final int PROCESSORS = Runtime.getRuntime().availableProcessors();
+  private static final int PARALLELISM =
+      positiveIntProperty("vectors.gguf.threads", PROCESSORS, PROCESSORS);
+  private static final int CHUNKS_PER_THREAD =
+      positiveIntProperty("vectors.gguf.chunksPerThread", 4, Integer.MAX_VALUE);
+  private static final ExecutionMode EXECUTION_MODE =
+      ExecutionMode.parse(System.getProperty("vectors.gguf.executor"));
   private static final Thread ACCESS_PROBE = Thread.ofPlatform().unstarted(() -> {});
 
   private GgufParallelSupport() {}
@@ -42,8 +49,8 @@ final class GgufParallelSupport {
       MemorySegment weights, int rows, int cols, long formatMinElements, IntConsumer rowOperation) {
     boolean shareable = weights.isAccessibleBy(ACCESS_PROBE);
     long effectiveMinElements = Math.max(MIN_ELEMENTS, formatMinElements);
-    if (shareable && shouldParallelize(rows, cols, PROCESSORS, ENABLED, effectiveMinElements)) {
-      IntStream.range(0, rows).parallel().forEach(rowOperation);
+    if (shareable && shouldParallelize(rows, cols, PARALLELISM, ENABLED, effectiveMinElements)) {
+      ExecutorHolder.INSTANCE.forEach(rows, rowOperation);
       return;
     }
     for (int row = 0; row < rows; row++) {
@@ -62,5 +69,66 @@ final class GgufParallelSupport {
 
   static long minElements() {
     return MIN_ELEMENTS;
+  }
+
+  static ExecutionMode executionMode() {
+    return EXECUTION_MODE;
+  }
+
+  static int parallelism() {
+    return PARALLELISM;
+  }
+
+  static GgufRowExecutor newExecutor(
+      ExecutionMode mode, int parallelism, int chunksPerThread, String threadNamePrefix) {
+    return switch (mode) {
+      case COMMON ->
+          (rows, rowOperation) -> IntStream.range(0, rows).parallel().forEach(rowOperation);
+      case DEDICATED -> new GgufDedicatedRowExecutor(parallelism, threadNamePrefix);
+      case PERSISTENT ->
+          new GgufPersistentRowExecutor(parallelism, chunksPerThread, threadNamePrefix);
+    };
+  }
+
+  private static int positiveIntProperty(String name, int defaultValue, int maximum) {
+    String configured = System.getProperty(name);
+    if (configured == null) {
+      return defaultValue;
+    }
+    try {
+      int value = Integer.parseInt(configured);
+      if (value < 1) {
+        throw new IllegalArgumentException(name + " must be positive: " + configured);
+      }
+      return Math.min(value, maximum);
+    } catch (NumberFormatException exception) {
+      throw new IllegalArgumentException(name + " must be an integer: " + configured, exception);
+    }
+  }
+
+  enum ExecutionMode {
+    COMMON,
+    DEDICATED,
+    PERSISTENT;
+
+    static ExecutionMode parse(String configured) {
+      if (configured == null || configured.isBlank()) {
+        return COMMON;
+      }
+      try {
+        return valueOf(configured.trim().toUpperCase(Locale.ROOT));
+      } catch (IllegalArgumentException exception) {
+        throw new IllegalArgumentException(
+            "vectors.gguf.executor must be common, dedicated, or persistent: " + configured,
+            exception);
+      }
+    }
+  }
+
+  private static final class ExecutorHolder {
+    private static final GgufRowExecutor INSTANCE =
+        newExecutor(EXECUTION_MODE, PARALLELISM, CHUNKS_PER_THREAD, "vectors-gguf");
+
+    private ExecutorHolder() {}
   }
 }
