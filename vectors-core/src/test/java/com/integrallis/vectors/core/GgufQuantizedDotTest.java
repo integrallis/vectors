@@ -323,6 +323,43 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0Q8_0BatchedMatmulMatchesIndependentQueries() {
+    int batchSize = 3;
+    int rows = 2;
+    int cols = 32;
+    float[] queries = new float[batchSize * cols];
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int col = 0; col < cols; col++) {
+        queries[batch * cols + col] = ((batch + 1) * (col - 13)) / 17.0f;
+      }
+    }
+    byte[] row0 = q4Block(0.125f, ones(cols), (lo, hi) -> (lo * 5 + hi * 3) & 0xFF);
+    byte[] row1 = q4Block(-0.25f, ones(cols), (lo, hi) -> (lo * 7 + hi) & 0xFF);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    byte[] q8Quants = new byte[batchSize * cols];
+    float[] q8Scales = new float[batchSize * (cols / 32)];
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, concat(row0, row1));
+      for (int batch = 0; batch < batchSize; batch++) {
+        float[] query = new float[cols];
+        System.arraycopy(queries, batch * cols, query, 0, cols);
+        float[] result = new float[rows];
+        VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+            query, segment, rows, cols, result, new byte[cols], new float[cols / 32]);
+        System.arraycopy(result, 0, expected, batch * rows, rows);
+      }
+
+      VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+          queries, segment, batchSize, rows, cols, actual, q8Quants, q8Scales);
+
+      assertThat(actual).containsExactly(expected);
+      assertThat(q8Quants[0]).isNotZero();
+    }
+  }
+
+  @Test
   void q8_0BatchDotProduct_respectsRowOffsets() {
     float[] query = ones(32);
     byte[] row0 = q8Block(1.0f);

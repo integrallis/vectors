@@ -27,19 +27,31 @@ final class GgufQuantizationSupport {
   private GgufQuantizationSupport() {}
 
   static void quantizeQ8_0(float[] query, int dimensions, byte[] quants, float[] scales) {
+    quantizeQ8_0(query, 0, dimensions, quants, 0, scales, 0);
+  }
+
+  static void quantizeQ8_0(
+      float[] query,
+      int queryOffset,
+      int dimensions,
+      byte[] quants,
+      int quantOffset,
+      float[] scales,
+      int scaleOffset) {
     int blocks = dimensions / VectorUtilSupport.GGUF_Q_BLOCK_SIZE;
     for (int block = 0; block < blocks; block++) {
       int offset = block * VectorUtilSupport.GGUF_Q_BLOCK_SIZE;
       float absoluteMax = 0.0f;
       for (int index = 0; index < VectorUtilSupport.GGUF_Q_BLOCK_SIZE; index++) {
-        absoluteMax = Math.max(absoluteMax, Math.abs(query[offset + index]));
+        absoluteMax = Math.max(absoluteMax, Math.abs(query[queryOffset + offset + index]));
       }
 
       float scale = absoluteMax / 127.0f;
       float inverseScale = absoluteMax == 0.0f ? 0.0f : 127.0f / absoluteMax;
-      scales[block] = Float.float16ToFloat(Float.floatToFloat16(scale));
+      scales[scaleOffset + block] = Float.float16ToFloat(Float.floatToFloat16(scale));
       for (int index = 0; index < VectorUtilSupport.GGUF_Q_BLOCK_SIZE; index++) {
-        quants[offset + index] = (byte) ggmlNearestInt(query[offset + index] * inverseScale);
+        quants[quantOffset + offset + index] =
+            (byte) ggmlNearestInt(query[queryOffset + offset + index] * inverseScale);
       }
     }
   }

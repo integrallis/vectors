@@ -399,6 +399,82 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
+  @Override
+  public void ggufQ4_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    if (VECTOR_BITSIZE < 256) {
+      VectorUtilSupport.super.ggufQ4_0Q8_0BatchedMatmul(
+          queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
+      return;
+    }
+
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_0(
+          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
+    }
+
+    long rowBytes = (long) blocks * GGUF_Q4_0_BLOCK_BYTES;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          for (int batch = 0; batch < batchSize; batch++) {
+            out[batch * rows + row] = 0.0f;
+          }
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+            float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+            ByteVector packed =
+                ByteVector.fromMemorySegment(
+                    ByteVector.SPECIES_128,
+                    qWeight,
+                    blockOffset + Short.BYTES,
+                    ByteOrder.LITTLE_ENDIAN);
+            ShortVector low =
+                (ShortVector)
+                    packed
+                        .and((byte) 0x0F)
+                        .sub((byte) 8)
+                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+            ShortVector high =
+                (ShortVector)
+                    packed
+                        .lanewise(VectorOperators.LSHR, 4)
+                        .and((byte) 0x0F)
+                        .sub((byte) 8)
+                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+
+            for (int batch = 0; batch < batchSize; batch++) {
+              int quantOffset = batch * cols + block * GGUF_Q_BLOCK_SIZE;
+              ShortVector lowQuants =
+                  (ShortVector)
+                      ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
+                          .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+              ShortVector highQuants =
+                  (ShortVector)
+                      ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
+                          .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+              int integerSum =
+                  fourProductLanes(low.mul(lowQuants), high.mul(highQuants))
+                      .reduceLanes(VectorOperators.ADD);
+              float scale = weightScale * q8Scales[batch * blocks + block];
+              int outputOffset = batch * rows + row;
+              out[outputOffset] = MathUtil.fma(scale, integerSum, out[outputOffset]);
+            }
+          }
+        });
+  }
+
   private static int q4_0Q8_0IntegerDot(
       MemorySegment qWeight, long nibbleOffset, byte[] q8Quants, int quantOffset) {
     if (VECTOR_BITSIZE >= 256) {

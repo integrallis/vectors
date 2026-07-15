@@ -425,6 +425,62 @@ public final class VectorUtil {
     IMPL.ggufQ4_0Q8_0MatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales);
   }
 
+  /**
+   * Multiplies one Q4_0 matrix by a batch-major collection of activation vectors.
+   *
+   * <p>{@code queries} is laid out as {@code [batchSize][cols]} and {@code out} as {@code
+   * [batchSize][rows]}. Activation quantization scratch is caller-owned so repeated prefill calls
+   * do not allocate in the hot path.
+   *
+   * @param q8Quants scratch space with at least {@code batchSize * cols} entries
+   * @param q8Scales scratch space with at least {@code batchSize * (cols / 32)} entries
+   */
+  public static void ggufQ4_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
+    }
+    Objects.requireNonNull(queries, "queries");
+    Objects.requireNonNull(out, "out");
+    Objects.requireNonNull(q8Quants, "q8Quants");
+    Objects.requireNonNull(q8Scales, "q8Scales");
+    checkGgufQuantizedMatrixArguments(
+        qWeight,
+        rows,
+        cols,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    int queryEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    int scaleEntries =
+        checkedProduct(batchSize, cols / VectorUtilSupport.GGUF_Q_BLOCK_SIZE, "batch scales");
+    if (queries.length < queryEntries) {
+      throw new IllegalArgumentException(
+          "queries.length must be >= batchSize * cols: " + queries.length + " < " + queryEntries);
+    }
+    if (out.length < outputEntries) {
+      throw new IllegalArgumentException(
+          "out.length must be >= batchSize * rows: " + out.length + " < " + outputEntries);
+    }
+    if (q8Quants.length < queryEntries) {
+      throw new IllegalArgumentException(
+          "q8Quants.length must be >= batchSize * cols: " + q8Quants.length + " < " + queryEntries);
+    }
+    if (q8Scales.length < scaleEntries) {
+      throw new IllegalArgumentException(
+          "q8Scales.length must be >= batch scales: " + q8Scales.length + " < " + scaleEntries);
+    }
+    IMPL.ggufQ4_0Q8_0BatchedMatmul(
+        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
+  }
+
   /** Batched row-major GEMV over GGUF Q4_K rows. */
   public static void ggufQ4_KBatchDotProduct(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
@@ -921,15 +977,27 @@ public final class VectorUtil {
       int blockSize,
       int blockBytes) {
     Objects.requireNonNull(query, "query");
-    Objects.requireNonNull(qWeight, "qWeight");
     Objects.requireNonNull(out, "out");
-    if (rows < 0) {
-      throw new IllegalArgumentException("rows must be >= 0: " + rows);
-    }
-    checkGgufQuantizedDimensions(query, cols, blockSize);
+    checkDimensions(query.length, cols);
+    checkGgufQuantizedMatrixArguments(qWeight, rows, cols, blockSize, blockBytes);
     if (out.length < rows) {
       throw new IllegalArgumentException(
           "out.length must be >= rows: " + out.length + " < " + rows);
+    }
+  }
+
+  private static void checkGgufQuantizedMatrixArguments(
+      MemorySegment qWeight, int rows, int cols, int blockSize, int blockBytes) {
+    Objects.requireNonNull(qWeight, "qWeight");
+    if (rows < 0) {
+      throw new IllegalArgumentException("rows must be >= 0: " + rows);
+    }
+    if (cols < 0) {
+      throw new IllegalArgumentException("cols must be >= 0: " + cols);
+    }
+    if (cols % blockSize != 0) {
+      throw new IllegalArgumentException(
+          "GGUF quantized dimensions must be a multiple of " + blockSize + ": " + cols);
     }
     long rowBytes = ggufQuantizedRowBytes(cols, blockSize, blockBytes);
     long required = rowBytes * rows;
@@ -986,5 +1054,13 @@ public final class VectorUtil {
 
   private static long ggufQuantizedRowBytes(int dimensions, int blockSize, int blockBytes) {
     return (long) (dimensions / blockSize) * blockBytes;
+  }
+
+  private static int checkedProduct(int left, int right, String label) {
+    long product = (long) left * right;
+    if (product > Integer.MAX_VALUE) {
+      throw new IllegalArgumentException(label + " exceeds maximum Java array length: " + product);
+    }
+    return (int) product;
   }
 }

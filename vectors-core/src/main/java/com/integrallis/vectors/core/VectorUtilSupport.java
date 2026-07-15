@@ -566,6 +566,51 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Q4_0 matrix multiplication over batch-major Q8_0-quantized activation rows. */
+  default void ggufQ4_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_0(
+          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
+    }
+
+    long rowBytes = ggufQ4_0RowBytes(cols);
+    for (int batch = 0; batch < batchSize; batch++) {
+      int quantBatchOffset = batch * cols;
+      int scaleBatchOffset = batch * blocks;
+      for (int row = 0; row < rows; row++) {
+        float sum = 0.0f;
+        long rowOffset = row * rowBytes;
+        for (int block = 0; block < blocks; block++) {
+          long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+          float scale =
+              Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset))
+                  * q8Scales[scaleBatchOffset + block];
+          long nibbleOffset = blockOffset + Short.BYTES;
+          int quantOffset = quantBatchOffset + block * GGUF_Q_BLOCK_SIZE;
+          int integerSum = 0;
+          for (int index = 0; index < 16; index++) {
+            int packed = qWeight.get(ValueLayout.JAVA_BYTE, nibbleOffset + index) & 0xFF;
+            int lo = (packed & 0x0F) - 8;
+            int hi = ((packed >>> 4) & 0x0F) - 8;
+            integerSum += lo * q8Quants[quantOffset + index];
+            integerSum += hi * q8Quants[quantOffset + index + 16];
+          }
+          sum = MathUtil.fma(scale, integerSum, sum);
+        }
+        out[batch * rows + row] = sum;
+      }
+    }
+  }
+
   /** Batched row-major GEMV over GGUF Q4_K rows. */
   default void ggufQ4_KMatVecDot(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
