@@ -681,7 +681,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         rows,
         cols,
         row -> {
-          FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
+          float sum = 0.0f;
           long rowOffset = row * rowBytes;
           for (int block = 0; block < blocks; block++) {
             long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
@@ -698,7 +698,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
             long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
             int activationOffset = block * GGUF_Q6_K_BLOCK_SIZE;
-            IntVector blockLanes = IntVector.zero(IntVector.SPECIES_256);
+            int blockSum = 0;
 
             for (int superBlock = 0; superBlock < 2; superBlock++) {
               long qlBase = qlOffset + (long) superBlock * 64;
@@ -711,33 +711,28 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                 int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
                 int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
                 int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
-                blockLanes =
-                    blockLanes.add(
-                        q6_KQ8_KIntegerLanes(
-                            qWeight,
-                            qlBase + batch,
-                            qlBase + 32L + batch,
-                            qhBase + batch,
-                            q8Quants,
-                            quantBase + batch,
-                            s1,
-                            s2,
-                            s3,
-                            s4));
+                blockSum +=
+                    q6_KQ8_KIntegerDot(
+                        qWeight,
+                        qlBase + batch,
+                        qlBase + 32L + batch,
+                        qhBase + batch,
+                        q8Quants,
+                        quantBase + batch,
+                        s1,
+                        s2,
+                        s3,
+                        s4);
               }
             }
 
-            FloatVector products =
-                (FloatVector)
-                    blockLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
-            accumulator =
-                fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, d), accumulator);
+            sum = MathUtil.fma(d, blockSum, sum);
           }
-          out[row] = accumulator.reduceLanes(VectorOperators.ADD);
+          out[row] = sum;
         });
   }
 
-  static IntVector q6_KQ8_KIntegerLanes(
+  static int q6_KQ8_KIntegerDot(
       MemorySegment qWeight,
       long ql1Offset,
       long ql2Offset,
@@ -780,7 +775,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         .mul(s1)
         .add(pairProductLanes(q2, q8Quants, quantOffset + 32).mul(s2))
         .add(pairProductLanes(q3, q8Quants, quantOffset + 64).mul(s3))
-        .add(pairProductLanes(q4, q8Quants, quantOffset + 96).mul(s4));
+        .add(pairProductLanes(q4, q8Quants, quantOffset + 96).mul(s4))
+        .reduceLanes(VectorOperators.ADD);
   }
 
   private static IntVector pairProductLanes(ByteVector weights, byte[] q8Quants, int quantOffset) {

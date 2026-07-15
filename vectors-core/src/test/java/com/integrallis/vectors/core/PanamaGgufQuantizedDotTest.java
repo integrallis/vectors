@@ -83,7 +83,7 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
-  void q6_KQ8_KIntegerLanesDecodePackedWeightsAndSignedScales() {
+  void q6_KQ8_KIntegerDotDecodesPackedWeightsAndSignedScales() {
     byte[] weights = new byte[80];
     byte[] q8 = new byte[128];
     Random random = new Random(0x516B48L);
@@ -95,11 +95,11 @@ class PanamaGgufQuantizedDotTest {
     int s3 = -3;
     int s4 = 13;
 
-    IntVector actual =
-        PanamaVectorUtilSupport.q6_KQ8_KIntegerLanes(
+    int actual =
+        PanamaVectorUtilSupport.q6_KQ8_KIntegerDot(
             MemorySegment.ofArray(weights), 0, 32, 64, q8, quantOffset, s1, s2, s3, s4);
 
-    int[] expected = new int[8];
+    int expected = 0;
     for (int index = 0; index < 16; index++) {
       int ql1 = weights[index] & 0xFF;
       int ql2 = weights[32 + index] & 0xFF;
@@ -108,13 +108,12 @@ class PanamaGgufQuantizedDotTest {
       int q2 = ((ql2 & 0x0F) | (((high >>> 2) & 0x03) << 4)) - 32;
       int q3 = ((ql1 >>> 4) | (((high >>> 4) & 0x03) << 4)) - 32;
       int q4 = ((ql2 >>> 4) | (((high >>> 6) & 0x03) << 4)) - 32;
-      int lane = index / 2;
-      expected[lane] += s1 * q1 * q8[quantOffset + index];
-      expected[lane] += s2 * q2 * q8[quantOffset + index + 32];
-      expected[lane] += s3 * q3 * q8[quantOffset + index + 64];
-      expected[lane] += s4 * q4 * q8[quantOffset + index + 96];
+      expected += s1 * q1 * q8[quantOffset + index];
+      expected += s2 * q2 * q8[quantOffset + index + 32];
+      expected += s3 * q3 * q8[quantOffset + index + 64];
+      expected += s4 * q4 * q8[quantOffset + index + 96];
     }
-    assertThat(actual.toArray()).containsExactly(expected);
+    assertThat(actual).isEqualTo(expected);
   }
 
   @Test
