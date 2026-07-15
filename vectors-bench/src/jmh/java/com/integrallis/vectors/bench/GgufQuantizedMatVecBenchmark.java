@@ -57,6 +57,8 @@ public class GgufQuantizedMatVecBenchmark {
   private MemorySegment secondQ4Weights;
   private MemorySegment thirdQ4Weights;
   private MemorySegment q4KWeights;
+  private MemorySegment secondQ4KWeights;
+  private MemorySegment thirdQ4KWeights;
   private MemorySegment q5Weights;
   private MemorySegment q8Weights;
   private MemorySegment q6Weights;
@@ -86,6 +88,9 @@ public class GgufQuantizedMatVecBenchmark {
     thirdQ4Weights =
         MemorySegment.ofArray(randomBlocks(random, auxiliaryRows * (cols / 32) * 18, 18, 0));
     q4KWeights = MemorySegment.ofArray(q4K);
+    secondQ4KWeights = MemorySegment.ofArray(randomQ4KBlocks(random, rows * (cols / 256) * 144));
+    thirdQ4KWeights =
+        MemorySegment.ofArray(randomQ4KBlocks(random, auxiliaryRows * (cols / 256) * 144));
     q5Weights = MemorySegment.ofArray(q5);
     q8Weights = MemorySegment.ofArray(q8);
     q6Weights = MemorySegment.ofArray(q6);
@@ -172,6 +177,71 @@ public class GgufQuantizedMatVecBenchmark {
     VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
         query, q4KWeights, rows, cols, out, q8Quants, q8Scales, q8Sums);
     blackhole.consume(out);
+  }
+
+  @Benchmark
+  public void q4_KSeparateDualProjection(Blackhole blackhole) {
+    VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+        query, q4KWeights, rows, cols, out, q8Quants, q8Scales, q8Sums);
+    VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+        query, secondQ4KWeights, rows, cols, secondOut, q8Quants, q8Scales, q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+  }
+
+  @Benchmark
+  public void q4_KGroupedDualProjection(Blackhole blackhole) {
+    VectorUtil.ggufQ4_KQ8_KDualBatchDotProduct(
+        query,
+        q4KWeights,
+        rows,
+        out,
+        secondQ4KWeights,
+        rows,
+        secondOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+  }
+
+  @Benchmark
+  public void q4_KSeparateQkvProjection(Blackhole blackhole) {
+    int auxiliaryRows = thirdOut.length;
+    VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+        query, q4KWeights, rows, cols, out, q8Quants, q8Scales, q8Sums);
+    VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+        query, secondQ4KWeights, auxiliaryRows, cols, secondOut, q8Quants, q8Scales, q8Sums);
+    VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+        query, thirdQ4KWeights, auxiliaryRows, cols, thirdOut, q8Quants, q8Scales, q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+    blackhole.consume(thirdOut);
+  }
+
+  @Benchmark
+  public void q4_KGroupedQkvProjection(Blackhole blackhole) {
+    int auxiliaryRows = thirdOut.length;
+    VectorUtil.ggufQ4_KQ8_KTripleBatchDotProduct(
+        query,
+        q4KWeights,
+        rows,
+        out,
+        secondQ4KWeights,
+        auxiliaryRows,
+        secondOut,
+        thirdQ4KWeights,
+        auxiliaryRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+    blackhole.consume(thirdOut);
   }
 
   @Benchmark
