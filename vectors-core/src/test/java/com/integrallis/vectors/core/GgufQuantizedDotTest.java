@@ -360,6 +360,28 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0Q8_0SingleQueryBatchMatchesGemvExactly() {
+    int rows = 2;
+    int cols = 32;
+    float[] query = patternedQuery(cols);
+    byte[] row0 = q4Block(0.125f, ones(cols), (lo, hi) -> (lo * 5 + hi * 3) & 0xFF);
+    byte[] row1 = q4Block(-0.25f, ones(cols), (lo, hi) -> (lo * 7 + hi) & 0xFF);
+    float[] expected = new float[rows];
+    float[] actual = new float[rows];
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, concat(row0, row1));
+      VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+          query, segment, rows, cols, expected, new byte[cols], new float[cols / 32]);
+
+      VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+          query, segment, 1, rows, cols, actual, new byte[cols], new float[cols / 32]);
+
+      assertThat(actual).containsExactly(expected);
+    }
+  }
+
+  @Test
   void q8_0BatchDotProduct_respectsRowOffsets() {
     float[] query = ones(32);
     byte[] row0 = q8Block(1.0f);

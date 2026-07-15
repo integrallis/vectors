@@ -409,6 +409,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales) {
+    if (batchSize == 1) {
+      ggufQ4_0Q8_0MatVecDot(queries, qWeight, rows, cols, out, q8Quants, q8Scales);
+      return;
+    }
     if (VECTOR_BITSIZE < 256) {
       VectorUtilSupport.super.ggufQ4_0Q8_0BatchedMatmul(
           queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
