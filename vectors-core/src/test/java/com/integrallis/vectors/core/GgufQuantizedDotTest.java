@@ -472,6 +472,41 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q6_KQ8_KBatchDotProduct_reusesIndependentScratchAcrossParallelRows() {
+    int rows = 4096;
+    float[] query = patternedQuery(256);
+    byte[] row = q6KBlock(0.125f, index -> (index * 5 + 3) % 64 - 32, index -> index - 8);
+    float[] expected = new float[1];
+    float[] out = new float[rows];
+    byte[] expectedQuants = new byte[query.length];
+    float[] expectedScales = new float[1];
+    byte[] q8Quants = new byte[query.length];
+    float[] q8Scales = new float[1];
+
+    new ScalarVectorUtilSupport()
+        .ggufQ6_KQ8_KMatVecDot(
+            query,
+            MemorySegment.ofArray(row),
+            1,
+            query.length,
+            expected,
+            expectedQuants,
+            expectedScales);
+    VectorUtil.ggufQ6_KQ8_KBatchDotProduct(
+        query,
+        MemorySegment.ofArray(repeat(row, rows)),
+        rows,
+        query.length,
+        out,
+        q8Quants,
+        q8Scales);
+
+    assertThat(q8Quants).containsExactly(expectedQuants);
+    assertThat(q8Scales).containsExactly(expectedScales);
+    assertThat(out).containsOnly(expected[0]);
+  }
+
+  @Test
   void q4_KQ8_KBatchDotProduct_quantizesTheQueryOnceUsingGgmlSemantics() {
     float[] query = new float[256];
     query[0] = 1.0f;
@@ -649,6 +684,14 @@ class GgufQuantizedDotTest {
       }
     }
     return block;
+  }
+
+  private static byte[] repeat(byte[] row, int count) {
+    byte[] result = new byte[Math.multiplyExact(row.length, count)];
+    for (int index = 0; index < count; index++) {
+      System.arraycopy(row, 0, result, index * row.length, row.length);
+    }
+    return result;
   }
 
   private static byte[] q8Block(float scale) {

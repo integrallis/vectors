@@ -326,6 +326,89 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     };
   }
 
+  /** SIMD Q4_0 by Q8_0 GEMV with one activation quantization shared by all rows. */
+  @Override
+  public void ggufQ4_0Q8_0MatVecDot(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          float sum = 0.0f;
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+            float scale =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+            int integerSum =
+                q4_0Q8_0IntegerDot(
+                    qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
+            sum = MathUtil.fma(scale, integerSum, sum);
+          }
+          out[row] = sum;
+        });
+  }
+
+  private static int q4_0Q8_0IntegerDot(
+      MemorySegment qWeight, long nibbleOffset, byte[] q8Quants, int quantOffset) {
+    if (VECTOR_BITSIZE >= 256) {
+      ByteVector packed =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
+      ByteVector low = packed.and((byte) 0x0F).sub((byte) 8);
+      ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F).sub((byte) 8);
+      ShortVector low16 =
+          (ShortVector) low.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+      ShortVector high16 =
+          (ShortVector) high.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+      ShortVector qLow16 =
+          (ShortVector)
+              ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+      ShortVector qHigh16 =
+          (ShortVector)
+              ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+      return low16.mul(qLow16).reduceLanes(VectorOperators.ADD)
+          + high16.mul(qHigh16).reduceLanes(VectorOperators.ADD);
+    }
+
+    int sum = 0;
+    for (int half = 0; half < 16; half += 8) {
+      ByteVector packed =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, nibbleOffset + half, ByteOrder.LITTLE_ENDIAN);
+      ByteVector low = packed.and((byte) 0x0F).sub((byte) 8);
+      ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F).sub((byte) 8);
+      ShortVector low16 =
+          (ShortVector) low.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      ShortVector high16 =
+          (ShortVector) high.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      ShortVector qLow16 =
+          (ShortVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + half)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      ShortVector qHigh16 =
+          (ShortVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + 16 + half)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      sum += low16.mul(qLow16).reduceLanes(VectorOperators.ADD);
+      sum += high16.mul(qHigh16).reduceLanes(VectorOperators.ADD);
+    }
+    return sum;
+  }
+
   // --- Byte dot product: widening to avoid overflow ---
   //
   // Tiered widening strategy (B2I = byte-to-int, 4x lane expansion):

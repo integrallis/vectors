@@ -97,6 +97,8 @@ public final class VectorizationProvider {
     String maxBits = System.getProperty("vectors.maxBits");
     String useVectorFMA = System.getProperty("vectors.useVectorFMA");
     String useScalarFMA = System.getProperty("vectors.useScalarFMA");
+    String ggufParallel = System.getProperty("vectors.gguf.parallel");
+    String ggufParallelThreshold = System.getProperty("vectors.gguf.parallelThreshold");
 
     StringBuilder sb = new StringBuilder("vectors-core: provider=");
     sb.append(impl.getClass().getSimpleName());
@@ -106,6 +108,8 @@ public final class VectorizationProvider {
     sb.append(" fastVectorFMA=").append(PanamaConstants.HAS_FAST_VECTOR_FMA);
     sb.append(" fastScalarFMA=").append(PanamaConstants.HAS_FAST_SCALAR_FMA);
     sb.append(" sve=").append(PanamaConstants.HAS_SVE);
+    sb.append(" ggufParallel=").append(GgufParallelSupport.enabled());
+    sb.append(" ggufParallelThreshold=").append(GgufParallelSupport.minElements());
     sb.append(" toggles=[");
     boolean first = true;
     if (forceScalar != null) {
@@ -125,6 +129,16 @@ public final class VectorizationProvider {
     if (useScalarFMA != null) {
       if (!first) sb.append(", ");
       sb.append("vectors.useScalarFMA=").append(useScalarFMA);
+      first = false;
+    }
+    if (ggufParallel != null) {
+      if (!first) sb.append(", ");
+      sb.append("vectors.gguf.parallel=").append(ggufParallel);
+      first = false;
+    }
+    if (ggufParallelThreshold != null) {
+      if (!first) sb.append(", ");
+      sb.append("vectors.gguf.parallelThreshold=").append(ggufParallelThreshold);
       first = false;
     }
     if (first) sb.append("(defaults — no -Dvectors.* overrides)");
