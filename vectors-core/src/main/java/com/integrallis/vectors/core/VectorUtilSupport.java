@@ -239,8 +239,8 @@ public interface VectorUtilSupport {
       int queryOffset = block * GGUF_Q4_K_BLOCK_SIZE;
 
       for (int group = 0; group < 8; group++) {
-        int scale = qKScale(qWeight, scalesOffset, group);
-        int min = qKMin(qWeight, scalesOffset, group);
+        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
         float scaledD = d * scale;
         float minimum = dMin * min;
         long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
@@ -272,8 +272,8 @@ public interface VectorUtilSupport {
       int outputOffset = outOffset + block * GGUF_Q4_K_BLOCK_SIZE;
 
       for (int group = 0; group < 8; group++) {
-        int scale = qKScale(qWeight, scalesOffset, group);
-        int min = qKMin(qWeight, scalesOffset, group);
+        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
         float scaledD = d * scale;
         float minimum = dMin * min;
         long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
@@ -310,8 +310,8 @@ public interface VectorUtilSupport {
       int queryOffset = block * GGUF_Q5_K_BLOCK_SIZE;
 
       for (int group = 0; group < 8; group++) {
-        int scale = qKScale(qWeight, scalesOffset, group);
-        int min = qKMin(qWeight, scalesOffset, group);
+        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
         float scaledD = d * scale;
         float minimum = dMin * min;
         long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
@@ -346,8 +346,8 @@ public interface VectorUtilSupport {
       int outputOffset = outOffset + block * GGUF_Q5_K_BLOCK_SIZE;
 
       for (int group = 0; group < 8; group++) {
-        int scale = qKScale(qWeight, scalesOffset, group);
-        int min = qKMin(qWeight, scalesOffset, group);
+        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
         float scaledD = d * scale;
         float minimum = dMin * min;
         long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
@@ -611,8 +611,8 @@ public interface VectorUtilSupport {
             int minimumSum = 0;
 
             for (int group = 0; group < 8; group++) {
-              int scale = qKScale(qWeight, scalesOffset, group);
-              int min = qKMin(qWeight, scalesOffset, group);
+              int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+              int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
               long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
               int shift = (group & 1) * 4;
               int groupActivationOffset = activationOffset + group * 32;
@@ -681,8 +681,8 @@ public interface VectorUtilSupport {
             int minimumSum = 0;
 
             for (int group = 0; group < 8; group++) {
-              int scale = qKScale(qWeight, scalesOffset, group);
-              int min = qKMin(qWeight, scalesOffset, group);
+              int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+              int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
               long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
               int shift = (group & 1) * 4;
               int highBit = 1 << group;
@@ -1113,81 +1113,16 @@ public interface VectorUtilSupport {
   }
 
   private static void quantizeQ8_K(float[] query, int dimensions, byte[] quants, float[] scales) {
-    quantizeQ8_K(query, dimensions, quants, scales, null);
+    GgufQuantizationSupport.quantizeQ8_K(query, dimensions, quants, scales, null);
   }
 
   private static void quantizeQ8_K(
       float[] query, int dimensions, byte[] quants, float[] scales, short[] sums) {
-    int blocks = dimensions / GGUF_Q6_K_BLOCK_SIZE;
-    for (int block = 0; block < blocks; block++) {
-      int offset = block * GGUF_Q6_K_BLOCK_SIZE;
-      float max = 0.0f;
-      float absoluteMax = 0.0f;
-      for (int index = 0; index < GGUF_Q6_K_BLOCK_SIZE; index++) {
-        float value = query[offset + index];
-        float absolute = Math.abs(value);
-        if (absolute > absoluteMax) {
-          absoluteMax = absolute;
-          max = value;
-        }
-      }
-
-      if (absoluteMax == 0.0f) {
-        java.util.Arrays.fill(quants, offset, offset + GGUF_Q6_K_BLOCK_SIZE, (byte) 0);
-        if (sums != null) {
-          java.util.Arrays.fill(
-              sums,
-              offset / GGUF_Q8_K_SUM_BLOCK_SIZE,
-              (offset + GGUF_Q6_K_BLOCK_SIZE) / GGUF_Q8_K_SUM_BLOCK_SIZE,
-              (short) 0);
-        }
-        scales[block] = 0.0f;
-        continue;
-      }
-
-      float inverseScale = -127.0f / max;
-      int sum = 0;
-      for (int index = 0; index < GGUF_Q6_K_BLOCK_SIZE; index++) {
-        int quant = ggmlNearestInt(inverseScale * query[offset + index]);
-        byte stored = (byte) Math.min(127, quant);
-        quants[offset + index] = stored;
-        if (sums != null) {
-          sum += stored;
-          if ((index + 1) % GGUF_Q8_K_SUM_BLOCK_SIZE == 0) {
-            sums[(offset + index) / GGUF_Q8_K_SUM_BLOCK_SIZE] = (short) sum;
-            sum = 0;
-          }
-        }
-      }
-      scales[block] = 1.0f / inverseScale;
-    }
-  }
-
-  private static int qKScale(MemorySegment qWeight, long scalesOffset, int group) {
-    if (group < 4) {
-      return qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group) & 0x3F;
-    }
-    int low = qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group + 4L) & 0x0F;
-    int high = (qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group - 4L) & 0xFF) >>> 6;
-    return low | (high << 4);
-  }
-
-  private static int qKMin(MemorySegment qWeight, long scalesOffset, int group) {
-    if (group < 4) {
-      return qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group + 4L) & 0x3F;
-    }
-    int low = (qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group + 4L) & 0xFF) >>> 4;
-    int high = (qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group) & 0xFF) >>> 6;
-    return low | (high << 4);
+    GgufQuantizationSupport.quantizeQ8_K(query, dimensions, quants, scales, sums);
   }
 
   private static void quantizeQ8_0(float[] query, int dimensions, byte[] quants, float[] scales) {
     GgufQuantizationSupport.quantizeQ8_0(query, dimensions, quants, scales);
-  }
-
-  private static int ggmlNearestInt(float value) {
-    int bits = Float.floatToRawIntBits(value + 12_582_912.0f);
-    return (bits & 0x007F_FFFF) - 0x0040_0000;
   }
 
   /**
