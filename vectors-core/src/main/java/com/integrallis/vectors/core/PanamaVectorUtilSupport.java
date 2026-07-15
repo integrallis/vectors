@@ -674,26 +674,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         cols,
         GgufParallelSupport.Q8_MIN_ELEMENTS,
         row -> {
-          if (VECTOR_BITSIZE == 256) {
-            FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
-            long rowOffset = row * rowBytes;
-            for (int block = 0; block < blocks; block++) {
-              long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
-              float scale =
-                  Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
-              IntVector integerLanes =
-                  q8_0Q8_0IntegerLanes(
-                      qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
-              FloatVector products =
-                  (FloatVector)
-                      integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
-              accumulator =
-                  fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
-            }
-            out[row] = accumulator.reduceLanes(VectorOperators.ADD);
-            return;
-          }
-
           float sum = 0.0f;
           long rowOffset = row * rowBytes;
           for (int block = 0; block < blocks; block++) {
@@ -781,24 +761,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           qWeight.get(ValueLayout.JAVA_BYTE, weightOffset + index) * q8Quants[quantOffset + index];
     }
     return sum;
-  }
-
-  static IntVector q8_0Q8_0IntegerLanes(
-      MemorySegment qWeight, long weightOffset, byte[] q8Quants, int quantOffset) {
-    IntVector accumulator = IntVector.zero(IntVector.SPECIES_256);
-    for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index += 8) {
-      ByteVector weights =
-          ByteVector.fromMemorySegment(
-              ByteVector.SPECIES_64, qWeight, weightOffset + index, ByteOrder.LITTLE_ENDIAN);
-      ByteVector quants =
-          ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index);
-      IntVector weightInts =
-          (IntVector) weights.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
-      IntVector quantInts =
-          (IntVector) quants.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
-      accumulator = accumulator.add(weightInts.mul(quantInts));
-    }
-    return accumulator;
   }
 
   // --- Byte dot product: widening to avoid overflow ---
