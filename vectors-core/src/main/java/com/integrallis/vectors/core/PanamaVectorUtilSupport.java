@@ -66,9 +66,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   private static final VectorShuffle<Short> SWAP_SHORT_PAIRS =
       VectorShuffle.fromValues(
           ShortVector.SPECIES_256, 2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13);
-  private static final VectorShuffle<Short> SELECT_EVEN_PAIRS =
-      VectorShuffle.fromValues(
-          ShortVector.SPECIES_256, 0, 2, 4, 6, 8, 10, 12, 14, 0, 0, 0, 0, 0, 0, 0, 0);
   private static final VectorShuffle<Short> SELECT_LOW_GROUPS =
       VectorShuffle.fromValues(
           ShortVector.SPECIES_256, 0, 4, 8, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -743,53 +740,45 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int s2,
       int s3,
       int s4) {
-    ByteVector ql1 =
-        ByteVector.fromMemorySegment(
-            ByteVector.SPECIES_128, qWeight, ql1Offset, ByteOrder.LITTLE_ENDIAN);
-    ByteVector ql2 =
-        ByteVector.fromMemorySegment(
-            ByteVector.SPECIES_128, qWeight, ql2Offset, ByteOrder.LITTLE_ENDIAN);
-    ByteVector qh =
-        ByteVector.fromMemorySegment(
-            ByteVector.SPECIES_128, qWeight, qhOffset, ByteOrder.LITTLE_ENDIAN);
-    ByteVector q1 =
-        ql1.and((byte) 0x0F)
-            .or(qh.and((byte) 0x03).lanewise(VectorOperators.LSHL, 4))
-            .sub((byte) 32);
-    ByteVector q2 =
-        ql2.and((byte) 0x0F)
-            .or(qh.and((byte) 0x0C).lanewise(VectorOperators.LSHL, 2))
-            .sub((byte) 32);
-    ByteVector q3 =
-        ql1.lanewise(VectorOperators.LSHR, 4)
-            .and((byte) 0x0F)
-            .or(qh.and((byte) 0x30))
-            .sub((byte) 32);
-    ByteVector q4 =
-        ql2.lanewise(VectorOperators.LSHR, 4)
-            .and((byte) 0x0F)
-            .or(qh.and((byte) 0xC0).lanewise(VectorOperators.LSHR, 2))
-            .sub((byte) 32);
-
-    return pairProductLanes(q1, q8Quants, quantOffset)
-        .mul(s1)
-        .add(pairProductLanes(q2, q8Quants, quantOffset + 32).mul(s2))
-        .add(pairProductLanes(q3, q8Quants, quantOffset + 64).mul(s3))
-        .add(pairProductLanes(q4, q8Quants, quantOffset + 96).mul(s4))
-        .reduceLanes(VectorOperators.ADD);
+    return s1 * q6_KQ8_KGroupDot(qWeight, ql1Offset, qhOffset, 0, 0, q8Quants, quantOffset)
+        + s2 * q6_KQ8_KGroupDot(qWeight, ql2Offset, qhOffset, 0, 2, q8Quants, quantOffset + 32)
+        + s3 * q6_KQ8_KGroupDot(qWeight, ql1Offset, qhOffset, 4, 4, q8Quants, quantOffset + 64)
+        + s4 * q6_KQ8_KGroupDot(qWeight, ql2Offset, qhOffset, 4, 6, q8Quants, quantOffset + 96);
   }
 
-  private static IntVector pairProductLanes(ByteVector weights, byte[] q8Quants, int quantOffset) {
-    ShortVector weightShorts =
-        (ShortVector) weights.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
-    ShortVector quantShorts =
-        (ShortVector)
-            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
-                .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
-    ShortVector products = weightShorts.mul(quantShorts);
-    ShortVector pairs = products.add(products.rearrange(SWAP_ADJACENT_SHORTS));
-    ShortVector selected = pairs.rearrange(SELECT_EVEN_PAIRS);
-    return (IntVector) selected.convertShape(VectorOperators.S2I, IntVector.SPECIES_256, 0);
+  private static int q6_KQ8_KGroupDot(
+      MemorySegment qWeight,
+      long qlOffset,
+      long qhOffset,
+      int qlShift,
+      int qhShift,
+      byte[] q8Quants,
+      int quantOffset) {
+    int sum = 0;
+    for (int index = 0; index < 16; index += 8) {
+      ByteVector ql =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, qlOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ByteVector qh =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, qhOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ByteVector low = ql.lanewise(VectorOperators.LSHR, qlShift).and((byte) 0x0F);
+      ByteVector high =
+          qh.lanewise(VectorOperators.LSHR, qhShift)
+              .and((byte) 0x03)
+              .lanewise(VectorOperators.LSHL, 4);
+      IntVector weights =
+          (IntVector)
+              low.add(high)
+                  .sub((byte) 32)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector quants =
+          (IntVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      sum += weights.mul(quants).reduceLanes(VectorOperators.ADD);
+    }
+    return sum;
   }
 
   /** SIMD Q8_0 by Q8_0 GEMV with one activation quantization shared by all rows. */
