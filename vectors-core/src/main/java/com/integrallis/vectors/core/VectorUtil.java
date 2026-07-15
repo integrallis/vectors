@@ -426,6 +426,85 @@ public final class VectorUtil {
   }
 
   /**
+   * Multiplies two Q4_0 matrices by the same activation with one Q8_0 quantization and one row
+   * dispatch.
+   *
+   * <p>This is intended for transformer projections such as SwiGLU gate/up matrices that consume
+   * the same normalized activation.
+   */
+  public static void ggufQ4_0Q8_0DualBatchDotProduct(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    checkGgufQuantizedBatchArguments(
+        query, firstWeight, firstRows, cols, firstOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchArguments(
+        query, secondWeight, secondRows, cols, secondOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    IMPL.ggufQ4_0Q8_0DualMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  /**
+   * Multiplies three Q4_0 matrices by the same activation with one Q8_0 quantization and one row
+   * dispatch.
+   *
+   * <p>This is intended for grouped query/key/value transformer projections.
+   */
+  public static void ggufQ4_0Q8_0TripleBatchDotProduct(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    checkGgufQuantizedBatchArguments(
+        query, firstWeight, firstRows, cols, firstOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchArguments(
+        query, secondWeight, secondRows, cols, secondOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchArguments(
+        query, thirdWeight, thirdRows, cols, thirdOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    IMPL.ggufQ4_0Q8_0TripleMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  /**
    * Multiplies one Q4_0 matrix by a batch-major collection of activation vectors.
    *
    * <p>{@code queries} is laid out as {@code [batchSize][cols]} and {@code out} as {@code

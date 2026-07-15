@@ -48,6 +48,36 @@ final class GgufParallelSupport {
   static void forEachRow(
       MemorySegment weights, int rows, int cols, long formatMinElements, IntConsumer rowOperation) {
     boolean shareable = weights.isAccessibleBy(ACCESS_PROBE);
+    forEachRow(shareable, rows, cols, formatMinElements, rowOperation);
+  }
+
+  static void forEachRow(
+      MemorySegment firstWeights,
+      MemorySegment secondWeights,
+      int rows,
+      int cols,
+      IntConsumer rowOperation) {
+    boolean shareable =
+        firstWeights.isAccessibleBy(ACCESS_PROBE) && secondWeights.isAccessibleBy(ACCESS_PROBE);
+    forEachRow(shareable, rows, cols, DEFAULT_MIN_ELEMENTS, rowOperation);
+  }
+
+  static void forEachRow(
+      MemorySegment firstWeights,
+      MemorySegment secondWeights,
+      MemorySegment thirdWeights,
+      int rows,
+      int cols,
+      IntConsumer rowOperation) {
+    boolean shareable =
+        firstWeights.isAccessibleBy(ACCESS_PROBE)
+            && secondWeights.isAccessibleBy(ACCESS_PROBE)
+            && thirdWeights.isAccessibleBy(ACCESS_PROBE);
+    forEachRow(shareable, rows, cols, DEFAULT_MIN_ELEMENTS, rowOperation);
+  }
+
+  private static void forEachRow(
+      boolean shareable, int rows, int cols, long formatMinElements, IntConsumer rowOperation) {
     long effectiveMinElements = Math.max(MIN_ELEMENTS, formatMinElements);
     if (shareable && shouldParallelize(rows, cols, PARALLELISM, ENABLED, effectiveMinElements)) {
       ExecutorHolder.INSTANCE.forEach(rows, rowOperation);

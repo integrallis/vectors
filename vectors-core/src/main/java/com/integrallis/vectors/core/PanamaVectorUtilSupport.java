@@ -363,10 +363,49 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         qWeight,
         rows,
         cols,
+        row -> out[row] = q4_0Q8_0RowDot(qWeight, row * rowBytes, blocks, q8Quants, q8Scales));
+  }
+
+  @Override
+  public void ggufQ4_0Q8_0DualMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    int totalRows = Math.addExact(firstRows, secondRows);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        totalRows,
+        cols,
+        // Keep the SIMD body in this lambda. Extracting it allocated about 38 MB per grouped call.
         row -> {
+          MemorySegment qWeight;
+          float[] out;
+          int matrixRow;
+          if (row < firstRows) {
+            qWeight = firstWeight;
+            out = firstOut;
+            matrixRow = row;
+          } else {
+            qWeight = secondWeight;
+            out = secondOut;
+            matrixRow = row - firstRows;
+          }
+
+          long rowOffset = matrixRow * rowBytes;
           if (VECTOR_BITSIZE >= 256) {
             FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
-            long rowOffset = row * rowBytes;
             for (int block = 0; block < blocks; block++) {
               long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
               float scale =
@@ -380,12 +419,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
               accumulator =
                   fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
             }
-            out[row] = reduceAdd(accumulator);
+            out[matrixRow] = reduceAdd(accumulator);
             return;
           }
 
           float sum = 0.0f;
-          long rowOffset = row * rowBytes;
           for (int block = 0; block < blocks; block++) {
             long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
             float scale =
@@ -395,7 +433,88 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                     qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
             sum = MathUtil.fma(scale, integerSum, sum);
           }
-          out[row] = sum;
+          out[matrixRow] = sum;
+        });
+  }
+
+  @Override
+  public void ggufQ4_0Q8_0TripleMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    int totalRows = Math.addExact(thirdStart, thirdRows);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        thirdWeight,
+        totalRows,
+        cols,
+        // Keep the SIMD body in this lambda. Extracting it allocated about 38 MB per grouped call.
+        row -> {
+          MemorySegment qWeight;
+          float[] out;
+          int matrixRow;
+          if (row < secondStart) {
+            qWeight = firstWeight;
+            out = firstOut;
+            matrixRow = row;
+          } else if (row < thirdStart) {
+            qWeight = secondWeight;
+            out = secondOut;
+            matrixRow = row - secondStart;
+          } else {
+            qWeight = thirdWeight;
+            out = thirdOut;
+            matrixRow = row - thirdStart;
+          }
+
+          long rowOffset = matrixRow * rowBytes;
+          if (VECTOR_BITSIZE >= 256) {
+            FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
+            for (int block = 0; block < blocks; block++) {
+              long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+              float scale =
+                  Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+              IntVector integerLanes =
+                  q4_0Q8_0IntegerLanes(
+                      qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
+              FloatVector products =
+                  (FloatVector)
+                      integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
+              accumulator =
+                  fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
+            }
+            out[matrixRow] = reduceAdd(accumulator);
+            return;
+          }
+
+          float sum = 0.0f;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+            float scale =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+            int integerSum =
+                q4_0Q8_0IntegerDot(
+                    qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
+            sum = MathUtil.fma(scale, integerSum, sum);
+          }
+          out[matrixRow] = sum;
         });
   }
 
@@ -534,6 +653,38 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       }
       default -> throw new AssertionError("unsupported float vector length: " + vector.length());
     };
+  }
+
+  private static float q4_0Q8_0RowDot(
+      MemorySegment qWeight, long rowOffset, int blocks, byte[] q8Quants, float[] q8Scales) {
+    if (VECTOR_BITSIZE >= 256) {
+      FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+        float scale =
+            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+        IntVector integerLanes =
+            q4_0Q8_0IntegerLanes(
+                qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
+        FloatVector products =
+            (FloatVector)
+                integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
+        accumulator =
+            fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
+      }
+      return reduceAdd(accumulator);
+    }
+
+    float sum = 0.0f;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+      int integerSum =
+          q4_0Q8_0IntegerDot(
+              qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
+      sum = MathUtil.fma(scale, integerSum, sum);
+    }
+    return sum;
   }
 
   private static int q4_0Q8_0IntegerDot(

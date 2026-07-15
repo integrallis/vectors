@@ -324,6 +324,115 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0Q8_0DualBatchDotProductMatchesSeparateMatmulsExactly() {
+    int cols = 64;
+    int firstRows = 2;
+    int secondRows = 3;
+    float[] query = patternedQuery(cols);
+    byte[] firstWeights =
+        concat(
+            repeat(q4Block(0.125f, ones(cols), (lo, hi) -> (lo * 5 + hi * 3) & 0xFF), 2),
+            repeat(q4Block(-0.25f, ones(cols), (lo, hi) -> (lo * 7 + hi) & 0xFF), 2));
+    byte[] secondWeights =
+        concat(
+            concat(
+                repeat(q4Block(0.5f, ones(cols), (lo, hi) -> (lo + hi * 11) & 0xFF), 2),
+                repeat(q4Block(-0.0625f, ones(cols), (lo, hi) -> (lo * 13 + hi) & 0xFF), 2)),
+            repeat(q4Block(0.03125f, ones(cols), (lo, hi) -> (lo * 3 + hi * 7) & 0xFF), 2));
+    float[] expectedFirst = new float[firstRows];
+    float[] expectedSecond = new float[secondRows];
+    float[] actualFirst = new float[firstRows];
+    float[] actualSecond = new float[secondRows];
+
+    MemorySegment firstSegment = MemorySegment.ofArray(firstWeights);
+    MemorySegment secondSegment = MemorySegment.ofArray(secondWeights);
+    VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+        query, firstSegment, firstRows, cols, expectedFirst, new byte[cols], new float[cols / 32]);
+    VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+        query,
+        secondSegment,
+        secondRows,
+        cols,
+        expectedSecond,
+        new byte[cols],
+        new float[cols / 32]);
+
+    VectorUtil.ggufQ4_0Q8_0DualBatchDotProduct(
+        query,
+        firstSegment,
+        firstRows,
+        actualFirst,
+        secondSegment,
+        secondRows,
+        actualSecond,
+        cols,
+        new byte[cols],
+        new float[cols / 32]);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+  }
+
+  @Test
+  void q4_0Q8_0TripleBatchDotProductMatchesSeparateMatmulsExactly() {
+    int cols = 64;
+    int firstRows = 4;
+    int secondRows = 2;
+    int thirdRows = 3;
+    float[] query = patternedQuery(cols);
+    MemorySegment firstWeight =
+        MemorySegment.ofArray(
+            repeat(
+                q4Block(0.125f, ones(cols), (lo, hi) -> (lo * 5 + hi * 3) & 0xFF), firstRows * 2));
+    MemorySegment secondWeight =
+        MemorySegment.ofArray(
+            repeat(q4Block(-0.25f, ones(cols), (lo, hi) -> (lo * 7 + hi) & 0xFF), secondRows * 2));
+    MemorySegment thirdWeight =
+        MemorySegment.ofArray(
+            repeat(
+                q4Block(0.03125f, ones(cols), (lo, hi) -> (lo * 3 + hi * 7) & 0xFF),
+                thirdRows * 2));
+    float[] expectedFirst = new float[firstRows];
+    float[] expectedSecond = new float[secondRows];
+    float[] expectedThird = new float[thirdRows];
+    float[] actualFirst = new float[firstRows];
+    float[] actualSecond = new float[secondRows];
+    float[] actualThird = new float[thirdRows];
+
+    VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+        query, firstWeight, firstRows, cols, expectedFirst, new byte[cols], new float[cols / 32]);
+    VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+        query,
+        secondWeight,
+        secondRows,
+        cols,
+        expectedSecond,
+        new byte[cols],
+        new float[cols / 32]);
+    VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+        query, thirdWeight, thirdRows, cols, expectedThird, new byte[cols], new float[cols / 32]);
+
+    VectorUtil.ggufQ4_0Q8_0TripleBatchDotProduct(
+        query,
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        thirdWeight,
+        thirdRows,
+        actualThird,
+        cols,
+        new byte[cols],
+        new float[cols / 32]);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+    assertThat(actualThird).containsExactly(expectedThird);
+  }
+
+  @Test
   void q4_0Q8_0BatchedMatmulMatchesIndependentQueries() {
     int batchSize = 3;
     int rows = 2;

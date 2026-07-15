@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -101,6 +102,29 @@ class GgufParallelSupportTest {
 
     try (Arena arena = Arena.ofConfined()) {
       GgufParallelSupport.forEachRow(
+          arena.allocate(1),
+          1024,
+          2048,
+          ignored -> {
+            rowsVisited.incrementAndGet();
+            threads.add(Thread.currentThread());
+          });
+    }
+
+    assertThat(rowsVisited).hasValue(1024);
+    assertThat(threads).containsExactly(owner);
+  }
+
+  @Test
+  void groupedRowsRemainOnOwnerWhenAnySegmentIsConfined() {
+    AtomicInteger rowsVisited = new AtomicInteger();
+    Set<Thread> threads = ConcurrentHashMap.newKeySet();
+    Thread owner = Thread.currentThread();
+
+    try (Arena arena = Arena.ofConfined()) {
+      GgufParallelSupport.forEachRow(
+          MemorySegment.ofArray(new byte[1]),
+          MemorySegment.ofArray(new byte[1]),
           arena.allocate(1),
           1024,
           2048,

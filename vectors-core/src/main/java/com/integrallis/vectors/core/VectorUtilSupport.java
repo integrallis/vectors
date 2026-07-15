@@ -544,26 +544,88 @@ public interface VectorUtilSupport {
     long rowBytes = ggufQ4_0RowBytes(cols);
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     for (int row = 0; row < rows; row++) {
-      float sum = 0.0f;
-      long rowOffset = row * rowBytes;
-      for (int block = 0; block < blocks; block++) {
-        long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
-        float scale =
-            Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
-        long nibbleOffset = blockOffset + Short.BYTES;
-        int quantOffset = block * GGUF_Q_BLOCK_SIZE;
-        int integerSum = 0;
-        for (int index = 0; index < 16; index++) {
-          int packed = qWeight.get(ValueLayout.JAVA_BYTE, nibbleOffset + index) & 0xFF;
-          int lo = (packed & 0x0F) - 8;
-          int hi = ((packed >>> 4) & 0x0F) - 8;
-          integerSum += lo * q8Quants[quantOffset + index];
-          integerSum += hi * q8Quants[quantOffset + index + 16];
-        }
-        sum = MathUtil.fma(scale, integerSum, sum);
-      }
-      out[row] = sum;
+      out[row] = ggufQ4_0Q8_0ScalarRowDot(qWeight, row * rowBytes, blocks, q8Quants, q8Scales);
     }
+  }
+
+  /** Two Q4_0 projections sharing one Q8_0 activation quantization. */
+  default void ggufQ4_0Q8_0DualMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = ggufQ4_0RowBytes(cols);
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int row = 0; row < firstRows; row++) {
+      firstOut[row] =
+          ggufQ4_0Q8_0ScalarRowDot(firstWeight, row * rowBytes, blocks, q8Quants, q8Scales);
+    }
+    for (int row = 0; row < secondRows; row++) {
+      secondOut[row] =
+          ggufQ4_0Q8_0ScalarRowDot(secondWeight, row * rowBytes, blocks, q8Quants, q8Scales);
+    }
+  }
+
+  /** Three Q4_0 projections sharing one Q8_0 activation quantization. */
+  default void ggufQ4_0Q8_0TripleMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = ggufQ4_0RowBytes(cols);
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int row = 0; row < firstRows; row++) {
+      firstOut[row] =
+          ggufQ4_0Q8_0ScalarRowDot(firstWeight, row * rowBytes, blocks, q8Quants, q8Scales);
+    }
+    for (int row = 0; row < secondRows; row++) {
+      secondOut[row] =
+          ggufQ4_0Q8_0ScalarRowDot(secondWeight, row * rowBytes, blocks, q8Quants, q8Scales);
+    }
+    for (int row = 0; row < thirdRows; row++) {
+      thirdOut[row] =
+          ggufQ4_0Q8_0ScalarRowDot(thirdWeight, row * rowBytes, blocks, q8Quants, q8Scales);
+    }
+  }
+
+  private static float ggufQ4_0Q8_0ScalarRowDot(
+      MemorySegment qWeight, long rowOffset, int blocks, byte[] q8Quants, float[] q8Scales) {
+    float sum = 0.0f;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+      long nibbleOffset = blockOffset + Short.BYTES;
+      int quantOffset = block * GGUF_Q_BLOCK_SIZE;
+      int integerSum = 0;
+      for (int index = 0; index < 16; index++) {
+        int packed = qWeight.get(ValueLayout.JAVA_BYTE, nibbleOffset + index) & 0xFF;
+        int lo = (packed & 0x0F) - 8;
+        int hi = ((packed >>> 4) & 0x0F) - 8;
+        integerSum += lo * q8Quants[quantOffset + index];
+        integerSum += hi * q8Quants[quantOffset + index + 16];
+      }
+      sum = MathUtil.fma(scale, integerSum, sum);
+    }
+    return sum;
   }
 
   /** Q4_0 matrix multiplication over batch-major Q8_0-quantized activation rows. */
