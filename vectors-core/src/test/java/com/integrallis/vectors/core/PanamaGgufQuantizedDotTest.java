@@ -16,17 +16,47 @@
 package com.integrallis.vectors.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.data.Offset.offset;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Random;
+import jdk.incubator.vector.IntVector;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("unit")
 class PanamaGgufQuantizedDotTest {
+
+  @Test
+  void q4_0Q8_0IntegerLanesSumFourProductsPerLane() {
+    byte[] packed = new byte[16];
+    byte[] q8 = new byte[32];
+    int[] q4 = new int[32];
+    for (int index = 0; index < 16; index++) {
+      int low = index % 16;
+      int high = 15 - index;
+      packed[index] = (byte) (low | (high << 4));
+      q4[index] = low - 8;
+      q4[index + 16] = high - 8;
+    }
+    for (int index = 0; index < q8.length; index++) {
+      q8[index] = (byte) (index - 16);
+    }
+
+    IntVector actual =
+        PanamaVectorUtilSupport.q4_0Q8_0IntegerLanes(MemorySegment.ofArray(packed), 0, q8, 0);
+
+    int[] expected = new int[8];
+    for (int lane = 0; lane < expected.length; lane++) {
+      for (int index = lane * 4; index < lane * 4 + 4; index++) {
+        expected[lane] += q4[index] * q8[index];
+      }
+    }
+    assertThat(actual.toArray()).containsExactly(expected);
+  }
 
   @Test
   void panamaProviderOwnsQ4_0Q8_0Kernel() {
@@ -84,7 +114,10 @@ class PanamaGgufQuantizedDotTest {
 
     assertThat(actualQuants).containsExactly(expectedQuants);
     assertThat(actualScales).containsExactly(expectedScales);
-    assertThat(actual).containsExactly(expected);
+    assertThat(actual).hasSameSizeAs(expected);
+    for (int row = 0; row < rows; row++) {
+      assertThat(actual[row]).isCloseTo(expected[row], offset(1e-4f));
+    }
   }
 
   @Test

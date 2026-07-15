@@ -23,7 +23,9 @@ import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.LongVector;
 import jdk.incubator.vector.ShortVector;
+import jdk.incubator.vector.VectorMask;
 import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.VectorShuffle;
 import jdk.incubator.vector.VectorSpecies;
 
 /**
@@ -58,6 +60,20 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   static final VectorSpecies<Long> LONG_SPECIES =
       PanamaConstants.preferredSpecies(LongVector.SPECIES_PREFERRED);
   static final int VECTOR_BITSIZE = FLOAT_SPECIES.vectorBitSize();
+  private static final VectorShuffle<Short> SWAP_ADJACENT_SHORTS =
+      VectorShuffle.fromValues(
+          ShortVector.SPECIES_256, 1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14);
+  private static final VectorShuffle<Short> SWAP_SHORT_PAIRS =
+      VectorShuffle.fromValues(
+          ShortVector.SPECIES_256, 2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13);
+  private static final VectorShuffle<Short> SELECT_LOW_GROUPS =
+      VectorShuffle.fromValues(
+          ShortVector.SPECIES_256, 0, 4, 8, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  private static final VectorShuffle<Short> SELECT_HIGH_GROUPS =
+      VectorShuffle.fromValues(
+          ShortVector.SPECIES_256, 0, 0, 0, 0, 0, 4, 8, 12, 0, 0, 0, 0, 0, 0, 0, 0);
+  private static final VectorMask<Short> HIGH_GROUP_LANES =
+      VectorMask.fromLong(ShortVector.SPECIES_256, 0xF0L);
 
   // --- Conditional FMA helpers ---
 
@@ -345,6 +361,26 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         rows,
         cols,
         row -> {
+          if (VECTOR_BITSIZE >= 256) {
+            FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
+            long rowOffset = row * rowBytes;
+            for (int block = 0; block < blocks; block++) {
+              long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+              float scale =
+                  Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+              IntVector integerLanes =
+                  q4_0Q8_0IntegerLanes(
+                      qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
+              FloatVector products =
+                  (FloatVector)
+                      integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
+              accumulator =
+                  fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
+            }
+            out[row] = accumulator.reduceLanes(VectorOperators.ADD);
+            return;
+          }
+
           float sum = 0.0f;
           long rowOffset = row * rowBytes;
           for (int block = 0; block < blocks; block++) {
@@ -407,6 +443,37 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       sum += high16.mul(qHigh16).reduceLanes(VectorOperators.ADD);
     }
     return sum;
+  }
+
+  static IntVector q4_0Q8_0IntegerLanes(
+      MemorySegment qWeight, long nibbleOffset, byte[] q8Quants, int quantOffset) {
+    ByteVector packed =
+        ByteVector.fromMemorySegment(
+            ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
+    ByteVector low = packed.and((byte) 0x0F).sub((byte) 8);
+    ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F).sub((byte) 8);
+    ShortVector lowProducts =
+        ((ShortVector) low.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0))
+            .mul(
+                (ShortVector)
+                    ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
+                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0));
+    ShortVector highProducts =
+        ((ShortVector) high.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0))
+            .mul(
+                (ShortVector)
+                    ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
+                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0));
+
+    ShortVector lowGroups = sumGroupsOfFour(lowProducts).rearrange(SELECT_LOW_GROUPS);
+    ShortVector highGroups = sumGroupsOfFour(highProducts).rearrange(SELECT_HIGH_GROUPS);
+    ShortVector groups = lowGroups.blend(highGroups, HIGH_GROUP_LANES);
+    return (IntVector) groups.convertShape(VectorOperators.S2I, IntVector.SPECIES_256, 0);
+  }
+
+  private static ShortVector sumGroupsOfFour(ShortVector products) {
+    ShortVector pairs = products.add(products.rearrange(SWAP_ADJACENT_SHORTS));
+    return pairs.add(pairs.rearrange(SWAP_SHORT_PAIRS));
   }
 
   /** SIMD Q4_K by Q8_K GEMV with one activation quantization shared by all rows. */
