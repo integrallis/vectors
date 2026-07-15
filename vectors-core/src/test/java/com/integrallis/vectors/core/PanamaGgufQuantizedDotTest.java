@@ -117,6 +117,29 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q8_0Q8_0PairLanesSumAdjacentProductsWithoutOverflow() {
+    byte[] weights = {127, 127, -128, 127, 64, -64, 31, -31, 1, -1, 100, -100, 12, 13, -14, -15};
+    byte[] q8 = new byte[21];
+    int quantOffset = 5;
+    for (int index = 0; index < weights.length; index++) {
+      q8[quantOffset + index] = (byte) (127 - index * 9);
+    }
+
+    IntVector actual =
+        PanamaVectorUtilSupport.q8_0Q8_0PairLanes(
+            MemorySegment.ofArray(weights), 0, q8, quantOffset);
+
+    int[] expected = new int[8];
+    for (int lane = 0; lane < expected.length; lane++) {
+      int index = lane * 2;
+      expected[lane] =
+          weights[index] * q8[quantOffset + index]
+              + weights[index + 1] * q8[quantOffset + index + 1];
+    }
+    assertThat(actual.toArray()).containsExactly(expected);
+  }
+
+  @Test
   void panamaProviderOwnsQ4_0Q8_0Kernel() {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)

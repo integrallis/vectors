@@ -66,6 +66,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   private static final VectorShuffle<Short> SWAP_SHORT_PAIRS =
       VectorShuffle.fromValues(
           ShortVector.SPECIES_256, 2, 3, 0, 1, 6, 7, 4, 5, 10, 11, 8, 9, 14, 15, 12, 13);
+  private static final VectorShuffle<Short> SELECT_EVEN_PAIRS =
+      VectorShuffle.fromValues(
+          ShortVector.SPECIES_256, 0, 2, 4, 6, 8, 10, 12, 14, 0, 0, 0, 0, 0, 0, 0, 0);
   private static final VectorShuffle<Short> SELECT_LOW_GROUPS =
       VectorShuffle.fromValues(
           ShortVector.SPECIES_256, 0, 4, 8, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -837,17 +840,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     if (VECTOR_BITSIZE >= 256) {
       IntVector accumulator = IntVector.zero(IntVector.SPECIES_256);
-      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index += 8) {
-        ByteVector weights =
-            ByteVector.fromMemorySegment(
-                ByteVector.SPECIES_64, qWeight, weightOffset + index, ByteOrder.LITTLE_ENDIAN);
-        ByteVector quants =
-            ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index);
-        IntVector weightInts =
-            (IntVector) weights.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
-        IntVector quantInts =
-            (IntVector) quants.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
-        accumulator = accumulator.add(weightInts.mul(quantInts));
+      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index += 16) {
+        accumulator =
+            accumulator.add(
+                q8_0Q8_0PairLanes(qWeight, weightOffset + index, q8Quants, quantOffset + index));
       }
       return accumulator.reduceLanes(VectorOperators.ADD);
     }
@@ -888,6 +884,23 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           qWeight.get(ValueLayout.JAVA_BYTE, weightOffset + index) * q8Quants[quantOffset + index];
     }
     return sum;
+  }
+
+  static IntVector q8_0Q8_0PairLanes(
+      MemorySegment qWeight, long weightOffset, byte[] q8Quants, int quantOffset) {
+    ShortVector weights =
+        (ShortVector)
+            ByteVector.fromMemorySegment(
+                    ByteVector.SPECIES_128, qWeight, weightOffset, ByteOrder.LITTLE_ENDIAN)
+                .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+    ShortVector quants =
+        (ShortVector)
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
+                .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+    ShortVector products = weights.mul(quants);
+    ShortVector pairs = products.add(products.rearrange(SWAP_ADJACENT_SHORTS));
+    ShortVector selected = pairs.rearrange(SELECT_EVEN_PAIRS);
+    return (IntVector) selected.convertShape(VectorOperators.S2I, IntVector.SPECIES_256, 0);
   }
 
   // --- Byte dot product: widening to avoid overflow ---
