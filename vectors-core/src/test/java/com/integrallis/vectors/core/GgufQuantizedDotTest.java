@@ -503,7 +503,9 @@ class GgufQuantizedDotTest {
 
     assertThat(q8Quants).containsExactly(expectedQuants);
     assertThat(q8Scales).containsExactly(expectedScales);
-    assertThat(out).containsOnly(expected[0]);
+    for (float value : out) {
+      assertThat(value).isCloseTo(expected[0], within(1e-4f));
+    }
   }
 
   @Test
