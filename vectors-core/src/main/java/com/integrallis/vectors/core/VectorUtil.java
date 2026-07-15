@@ -447,10 +447,45 @@ public final class VectorUtil {
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
     }
+    if (rows < 1) {
+      throw new IllegalArgumentException("rows must be >= 1: " + rows);
+    }
+    int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    ggufQ4_0Q8_0BatchedMatmul(
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        new float[checkedProduct(outputEntries, 8, "Q4 lane scratch")]);
+  }
+
+  /**
+   * Allocation-free Q4_0 batched matrix multiplication with caller-owned reduction lanes.
+   *
+   * @param laneScratch scratch space with at least {@code batchSize * rows * 8} entries
+   */
+  public static void ggufQ4_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      float[] laneScratch) {
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
+    }
     Objects.requireNonNull(queries, "queries");
     Objects.requireNonNull(out, "out");
     Objects.requireNonNull(q8Quants, "q8Quants");
     Objects.requireNonNull(q8Scales, "q8Scales");
+    Objects.requireNonNull(laneScratch, "laneScratch");
     checkGgufQuantizedMatrixArguments(
         qWeight,
         rows,
@@ -459,6 +494,7 @@ public final class VectorUtil {
         VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
     int queryEntries = checkedProduct(batchSize, cols, "batchSize * cols");
     int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    int laneEntries = checkedProduct(outputEntries, 8, "Q4 lane scratch");
     int scaleEntries =
         checkedProduct(batchSize, cols / VectorUtilSupport.GGUF_Q_BLOCK_SIZE, "batch scales");
     if (queries.length < queryEntries) {
@@ -477,8 +513,15 @@ public final class VectorUtil {
       throw new IllegalArgumentException(
           "q8Scales.length must be >= batch scales: " + q8Scales.length + " < " + scaleEntries);
     }
+    if (laneScratch.length < laneEntries) {
+      throw new IllegalArgumentException(
+          "lane scratch length must be >= batchSize * rows * 8: "
+              + laneScratch.length
+              + " < "
+              + laneEntries);
+    }
     IMPL.ggufQ4_0Q8_0BatchedMatmul(
-        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
+        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, laneScratch);
   }
 
   /** Batched row-major GEMV over GGUF Q4_K rows. */

@@ -62,6 +62,7 @@ public class GgufBatchedMatmulBenchmark {
   private float[] independentOut;
   private byte[] batchedQuants;
   private float[] batchedScales;
+  private float[] batchedLanes;
   private byte[] independentQuants;
   private float[] independentScales;
 
@@ -90,6 +91,7 @@ public class GgufBatchedMatmulBenchmark {
     independentOut = new float[rows];
     batchedQuants = new byte[batchSize * cols];
     batchedScales = new float[batchSize * (cols / 32)];
+    batchedLanes = new float[batchSize * rows * 8];
     independentQuants = new byte[cols];
     independentScales = new float[cols / 32];
   }
@@ -104,7 +106,8 @@ public class GgufBatchedMatmulBenchmark {
         cols,
         batchedOut,
         batchedQuants,
-        batchedScales);
+        batchedScales,
+        batchedLanes);
     blackhole.consume(batchedOut);
   }
 
@@ -112,13 +115,7 @@ public class GgufBatchedMatmulBenchmark {
   public void independent(Blackhole blackhole) {
     for (float[] query : independentQueries) {
       VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-          query,
-          weights,
-          rows,
-          cols,
-          independentOut,
-          independentQuants,
-          independentScales);
+          query, weights, rows, cols, independentOut, independentQuants, independentScales);
       blackhole.consume(independentOut);
     }
   }

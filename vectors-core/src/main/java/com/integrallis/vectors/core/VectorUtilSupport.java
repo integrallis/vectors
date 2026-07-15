@@ -575,7 +575,8 @@ public interface VectorUtilSupport {
       int cols,
       float[] out,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      float[] laneScratch) {
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     for (int batch = 0; batch < batchSize; batch++) {
       GgufQuantizationSupport.quantizeQ8_0(

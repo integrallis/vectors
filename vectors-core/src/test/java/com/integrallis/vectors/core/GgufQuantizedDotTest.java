@@ -417,9 +417,32 @@ class GgufQuantizedDotTest {
           cols,
           actual,
           new byte[batchSize * cols],
-          new float[batchSize * (cols / 32)]);
+          new float[batchSize * (cols / 32)],
+          new float[batchSize * rows * 8]);
 
       assertThat(actual).containsExactly(expected);
+    }
+  }
+
+  @Test
+  void q4_0Q8_0BatchedMatmulRejectsUndersizedLaneScratch() {
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, repeat(q4Block(0.1f, ones(32), null), 2));
+
+      assertThatThrownBy(
+              () ->
+                  VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+                      patternedQuery(64),
+                      segment,
+                      2,
+                      1,
+                      32,
+                      new float[2],
+                      new byte[64],
+                      new float[2],
+                      new float[15]))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("lane scratch");
     }
   }
 
