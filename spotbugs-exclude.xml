@@ -71,6 +71,20 @@
         <Class name="com.integrallis.vectors.bench.TieredIvfRecallQpsBenchmark"/>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
+    <!-- vectors-bench: GgufBatchedMatmulBenchmark reuses one fixed-seed Random for every
+         activation and weight value in @Setup. SpotBugs reports the allocation as one-shot
+         even though the nested loops and block generators make repeated calls. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.GgufBatchedMatmulBenchmark"/>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
+    <!-- vectors-bench: GgufRowDispatchBenchmark's query, weights, and IntConsumer are JMH
+         @State read from a method-reference callback reached by the @Benchmark method. The
+         generated JMH caller is unavailable during SpotBugs analysis, producing UrF warnings. -->
+    <Match>
+        <Class name="com.integrallis.vectors.core.GgufRowDispatchBenchmark"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
     <!-- HNSW: SearchResult record exposes/stores arrays intentionally for zero-copy access -->
     <Match>
         <Class name="com.integrallis.vectors.hnsw.SearchResult"/>
