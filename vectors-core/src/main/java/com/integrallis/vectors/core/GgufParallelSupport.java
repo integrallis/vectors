@@ -16,8 +16,10 @@
 package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RecursiveAction;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
-import java.util.stream.IntStream;
 
 /** Bounded row parallelism for large, thread-shareable GGUF matrices. */
 final class GgufParallelSupport {
@@ -30,7 +32,20 @@ final class GgufParallelSupport {
   private static final long MIN_ELEMENTS =
       Math.max(1L, Long.getLong("vectors.gguf.parallelThreshold", DEFAULT_MIN_ELEMENTS));
   private static final int PROCESSORS = Runtime.getRuntime().availableProcessors();
+  private static final int PARALLELISM =
+      Math.max(1, Math.min(PROCESSORS, Integer.getInteger("vectors.gguf.parallelism", PROCESSORS)));
   private static final Thread ACCESS_PROBE = Thread.ofPlatform().unstarted(() -> {});
+  private static final AtomicInteger WORKER_SEQUENCE = new AtomicInteger();
+  private static final ForkJoinPool ROW_POOL =
+      new ForkJoinPool(
+          PARALLELISM,
+          pool -> {
+            var worker = ForkJoinPool.defaultForkJoinWorkerThreadFactory.newThread(pool);
+            worker.setName("vectors-gguf-" + WORKER_SEQUENCE.incrementAndGet());
+            return worker;
+          },
+          null,
+          false);
 
   private GgufParallelSupport() {}
 
@@ -42,13 +57,17 @@ final class GgufParallelSupport {
       MemorySegment weights, int rows, int cols, long formatMinElements, IntConsumer rowOperation) {
     boolean shareable = weights.isAccessibleBy(ACCESS_PROBE);
     long effectiveMinElements = Math.max(MIN_ELEMENTS, formatMinElements);
-    if (shareable && shouldParallelize(rows, cols, PROCESSORS, ENABLED, effectiveMinElements)) {
-      IntStream.range(0, rows).parallel().forEach(rowOperation);
+    if (shareable && shouldParallelize(rows, cols, PARALLELISM, ENABLED, effectiveMinElements)) {
+      forEachRowInPool(ROW_POOL, rows, rowOperation);
       return;
     }
     for (int row = 0; row < rows; row++) {
       rowOperation.accept(row);
     }
+  }
+
+  static void forEachRowInPool(ForkJoinPool pool, int rows, IntConsumer rowOperation) {
+    pool.invoke(new RowRangeAction(rows, rowOperation, pool.getParallelism()));
   }
 
   static boolean shouldParallelize(
@@ -62,5 +81,65 @@ final class GgufParallelSupport {
 
   static long minElements() {
     return MIN_ELEMENTS;
+  }
+
+  static int parallelism() {
+    return PARALLELISM;
+  }
+
+  @SuppressWarnings("serial")
+  private static final class RowRangeAction extends RecursiveAction {
+    private final int rows;
+    private final IntConsumer rowOperation;
+    private final int parallelism;
+
+    private RowRangeAction(int rows, IntConsumer rowOperation, int parallelism) {
+      this.rows = rows;
+      this.rowOperation = rowOperation;
+      this.parallelism = parallelism;
+    }
+
+    @Override
+    protected void compute() {
+      int taskCount = Math.min(rows, parallelism);
+      int rowsPerTask = (rows + taskCount - 1) / taskCount;
+      RowBatchAction[] forked = new RowBatchAction[taskCount - 1];
+      for (int task = 1; task < taskCount; task++) {
+        int start = task * rowsPerTask;
+        int end = Math.min(rows, start + rowsPerTask);
+        RowBatchAction action = new RowBatchAction(start, end, rowOperation);
+        forked[task - 1] = action;
+        action.fork();
+      }
+
+      runRows(0, Math.min(rows, rowsPerTask), rowOperation);
+      for (RowBatchAction action : forked) {
+        action.join();
+      }
+    }
+  }
+
+  @SuppressWarnings("serial")
+  private static final class RowBatchAction extends RecursiveAction {
+    private final int start;
+    private final int end;
+    private final IntConsumer rowOperation;
+
+    private RowBatchAction(int start, int end, IntConsumer rowOperation) {
+      this.start = start;
+      this.end = end;
+      this.rowOperation = rowOperation;
+    }
+
+    @Override
+    protected void compute() {
+      runRows(start, end, rowOperation);
+    }
+  }
+
+  private static void runRows(int start, int end, IntConsumer rowOperation) {
+    for (int row = start; row < end; row++) {
+      rowOperation.accept(row);
+    }
   }
 }
