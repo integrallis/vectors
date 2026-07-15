@@ -839,11 +839,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       ByteVector packed =
           ByteVector.fromMemorySegment(
               ByteVector.SPECIES_64, qWeight, packedOffset + index, ByteOrder.LITTLE_ENDIAN);
-      ByteVector low = q5Values(packed.and((byte) 0x0F), (byte) (highBits >>> index));
+      ByteVector low = q5Values(packed.and((byte) 0x0F), highBits >>> index);
       ByteVector high =
           q5Values(
-              packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F),
-              (byte) (highBits >>> (index + 16)));
+              packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F), highBits >>> (index + 16));
       IntVector lowWeights =
           (IntVector) low.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
       IntVector highWeights =
@@ -861,9 +860,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return accumulator;
   }
 
-  private static ByteVector q5Values(ByteVector lowBits, byte highBits) {
+  private static ByteVector q5Values(ByteVector lowBits, int highBits) {
     VectorMask<Byte> highMask =
-        Q5_HIGH_BIT_MASKS.and(highBits).compare(VectorOperators.NE, (byte) 0);
+        Q5_HIGH_BIT_MASKS.and((byte) (highBits & 0xFF)).compare(VectorOperators.NE, (byte) 0);
     return lowBits.add((byte) 16, highMask).sub((byte) 16);
   }
 
