@@ -15,6 +15,10 @@
  */
 package com.integrallis.vectors.core;
 
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.util.Arrays;
+
 /** Shared activation quantization used by scalar and Panama GGUF kernels. */
 final class GgufQuantizationSupport {
 
@@ -38,6 +42,69 @@ final class GgufQuantizationSupport {
         quants[offset + index] = (byte) ggmlNearestInt(query[offset + index] * inverseScale);
       }
     }
+  }
+
+  static void quantizeQ8_K(
+      float[] query, int dimensions, byte[] quants, float[] scales, short[] sums) {
+    int blockSize = VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE;
+    int sumBlockSize = VectorUtilSupport.GGUF_Q8_K_SUM_BLOCK_SIZE;
+    int blocks = dimensions / blockSize;
+    for (int block = 0; block < blocks; block++) {
+      int offset = block * blockSize;
+      float max = 0.0f;
+      float absoluteMax = 0.0f;
+      for (int index = 0; index < blockSize; index++) {
+        float value = query[offset + index];
+        float absolute = Math.abs(value);
+        if (absolute > absoluteMax) {
+          absoluteMax = absolute;
+          max = value;
+        }
+      }
+
+      if (absoluteMax == 0.0f) {
+        Arrays.fill(quants, offset, offset + blockSize, (byte) 0);
+        if (sums != null) {
+          Arrays.fill(sums, offset / sumBlockSize, (offset + blockSize) / sumBlockSize, (short) 0);
+        }
+        scales[block] = 0.0f;
+        continue;
+      }
+
+      float inverseScale = -127.0f / max;
+      int sum = 0;
+      for (int index = 0; index < blockSize; index++) {
+        int quant = ggmlNearestInt(inverseScale * query[offset + index]);
+        byte stored = (byte) Math.min(127, quant);
+        quants[offset + index] = stored;
+        if (sums != null) {
+          sum += stored;
+          if ((index + 1) % sumBlockSize == 0) {
+            sums[(offset + index) / sumBlockSize] = (short) sum;
+            sum = 0;
+          }
+        }
+      }
+      scales[block] = 1.0f / inverseScale;
+    }
+  }
+
+  static int qKScale(MemorySegment qWeight, long scalesOffset, int group) {
+    if (group < 4) {
+      return qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group) & 0x3F;
+    }
+    int low = qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group + 4L) & 0x0F;
+    int high = (qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group - 4L) & 0xFF) >>> 6;
+    return low | (high << 4);
+  }
+
+  static int qKMin(MemorySegment qWeight, long scalesOffset, int group) {
+    if (group < 4) {
+      return qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group + 4L) & 0x3F;
+    }
+    int low = (qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group + 4L) & 0xFF) >>> 4;
+    int high = (qWeight.get(ValueLayout.JAVA_BYTE, scalesOffset + group) & 0xFF) >>> 6;
+    return low | (high << 4);
   }
 
   static Q6Scratch q6Scratch() {
