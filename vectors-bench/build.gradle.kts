@@ -75,7 +75,7 @@ jmh {
         (project.findProperty(key) as String?)?.let { jvmArgs.add("-D$key=$it") }
     }
     // Forward GGUF kernel controls so serial/parallel comparisons use the same JMH harness.
-    listOf("vectors.gguf.parallel", "vectors.gguf.parallelThreshold", "vectors.gguf.parallelism").forEach { key ->
+    listOf("vectors.gguf.parallel", "vectors.gguf.parallelThreshold").forEach { key ->
         (project.findProperty(key) as String?)?.let { jvmArgs.add("-D$key=$it") }
     }
     // Time-box overrides for short/dev runs:

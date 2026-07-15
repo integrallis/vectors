@@ -21,7 +21,6 @@ import java.lang.foreign.Arena;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicIntegerArray;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -75,25 +74,5 @@ class GgufParallelSupportTest {
 
     assertThat(rowsVisited).hasValue(1024);
     assertThat(threads).containsExactly(owner);
-  }
-
-  @Test
-  void boundedParallelExecutionVisitsEveryRowExactlyOnce() {
-    int rows = 257;
-    AtomicIntegerArray visits = new AtomicIntegerArray(rows);
-    Set<Thread> threads = ConcurrentHashMap.newKeySet();
-
-    GgufParallelSupport.forEachRowParallel(
-        rows,
-        3,
-        row -> {
-          visits.incrementAndGet(row);
-          threads.add(Thread.currentThread());
-        });
-
-    for (int row = 0; row < rows; row++) {
-      assertThat(visits.get(row)).isOne();
-    }
-    assertThat(threads).hasSizeBetween(1, 3);
   }
 }
