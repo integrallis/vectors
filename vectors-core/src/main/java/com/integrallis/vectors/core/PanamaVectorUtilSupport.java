@@ -1132,6 +1132,278 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return fourProductLanes(firstProducts, secondProducts);
   }
 
+  /** SIMD Q5_K by Q8_K GEMV with one activation quantization shared by all rows. */
+  @Override
+  public void ggufQ5_KQ8_KMatVecDot(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    if (VECTOR_BITSIZE < 256) {
+      VectorUtilSupport.super.ggufQ5_KQ8_KMatVecDot(
+          query, qWeight, rows, cols, out, q8Quants, q8Scales, q8Sums);
+      return;
+    }
+
+    GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
+    long rowBytes = (long) (cols / GGUF_Q5_K_BLOCK_SIZE) * GGUF_Q5_K_BLOCK_BYTES;
+    int blocks = cols / GGUF_Q5_K_BLOCK_SIZE;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row ->
+            out[row] = q5_KQ8_KRowDot(qWeight, row * rowBytes, blocks, q8Quants, q8Scales, q8Sums));
+  }
+
+  @Override
+  public void ggufQ5_KQ8_KDualMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    if (VECTOR_BITSIZE < 256) {
+      VectorUtilSupport.super.ggufQ5_KQ8_KDualMatVecDot(
+          query,
+          firstWeight,
+          firstRows,
+          firstOut,
+          secondWeight,
+          secondRows,
+          secondOut,
+          cols,
+          q8Quants,
+          q8Scales,
+          q8Sums);
+      return;
+    }
+    ggufQ5_KQ8_KGroupedMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        secondWeight,
+        0,
+        secondOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+  }
+
+  @Override
+  public void ggufQ5_KQ8_KTripleMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    if (VECTOR_BITSIZE < 256) {
+      VectorUtilSupport.super.ggufQ5_KQ8_KTripleMatVecDot(
+          query,
+          firstWeight,
+          firstRows,
+          firstOut,
+          secondWeight,
+          secondRows,
+          secondOut,
+          thirdWeight,
+          thirdRows,
+          thirdOut,
+          cols,
+          q8Quants,
+          q8Scales,
+          q8Sums);
+      return;
+    }
+    ggufQ5_KQ8_KGroupedMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+  }
+
+  private static void ggufQ5_KQ8_KGroupedMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
+
+    long rowBytes = (long) (cols / GGUF_Q5_K_BLOCK_SIZE) * GGUF_Q5_K_BLOCK_BYTES;
+    int blocks = cols / GGUF_Q5_K_BLOCK_SIZE;
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    int totalRows = Math.addExact(thirdStart, thirdRows);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        thirdWeight,
+        totalRows,
+        cols,
+        row -> {
+          MemorySegment qWeight;
+          float[] out;
+          int matrixRow;
+          if (row < secondStart) {
+            qWeight = firstWeight;
+            out = firstOut;
+            matrixRow = row;
+          } else if (row < thirdStart) {
+            qWeight = secondWeight;
+            out = secondOut;
+            matrixRow = row - secondStart;
+          } else {
+            qWeight = thirdWeight;
+            out = thirdOut;
+            matrixRow = row - thirdStart;
+          }
+
+          out[matrixRow] =
+              q5_KQ8_KRowDot(qWeight, matrixRow * rowBytes, blocks, q8Quants, q8Scales, q8Sums);
+        });
+  }
+
+  private static float q5_KQ8_KRowDot(
+      MemorySegment qWeight,
+      long rowOffset,
+      int blocks,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    float sum = 0.0f;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q5_K_BLOCK_BYTES;
+      float q8Scale = q8Scales[block];
+      float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
+      float dMin =
+          Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES)) * q8Scale;
+      long scalesOffset = blockOffset + GGUF_Q5_K_SCALES_OFFSET;
+      long highBitsOffset = blockOffset + GGUF_Q5_K_HIGH_BITS_OFFSET;
+      long quantsOffset = blockOffset + GGUF_Q5_K_QUANTS_OFFSET;
+      int activationOffset = block * GGUF_Q5_K_BLOCK_SIZE;
+      int quantizedSum = 0;
+      int minimumSum = 0;
+
+      for (int group = 0; group < 8; group++) {
+        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+        long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+        int shift = (group & 1) * 4;
+        int highBit = 1 << group;
+        int groupActivationOffset = activationOffset + group * 32;
+        int groupDot =
+            q5_KQ8_KIntegerDot(
+                qWeight,
+                packedOffset,
+                shift,
+                highBitsOffset,
+                highBit,
+                q8Quants,
+                groupActivationOffset);
+        quantizedSum += scale * groupDot;
+        int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+        minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
+      }
+
+      sum = MathUtil.fma(d, quantizedSum, sum);
+      sum = MathUtil.fma(-dMin, minimumSum, sum);
+    }
+    return sum;
+  }
+
+  static int q5_KQ8_KIntegerDot(
+      MemorySegment qWeight,
+      long packedOffset,
+      int shift,
+      long highBitsOffset,
+      int highBit,
+      byte[] q8Quants,
+      int quantOffset) {
+    int sum = q4_KQ8_KIntegerDot(qWeight, packedOffset, shift, q8Quants, quantOffset);
+    int highShift = Integer.numberOfTrailingZeros(highBit);
+    if (VECTOR_BITSIZE >= 256) {
+      for (int index = 0; index < 32; index += 16) {
+        ByteVector highBits =
+            ByteVector.fromMemorySegment(
+                ByteVector.SPECIES_128, qWeight, highBitsOffset + index, ByteOrder.LITTLE_ENDIAN);
+        ShortVector bits =
+            (ShortVector)
+                highBits
+                    .lanewise(VectorOperators.LSHR, highShift)
+                    .and((byte) 1)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+        ShortVector quants =
+            (ShortVector)
+                ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + index)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+        sum += 16 * bits.mul(quants).reduceLanes(VectorOperators.ADD);
+      }
+      return sum;
+    }
+
+    for (int index = 0; index < 32; index += 8) {
+      ByteVector highBits =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, highBitsOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ShortVector bits =
+          (ShortVector)
+              highBits
+                  .lanewise(VectorOperators.LSHR, highShift)
+                  .and((byte) 1)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      ShortVector quants =
+          (ShortVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      sum += 16 * bits.mul(quants).reduceLanes(VectorOperators.ADD);
+    }
+    return sum;
+  }
+
   /** SIMD Q5_0 by Q8_0 GEMV with one activation quantization shared by all rows. */
   @Override
   public void ggufQ5_0Q8_0MatVecDot(

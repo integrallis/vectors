@@ -59,6 +59,9 @@ public class GgufQuantizedMatVecBenchmark {
   private MemorySegment q4KWeights;
   private MemorySegment secondQ4KWeights;
   private MemorySegment thirdQ4KWeights;
+  private MemorySegment q5KWeights;
+  private MemorySegment secondQ5KWeights;
+  private MemorySegment thirdQ5KWeights;
   private MemorySegment q5Weights;
   private MemorySegment q8Weights;
   private MemorySegment q6Weights;
@@ -79,6 +82,7 @@ public class GgufQuantizedMatVecBenchmark {
 
     byte[] q4 = randomBlocks(random, rows * (cols / 32) * 18, 18, 0);
     byte[] q4K = randomQ4KBlocks(random, rows * (cols / 256) * 144);
+    byte[] q5K = randomQ5KBlocks(random, rows * (cols / 256) * 176);
     byte[] q5 = randomBlocks(random, rows * (cols / 32) * 22, 22, 0);
     byte[] q8 = randomBlocks(random, rows * (cols / 32) * 34, 34, 0);
     byte[] q6 = randomBlocks(random, rows * (cols / 256) * 210, 210, 208);
@@ -91,6 +95,10 @@ public class GgufQuantizedMatVecBenchmark {
     secondQ4KWeights = MemorySegment.ofArray(randomQ4KBlocks(random, rows * (cols / 256) * 144));
     thirdQ4KWeights =
         MemorySegment.ofArray(randomQ4KBlocks(random, auxiliaryRows * (cols / 256) * 144));
+    q5KWeights = MemorySegment.ofArray(q5K);
+    secondQ5KWeights = MemorySegment.ofArray(randomQ5KBlocks(random, rows * (cols / 256) * 176));
+    thirdQ5KWeights =
+        MemorySegment.ofArray(randomQ5KBlocks(random, auxiliaryRows * (cols / 256) * 176));
     q5Weights = MemorySegment.ofArray(q5);
     q8Weights = MemorySegment.ofArray(q8);
     q6Weights = MemorySegment.ofArray(q6);
@@ -245,6 +253,71 @@ public class GgufQuantizedMatVecBenchmark {
   }
 
   @Benchmark
+  public void q5_KSeparateDualProjection(Blackhole blackhole) {
+    VectorUtil.ggufQ5_KQ8_KBatchDotProduct(
+        query, q5KWeights, rows, cols, out, q8Quants, q8Scales, q8Sums);
+    VectorUtil.ggufQ5_KQ8_KBatchDotProduct(
+        query, secondQ5KWeights, rows, cols, secondOut, q8Quants, q8Scales, q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+  }
+
+  @Benchmark
+  public void q5_KGroupedDualProjection(Blackhole blackhole) {
+    VectorUtil.ggufQ5_KQ8_KDualBatchDotProduct(
+        query,
+        q5KWeights,
+        rows,
+        out,
+        secondQ5KWeights,
+        rows,
+        secondOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+  }
+
+  @Benchmark
+  public void q5_KSeparateQkvProjection(Blackhole blackhole) {
+    int auxiliaryRows = thirdOut.length;
+    VectorUtil.ggufQ5_KQ8_KBatchDotProduct(
+        query, q5KWeights, rows, cols, out, q8Quants, q8Scales, q8Sums);
+    VectorUtil.ggufQ5_KQ8_KBatchDotProduct(
+        query, secondQ5KWeights, auxiliaryRows, cols, secondOut, q8Quants, q8Scales, q8Sums);
+    VectorUtil.ggufQ5_KQ8_KBatchDotProduct(
+        query, thirdQ5KWeights, auxiliaryRows, cols, thirdOut, q8Quants, q8Scales, q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+    blackhole.consume(thirdOut);
+  }
+
+  @Benchmark
+  public void q5_KGroupedQkvProjection(Blackhole blackhole) {
+    int auxiliaryRows = thirdOut.length;
+    VectorUtil.ggufQ5_KQ8_KTripleBatchDotProduct(
+        query,
+        q5KWeights,
+        rows,
+        out,
+        secondQ5KWeights,
+        auxiliaryRows,
+        secondOut,
+        thirdQ5KWeights,
+        auxiliaryRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+    blackhole.consume(thirdOut);
+  }
+
+  @Benchmark
   public void q5_0WithF32Activation(Blackhole blackhole) {
     VectorUtil.ggufQ5_0BatchDotProduct(query, q5Weights, rows, cols, out);
     blackhole.consume(out);
@@ -297,6 +370,16 @@ public class GgufQuantizedMatVecBenchmark {
     ByteBuffer buffer = ByteBuffer.wrap(blocks).order(ByteOrder.LITTLE_ENDIAN);
     short minScale = Float.floatToFloat16(0.005f);
     for (int offset = 0; offset < byteCount; offset += 144) {
+      buffer.putShort(offset + Short.BYTES, minScale);
+    }
+    return blocks;
+  }
+
+  private static byte[] randomQ5KBlocks(Random random, int byteCount) {
+    byte[] blocks = randomBlocks(random, byteCount, 176, 0);
+    ByteBuffer buffer = ByteBuffer.wrap(blocks).order(ByteOrder.LITTLE_ENDIAN);
+    short minScale = Float.floatToFloat16(0.005f);
+    for (int offset = 0; offset < byteCount; offset += 176) {
       buffer.putShort(offset + Short.BYTES, minScale);
     }
     return blocks;

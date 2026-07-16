@@ -83,6 +83,37 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q5_KQ8_KIntegerDotDecodesPerElementHighBits() {
+    byte[] weights = new byte[64];
+    byte[] q8 = new byte[32];
+    int highBit = 1 << 3;
+    for (int index = 0; index < 32; index++) {
+      int low = index * 3 % 16;
+      int high = index * 5 % 16;
+      weights[32 + index] = (byte) (low | (high << 4));
+      if ((index & 1) != 0) {
+        weights[index] = (byte) highBit;
+      }
+      q8[index] = (byte) (index - 16);
+    }
+
+    int actual =
+        PanamaVectorUtilSupport.q5_KQ8_KIntegerDot(
+            MemorySegment.ofArray(weights), 32, 4, 0, highBit, q8, 0);
+
+    int expected = 0;
+    for (int index = 0; index < 32; index++) {
+      int packed = weights[32 + index] & 0xFF;
+      int quant = (packed >>> 4) & 0x0F;
+      if ((weights[index] & highBit) != 0) {
+        quant += 16;
+      }
+      expected += quant * q8[index];
+    }
+    assertThat(actual).isEqualTo(expected);
+  }
+
+  @Test
   void q6_KQ8_KIntegerDotDecodesPackedWeightsAndSignedScales() {
     byte[] weights = new byte[80];
     byte[] q8 = new byte[128];
@@ -160,6 +191,13 @@ class PanamaGgufQuantizedDotTest {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)
         .contains("ggufQ4_KQ8_KMatVecDot");
+  }
+
+  @Test
+  void panamaProviderOwnsQ5_KQ8_KKernel() {
+    assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
+        .extracting(Method::getName)
+        .contains("ggufQ5_KQ8_KMatVecDot");
   }
 
   @Test
@@ -306,6 +344,56 @@ class PanamaGgufQuantizedDotTest {
     for (int row = 0; row < rows; row++) {
       assertThat(actual[row]).isCloseTo(expected[row], offset(1e-3f));
     }
+  }
+
+  @Test
+  void q5_KQ8_KKernelMatchesScalarReferenceAcrossRowsAndBlocks() {
+    int rows = 512;
+    int cols = 2048;
+    Random random = new Random(0x515B48L);
+    float[] query = new float[cols];
+    for (int index = 0; index < cols; index++) {
+      query[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+
+    byte[] weights = new byte[rows * (cols / 256) * 176];
+    random.nextBytes(weights);
+    ByteBuffer buffer = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < weights.length; offset += 176) {
+      float scale = random.nextFloat() * 0.05f + 0.001f;
+      float minScale = random.nextFloat() * 0.05f;
+      buffer.putShort(offset, Float.floatToFloat16(scale));
+      buffer.putShort(offset + Short.BYTES, Float.floatToFloat16(minScale));
+    }
+
+    float[] expected = new float[rows];
+    float[] actual = new float[rows];
+    byte[] expectedQuants = new byte[cols];
+    byte[] actualQuants = new byte[cols];
+    float[] expectedScales = new float[cols / 256];
+    float[] actualScales = new float[cols / 256];
+    short[] expectedSums = new short[cols / 16];
+    short[] actualSums = new short[cols / 16];
+    MemorySegment weightSegment = MemorySegment.ofArray(weights);
+
+    new ScalarVectorUtilSupport()
+        .ggufQ5_KQ8_KMatVecDot(
+            query,
+            weightSegment,
+            rows,
+            cols,
+            expected,
+            expectedQuants,
+            expectedScales,
+            expectedSums);
+    new PanamaVectorUtilSupport()
+        .ggufQ5_KQ8_KMatVecDot(
+            query, weightSegment, rows, cols, actual, actualQuants, actualScales, actualSums);
+
+    assertThat(actualQuants).containsExactly(expectedQuants);
+    assertThat(actualScales).containsExactly(expectedScales);
+    assertThat(actualSums).containsExactly(expectedSums);
+    assertThat(actual).containsExactly(expected);
   }
 
   @Test
