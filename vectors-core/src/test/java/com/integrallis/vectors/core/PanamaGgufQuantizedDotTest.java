@@ -340,10 +340,7 @@ class PanamaGgufQuantizedDotTest {
     assertThat(actualQuants).containsExactly(expectedQuants);
     assertThat(actualScales).containsExactly(expectedScales);
     assertThat(actualSums).containsExactly(expectedSums);
-    assertThat(actual).hasSameSizeAs(expected);
-    for (int row = 0; row < rows; row++) {
-      assertThat(actual[row]).isCloseTo(expected[row], offset(1e-3f));
-    }
+    assertThat(actual).containsExactly(expected);
   }
 
   @Test
