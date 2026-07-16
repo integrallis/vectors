@@ -1170,25 +1170,111 @@ public interface VectorUtilSupport {
         rows,
         cols,
         GgufParallelSupport.Q8_MIN_ELEMENTS,
+        row ->
+            out[row] =
+                ggufQ8_0Q8_0ScalarRowDot(qWeight, row * rowBytes, blocks, q8Quants, q8Scales));
+  }
+
+  /** Two Q8_0 projections sharing one Q8_0 activation quantization and row dispatch. */
+  default void ggufQ8_0Q8_0DualMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = ggufQ8_0RowBytes(cols);
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    int totalRows = Math.addExact(firstRows, secondRows);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        totalRows,
+        cols,
+        GgufParallelSupport.Q8_MIN_ELEMENTS,
         row -> {
-          float sum = 0.0f;
-          long rowOffset = row * rowBytes;
-          for (int block = 0; block < blocks; block++) {
-            long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
-            float scale =
-                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
-            long quantOffset = blockOffset + Short.BYTES;
-            int queryOffset = block * GGUF_Q_BLOCK_SIZE;
-            int integerSum = 0;
-            for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
-              integerSum +=
-                  qWeight.get(ValueLayout.JAVA_BYTE, quantOffset + index)
-                      * q8Quants[queryOffset + index];
-            }
-            sum = MathUtil.fma(scale, integerSum, sum);
-          }
-          out[row] = sum;
+          boolean first = row < firstRows;
+          MemorySegment weight = first ? firstWeight : secondWeight;
+          int matrixRow = first ? row : row - firstRows;
+          float[] out = first ? firstOut : secondOut;
+          out[matrixRow] =
+              ggufQ8_0Q8_0ScalarRowDot(weight, matrixRow * rowBytes, blocks, q8Quants, q8Scales);
         });
+  }
+
+  /** Three Q8_0 projections sharing one Q8_0 activation quantization and row dispatch. */
+  default void ggufQ8_0Q8_0TripleMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = ggufQ8_0RowBytes(cols);
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    int totalRows = Math.addExact(thirdStart, thirdRows);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        thirdWeight,
+        totalRows,
+        cols,
+        GgufParallelSupport.Q8_MIN_ELEMENTS,
+        row -> {
+          MemorySegment weight;
+          float[] out;
+          int matrixRow;
+          if (row < secondStart) {
+            weight = firstWeight;
+            out = firstOut;
+            matrixRow = row;
+          } else if (row < thirdStart) {
+            weight = secondWeight;
+            out = secondOut;
+            matrixRow = row - secondStart;
+          } else {
+            weight = thirdWeight;
+            out = thirdOut;
+            matrixRow = row - thirdStart;
+          }
+          out[matrixRow] =
+              ggufQ8_0Q8_0ScalarRowDot(weight, matrixRow * rowBytes, blocks, q8Quants, q8Scales);
+        });
+  }
+
+  private static float ggufQ8_0Q8_0ScalarRowDot(
+      MemorySegment qWeight, long rowOffset, int blocks, byte[] q8Quants, float[] q8Scales) {
+    float sum = 0.0f;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+      long quantOffset = blockOffset + Short.BYTES;
+      int queryOffset = block * GGUF_Q_BLOCK_SIZE;
+      int integerSum = 0;
+      for (int index = 0; index < GGUF_Q_BLOCK_SIZE; index++) {
+        integerSum +=
+            qWeight.get(ValueLayout.JAVA_BYTE, quantOffset + index) * q8Quants[queryOffset + index];
+      }
+      sum = MathUtil.fma(scale, integerSum, sum);
+    }
+    return sum;
   }
 
   /**

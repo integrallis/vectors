@@ -57,9 +57,19 @@ final class GgufParallelSupport {
       int rows,
       int cols,
       IntConsumer rowOperation) {
+    forEachRow(firstWeights, secondWeights, rows, cols, DEFAULT_MIN_ELEMENTS, rowOperation);
+  }
+
+  static void forEachRow(
+      MemorySegment firstWeights,
+      MemorySegment secondWeights,
+      int rows,
+      int cols,
+      long formatMinElements,
+      IntConsumer rowOperation) {
     boolean shareable =
         firstWeights.isAccessibleBy(ACCESS_PROBE) && secondWeights.isAccessibleBy(ACCESS_PROBE);
-    forEachRow(shareable, rows, cols, DEFAULT_MIN_ELEMENTS, rowOperation);
+    forEachRow(shareable, rows, cols, formatMinElements, rowOperation);
   }
 
   static void forEachRow(
@@ -69,11 +79,23 @@ final class GgufParallelSupport {
       int rows,
       int cols,
       IntConsumer rowOperation) {
+    forEachRow(
+        firstWeights, secondWeights, thirdWeights, rows, cols, DEFAULT_MIN_ELEMENTS, rowOperation);
+  }
+
+  static void forEachRow(
+      MemorySegment firstWeights,
+      MemorySegment secondWeights,
+      MemorySegment thirdWeights,
+      int rows,
+      int cols,
+      long formatMinElements,
+      IntConsumer rowOperation) {
     boolean shareable =
         firstWeights.isAccessibleBy(ACCESS_PROBE)
             && secondWeights.isAccessibleBy(ACCESS_PROBE)
             && thirdWeights.isAccessibleBy(ACCESS_PROBE);
-    forEachRow(shareable, rows, cols, DEFAULT_MIN_ELEMENTS, rowOperation);
+    forEachRow(shareable, rows, cols, formatMinElements, rowOperation);
   }
 
   private static void forEachRow(
