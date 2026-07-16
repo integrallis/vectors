@@ -644,6 +644,101 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q8_0Q8_0DualBatchDotProductMatchesSeparateMatmulsExactly() {
+    int cols = 64;
+    int firstRows = 2;
+    int secondRows = 3;
+    float[] query = patternedQuery(cols);
+    MemorySegment firstWeight =
+        MemorySegment.ofArray(repeat(q8Block(0.125f, i -> i * 7 - 53), firstRows * 2));
+    MemorySegment secondWeight =
+        MemorySegment.ofArray(repeat(q8Block(-0.25f, i -> 61 - i * 5), secondRows * 2));
+    float[] expectedFirst = new float[firstRows];
+    float[] expectedSecond = new float[secondRows];
+    float[] actualFirst = new float[firstRows];
+    float[] actualSecond = new float[secondRows];
+
+    VectorUtil.ggufQ8_0Q8_0BatchDotProduct(
+        query, firstWeight, firstRows, cols, expectedFirst, new byte[cols], new float[cols / 32]);
+    VectorUtil.ggufQ8_0Q8_0BatchDotProduct(
+        query,
+        secondWeight,
+        secondRows,
+        cols,
+        expectedSecond,
+        new byte[cols],
+        new float[cols / 32]);
+
+    VectorUtil.ggufQ8_0Q8_0DualBatchDotProduct(
+        query,
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        cols,
+        new byte[cols],
+        new float[cols / 32]);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+  }
+
+  @Test
+  void q8_0Q8_0TripleBatchDotProductMatchesSeparateMatmulsExactly() {
+    int cols = 64;
+    int firstRows = 4;
+    int secondRows = 2;
+    int thirdRows = 3;
+    float[] query = patternedQuery(cols);
+    MemorySegment firstWeight =
+        MemorySegment.ofArray(repeat(q8Block(0.125f, i -> i * 7 - 53), firstRows * 2));
+    MemorySegment secondWeight =
+        MemorySegment.ofArray(repeat(q8Block(-0.25f, i -> 61 - i * 5), secondRows * 2));
+    MemorySegment thirdWeight =
+        MemorySegment.ofArray(repeat(q8Block(0.03125f, i -> i * 3 - 41), thirdRows * 2));
+    float[] expectedFirst = new float[firstRows];
+    float[] expectedSecond = new float[secondRows];
+    float[] expectedThird = new float[thirdRows];
+    float[] actualFirst = new float[firstRows];
+    float[] actualSecond = new float[secondRows];
+    float[] actualThird = new float[thirdRows];
+
+    VectorUtil.ggufQ8_0Q8_0BatchDotProduct(
+        query, firstWeight, firstRows, cols, expectedFirst, new byte[cols], new float[cols / 32]);
+    VectorUtil.ggufQ8_0Q8_0BatchDotProduct(
+        query,
+        secondWeight,
+        secondRows,
+        cols,
+        expectedSecond,
+        new byte[cols],
+        new float[cols / 32]);
+    VectorUtil.ggufQ8_0Q8_0BatchDotProduct(
+        query, thirdWeight, thirdRows, cols, expectedThird, new byte[cols], new float[cols / 32]);
+
+    VectorUtil.ggufQ8_0Q8_0TripleBatchDotProduct(
+        query,
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        thirdWeight,
+        thirdRows,
+        actualThird,
+        cols,
+        new byte[cols],
+        new float[cols / 32]);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+    assertThat(actualThird).containsExactly(expectedThird);
+  }
+
+  @Test
   void activationQuantizedBatchDotProducts_rejectUndersizedScratch() {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment q4 = copy(arena, q4Block(1.0f, ones(32), null));

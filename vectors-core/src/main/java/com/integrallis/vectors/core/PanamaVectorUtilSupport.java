@@ -1622,20 +1622,130 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         rows,
         cols,
         GgufParallelSupport.Q8_MIN_ELEMENTS,
+        row -> out[row] = q8_0Q8_0RowDot(qWeight, row * rowBytes, blocks, q8Quants, q8Scales));
+  }
+
+  @Override
+  public void ggufQ8_0Q8_0DualMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    ggufQ8_0Q8_0GroupedMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        secondWeight,
+        0,
+        secondOut,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  @Override
+  public void ggufQ8_0Q8_0TripleMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    ggufQ8_0Q8_0GroupedMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  private static void ggufQ8_0Q8_0GroupedMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
+
+    long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q8_0_BLOCK_BYTES;
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    int totalRows = Math.addExact(thirdStart, thirdRows);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        thirdWeight,
+        totalRows,
+        cols,
+        GgufParallelSupport.Q8_MIN_ELEMENTS,
         row -> {
-          float sum = 0.0f;
-          long rowOffset = row * rowBytes;
-          for (int block = 0; block < blocks; block++) {
-            long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
-            float scale =
-                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
-            int integerSum =
-                q8_0Q8_0IntegerDot(
-                    qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
-            sum = MathUtil.fma(scale, integerSum, sum);
+          MemorySegment qWeight;
+          float[] out;
+          int matrixRow;
+          if (row < secondStart) {
+            qWeight = firstWeight;
+            out = firstOut;
+            matrixRow = row;
+          } else if (row < thirdStart) {
+            qWeight = secondWeight;
+            out = secondOut;
+            matrixRow = row - secondStart;
+          } else {
+            qWeight = thirdWeight;
+            out = thirdOut;
+            matrixRow = row - thirdStart;
           }
-          out[row] = sum;
+          out[matrixRow] =
+              q8_0Q8_0RowDot(qWeight, matrixRow * rowBytes, blocks, q8Quants, q8Scales);
         });
+  }
+
+  private static float q8_0Q8_0RowDot(
+      MemorySegment qWeight, long rowOffset, int blocks, byte[] q8Quants, float[] q8Scales) {
+    float sum = 0.0f;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+      int integerSum =
+          q8_0Q8_0IntegerDot(
+              qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE);
+      sum = MathUtil.fma(scale, integerSum, sum);
+    }
+    return sum;
   }
 
   private static int q8_0Q8_0IntegerDot(

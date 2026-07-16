@@ -959,6 +959,80 @@ public final class VectorUtil {
     IMPL.ggufQ8_0Q8_0MatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales);
   }
 
+  /**
+   * Multiplies two Q8_0 matrices by the same activation with one Q8_0 quantization and one row
+   * dispatch.
+   */
+  public static void ggufQ8_0Q8_0DualBatchDotProduct(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    checkGgufQuantizedBatchArguments(
+        query, firstWeight, firstRows, cols, firstOut, VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchArguments(
+        query, secondWeight, secondRows, cols, secondOut, VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    IMPL.ggufQ8_0Q8_0DualMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  /**
+   * Multiplies three Q8_0 matrices by the same activation with one Q8_0 quantization and one row
+   * dispatch.
+   */
+  public static void ggufQ8_0Q8_0TripleBatchDotProduct(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    checkGgufQuantizedBatchArguments(
+        query, firstWeight, firstRows, cols, firstOut, VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchArguments(
+        query, secondWeight, secondRows, cols, secondOut, VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchArguments(
+        query, thirdWeight, thirdRows, cols, thirdOut, VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    IMPL.ggufQ8_0Q8_0TripleMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
   /** Batched row-major GEMV over GGUF Q6_K rows. */
   public static void ggufQ6_KBatchDotProduct(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
