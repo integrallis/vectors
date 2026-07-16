@@ -46,7 +46,7 @@ import org.openjdk.jmh.infra.Blackhole;
 @Measurement(iterations = 5, time = 1)
 public class GgufBatchedMatmulBenchmark {
 
-  @Param({"1", "8", "32"})
+  @Param({"1", "2", "4", "8", "32"})
   int batchSize;
 
   @Param("1024")
