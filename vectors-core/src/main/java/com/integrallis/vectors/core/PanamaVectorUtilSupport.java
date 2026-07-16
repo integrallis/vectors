@@ -792,8 +792,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         cols,
         row -> {
           if (VECTOR_BITSIZE >= 256) {
-            FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
-            float minimumContribution = 0.0f;
+            float sum = 0.0f;
             long rowOffset = row * rowBytes;
             for (int block = 0; block < blocks; block++) {
               long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
@@ -822,14 +821,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                 minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
               }
 
-              FloatVector products =
-                  (FloatVector)
-                      blockLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
-              accumulator =
-                  fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, d), accumulator);
-              minimumContribution = MathUtil.fma(-dMin, minimumSum, minimumContribution);
+              int quantizedSum = blockLanes.reduceLanes(VectorOperators.ADD);
+              sum = MathUtil.fma(d, quantizedSum, sum);
+              sum = MathUtil.fma(-dMin, minimumSum, sum);
             }
-            out[row] = accumulator.reduceLanes(VectorOperators.ADD) + minimumContribution;
+            out[row] = sum;
             return;
           }
 
@@ -979,8 +975,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
           // Keep the SIMD body in this lambda. Extracting Vector values defeats C2 scalarization.
           if (VECTOR_BITSIZE >= 256) {
-            FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
-            float minimumContribution = 0.0f;
+            float sum = 0.0f;
             long rowOffset = matrixRow * rowBytes;
             for (int block = 0; block < blocks; block++) {
               long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
@@ -1009,14 +1004,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                 minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
               }
 
-              FloatVector products =
-                  (FloatVector)
-                      blockLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
-              accumulator =
-                  fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, d), accumulator);
-              minimumContribution = MathUtil.fma(-dMin, minimumSum, minimumContribution);
+              int quantizedSum = blockLanes.reduceLanes(VectorOperators.ADD);
+              sum = MathUtil.fma(d, quantizedSum, sum);
+              sum = MathUtil.fma(-dMin, minimumSum, sum);
             }
-            out[matrixRow] = accumulator.reduceLanes(VectorOperators.ADD) + minimumContribution;
+            out[matrixRow] = sum;
             return;
           }
 
