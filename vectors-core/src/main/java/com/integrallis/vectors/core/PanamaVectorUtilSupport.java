@@ -1909,6 +1909,58 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         row -> out[row] = q8_0Q8_0RowDot(qWeight, row * rowBytes, blocks, q8Quants, q8Scales));
   }
 
+  /** SIMD Q8_0 by a batch of Q8_0 activations with row-local weight reuse. */
+  @Override
+  public void ggufQ8_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    if (batchSize == 1) {
+      ggufQ8_0Q8_0MatVecDot(queries, qWeight, rows, cols, out, q8Quants, q8Scales);
+      return;
+    }
+
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_0(
+          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
+    }
+
+    long rowBytes = (long) blocks * GGUF_Q8_0_BLOCK_BYTES;
+    int effectiveCols = Math.multiplyExact(cols, batchSize);
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        effectiveCols,
+        GgufParallelSupport.Q8_MIN_ELEMENTS,
+        row -> {
+          for (int batch = 0; batch < batchSize; batch++) {
+            out[batch * rows + row] = 0.0f;
+          }
+
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+            float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+            long weightOffset = blockOffset + Short.BYTES;
+            int blockActivationOffset = block * GGUF_Q_BLOCK_SIZE;
+            for (int batch = 0; batch < batchSize; batch++) {
+              float scale = weightScale * q8Scales[batch * blocks + block];
+              int integerSum =
+                  q8_0Q8_0IntegerDot(
+                      qWeight, weightOffset, q8Quants, batch * cols + blockActivationOffset);
+              int outputIndex = batch * rows + row;
+              out[outputIndex] = MathUtil.fma(scale, integerSum, out[outputIndex]);
+            }
+          }
+        });
+  }
+
   @Override
   public void ggufQ8_0Q8_0DualMatVecDot(
       float[] query,
