@@ -864,6 +864,109 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
+  /** SIMD Q4_K by a batch of Q8_K activations with row-local weight reuse. */
+  @Override
+  public void ggufQ4_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    if (batchSize == 1) {
+      ggufQ4_KQ8_KMatVecDot(queries, qWeight, rows, cols, out, q8Quants, q8Scales, q8Sums);
+      return;
+    }
+
+    int blocks = cols / GGUF_Q4_K_BLOCK_SIZE;
+    int sumsPerBatch = cols / GGUF_Q8_K_SUM_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_K(
+          queries,
+          batch * cols,
+          cols,
+          q8Quants,
+          batch * cols,
+          q8Scales,
+          batch * blocks,
+          q8Sums,
+          batch * sumsPerBatch);
+    }
+
+    long rowBytes = (long) blocks * GGUF_Q4_K_BLOCK_BYTES;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          for (int batch = 0; batch < batchSize; batch++) {
+            out[batch * rows + row] = 0.0f;
+          }
+
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
+            float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+            float weightMinScale =
+                Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES));
+            long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
+            long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
+            int blockActivationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
+
+            for (int batch = 0; batch < batchSize; batch++) {
+              int quantBatchOffset = batch * cols;
+              int scaleBatchOffset = batch * blocks;
+              int sumBatchOffset = batch * sumsPerBatch;
+              float q8Scale = q8Scales[scaleBatchOffset + block];
+              float d = weightScale * q8Scale;
+              float dMin = weightMinScale * q8Scale;
+              int quantizedSum = 0;
+              int minimumSum = 0;
+
+              for (int group = 0; group < 8; group++) {
+                int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+                int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+                long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+                int shift = (group & 1) * 4;
+                int groupActivationOffset = blockActivationOffset + group * 32;
+                int groupDot;
+                if (VECTOR_BITSIZE >= 256) {
+                  IntVector groupLanes =
+                      q4_KQ8_KIntegerLanes(
+                          qWeight,
+                          packedOffset,
+                          shift,
+                          q8Quants,
+                          quantBatchOffset + groupActivationOffset);
+                  groupDot = groupLanes.reduceLanes(VectorOperators.ADD);
+                } else {
+                  groupDot =
+                      q4_KQ8_KIntegerDot(
+                          qWeight,
+                          packedOffset,
+                          shift,
+                          q8Quants,
+                          quantBatchOffset + groupActivationOffset);
+                }
+                quantizedSum += scale * groupDot;
+                int activationSumOffset =
+                    sumBatchOffset + groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+                minimumSum += min * (q8Sums[activationSumOffset] + q8Sums[activationSumOffset + 1]);
+              }
+
+              int outputOffset = batch * rows + row;
+              float sum = out[outputOffset];
+              sum = MathUtil.fma(d, quantizedSum, sum);
+              sum = MathUtil.fma(-dMin, minimumSum, sum);
+              out[outputOffset] = sum;
+            }
+          }
+        });
+  }
+
   @Override
   public void ggufQ4_KQ8_KDualMatVecDot(
       float[] query,

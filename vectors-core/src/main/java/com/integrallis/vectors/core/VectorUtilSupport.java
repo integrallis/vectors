@@ -707,6 +707,54 @@ public interface VectorUtilSupport {
                     qWeight, row * rowBytes, blocks, q8Quants, q8Scales, q8Sums));
   }
 
+  /** Q4_K matrix multiplication over batch-major Q8_K-quantized activation rows. */
+  default void ggufQ4_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    int blocks = cols / GGUF_Q4_K_BLOCK_SIZE;
+    int sumsPerBatch = cols / GGUF_Q8_K_SUM_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_K(
+          queries,
+          batch * cols,
+          cols,
+          q8Quants,
+          batch * cols,
+          q8Scales,
+          batch * blocks,
+          q8Sums,
+          batch * sumsPerBatch);
+    }
+
+    long rowBytes = ggufQ4_KRowBytes(cols);
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          for (int batch = 0; batch < batchSize; batch++) {
+            out[batch * rows + row] =
+                ggufQ4_KQ8_KScalarRowDot(
+                    qWeight,
+                    row * rowBytes,
+                    blocks,
+                    q8Quants,
+                    batch * cols,
+                    q8Scales,
+                    batch * blocks,
+                    q8Sums,
+                    batch * sumsPerBatch);
+          }
+        });
+  }
+
   /** Two Q4_K projections sharing one Q8_K activation quantization and row dispatch. */
   default void ggufQ4_KQ8_KDualMatVecDot(
       float[] query,
@@ -800,16 +848,30 @@ public interface VectorUtilSupport {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    return ggufQ4_KQ8_KScalarRowDot(
+        qWeight, rowOffset, blocks, q8Quants, 0, q8Scales, 0, q8Sums, 0);
+  }
+
+  private static float ggufQ4_KQ8_KScalarRowDot(
+      MemorySegment qWeight,
+      long rowOffset,
+      int blocks,
+      byte[] q8Quants,
+      int quantBatchOffset,
+      float[] q8Scales,
+      int scaleBatchOffset,
+      short[] q8Sums,
+      int sumBatchOffset) {
     float sum = 0.0f;
     for (int block = 0; block < blocks; block++) {
       long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
-      float q8Scale = q8Scales[block];
+      float q8Scale = q8Scales[scaleBatchOffset + block];
       float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
       float dMin =
           Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES)) * q8Scale;
       long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
       long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
-      int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
+      int activationOffset = quantBatchOffset + block * GGUF_Q4_K_BLOCK_SIZE;
       int quantizedSum = 0;
       int minimumSum = 0;
 
@@ -826,7 +888,8 @@ public interface VectorUtilSupport {
           groupDot += quant * q8Quants[groupActivationOffset + index];
         }
         quantizedSum += scale * groupDot;
-        int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+        int sumOffset =
+            sumBatchOffset + (groupActivationOffset - quantBatchOffset) / GGUF_Q8_K_SUM_BLOCK_SIZE;
         minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
       }
 

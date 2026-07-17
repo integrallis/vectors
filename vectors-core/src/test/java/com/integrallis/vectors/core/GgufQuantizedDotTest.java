@@ -935,6 +935,127 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_KQ8_KBatchedMatmulMatchesIndependentQueriesExactly() {
+    int batchSize = 3;
+    int rows = 2;
+    int cols = 512;
+    float[] queries = new float[batchSize * cols];
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int col = 0; col < cols; col++) {
+        queries[batch * cols + col] =
+            (float) Math.sin((batch + 1.0) * (col + 0.25)) * (batch + 0.5f);
+      }
+    }
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] firstBlock = q4KBlock(0.125f, 0.0625f, i -> i % 16, scales, mins);
+    byte[] secondBlock = q4KBlock(-0.25f, 0.03125f, i -> 15 - i % 16, scales, mins);
+    MemorySegment weights =
+        MemorySegment.ofArray(
+            concat(concat(firstBlock, secondBlock), concat(secondBlock, firstBlock)));
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] query = new float[cols];
+    float[] result = new float[rows];
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      System.arraycopy(queries, batch * cols, query, 0, cols);
+      VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+          query,
+          weights,
+          rows,
+          cols,
+          result,
+          new byte[cols],
+          new float[cols / 256],
+          new short[cols / 16]);
+      System.arraycopy(result, 0, expected, batch * rows, rows);
+    }
+
+    VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        actual,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 256)],
+        new short[batchSize * (cols / 16)]);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q4_KQ8_KBatchedMatmulMatchesGemvAtProjectionScaleAfterWarmup() {
+    int batchSize = 4;
+    int rows = 512;
+    int cols = 2_048;
+    int blocks = cols / 256;
+    Random random = new Random(0xB47C_4B48L);
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = random.nextFloat() * 8.0f - 4.0f;
+    }
+    byte[] matrix = new byte[rows * blocks * 144];
+    random.nextBytes(matrix);
+    ByteBuffer matrixBuffer = ByteBuffer.wrap(matrix).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < matrix.length; offset += 144) {
+      matrixBuffer.putShort(offset, Float.floatToFloat16(0.001f + random.nextFloat() * 0.1f));
+      matrixBuffer.putShort(offset + Short.BYTES, Float.floatToFloat16(random.nextFloat() * 0.05f));
+    }
+
+    MemorySegment weights = MemorySegment.ofArray(matrix);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] query = new float[cols];
+    float[] gemvOut = new float[rows];
+    byte[] gemvQuants = new byte[cols];
+    float[] gemvScales = new float[blocks];
+    short[] gemvSums = new short[cols / 16];
+    byte[] batchQuants = new byte[batchSize * cols];
+    float[] batchScales = new float[batchSize * blocks];
+    short[] batchSums = new short[batchSize * (cols / 16)];
+
+    for (int iteration = 0; iteration < 12; iteration++) {
+      for (int batch = 0; batch < batchSize; batch++) {
+        System.arraycopy(queries, batch * cols, query, 0, cols);
+        VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+            query, weights, rows, cols, gemvOut, gemvQuants, gemvScales, gemvSums);
+        System.arraycopy(gemvOut, 0, expected, batch * rows, rows);
+      }
+
+      VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
+          queries, weights, batchSize, rows, cols, actual, batchQuants, batchScales, batchSums);
+      assertThat(actual).containsExactly(expected);
+    }
+  }
+
+  @Test
+  void q4_KQ8_KBatchedMatmulRejectsUndersizedSumScratch() {
+    int batchSize = 2;
+    int cols = 256;
+    int[] unitScales = {1, 1, 1, 1, 1, 1, 1, 1};
+    MemorySegment weights =
+        MemorySegment.ofArray(q4KBlock(1.0f, 0.0f, ignored -> 1, unitScales, new int[8]));
+
+    assertThatThrownBy(
+            () ->
+                VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
+                    new float[batchSize * cols],
+                    weights,
+                    batchSize,
+                    1,
+                    cols,
+                    new float[batchSize],
+                    new byte[batchSize * cols],
+                    new float[batchSize],
+                    new short[batchSize * (cols / 16) - 1]))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("q8Sums");
+  }
+
+  @Test
   void q4_KQ8_KDualBatchDotProductMatchesSeparateMatmulsExactly() {
     int cols = 256;
     int firstRows = 3;

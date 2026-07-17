@@ -58,6 +58,19 @@ final class GgufQuantizationSupport {
 
   static void quantizeQ8_K(
       float[] query, int dimensions, byte[] quants, float[] scales, short[] sums) {
+    quantizeQ8_K(query, 0, dimensions, quants, 0, scales, 0, sums, 0);
+  }
+
+  static void quantizeQ8_K(
+      float[] query,
+      int queryOffset,
+      int dimensions,
+      byte[] quants,
+      int quantOffset,
+      float[] scales,
+      int scaleOffset,
+      short[] sums,
+      int sumOffset) {
     int blockSize = VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE;
     int sumBlockSize = VectorUtilSupport.GGUF_Q8_K_SUM_BLOCK_SIZE;
     int blocks = dimensions / blockSize;
@@ -66,7 +79,7 @@ final class GgufQuantizationSupport {
       float max = 0.0f;
       float absoluteMax = 0.0f;
       for (int index = 0; index < blockSize; index++) {
-        float value = query[offset + index];
+        float value = query[queryOffset + offset + index];
         float absolute = Math.abs(value);
         if (absolute > absoluteMax) {
           absoluteMax = absolute;
@@ -75,29 +88,33 @@ final class GgufQuantizationSupport {
       }
 
       if (absoluteMax == 0.0f) {
-        Arrays.fill(quants, offset, offset + blockSize, (byte) 0);
+        Arrays.fill(quants, quantOffset + offset, quantOffset + offset + blockSize, (byte) 0);
         if (sums != null) {
-          Arrays.fill(sums, offset / sumBlockSize, (offset + blockSize) / sumBlockSize, (short) 0);
+          Arrays.fill(
+              sums,
+              sumOffset + offset / sumBlockSize,
+              sumOffset + (offset + blockSize) / sumBlockSize,
+              (short) 0);
         }
-        scales[block] = 0.0f;
+        scales[scaleOffset + block] = 0.0f;
         continue;
       }
 
       float inverseScale = -127.0f / max;
       int sum = 0;
       for (int index = 0; index < blockSize; index++) {
-        int quant = ggmlNearestInt(inverseScale * query[offset + index]);
+        int quant = ggmlNearestInt(inverseScale * query[queryOffset + offset + index]);
         byte stored = (byte) Math.min(127, quant);
-        quants[offset + index] = stored;
+        quants[quantOffset + offset + index] = stored;
         if (sums != null) {
           sum += stored;
           if ((index + 1) % sumBlockSize == 0) {
-            sums[(offset + index) / sumBlockSize] = (short) sum;
+            sums[sumOffset + (offset + index) / sumBlockSize] = (short) sum;
             sum = 0;
           }
         }
       }
-      scales[block] = 1.0f / inverseScale;
+      scales[scaleOffset + block] = 1.0f / inverseScale;
     }
   }
 
