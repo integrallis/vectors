@@ -1646,6 +1646,95 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
+  /** SIMD Q6_K by a batch of Q8_K activations with row-local weight reuse. */
+  @Override
+  public void ggufQ6_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    if (batchSize == 1) {
+      ggufQ6_KQ8_KMatVecDot(queries, qWeight, rows, cols, out, q8Quants, q8Scales);
+      return;
+    }
+    if (VECTOR_BITSIZE < 256) {
+      VectorUtilSupport.super.ggufQ6_KQ8_KBatchedMatmul(
+          queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
+      return;
+    }
+
+    int blocks = cols / GGUF_Q6_K_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_K(
+          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks, null, 0);
+    }
+
+    long rowBytes = (long) blocks * GGUF_Q6_K_BLOCK_BYTES;
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
+        row -> {
+          for (int batch = 0; batch < batchSize; batch++) {
+            out[batch * rows + row] = 0.0f;
+          }
+
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+            float weightScale =
+                Float.float16ToFloat(
+                    qWeight.get(
+                        GGUF_LE_SHORT,
+                        blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES));
+            long qlOffset = blockOffset;
+            long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+            long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+            int blockActivationOffset = block * GGUF_Q6_K_BLOCK_SIZE;
+
+            for (int batch = 0; batch < batchSize; batch++) {
+              int quantBatchOffset = batch * cols;
+              int scaleBatchOffset = batch * blocks;
+              int blockSum = 0;
+
+              for (int superBlock = 0; superBlock < 2; superBlock++) {
+                long qlBase = qlOffset + (long) superBlock * 64;
+                long qhBase = qhOffset + (long) superBlock * 32;
+                long scaleBase = scaleOffset + (long) superBlock * 8;
+                int quantBase = quantBatchOffset + blockActivationOffset + superBlock * 128;
+                for (int chunk = 0; chunk < 32; chunk += 16) {
+                  int scaleIndex = chunk / 16;
+                  int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
+                  int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
+                  int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
+                  int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
+                  blockSum +=
+                      q6_KQ8_KIntegerDot(
+                          qWeight,
+                          qlBase + chunk,
+                          qlBase + 32L + chunk,
+                          qhBase + chunk,
+                          q8Quants,
+                          quantBase + chunk,
+                          s1,
+                          s2,
+                          s3,
+                          s4);
+                }
+              }
+
+              int outputOffset = batch * rows + row;
+              float d = weightScale * q8Scales[scaleBatchOffset + block];
+              out[outputOffset] = MathUtil.fma(d, blockSum, out[outputOffset]);
+            }
+          }
+        });
+  }
+
   static int q6_KQ8_KIntegerDot(
       MemorySegment qWeight,
       long ql1Offset,

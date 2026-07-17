@@ -881,6 +881,112 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q6_KQ8_KBatchedMatmulMatchesIndependentQueriesExactly() {
+    int batchSize = 3;
+    int rows = 2;
+    int cols = 512;
+    float[] queries = new float[batchSize * cols];
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int col = 0; col < cols; col++) {
+        queries[batch * cols + col] =
+            (float) Math.cos((batch + 0.75) * (col + 0.5)) * (batch + 0.25f);
+      }
+    }
+    byte[] firstBlock = q6KBlock(0.125f, index -> (index * 5 + 3) % 64 - 32, index -> index - 8);
+    byte[] secondBlock = q6KBlock(-0.25f, index -> 31 - (index % 64), index -> 7 - index);
+    MemorySegment weights =
+        MemorySegment.ofArray(
+            concat(concat(firstBlock, secondBlock), concat(secondBlock, firstBlock)));
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] query = new float[cols];
+    float[] result = new float[rows];
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      System.arraycopy(queries, batch * cols, query, 0, cols);
+      VectorUtil.ggufQ6_KQ8_KBatchDotProduct(
+          query, weights, rows, cols, result, new byte[cols], new float[cols / 256]);
+      System.arraycopy(result, 0, expected, batch * rows, rows);
+    }
+
+    VectorUtil.ggufQ6_KQ8_KBatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        actual,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 256)]);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q6_KQ8_KBatchedMatmulMatchesGemvAtProjectionScaleAfterWarmup() {
+    int batchSize = 4;
+    int rows = 512;
+    int cols = 2_048;
+    int blocks = cols / 256;
+    int blockBytes = 210;
+    Random random = new Random(0xB47C_6B48L);
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = random.nextFloat() * 8.0f - 4.0f;
+    }
+    byte[] matrix = new byte[rows * blocks * blockBytes];
+    random.nextBytes(matrix);
+    ByteBuffer matrixBuffer = ByteBuffer.wrap(matrix).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < matrix.length; offset += blockBytes) {
+      matrixBuffer.putShort(offset + 208, Float.floatToFloat16(0.001f + random.nextFloat() * 0.1f));
+    }
+
+    MemorySegment weights = MemorySegment.ofArray(matrix);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] query = new float[cols];
+    float[] gemvOut = new float[rows];
+    byte[] gemvQuants = new byte[cols];
+    float[] gemvScales = new float[blocks];
+    byte[] batchQuants = new byte[batchSize * cols];
+    float[] batchScales = new float[batchSize * blocks];
+
+    for (int iteration = 0; iteration < 12; iteration++) {
+      for (int batch = 0; batch < batchSize; batch++) {
+        System.arraycopy(queries, batch * cols, query, 0, cols);
+        VectorUtil.ggufQ6_KQ8_KBatchDotProduct(
+            query, weights, rows, cols, gemvOut, gemvQuants, gemvScales);
+        System.arraycopy(gemvOut, 0, expected, batch * rows, rows);
+      }
+
+      VectorUtil.ggufQ6_KQ8_KBatchedMatmul(
+          queries, weights, batchSize, rows, cols, actual, batchQuants, batchScales);
+      assertThat(actual).containsExactly(expected);
+    }
+  }
+
+  @Test
+  void q6_KQ8_KBatchedMatmulRejectsUndersizedScaleScratch() {
+    int batchSize = 2;
+    int cols = 256;
+    MemorySegment weights = MemorySegment.ofArray(q6KBlock(1.0f, ignored -> 1, ignored -> 1));
+
+    assertThatThrownBy(
+            () ->
+                VectorUtil.ggufQ6_KQ8_KBatchedMatmul(
+                    new float[batchSize * cols],
+                    weights,
+                    batchSize,
+                    1,
+                    cols,
+                    new float[batchSize],
+                    new byte[batchSize * cols],
+                    new float[batchSize - 1]))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("q8Scales");
+  }
+
+  @Test
   void q4_KQ8_KBatchDotProduct_quantizesTheQueryOnceUsingGgmlSemantics() {
     float[] query = new float[256];
     query[0] = 1.0f;

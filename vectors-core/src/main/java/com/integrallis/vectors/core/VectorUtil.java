@@ -1151,6 +1151,69 @@ public final class VectorUtil {
   }
 
   /**
+   * Multiplies one Q6_K matrix by a batch-major collection of activation vectors.
+   *
+   * <p>{@code queries} is laid out as {@code [batchSize][cols]} and {@code out} as {@code
+   * [batchSize][rows]}. Each activation row is quantized independently to Q8_K in caller-owned
+   * scratch before the matrix rows are evaluated.
+   *
+   * @param q8Quants scratch space with at least {@code batchSize * cols} entries
+   * @param q8Scales scratch space with at least {@code batchSize * (cols / 256)} entries
+   */
+  public static void ggufQ6_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
+    }
+    if (rows < 1) {
+      throw new IllegalArgumentException("rows must be >= 1: " + rows);
+    }
+    Objects.requireNonNull(queries, "queries");
+    Objects.requireNonNull(out, "out");
+    Objects.requireNonNull(q8Quants, "q8Quants");
+    Objects.requireNonNull(q8Scales, "q8Scales");
+    checkGgufQuantizedMatrixArguments(
+        qWeight,
+        rows,
+        cols,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_BYTES);
+    int queryEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    int scaleEntries =
+        checkedProduct(
+            batchSize, cols / VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE, "batch Q8_K scales");
+    if (queries.length < queryEntries) {
+      throw new IllegalArgumentException(
+          "queries.length must be >= batchSize * cols: " + queries.length + " < " + queryEntries);
+    }
+    if (out.length < outputEntries) {
+      throw new IllegalArgumentException(
+          "out.length must be >= batchSize * rows: " + out.length + " < " + outputEntries);
+    }
+    if (q8Quants.length < queryEntries) {
+      throw new IllegalArgumentException(
+          "q8Quants.length must be >= batchSize * cols: " + q8Quants.length + " < " + queryEntries);
+    }
+    if (q8Scales.length < scaleEntries) {
+      throw new IllegalArgumentException(
+          "q8Scales.length must be >= batch Q8_K scales: "
+              + q8Scales.length
+              + " < "
+              + scaleEntries);
+    }
+    IMPL.ggufQ6_KQ8_KBatchedMatmul(
+        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
+  }
+
+  /**
    * Fills {@code out[i]} with the squared L2 distance from {@code query} to {@code matrix[i]} for
    * all rows {@code i} in {@code [0, matrix.length)}. {@code out.length} must be &ge; {@code
    * matrix.length}.
