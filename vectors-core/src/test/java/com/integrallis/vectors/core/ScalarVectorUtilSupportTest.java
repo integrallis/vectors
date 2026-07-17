@@ -129,6 +129,60 @@ class ScalarVectorUtilSupportTest {
     assertThat(out).containsExactly(-2f, 8.5f);
   }
 
+  @Test
+  void q4_KBatchedMatmulMatchesIndependentScalarQueriesExactly() {
+    int batchSize = 3;
+    int rows = 2;
+    int cols = 512;
+    float[] queries = new float[batchSize * cols];
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int col = 0; col < cols; col++) {
+        queries[batch * cols + col] =
+            (float) Math.sin((batch + 1.0) * (col + 0.5)) * (batch + 0.25f);
+      }
+    }
+    byte[] matrix = new byte[rows * (cols / 256) * 144];
+    for (int index = 0; index < matrix.length; index++) {
+      matrix[index] = (byte) (index * 31 + 7);
+    }
+    ByteBuffer matrixBuffer = ByteBuffer.wrap(matrix).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < matrix.length; offset += 144) {
+      matrixBuffer.putShort(offset, Float.floatToFloat16(0.01f));
+      matrixBuffer.putShort(offset + Short.BYTES, Float.floatToFloat16(0.005f));
+    }
+    MemorySegment weights = MemorySegment.ofArray(matrix);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] query = new float[cols];
+    float[] result = new float[rows];
+    for (int batch = 0; batch < batchSize; batch++) {
+      System.arraycopy(queries, batch * cols, query, 0, cols);
+      scalar.ggufQ4_KQ8_KMatVecDot(
+          query,
+          weights,
+          rows,
+          cols,
+          result,
+          new byte[cols],
+          new float[cols / 256],
+          new short[cols / 16]);
+      System.arraycopy(result, 0, expected, batch * rows, rows);
+    }
+
+    scalar.ggufQ4_KQ8_KBatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        actual,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 256)],
+        new short[batchSize * (cols / 16)]);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
   private static float referenceDot(float[] a, int ao, float[] b, int bo, int length) {
     float result = 0f;
     for (int i = 0; i < length; i++) result = Math.fma(a[ao + i], b[bo + i], result);

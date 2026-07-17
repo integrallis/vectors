@@ -649,6 +649,79 @@ public final class VectorUtil {
     IMPL.ggufQ4_KQ8_KMatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales, q8Sums);
   }
 
+  /**
+   * Multiplies one Q4_K matrix by a batch-major collection of activation vectors.
+   *
+   * <p>{@code queries} is laid out as {@code [batchSize][cols]} and {@code out} as {@code
+   * [batchSize][rows]}. Each activation row is quantized independently to Q8_K in caller-owned
+   * scratch before the matrix rows are evaluated.
+   *
+   * @param q8Quants scratch space with at least {@code batchSize * cols} entries
+   * @param q8Scales scratch space with at least {@code batchSize * (cols / 256)} entries
+   * @param q8Sums scratch space with at least {@code batchSize * (cols / 16)} entries
+   */
+  public static void ggufQ4_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
+    }
+    if (rows < 1) {
+      throw new IllegalArgumentException("rows must be >= 1: " + rows);
+    }
+    Objects.requireNonNull(queries, "queries");
+    Objects.requireNonNull(out, "out");
+    Objects.requireNonNull(q8Quants, "q8Quants");
+    Objects.requireNonNull(q8Scales, "q8Scales");
+    Objects.requireNonNull(q8Sums, "q8Sums");
+    checkGgufQuantizedMatrixArguments(
+        qWeight,
+        rows,
+        cols,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_BYTES);
+    int queryEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    int scaleEntries =
+        checkedProduct(
+            batchSize, cols / VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE, "batch Q8_K scales");
+    int sumEntries =
+        checkedProduct(
+            batchSize, cols / VectorUtilSupport.GGUF_Q8_K_SUM_BLOCK_SIZE, "batch Q8_K sums");
+    if (queries.length < queryEntries) {
+      throw new IllegalArgumentException(
+          "queries.length must be >= batchSize * cols: " + queries.length + " < " + queryEntries);
+    }
+    if (out.length < outputEntries) {
+      throw new IllegalArgumentException(
+          "out.length must be >= batchSize * rows: " + out.length + " < " + outputEntries);
+    }
+    if (q8Quants.length < queryEntries) {
+      throw new IllegalArgumentException(
+          "q8Quants.length must be >= batchSize * cols: " + q8Quants.length + " < " + queryEntries);
+    }
+    if (q8Scales.length < scaleEntries) {
+      throw new IllegalArgumentException(
+          "q8Scales.length must be >= batch Q8_K scales: "
+              + q8Scales.length
+              + " < "
+              + scaleEntries);
+    }
+    if (q8Sums.length < sumEntries) {
+      throw new IllegalArgumentException(
+          "q8Sums.length must be >= batch Q8_K sums: " + q8Sums.length + " < " + sumEntries);
+    }
+    IMPL.ggufQ4_KQ8_KBatchedMatmul(
+        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, q8Sums);
+  }
+
   /** Multiplies two Q4_K matrices by one shared Q8_K activation quantization and row dispatch. */
   public static void ggufQ4_KQ8_KDualBatchDotProduct(
       float[] query,

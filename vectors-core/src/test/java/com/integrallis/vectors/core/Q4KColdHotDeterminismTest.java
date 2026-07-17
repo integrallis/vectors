@@ -29,12 +29,21 @@ class Q4KColdHotDeterminismTest {
 
   @Test
   void q4_K256BitKernelIsBitIdenticalBeforeAndAfterCompilation() throws Exception {
+    runProbe(256);
+  }
+
+  @Test
+  void q4_K128BitKernelIsBitIdenticalBeforeAndAfterCompilation() throws Exception {
+    runProbe(128);
+  }
+
+  private static void runProbe(int maxBits) throws Exception {
     Process process =
         new ProcessBuilder(
                 javaExecutable(),
                 "--add-modules",
                 "jdk.incubator.vector",
-                "-Dvectors.maxBits=256",
+                "-Dvectors.maxBits=" + maxBits,
                 "-Dvectors.gguf.parallel=false",
                 "-cp",
                 System.getProperty("java.class.path"),

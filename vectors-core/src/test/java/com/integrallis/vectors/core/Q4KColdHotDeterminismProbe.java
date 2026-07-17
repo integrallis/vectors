@@ -26,6 +26,7 @@ final class Q4KColdHotDeterminismProbe {
 
   private static final int ROWS = 4_096;
   private static final int COLS = 3_584;
+  private static final int BATCH_SIZE = 4;
   private static final int Q4_K_BLOCK_BYTES = 144;
 
   private Q4KColdHotDeterminismProbe() {}
@@ -59,17 +60,59 @@ final class Q4KColdHotDeterminismProbe {
           query, weightSegment, ROWS, COLS, current, quants, scales, sums);
     }
 
-    if (!Arrays.equals(first, current)) {
-      for (int row = 0; row < ROWS; row++) {
-        if (Float.floatToRawIntBits(first[row]) != Float.floatToRawIntBits(current[row])) {
-          throw new AssertionError(
-              "Q4_K cold/hot mismatch at row "
-                  + row
-                  + ": first="
-                  + first[row]
-                  + ", hot="
-                  + current[row]);
-        }
+    assertBitIdentical("Q4_K GEMV", first, current);
+
+    float[] queries = new float[BATCH_SIZE * COLS];
+    for (int batch = 0; batch < BATCH_SIZE; batch++) {
+      for (int col = 0; col < COLS; col++) {
+        queries[batch * COLS + col] = random.nextFloat() * (batch + 1.0f) - batch * 0.5f;
+      }
+    }
+    byte[] batchQuants = new byte[BATCH_SIZE * COLS];
+    float[] batchScales = new float[BATCH_SIZE * (COLS / 256)];
+    short[] batchSums = new short[BATCH_SIZE * (COLS / 16)];
+    float[] firstBatch = new float[BATCH_SIZE * ROWS];
+    float[] currentBatch = new float[BATCH_SIZE * ROWS];
+
+    provider.ggufQ4_KQ8_KBatchedMatmul(
+        queries,
+        weightSegment,
+        BATCH_SIZE,
+        ROWS,
+        COLS,
+        firstBatch,
+        batchQuants,
+        batchScales,
+        batchSums);
+    for (int iteration = 0; iteration < 8; iteration++) {
+      provider.ggufQ4_KQ8_KBatchedMatmul(
+          queries,
+          weightSegment,
+          BATCH_SIZE,
+          ROWS,
+          COLS,
+          currentBatch,
+          batchQuants,
+          batchScales,
+          batchSums);
+    }
+    assertBitIdentical("Q4_K batched matmul", firstBatch, currentBatch);
+  }
+
+  private static void assertBitIdentical(String operation, float[] first, float[] current) {
+    if (Arrays.equals(first, current)) {
+      return;
+    }
+    for (int index = 0; index < first.length; index++) {
+      if (Float.floatToRawIntBits(first[index]) != Float.floatToRawIntBits(current[index])) {
+        throw new AssertionError(
+            operation
+                + " cold/hot mismatch at index "
+                + index
+                + ": first="
+                + first[index]
+                + ", hot="
+                + current[index]);
       }
     }
   }
