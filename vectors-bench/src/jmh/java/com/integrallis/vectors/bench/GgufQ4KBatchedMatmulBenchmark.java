@@ -80,15 +80,7 @@ public class GgufQ4KBatchedMatmulBenchmark {
       }
     }
 
-    byte[] blocks = new byte[rows * (cols / 256) * 144];
-    random.nextBytes(blocks);
-    ByteBuffer buffer = ByteBuffer.wrap(blocks).order(ByteOrder.LITTLE_ENDIAN);
-    short scale = Float.floatToFloat16(0.01f);
-    short minScale = Float.floatToFloat16(0.005f);
-    for (int offset = 0; offset < blocks.length; offset += 144) {
-      buffer.putShort(offset, scale);
-      buffer.putShort(offset + Short.BYTES, minScale);
-    }
+    byte[] blocks = randomQ4KBlocks(random, rows * (cols / 256) * 144);
     weights = MemorySegment.ofArray(blocks);
     batchedOut = new float[batchSize * rows];
     independentOut = new float[rows];
@@ -98,6 +90,19 @@ public class GgufQ4KBatchedMatmulBenchmark {
     independentQuants = new byte[cols];
     independentScales = new float[cols / 256];
     independentSums = new short[cols / 16];
+  }
+
+  private static byte[] randomQ4KBlocks(Random random, int byteCount) {
+    byte[] blocks = new byte[byteCount];
+    random.nextBytes(blocks);
+    ByteBuffer buffer = ByteBuffer.wrap(blocks).order(ByteOrder.LITTLE_ENDIAN);
+    short scale = Float.floatToFloat16(0.01f);
+    short minScale = Float.floatToFloat16(0.005f);
+    for (int offset = 0; offset < blocks.length; offset += 144) {
+      buffer.putShort(offset, scale);
+      buffer.putShort(offset + Short.BYTES, minScale);
+    }
+    return blocks;
   }
 
   @Benchmark
