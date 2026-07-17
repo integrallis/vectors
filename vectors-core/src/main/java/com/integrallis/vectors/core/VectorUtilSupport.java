@@ -1141,69 +1141,113 @@ public interface VectorUtilSupport {
         qWeight,
         rows,
         cols,
+        row ->
+            out[row] =
+                ggufQ6_KQ8_KScalarRowDot(
+                    qWeight, row * rowBytes, blocks, q8Quants, 0, q8Scales, 0));
+  }
+
+  /** Q6_K matrix multiplication over batch-major Q8_K-quantized activation rows. */
+  default void ggufQ6_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    int blocks = cols / GGUF_Q6_K_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_K(
+          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks, null, 0);
+    }
+
+    long rowBytes = ggufQ6_KRowBytes(cols);
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        cols,
         row -> {
-          GgufQuantizationSupport.Q6Scratch scratch = GgufQuantizationSupport.q6Scratch();
-          int[] integerSums = scratch.integerSums;
-          float[] laneSums = scratch.laneSums;
-          java.util.Arrays.fill(laneSums, 0.0f);
-          long rowOffset = row * rowBytes;
-
-          for (int block = 0; block < blocks; block++) {
-            java.util.Arrays.fill(integerSums, 0);
-            long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
-            float d =
-                Float.float16ToFloat(
-                        qWeight.get(
-                            GGUF_LE_SHORT,
-                            blockOffset
-                                + GGUF_Q6_K_QL_BYTES
-                                + GGUF_Q6_K_QH_BYTES
-                                + GGUF_Q6_K_SCALES))
-                    * q8Scales[block];
-            long qlOffset = blockOffset;
-            long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
-            long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
-            int queryOffset = block * GGUF_Q6_K_BLOCK_SIZE;
-
-            for (int superBlock = 0; superBlock < 2; superBlock++) {
-              long qlBase = qlOffset + (long) superBlock * 64;
-              long qhBase = qhOffset + (long) superBlock * 32;
-              long scaleBase = scaleOffset + (long) superBlock * 8;
-              int quantBase = queryOffset + superBlock * 128;
-
-              for (int index = 0; index < 32; index++) {
-                int scaleIndex = index / 16;
-                int ql1 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + index) & 0xFF;
-                int ql2 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + 32L + index) & 0xFF;
-                int qh = qWeight.get(ValueLayout.JAVA_BYTE, qhBase + index) & 0xFF;
-                int q1 = ((ql1 & 0x0F) | ((qh & 0x03) << 4)) - 32;
-                int q2 = ((ql2 & 0x0F) | (((qh >>> 2) & 0x03) << 4)) - 32;
-                int q3 = ((ql1 >>> 4) | (((qh >>> 4) & 0x03) << 4)) - 32;
-                int q4 = ((ql2 >>> 4) | (((qh >>> 6) & 0x03) << 4)) - 32;
-                int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
-                int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
-                int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
-                int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
-                int lane = index & 7;
-
-                integerSums[lane] += s1 * q1 * q8Quants[quantBase + index];
-                integerSums[lane] += s2 * q2 * q8Quants[quantBase + index + 32];
-                integerSums[lane] += s3 * q3 * q8Quants[quantBase + index + 64];
-                integerSums[lane] += s4 * q4 * q8Quants[quantBase + index + 96];
-              }
-            }
-
-            for (int lane = 0; lane < laneSums.length; lane++) {
-              laneSums[lane] = MathUtil.fma(d, integerSums[lane], laneSums[lane]);
-            }
+          for (int batch = 0; batch < batchSize; batch++) {
+            out[batch * rows + row] =
+                ggufQ6_KQ8_KScalarRowDot(
+                    qWeight,
+                    row * rowBytes,
+                    blocks,
+                    q8Quants,
+                    batch * cols,
+                    q8Scales,
+                    batch * blocks);
           }
-
-          float sum = 0.0f;
-          for (float laneSum : laneSums) {
-            sum += laneSum;
-          }
-          out[row] = sum;
         });
+  }
+
+  private static float ggufQ6_KQ8_KScalarRowDot(
+      MemorySegment qWeight,
+      long rowOffset,
+      int blocks,
+      byte[] q8Quants,
+      int quantBatchOffset,
+      float[] q8Scales,
+      int scaleBatchOffset) {
+    GgufQuantizationSupport.Q6Scratch scratch = GgufQuantizationSupport.q6Scratch();
+    int[] integerSums = scratch.integerSums;
+    float[] laneSums = scratch.laneSums;
+    java.util.Arrays.fill(laneSums, 0.0f);
+
+    for (int block = 0; block < blocks; block++) {
+      java.util.Arrays.fill(integerSums, 0);
+      long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+      float d =
+          Float.float16ToFloat(
+                  qWeight.get(
+                      GGUF_LE_SHORT,
+                      blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES))
+              * q8Scales[scaleBatchOffset + block];
+      long qlOffset = blockOffset;
+      long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+      long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+      int queryOffset = quantBatchOffset + block * GGUF_Q6_K_BLOCK_SIZE;
+
+      for (int superBlock = 0; superBlock < 2; superBlock++) {
+        long qlBase = qlOffset + (long) superBlock * 64;
+        long qhBase = qhOffset + (long) superBlock * 32;
+        long scaleBase = scaleOffset + (long) superBlock * 8;
+        int quantBase = queryOffset + superBlock * 128;
+
+        for (int index = 0; index < 32; index++) {
+          int scaleIndex = index / 16;
+          int ql1 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + index) & 0xFF;
+          int ql2 = qWeight.get(ValueLayout.JAVA_BYTE, qlBase + 32L + index) & 0xFF;
+          int qh = qWeight.get(ValueLayout.JAVA_BYTE, qhBase + index) & 0xFF;
+          int q1 = ((ql1 & 0x0F) | ((qh & 0x03) << 4)) - 32;
+          int q2 = ((ql2 & 0x0F) | (((qh >>> 2) & 0x03) << 4)) - 32;
+          int q3 = ((ql1 >>> 4) | (((qh >>> 4) & 0x03) << 4)) - 32;
+          int q4 = ((ql2 >>> 4) | (((qh >>> 6) & 0x03) << 4)) - 32;
+          int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
+          int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
+          int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
+          int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
+          int lane = index & 7;
+
+          integerSums[lane] += s1 * q1 * q8Quants[quantBase + index];
+          integerSums[lane] += s2 * q2 * q8Quants[quantBase + index + 32];
+          integerSums[lane] += s3 * q3 * q8Quants[quantBase + index + 64];
+          integerSums[lane] += s4 * q4 * q8Quants[quantBase + index + 96];
+        }
+      }
+
+      for (int lane = 0; lane < laneSums.length; lane++) {
+        laneSums[lane] = MathUtil.fma(d, integerSums[lane], laneSums[lane]);
+      }
+    }
+
+    float sum = 0.0f;
+    for (float laneSum : laneSums) {
+      sum += laneSum;
+    }
+    return sum;
   }
 
   /** Batched row-major GEMV over GGUF Q8_0 rows. */
