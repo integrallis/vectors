@@ -184,6 +184,58 @@ class ScalarVectorUtilSupportTest {
   }
 
   @Test
+  void q5_KBatchedMatmulMatchesIndependentScalarQueriesExactly() {
+    int batchSize = 3;
+    int rows = 2;
+    int cols = 512;
+    int blockBytes = 176;
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = (float) Math.sin((index + 0.25) * 0.046875);
+    }
+    byte[] matrix = new byte[rows * (cols / 256) * blockBytes];
+    for (int index = 0; index < matrix.length; index++) {
+      matrix[index] = (byte) (index * 29 + 11);
+    }
+    ByteBuffer matrixBuffer = ByteBuffer.wrap(matrix).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < matrix.length; offset += blockBytes) {
+      matrixBuffer.putShort(offset, Float.floatToFloat16(0.01f));
+      matrixBuffer.putShort(offset + Short.BYTES, Float.floatToFloat16(0.005f));
+    }
+    MemorySegment weights = MemorySegment.ofArray(matrix);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] query = new float[cols];
+    float[] result = new float[rows];
+    for (int batch = 0; batch < batchSize; batch++) {
+      System.arraycopy(queries, batch * cols, query, 0, cols);
+      scalar.ggufQ5_KQ8_KMatVecDot(
+          query,
+          weights,
+          rows,
+          cols,
+          result,
+          new byte[cols],
+          new float[cols / 256],
+          new short[cols / 16]);
+      System.arraycopy(result, 0, expected, batch * rows, rows);
+    }
+
+    scalar.ggufQ5_KQ8_KBatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        actual,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 256)],
+        new short[batchSize * (cols / 16)]);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
   void q6_KBatchedMatmulMatchesIndependentScalarQueriesExactly() {
     int batchSize = 3;
     int rows = 2;

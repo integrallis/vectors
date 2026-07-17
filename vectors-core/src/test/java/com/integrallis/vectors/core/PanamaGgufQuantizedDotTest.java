@@ -208,6 +208,13 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void panamaProviderOwnsQ5_KQ8_KBatchedKernel() {
+    assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
+        .extracting(Method::getName)
+        .contains("ggufQ5_KQ8_KBatchedMatmul");
+  }
+
+  @Test
   void panamaProviderOwnsQ6_KQ8_KKernel() {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)
