@@ -25,11 +25,12 @@ import jdk.incubator.vector.VectorShape;
 import jdk.incubator.vector.VectorSpecies;
 
 /**
- * Constants for Panama Vector API SIMD operations. Detects platform capabilities at class-load time
- * to enable conditional FMA dispatch and species selection.
+ * Constants for Panama Vector API SIMD operations. Resolves platform capabilities deterministically
+ * at class-load time to enable conditional FMA dispatch and species selection.
  *
- * <p>The conditional FMA pattern comes from Apache Lucene, which discovered that FMA is slower on
- * some AMD CPUs (certain Zen architectures). System properties allow overriding for testing.
+ * <p>The conditional FMA policy follows Apache Lucene's conservative platform heuristics. It does
+ * not benchmark at class-load time, so unrelated startup load cannot change arithmetic or model
+ * output. System properties allow overriding the policy for measured deployments and testing.
  */
 public final class PanamaConstants {
 
@@ -60,12 +61,6 @@ public final class PanamaConstants {
    * The platform's hardware-preferred float SIMD width in bits, before any {@link #MAX_BITS} cap.
    */
   public static final int PREFERRED_BITS = FloatVector.SPECIES_PREFERRED.vectorBitSize();
-
-  private static final VectorSpecies<Float> FLOAT_SPECIES =
-      preferredSpecies(FloatVector.SPECIES_PREFERRED);
-  private static final int FMA_BENCHMARK_ITERATIONS = 10_000;
-  private static final float FMA_SLOW_THRESHOLD = 1.05f;
-  private static volatile float fmaBenchmarkSink;
 
   private PanamaConstants() {}
 
@@ -150,7 +145,11 @@ public final class PanamaConstants {
     if (override != null) {
       return Boolean.parseBoolean(override);
     }
-    return !isAmdCpuWithSlowFma();
+    return hasFastVectorFma(
+        System.getProperty("os.arch", ""),
+        System.getProperty("os.name", ""),
+        readLinuxCpuInfo(),
+        PREFERRED_BITS);
   }
 
   private static boolean detectFastScalarFma() {
@@ -191,15 +190,20 @@ public final class PanamaConstants {
     return cpuInfo.sve();
   }
 
-  private static boolean isAmdCpuWithSlowFma() {
-    String arch = System.getProperty("os.arch", "");
+  static boolean hasFastVectorFma(String arch, String osName, CpuInfo cpuInfo, int preferredBits) {
+    // Lucene leaves vector FMA off on Apple Silicon and enables it on other AArch64 platforms.
+    if (isArmArch(arch)) {
+      return !osName.toLowerCase(Locale.ROOT).contains("mac");
+    }
     if (!isX86Arch(arch)) {
       return false;
     }
-    if (!isAmdWithFma(readLinuxCpuInfo())) {
-      return false;
+    // Zen benefits from vector FMA at AVX2 width, while narrower AMD vectors remain conservative.
+    if (cpuInfo.amd()) {
+      return cpuInfo.fma() && preferredBits >= 256;
     }
-    return vectorFmaSlowerThanMulAdd();
+    // Intel x86 has consistently fast vector FMA, including Intel-based Macs.
+    return true;
   }
 
   static boolean isX86Arch(String arch) {
@@ -258,64 +262,6 @@ public final class PanamaConstants {
       }
     }
     return false;
-  }
-
-  private static boolean vectorFmaSlowerThanMulAdd() {
-    float[] a = new float[FLOAT_SPECIES.length() * 8];
-    float[] b = new float[a.length];
-    float[] c = new float[a.length];
-    for (int i = 0; i < a.length; i++) {
-      a[i] = 1.0f + i * 0.001f;
-      b[i] = 0.5f + i * 0.002f;
-      c[i] = 0.25f + i * 0.003f;
-    }
-
-    runVectorFma(a, b, c, 1_000);
-    runVectorMulAdd(a, b, c, 1_000);
-
-    long fmaNanos = timeVectorFma(a, b, c);
-    long mulAddNanos = timeVectorMulAdd(a, b, c);
-    return fmaNanos > (long) (mulAddNanos * FMA_SLOW_THRESHOLD);
-  }
-
-  private static long timeVectorFma(float[] a, float[] b, float[] c) {
-    long start = System.nanoTime();
-    runVectorFma(a, b, c, FMA_BENCHMARK_ITERATIONS);
-    return System.nanoTime() - start;
-  }
-
-  private static long timeVectorMulAdd(float[] a, float[] b, float[] c) {
-    long start = System.nanoTime();
-    runVectorMulAdd(a, b, c, FMA_BENCHMARK_ITERATIONS);
-    return System.nanoTime() - start;
-  }
-
-  private static void runVectorFma(float[] a, float[] b, float[] c, int iterations) {
-    FloatVector acc = FloatVector.zero(FLOAT_SPECIES);
-    int limit = FLOAT_SPECIES.loopBound(a.length);
-    for (int iter = 0; iter < iterations; iter++) {
-      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
-        FloatVector va = FloatVector.fromArray(FLOAT_SPECIES, a, i);
-        FloatVector vb = FloatVector.fromArray(FLOAT_SPECIES, b, i);
-        FloatVector vc = FloatVector.fromArray(FLOAT_SPECIES, c, i);
-        acc = va.fma(vb, vc).add(acc);
-      }
-    }
-    fmaBenchmarkSink = acc.reduceLanes(jdk.incubator.vector.VectorOperators.ADD);
-  }
-
-  private static void runVectorMulAdd(float[] a, float[] b, float[] c, int iterations) {
-    FloatVector acc = FloatVector.zero(FLOAT_SPECIES);
-    int limit = FLOAT_SPECIES.loopBound(a.length);
-    for (int iter = 0; iter < iterations; iter++) {
-      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
-        FloatVector va = FloatVector.fromArray(FLOAT_SPECIES, a, i);
-        FloatVector vb = FloatVector.fromArray(FLOAT_SPECIES, b, i);
-        FloatVector vc = FloatVector.fromArray(FLOAT_SPECIES, c, i);
-        acc = va.mul(vb).add(vc).add(acc);
-      }
-    }
-    fmaBenchmarkSink = acc.reduceLanes(jdk.incubator.vector.VectorOperators.ADD);
   }
 
   record CpuInfo(boolean amd, boolean fma, boolean sve) {
