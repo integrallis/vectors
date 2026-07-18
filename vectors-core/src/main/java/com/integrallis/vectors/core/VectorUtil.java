@@ -41,6 +41,11 @@ public final class VectorUtil {
 
   private VectorUtil() {}
 
+  /** Returns the SIMD and GGUF execution capabilities selected by vectors-core. */
+  public static VectorRuntimeCapabilities runtimeCapabilities() {
+    return VectorizationProvider.runtimeCapabilities();
+  }
+
   // --- Float distance operations ---
 
   /** Computes the dot product of two float vectors of equal length. */

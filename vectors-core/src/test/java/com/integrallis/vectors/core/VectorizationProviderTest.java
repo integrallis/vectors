@@ -88,6 +88,21 @@ class VectorizationProviderTest {
   }
 
   @Test
+  void runtimeCapabilitiesExposeStructuredProviderAndExecutorFacts() {
+    VectorRuntimeCapabilities capabilities = VectorUtil.runtimeCapabilities();
+
+    assertThat(capabilities.providerName()).isEqualTo(VectorizationProvider.getProviderName());
+    assertThat(capabilities.vectorApi()).isEqualTo(VectorizationProvider.isPanamaEnabled());
+    assertThat(capabilities.preferredVectorBits()).isPositive();
+    assertThat(capabilities.activeVectorBits())
+        .isEqualTo(
+            VectorizationProvider.isPanamaEnabled() ? PanamaVectorUtilSupport.VECTOR_BITSIZE : 0);
+    assertThat(capabilities.ggufExecutor()).isEqualTo("persistent");
+    assertThat(capabilities.ggufThreads()).isEqualTo(GgufParallelSupport.parallelism());
+    assertThat(capabilities.ggufChunksPerThread()).isEqualTo(GgufParallelSupport.chunksPerThread());
+  }
+
+  @Test
   void newScalarProviderReturnsScalar() {
     VectorUtilSupport scalar = VectorizationProvider.newScalarProvider();
     assertThat(scalar).isNotNull();
