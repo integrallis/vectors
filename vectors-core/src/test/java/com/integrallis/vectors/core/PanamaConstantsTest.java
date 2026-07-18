@@ -70,6 +70,21 @@ class PanamaConstantsTest {
     assertThat(PanamaConstants.isAmdWithFma(info)).isFalse();
   }
 
+  @Test
+  void vectorFmaPolicyIsDeterministicAcrossSupportedPlatforms() {
+    PanamaConstants.CpuInfo amdFma = new PanamaConstants.CpuInfo(true, true, false);
+    PanamaConstants.CpuInfo amdWithoutFma = new PanamaConstants.CpuInfo(true, false, false);
+    PanamaConstants.CpuInfo nonAmd = PanamaConstants.CpuInfo.empty();
+
+    assertThat(PanamaConstants.hasFastVectorFma("amd64", "Linux", amdFma, 256)).isTrue();
+    assertThat(PanamaConstants.hasFastVectorFma("amd64", "Linux", amdFma, 128)).isFalse();
+    assertThat(PanamaConstants.hasFastVectorFma("amd64", "Linux", amdWithoutFma, 256)).isFalse();
+    assertThat(PanamaConstants.hasFastVectorFma("amd64", "Mac OS X", nonAmd, 256)).isTrue();
+    assertThat(PanamaConstants.hasFastVectorFma("aarch64", "Linux", nonAmd, 256)).isTrue();
+    assertThat(PanamaConstants.hasFastVectorFma("arm64", "Mac OS X", nonAmd, 128)).isFalse();
+    assertThat(PanamaConstants.hasFastVectorFma("riscv64", "Linux", nonAmd, 256)).isFalse();
+  }
+
   // ─── P3.5 SVE detection ────────────────────────────────────────────────────
 
   @Test
