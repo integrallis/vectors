@@ -135,7 +135,7 @@ public final class PanamaConstants {
    *
    * <p>This is detection-only scaffolding (P3.5): no kernel currently dispatches on it. A future
    * predicated/scalable-vector kernel can branch on {@code HAS_SVE} to enter the SVE path while
-   * falling back to {@link #FLOAT_SPECIES} elsewhere. Can be forced via {@code
+   * falling back to the selected fixed-width species elsewhere. Can be forced via {@code
    * -Dvectors.forceSve=true|false} for testing.
    */
   public static final boolean HAS_SVE = detectSve();
