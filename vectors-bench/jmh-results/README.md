@@ -22,6 +22,11 @@ They are **not authoritative**:
 first** — the gate is "did *my* number move", not "did it match the
 checked-in baseline".
 
+Focused JVM/compiler comparisons may also be recorded as Markdown reports. Unlike the illustrative
+single-fork snapshots, each report must state its fork count, runtime revision, affinity, CPU
+features, generated-code evidence, and the limitation of its conclusion. See
+`vector-api-pairwise-jvm-baseline.md` for the first such comparison.
+
 Audit T4.11 (2026-06-06) noted this nuance. The `System.gc()` calls in
 the hand-rolled benchmarks have been audited; the only ones that remain
 are in `BuildScalabilityBenchmark`, where they're justified for heap-size

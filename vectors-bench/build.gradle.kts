@@ -1,3 +1,5 @@
+import me.champeau.jmh.JmhBytecodeGeneratorTask
+
 plugins {
     id("me.champeau.jmh") version "0.7.2"
 }
@@ -97,6 +99,13 @@ jmh {
     resultFormat.set(project.findProperty("jmh.resultFormat") as String? ?: "TEXT")
     val resultExt = (resultFormat.get() as String).lowercase()
     resultsFile.set(project.file("build/results/jmh/results.$resultExt"))
+}
+
+// The JMH plugin reflects over benchmark classes in a separate generator JVM. Benchmarks may use
+// Vector values directly in their state and method signatures, so that JVM needs the incubator
+// module just like compilation and benchmark forks do.
+tasks.withType<JmhBytecodeGeneratorTask>().configureEach {
+    jvmArgs.addAll("--add-modules", "jdk.incubator.vector")
 }
 
 // ---------------------------------------------------------------------------
