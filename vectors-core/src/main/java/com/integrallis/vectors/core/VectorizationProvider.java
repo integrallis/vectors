@@ -60,6 +60,24 @@ public final class VectorizationProvider {
     return INSTANCE;
   }
 
+  /** Returns structured, deterministic capabilities for higher-level execution planners. */
+  public static VectorRuntimeCapabilities runtimeCapabilities() {
+    boolean vectorApi = INSTANCE instanceof PanamaVectorUtilSupport;
+    return new VectorRuntimeCapabilities(
+        INSTANCE.getClass().getSimpleName(),
+        vectorApi,
+        PanamaConstants.MAX_BITS,
+        PanamaConstants.PREFERRED_BITS,
+        vectorApi ? PanamaVectorUtilSupport.VECTOR_BITSIZE : 0,
+        PanamaConstants.HAS_FAST_VECTOR_FMA,
+        PanamaConstants.HAS_FAST_SCALAR_FMA,
+        PanamaConstants.HAS_SVE,
+        GgufParallelSupport.enabled(),
+        GgufParallelSupport.executionMode().name().toLowerCase(Locale.ROOT),
+        GgufParallelSupport.parallelism(),
+        GgufParallelSupport.chunksPerThread());
+  }
+
   private static VectorUtilSupport selectProvider() {
     // Allow forcing scalar mode for testing — bypasses discovery entirely.
     if (isForcedScalar()) {
