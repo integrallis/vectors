@@ -59,27 +59,38 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
-  void q4_KQ8_KIntegerLanesSumFourProductsPerLane() {
+  void q4_KQ8_KIntegerDotDecodesBothNibbleHalves() {
     byte[] packed = new byte[32];
     byte[] q8 = new byte[32];
-    int[] q4 = new int[32];
+    int expectedLow = 0;
+    int expectedHigh = 0;
     for (int index = 0; index < packed.length; index++) {
-      int value = (index * 3) % 16;
-      packed[index] = (byte) ((value << 4) | (15 - value));
-      q4[index] = value;
+      int high = (index * 3) % 16;
+      int low = 15 - high;
+      packed[index] = (byte) ((high << 4) | low);
       q8[index] = (byte) (index - 16);
+      expectedLow += low * q8[index];
+      expectedHigh += high * q8[index];
     }
 
-    IntVector actual =
-        PanamaVectorUtilSupport.q4_KQ8_KIntegerLanes(MemorySegment.ofArray(packed), 0, 4, q8, 0);
+    MemorySegment weights = MemorySegment.ofArray(packed);
+    assertThat(PanamaVectorUtilSupport.q4_KQ8_KIntegerDot(weights, 0, 0, q8, 0))
+        .isEqualTo(expectedLow);
+    assertThat(PanamaVectorUtilSupport.q4_KQ8_KIntegerDot(weights, 0, 4, q8, 0))
+        .isEqualTo(expectedHigh);
+  }
 
-    int[] expected = new int[8];
-    for (int lane = 0; lane < expected.length; lane++) {
-      for (int index = lane * 4; index < lane * 4 + 4; index++) {
-        expected[lane] += q4[index] * q8[index];
-      }
-    }
-    assertThat(actual.toArray()).containsExactly(expected);
+  @Test
+  void kQuantPackedDotHelpersReturnPrimitivesToPreserveScalarReplacement() {
+    assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
+        .filteredOn(
+            method ->
+                method.getName().equals("q4_KQ8_KIntegerDot")
+                    || method.getName().equals("q4_KQ8_KLowIntegerDot")
+                    || method.getName().equals("q4_KQ8_KHighIntegerDot")
+                    || method.getName().matches("q6_KQ8_KGroup[0246]Dot"))
+        .isNotEmpty()
+        .allSatisfy(method -> assertThat(method.getReturnType()).isEqualTo(int.class));
   }
 
   @Test

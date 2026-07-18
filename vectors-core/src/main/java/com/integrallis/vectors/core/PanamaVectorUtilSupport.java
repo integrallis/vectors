@@ -791,44 +791,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         rows,
         cols,
         row -> {
-          if (VECTOR_BITSIZE >= 256) {
-            float sum = 0.0f;
-            long rowOffset = row * rowBytes;
-            for (int block = 0; block < blocks; block++) {
-              long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
-              float q8Scale = q8Scales[block];
-              float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
-              float dMin =
-                  Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES))
-                      * q8Scale;
-              long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
-              long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
-              int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
-              IntVector blockLanes = IntVector.zero(IntVector.SPECIES_256);
-              int minimumSum = 0;
-
-              for (int group = 0; group < 8; group++) {
-                int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
-                int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
-                long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
-                int shift = (group & 1) * 4;
-                int groupActivationOffset = activationOffset + group * 32;
-                IntVector groupLanes =
-                    q4_KQ8_KIntegerLanes(
-                        qWeight, packedOffset, shift, q8Quants, groupActivationOffset);
-                blockLanes = blockLanes.add(groupLanes.mul(scale));
-                int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
-                minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
-              }
-
-              int quantizedSum = blockLanes.reduceLanes(VectorOperators.ADD);
-              sum = MathUtil.fma(d, quantizedSum, sum);
-              sum = MathUtil.fma(-dMin, minimumSum, sum);
-            }
-            out[row] = sum;
-            return;
-          }
-
           float sum = 0.0f;
           long rowOffset = row * rowBytes;
           for (int block = 0; block < blocks; block++) {
@@ -932,25 +894,13 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                 long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
                 int shift = (group & 1) * 4;
                 int groupActivationOffset = blockActivationOffset + group * 32;
-                int groupDot;
-                if (VECTOR_BITSIZE >= 256) {
-                  IntVector groupLanes =
-                      q4_KQ8_KIntegerLanes(
-                          qWeight,
-                          packedOffset,
-                          shift,
-                          q8Quants,
-                          quantBatchOffset + groupActivationOffset);
-                  groupDot = groupLanes.reduceLanes(VectorOperators.ADD);
-                } else {
-                  groupDot =
-                      q4_KQ8_KIntegerDot(
-                          qWeight,
-                          packedOffset,
-                          shift,
-                          q8Quants,
-                          quantBatchOffset + groupActivationOffset);
-                }
+                int groupDot =
+                    q4_KQ8_KIntegerDot(
+                        qWeight,
+                        packedOffset,
+                        shift,
+                        q8Quants,
+                        quantBatchOffset + groupActivationOffset);
                 quantizedSum += scale * groupDot;
                 int activationSumOffset =
                     sumBatchOffset + groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
@@ -1076,45 +1026,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             matrixRow = row - thirdStart;
           }
 
-          // Keep the SIMD body in this lambda. Extracting Vector values defeats C2 scalarization.
-          if (VECTOR_BITSIZE >= 256) {
-            float sum = 0.0f;
-            long rowOffset = matrixRow * rowBytes;
-            for (int block = 0; block < blocks; block++) {
-              long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
-              float q8Scale = q8Scales[block];
-              float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
-              float dMin =
-                  Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES))
-                      * q8Scale;
-              long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
-              long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
-              int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
-              IntVector blockLanes = IntVector.zero(IntVector.SPECIES_256);
-              int minimumSum = 0;
-
-              for (int group = 0; group < 8; group++) {
-                int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
-                int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
-                long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
-                int shift = (group & 1) * 4;
-                int groupActivationOffset = activationOffset + group * 32;
-                IntVector groupLanes =
-                    q4_KQ8_KIntegerLanes(
-                        qWeight, packedOffset, shift, q8Quants, groupActivationOffset);
-                blockLanes = blockLanes.add(groupLanes.mul(scale));
-                int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
-                minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
-              }
-
-              int quantizedSum = blockLanes.reduceLanes(VectorOperators.ADD);
-              sum = MathUtil.fma(d, quantizedSum, sum);
-              sum = MathUtil.fma(-dMin, minimumSum, sum);
-            }
-            out[matrixRow] = sum;
-            return;
-          }
-
           float sum = 0.0f;
           long rowOffset = matrixRow * rowBytes;
           for (int block = 0; block < blocks; block++) {
@@ -1150,15 +1061,24 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
-  private static int q4_KQ8_KIntegerDot(
+  static int q4_KQ8_KIntegerDot(
       MemorySegment qWeight, long packedOffset, int shift, byte[] q8Quants, int quantOffset) {
+    return switch (shift) {
+      case 0 -> q4_KQ8_KLowIntegerDot(qWeight, packedOffset, q8Quants, quantOffset);
+      case 4 -> q4_KQ8_KHighIntegerDot(qWeight, packedOffset, q8Quants, quantOffset);
+      default -> throw new IllegalArgumentException("Q4_K shift must be 0 or 4: " + shift);
+    };
+  }
+
+  private static int q4_KQ8_KLowIntegerDot(
+      MemorySegment qWeight, long packedOffset, byte[] q8Quants, int quantOffset) {
     if (VECTOR_BITSIZE >= 256) {
       int sum = 0;
       for (int index = 0; index < 32; index += 16) {
         ByteVector packed =
             ByteVector.fromMemorySegment(
                 ByteVector.SPECIES_128, qWeight, packedOffset + index, ByteOrder.LITTLE_ENDIAN);
-        ByteVector q4 = packed.lanewise(VectorOperators.LSHR, shift).and((byte) 0x0F);
+        ByteVector q4 = packed.and((byte) 0x0F);
         ShortVector q4Shorts =
             (ShortVector) q4.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
         ShortVector q8Shorts =
@@ -1176,7 +1096,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         ByteVector packed =
             ByteVector.fromMemorySegment(
                 ByteVector.SPECIES_64, qWeight, packedOffset + index, ByteOrder.LITTLE_ENDIAN);
-        ByteVector q4 = packed.lanewise(VectorOperators.LSHR, shift).and((byte) 0x0F);
+        ByteVector q4 = packed.and((byte) 0x0F);
         ShortVector q4Shorts =
             (ShortVector) q4.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
         ShortVector q8Shorts =
@@ -1191,40 +1111,55 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     int sum = 0;
     for (int index = 0; index < 32; index++) {
       int packed = qWeight.get(ValueLayout.JAVA_BYTE, packedOffset + index) & 0xFF;
-      sum += ((packed >>> shift) & 0x0F) * q8Quants[quantOffset + index];
+      sum += (packed & 0x0F) * q8Quants[quantOffset + index];
     }
     return sum;
   }
 
-  static IntVector q4_KQ8_KIntegerLanes(
-      MemorySegment qWeight, long packedOffset, int shift, byte[] q8Quants, int quantOffset) {
-    ByteVector firstPacked =
-        ByteVector.fromMemorySegment(
-            ByteVector.SPECIES_128, qWeight, packedOffset, ByteOrder.LITTLE_ENDIAN);
-    ByteVector secondPacked =
-        ByteVector.fromMemorySegment(
-            ByteVector.SPECIES_128, qWeight, packedOffset + 16, ByteOrder.LITTLE_ENDIAN);
-    ShortVector firstProducts =
-        ((ShortVector)
-                firstPacked
-                    .lanewise(VectorOperators.LSHR, shift)
-                    .and((byte) 0x0F)
-                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0))
-            .mul(
-                (ShortVector)
-                    ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
-                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0));
-    ShortVector secondProducts =
-        ((ShortVector)
-                secondPacked
-                    .lanewise(VectorOperators.LSHR, shift)
-                    .and((byte) 0x0F)
-                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0))
-            .mul(
-                (ShortVector)
-                    ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
-                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0));
-    return fourProductLanes(firstProducts, secondProducts);
+  private static int q4_KQ8_KHighIntegerDot(
+      MemorySegment qWeight, long packedOffset, byte[] q8Quants, int quantOffset) {
+    if (VECTOR_BITSIZE >= 256) {
+      int sum = 0;
+      for (int index = 0; index < 32; index += 16) {
+        ByteVector packed =
+            ByteVector.fromMemorySegment(
+                ByteVector.SPECIES_128, qWeight, packedOffset + index, ByteOrder.LITTLE_ENDIAN);
+        ByteVector q4 = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+        ShortVector q4Shorts =
+            (ShortVector) q4.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+        ShortVector q8Shorts =
+            (ShortVector)
+                ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + index)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+        sum += q4Shorts.mul(q8Shorts).reduceLanes(VectorOperators.ADD);
+      }
+      return sum;
+    }
+
+    if (VECTOR_BITSIZE >= 128) {
+      int sum = 0;
+      for (int index = 0; index < 32; index += 8) {
+        ByteVector packed =
+            ByteVector.fromMemorySegment(
+                ByteVector.SPECIES_64, qWeight, packedOffset + index, ByteOrder.LITTLE_ENDIAN);
+        ByteVector q4 = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+        ShortVector q4Shorts =
+            (ShortVector) q4.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        ShortVector q8Shorts =
+            (ShortVector)
+                ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+        sum += q4Shorts.mul(q8Shorts).reduceLanes(VectorOperators.ADD);
+      }
+      return sum;
+    }
+
+    int sum = 0;
+    for (int index = 0; index < 32; index++) {
+      int packed = qWeight.get(ValueLayout.JAVA_BYTE, packedOffset + index) & 0xFF;
+      sum += ((packed >>> 4) & 0x0F) * q8Quants[quantOffset + index];
+    }
+    return sum;
   }
 
   /** SIMD Q5_K by Q8_K GEMV with one activation quantization shared by all rows. */
@@ -1846,20 +1781,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int s2,
       int s3,
       int s4) {
-    return s1 * q6_KQ8_KGroupDot(qWeight, ql1Offset, qhOffset, 0, 0, q8Quants, quantOffset)
-        + s2 * q6_KQ8_KGroupDot(qWeight, ql2Offset, qhOffset, 0, 2, q8Quants, quantOffset + 32)
-        + s3 * q6_KQ8_KGroupDot(qWeight, ql1Offset, qhOffset, 4, 4, q8Quants, quantOffset + 64)
-        + s4 * q6_KQ8_KGroupDot(qWeight, ql2Offset, qhOffset, 4, 6, q8Quants, quantOffset + 96);
+    return s1 * q6_KQ8_KGroup0Dot(qWeight, ql1Offset, qhOffset, q8Quants, quantOffset)
+        + s2 * q6_KQ8_KGroup2Dot(qWeight, ql2Offset, qhOffset, q8Quants, quantOffset + 32)
+        + s3 * q6_KQ8_KGroup4Dot(qWeight, ql1Offset, qhOffset, q8Quants, quantOffset + 64)
+        + s4 * q6_KQ8_KGroup6Dot(qWeight, ql2Offset, qhOffset, q8Quants, quantOffset + 96);
   }
 
-  private static int q6_KQ8_KGroupDot(
-      MemorySegment qWeight,
-      long qlOffset,
-      long qhOffset,
-      int qlShift,
-      int qhShift,
-      byte[] q8Quants,
-      int quantOffset) {
+  private static int q6_KQ8_KGroup0Dot(
+      MemorySegment qWeight, long qlOffset, long qhOffset, byte[] q8Quants, int quantOffset) {
     int sum = 0;
     for (int index = 0; index < 16; index += 8) {
       ByteVector ql =
@@ -1868,11 +1797,86 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       ByteVector qh =
           ByteVector.fromMemorySegment(
               ByteVector.SPECIES_64, qWeight, qhOffset + index, ByteOrder.LITTLE_ENDIAN);
-      ByteVector low = ql.lanewise(VectorOperators.LSHR, qlShift).and((byte) 0x0F);
-      ByteVector high =
-          qh.lanewise(VectorOperators.LSHR, qhShift)
-              .and((byte) 0x03)
-              .lanewise(VectorOperators.LSHL, 4);
+      ByteVector low = ql.and((byte) 0x0F);
+      ByteVector high = qh.and((byte) 0x03).lanewise(VectorOperators.LSHL, 4);
+      IntVector weights =
+          (IntVector)
+              low.add(high)
+                  .sub((byte) 32)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector quants =
+          (IntVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      sum += weights.mul(quants).reduceLanes(VectorOperators.ADD);
+    }
+    return sum;
+  }
+
+  private static int q6_KQ8_KGroup2Dot(
+      MemorySegment qWeight, long qlOffset, long qhOffset, byte[] q8Quants, int quantOffset) {
+    int sum = 0;
+    for (int index = 0; index < 16; index += 8) {
+      ByteVector ql =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, qlOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ByteVector qh =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, qhOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ByteVector low = ql.and((byte) 0x0F);
+      ByteVector high = qh.and((byte) 0x0C).lanewise(VectorOperators.LSHL, 2);
+      IntVector weights =
+          (IntVector)
+              low.add(high)
+                  .sub((byte) 32)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector quants =
+          (IntVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      sum += weights.mul(quants).reduceLanes(VectorOperators.ADD);
+    }
+    return sum;
+  }
+
+  private static int q6_KQ8_KGroup4Dot(
+      MemorySegment qWeight, long qlOffset, long qhOffset, byte[] q8Quants, int quantOffset) {
+    int sum = 0;
+    for (int index = 0; index < 16; index += 8) {
+      ByteVector ql =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, qlOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ByteVector qh =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, qhOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ByteVector low = ql.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+      ByteVector high = qh.and((byte) 0x30);
+      IntVector weights =
+          (IntVector)
+              low.add(high)
+                  .sub((byte) 32)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector quants =
+          (IntVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, q8Quants, quantOffset + index)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      sum += weights.mul(quants).reduceLanes(VectorOperators.ADD);
+    }
+    return sum;
+  }
+
+  private static int q6_KQ8_KGroup6Dot(
+      MemorySegment qWeight, long qlOffset, long qhOffset, byte[] q8Quants, int quantOffset) {
+    int sum = 0;
+    for (int index = 0; index < 16; index += 8) {
+      ByteVector ql =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, qlOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ByteVector qh =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, qWeight, qhOffset + index, ByteOrder.LITTLE_ENDIAN);
+      ByteVector low = ql.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+      ByteVector high = qh.and((byte) 0xC0).lanewise(VectorOperators.LSHR, 2);
       IntVector weights =
           (IntVector)
               low.add(high)
