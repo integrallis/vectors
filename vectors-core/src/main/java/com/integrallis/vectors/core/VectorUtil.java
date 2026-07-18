@@ -831,6 +831,68 @@ public final class VectorUtil {
         q8Sums);
   }
 
+  /**
+   * Multiplies two Q4_K matrices and one Q6_K matrix by one shared Q8_K activation quantization and
+   * row dispatch.
+   */
+  public static void ggufQ4_KQ4_KQ6_KQ8_KTripleBatchDotProduct(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    checkGgufQuantizedBatchArguments(
+        query,
+        firstWeight,
+        firstRows,
+        cols,
+        firstOut,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_BYTES);
+    checkGgufQuantizedBatchArguments(
+        query,
+        secondWeight,
+        secondRows,
+        cols,
+        secondOut,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_BYTES);
+    checkGgufQuantizedBatchArguments(
+        query,
+        thirdWeight,
+        thirdRows,
+        cols,
+        thirdOut,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_BYTES);
+    checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE);
+    checkGgufQ8KSums(q8Sums, cols);
+    IMPL.ggufQ4_KQ4_KQ6_KQ8_KTripleMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+  }
+
   /** Batched row-major GEMV over GGUF Q5_K rows. */
   public static void ggufQ5_KBatchDotProduct(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {

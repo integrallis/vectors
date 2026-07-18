@@ -1397,6 +1397,73 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_KQ4_KQ6_KQ8_KTripleBatchDotProductMatchesSeparateMatmulsExactly() {
+    int cols = 256;
+    int firstRows = 2;
+    int secondRows = 3;
+    int thirdRows = 2;
+    float[] query = patternedQuery(cols);
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    MemorySegment firstWeight =
+        MemorySegment.ofArray(
+            repeat(q4KBlock(0.125f, 0.0625f, i -> i % 16, scales, mins), firstRows));
+    MemorySegment secondWeight =
+        MemorySegment.ofArray(
+            repeat(q4KBlock(-0.25f, 0.03125f, i -> 15 - i % 16, scales, mins), secondRows));
+    MemorySegment thirdWeight =
+        MemorySegment.ofArray(
+            repeat(q6KBlock(0.25f, i -> (i * 5 + 3) % 64 - 32, i -> i - 8), thirdRows));
+    float[] expectedFirst = new float[firstRows];
+    float[] expectedSecond = new float[secondRows];
+    float[] expectedThird = new float[thirdRows];
+    float[] actualFirst = new float[firstRows];
+    float[] actualSecond = new float[secondRows];
+    float[] actualThird = new float[thirdRows];
+
+    VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+        query,
+        firstWeight,
+        firstRows,
+        cols,
+        expectedFirst,
+        new byte[cols],
+        new float[cols / 256],
+        new short[cols / 16]);
+    VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+        query,
+        secondWeight,
+        secondRows,
+        cols,
+        expectedSecond,
+        new byte[cols],
+        new float[cols / 256],
+        new short[cols / 16]);
+    VectorUtil.ggufQ6_KQ8_KBatchDotProduct(
+        query, thirdWeight, thirdRows, cols, expectedThird, new byte[cols], new float[cols / 256]);
+
+    VectorUtil.ggufQ4_KQ4_KQ6_KQ8_KTripleBatchDotProduct(
+        query,
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        thirdWeight,
+        thirdRows,
+        actualThird,
+        cols,
+        new byte[cols],
+        new float[cols / 256],
+        new short[cols / 16]);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+    assertThat(actualThird).containsExactly(expectedThird);
+  }
+
+  @Test
   void q5_KQ8_KDualBatchDotProductMatchesSeparateMatmulsExactly() {
     int cols = 256;
     int firstRows = 3;
