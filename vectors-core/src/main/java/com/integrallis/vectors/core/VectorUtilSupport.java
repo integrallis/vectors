@@ -841,6 +841,55 @@ public interface VectorUtilSupport {
         });
   }
 
+  /** Two Q4_K projections and one Q6_K projection sharing Q8_K quantization and row dispatch. */
+  default void ggufQ4_KQ4_KQ6_KQ8_KTripleMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
+
+    long q4RowBytes = ggufQ4_KRowBytes(cols);
+    long q6RowBytes = ggufQ6_KRowBytes(cols);
+    int blocks = cols / GGUF_Q4_K_BLOCK_SIZE;
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    int totalRows = Math.addExact(thirdStart, thirdRows);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        thirdWeight,
+        totalRows,
+        cols,
+        row -> {
+          if (row < secondStart) {
+            firstOut[row] =
+                ggufQ4_KQ8_KScalarRowDot(
+                    firstWeight, row * q4RowBytes, blocks, q8Quants, q8Scales, q8Sums);
+          } else if (row < thirdStart) {
+            int matrixRow = row - secondStart;
+            secondOut[matrixRow] =
+                ggufQ4_KQ8_KScalarRowDot(
+                    secondWeight, matrixRow * q4RowBytes, blocks, q8Quants, q8Scales, q8Sums);
+          } else {
+            int matrixRow = row - thirdStart;
+            thirdOut[matrixRow] =
+                ggufQ6_KQ8_KScalarRowDot(
+                    thirdWeight, matrixRow * q6RowBytes, blocks, q8Quants, 0, q8Scales, 0);
+          }
+        });
+  }
+
   private static float ggufQ4_KQ8_KScalarRowDot(
       MemorySegment qWeight,
       long rowOffset,

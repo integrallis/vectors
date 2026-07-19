@@ -1061,6 +1061,112 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
+  private static float ggufQ4_KQ8_KVectorRowDot(
+      MemorySegment qWeight,
+      long rowOffset,
+      int blocks,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    float sum = 0.0f;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
+      float q8Scale = q8Scales[block];
+      float d = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scale;
+      float dMin =
+          Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset + Short.BYTES)) * q8Scale;
+      long scalesOffset = blockOffset + GGUF_Q4_K_SCALES_OFFSET;
+      long quantsOffset = blockOffset + GGUF_Q4_K_QUANTS_OFFSET;
+      int activationOffset = block * GGUF_Q4_K_BLOCK_SIZE;
+      int quantizedSum = 0;
+      int minimumSum = 0;
+
+      for (int group = 0; group < 8; group++) {
+        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+        long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
+        int shift = (group & 1) * 4;
+        int groupActivationOffset = activationOffset + group * 32;
+        int groupDot =
+            q4_KQ8_KIntegerDot(qWeight, packedOffset, shift, q8Quants, groupActivationOffset);
+        quantizedSum += scale * groupDot;
+        int sumOffset = groupActivationOffset / GGUF_Q8_K_SUM_BLOCK_SIZE;
+        minimumSum += min * (q8Sums[sumOffset] + q8Sums[sumOffset + 1]);
+      }
+
+      sum = MathUtil.fma(d, quantizedSum, sum);
+      sum = MathUtil.fma(-dMin, minimumSum, sum);
+    }
+    return sum;
+  }
+
+  @Override
+  public void ggufQ4_KQ4_KQ6_KQ8_KTripleMatVecDot(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    if (VECTOR_BITSIZE < 256) {
+      VectorUtilSupport.super.ggufQ4_KQ4_KQ6_KQ8_KTripleMatVecDot(
+          query,
+          firstWeight,
+          firstRows,
+          firstOut,
+          secondWeight,
+          secondRows,
+          secondOut,
+          thirdWeight,
+          thirdRows,
+          thirdOut,
+          cols,
+          q8Quants,
+          q8Scales,
+          q8Sums);
+      return;
+    }
+
+    GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
+    int blocks = cols / GGUF_Q4_K_BLOCK_SIZE;
+    long q4RowBytes = (long) blocks * GGUF_Q4_K_BLOCK_BYTES;
+    long q6RowBytes = (long) blocks * GGUF_Q6_K_BLOCK_BYTES;
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    int totalRows = Math.addExact(thirdStart, thirdRows);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        thirdWeight,
+        totalRows,
+        cols,
+        row -> {
+          if (row < secondStart) {
+            firstOut[row] =
+                ggufQ4_KQ8_KVectorRowDot(
+                    firstWeight, row * q4RowBytes, blocks, q8Quants, q8Scales, q8Sums);
+          } else if (row < thirdStart) {
+            int matrixRow = row - secondStart;
+            secondOut[matrixRow] =
+                ggufQ4_KQ8_KVectorRowDot(
+                    secondWeight, matrixRow * q4RowBytes, blocks, q8Quants, q8Scales, q8Sums);
+          } else {
+            int matrixRow = row - thirdStart;
+            thirdOut[matrixRow] =
+                ggufQ6_KQ8_KVectorRowDot(
+                    thirdWeight, matrixRow * q6RowBytes, blocks, q8Quants, q8Scales);
+          }
+        });
+  }
+
   static int q4_KQ8_KIntegerDot(
       MemorySegment qWeight, long packedOffset, int shift, byte[] q8Quants, int quantOffset) {
     return switch (shift) {
@@ -1679,6 +1785,54 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           }
           out[row] = sum;
         });
+  }
+
+  private static float ggufQ6_KQ8_KVectorRowDot(
+      MemorySegment qWeight, long rowOffset, int blocks, byte[] q8Quants, float[] q8Scales) {
+    float sum = 0.0f;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+      float d =
+          Float.float16ToFloat(
+                  qWeight.get(
+                      GGUF_LE_SHORT,
+                      blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES))
+              * q8Scales[block];
+      long qlOffset = blockOffset;
+      long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+      long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+      int activationOffset = block * GGUF_Q6_K_BLOCK_SIZE;
+      int blockSum = 0;
+
+      for (int superBlock = 0; superBlock < 2; superBlock++) {
+        long qlBase = qlOffset + (long) superBlock * 64;
+        long qhBase = qhOffset + (long) superBlock * 32;
+        long scaleBase = scaleOffset + (long) superBlock * 8;
+        int quantBase = activationOffset + superBlock * 128;
+        for (int batch = 0; batch < 32; batch += 16) {
+          int scaleIndex = batch / 16;
+          int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
+          int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
+          int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
+          int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
+          blockSum +=
+              q6_KQ8_KIntegerDot(
+                  qWeight,
+                  qlBase + batch,
+                  qlBase + 32L + batch,
+                  qhBase + batch,
+                  q8Quants,
+                  quantBase + batch,
+                  s1,
+                  s2,
+                  s3,
+                  s4);
+        }
+      }
+
+      sum = MathUtil.fma(d, blockSum, sum);
+    }
+    return sum;
   }
 
   /** SIMD Q6_K by a batch of Q8_K activations with row-local weight reuse. */

@@ -279,6 +279,70 @@ class ScalarVectorUtilSupportTest {
   }
 
   @Test
+  void mixedQ4_KQ6_KTripleMatmulMatchesIndependentScalarProjectionsExactly() {
+    int cols = 512;
+    int firstRows = 2;
+    int secondRows = 3;
+    int thirdRows = 2;
+    float[] query = new float[cols];
+    for (int index = 0; index < query.length; index++) {
+      query[index] = (float) Math.sin((index + 0.75) * 0.0234375);
+    }
+    MemorySegment firstWeight =
+        MemorySegment.ofArray(q4_KMatrix(firstRows, cols, 23, 0.01f, 0.005f));
+    MemorySegment secondWeight =
+        MemorySegment.ofArray(q4_KMatrix(secondRows, cols, 31, -0.02f, 0.0025f));
+    MemorySegment thirdWeight = MemorySegment.ofArray(q6_KMatrix(thirdRows, cols, 17, 0.015f));
+    float[] expectedFirst = new float[firstRows];
+    float[] expectedSecond = new float[secondRows];
+    float[] expectedThird = new float[thirdRows];
+    float[] actualFirst = new float[firstRows];
+    float[] actualSecond = new float[secondRows];
+    float[] actualThird = new float[thirdRows];
+
+    scalar.ggufQ4_KQ8_KMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        cols,
+        expectedFirst,
+        new byte[cols],
+        new float[cols / 256],
+        new short[cols / 16]);
+    scalar.ggufQ4_KQ8_KMatVecDot(
+        query,
+        secondWeight,
+        secondRows,
+        cols,
+        expectedSecond,
+        new byte[cols],
+        new float[cols / 256],
+        new short[cols / 16]);
+    scalar.ggufQ6_KQ8_KMatVecDot(
+        query, thirdWeight, thirdRows, cols, expectedThird, new byte[cols], new float[cols / 256]);
+
+    scalar.ggufQ4_KQ4_KQ6_KQ8_KTripleMatVecDot(
+        query,
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        thirdWeight,
+        thirdRows,
+        actualThird,
+        cols,
+        new byte[cols],
+        new float[cols / 256],
+        new short[cols / 16]);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+    assertThat(actualThird).containsExactly(expectedThird);
+  }
+
+  @Test
   void q8_0BatchedMatmulMatchesIndependentScalarQueriesExactly() {
     int batchSize = 3;
     int rows = 2;
@@ -333,6 +397,36 @@ class ScalarVectorUtilSupportTest {
       result += delta * delta;
     }
     return result;
+  }
+
+  private static byte[] q4_KMatrix(
+      int rows, int cols, int multiplier, float scale, float minScale) {
+    int blockBytes = 144;
+    byte[] matrix = patternedMatrix(rows, cols, blockBytes, multiplier);
+    ByteBuffer buffer = ByteBuffer.wrap(matrix).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < matrix.length; offset += blockBytes) {
+      buffer.putShort(offset, Float.floatToFloat16(scale));
+      buffer.putShort(offset + Short.BYTES, Float.floatToFloat16(minScale));
+    }
+    return matrix;
+  }
+
+  private static byte[] q6_KMatrix(int rows, int cols, int multiplier, float scale) {
+    int blockBytes = 210;
+    byte[] matrix = patternedMatrix(rows, cols, blockBytes, multiplier);
+    ByteBuffer buffer = ByteBuffer.wrap(matrix).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < matrix.length; offset += blockBytes) {
+      buffer.putShort(offset + 208, Float.floatToFloat16(scale));
+    }
+    return matrix;
+  }
+
+  private static byte[] patternedMatrix(int rows, int cols, int blockBytes, int multiplier) {
+    byte[] matrix = new byte[rows * (cols / 256) * blockBytes];
+    for (int index = 0; index < matrix.length; index++) {
+      matrix[index] = (byte) (index * multiplier + 7);
+    }
+    return matrix;
   }
 
   private static org.assertj.core.data.Offset<Float> within(float value) {
