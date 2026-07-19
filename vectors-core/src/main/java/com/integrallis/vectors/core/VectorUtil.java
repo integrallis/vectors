@@ -727,6 +727,60 @@ public final class VectorUtil {
         queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, q8Sums);
   }
 
+  /**
+   * Multiplies two Q4_K matrices by a batch of activations with one Q8_K quantization pass and one
+   * row dispatch.
+   */
+  public static void ggufQ4_KQ8_KDualBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        firstWeight,
+        batchSize,
+        firstRows,
+        cols,
+        firstOut,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_BYTES);
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        secondWeight,
+        batchSize,
+        secondRows,
+        cols,
+        secondOut,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_BYTES);
+    int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    checkGgufActivationScratch(
+        q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE);
+    checkGgufQ8KSums(q8Sums, activationEntries);
+    IMPL.ggufQ4_KQ8_KDualBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+  }
+
   /** Multiplies two Q4_K matrices by one shared Q8_K activation quantization and row dispatch. */
   public static void ggufQ4_KQ8_KDualBatchDotProduct(
       float[] query,
@@ -887,6 +941,75 @@ public final class VectorUtil {
         thirdWeight,
         thirdRows,
         thirdOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+  }
+
+  /**
+   * Multiplies two Q4_K matrices and one Q6_K matrix by a batch of activations with one Q8_K
+   * quantization pass and one row dispatch.
+   */
+  public static void ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums) {
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        firstWeight,
+        batchSize,
+        firstRows,
+        cols,
+        firstOut,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_BYTES);
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        secondWeight,
+        batchSize,
+        secondRows,
+        cols,
+        secondOut,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_K_BLOCK_BYTES);
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        thirdWeight,
+        batchSize,
+        thirdRows,
+        cols,
+        thirdOut,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q6_K_BLOCK_BYTES);
+    int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    checkGgufActivationScratch(
+        q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE);
+    checkGgufQ8KSums(q8Sums, activationEntries);
+    IMPL.ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
         cols,
         q8Quants,
         q8Scales,
@@ -1725,6 +1848,33 @@ public final class VectorUtil {
     if (out.length < rows) {
       throw new IllegalArgumentException(
           "out.length must be >= rows: " + out.length + " < " + rows);
+    }
+  }
+
+  private static void checkGgufQuantizedBatchedArguments(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      int blockSize,
+      int blockBytes) {
+    Objects.requireNonNull(queries, "queries");
+    Objects.requireNonNull(out, "out");
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
+    }
+    checkGgufQuantizedMatrixArguments(qWeight, rows, cols, blockSize, blockBytes);
+    int queryEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    if (queries.length < queryEntries) {
+      throw new IllegalArgumentException(
+          "queries.length must be >= batchSize * cols: " + queries.length + " < " + queryEntries);
+    }
+    if (out.length < outputEntries) {
+      throw new IllegalArgumentException(
+          "out.length must be >= batchSize * rows: " + out.length + " < " + outputEntries);
     }
   }
 
