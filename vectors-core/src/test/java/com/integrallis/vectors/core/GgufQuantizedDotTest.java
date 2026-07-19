@@ -19,11 +19,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Random;
 import java.util.function.IntUnaryOperator;
 import org.junit.jupiter.api.Tag;
@@ -139,6 +144,123 @@ class GgufQuantizedDotTest {
       float actual = VectorUtil.ggufQ6_KDotProduct(query, segment, 0, query.length);
 
       assertThat(actual).isCloseTo(expected, within(1e-5f));
+    }
+  }
+
+  @Test
+  void q6_KLongOffsetRowsMatchTheEstablishedMappedKernelExactly() throws IOException {
+    int rows = 2;
+    int cols = 512;
+    byte[] firstRow = repeat(q6KBlock(0.125f, i -> (i * 5 + 3) % 64 - 32, i -> i - 8), 2);
+    byte[] secondRow = repeat(q6KBlock(-0.25f, i -> 31 - (i % 64), i -> 7 - i), 2);
+    byte[] matrix = concat(firstRow, secondRow);
+    float[] query = patternedQuery(cols);
+    float[] expected = new float[rows];
+    byte[] q8Quants = new byte[cols];
+    float[] q8Scales = new float[cols / 256];
+    Path path = Files.createTempFile("vectors-q6-k-", ".bin");
+    Files.write(path, matrix);
+
+    try (Arena arena = Arena.ofConfined();
+        FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+      MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, matrix.length, arena);
+      assertThat(mapped.isMapped()).isTrue();
+
+      VectorUtil.ggufQ6_KQ8_KBatchDotProduct(
+          query, mapped, rows, cols, expected, q8Quants, q8Scales);
+      GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, null);
+
+      long rowBytes = firstRow.length;
+      float[] actual = {
+        PanamaVectorUtilSupport.ggufQ6_KQ8_KLongOffsetRowDot(
+            mapped, 0, rowBytes, q8Quants, q8Scales),
+        PanamaVectorUtilSupport.ggufQ6_KQ8_KLongOffsetRowDot(
+            mapped, rowBytes, rowBytes, q8Quants, q8Scales)
+      };
+
+      assertThat(actual).containsExactly(expected);
+    } finally {
+      Files.deleteIfExists(path);
+    }
+  }
+
+  @Test
+  void q4_KLongOffsetRowsMatchTheEstablishedMappedKernelExactly() throws IOException {
+    int rows = 2;
+    int cols = 512;
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] firstRow = repeat(q4KBlock(0.125f, 0.0625f, i -> (i * 5 + 3) & 0x0F, scales, mins), 2);
+    byte[] secondRow = repeat(q4KBlock(-0.25f, 0.03125f, i -> 15 - (i & 0x0F), scales, mins), 2);
+    byte[] matrix = concat(firstRow, secondRow);
+    float[] query = patternedQuery(cols);
+    float[] expected = new float[rows];
+    byte[] q8Quants = new byte[cols];
+    float[] q8Scales = new float[cols / 256];
+    short[] q8Sums = new short[cols / 16];
+    Path path = Files.createTempFile("vectors-q4-k-", ".bin");
+    Files.write(path, matrix);
+
+    try (Arena arena = Arena.ofConfined();
+        FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+      MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, matrix.length, arena);
+      assertThat(mapped.isMapped()).isTrue();
+
+      VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
+          query, mapped, rows, cols, expected, q8Quants, q8Scales, q8Sums);
+      GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
+
+      long rowBytes = firstRow.length;
+      float[] actual = {
+        PanamaVectorUtilSupport.ggufQ4_KQ8_KLongOffsetRowDot(
+            mapped, 0, rowBytes, q8Quants, q8Scales, q8Sums),
+        PanamaVectorUtilSupport.ggufQ4_KQ8_KLongOffsetRowDot(
+            mapped, rowBytes, rowBytes, q8Quants, q8Scales, q8Sums)
+      };
+
+      assertThat(actual).containsExactly(expected);
+    } finally {
+      Files.deleteIfExists(path);
+    }
+  }
+
+  @Test
+  void q5_KLongOffsetRowsMatchTheEstablishedMappedKernelExactly() throws IOException {
+    int rows = 2;
+    int cols = 512;
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] firstRow = repeat(q5KBlock(0.125f, 0.0625f, i -> (i * 7 + 3) & 0x1F, scales, mins), 2);
+    byte[] secondRow = repeat(q5KBlock(-0.25f, 0.03125f, i -> 31 - (i & 0x1F), scales, mins), 2);
+    byte[] matrix = concat(firstRow, secondRow);
+    float[] query = patternedQuery(cols);
+    float[] expected = new float[rows];
+    byte[] q8Quants = new byte[cols];
+    float[] q8Scales = new float[cols / 256];
+    short[] q8Sums = new short[cols / 16];
+    Path path = Files.createTempFile("vectors-q5-k-", ".bin");
+    Files.write(path, matrix);
+
+    try (Arena arena = Arena.ofConfined();
+        FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+      MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, matrix.length, arena);
+      assertThat(mapped.isMapped()).isTrue();
+
+      VectorUtil.ggufQ5_KQ8_KBatchDotProduct(
+          query, mapped, rows, cols, expected, q8Quants, q8Scales, q8Sums);
+      GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
+
+      long rowBytes = firstRow.length;
+      float[] actual = {
+        PanamaVectorUtilSupport.ggufQ5_KQ8_KLongOffsetRowDot(
+            mapped, 0, rowBytes, q8Quants, q8Scales, q8Sums),
+        PanamaVectorUtilSupport.ggufQ5_KQ8_KLongOffsetRowDot(
+            mapped, rowBytes, rowBytes, q8Quants, q8Scales, q8Sums)
+      };
+
+      assertThat(actual).containsExactly(expected);
+    } finally {
+      Files.deleteIfExists(path);
     }
   }
 

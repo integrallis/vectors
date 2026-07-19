@@ -73,6 +73,24 @@ class VectorizationProviderTest {
   }
 
   @Test
+  void toggleSummaryReportsMappedKQuantLongOffsetProperty() {
+    String key = PanamaConstants.MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY;
+    String prior = System.getProperty(key);
+    System.setProperty(key, "true");
+    try {
+      String summary =
+          VectorizationProvider.buildToggleSummary(VectorizationProvider.getInstance());
+      assertThat(summary).contains(key + "=true");
+    } finally {
+      if (prior == null) {
+        System.clearProperty(key);
+      } else {
+        System.setProperty(key, prior);
+      }
+    }
+  }
+
+  @Test
   void isPanamaEnabledReturnsBooleanWithoutCrashing() {
     // On JDK 25+ with --add-modules jdk.incubator.vector, this should be true
     boolean enabled = VectorizationProvider.isPanamaEnabled();

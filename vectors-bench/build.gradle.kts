@@ -82,7 +82,8 @@ jmh {
         "vectors.gguf.parallelThreshold",
         "vectors.gguf.executor",
         "vectors.gguf.threads",
-        "vectors.gguf.chunksPerThread"
+        "vectors.gguf.chunksPerThread",
+        "vectors.gguf.mappedKQuantLongOffsets"
     ).forEach { key ->
         (project.findProperty(key) as String?)?.let { jvmArgs.add("-D$key=$it") }
     }

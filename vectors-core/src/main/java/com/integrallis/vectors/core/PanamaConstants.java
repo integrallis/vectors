@@ -48,6 +48,7 @@ public final class PanamaConstants {
 
   private static final int SMALLEST_SIMD_BITS = 64;
   private static final int LARGEST_SIMD_BITS = 512;
+  static final String MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY = "vectors.gguf.mappedKQuantLongOffsets";
 
   /**
    * The resolved SIMD register-width ceiling in bits. Defaults to {@link #DEFAULT_MAX_BITS};
@@ -109,6 +110,22 @@ public final class PanamaConstants {
               + parsed);
     }
     return parsed;
+  }
+
+  static boolean useMappedKQuantLongOffsets(int runtimeFeature, boolean mapped, String configured) {
+    if (!mapped || configured == null || configured.isBlank()) {
+      return false;
+    }
+    return switch (configured.trim().toLowerCase(Locale.ROOT)) {
+      case "true" -> true;
+      case "false" -> false;
+      default ->
+          throw new IllegalArgumentException(
+              "-D"
+                  + MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY
+                  + " must be true or false; got: "
+                  + configured);
+    };
   }
 
   /**

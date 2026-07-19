@@ -16,6 +16,7 @@
 package com.integrallis.vectors.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,18 @@ class PanamaConstantsTest {
     assertThat(PanamaConstants.hasFastVectorFma("aarch64", "Linux", nonAmd, 256)).isTrue();
     assertThat(PanamaConstants.hasFastVectorFma("arm64", "Mac OS X", nonAmd, 128)).isFalse();
     assertThat(PanamaConstants.hasFastVectorFma("riscv64", "Linux", nonAmd, 256)).isFalse();
+  }
+
+  @Test
+  void mappedKQuantLongOffsetCandidateRequiresMappedStorageAndAnExplicitOverride() {
+    assertThat(PanamaConstants.useMappedKQuantLongOffsets(26, true, "true")).isTrue();
+    assertThat(PanamaConstants.useMappedKQuantLongOffsets(25, true, "true")).isTrue();
+    assertThat(PanamaConstants.useMappedKQuantLongOffsets(26, true, "false")).isFalse();
+    assertThat(PanamaConstants.useMappedKQuantLongOffsets(26, true, null)).isFalse();
+    assertThat(PanamaConstants.useMappedKQuantLongOffsets(26, false, "true")).isFalse();
+    assertThatThrownBy(() -> PanamaConstants.useMappedKQuantLongOffsets(26, true, "sometimes"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("vectors.gguf.mappedKQuantLongOffsets");
   }
 
   // ─── P3.5 SVE detection ────────────────────────────────────────────────────
