@@ -1695,6 +1695,137 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Two Q8_0 projections over an activation batch sharing Q8_0 quantization and row dispatch. */
+  default void ggufQ8_0Q8_0DualBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    ggufQ8_0Q8_0GroupedBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        secondWeight,
+        0,
+        secondOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  /** Three Q8_0 projections over an activation batch sharing Q8_0 quantization and row dispatch. */
+  default void ggufQ8_0Q8_0TripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    ggufQ8_0Q8_0GroupedBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  private static void ggufQ8_0Q8_0GroupedBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_0(
+          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
+    }
+
+    long rowBytes = ggufQ8_0RowBytes(cols);
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    int totalRows = Math.addExact(thirdStart, thirdRows);
+    int effectiveCols = Math.multiplyExact(cols, batchSize);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        thirdWeight,
+        totalRows,
+        effectiveCols,
+        GgufParallelSupport.Q8_MIN_ELEMENTS,
+        row -> {
+          MemorySegment weight;
+          float[] out;
+          int matrixRow;
+          int matrixRows;
+          if (row < secondStart) {
+            weight = firstWeight;
+            out = firstOut;
+            matrixRow = row;
+            matrixRows = firstRows;
+          } else if (row < thirdStart) {
+            weight = secondWeight;
+            out = secondOut;
+            matrixRow = row - secondStart;
+            matrixRows = secondRows;
+          } else {
+            weight = thirdWeight;
+            out = thirdOut;
+            matrixRow = row - thirdStart;
+            matrixRows = thirdRows;
+          }
+          for (int batch = 0; batch < batchSize; batch++) {
+            out[batch * matrixRows + matrixRow] =
+                ggufQ8_0Q8_0ScalarRowDot(
+                    weight,
+                    matrixRow * rowBytes,
+                    blocks,
+                    q8Quants,
+                    batch * cols,
+                    q8Scales,
+                    batch * blocks);
+          }
+        });
+  }
+
   /** Two Q8_0 projections sharing one Q8_0 activation quantization and row dispatch. */
   default void ggufQ8_0Q8_0DualMatVecDot(
       float[] query,

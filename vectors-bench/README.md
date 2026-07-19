@@ -26,8 +26,10 @@ warmups measured a 9.99 MB total allocation difference for the complete process,
 steady per-prefill allocation penalty. The previously retained mixed Q4_K/Q4_K/Q6_K path improved
 MiniCPM5 1B median TTFT from 8330.16 to 7948.31 ms.
 
-These results do not imply that every quantization format benefits from grouped dispatch. Q8_0
-remains disabled for batched grouping until its independent gate passes.
+These results do not imply that every projection shape benefits from grouped dispatch. A subsequent
+SmolLM2 360M gate retained Q8_0 batched dual dispatch for gate/up: median TTFT improved from 2612.09
+to 2581.73 ms and prefill from 60.22 to 61.01 tok/s across 18 trials per mode, with exact paired
+outputs. Q8_0 triple Q/K/V dispatch remains disabled in Models until its independent gate passes.
 
 ## Dependencies
 

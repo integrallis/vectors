@@ -3052,6 +3052,177 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void ggufQ8_0Q8_0DualBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    if (batchSize == 1) {
+      ggufQ8_0Q8_0DualMatVecDot(
+          queries,
+          firstWeight,
+          firstRows,
+          firstOut,
+          secondWeight,
+          secondRows,
+          secondOut,
+          cols,
+          q8Quants,
+          q8Scales);
+      return;
+    }
+    ggufQ8_0Q8_0GroupedBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        secondWeight,
+        0,
+        secondOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  @Override
+  public void ggufQ8_0Q8_0TripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    if (batchSize == 1) {
+      ggufQ8_0Q8_0TripleMatVecDot(
+          queries,
+          firstWeight,
+          firstRows,
+          firstOut,
+          secondWeight,
+          secondRows,
+          secondOut,
+          thirdWeight,
+          thirdRows,
+          thirdOut,
+          cols,
+          q8Quants,
+          q8Scales);
+      return;
+    }
+    ggufQ8_0Q8_0GroupedBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  private static void ggufQ8_0Q8_0GroupedBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_0(
+          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
+    }
+
+    long rowBytes = (long) blocks * GGUF_Q8_0_BLOCK_BYTES;
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    int totalRows = Math.addExact(thirdStart, thirdRows);
+    int effectiveCols = Math.multiplyExact(cols, batchSize);
+    GgufParallelSupport.forEachRow(
+        firstWeight,
+        secondWeight,
+        thirdWeight,
+        totalRows,
+        effectiveCols,
+        GgufParallelSupport.Q8_MIN_ELEMENTS,
+        row -> {
+          MemorySegment qWeight;
+          float[] out;
+          int matrixRow;
+          int matrixRows;
+          if (row < secondStart) {
+            qWeight = firstWeight;
+            out = firstOut;
+            matrixRow = row;
+            matrixRows = firstRows;
+          } else if (row < thirdStart) {
+            qWeight = secondWeight;
+            out = secondOut;
+            matrixRow = row - secondStart;
+            matrixRows = secondRows;
+          } else {
+            qWeight = thirdWeight;
+            out = thirdOut;
+            matrixRow = row - thirdStart;
+            matrixRows = thirdRows;
+          }
+
+          for (int batch = 0; batch < batchSize; batch++) {
+            out[batch * matrixRows + matrixRow] = 0.0f;
+          }
+
+          long rowOffset = matrixRow * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+            float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+            long weightOffset = blockOffset + Short.BYTES;
+            int blockActivationOffset = block * GGUF_Q_BLOCK_SIZE;
+            for (int batch = 0; batch < batchSize; batch++) {
+              float scale = weightScale * q8Scales[batch * blocks + block];
+              int integerSum =
+                  q8_0Q8_0IntegerDot(
+                      qWeight, weightOffset, q8Quants, batch * cols + blockActivationOffset);
+              int outputIndex = batch * matrixRows + matrixRow;
+              out[outputIndex] = MathUtil.fma(scale, integerSum, out[outputIndex]);
+            }
+          }
+        });
+  }
+
+  @Override
   public void ggufQ8_0Q8_0DualMatVecDot(
       float[] query,
       MemorySegment firstWeight,

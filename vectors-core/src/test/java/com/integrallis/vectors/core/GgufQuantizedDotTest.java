@@ -1082,6 +1082,97 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q8_0Q8_0DualBatchedMatmulMatchesSeparateBatchedMatmulsExactly() {
+    int batchSize = 3;
+    int cols = 64;
+    int firstRows = 2;
+    int secondRows = 3;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] firstRow = repeat(q8Block(0.125f, index -> index * 7 - 53), 2);
+    byte[] secondRow = repeat(q8Block(-0.25f, index -> 61 - index * 5), 2);
+    MemorySegment firstWeight = MemorySegment.ofArray(repeat(firstRow, firstRows));
+    MemorySegment secondWeight = MemorySegment.ofArray(repeat(secondRow, secondRows));
+    float[] expectedFirst = new float[batchSize * firstRows];
+    float[] expectedSecond = new float[batchSize * secondRows];
+    float[] actualFirst = new float[batchSize * firstRows];
+    float[] actualSecond = new float[batchSize * secondRows];
+    byte[] quants = new byte[batchSize * cols];
+    float[] scales = new float[batchSize * (cols / 32)];
+
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmul(
+        queries, firstWeight, batchSize, firstRows, cols, expectedFirst, quants, scales);
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmul(
+        queries, secondWeight, batchSize, secondRows, cols, expectedSecond, quants, scales);
+
+    VectorUtil.ggufQ8_0Q8_0DualBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        batchSize,
+        cols,
+        quants,
+        scales);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+  }
+
+  @Test
+  void q8_0Q8_0TripleBatchedMatmulMatchesSeparateBatchedMatmulsExactly() {
+    int batchSize = 3;
+    int cols = 64;
+    int firstRows = 2;
+    int secondRows = 3;
+    int thirdRows = 1;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] firstRow = repeat(q8Block(0.125f, index -> index * 7 - 53), 2);
+    byte[] secondRow = repeat(q8Block(-0.25f, index -> 61 - index * 5), 2);
+    byte[] thirdRow = repeat(q8Block(0.03125f, index -> index * 3 - 41), 2);
+    MemorySegment firstWeight = MemorySegment.ofArray(repeat(firstRow, firstRows));
+    MemorySegment secondWeight = MemorySegment.ofArray(repeat(secondRow, secondRows));
+    MemorySegment thirdWeight = MemorySegment.ofArray(repeat(thirdRow, thirdRows));
+    float[] expectedFirst = new float[batchSize * firstRows];
+    float[] expectedSecond = new float[batchSize * secondRows];
+    float[] expectedThird = new float[batchSize * thirdRows];
+    float[] actualFirst = new float[batchSize * firstRows];
+    float[] actualSecond = new float[batchSize * secondRows];
+    float[] actualThird = new float[batchSize * thirdRows];
+    byte[] quants = new byte[batchSize * cols];
+    float[] scales = new float[batchSize * (cols / 32)];
+
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmul(
+        queries, firstWeight, batchSize, firstRows, cols, expectedFirst, quants, scales);
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmul(
+        queries, secondWeight, batchSize, secondRows, cols, expectedSecond, quants, scales);
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmul(
+        queries, thirdWeight, batchSize, thirdRows, cols, expectedThird, quants, scales);
+
+    VectorUtil.ggufQ8_0Q8_0TripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        thirdWeight,
+        thirdRows,
+        actualThird,
+        batchSize,
+        cols,
+        quants,
+        scales);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+    assertThat(actualThird).containsExactly(expectedThird);
+  }
+
+  @Test
   void q8_0Q8_0BatchedMatmulMatchesGemvAtProjectionScaleAfterWarmup() {
     int batchSize = 4;
     int rows = 512;
