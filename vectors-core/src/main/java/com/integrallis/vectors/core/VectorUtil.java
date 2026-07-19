@@ -1476,6 +1476,117 @@ public final class VectorUtil {
         queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
   }
 
+  /** Two Q8_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */
+  public static void ggufQ8_0Q8_0DualBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        firstWeight,
+        batchSize,
+        firstRows,
+        cols,
+        firstOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        secondWeight,
+        batchSize,
+        secondRows,
+        cols,
+        secondOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    checkGgufActivationScratch(
+        q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    IMPL.ggufQ8_0Q8_0DualBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
+  /** Three Q8_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */
+  public static void ggufQ8_0Q8_0TripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        firstWeight,
+        batchSize,
+        firstRows,
+        cols,
+        firstOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        secondWeight,
+        batchSize,
+        secondRows,
+        cols,
+        secondOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        thirdWeight,
+        batchSize,
+        thirdRows,
+        cols,
+        thirdOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    checkGgufActivationScratch(
+        q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    IMPL.ggufQ8_0Q8_0TripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales);
+  }
+
   /**
    * Multiplies two Q8_0 matrices by the same activation with one Q8_0 quantization and one row
    * dispatch.
