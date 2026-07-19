@@ -608,6 +608,125 @@ public final class VectorUtil {
         queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, laneScratch);
   }
 
+  /** Two Q4_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */
+  public static void ggufQ4_0Q8_0DualBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      float[] laneScratch) {
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        firstWeight,
+        batchSize,
+        firstRows,
+        cols,
+        firstOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        secondWeight,
+        batchSize,
+        secondRows,
+        cols,
+        secondOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    checkGgufActivationScratch(
+        q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    checkGgufQ4LaneScratch(
+        laneScratch, batchSize, Math.addExact(firstRows, secondRows), "dual Q4 lane scratch");
+    IMPL.ggufQ4_0Q8_0DualBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        laneScratch);
+  }
+
+  /** Three Q4_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */
+  public static void ggufQ4_0Q8_0TripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      float[] laneScratch) {
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        firstWeight,
+        batchSize,
+        firstRows,
+        cols,
+        firstOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        secondWeight,
+        batchSize,
+        secondRows,
+        cols,
+        secondOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    checkGgufQuantizedBatchedArguments(
+        queries,
+        thirdWeight,
+        batchSize,
+        thirdRows,
+        cols,
+        thirdOut,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    checkGgufActivationScratch(
+        q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    int totalRows = Math.addExact(Math.addExact(firstRows, secondRows), thirdRows);
+    checkGgufQ4LaneScratch(laneScratch, batchSize, totalRows, "triple Q4 lane scratch");
+    IMPL.ggufQ4_0Q8_0TripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        laneScratch);
+  }
+
   /** Batched row-major GEMV over GGUF Q4_K rows. */
   public static void ggufQ4_KBatchDotProduct(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
@@ -1941,6 +2060,20 @@ public final class VectorUtil {
               + q8Sums.length
               + " < "
               + requiredSums);
+    }
+  }
+
+  private static void checkGgufQ4LaneScratch(
+      float[] laneScratch, int batchSize, int rows, String label) {
+    Objects.requireNonNull(laneScratch, "laneScratch");
+    int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    int required = checkedProduct(outputEntries, 8, label);
+    if (laneScratch.length < required) {
+      throw new IllegalArgumentException(
+          "lane scratch length must be >= batchSize * rows * 8: "
+              + laneScratch.length
+              + " < "
+              + required);
     }
   }
 

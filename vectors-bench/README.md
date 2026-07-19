@@ -16,6 +16,19 @@ Benchmarks for the Vectors library.
 ./gradlew :vectors-bench:jmh
 ```
 
+## Grouped GGUF projection gates
+
+Grouped batched GGUF APIs are retained by quantization format only after an exact real-model gate
+in Models. On Java 25 and an eight-vCPU AMD EPYC-Milan host, the Q4_0 dual/triple path improved
+Qwen3 0.6B median TTFT from 3127.92 to 3096.45 ms across 18 trials per mode, with identical token
+counts and output hashes in every counterbalanced pair. A ten-prompt allocation JFR with five
+warmups measured a 9.99 MB total allocation difference for the complete process, ruling out a
+steady per-prefill allocation penalty. The previously retained mixed Q4_K/Q4_K/Q6_K path improved
+MiniCPM5 1B median TTFT from 8330.16 to 7948.31 ms.
+
+These results do not imply that every quantization format benefits from grouped dispatch. Q8_0
+remains disabled for batched grouping until its independent gate passes.
+
 ## Dependencies
 
 - All Vectors library modules
