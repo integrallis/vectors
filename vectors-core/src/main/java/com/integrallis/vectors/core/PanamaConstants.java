@@ -50,6 +50,12 @@ public final class PanamaConstants {
   private static final int LARGEST_SIMD_BITS = 512;
   static final String MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY = "vectors.gguf.mappedKQuantLongOffsets";
 
+  enum MappedKQuantFormat {
+    Q4_K,
+    Q5_K,
+    Q6_K
+  }
+
   /**
    * The resolved SIMD register-width ceiling in bits. Defaults to {@link #DEFAULT_MAX_BITS};
    * override with {@code -Dvectors.maxBits=<64|128|256|512>}. The effective species width is {@code
@@ -112,19 +118,46 @@ public final class PanamaConstants {
     return parsed;
   }
 
-  static boolean useMappedKQuantLongOffsets(int runtimeFeature, boolean mapped, String configured) {
-    if (!mapped || configured == null || configured.isBlank()) {
+  static boolean useMappedKQuantLongOffsets(MappedKQuantFormat format, boolean mapped) {
+    return useMappedKQuantLongOffsets(
+        Runtime.version().feature(),
+        System.getProperty("os.arch", ""),
+        mapped,
+        format,
+        System.getProperty(MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY));
+  }
+
+  static boolean useMappedKQuantLongOffsets(
+      int runtimeFeature,
+      String arch,
+      boolean mapped,
+      MappedKQuantFormat format,
+      String configured) {
+    if (!mapped) {
       return false;
     }
-    return switch (configured.trim().toLowerCase(Locale.ROOT)) {
-      case "true" -> true;
-      case "false" -> false;
-      default ->
-          throw new IllegalArgumentException(
-              "-D"
-                  + MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY
-                  + " must be true or false; got: "
-                  + configured);
+    String mode = configured == null || configured.isBlank() ? "auto" : configured.trim();
+    switch (mode.toLowerCase(Locale.ROOT)) {
+      case "true":
+        return true;
+      case "false":
+        return false;
+      case "auto":
+        break;
+      default:
+        throw new IllegalArgumentException(
+            "-D"
+                + MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY
+                + " must be auto, true, or false; got: "
+                + configured);
+    }
+    if (!isX86Arch(arch)) {
+      return false;
+    }
+    return switch (format) {
+      case Q4_K -> runtimeFeature >= 25;
+      case Q5_K -> false;
+      case Q6_K -> runtimeFeature >= 26;
     };
   }
 

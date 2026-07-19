@@ -48,6 +48,8 @@ class VectorizationProviderTest {
     assertThat(summary).contains("ggufExecutor=persistent");
     assertThat(summary).contains("ggufThreads=" + GgufParallelSupport.parallelism());
     assertThat(summary).contains("ggufChunksPerThread=2");
+    assertThat(summary).contains("mappedKQuantLongOffsets=auto(");
+    assertThat(summary).contains("q4=").contains("q5=").contains("q6=");
     assertThat(summary).contains("toggles=[");
     assertThat(summary).endsWith("]");
   }
@@ -80,7 +82,9 @@ class VectorizationProviderTest {
     try {
       String summary =
           VectorizationProvider.buildToggleSummary(VectorizationProvider.getInstance());
-      assertThat(summary).contains(key + "=true");
+      assertThat(summary)
+          .contains("mappedKQuantLongOffsets=true(q4=true,q5=true,q6=true)")
+          .contains(key + "=true");
     } finally {
       if (prior == null) {
         System.clearProperty(key);

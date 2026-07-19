@@ -87,13 +87,43 @@ class PanamaConstantsTest {
   }
 
   @Test
-  void mappedKQuantLongOffsetCandidateRequiresMappedStorageAndAnExplicitOverride() {
-    assertThat(PanamaConstants.useMappedKQuantLongOffsets(26, true, "true")).isTrue();
-    assertThat(PanamaConstants.useMappedKQuantLongOffsets(25, true, "true")).isTrue();
-    assertThat(PanamaConstants.useMappedKQuantLongOffsets(26, true, "false")).isFalse();
-    assertThat(PanamaConstants.useMappedKQuantLongOffsets(26, true, null)).isFalse();
-    assertThat(PanamaConstants.useMappedKQuantLongOffsets(26, false, "true")).isFalse();
-    assertThatThrownBy(() -> PanamaConstants.useMappedKQuantLongOffsets(26, true, "sometimes"))
+  void mappedKQuantLongOffsetPolicyIsFormatRuntimeAndPlatformAware() {
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                25, "amd64", true, PanamaConstants.MappedKQuantFormat.Q4_K, null))
+        .isTrue();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "amd64", true, PanamaConstants.MappedKQuantFormat.Q6_K, "auto"))
+        .isTrue();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                25, "amd64", true, PanamaConstants.MappedKQuantFormat.Q6_K, null))
+        .isFalse();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "amd64", true, PanamaConstants.MappedKQuantFormat.Q5_K, null))
+        .isFalse();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "arm64", true, PanamaConstants.MappedKQuantFormat.Q4_K, null))
+        .isFalse();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                25, "arm64", true, PanamaConstants.MappedKQuantFormat.Q5_K, "true"))
+        .isTrue();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "amd64", true, PanamaConstants.MappedKQuantFormat.Q4_K, "false"))
+        .isFalse();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "amd64", false, PanamaConstants.MappedKQuantFormat.Q4_K, "true"))
+        .isFalse();
+    assertThatThrownBy(
+            () ->
+                PanamaConstants.useMappedKQuantLongOffsets(
+                    26, "amd64", true, PanamaConstants.MappedKQuantFormat.Q4_K, "sometimes"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("vectors.gguf.mappedKQuantLongOffsets");
   }

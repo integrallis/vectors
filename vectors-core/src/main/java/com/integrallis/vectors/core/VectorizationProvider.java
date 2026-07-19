@@ -123,6 +123,33 @@ public final class VectorizationProvider {
     String ggufChunksPerThread = System.getProperty("vectors.gguf.chunksPerThread");
     String mappedKQuantLongOffsets =
         System.getProperty(PanamaConstants.MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY);
+    String mappedKQuantMode =
+        mappedKQuantLongOffsets == null || mappedKQuantLongOffsets.isBlank()
+            ? "auto"
+            : mappedKQuantLongOffsets.trim().toLowerCase(Locale.ROOT);
+    int runtimeFeature = Runtime.version().feature();
+    String architecture = System.getProperty("os.arch", "");
+    boolean mappedQ4LongOffsets =
+        PanamaConstants.useMappedKQuantLongOffsets(
+            runtimeFeature,
+            architecture,
+            true,
+            PanamaConstants.MappedKQuantFormat.Q4_K,
+            mappedKQuantLongOffsets);
+    boolean mappedQ5LongOffsets =
+        PanamaConstants.useMappedKQuantLongOffsets(
+            runtimeFeature,
+            architecture,
+            true,
+            PanamaConstants.MappedKQuantFormat.Q5_K,
+            mappedKQuantLongOffsets);
+    boolean mappedQ6LongOffsets =
+        PanamaConstants.useMappedKQuantLongOffsets(
+            runtimeFeature,
+            architecture,
+            true,
+            PanamaConstants.MappedKQuantFormat.Q6_K,
+            mappedKQuantLongOffsets);
 
     StringBuilder sb = new StringBuilder("vectors-core: provider=");
     sb.append(impl.getClass().getSimpleName());
@@ -138,6 +165,15 @@ public final class VectorizationProvider {
         .append(GgufParallelSupport.executionMode().name().toLowerCase(Locale.ROOT));
     sb.append(" ggufThreads=").append(GgufParallelSupport.parallelism());
     sb.append(" ggufChunksPerThread=").append(GgufParallelSupport.chunksPerThread());
+    sb.append(" mappedKQuantLongOffsets=")
+        .append(mappedKQuantMode)
+        .append("(q4=")
+        .append(mappedQ4LongOffsets)
+        .append(",q5=")
+        .append(mappedQ5LongOffsets)
+        .append(",q6=")
+        .append(mappedQ6LongOffsets)
+        .append(')');
     sb.append(" toggles=[");
     boolean first = true;
     if (forceScalar != null) {

@@ -207,7 +207,7 @@ class GgufQuantizedDotTest {
       assertThat(mapped.isMapped()).isTrue();
 
       VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
-          query, mapped, rows, cols, expected, q8Quants, q8Scales, q8Sums);
+          query, MemorySegment.ofArray(matrix), rows, cols, expected, q8Quants, q8Scales, q8Sums);
       GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
 
       long rowBytes = firstRow.length;
