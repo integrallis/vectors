@@ -121,6 +121,10 @@ public final class VectorizationProvider {
     String ggufExecutor = System.getProperty("vectors.gguf.executor");
     String ggufThreads = System.getProperty("vectors.gguf.threads");
     String ggufChunksPerThread = System.getProperty("vectors.gguf.chunksPerThread");
+    String mappedKQuantLongOffsets =
+        System.getProperty(PanamaConstants.MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY);
+    PanamaConstants.MappedKQuantLongOffsetPolicy mappedKQuantPolicy =
+        PanamaConstants.mappedKQuantLongOffsetPolicy();
 
     StringBuilder sb = new StringBuilder("vectors-core: provider=");
     sb.append(impl.getClass().getSimpleName());
@@ -136,6 +140,15 @@ public final class VectorizationProvider {
         .append(GgufParallelSupport.executionMode().name().toLowerCase(Locale.ROOT));
     sb.append(" ggufThreads=").append(GgufParallelSupport.parallelism());
     sb.append(" ggufChunksPerThread=").append(GgufParallelSupport.chunksPerThread());
+    sb.append(" mappedKQuantLongOffsets=")
+        .append(mappedKQuantPolicy.mode())
+        .append("(q4=")
+        .append(mappedKQuantPolicy.q4())
+        .append(",q5=")
+        .append(mappedKQuantPolicy.q5())
+        .append(",q6=")
+        .append(mappedKQuantPolicy.q6())
+        .append(')');
     sb.append(" toggles=[");
     boolean first = true;
     if (forceScalar != null) {
@@ -180,6 +193,13 @@ public final class VectorizationProvider {
     if (ggufChunksPerThread != null) {
       if (!first) sb.append(", ");
       sb.append("vectors.gguf.chunksPerThread=").append(ggufChunksPerThread);
+      first = false;
+    }
+    if (mappedKQuantLongOffsets != null) {
+      if (!first) sb.append(", ");
+      sb.append(PanamaConstants.MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY)
+          .append('=')
+          .append(mappedKQuantLongOffsets);
       first = false;
     }
     if (first) sb.append("(defaults — no -Dvectors.* overrides)");

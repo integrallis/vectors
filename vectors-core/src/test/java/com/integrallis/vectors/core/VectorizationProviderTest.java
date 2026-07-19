@@ -48,6 +48,8 @@ class VectorizationProviderTest {
     assertThat(summary).contains("ggufExecutor=persistent");
     assertThat(summary).contains("ggufThreads=" + GgufParallelSupport.parallelism());
     assertThat(summary).contains("ggufChunksPerThread=2");
+    assertThat(summary).contains("mappedKQuantLongOffsets=auto(");
+    assertThat(summary).contains("q4=").contains("q5=").contains("q6=");
     assertThat(summary).contains("toggles=[");
     assertThat(summary).endsWith("]");
   }
@@ -63,6 +65,34 @@ class VectorizationProviderTest {
       assertThat(summary)
           .as("forced-scalar property must appear verbatim in the toggles list")
           .contains("vectors.forceScalar=true");
+    } finally {
+      if (prior == null) {
+        System.clearProperty(key);
+      } else {
+        System.setProperty(key, prior);
+      }
+    }
+  }
+
+  @Test
+  void toggleSummaryReportsMappedKQuantLongOffsetPropertyWithoutChangingStartupPolicy() {
+    String key = PanamaConstants.MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY;
+    String prior = System.getProperty(key);
+    PanamaConstants.MappedKQuantLongOffsetPolicy startupPolicy =
+        PanamaConstants.mappedKQuantLongOffsetPolicy();
+    System.setProperty(key, "true");
+    try {
+      String summary =
+          VectorizationProvider.buildToggleSummary(VectorizationProvider.getInstance());
+      assertThat(summary)
+          .contains(
+              "mappedKQuantLongOffsets=%s(q4=%s,q5=%s,q6=%s)"
+                  .formatted(
+                      startupPolicy.mode(),
+                      startupPolicy.q4(),
+                      startupPolicy.q5(),
+                      startupPolicy.q6()))
+          .contains(key + "=true");
     } finally {
       if (prior == null) {
         System.clearProperty(key);

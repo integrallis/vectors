@@ -16,6 +16,7 @@
 package com.integrallis.vectors.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,68 @@ class PanamaConstantsTest {
     assertThat(PanamaConstants.hasFastVectorFma("aarch64", "Linux", nonAmd, 256)).isTrue();
     assertThat(PanamaConstants.hasFastVectorFma("arm64", "Mac OS X", nonAmd, 128)).isFalse();
     assertThat(PanamaConstants.hasFastVectorFma("riscv64", "Linux", nonAmd, 256)).isFalse();
+  }
+
+  @Test
+  void mappedKQuantLongOffsetPolicyIsFormatRuntimeAndPlatformAware() {
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                25, "amd64", true, PanamaConstants.MappedKQuantFormat.Q4_K, null))
+        .isTrue();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "amd64", true, PanamaConstants.MappedKQuantFormat.Q6_K, "auto"))
+        .isTrue();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                25, "amd64", true, PanamaConstants.MappedKQuantFormat.Q6_K, null))
+        .isFalse();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "amd64", true, PanamaConstants.MappedKQuantFormat.Q5_K, null))
+        .isFalse();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "arm64", true, PanamaConstants.MappedKQuantFormat.Q4_K, null))
+        .isFalse();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                25, "arm64", true, PanamaConstants.MappedKQuantFormat.Q5_K, "true"))
+        .isTrue();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "amd64", true, PanamaConstants.MappedKQuantFormat.Q4_K, "false"))
+        .isFalse();
+    assertThat(
+            PanamaConstants.useMappedKQuantLongOffsets(
+                26, "amd64", false, PanamaConstants.MappedKQuantFormat.Q4_K, "true"))
+        .isFalse();
+    assertThatThrownBy(
+            () ->
+                PanamaConstants.useMappedKQuantLongOffsets(
+                    26, "amd64", true, PanamaConstants.MappedKQuantFormat.Q4_K, "sometimes"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("vectors.gguf.mappedKQuantLongOffsets");
+  }
+
+  @Test
+  void mappedKQuantLongOffsetPolicyResolvesAllHotPathDecisionsOnce() {
+    PanamaConstants.MappedKQuantLongOffsetPolicy jdk25 =
+        PanamaConstants.resolveMappedKQuantLongOffsetPolicy(25, "amd64", null);
+    PanamaConstants.MappedKQuantLongOffsetPolicy jdk26 =
+        PanamaConstants.resolveMappedKQuantLongOffsetPolicy(26, "amd64", "auto");
+    PanamaConstants.MappedKQuantLongOffsetPolicy forced =
+        PanamaConstants.resolveMappedKQuantLongOffsetPolicy(25, "arm64", "true");
+
+    assertThat(jdk25.q4()).isTrue();
+    assertThat(jdk25.q5()).isFalse();
+    assertThat(jdk25.q6()).isFalse();
+    assertThat(jdk26.q4()).isTrue();
+    assertThat(jdk26.q5()).isFalse();
+    assertThat(jdk26.q6()).isTrue();
+    assertThat(forced.q4()).isTrue();
+    assertThat(forced.q5()).isTrue();
+    assertThat(forced.q6()).isTrue();
   }
 
   // ─── P3.5 SVE detection ────────────────────────────────────────────────────
