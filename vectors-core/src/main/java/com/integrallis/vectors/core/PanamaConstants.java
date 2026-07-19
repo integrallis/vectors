@@ -56,6 +56,26 @@ public final class PanamaConstants {
     Q6_K
   }
 
+  record MappedKQuantLongOffsetPolicy(String mode, boolean q4, boolean q5, boolean q6) {
+    boolean enabled(MappedKQuantFormat format) {
+      return switch (format) {
+        case Q4_K -> q4;
+        case Q5_K -> q5;
+        case Q6_K -> q6;
+      };
+    }
+  }
+
+  private static final MappedKQuantLongOffsetPolicy MAPPED_K_QUANT_LONG_OFFSET_POLICY =
+      resolveMappedKQuantLongOffsetPolicy(
+          Runtime.version().feature(),
+          System.getProperty("os.arch", ""),
+          System.getProperty(MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY));
+
+  static final boolean USE_MAPPED_Q4_K_LONG_OFFSETS = MAPPED_K_QUANT_LONG_OFFSET_POLICY.q4();
+  static final boolean USE_MAPPED_Q5_K_LONG_OFFSETS = MAPPED_K_QUANT_LONG_OFFSET_POLICY.q5();
+  static final boolean USE_MAPPED_Q6_K_LONG_OFFSETS = MAPPED_K_QUANT_LONG_OFFSET_POLICY.q6();
+
   /**
    * The resolved SIMD register-width ceiling in bits. Defaults to {@link #DEFAULT_MAX_BITS};
    * override with {@code -Dvectors.maxBits=<64|128|256|512>}. The effective species width is {@code
@@ -119,12 +139,7 @@ public final class PanamaConstants {
   }
 
   static boolean useMappedKQuantLongOffsets(MappedKQuantFormat format, boolean mapped) {
-    return useMappedKQuantLongOffsets(
-        Runtime.version().feature(),
-        System.getProperty("os.arch", ""),
-        mapped,
-        format,
-        System.getProperty(MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY));
+    return mapped && MAPPED_K_QUANT_LONG_OFFSET_POLICY.enabled(format);
   }
 
   static boolean useMappedKQuantLongOffsets(
@@ -133,15 +148,18 @@ public final class PanamaConstants {
       boolean mapped,
       MappedKQuantFormat format,
       String configured) {
-    if (!mapped) {
-      return false;
-    }
+    return mapped
+        && resolveMappedKQuantLongOffsetPolicy(runtimeFeature, arch, configured).enabled(format);
+  }
+
+  static MappedKQuantLongOffsetPolicy resolveMappedKQuantLongOffsetPolicy(
+      int runtimeFeature, String arch, String configured) {
     String mode = configured == null || configured.isBlank() ? "auto" : configured.trim();
     switch (mode.toLowerCase(Locale.ROOT)) {
       case "true":
-        return true;
+        return new MappedKQuantLongOffsetPolicy("true", true, true, true);
       case "false":
-        return false;
+        return new MappedKQuantLongOffsetPolicy("false", false, false, false);
       case "auto":
         break;
       default:
@@ -152,13 +170,14 @@ public final class PanamaConstants {
                 + configured);
     }
     if (!isX86Arch(arch)) {
-      return false;
+      return new MappedKQuantLongOffsetPolicy("auto", false, false, false);
     }
-    return switch (format) {
-      case Q4_K -> runtimeFeature >= 25;
-      case Q5_K -> false;
-      case Q6_K -> runtimeFeature >= 26;
-    };
+    return new MappedKQuantLongOffsetPolicy(
+        "auto", runtimeFeature >= 25, false, runtimeFeature >= 26);
+  }
+
+  static MappedKQuantLongOffsetPolicy mappedKQuantLongOffsetPolicy() {
+    return MAPPED_K_QUANT_LONG_OFFSET_POLICY;
   }
 
   /**

@@ -128,6 +128,26 @@ class PanamaConstantsTest {
         .hasMessageContaining("vectors.gguf.mappedKQuantLongOffsets");
   }
 
+  @Test
+  void mappedKQuantLongOffsetPolicyResolvesAllHotPathDecisionsOnce() {
+    PanamaConstants.MappedKQuantLongOffsetPolicy jdk25 =
+        PanamaConstants.resolveMappedKQuantLongOffsetPolicy(25, "amd64", null);
+    PanamaConstants.MappedKQuantLongOffsetPolicy jdk26 =
+        PanamaConstants.resolveMappedKQuantLongOffsetPolicy(26, "amd64", "auto");
+    PanamaConstants.MappedKQuantLongOffsetPolicy forced =
+        PanamaConstants.resolveMappedKQuantLongOffsetPolicy(25, "arm64", "true");
+
+    assertThat(jdk25.q4()).isTrue();
+    assertThat(jdk25.q5()).isFalse();
+    assertThat(jdk25.q6()).isFalse();
+    assertThat(jdk26.q4()).isTrue();
+    assertThat(jdk26.q5()).isFalse();
+    assertThat(jdk26.q6()).isTrue();
+    assertThat(forced.q4()).isTrue();
+    assertThat(forced.q5()).isTrue();
+    assertThat(forced.q6()).isTrue();
+  }
+
   // ─── P3.5 SVE detection ────────────────────────────────────────────────────
 
   @Test

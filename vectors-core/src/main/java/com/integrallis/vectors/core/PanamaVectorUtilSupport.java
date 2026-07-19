@@ -785,8 +785,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
 
     long rowBytes = (long) (cols / GGUF_Q4_K_BLOCK_SIZE) * GGUF_Q4_K_BLOCK_BYTES;
-    if (PanamaConstants.useMappedKQuantLongOffsets(
-        PanamaConstants.MappedKQuantFormat.Q4_K, qWeight.isMapped())) {
+    if (qWeight.isMapped() && PanamaConstants.USE_MAPPED_Q4_K_LONG_OFFSETS) {
       GgufParallelSupport.forEachRow(
           qWeight,
           rows,
@@ -872,8 +871,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     long rowBytes = (long) blocks * GGUF_Q4_K_BLOCK_BYTES;
-    if (PanamaConstants.useMappedKQuantLongOffsets(
-        PanamaConstants.MappedKQuantFormat.Q4_K, qWeight.isMapped())) {
+    if (qWeight.isMapped() && PanamaConstants.USE_MAPPED_Q4_K_LONG_OFFSETS) {
       ggufQ4_KQ8_KLongOffsetBatchedMatmul(
           qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, q8Sums);
       return;
@@ -1094,9 +1092,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     int secondStart = firstRows;
     int thirdStart = Math.addExact(firstRows, secondRows);
     int totalRows = Math.addExact(thirdStart, thirdRows);
-    if (PanamaConstants.useMappedKQuantLongOffsets(
-        PanamaConstants.MappedKQuantFormat.Q4_K,
-        firstWeight.isMapped() && secondWeight.isMapped() && thirdWeight.isMapped())) {
+    if (firstWeight.isMapped()
+        && secondWeight.isMapped()
+        && thirdWeight.isMapped()
+        && PanamaConstants.USE_MAPPED_Q4_K_LONG_OFFSETS) {
       GgufParallelSupport.forEachRow(
           firstWeight,
           secondWeight,
@@ -1305,9 +1304,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     int secondStart = firstRows;
     int thirdStart = Math.addExact(firstRows, secondRows);
     int totalRows = Math.addExact(thirdStart, thirdRows);
-    if (PanamaConstants.useMappedKQuantLongOffsets(
-        PanamaConstants.MappedKQuantFormat.Q4_K,
-        firstWeight.isMapped() && secondWeight.isMapped() && thirdWeight.isMapped())) {
+    if (firstWeight.isMapped()
+        && secondWeight.isMapped()
+        && thirdWeight.isMapped()
+        && PanamaConstants.USE_MAPPED_Q4_K_LONG_OFFSETS) {
       GgufParallelSupport.forEachRow(
           firstWeight,
           secondWeight,
@@ -1479,8 +1479,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, q8Sums);
     long rowBytes = (long) (cols / GGUF_Q5_K_BLOCK_SIZE) * GGUF_Q5_K_BLOCK_BYTES;
-    if (PanamaConstants.useMappedKQuantLongOffsets(
-        PanamaConstants.MappedKQuantFormat.Q5_K, qWeight.isMapped())) {
+    if (qWeight.isMapped() && PanamaConstants.USE_MAPPED_Q5_K_LONG_OFFSETS) {
       GgufParallelSupport.forEachRow(
           qWeight,
           rows,
@@ -1719,9 +1718,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     int secondStart = firstRows;
     int thirdStart = Math.addExact(firstRows, secondRows);
     int totalRows = Math.addExact(thirdStart, thirdRows);
-    if (PanamaConstants.useMappedKQuantLongOffsets(
-        PanamaConstants.MappedKQuantFormat.Q5_K,
-        firstWeight.isMapped() && secondWeight.isMapped() && thirdWeight.isMapped())) {
+    if (firstWeight.isMapped()
+        && secondWeight.isMapped()
+        && thirdWeight.isMapped()
+        && PanamaConstants.USE_MAPPED_Q5_K_LONG_OFFSETS) {
       GgufParallelSupport.forEachRow(
           firstWeight,
           secondWeight,
@@ -2015,8 +2015,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     GgufQuantizationSupport.quantizeQ8_K(query, cols, q8Quants, q8Scales, null);
     long rowBytes = (long) (cols / GGUF_Q6_K_BLOCK_SIZE) * GGUF_Q6_K_BLOCK_BYTES;
-    if (PanamaConstants.useMappedKQuantLongOffsets(
-        PanamaConstants.MappedKQuantFormat.Q6_K, qWeight.isMapped())) {
+    if (qWeight.isMapped() && PanamaConstants.USE_MAPPED_Q6_K_LONG_OFFSETS) {
       GgufParallelSupport.forEachRow(
           qWeight,
           rows,

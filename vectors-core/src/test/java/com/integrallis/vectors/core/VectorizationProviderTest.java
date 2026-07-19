@@ -75,15 +75,23 @@ class VectorizationProviderTest {
   }
 
   @Test
-  void toggleSummaryReportsMappedKQuantLongOffsetProperty() {
+  void toggleSummaryReportsMappedKQuantLongOffsetPropertyWithoutChangingStartupPolicy() {
     String key = PanamaConstants.MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY;
     String prior = System.getProperty(key);
+    PanamaConstants.MappedKQuantLongOffsetPolicy startupPolicy =
+        PanamaConstants.mappedKQuantLongOffsetPolicy();
     System.setProperty(key, "true");
     try {
       String summary =
           VectorizationProvider.buildToggleSummary(VectorizationProvider.getInstance());
       assertThat(summary)
-          .contains("mappedKQuantLongOffsets=true(q4=true,q5=true,q6=true)")
+          .contains(
+              "mappedKQuantLongOffsets=%s(q4=%s,q5=%s,q6=%s)"
+                  .formatted(
+                      startupPolicy.mode(),
+                      startupPolicy.q4(),
+                      startupPolicy.q5(),
+                      startupPolicy.q6()))
           .contains(key + "=true");
     } finally {
       if (prior == null) {
