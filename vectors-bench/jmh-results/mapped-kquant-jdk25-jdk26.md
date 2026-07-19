@@ -9,7 +9,7 @@ publishes for Java 25. Java 26 is an optional runtime, not a new minimum.
 ## Environment
 
 - Branch: `perf/jdk26-mapped-kquant`
-- Candidate head: `a54986f`
+- Candidate head: `3cd0233`
 - Controlled host: AMD EPYC Milan, 4 physical cores / 8 vCPUs, AVX2, 30 GiB
 - Java 25: Temurin 25.0.3+9-LTS
 - Java 26: Temurin 26.0.1+8
@@ -47,19 +47,36 @@ kernel on the controlled host.
 MiniCPM5-1B-Q4_K_M used two warmups and ten measured 64-token trials at a
 2,048-token context with eight threads. The GGUF SHA-256 is
 `81b64d05a23b17b34c475f42b3e72fbde62d4b92cc34541f7a8031d0752deafa`.
+Both Java 26 runs reached the benchmark's `OFFLINE` acceptance tier. The
+candidate used the production `auto` policy, not a forced experimental mode.
 
-| Runtime | Metric | Legacy | Candidate | Change |
-| --- | --- | ---: | ---: | ---: |
-| Java 26.0.1 | p50 decode | 11.5456 tok/s | 12.7896 tok/s | +10.77% |
-| Java 26.0.1 | p50 TTFT | 10,820.8 ms | 9,427.8 ms | -12.87% |
-| Java 26.0.1 | p95 TTFT | 10,998.4 ms | 9,552.0 ms | -13.15% |
-| Java 25.0.3 | p50 decode | 13.2951 tok/s | 13.5012 tok/s | +1.55% |
-| Java 25.0.3 | p50 TTFT | 8,443.4 ms | 8,356.9 ms | -1.02% |
-| Java 25.0.3 | p95 TTFT | 8,557.4 ms | 8,493.4 ms | -0.75% |
+| Java 26.0.1 metric | Legacy | Auto | Change |
+| --- | ---: | ---: | ---: |
+| p50 decode | 10.2792 tok/s | 10.7403 tok/s | +4.49% |
+| p50 TTFT | 11,000.6 ms | 9,825.9 ms | -10.68% |
+| p95 TTFT | 11,142.7 ms | 9,962.5 ms | -10.59% |
+| p50 prefill | 13.6320 tok/s | 15.2581 tok/s | +11.93% |
+| p50 TPOT | 97.198 ms | 93.015 ms | -4.30% |
 
-All ten corresponding output hashes matched for both runtime comparisons.
-Java 26 candidate RSS increased from 841,883,648 to 918,843,392 bytes and
-requires separate attribution.
+Linux `perf stat` covered each complete JVM run. Average reported frequency was
+3.440 GHz for legacy and 3.428 GHz for auto, while the candidate reduced
+task-clock by 8.59%, cycles by 8.93%, retired instructions by 7.06%, cache
+misses by 22.23%, and branch misses by 22.70%. All ten corresponding output
+hashes matched exactly.
+
+An earlier non-interleaved run reported a 10.77% decode gain. Replaying the
+same candidate commit later on the otherwise-idle KVM moved absolute decode
+from 12.7896 to 11.56 tok/s. That result is host-frequency/steal drift, not a
+defensible kernel effect, and is superseded by the counter-backed gate above.
+The earlier Java 25 full-model result (+1.55% decode, -1.02% p50 TTFT) remains
+corroborative rather than acceptance evidence; the Java 25 kernel gate is the
+non-overlapping JMH result in the preceding section.
+
+Peak `VmHWM` was also unstable across repeated candidate JVMs (850.8-926.2 MB).
+At comparable live lifecycle points, `/proc/<pid>/smaps_rollup` measured
+812-814 MiB RSS in both modes, split into approximately 216-218 MiB anonymous
+and 594 MiB file-backed memory. No memory-capacity improvement or regression is
+claimed from these runs; a lifecycle-aligned sampler is required for that gate.
 
 ## Retained Policy
 
