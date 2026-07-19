@@ -40,6 +40,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
 
 /** Measures the K-quant GEMV path used by file-mapped GGUF model weights. */
 @BenchmarkMode(Mode.AverageTime)
@@ -58,6 +59,12 @@ public class GgufMappedKQuantMatVecBenchmark {
   @Param("2048")
   int cols;
 
+  @Param("256")
+  int auxiliaryRows;
+
+  @Param("32")
+  int batchSize;
+
   private Arena arena;
   private Path q4Path;
   private Path q5Path;
@@ -66,14 +73,21 @@ public class GgufMappedKQuantMatVecBenchmark {
   private MemorySegment q5Weights;
   private MemorySegment q6Weights;
   private float[] query;
+  private float[] batchedQueries;
   private float[] out;
+  private float[] batchedOut;
+  private float[] secondOut;
+  private float[] thirdOut;
   private byte[] q8Quants;
   private float[] q8Scales;
   private short[] q8Sums;
+  private byte[] batchedQ8Quants;
+  private float[] batchedQ8Scales;
+  private short[] batchedQ8Sums;
 
   @Setup(Level.Trial)
   public void setUp() throws IOException {
-    arena = Arena.ofConfined();
+    arena = Arena.ofShared();
     Random random = new Random(0x26_4bL);
     q4Path = Files.createTempFile("mapped-q4-k-", ".bin");
     q5Path = Files.createTempFile("mapped-q5-k-", ".bin");
@@ -84,15 +98,31 @@ public class GgufMappedKQuantMatVecBenchmark {
     if (!q4Weights.isMapped() || !q5Weights.isMapped() || !q6Weights.isMapped()) {
       throw new IllegalStateException("K-quant benchmark weights must be file mapped");
     }
+    Thread worker = Thread.ofPlatform().unstarted(() -> {});
+    if (!q4Weights.isAccessibleBy(worker)
+        || !q5Weights.isAccessibleBy(worker)
+        || !q6Weights.isAccessibleBy(worker)) {
+      throw new IllegalStateException("K-quant benchmark weights must be worker accessible");
+    }
 
     query = new float[cols];
     for (int index = 0; index < cols; index++) {
       query[index] = random.nextFloat() * 2.0f - 1.0f;
     }
+    batchedQueries = new float[batchSize * cols];
+    for (int index = 0; index < batchedQueries.length; index++) {
+      batchedQueries[index] = random.nextFloat() * 2.0f - 1.0f;
+    }
     out = new float[rows];
+    batchedOut = new float[batchSize * rows];
+    secondOut = new float[rows];
+    thirdOut = new float[Math.max(rows, auxiliaryRows)];
     q8Quants = new byte[cols];
     q8Scales = new float[cols / 256];
     q8Sums = new short[cols / 16];
+    batchedQ8Quants = new byte[batchSize * cols];
+    batchedQ8Scales = new float[batchSize * (cols / 256)];
+    batchedQ8Sums = new short[batchSize * (cols / 16)];
   }
 
   @TearDown(Level.Trial)
@@ -121,6 +151,51 @@ public class GgufMappedKQuantMatVecBenchmark {
   public float[] q6K() {
     VectorUtil.ggufQ6_KQ8_KBatchDotProduct(query, q6Weights, rows, cols, out, q8Quants, q8Scales);
     return out;
+  }
+
+  @Benchmark
+  public float[] q4KBatched() {
+    VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
+        batchedQueries,
+        q4Weights,
+        batchSize,
+        rows,
+        cols,
+        batchedOut,
+        batchedQ8Quants,
+        batchedQ8Scales,
+        batchedQ8Sums);
+    return batchedOut;
+  }
+
+  @Benchmark
+  public void q4KDual(Blackhole blackhole) {
+    VectorUtil.ggufQ4_KQ8_KDualBatchDotProduct(
+        query, q4Weights, rows, out, q4Weights, rows, secondOut, cols, q8Quants, q8Scales, q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+  }
+
+  @Benchmark
+  public void q4KQ4KQ6KTriple(Blackhole blackhole) {
+    VectorUtil.ggufQ4_KQ4_KQ6_KQ8_KTripleBatchDotProduct(
+        query,
+        q4Weights,
+        rows,
+        out,
+        q4Weights,
+        auxiliaryRows,
+        secondOut,
+        q6Weights,
+        auxiliaryRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums);
+    blackhole.consume(out);
+    blackhole.consume(secondOut);
+    blackhole.consume(thirdOut);
   }
 
   private MemorySegment mapReadOnly(byte[] bytes, Path path) throws IOException {

@@ -225,6 +225,52 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_KLongOffsetBatchedMatmulMatchesTheEstablishedKernelExactly() throws IOException {
+    int batchSize = 3;
+    int rows = 2;
+    int cols = 512;
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] firstRow = repeat(q4KBlock(0.125f, 0.0625f, i -> (i * 5 + 3) & 0x0F, scales, mins), 2);
+    byte[] secondRow = repeat(q4KBlock(-0.25f, 0.03125f, i -> 15 - (i & 0x0F), scales, mins), 2);
+    byte[] matrix = concat(firstRow, secondRow);
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = (float) Math.sin((index + 0.25) * 0.03125);
+    }
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    byte[] q8Quants = new byte[batchSize * cols];
+    float[] q8Scales = new float[batchSize * (cols / 256)];
+    short[] q8Sums = new short[batchSize * (cols / 16)];
+    Path path = Files.createTempFile("vectors-q4-k-batch-", ".bin");
+    Files.write(path, matrix);
+
+    try (Arena arena = Arena.ofConfined();
+        FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+      MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, matrix.length, arena);
+      assertThat(mapped.isMapped()).isTrue();
+
+      VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
+          queries,
+          MemorySegment.ofArray(matrix),
+          batchSize,
+          rows,
+          cols,
+          expected,
+          q8Quants,
+          q8Scales,
+          q8Sums);
+      PanamaVectorUtilSupport.ggufQ4_KQ8_KLongOffsetBatchedMatmul(
+          mapped, batchSize, rows, cols, actual, q8Quants, q8Scales, q8Sums);
+
+      assertThat(actual).containsExactly(expected);
+    } finally {
+      Files.deleteIfExists(path);
+    }
+  }
+
+  @Test
   void q5_KLongOffsetRowsMatchTheEstablishedMappedKernelExactly() throws IOException {
     int rows = 2;
     int cols = 512;
