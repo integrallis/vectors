@@ -1436,6 +1436,69 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_KQ8_KDualBatchedMatmulMatchesSeparateBatchedMatmulsExactly() {
+    int batchSize = 3;
+    int cols = 512;
+    int firstRows = 2;
+    int secondRows = 3;
+    float[] queries = patternedQueries(batchSize, cols);
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] firstRow =
+        concat(
+            q4KBlock(0.125f, 0.0625f, i -> i % 16, scales, mins),
+            q4KBlock(-0.25f, 0.03125f, i -> 15 - i % 16, scales, mins));
+    byte[] secondRow =
+        concat(
+            q4KBlock(0.5f, -0.015625f, i -> i * 3 % 16, scales, mins),
+            q4KBlock(0.0625f, 0.125f, i -> i * 5 % 16, scales, mins));
+    MemorySegment firstWeight = MemorySegment.ofArray(repeat(firstRow, firstRows));
+    MemorySegment secondWeight = MemorySegment.ofArray(repeat(secondRow, secondRows));
+    float[] expectedFirst = new float[batchSize * firstRows];
+    float[] expectedSecond = new float[batchSize * secondRows];
+    float[] actualFirst = new float[batchSize * firstRows];
+    float[] actualSecond = new float[batchSize * secondRows];
+
+    VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
+        queries,
+        firstWeight,
+        batchSize,
+        firstRows,
+        cols,
+        expectedFirst,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 256)],
+        new short[batchSize * (cols / 16)]);
+    VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
+        queries,
+        secondWeight,
+        batchSize,
+        secondRows,
+        cols,
+        expectedSecond,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 256)],
+        new short[batchSize * (cols / 16)]);
+
+    VectorUtil.ggufQ4_KQ8_KDualBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        batchSize,
+        cols,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 256)],
+        new short[batchSize * (cols / 16)]);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+  }
+
+  @Test
   void q4_KQ8_KDualBatchDotProductMatchesSeparateMatmulsExactly() {
     int cols = 256;
     int firstRows = 3;
@@ -1625,6 +1688,80 @@ class GgufQuantizedDotTest {
         new byte[cols],
         new float[cols / 256],
         new short[cols / 16]);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+    assertThat(actualThird).containsExactly(expectedThird);
+  }
+
+  @Test
+  void q4_KQ4_KQ6_KQ8_KTripleBatchedMatmulMatchesSeparateBatchedMatmulsExactly() {
+    int batchSize = 3;
+    int cols = 256;
+    int firstRows = 2;
+    int secondRows = 3;
+    int thirdRows = 2;
+    float[] queries = patternedQueries(batchSize, cols);
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    MemorySegment firstWeight =
+        MemorySegment.ofArray(
+            repeat(q4KBlock(0.125f, 0.0625f, i -> i % 16, scales, mins), firstRows));
+    MemorySegment secondWeight =
+        MemorySegment.ofArray(
+            repeat(q4KBlock(-0.25f, 0.03125f, i -> 15 - i % 16, scales, mins), secondRows));
+    MemorySegment thirdWeight =
+        MemorySegment.ofArray(
+            repeat(q6KBlock(0.25f, i -> (i * 5 + 3) % 64 - 32, i -> i - 8), thirdRows));
+    float[] expectedFirst = new float[batchSize * firstRows];
+    float[] expectedSecond = new float[batchSize * secondRows];
+    float[] expectedThird = new float[batchSize * thirdRows];
+    float[] actualFirst = new float[batchSize * firstRows];
+    float[] actualSecond = new float[batchSize * secondRows];
+    float[] actualThird = new float[batchSize * thirdRows];
+    byte[] quants = new byte[batchSize * cols];
+    float[] quantScales = new float[batchSize * (cols / 256)];
+    short[] quantSums = new short[batchSize * (cols / 16)];
+
+    VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
+        queries,
+        firstWeight,
+        batchSize,
+        firstRows,
+        cols,
+        expectedFirst,
+        quants,
+        quantScales,
+        quantSums);
+    VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
+        queries,
+        secondWeight,
+        batchSize,
+        secondRows,
+        cols,
+        expectedSecond,
+        quants,
+        quantScales,
+        quantSums);
+    VectorUtil.ggufQ6_KQ8_KBatchedMatmul(
+        queries, thirdWeight, batchSize, thirdRows, cols, expectedThird, quants, quantScales);
+
+    VectorUtil.ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        thirdWeight,
+        thirdRows,
+        actualThird,
+        batchSize,
+        cols,
+        quants,
+        quantScales,
+        quantSums);
 
     assertThat(actualFirst).containsExactly(expectedFirst);
     assertThat(actualSecond).containsExactly(expectedSecond);
@@ -2166,6 +2303,16 @@ class GgufQuantizedDotTest {
     float[] out = new float[length];
     for (int i = 0; i < length; i++) {
       out[i] = (i % 11) * 0.25f - 1.25f;
+    }
+    return out;
+  }
+
+  private static float[] patternedQueries(int batchSize, int cols) {
+    float[] out = new float[batchSize * cols];
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int col = 0; col < cols; col++) {
+        out[batch * cols + col] = (float) Math.sin((batch + 1.0) * (col + 0.25)) * (batch + 0.5f);
+      }
     }
     return out;
   }
