@@ -134,27 +134,27 @@ public class GgufMappedKQuantMatVecBenchmark {
   }
 
   @Benchmark
-  public float[] q4K() {
+  public void q4K(Blackhole blackhole) {
     VectorUtil.ggufQ4_KQ8_KBatchDotProduct(
         query, q4Weights, rows, cols, out, q8Quants, q8Scales, q8Sums);
-    return out;
+    blackhole.consume(out);
   }
 
   @Benchmark
-  public float[] q5K() {
+  public void q5K(Blackhole blackhole) {
     VectorUtil.ggufQ5_KQ8_KBatchDotProduct(
         query, q5Weights, rows, cols, out, q8Quants, q8Scales, q8Sums);
-    return out;
+    blackhole.consume(out);
   }
 
   @Benchmark
-  public float[] q6K() {
+  public void q6K(Blackhole blackhole) {
     VectorUtil.ggufQ6_KQ8_KBatchDotProduct(query, q6Weights, rows, cols, out, q8Quants, q8Scales);
-    return out;
+    blackhole.consume(out);
   }
 
   @Benchmark
-  public float[] q4KBatched() {
+  public void q4KBatched(Blackhole blackhole) {
     VectorUtil.ggufQ4_KQ8_KBatchedMatmul(
         batchedQueries,
         q4Weights,
@@ -165,7 +165,7 @@ public class GgufMappedKQuantMatVecBenchmark {
         batchedQ8Quants,
         batchedQ8Scales,
         batchedQ8Sums);
-    return batchedOut;
+    blackhole.consume(batchedOut);
   }
 
   @Benchmark
