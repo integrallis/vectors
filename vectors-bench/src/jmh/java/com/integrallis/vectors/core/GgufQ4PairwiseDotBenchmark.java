@@ -116,7 +116,7 @@ public class GgufQ4PairwiseDotBenchmark {
           PanamaVectorUtilSupport.fma(
               products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
     }
-    return accumulator.reduceLanes(VectorOperators.ADD);
+    return reduce256(accumulator);
   }
 
   @Benchmark
@@ -171,6 +171,12 @@ public class GgufQ4PairwiseDotBenchmark {
           PanamaVectorUtilSupport.fma(
               products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
     }
-    return accumulator.reduceLanes(VectorOperators.ADD);
+    return reduce256(accumulator);
+  }
+
+  private static float reduce256(FloatVector vector) {
+    float even = (vector.lane(4) + vector.lane(0)) + (vector.lane(6) + vector.lane(2));
+    float odd = (vector.lane(5) + vector.lane(1)) + (vector.lane(7) + vector.lane(3));
+    return even + odd;
   }
 }
