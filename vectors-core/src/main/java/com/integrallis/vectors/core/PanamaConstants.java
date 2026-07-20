@@ -49,7 +49,6 @@ public final class PanamaConstants {
   private static final int SMALLEST_SIMD_BITS = 64;
   private static final int LARGEST_SIMD_BITS = 512;
   static final String MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY = "vectors.gguf.mappedKQuantLongOffsets";
-  static final String Q4_SHORT_PAIRWISE_PROPERTY = "vectors.gguf.q4ShortPairwise";
 
   enum MappedKQuantFormat {
     Q4_K,
@@ -76,8 +75,6 @@ public final class PanamaConstants {
   static final boolean USE_MAPPED_Q4_K_LONG_OFFSETS = MAPPED_K_QUANT_LONG_OFFSET_POLICY.q4();
   static final boolean USE_MAPPED_Q5_K_LONG_OFFSETS = MAPPED_K_QUANT_LONG_OFFSET_POLICY.q5();
   static final boolean USE_MAPPED_Q6_K_LONG_OFFSETS = MAPPED_K_QUANT_LONG_OFFSET_POLICY.q6();
-  static final boolean USE_Q4_SHORT_PAIRWISE =
-      resolveQ4ShortPairwise(System.getProperty(Q4_SHORT_PAIRWISE_PROPERTY));
 
   /**
    * The resolved SIMD register-width ceiling in bits. Defaults to {@link #DEFAULT_MAX_BITS};
@@ -181,19 +178,6 @@ public final class PanamaConstants {
 
   static MappedKQuantLongOffsetPolicy mappedKQuantLongOffsetPolicy() {
     return MAPPED_K_QUANT_LONG_OFFSET_POLICY;
-  }
-
-  static boolean resolveQ4ShortPairwise(String configured) {
-    if (configured == null || configured.isBlank()) {
-      return false;
-    }
-    return switch (configured.trim().toLowerCase(Locale.ROOT)) {
-      case "true" -> true;
-      case "false" -> false;
-      default ->
-          throw new IllegalArgumentException(
-              "-D" + Q4_SHORT_PAIRWISE_PROPERTY + " must be true or false; got: " + configured);
-    };
   }
 
   /**

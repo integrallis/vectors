@@ -72,7 +72,7 @@ public final class VectorizationProvider {
         PanamaConstants.HAS_FAST_VECTOR_FMA,
         PanamaConstants.HAS_FAST_SCALAR_FMA,
         PanamaConstants.HAS_SVE,
-        PanamaConstants.USE_Q4_SHORT_PAIRWISE,
+        vectorApi && PanamaVectorUtilSupport.VECTOR_BITSIZE >= 256,
         GgufParallelSupport.enabled(),
         GgufParallelSupport.executionMode().name().toLowerCase(Locale.ROOT),
         GgufParallelSupport.parallelism(),
@@ -124,7 +124,6 @@ public final class VectorizationProvider {
     String ggufChunksPerThread = System.getProperty("vectors.gguf.chunksPerThread");
     String mappedKQuantLongOffsets =
         System.getProperty(PanamaConstants.MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY);
-    String q4ShortPairwise = System.getProperty(PanamaConstants.Q4_SHORT_PAIRWISE_PROPERTY);
     PanamaConstants.MappedKQuantLongOffsetPolicy mappedKQuantPolicy =
         PanamaConstants.mappedKQuantLongOffsetPolicy();
 
@@ -151,7 +150,10 @@ public final class VectorizationProvider {
         .append(",q6=")
         .append(mappedKQuantPolicy.q6())
         .append(')');
-    sb.append(" q4ShortPairwise=").append(PanamaConstants.USE_Q4_SHORT_PAIRWISE);
+    sb.append(" q4ShortPairwiseSupported=")
+        .append(
+            impl instanceof PanamaVectorUtilSupport
+                && PanamaVectorUtilSupport.VECTOR_BITSIZE >= 256);
     sb.append(" toggles=[");
     boolean first = true;
     if (forceScalar != null) {
@@ -203,11 +205,6 @@ public final class VectorizationProvider {
       sb.append(PanamaConstants.MAPPED_K_QUANT_LONG_OFFSETS_PROPERTY)
           .append('=')
           .append(mappedKQuantLongOffsets);
-      first = false;
-    }
-    if (q4ShortPairwise != null) {
-      if (!first) sb.append(", ");
-      sb.append(PanamaConstants.Q4_SHORT_PAIRWISE_PROPERTY).append('=').append(q4ShortPairwise);
       first = false;
     }
     if (first) sb.append("(defaults — no -Dvectors.* overrides)");

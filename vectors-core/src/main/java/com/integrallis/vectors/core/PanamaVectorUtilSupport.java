@@ -18,6 +18,7 @@ package com.integrallis.vectors.core;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+import java.util.Objects;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
@@ -102,12 +103,17 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
   }
 
-  static boolean useQ4ShortPairwise(boolean configured, int vectorBits, int blocks) {
-    return configured && vectorBits >= 256 && blocks >= Q4_SHORT_PAIRWISE_MIN_BLOCKS;
+  static boolean useQ4ShortPairwise(GgufQ4Kernel kernel, int vectorBits, int blocks) {
+    boolean requested =
+        switch (Objects.requireNonNull(kernel, "kernel")) {
+          case WIDENED -> false;
+          case SHORT_PAIRWISE -> true;
+        };
+    return requested && vectorBits >= 256 && blocks >= Q4_SHORT_PAIRWISE_MIN_BLOCKS;
   }
 
-  private static boolean useQ4ShortPairwise(int blocks) {
-    return useQ4ShortPairwise(PanamaConstants.USE_Q4_SHORT_PAIRWISE, VECTOR_BITSIZE, blocks);
+  private static boolean useQ4ShortPairwise(GgufQ4Kernel kernel, int blocks) {
+    return useQ4ShortPairwise(kernel, VECTOR_BITSIZE, blocks);
   }
 
   // --- Float dot product: 4x unrolled FMA (Lucene pattern) ---
@@ -376,16 +382,21 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int cols,
       float[] out,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
 
     long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
     GgufParallelSupport.forEachRow(
         qWeight,
         rows,
         cols,
-        row -> out[row] = q4_0Q8_0RowDot(qWeight, row * rowBytes, blocks, q8Quants, q8Scales));
+        row ->
+            out[row] =
+                q4_0Q8_0RowDot(
+                    qWeight, row * rowBytes, blocks, q8Quants, q8Scales, useShortPairwise));
   }
 
   @Override
@@ -399,11 +410,13 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] secondOut,
       int cols,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
 
     long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
     int totalRows = Math.addExact(firstRows, secondRows);
     GgufParallelSupport.forEachRow(
         firstWeight,
@@ -433,7 +446,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
               float scale =
                   Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
               IntVector integerLanes =
-                  useQ4ShortPairwise(blocks)
+                  useShortPairwise
                       ? q4_0Q8_0ShortPairwiseIntegerLanes(
                           qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE)
                       : q4_0Q8_0IntegerLanes(
@@ -476,11 +489,13 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] thirdOut,
       int cols,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
 
     long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
     int secondStart = firstRows;
     int thirdStart = Math.addExact(firstRows, secondRows);
     int totalRows = Math.addExact(thirdStart, thirdRows);
@@ -517,7 +532,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
               float scale =
                   Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
               IntVector integerLanes =
-                  useQ4ShortPairwise(blocks)
+                  useShortPairwise
                       ? q4_0Q8_0ShortPairwiseIntegerLanes(
                           qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE)
                       : q4_0Q8_0IntegerLanes(
@@ -556,19 +571,20 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
-      float[] laneScratch) {
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     if (batchSize == 1) {
-      ggufQ4_0Q8_0MatVecDot(queries, qWeight, rows, cols, out, q8Quants, q8Scales);
+      ggufQ4_0Q8_0MatVecDot(queries, qWeight, rows, cols, out, q8Quants, q8Scales, kernel);
       return;
     }
     if (VECTOR_BITSIZE < 256) {
       VectorUtilSupport.super.ggufQ4_0Q8_0BatchedMatmul(
-          queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, laneScratch);
+          queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, laneScratch, kernel);
       return;
     }
 
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
-    boolean useShortPairwise = useQ4ShortPairwise(blocks);
+    boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
     for (int batch = 0; batch < batchSize; batch++) {
       GgufQuantizationSupport.quantizeQ8_0(
           queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
@@ -645,7 +661,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
-      float[] laneScratch) {
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     if (batchSize == 1) {
       ggufQ4_0Q8_0DualMatVecDot(
           queries,
@@ -657,7 +674,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           secondOut,
           cols,
           q8Quants,
-          q8Scales);
+          q8Scales,
+          kernel);
       return;
     }
     ggufQ4_0Q8_0GroupedBatchedMatmul(
@@ -675,7 +693,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         cols,
         q8Quants,
         q8Scales,
-        laneScratch);
+        laneScratch,
+        kernel);
   }
 
   @Override
@@ -694,7 +713,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
-      float[] laneScratch) {
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     if (batchSize == 1) {
       ggufQ4_0Q8_0TripleMatVecDot(
           queries,
@@ -709,7 +729,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           thirdOut,
           cols,
           q8Quants,
-          q8Scales);
+          q8Scales,
+          kernel);
       return;
     }
     ggufQ4_0Q8_0GroupedBatchedMatmul(
@@ -727,7 +748,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         cols,
         q8Quants,
         q8Scales,
-        laneScratch);
+        laneScratch,
+        kernel);
   }
 
   private void ggufQ4_0Q8_0GroupedBatchedMatmul(
@@ -745,7 +767,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
-      float[] laneScratch) {
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     if (VECTOR_BITSIZE < 256) {
       if (thirdRows == 0) {
         VectorUtilSupport.super.ggufQ4_0Q8_0DualBatchedMatmul(
@@ -760,7 +783,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             cols,
             q8Quants,
             q8Scales,
-            laneScratch);
+            laneScratch,
+            kernel);
       } else {
         VectorUtilSupport.super.ggufQ4_0Q8_0TripleBatchedMatmul(
             queries,
@@ -777,13 +801,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             cols,
             q8Quants,
             q8Scales,
-            laneScratch);
+            laneScratch,
+            kernel);
       }
       return;
     }
 
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
-    boolean useShortPairwise = useQ4ShortPairwise(blocks);
+    boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
     for (int batch = 0; batch < batchSize; batch++) {
       GgufQuantizationSupport.quantizeQ8_0(
           queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
@@ -932,7 +957,12 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   private static float q4_0Q8_0RowDot(
-      MemorySegment qWeight, long rowOffset, int blocks, byte[] q8Quants, float[] q8Scales) {
+      MemorySegment qWeight,
+      long rowOffset,
+      int blocks,
+      byte[] q8Quants,
+      float[] q8Scales,
+      boolean useShortPairwise) {
     if (VECTOR_BITSIZE >= 256) {
       FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
       for (int block = 0; block < blocks; block++) {
@@ -940,7 +970,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         float scale =
             Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
         IntVector integerLanes =
-            useQ4ShortPairwise(blocks)
+            useShortPairwise
                 ? q4_0Q8_0ShortPairwiseIntegerLanes(
                     qWeight, blockOffset + Short.BYTES, q8Quants, block * GGUF_Q_BLOCK_SIZE)
                 : q4_0Q8_0IntegerLanes(

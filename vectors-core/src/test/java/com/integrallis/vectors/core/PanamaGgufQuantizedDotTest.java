@@ -31,11 +31,25 @@ import org.junit.jupiter.api.Test;
 class PanamaGgufQuantizedDotTest {
 
   @Test
-  void q4ShortPairwiseRequiresOptInAvx2WidthAndModelSizedRows() {
-    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(false, 256, 64)).isFalse();
-    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(true, 128, 64)).isFalse();
-    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(true, 256, 31)).isFalse();
-    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(true, 256, 32)).isTrue();
+  void q4ShortPairwiseRequiresExplicitSelectionAvx2WidthAndModelSizedRows() {
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(GgufQ4Kernel.WIDENED, 256, 64)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(GgufQ4Kernel.SHORT_PAIRWISE, 128, 64))
+        .isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(GgufQ4Kernel.SHORT_PAIRWISE, 256, 31))
+        .isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(GgufQ4Kernel.SHORT_PAIRWISE, 256, 32))
+        .isTrue();
+  }
+
+  @Test
+  void explicitQ4KernelSelectionCannotBypassHardwareEligibility() {
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(GgufQ4Kernel.WIDENED, 256, 64)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(GgufQ4Kernel.SHORT_PAIRWISE, 256, 64))
+        .isTrue();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(GgufQ4Kernel.SHORT_PAIRWISE, 128, 64))
+        .isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(GgufQ4Kernel.SHORT_PAIRWISE, 256, 31))
+        .isFalse();
   }
 
   @Test
@@ -321,10 +335,24 @@ class PanamaGgufQuantizedDotTest {
 
     new ScalarVectorUtilSupport()
         .ggufQ4_0Q8_0MatVecDot(
-            query, weightSegment, rows, cols, expected, expectedQuants, expectedScales);
+            query,
+            weightSegment,
+            rows,
+            cols,
+            expected,
+            expectedQuants,
+            expectedScales,
+            GgufQ4Kernel.WIDENED);
     new PanamaVectorUtilSupport()
         .ggufQ4_0Q8_0MatVecDot(
-            query, weightSegment, rows, cols, actual, actualQuants, actualScales);
+            query,
+            weightSegment,
+            rows,
+            cols,
+            actual,
+            actualQuants,
+            actualScales,
+            GgufQ4Kernel.WIDENED);
 
     assertThat(actualQuants).containsExactly(expectedQuants);
     assertThat(actualScales).containsExactly(expectedScales);

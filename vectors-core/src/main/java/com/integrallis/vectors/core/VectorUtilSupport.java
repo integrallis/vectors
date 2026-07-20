@@ -538,7 +538,8 @@ public interface VectorUtilSupport {
       int cols,
       float[] out,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     quantizeQ8_0(query, cols, q8Quants, q8Scales);
 
     long rowBytes = ggufQ4_0RowBytes(cols);
@@ -559,7 +560,8 @@ public interface VectorUtilSupport {
       float[] secondOut,
       int cols,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     quantizeQ8_0(query, cols, q8Quants, q8Scales);
 
     long rowBytes = ggufQ4_0RowBytes(cols);
@@ -588,7 +590,8 @@ public interface VectorUtilSupport {
       float[] thirdOut,
       int cols,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     quantizeQ8_0(query, cols, q8Quants, q8Scales);
 
     long rowBytes = ggufQ4_0RowBytes(cols);
@@ -651,7 +654,8 @@ public interface VectorUtilSupport {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
-      float[] laneScratch) {
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     for (int batch = 0; batch < batchSize; batch++) {
       GgufQuantizationSupport.quantizeQ8_0(
@@ -700,7 +704,8 @@ public interface VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
-      float[] laneScratch) {
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     for (int batch = 0; batch < batchSize; batch++) {
       GgufQuantizationSupport.quantizeQ8_0(
@@ -750,7 +755,8 @@ public interface VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
-      float[] laneScratch) {
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     for (int batch = 0; batch < batchSize; batch++) {
       GgufQuantizationSupport.quantizeQ8_0(
