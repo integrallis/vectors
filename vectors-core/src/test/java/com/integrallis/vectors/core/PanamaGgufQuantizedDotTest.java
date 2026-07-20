@@ -92,6 +92,8 @@ class PanamaGgufQuantizedDotTest {
       IntVector actual = PanamaVectorUtilSupport.q4_0Q8_0PairwiseIntegerLanes(weights, 0, q8, 0);
       IntVector offsetActual =
           PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwiseIntegerLanes(weights, 0, q8, 0);
+      IntVector shortPairwise =
+          PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(weights, 0, q8, 0);
       IntVector low128 =
           PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(weights, 0, q8, 0, false);
       IntVector high128 =
@@ -115,6 +117,7 @@ class PanamaGgufQuantizedDotTest {
 
       assertThat(actual.toArray()).containsExactly(expected.toArray());
       assertThat(offsetActual.toArray()).containsExactly(expected.toArray());
+      assertThat(shortPairwise.toArray()).containsExactly(expected.toArray());
       assertThat(low128.toArray())
           .containsExactly(expected.lane(0), expected.lane(1), expected.lane(2), expected.lane(3));
       assertThat(high128.toArray())

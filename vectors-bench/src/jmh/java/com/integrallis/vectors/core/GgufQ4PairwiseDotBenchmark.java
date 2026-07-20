@@ -95,11 +95,13 @@ public class GgufQ4PairwiseDotBenchmark {
     float offsetPairwise128 = offsetPairwise128();
     float precomputedOffsetPairwise128 = precomputedOffsetPairwise128();
     float pairwise128 = pairwise128();
+    float shortPairwise = shortPairwise();
     if (Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(pairwise)
         || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(offsetPairwise)
         || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(offsetPairwise128)
         || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(precomputedOffsetPairwise128)
-        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(pairwise128)) {
+        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(pairwise128)
+        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(shortPairwise)) {
       throw new IllegalStateException("Q4 pairwise benchmark kernels disagree");
     }
   }
@@ -248,6 +250,24 @@ public class GgufQ4PairwiseDotBenchmark {
         (highAccumulator.lane(1) + lowAccumulator.lane(1))
             + (highAccumulator.lane(3) + lowAccumulator.lane(3));
     return even + odd;
+  }
+
+  @Benchmark
+  public float shortPairwise() {
+    FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = (long) block * BLOCK_BYTES;
+      float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
+      IntVector integerLanes =
+          PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(
+              weights, blockOffset + Short.BYTES, q8Quants, block * BLOCK_SIZE);
+      FloatVector products =
+          (FloatVector) integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
+      accumulator =
+          PanamaVectorUtilSupport.fma(
+              products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
+    }
+    return reduce256(accumulator);
   }
 
   private float rowDot(boolean usePairwise) {

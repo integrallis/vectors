@@ -74,6 +74,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           ShortVector.SPECIES_256, 0, 0, 0, 0, 0, 4, 8, 12, 0, 0, 0, 0, 0, 0, 0, 0);
   private static final VectorMask<Short> HIGH_GROUP_LANES =
       VectorMask.fromLong(ShortVector.SPECIES_256, 0xF0L);
+  private static final VectorShuffle<Integer> SWAP_ADJACENT_INTS =
+      VectorShuffle.fromValues(IntVector.SPECIES_256, 1, 0, 3, 2, 5, 4, 7, 6);
+  private static final VectorShuffle<Integer> SELECT_LOW_INT_GROUPS =
+      VectorShuffle.fromValues(IntVector.SPECIES_256, 0, 2, 4, 6, 0, 0, 0, 0);
+  private static final VectorShuffle<Integer> SELECT_HIGH_INT_GROUPS =
+      VectorShuffle.fromValues(IntVector.SPECIES_256, 0, 0, 0, 0, 0, 2, 4, 6);
+  private static final VectorMask<Integer> HIGH_INT_GROUP_LANES =
+      VectorMask.fromLong(IntVector.SPECIES_256, 0xF0L);
   private static final VectorShuffle<Byte> BYTE_128_EVEN_LANES =
       VectorShuffle.makeUnzip(ByteVector.SPECIES_128, 0);
   private static final VectorShuffle<Byte> BYTE_128_ODD_LANES =
@@ -1021,6 +1029,34 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                         .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0));
 
     return fourProductLanes(lowProducts, highProducts);
+  }
+
+  static IntVector q4_0Q8_0ShortPairwiseIntegerLanes(
+      MemorySegment qWeight, long nibbleOffset, byte[] q8Quants, int quantOffset) {
+    ByteVector packed =
+        ByteVector.fromMemorySegment(
+            ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
+    ByteVector low = packed.and((byte) 0x0F).sub((byte) 8);
+    ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F).sub((byte) 8);
+    ShortVector low16 =
+        (ShortVector) low.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+    ShortVector high16 =
+        (ShortVector) high.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+    ShortVector qLow16 =
+        (ShortVector)
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset)
+                .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+    ShortVector qHigh16 =
+        (ShortVector)
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16)
+                .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+    IntVector lowPairs = multiplyAddSignedShorts256(low16, qLow16);
+    IntVector highPairs = multiplyAddSignedShorts256(high16, qHigh16);
+    IntVector lowGroups =
+        lowPairs.add(lowPairs.rearrange(SWAP_ADJACENT_INTS)).rearrange(SELECT_LOW_INT_GROUPS);
+    IntVector highGroups =
+        highPairs.add(highPairs.rearrange(SWAP_ADJACENT_INTS)).rearrange(SELECT_HIGH_INT_GROUPS);
+    return lowGroups.blend(highGroups, HIGH_INT_GROUP_LANES);
   }
 
   static IntVector q4_0Q8_0PairwiseIntegerLanes(
