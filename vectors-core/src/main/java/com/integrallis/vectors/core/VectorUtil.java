@@ -424,10 +424,32 @@ public final class VectorUtil {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ4_0Q8_0BatchDotProduct(
+        query, qWeight, rows, cols, out, q8Quants, q8Scales, GgufQ4Kernel.WIDENED);
+  }
+
+  /** Q4_0 by Q8_0 GEMV with an explicit arithmetic-kernel policy. */
+  public static void ggufQ4_0Q8_0BatchDotProduct(
+      float[] query,
+      MemorySegment qWeight,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchArguments(
         query, qWeight, rows, cols, out, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
     checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
-    IMPL.ggufQ4_0Q8_0MatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales);
+    IMPL.ggufQ4_0Q8_0MatVecDot(
+        query,
+        qWeight,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        Objects.requireNonNull(kernel, "kernel"));
   }
 
   /**
@@ -448,6 +470,33 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ4_0Q8_0DualBatchDotProduct(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        GgufQ4Kernel.WIDENED);
+  }
+
+  /** Two Q4_0 projections with an explicit arithmetic-kernel policy. */
+  public static void ggufQ4_0Q8_0DualBatchDotProduct(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchArguments(
         query, firstWeight, firstRows, cols, firstOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
     checkGgufQuantizedBatchArguments(
@@ -463,7 +512,8 @@ public final class VectorUtil {
         secondOut,
         cols,
         q8Quants,
-        q8Scales);
+        q8Scales,
+        Objects.requireNonNull(kernel, "kernel"));
   }
 
   /**
@@ -486,6 +536,39 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ4_0Q8_0TripleBatchDotProduct(
+        query,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        cols,
+        q8Quants,
+        q8Scales,
+        GgufQ4Kernel.WIDENED);
+  }
+
+  /** Three Q4_0 projections with an explicit arithmetic-kernel policy. */
+  public static void ggufQ4_0Q8_0TripleBatchDotProduct(
+      float[] query,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchArguments(
         query, firstWeight, firstRows, cols, firstOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
     checkGgufQuantizedBatchArguments(
@@ -506,7 +589,8 @@ public final class VectorUtil {
         thirdOut,
         cols,
         q8Quants,
-        q8Scales);
+        q8Scales,
+        Objects.requireNonNull(kernel, "kernel"));
   }
 
   /**
@@ -528,6 +612,21 @@ public final class VectorUtil {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ4_0Q8_0BatchedMatmul(
+        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, GgufQ4Kernel.WIDENED);
+  }
+
+  /** Q4_0 batched matrix multiplication with an explicit arithmetic-kernel policy. */
+  public static void ggufQ4_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufQ4Kernel kernel) {
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
     }
@@ -544,7 +643,8 @@ public final class VectorUtil {
         out,
         q8Quants,
         q8Scales,
-        new float[checkedProduct(outputEntries, 8, "Q4 lane scratch")]);
+        new float[checkedProduct(outputEntries, 8, "Q4 lane scratch")],
+        kernel);
   }
 
   /**
@@ -562,6 +662,31 @@ public final class VectorUtil {
       byte[] q8Quants,
       float[] q8Scales,
       float[] laneScratch) {
+    ggufQ4_0Q8_0BatchedMatmul(
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        laneScratch,
+        GgufQ4Kernel.WIDENED);
+  }
+
+  /** Allocation-free Q4_0 batched matrix multiplication with an explicit kernel policy. */
+  public static void ggufQ4_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
     }
@@ -605,7 +730,16 @@ public final class VectorUtil {
               + laneEntries);
     }
     IMPL.ggufQ4_0Q8_0BatchedMatmul(
-        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, laneScratch);
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        laneScratch,
+        Objects.requireNonNull(kernel, "kernel"));
   }
 
   /** Two Q4_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */
@@ -622,6 +756,37 @@ public final class VectorUtil {
       byte[] q8Quants,
       float[] q8Scales,
       float[] laneScratch) {
+    ggufQ4_0Q8_0DualBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        laneScratch,
+        GgufQ4Kernel.WIDENED);
+  }
+
+  /** Two Q4_0 batched projections with an explicit arithmetic-kernel policy. */
+  public static void ggufQ4_0Q8_0DualBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchedArguments(
         queries,
         firstWeight,
@@ -657,7 +822,8 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
-        laneScratch);
+        laneScratch,
+        Objects.requireNonNull(kernel, "kernel"));
   }
 
   /** Three Q4_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */
@@ -677,6 +843,43 @@ public final class VectorUtil {
       byte[] q8Quants,
       float[] q8Scales,
       float[] laneScratch) {
+    ggufQ4_0Q8_0TripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        laneScratch,
+        GgufQ4Kernel.WIDENED);
+  }
+
+  /** Three Q4_0 batched projections with an explicit arithmetic-kernel policy. */
+  public static void ggufQ4_0Q8_0TripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchedArguments(
         queries,
         firstWeight,
@@ -724,7 +927,8 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
-        laneScratch);
+        laneScratch,
+        Objects.requireNonNull(kernel, "kernel"));
   }
 
   /** Batched row-major GEMV over GGUF Q4_K rows. */
