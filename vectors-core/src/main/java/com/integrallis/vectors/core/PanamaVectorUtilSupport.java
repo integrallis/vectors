@@ -1076,6 +1076,25 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return offsetPairwise128IntegerLanes(nibbles, q8);
   }
 
+  static IntVector q4_0Q8_0Pairwise128IntegerLanes(
+      MemorySegment qWeight,
+      long nibbleOffset,
+      byte[] q8Quants,
+      int quantOffset,
+      boolean highNibble) {
+    ByteVector packed =
+        ByteVector.fromMemorySegment(
+            ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
+    ByteVector q4 =
+        highNibble
+            ? packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F).sub((byte) 8)
+            : packed.and((byte) 0x0F).sub((byte) 8);
+    ByteVector q8 = ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset);
+    VectorMask<Byte> negativeQ4 = q4.compare(VectorOperators.LT, (byte) 0);
+    ByteVector signedQ8 = q8.blend(q8.lanewise(VectorOperators.NEG), negativeQ4);
+    return pairwise128IntegerLanes(q4.lanewise(VectorOperators.ABS), signedQ8);
+  }
+
   static IntVector q4_0Q8_0OffsetPairwise128IntegerLanes(
       MemorySegment qWeight,
       long nibbleOffset,

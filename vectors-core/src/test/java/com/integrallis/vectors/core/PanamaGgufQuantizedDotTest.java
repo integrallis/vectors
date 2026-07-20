@@ -96,6 +96,10 @@ class PanamaGgufQuantizedDotTest {
           PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(weights, 0, q8, 0, false);
       IntVector high128 =
           PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(weights, 0, q8, 16, true);
+      IntVector signedLow128 =
+          PanamaVectorUtilSupport.q4_0Q8_0Pairwise128IntegerLanes(weights, 0, q8, 0, false);
+      IntVector signedHigh128 =
+          PanamaVectorUtilSupport.q4_0Q8_0Pairwise128IntegerLanes(weights, 0, q8, 16, true);
       int[] q8GroupSums = new int[8];
       for (int lane = 0; lane < q8GroupSums.length; lane++) {
         for (int index = 0; index < 4; index++) {
@@ -115,6 +119,8 @@ class PanamaGgufQuantizedDotTest {
           .containsExactly(expected.lane(0), expected.lane(1), expected.lane(2), expected.lane(3));
       assertThat(high128.toArray())
           .containsExactly(expected.lane(4), expected.lane(5), expected.lane(6), expected.lane(7));
+      assertThat(signedLow128.toArray()).containsExactly(low128.toArray());
+      assertThat(signedHigh128.toArray()).containsExactly(high128.toArray());
       assertThat(precomputedLow128.toArray()).containsExactly(low128.toArray());
       assertThat(precomputedHigh128.toArray()).containsExactly(high128.toArray());
     }

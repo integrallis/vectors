@@ -94,11 +94,12 @@ public class GgufQ4PairwiseDotBenchmark {
     float offsetPairwise = offsetPairwise();
     float offsetPairwise128 = offsetPairwise128();
     float precomputedOffsetPairwise128 = precomputedOffsetPairwise128();
+    float pairwise128 = pairwise128();
     if (Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(pairwise)
         || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(offsetPairwise)
         || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(offsetPairwise128)
-        || Float.floatToRawIntBits(widened)
-            != Float.floatToRawIntBits(precomputedOffsetPairwise128)) {
+        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(precomputedOffsetPairwise128)
+        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(pairwise128)) {
       throw new IllegalStateException("Q4 pairwise benchmark kernels disagree");
     }
   }
@@ -193,6 +194,41 @@ public class GgufQ4PairwiseDotBenchmark {
               q8GroupSums,
               sumOffset + 4,
               true);
+      FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
+      lowAccumulator =
+          PanamaVectorUtilSupport.fma(
+              (FloatVector) lowLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+              scaleVector,
+              lowAccumulator);
+      highAccumulator =
+          PanamaVectorUtilSupport.fma(
+              (FloatVector) highLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+              scaleVector,
+              highAccumulator);
+    }
+    float even =
+        (highAccumulator.lane(0) + lowAccumulator.lane(0))
+            + (highAccumulator.lane(2) + lowAccumulator.lane(2));
+    float odd =
+        (highAccumulator.lane(1) + lowAccumulator.lane(1))
+            + (highAccumulator.lane(3) + lowAccumulator.lane(3));
+    return even + odd;
+  }
+
+  @Benchmark
+  public float pairwise128() {
+    FloatVector lowAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
+    FloatVector highAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = (long) block * BLOCK_BYTES;
+      int quantOffset = block * BLOCK_SIZE;
+      float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
+      IntVector lowLanes =
+          PanamaVectorUtilSupport.q4_0Q8_0Pairwise128IntegerLanes(
+              weights, blockOffset + Short.BYTES, q8Quants, quantOffset, false);
+      IntVector highLanes =
+          PanamaVectorUtilSupport.q4_0Q8_0Pairwise128IntegerLanes(
+              weights, blockOffset + Short.BYTES, q8Quants, quantOffset + 16, true);
       FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
       lowAccumulator =
           PanamaVectorUtilSupport.fma(
