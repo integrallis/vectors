@@ -84,6 +84,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       VectorShuffle.makeUnzip(ShortVector.SPECIES_256, 1);
   private static final ShortVector SHORT_256_ONES =
       ShortVector.broadcast(ShortVector.SPECIES_256, (short) 1);
+  private static final ByteVector BYTE_256_ONES =
+      ByteVector.broadcast(ByteVector.SPECIES_256, (byte) 1);
   private static final ByteVector Q5_HIGH_BIT_MASKS =
       ByteVector.fromArray(
           ByteVector.SPECIES_64, new byte[] {1, 2, 4, 8, 16, 32, 64, (byte) 0x80}, 0);
@@ -1025,6 +1027,24 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     ShortVector pairSums =
         multiplyAddUnsignedSignedBytesSaturating256(q4.lanewise(VectorOperators.ABS), signedQ8);
     return multiplyAddSignedShorts256(pairSums, SHORT_256_ONES);
+  }
+
+  static IntVector q4_0Q8_0OffsetPairwiseIntegerLanes(
+      MemorySegment qWeight, long nibbleOffset, byte[] q8Quants, int quantOffset) {
+    ByteVector packed =
+        ByteVector.fromMemorySegment(
+            ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
+    ByteVector low = packed.and((byte) 0x0F);
+    ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+    ByteVector low256 = (ByteVector) low.reinterpretShape(ByteVector.SPECIES_256, 0);
+    ByteVector high256 = (ByteVector) high.reinterpretShape(ByteVector.SPECIES_256, -1);
+    ByteVector q4 = low256.or(high256);
+    ByteVector q8 = ByteVector.fromArray(ByteVector.SPECIES_256, q8Quants, quantOffset);
+    ShortVector weightedPairs = multiplyAddUnsignedSignedBytesSaturating256(q4, q8);
+    IntVector weighted = multiplyAddSignedShorts256(weightedPairs, SHORT_256_ONES);
+    ShortVector q8Pairs = multiplyAddUnsignedSignedBytesSaturating256(BYTE_256_ONES, q8);
+    IntVector q8Sums = multiplyAddSignedShorts256(q8Pairs, SHORT_256_ONES);
+    return weighted.sub(q8Sums.mul(8));
   }
 
   private static ShortVector multiplyAddUnsignedSignedBytesSaturating256(

@@ -90,8 +90,11 @@ class PanamaGgufQuantizedDotTest {
       MemorySegment weights = MemorySegment.ofArray(packed);
       IntVector expected = PanamaVectorUtilSupport.q4_0Q8_0IntegerLanes(weights, 0, q8, 0);
       IntVector actual = PanamaVectorUtilSupport.q4_0Q8_0PairwiseIntegerLanes(weights, 0, q8, 0);
+      IntVector offsetActual =
+          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwiseIntegerLanes(weights, 0, q8, 0);
 
       assertThat(actual.toArray()).containsExactly(expected.toArray());
+      assertThat(offsetActual.toArray()).containsExactly(expected.toArray());
     }
   }
 

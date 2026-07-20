@@ -82,7 +82,9 @@ public class GgufQ4PairwiseDotBenchmark {
 
     float widened = widened();
     float pairwise = pairwise();
-    if (Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(pairwise)) {
+    float offsetPairwise = offsetPairwise();
+    if (Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(pairwise)
+        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(offsetPairwise)) {
       throw new IllegalStateException("Q4 pairwise benchmark kernels disagree");
     }
   }
@@ -95,6 +97,24 @@ public class GgufQ4PairwiseDotBenchmark {
   @Benchmark
   public float pairwise() {
     return rowDot(true);
+  }
+
+  @Benchmark
+  public float offsetPairwise() {
+    FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = (long) block * BLOCK_BYTES;
+      float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
+      IntVector integerLanes =
+          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwiseIntegerLanes(
+              weights, blockOffset + Short.BYTES, q8Quants, block * BLOCK_SIZE);
+      FloatVector products =
+          (FloatVector) integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
+      accumulator =
+          PanamaVectorUtilSupport.fma(
+              products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
+    }
+    return accumulator.reduceLanes(VectorOperators.ADD);
   }
 
   private float rowDot(boolean usePairwise) {
