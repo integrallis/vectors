@@ -36,7 +36,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
-/** Compares widened and packed-pairwise Q4_0 by Q8_0 row kernels. */
+/** Compares widened and signed-short pairwise Q4_0 by Q8_0 row kernels. */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Thread)
@@ -57,7 +57,6 @@ public class GgufQ4PairwiseDotBenchmark {
 
   private MemorySegment weights;
   private byte[] q8Quants;
-  private int[] q8GroupSums;
   private float[] q8Scales;
 
   @Setup(Level.Trial)
@@ -65,7 +64,6 @@ public class GgufQ4PairwiseDotBenchmark {
     Random random = new Random(0x514750414952L);
     byte[] weightBytes = new byte[blocks * BLOCK_BYTES];
     q8Quants = new byte[blocks * BLOCK_SIZE];
-    q8GroupSums = new int[blocks * 8];
     q8Scales = new float[blocks];
     for (int block = 0; block < blocks; block++) {
       int weightOffset = block * BLOCK_BYTES;
@@ -78,30 +76,13 @@ public class GgufQ4PairwiseDotBenchmark {
       for (int index = 0; index < BLOCK_SIZE; index++) {
         q8Quants[block * BLOCK_SIZE + index] = (byte) random.nextInt(-127, 128);
       }
-      for (int group = 0; group < 8; group++) {
-        int sum = 0;
-        for (int index = 0; index < 4; index++) {
-          sum += q8Quants[block * BLOCK_SIZE + group * 4 + index];
-        }
-        q8GroupSums[block * 8 + group] = sum;
-      }
       q8Scales[block] = 0.001f + random.nextFloat() * 0.05f;
     }
     weights = MemorySegment.ofArray(weightBytes);
 
     float widened = widened();
-    float pairwise = pairwise();
-    float offsetPairwise = offsetPairwise();
-    float offsetPairwise128 = offsetPairwise128();
-    float precomputedOffsetPairwise128 = precomputedOffsetPairwise128();
-    float pairwise128 = pairwise128();
     float shortPairwise = shortPairwise();
-    if (Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(pairwise)
-        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(offsetPairwise)
-        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(offsetPairwise128)
-        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(precomputedOffsetPairwise128)
-        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(pairwise128)
-        || Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(shortPairwise)) {
+    if (Float.floatToRawIntBits(widened) != Float.floatToRawIntBits(shortPairwise)) {
       throw new IllegalStateException("Q4 pairwise benchmark kernels disagree");
     }
   }
@@ -112,172 +93,18 @@ public class GgufQ4PairwiseDotBenchmark {
   }
 
   @Benchmark
-  public float pairwise() {
+  public float shortPairwise() {
     return rowDot(true);
   }
 
-  @Benchmark
-  public float offsetPairwise() {
+  private float rowDot(boolean useShortPairwise) {
     FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
     for (int block = 0; block < blocks; block++) {
       long blockOffset = (long) block * BLOCK_BYTES;
       float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
       IntVector integerLanes =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwiseIntegerLanes(
-              weights, blockOffset + Short.BYTES, q8Quants, block * BLOCK_SIZE);
-      FloatVector products =
-          (FloatVector) integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
-      accumulator =
-          PanamaVectorUtilSupport.fma(
-              products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
-    }
-    return reduce256(accumulator);
-  }
-
-  @Benchmark
-  public float offsetPairwise128() {
-    FloatVector lowAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
-    FloatVector highAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
-    for (int block = 0; block < blocks; block++) {
-      long blockOffset = (long) block * BLOCK_BYTES;
-      int quantOffset = block * BLOCK_SIZE;
-      float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
-      IntVector lowLanes =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(
-              weights, blockOffset + Short.BYTES, q8Quants, quantOffset, false);
-      IntVector highLanes =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(
-              weights, blockOffset + Short.BYTES, q8Quants, quantOffset + 16, true);
-      FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
-      lowAccumulator =
-          PanamaVectorUtilSupport.fma(
-              (FloatVector) lowLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-              scaleVector,
-              lowAccumulator);
-      highAccumulator =
-          PanamaVectorUtilSupport.fma(
-              (FloatVector) highLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-              scaleVector,
-              highAccumulator);
-    }
-    float even =
-        (highAccumulator.lane(0) + lowAccumulator.lane(0))
-            + (highAccumulator.lane(2) + lowAccumulator.lane(2));
-    float odd =
-        (highAccumulator.lane(1) + lowAccumulator.lane(1))
-            + (highAccumulator.lane(3) + lowAccumulator.lane(3));
-    return even + odd;
-  }
-
-  @Benchmark
-  public float precomputedOffsetPairwise128() {
-    FloatVector lowAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
-    FloatVector highAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
-    for (int block = 0; block < blocks; block++) {
-      long blockOffset = (long) block * BLOCK_BYTES;
-      int quantOffset = block * BLOCK_SIZE;
-      int sumOffset = block * 8;
-      float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
-      IntVector lowLanes =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(
-              weights,
-              blockOffset + Short.BYTES,
-              q8Quants,
-              quantOffset,
-              q8GroupSums,
-              sumOffset,
-              false);
-      IntVector highLanes =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(
-              weights,
-              blockOffset + Short.BYTES,
-              q8Quants,
-              quantOffset + 16,
-              q8GroupSums,
-              sumOffset + 4,
-              true);
-      FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
-      lowAccumulator =
-          PanamaVectorUtilSupport.fma(
-              (FloatVector) lowLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-              scaleVector,
-              lowAccumulator);
-      highAccumulator =
-          PanamaVectorUtilSupport.fma(
-              (FloatVector) highLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-              scaleVector,
-              highAccumulator);
-    }
-    float even =
-        (highAccumulator.lane(0) + lowAccumulator.lane(0))
-            + (highAccumulator.lane(2) + lowAccumulator.lane(2));
-    float odd =
-        (highAccumulator.lane(1) + lowAccumulator.lane(1))
-            + (highAccumulator.lane(3) + lowAccumulator.lane(3));
-    return even + odd;
-  }
-
-  @Benchmark
-  public float pairwise128() {
-    FloatVector lowAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
-    FloatVector highAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
-    for (int block = 0; block < blocks; block++) {
-      long blockOffset = (long) block * BLOCK_BYTES;
-      int quantOffset = block * BLOCK_SIZE;
-      float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
-      IntVector lowLanes =
-          PanamaVectorUtilSupport.q4_0Q8_0Pairwise128IntegerLanes(
-              weights, blockOffset + Short.BYTES, q8Quants, quantOffset, false);
-      IntVector highLanes =
-          PanamaVectorUtilSupport.q4_0Q8_0Pairwise128IntegerLanes(
-              weights, blockOffset + Short.BYTES, q8Quants, quantOffset + 16, true);
-      FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
-      lowAccumulator =
-          PanamaVectorUtilSupport.fma(
-              (FloatVector) lowLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-              scaleVector,
-              lowAccumulator);
-      highAccumulator =
-          PanamaVectorUtilSupport.fma(
-              (FloatVector) highLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-              scaleVector,
-              highAccumulator);
-    }
-    float even =
-        (highAccumulator.lane(0) + lowAccumulator.lane(0))
-            + (highAccumulator.lane(2) + lowAccumulator.lane(2));
-    float odd =
-        (highAccumulator.lane(1) + lowAccumulator.lane(1))
-            + (highAccumulator.lane(3) + lowAccumulator.lane(3));
-    return even + odd;
-  }
-
-  @Benchmark
-  public float shortPairwise() {
-    FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
-    for (int block = 0; block < blocks; block++) {
-      long blockOffset = (long) block * BLOCK_BYTES;
-      float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
-      IntVector integerLanes =
-          PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(
-              weights, blockOffset + Short.BYTES, q8Quants, block * BLOCK_SIZE);
-      FloatVector products =
-          (FloatVector) integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
-      accumulator =
-          PanamaVectorUtilSupport.fma(
-              products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator);
-    }
-    return reduce256(accumulator);
-  }
-
-  private float rowDot(boolean usePairwise) {
-    FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
-    for (int block = 0; block < blocks; block++) {
-      long blockOffset = (long) block * BLOCK_BYTES;
-      float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
-      IntVector integerLanes =
-          usePairwise
-              ? PanamaVectorUtilSupport.q4_0Q8_0PairwiseIntegerLanes(
+          useShortPairwise
+              ? PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(
                   weights, blockOffset + Short.BYTES, q8Quants, block * BLOCK_SIZE)
               : PanamaVectorUtilSupport.q4_0Q8_0IntegerLanes(
                   weights, blockOffset + Short.BYTES, q8Quants, block * BLOCK_SIZE);

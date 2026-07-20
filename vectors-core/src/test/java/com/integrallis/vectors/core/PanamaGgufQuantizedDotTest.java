@@ -31,6 +31,14 @@ import org.junit.jupiter.api.Test;
 class PanamaGgufQuantizedDotTest {
 
   @Test
+  void q4ShortPairwiseRequiresOptInAvx2WidthAndModelSizedRows() {
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(false, 256, 64)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(true, 128, 64)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(true, 256, 31)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(true, 256, 32)).isTrue();
+  }
+
+  @Test
   void q4_0Q8_0IntegerLanesSumFourProductsPerLane() {
     byte[] packed = new byte[16];
     byte[] q8 = new byte[32];
@@ -59,7 +67,7 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
-  void q4_0Q8_0PairwiseIntegerLanesMatchWidenedKernelExactly() {
+  void q4_0Q8_0ShortPairwiseIntegerLanesMatchWidenedKernelExactly() {
     byte[] packed = new byte[16];
     byte[] q8 = new byte[32];
     Random random = new Random(0x514750414952L);
@@ -67,11 +75,6 @@ class PanamaGgufQuantizedDotTest {
     for (int iteration = 0; iteration < 10_000; iteration++) {
       random.nextBytes(packed);
       random.nextBytes(q8);
-      for (int index = 0; index < q8.length; index++) {
-        if (q8[index] == Byte.MIN_VALUE) {
-          q8[index] = -127;
-        }
-      }
       if (iteration == 0) {
         for (int index = 0; index < packed.length; index++) {
           packed[index] = (byte) (index | ((15 - index) << 4));
@@ -79,7 +82,7 @@ class PanamaGgufQuantizedDotTest {
         for (int index = 0; index < q8.length; index++) {
           q8[index] =
               switch (index & 3) {
-                case 0 -> -127;
+                case 0 -> Byte.MIN_VALUE;
                 case 1 -> -1;
                 case 2 -> 0;
                 default -> 127;
@@ -89,43 +92,9 @@ class PanamaGgufQuantizedDotTest {
 
       MemorySegment weights = MemorySegment.ofArray(packed);
       IntVector expected = PanamaVectorUtilSupport.q4_0Q8_0IntegerLanes(weights, 0, q8, 0);
-      IntVector actual = PanamaVectorUtilSupport.q4_0Q8_0PairwiseIntegerLanes(weights, 0, q8, 0);
-      IntVector offsetActual =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwiseIntegerLanes(weights, 0, q8, 0);
       IntVector shortPairwise =
           PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(weights, 0, q8, 0);
-      IntVector low128 =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(weights, 0, q8, 0, false);
-      IntVector high128 =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(weights, 0, q8, 16, true);
-      IntVector signedLow128 =
-          PanamaVectorUtilSupport.q4_0Q8_0Pairwise128IntegerLanes(weights, 0, q8, 0, false);
-      IntVector signedHigh128 =
-          PanamaVectorUtilSupport.q4_0Q8_0Pairwise128IntegerLanes(weights, 0, q8, 16, true);
-      int[] q8GroupSums = new int[8];
-      for (int lane = 0; lane < q8GroupSums.length; lane++) {
-        for (int index = 0; index < 4; index++) {
-          q8GroupSums[lane] += q8[lane * 4 + index];
-        }
-      }
-      IntVector precomputedLow128 =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(
-              weights, 0, q8, 0, q8GroupSums, 0, false);
-      IntVector precomputedHigh128 =
-          PanamaVectorUtilSupport.q4_0Q8_0OffsetPairwise128IntegerLanes(
-              weights, 0, q8, 16, q8GroupSums, 4, true);
-
-      assertThat(actual.toArray()).containsExactly(expected.toArray());
-      assertThat(offsetActual.toArray()).containsExactly(expected.toArray());
       assertThat(shortPairwise.toArray()).containsExactly(expected.toArray());
-      assertThat(low128.toArray())
-          .containsExactly(expected.lane(0), expected.lane(1), expected.lane(2), expected.lane(3));
-      assertThat(high128.toArray())
-          .containsExactly(expected.lane(4), expected.lane(5), expected.lane(6), expected.lane(7));
-      assertThat(signedLow128.toArray()).containsExactly(low128.toArray());
-      assertThat(signedHigh128.toArray()).containsExactly(high128.toArray());
-      assertThat(precomputedLow128.toArray()).containsExactly(low128.toArray());
-      assertThat(precomputedHigh128.toArray()).containsExactly(high128.toArray());
     }
   }
 
