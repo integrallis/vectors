@@ -50,6 +50,7 @@ class VectorizationProviderTest {
     assertThat(summary).contains("ggufChunksPerThread=2");
     assertThat(summary).contains("mappedKQuantLongOffsets=auto(");
     assertThat(summary).contains("q4=").contains("q5=").contains("q6=");
+    assertThat(summary).contains("q4ShortPairwise=" + PanamaConstants.USE_Q4_SHORT_PAIRWISE);
     assertThat(summary).contains("toggles=[");
     assertThat(summary).endsWith("]");
   }
@@ -128,6 +129,7 @@ class VectorizationProviderTest {
         .isEqualTo(
             VectorizationProvider.isPanamaEnabled() ? PanamaVectorUtilSupport.VECTOR_BITSIZE : 0);
     assertThat(capabilities.ggufExecutor()).isEqualTo("persistent");
+    assertThat(capabilities.q4ShortPairwise()).isEqualTo(PanamaConstants.USE_Q4_SHORT_PAIRWISE);
     assertThat(capabilities.ggufThreads()).isEqualTo(GgufParallelSupport.parallelism());
     assertThat(capabilities.ggufChunksPerThread()).isEqualTo(GgufParallelSupport.chunksPerThread());
   }

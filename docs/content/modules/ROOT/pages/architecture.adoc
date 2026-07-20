@@ -171,6 +171,14 @@ Set `-Dvectors.gguf.parallel=false` to force serial GGUF execution, or raise the
 with `-Dvectors.gguf.parallelThreshold=<elements>`. The active values are included in the
 `vectors-core` startup diagnostic line.
 
+An experimental Q4_0/Q8_0 signed-short pairwise kernel is available for measured GraalVM
+deployments. It is disabled by default and activates only for 256-bit vectors and rows of at least
+1,024 dimensions. The accepted Qwen3 profile uses both
+`-Djdk.graal.MaximumInliningSize=10000` and `-Dvectors.gguf.q4ShortPairwise=true`; enabling only the
+Vectors property can create substantial temporary Vector API allocations. See
+`vectors-bench/jmh-results/graal-q4-short-pairwise.md` in the source repository for the exact JVM
+revision, correctness gate, performance evidence, and rollback procedure.
+
 == Memory Model
 
 * **Vectors** are stored off-heap via `MemorySegment` in persistent mode, or as `float[][]` on the heap in memory mode.

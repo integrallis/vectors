@@ -148,6 +148,17 @@ class PanamaConstantsTest {
     assertThat(forced.q6()).isTrue();
   }
 
+  @Test
+  void q4ShortPairwisePolicyRequiresExplicitBooleanOptIn() {
+    assertThat(PanamaConstants.resolveQ4ShortPairwise(null)).isFalse();
+    assertThat(PanamaConstants.resolveQ4ShortPairwise(" ")).isFalse();
+    assertThat(PanamaConstants.resolveQ4ShortPairwise("false")).isFalse();
+    assertThat(PanamaConstants.resolveQ4ShortPairwise("TRUE")).isTrue();
+    assertThatThrownBy(() -> PanamaConstants.resolveQ4ShortPairwise("auto"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("vectors.gguf.q4ShortPairwise");
+  }
+
   // ─── P3.5 SVE detection ────────────────────────────────────────────────────
 
   @Test

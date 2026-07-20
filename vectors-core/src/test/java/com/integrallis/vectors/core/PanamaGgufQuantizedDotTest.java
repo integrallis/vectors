@@ -31,6 +31,14 @@ import org.junit.jupiter.api.Test;
 class PanamaGgufQuantizedDotTest {
 
   @Test
+  void q4ShortPairwiseRequiresOptInAvx2WidthAndModelSizedRows() {
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(false, 256, 64)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(true, 128, 64)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(true, 256, 31)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(true, 256, 32)).isTrue();
+  }
+
+  @Test
   void q4_0Q8_0IntegerLanesSumFourProductsPerLane() {
     byte[] packed = new byte[16];
     byte[] q8 = new byte[32];
@@ -56,6 +64,38 @@ class PanamaGgufQuantizedDotTest {
       }
     }
     assertThat(actual.toArray()).containsExactly(expected);
+  }
+
+  @Test
+  void q4_0Q8_0ShortPairwiseIntegerLanesMatchWidenedKernelExactly() {
+    byte[] packed = new byte[16];
+    byte[] q8 = new byte[32];
+    Random random = new Random(0x514750414952L);
+
+    for (int iteration = 0; iteration < 10_000; iteration++) {
+      random.nextBytes(packed);
+      random.nextBytes(q8);
+      if (iteration == 0) {
+        for (int index = 0; index < packed.length; index++) {
+          packed[index] = (byte) (index | ((15 - index) << 4));
+        }
+        for (int index = 0; index < q8.length; index++) {
+          q8[index] =
+              switch (index & 3) {
+                case 0 -> Byte.MIN_VALUE;
+                case 1 -> -1;
+                case 2 -> 0;
+                default -> 127;
+              };
+        }
+      }
+
+      MemorySegment weights = MemorySegment.ofArray(packed);
+      IntVector expected = PanamaVectorUtilSupport.q4_0Q8_0IntegerLanes(weights, 0, q8, 0);
+      IntVector shortPairwise =
+          PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(weights, 0, q8, 0);
+      assertThat(shortPairwise.toArray()).containsExactly(expected.toArray());
+    }
   }
 
   @Test
