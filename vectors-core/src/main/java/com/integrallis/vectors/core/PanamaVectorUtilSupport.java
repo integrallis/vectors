@@ -1076,13 +1076,38 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return offsetPairwise128IntegerLanes(nibbles, q8);
   }
 
+  static IntVector q4_0Q8_0OffsetPairwise128IntegerLanes(
+      MemorySegment qWeight,
+      long nibbleOffset,
+      byte[] q8Quants,
+      int quantOffset,
+      int[] q8GroupSums,
+      int sumOffset,
+      boolean highNibble) {
+    ByteVector packed =
+        ByteVector.fromMemorySegment(
+            ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
+    ByteVector nibbles =
+        highNibble
+            ? packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F)
+            : packed.and((byte) 0x0F);
+    ByteVector q8 = ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset);
+    IntVector weighted = pairwise128IntegerLanes(nibbles, q8);
+    IntVector q8Sums = IntVector.fromArray(IntVector.SPECIES_128, q8GroupSums, sumOffset);
+    return weighted.sub(q8Sums.mul(8));
+  }
+
   private static IntVector offsetPairwise128IntegerLanes(
       ByteVector unsignedNibbles, ByteVector q8) {
-    ShortVector weightedPairs = multiplyAddUnsignedSignedBytesSaturating128(unsignedNibbles, q8);
-    IntVector weighted = multiplyAddSignedShorts128(weightedPairs, SHORT_128_ONES);
+    IntVector weighted = pairwise128IntegerLanes(unsignedNibbles, q8);
     ShortVector q8Pairs = multiplyAddUnsignedSignedBytesSaturating128(BYTE_128_ONES, q8);
     IntVector q8Sums = multiplyAddSignedShorts128(q8Pairs, SHORT_128_ONES);
     return weighted.sub(q8Sums.mul(8));
+  }
+
+  private static IntVector pairwise128IntegerLanes(ByteVector unsignedNibbles, ByteVector q8) {
+    ShortVector weightedPairs = multiplyAddUnsignedSignedBytesSaturating128(unsignedNibbles, q8);
+    return multiplyAddSignedShorts128(weightedPairs, SHORT_128_ONES);
   }
 
   private static ShortVector multiplyAddUnsignedSignedBytesSaturating128(
