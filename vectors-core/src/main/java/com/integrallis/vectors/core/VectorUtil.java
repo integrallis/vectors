@@ -1383,6 +1383,68 @@ public final class VectorUtil {
     IMPL.ggufQ5_0Q8_0MatVecDot(query, qWeight, rows, cols, out, q8Quants, q8Scales);
   }
 
+  /**
+   * Multiplies one Q5_0 matrix by a batch-major collection of activation vectors.
+   *
+   * <p>{@code queries} is laid out as {@code [batchSize][cols]} and {@code out} as {@code
+   * [batchSize][rows]}. Each activation row is quantized independently to Q8_0 in caller-owned
+   * scratch before the matrix rows are evaluated.
+   *
+   * @param q8Quants scratch space with at least {@code batchSize * cols} entries
+   * @param q8Scales scratch space with at least {@code batchSize * (cols / 32)} entries
+   */
+  public static void ggufQ5_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
+    }
+    if (rows < 1) {
+      throw new IllegalArgumentException("rows must be >= 1: " + rows);
+    }
+    Objects.requireNonNull(queries, "queries");
+    Objects.requireNonNull(out, "out");
+    Objects.requireNonNull(q8Quants, "q8Quants");
+    Objects.requireNonNull(q8Scales, "q8Scales");
+    checkGgufQuantizedMatrixArguments(
+        qWeight,
+        rows,
+        cols,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q5_0_BLOCK_BYTES);
+    int queryEntries = checkedProduct(batchSize, cols, "batchSize * cols");
+    int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    int scaleEntries =
+        checkedProduct(batchSize, cols / VectorUtilSupport.GGUF_Q_BLOCK_SIZE, "batch Q8_0 scales");
+    if (queries.length < queryEntries) {
+      throw new IllegalArgumentException(
+          "queries.length must be >= batchSize * cols: " + queries.length + " < " + queryEntries);
+    }
+    if (out.length < outputEntries) {
+      throw new IllegalArgumentException(
+          "out.length must be >= batchSize * rows: " + out.length + " < " + outputEntries);
+    }
+    if (q8Quants.length < queryEntries) {
+      throw new IllegalArgumentException(
+          "q8Quants.length must be >= batchSize * cols: " + q8Quants.length + " < " + queryEntries);
+    }
+    if (q8Scales.length < scaleEntries) {
+      throw new IllegalArgumentException(
+          "q8Scales.length must be >= batch Q8_0 scales: "
+              + q8Scales.length
+              + " < "
+              + scaleEntries);
+    }
+    IMPL.ggufQ5_0Q8_0BatchedMatmul(
+        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
+  }
+
   /** Batched row-major GEMV over GGUF Q8_0 rows. */
   public static void ggufQ8_0BatchDotProduct(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {

@@ -1494,6 +1494,52 @@ public interface VectorUtilSupport {
         });
   }
 
+  /** Q5_0 matrix multiplication over batch-major Q8_0-quantized activation rows. */
+  default void ggufQ5_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_0(
+          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
+    }
+
+    long rowBytes = ggufQ5_0RowBytes(cols);
+    for (int row = 0; row < rows; row++) {
+      for (int batch = 0; batch < batchSize; batch++) {
+        out[batch * rows + row] = 0.0f;
+      }
+      long rowOffset = row * rowBytes;
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = rowOffset + (long) block * GGUF_Q5_0_BLOCK_BYTES;
+        float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+        int highBits = qWeight.get(GGUF_LE_INT, blockOffset + Short.BYTES);
+        long quantsOffset = blockOffset + Short.BYTES + Integer.BYTES;
+        int blockActivationOffset = block * GGUF_Q_BLOCK_SIZE;
+        for (int batch = 0; batch < batchSize; batch++) {
+          int activationOffset = batch * cols + blockActivationOffset;
+          int integerSum = 0;
+          for (int index = 0; index < 16; index++) {
+            int packed = qWeight.get(ValueLayout.JAVA_BYTE, quantsOffset + index) & 0xFF;
+            int low = (packed & 0x0F) | (((highBits >>> index) & 1) << 4);
+            int high = (packed >>> 4) | (((highBits >>> (index + 16)) & 1) << 4);
+            integerSum += (low - 16) * q8Quants[activationOffset + index];
+            integerSum += (high - 16) * q8Quants[activationOffset + index + 16];
+          }
+          int outputIndex = batch * rows + row;
+          float scale = weightScale * q8Scales[batch * blocks + block];
+          out[outputIndex] = MathUtil.fma(scale, integerSum, out[outputIndex]);
+        }
+      }
+    }
+  }
+
   /** Batched row-major GEMV over GGUF Q6_K rows. */
   default void ggufQ6_KMatVecDot(
       float[] query, MemorySegment qWeight, int rows, int cols, float[] out) {
