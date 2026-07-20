@@ -59,6 +59,43 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0Q8_0PairwiseIntegerLanesMatchWidenedKernelExactly() {
+    byte[] packed = new byte[16];
+    byte[] q8 = new byte[32];
+    Random random = new Random(0x514750414952L);
+
+    for (int iteration = 0; iteration < 10_000; iteration++) {
+      random.nextBytes(packed);
+      random.nextBytes(q8);
+      for (int index = 0; index < q8.length; index++) {
+        if (q8[index] == Byte.MIN_VALUE) {
+          q8[index] = -127;
+        }
+      }
+      if (iteration == 0) {
+        for (int index = 0; index < packed.length; index++) {
+          packed[index] = (byte) (index | ((15 - index) << 4));
+        }
+        for (int index = 0; index < q8.length; index++) {
+          q8[index] =
+              switch (index & 3) {
+                case 0 -> -127;
+                case 1 -> -1;
+                case 2 -> 0;
+                default -> 127;
+              };
+        }
+      }
+
+      MemorySegment weights = MemorySegment.ofArray(packed);
+      IntVector expected = PanamaVectorUtilSupport.q4_0Q8_0IntegerLanes(weights, 0, q8, 0);
+      IntVector actual = PanamaVectorUtilSupport.q4_0Q8_0PairwiseIntegerLanes(weights, 0, q8, 0);
+
+      assertThat(actual.toArray()).containsExactly(expected.toArray());
+    }
+  }
+
+  @Test
   void q4_KQ8_KIntegerDotDecodesBothNibbleHalves() {
     byte[] packed = new byte[32];
     byte[] q8 = new byte[32];
