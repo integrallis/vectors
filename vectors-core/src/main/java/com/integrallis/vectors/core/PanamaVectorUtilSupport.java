@@ -2547,6 +2547,63 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
+  /** SIMD Q5_0 by a batch of Q8_0 activations with row-local weight reuse. */
+  @Override
+  public void ggufQ5_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    if (batchSize == 1) {
+      ggufQ5_0Q8_0MatVecDot(queries, qWeight, rows, cols, out, q8Quants, q8Scales);
+      return;
+    }
+
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    for (int batch = 0; batch < batchSize; batch++) {
+      GgufQuantizationSupport.quantizeQ8_0(
+          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
+    }
+
+    long rowBytes = (long) blocks * GGUF_Q5_0_BLOCK_BYTES;
+    int effectiveCols = Math.multiplyExact(cols, batchSize);
+    GgufParallelSupport.forEachRow(
+        qWeight,
+        rows,
+        effectiveCols,
+        row -> {
+          for (int batch = 0; batch < batchSize; batch++) {
+            out[batch * rows + row] = 0.0f;
+          }
+
+          long rowOffset = row * rowBytes;
+          for (int block = 0; block < blocks; block++) {
+            long blockOffset = rowOffset + (long) block * GGUF_Q5_0_BLOCK_BYTES;
+            float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+            int highBits = qWeight.get(GGUF_LE_INT, blockOffset + Short.BYTES);
+            long packedOffset = blockOffset + Short.BYTES + Integer.BYTES;
+            int blockActivationOffset = block * GGUF_Q_BLOCK_SIZE;
+            for (int batch = 0; batch < batchSize; batch++) {
+              int integerSum =
+                  q5_0Q8_0IntegerLanes(
+                          qWeight,
+                          packedOffset,
+                          highBits,
+                          q8Quants,
+                          batch * cols + blockActivationOffset)
+                      .reduceLanes(VectorOperators.ADD);
+              int outputIndex = batch * rows + row;
+              float scale = weightScale * q8Scales[batch * blocks + block];
+              out[outputIndex] = MathUtil.fma(scale, integerSum, out[outputIndex]);
+            }
+          }
+        });
+  }
+
   static IntVector q5_0Q8_0IntegerLanes(
       MemorySegment qWeight, long packedOffset, int highBits, byte[] q8Quants, int quantOffset) {
     IntVector accumulator = IntVector.zero(IntVector.SPECIES_256);

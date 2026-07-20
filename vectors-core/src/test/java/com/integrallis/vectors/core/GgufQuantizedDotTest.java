@@ -2318,6 +2318,67 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q5_0Q8_0BatchedMatmulMatchesIndependentQueriesExactly() {
+    int batchSize = 3;
+    int rows = 2;
+    int cols = 64;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] firstRow =
+        concat(
+            q5Block(0.125f, index -> (index * 7) % 32 - 16),
+            q5Block(-0.25f, index -> 15 - (index * 5) % 32));
+    byte[] secondRow =
+        concat(
+            q5Block(0.0625f, index -> (index * 11) % 32 - 16),
+            q5Block(0.5f, index -> 15 - (index * 3) % 32));
+    MemorySegment weights = MemorySegment.ofArray(concat(firstRow, secondRow));
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] query = new float[cols];
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      System.arraycopy(queries, batch * cols, query, 0, cols);
+      float[] result = new float[rows];
+      VectorUtil.ggufQ5_0Q8_0BatchDotProduct(
+          query, weights, rows, cols, result, new byte[cols], new float[cols / 32]);
+      System.arraycopy(result, 0, expected, batch * rows, rows);
+    }
+
+    VectorUtil.ggufQ5_0Q8_0BatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        actual,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 32)]);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q5_0Q8_0BatchedMatmulRejectsUndersizedScaleScratch() {
+    int batchSize = 2;
+    int cols = 32;
+    MemorySegment weights = MemorySegment.ofArray(q5Block(1.0f, ignored -> 1));
+
+    assertThatThrownBy(
+            () ->
+                VectorUtil.ggufQ5_0Q8_0BatchedMatmul(
+                    new float[batchSize * cols],
+                    weights,
+                    batchSize,
+                    1,
+                    cols,
+                    new float[batchSize],
+                    new byte[batchSize * cols],
+                    new float[batchSize - 1]))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("q8Scales");
+  }
+
+  @Test
   void quantizedDotRejectsNonBlockAlignedDimensions() {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment q4 = copy(arena, q4Block(1.0f, ones(32), null));

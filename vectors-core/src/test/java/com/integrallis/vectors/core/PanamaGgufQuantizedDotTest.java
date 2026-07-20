@@ -250,7 +250,7 @@ class PanamaGgufQuantizedDotTest {
   void panamaProviderOwnsQ5_0Q8_0Kernel() {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)
-        .contains("ggufQ5_0Q8_0MatVecDot");
+        .contains("ggufQ5_0Q8_0MatVecDot", "ggufQ5_0Q8_0BatchedMatmul");
   }
 
   @Test
@@ -505,6 +505,51 @@ class PanamaGgufQuantizedDotTest {
     new PanamaVectorUtilSupport()
         .ggufQ5_0Q8_0MatVecDot(
             query, weightSegment, rows, cols, actual, actualQuants, actualScales);
+
+    assertThat(actualQuants).containsExactly(expectedQuants);
+    assertThat(actualScales).containsExactly(expectedScales);
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q5_0Q8_0BatchedKernelMatchesScalarReferenceExactly() {
+    int batchSize = 4;
+    int rows = 17;
+    int cols = 256;
+    Random random = new Random(0xB515048L);
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+
+    byte[] weights = new byte[rows * (cols / 32) * 22];
+    random.nextBytes(weights);
+    ByteBuffer buffer = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < weights.length; offset += 22) {
+      buffer.putShort(offset, Float.floatToFloat16(random.nextFloat() * 0.05f + 0.001f));
+    }
+
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    byte[] expectedQuants = new byte[batchSize * cols];
+    byte[] actualQuants = new byte[batchSize * cols];
+    float[] expectedScales = new float[batchSize * (cols / 32)];
+    float[] actualScales = new float[batchSize * (cols / 32)];
+    MemorySegment weightSegment = MemorySegment.ofArray(weights);
+
+    new ScalarVectorUtilSupport()
+        .ggufQ5_0Q8_0BatchedMatmul(
+            queries,
+            weightSegment,
+            batchSize,
+            rows,
+            cols,
+            expected,
+            expectedQuants,
+            expectedScales);
+    new PanamaVectorUtilSupport()
+        .ggufQ5_0Q8_0BatchedMatmul(
+            queries, weightSegment, batchSize, rows, cols, actual, actualQuants, actualScales);
 
     assertThat(actualQuants).containsExactly(expectedQuants);
     assertThat(actualScales).containsExactly(expectedScales);
