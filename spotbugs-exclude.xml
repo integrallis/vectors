@@ -85,6 +85,14 @@
         <Class name="com.integrallis.vectors.core.GgufRowDispatchBenchmark"/>
         <Bug pattern="URF_UNREAD_FIELD"/>
     </Match>
+    <!-- vectors-bench: GgufQ4PairwiseDotBenchmark's mapped weights and Q8 activation state are
+         written by @Setup and read by rowDot(), which is reached by both @Benchmark methods.
+         The getfield instructions are present in the compiled bytecode, but SpotBugs misses the
+         reads while analyzing the generated JMH source set, as with GgufRowDispatchBenchmark. -->
+    <Match>
+        <Class name="com.integrallis.vectors.core.GgufQ4PairwiseDotBenchmark"/>
+        <Bug pattern="URF_UNREAD_FIELD"/>
+    </Match>
     <!-- HNSW: SearchResult record exposes/stores arrays intentionally for zero-copy access -->
     <Match>
         <Class name="com.integrallis.vectors.hnsw.SearchResult"/>
