@@ -74,6 +74,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           ShortVector.SPECIES_256, 0, 0, 0, 0, 0, 4, 8, 12, 0, 0, 0, 0, 0, 0, 0, 0);
   private static final VectorMask<Short> HIGH_GROUP_LANES =
       VectorMask.fromLong(ShortVector.SPECIES_256, 0xF0L);
+  private static final VectorShuffle<Byte> BYTE_128_EVEN_LANES =
+      VectorShuffle.makeUnzip(ByteVector.SPECIES_128, 0);
+  private static final VectorShuffle<Byte> BYTE_128_ODD_LANES =
+      VectorShuffle.makeUnzip(ByteVector.SPECIES_128, 1);
   private static final VectorShuffle<Byte> BYTE_256_EVEN_LANES =
       VectorShuffle.makeUnzip(ByteVector.SPECIES_256, 0);
   private static final VectorShuffle<Byte> BYTE_256_ODD_LANES =
@@ -82,8 +86,16 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       VectorShuffle.makeUnzip(ShortVector.SPECIES_256, 0);
   private static final VectorShuffle<Short> SHORT_256_ODD_LANES =
       VectorShuffle.makeUnzip(ShortVector.SPECIES_256, 1);
+  private static final VectorShuffle<Short> SHORT_128_EVEN_LANES =
+      VectorShuffle.makeUnzip(ShortVector.SPECIES_128, 0);
+  private static final VectorShuffle<Short> SHORT_128_ODD_LANES =
+      VectorShuffle.makeUnzip(ShortVector.SPECIES_128, 1);
+  private static final ShortVector SHORT_128_ONES =
+      ShortVector.broadcast(ShortVector.SPECIES_128, (short) 1);
   private static final ShortVector SHORT_256_ONES =
       ShortVector.broadcast(ShortVector.SPECIES_256, (short) 1);
+  private static final ByteVector BYTE_128_ONES =
+      ByteVector.broadcast(ByteVector.SPECIES_128, (byte) 1);
   private static final ByteVector BYTE_256_ONES =
       ByteVector.broadcast(ByteVector.SPECIES_256, (byte) 1);
   private static final ByteVector Q5_HIGH_BIT_MASKS =
@@ -1045,6 +1057,69 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     ShortVector q8Pairs = multiplyAddUnsignedSignedBytesSaturating256(BYTE_256_ONES, q8);
     IntVector q8Sums = multiplyAddSignedShorts256(q8Pairs, SHORT_256_ONES);
     return weighted.sub(q8Sums.mul(8));
+  }
+
+  static IntVector q4_0Q8_0OffsetPairwise128IntegerLanes(
+      MemorySegment qWeight,
+      long nibbleOffset,
+      byte[] q8Quants,
+      int quantOffset,
+      boolean highNibble) {
+    ByteVector packed =
+        ByteVector.fromMemorySegment(
+            ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
+    ByteVector nibbles =
+        highNibble
+            ? packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F)
+            : packed.and((byte) 0x0F);
+    ByteVector q8 = ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset);
+    return offsetPairwise128IntegerLanes(nibbles, q8);
+  }
+
+  private static IntVector offsetPairwise128IntegerLanes(
+      ByteVector unsignedNibbles, ByteVector q8) {
+    ShortVector weightedPairs = multiplyAddUnsignedSignedBytesSaturating128(unsignedNibbles, q8);
+    IntVector weighted = multiplyAddSignedShorts128(weightedPairs, SHORT_128_ONES);
+    ShortVector q8Pairs = multiplyAddUnsignedSignedBytesSaturating128(BYTE_128_ONES, q8);
+    IntVector q8Sums = multiplyAddSignedShorts128(q8Pairs, SHORT_128_ONES);
+    return weighted.sub(q8Sums.mul(8));
+  }
+
+  private static ShortVector multiplyAddUnsignedSignedBytesSaturating128(
+      ByteVector unsigned, ByteVector signed) {
+    ByteVector unsignedEven = unsigned.rearrange(BYTE_128_EVEN_LANES);
+    ByteVector unsignedOdd = unsigned.rearrange(BYTE_128_ODD_LANES);
+    ByteVector signedEven = signed.rearrange(BYTE_128_EVEN_LANES);
+    ByteVector signedOdd = signed.rearrange(BYTE_128_ODD_LANES);
+    ShortVector unsignedEvenShorts =
+        (ShortVector)
+            unsignedEven.convertShape(VectorOperators.ZERO_EXTEND_B2S, ShortVector.SPECIES_128, 0);
+    ShortVector unsignedOddShorts =
+        (ShortVector)
+            unsignedOdd.convertShape(VectorOperators.ZERO_EXTEND_B2S, ShortVector.SPECIES_128, 0);
+    ShortVector signedEvenShorts =
+        (ShortVector) signedEven.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+    ShortVector signedOddShorts =
+        (ShortVector) signedOdd.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+    return unsignedEvenShorts
+        .mul(signedEvenShorts)
+        .lanewise(VectorOperators.SADD, unsignedOddShorts.mul(signedOddShorts));
+  }
+
+  private static IntVector multiplyAddSignedShorts128(ShortVector left, ShortVector right) {
+    ShortVector leftEven = left.rearrange(SHORT_128_EVEN_LANES);
+    ShortVector leftOdd = left.rearrange(SHORT_128_ODD_LANES);
+    ShortVector rightEven = right.rearrange(SHORT_128_EVEN_LANES);
+    ShortVector rightOdd = right.rearrange(SHORT_128_ODD_LANES);
+    IntVector leftEvenInts =
+        (IntVector) leftEven.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+    IntVector leftOddInts =
+        (IntVector) leftOdd.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+    IntVector rightEvenInts =
+        (IntVector) rightEven.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+    IntVector rightOddInts =
+        (IntVector) rightOdd.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+    return leftEvenInts.mul(rightEvenInts).add(leftOddInts.mul(rightOddInts));
   }
 
   private static ShortVector multiplyAddUnsignedSignedBytesSaturating256(
