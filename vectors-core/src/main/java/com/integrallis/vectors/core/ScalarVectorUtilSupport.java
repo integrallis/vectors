@@ -246,6 +246,28 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void addWeightedRowsInPlace(
+      float[] out,
+      int outOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      float[] weights,
+      int weightsOffset,
+      int rows,
+      int columns) {
+    for (int row = 0; row < rows; row++) {
+      addScaledInPlace(
+          out,
+          outOffset,
+          matrix,
+          matrixOffset + row * rowStride,
+          columns,
+          weights[weightsOffset + row]);
+    }
+  }
+
+  @Override
   public void subInPlace(float[] v1, float[] v2) {
     for (int i = 0; i < v1.length; i++) {
       v1[i] -= v2[i];

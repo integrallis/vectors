@@ -4123,6 +4123,60 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void addWeightedRowsInPlace(
+      float[] out,
+      int outOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      float[] weights,
+      int weightsOffset,
+      int rows,
+      int columns) {
+    int row = 0;
+    int fourRowLimit = rows & ~3;
+    int vectorLimit = FLOAT_SPECIES.loopBound(columns);
+    for (; row < fourRowLimit; row += 4) {
+      int row0 = matrixOffset + row * rowStride;
+      int row1 = row0 + rowStride;
+      int row2 = row1 + rowStride;
+      int row3 = row2 + rowStride;
+      FloatVector weight0 = FloatVector.broadcast(FLOAT_SPECIES, weights[weightsOffset + row]);
+      FloatVector weight1 = FloatVector.broadcast(FLOAT_SPECIES, weights[weightsOffset + row + 1]);
+      FloatVector weight2 = FloatVector.broadcast(FLOAT_SPECIES, weights[weightsOffset + row + 2]);
+      FloatVector weight3 = FloatVector.broadcast(FLOAT_SPECIES, weights[weightsOffset + row + 3]);
+
+      int column = 0;
+      for (; column < vectorLimit; column += FLOAT_SPECIES.length()) {
+        FloatVector result = FloatVector.fromArray(FLOAT_SPECIES, out, outOffset + column);
+        result = fma(FloatVector.fromArray(FLOAT_SPECIES, matrix, row0 + column), weight0, result);
+        result = fma(FloatVector.fromArray(FLOAT_SPECIES, matrix, row1 + column), weight1, result);
+        result = fma(FloatVector.fromArray(FLOAT_SPECIES, matrix, row2 + column), weight2, result);
+        result = fma(FloatVector.fromArray(FLOAT_SPECIES, matrix, row3 + column), weight3, result);
+        result.intoArray(out, outOffset + column);
+      }
+      for (; column < columns; column++) {
+        int outIndex = outOffset + column;
+        float result = out[outIndex];
+        result = MathUtil.fma(matrix[row0 + column], weights[weightsOffset + row], result);
+        result = MathUtil.fma(matrix[row1 + column], weights[weightsOffset + row + 1], result);
+        result = MathUtil.fma(matrix[row2 + column], weights[weightsOffset + row + 2], result);
+        result = MathUtil.fma(matrix[row3 + column], weights[weightsOffset + row + 3], result);
+        out[outIndex] = result;
+      }
+    }
+    for (; row < rows; row++) {
+      addScaledInPlace(
+          out,
+          outOffset,
+          matrix,
+          matrixOffset + row * rowStride,
+          columns,
+          weights[weightsOffset + row]);
+    }
+  }
+
+  @Override
   public void subInPlace(float[] v1, float[] v2) {
     int i = 0;
     int limit = FLOAT_SPECIES.loopBound(v1.length);

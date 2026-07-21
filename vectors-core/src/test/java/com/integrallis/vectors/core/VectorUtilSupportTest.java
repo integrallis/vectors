@@ -591,6 +591,23 @@ class VectorUtilSupportTest {
 
     @ParameterizedTest(name = "dim={0}")
     @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
+    void addWeightedRowsInPlacePanamaMatchesScalarExactly(int dim) {
+      Random rng = new Random(SEED);
+      int rows = 7;
+      int rowStride = dim + 3;
+      float[] matrix = randomFloats(2 + rows * rowStride, rng);
+      float[] weights = randomFloats(rows + 2, rng);
+      float[] expected = randomFloats(dim + 2, rng);
+      float[] actual = expected.clone();
+
+      scalar.addWeightedRowsInPlace(expected, 1, matrix, 2, rowStride, weights, 1, rows, dim);
+      panama.addWeightedRowsInPlace(actual, 1, matrix, 2, rowStride, weights, 1, rows, dim);
+
+      assertThat(actual).containsExactly(expected);
+    }
+
+    @ParameterizedTest(name = "dim={0}")
+    @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
     void subInPlacePanamaMatchesScalar(int dim) {
       Random rng = new Random(SEED);
       float[] a1 = randomFloats(dim, rng);
