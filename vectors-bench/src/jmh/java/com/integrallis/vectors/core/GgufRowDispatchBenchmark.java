@@ -58,6 +58,9 @@ public class GgufRowDispatchBenchmark {
   @Param("1024")
   int cols;
 
+  @Param("2")
+  int chunksPerThread;
+
   private GgufRowExecutor executor;
   private float[] query;
   private float[] weights;
@@ -76,7 +79,7 @@ public class GgufRowDispatchBenchmark {
         GgufParallelSupport.newExecutor(
             GgufParallelSupport.ExecutionMode.parse(executionMode),
             parallelism,
-            4,
+            chunksPerThread,
             "vectors-bench");
   }
 
