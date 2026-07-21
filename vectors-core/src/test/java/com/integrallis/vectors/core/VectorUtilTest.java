@@ -169,6 +169,41 @@ class VectorUtilTest {
   }
 
   @Test
+  void exactBatchDotProductSupportsOffsetsAndStridedRows() {
+    float[] query = {99.0f, 1.0f, 2.0f, 3.0f, 98.0f};
+    float[] matrix = {97.0f, 1.0f, 0.0f, 1.0f, 96.0f, 95.0f, 0.0f, 1.0f, 1.0f, 94.0f};
+    float[] out = {93.0f, Float.NaN, Float.NaN, 92.0f};
+
+    VectorUtil.batchDotProductExact(query, 1, matrix, 1, 5, 2, 3, out, 1);
+
+    assertThat(out).containsExactly(93.0f, 4.0f, 5.0f, 92.0f);
+  }
+
+  @Test
+  void exactBatchDotProductRejectsInvalidRangesAndAliases() {
+    float[] query = {1.0f, 2.0f};
+    float[] matrix = {3.0f, 4.0f, 5.0f, 6.0f};
+    float[] out = new float[2];
+
+    assertThatThrownBy(() -> VectorUtil.batchDotProductExact(query, 0, matrix, 0, 1, 2, 2, out, 0))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("rowStride");
+    assertThatThrownBy(() -> VectorUtil.batchDotProductExact(query, 1, matrix, 0, 2, 2, 2, out, 0))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("query range");
+    assertThatThrownBy(() -> VectorUtil.batchDotProductExact(query, 0, matrix, 1, 2, 2, 2, out, 0))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("matrix range");
+    assertThatThrownBy(() -> VectorUtil.batchDotProductExact(query, 0, matrix, 0, 2, 2, 2, out, 1))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("output range");
+    assertThatThrownBy(
+            () -> VectorUtil.batchDotProductExact(query, 0, matrix, 0, 2, 2, 2, query, 0))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("must not alias");
+  }
+
+  @Test
   void addScaledInPlace_rejectsInvalidArguments() {
     float[] out = {1.0f, 2.0f};
     float[] vector = {3.0f, 4.0f};

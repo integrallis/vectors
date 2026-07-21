@@ -59,6 +59,23 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void matVecDotExact(
+      float[] query,
+      int queryOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      int rows,
+      int columns,
+      float[] out,
+      int outOffset) {
+    for (int row = 0; row < rows; row++) {
+      out[outOffset + row] =
+          dotProduct(query, queryOffset, matrix, matrixOffset + row * rowStride, columns);
+    }
+  }
+
+  @Override
   public float squareDistance(float[] a, float[] b) {
     return squareDistance(a, 0, b, 0, a.length);
   }

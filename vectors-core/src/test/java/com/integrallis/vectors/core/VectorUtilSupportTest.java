@@ -213,6 +213,48 @@ class VectorUtilSupportTest {
     }
   }
 
+  @Nested
+  class ExactStridedBatchDotProductTest {
+
+    @ParameterizedTest(name = "dim={0}")
+    @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
+    void matchesIndependentProviderDotProductsBitForBit(int dim) {
+      int queryOffset = 3;
+      int matrixOffset = 5;
+      int rowStride = dim + 7;
+      int rows = 7;
+      int outOffset = 2;
+      Random rng = new Random(SEED + dim);
+      float[] query = randomFloats(queryOffset + dim + 4, rng);
+      float[] matrix = randomFloats(matrixOffset + (rows - 1) * rowStride + dim + 6, rng);
+      float[] scalarOut = new float[outOffset + rows + 3];
+      float[] panamaOut = new float[outOffset + rows + 3];
+      java.util.Arrays.fill(scalarOut, Float.NaN);
+      java.util.Arrays.fill(panamaOut, Float.NaN);
+
+      scalar.matVecDotExact(
+          query, queryOffset, matrix, matrixOffset, rowStride, rows, dim, scalarOut, outOffset);
+      panama.matVecDotExact(
+          query, queryOffset, matrix, matrixOffset, rowStride, rows, dim, panamaOut, outOffset);
+
+      for (int row = 0; row < rows; row++) {
+        int rowOffset = matrixOffset + row * rowStride;
+        assertThat(Float.floatToRawIntBits(scalarOut[outOffset + row]))
+            .isEqualTo(
+                Float.floatToRawIntBits(
+                    scalar.dotProduct(query, queryOffset, matrix, rowOffset, dim)));
+        assertThat(Float.floatToRawIntBits(panamaOut[outOffset + row]))
+            .isEqualTo(
+                Float.floatToRawIntBits(
+                    panama.dotProduct(query, queryOffset, matrix, rowOffset, dim)));
+      }
+      assertThat(scalarOut[0]).isNaN();
+      assertThat(scalarOut[outOffset + rows]).isNaN();
+      assertThat(panamaOut[0]).isNaN();
+      assertThat(panamaOut[outOffset + rows]).isNaN();
+    }
+  }
+
   // ===========================
   // Float square distance tests
   // ===========================

@@ -190,6 +190,21 @@ public interface VectorUtilSupport {
     }
   }
 
+  /**
+   * Fills an output range from offset query and strided matrix rows while preserving this
+   * provider's independent {@link #dotProduct(float[], int, float[], int, int)} result bit for bit.
+   */
+  void matVecDotExact(
+      float[] query,
+      int queryOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      int rows,
+      int columns,
+      float[] out,
+      int outOffset);
+
   /** Batched row-major GEMV over little-endian GGUF F32 rows without copying mapped weights. */
   default void ggufF32MatVecDot(
       float[] query, MemorySegment weight, int rows, int cols, float[] out) {
