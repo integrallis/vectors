@@ -73,6 +73,7 @@ public final class VectorizationProvider {
         PanamaConstants.HAS_FAST_SCALAR_FMA,
         PanamaConstants.HAS_SVE,
         vectorApi && PanamaVectorUtilSupport.VECTOR_BITSIZE >= 256,
+        vectorApi && PanamaVectorUtilSupport.VECTOR_BITSIZE >= 256,
         GgufParallelSupport.enabled(),
         GgufParallelSupport.executionMode().name().toLowerCase(Locale.ROOT),
         GgufParallelSupport.parallelism(),
@@ -151,6 +152,10 @@ public final class VectorizationProvider {
         .append(mappedKQuantPolicy.q6())
         .append(')');
     sb.append(" q4ShortPairwiseSupported=")
+        .append(
+            impl instanceof PanamaVectorUtilSupport
+                && PanamaVectorUtilSupport.VECTOR_BITSIZE >= 256);
+    sb.append(" q4UnsignedPairwiseSupported=")
         .append(
             impl instanceof PanamaVectorUtilSupport
                 && PanamaVectorUtilSupport.VECTOR_BITSIZE >= 256);

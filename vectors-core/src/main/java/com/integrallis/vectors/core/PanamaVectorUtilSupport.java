@@ -89,6 +89,15 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       VectorShuffle.makeUnzip(ShortVector.SPECIES_256, 0);
   private static final VectorShuffle<Short> SHORT_256_ODD_LANES =
       VectorShuffle.makeUnzip(ShortVector.SPECIES_256, 1);
+  private static final VectorShuffle<Byte> BYTE_128_EVEN_LANES =
+      VectorShuffle.makeUnzip(ByteVector.SPECIES_128, 0);
+  private static final VectorShuffle<Byte> BYTE_128_ODD_LANES =
+      VectorShuffle.makeUnzip(ByteVector.SPECIES_128, 1);
+  private static final VectorShuffle<Short> SHORT_128_EVEN_LANES =
+      VectorShuffle.makeUnzip(ShortVector.SPECIES_128, 0);
+  private static final VectorShuffle<Short> SHORT_128_ODD_LANES =
+      VectorShuffle.makeUnzip(ShortVector.SPECIES_128, 1);
+  private static final short[] Q4_PAIR_FACTORS = {1, 1, 1, 1, 1, 1, 1, 1};
   private static final ByteVector Q5_HIGH_BIT_MASKS =
       ByteVector.fromArray(
           ByteVector.SPECIES_64, new byte[] {1, 2, 4, 8, 16, 32, 64, (byte) 0x80}, 0);
@@ -106,7 +115,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   static boolean useQ4ShortPairwise(GgufQ4Kernel kernel, int vectorBits, int blocks) {
     boolean requested =
         switch (Objects.requireNonNull(kernel, "kernel")) {
-          case WIDENED -> false;
+          case WIDENED, UNSIGNED_PAIRWISE -> false;
           case SHORT_PAIRWISE -> true;
         };
     return requested && vectorBits >= 256 && blocks >= Q4_SHORT_PAIRWISE_MIN_BLOCKS;
@@ -114,6 +123,44 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
   private static boolean useQ4ShortPairwise(GgufQ4Kernel kernel, int blocks) {
     return useQ4ShortPairwise(kernel, VECTOR_BITSIZE, blocks);
+  }
+
+  static boolean useQ4UnsignedPairwise(GgufQ4Kernel kernel, int vectorBits, int blocks) {
+    return Objects.requireNonNull(kernel, "kernel") == GgufQ4Kernel.UNSIGNED_PAIRWISE
+        && vectorBits >= 256
+        && blocks >= Q4_SHORT_PAIRWISE_MIN_BLOCKS;
+  }
+
+  private static boolean useQ4UnsignedPairwise(GgufQ4Kernel kernel, int blocks) {
+    return useQ4UnsignedPairwise(kernel, VECTOR_BITSIZE, blocks);
+  }
+
+  private static void quantizeQ8_0ForQ4(
+      float[] query,
+      int queryOffset,
+      int dimensions,
+      byte[] q8Quants,
+      int quantOffset,
+      float[] q8Scales,
+      int scaleOffset,
+      int[] q8ZeroPointCorrections,
+      int correctionOffset,
+      boolean computeZeroPointCorrections) {
+    if (computeZeroPointCorrections) {
+      GgufQuantizationSupport.quantizeQ8_0WithQ4Corrections(
+          query,
+          queryOffset,
+          dimensions,
+          q8Quants,
+          quantOffset,
+          q8Scales,
+          scaleOffset,
+          q8ZeroPointCorrections,
+          correctionOffset);
+      return;
+    }
+    GgufQuantizationSupport.quantizeQ8_0(
+        query, queryOffset, dimensions, q8Quants, quantOffset, q8Scales, scaleOffset);
   }
 
   // --- Float dot product: 4x unrolled FMA (Lucene pattern) ---
@@ -383,20 +430,25 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
-    GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
-
     long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
+    boolean useUnsignedPairwise = useQ4UnsignedPairwise(kernel, blocks);
+    quantizeQ8_0ForQ4(
+        query, 0, cols, q8Quants, 0, q8Scales, 0, q8ZeroPointCorrections, 0, useUnsignedPairwise);
     GgufParallelSupport.forEachRow(
         qWeight,
         rows,
         cols,
         row ->
             out[row] =
-                q4_0Q8_0RowDot(
-                    qWeight, row * rowBytes, blocks, q8Quants, q8Scales, useShortPairwise));
+                useUnsignedPairwise
+                    ? q4_0Q8_0UnsignedPairwiseRowDot(
+                        qWeight, row * rowBytes, blocks, q8Quants, q8Scales, q8ZeroPointCorrections)
+                    : q4_0Q8_0RowDot(
+                        qWeight, row * rowBytes, blocks, q8Quants, q8Scales, useShortPairwise));
   }
 
   @Override
@@ -411,12 +463,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
-    GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
-
     long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
+    boolean useUnsignedPairwise = useQ4UnsignedPairwise(kernel, blocks);
+    quantizeQ8_0ForQ4(
+        query, 0, cols, q8Quants, 0, q8Scales, 0, q8ZeroPointCorrections, 0, useUnsignedPairwise);
     int totalRows = Math.addExact(firstRows, secondRows);
     GgufParallelSupport.forEachRow(
         firstWeight,
@@ -439,6 +493,12 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           }
 
           long rowOffset = matrixRow * rowBytes;
+          if (useUnsignedPairwise) {
+            out[matrixRow] =
+                q4_0Q8_0UnsignedPairwiseRowDot(
+                    qWeight, rowOffset, blocks, q8Quants, q8Scales, q8ZeroPointCorrections);
+            return;
+          }
           if (VECTOR_BITSIZE >= 256) {
             FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
             for (int block = 0; block < blocks; block++) {
@@ -490,12 +550,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
-    GgufQuantizationSupport.quantizeQ8_0(query, cols, q8Quants, q8Scales);
-
     long rowBytes = (long) (cols / GGUF_Q_BLOCK_SIZE) * GGUF_Q4_0_BLOCK_BYTES;
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
+    boolean useUnsignedPairwise = useQ4UnsignedPairwise(kernel, blocks);
+    quantizeQ8_0ForQ4(
+        query, 0, cols, q8Quants, 0, q8Scales, 0, q8ZeroPointCorrections, 0, useUnsignedPairwise);
     int secondStart = firstRows;
     int thirdStart = Math.addExact(firstRows, secondRows);
     int totalRows = Math.addExact(thirdStart, thirdRows);
@@ -525,6 +587,12 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           }
 
           long rowOffset = matrixRow * rowBytes;
+          if (useUnsignedPairwise) {
+            out[matrixRow] =
+                q4_0Q8_0UnsignedPairwiseRowDot(
+                    qWeight, rowOffset, blocks, q8Quants, q8Scales, q8ZeroPointCorrections);
+            return;
+          }
           if (VECTOR_BITSIZE >= 256) {
             FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_256);
             for (int block = 0; block < blocks; block++) {
@@ -571,23 +639,45 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     if (batchSize == 1) {
-      ggufQ4_0Q8_0MatVecDot(queries, qWeight, rows, cols, out, q8Quants, q8Scales, kernel);
+      ggufQ4_0Q8_0MatVecDot(
+          queries, qWeight, rows, cols, out, q8Quants, q8Scales, q8ZeroPointCorrections, kernel);
       return;
     }
     if (VECTOR_BITSIZE < 256) {
       VectorUtilSupport.super.ggufQ4_0Q8_0BatchedMatmul(
-          queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, laneScratch, kernel);
+          queries,
+          qWeight,
+          batchSize,
+          rows,
+          cols,
+          out,
+          q8Quants,
+          q8Scales,
+          q8ZeroPointCorrections,
+          laneScratch,
+          kernel);
       return;
     }
 
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
+    boolean useUnsignedPairwise = useQ4UnsignedPairwise(kernel, blocks);
     for (int batch = 0; batch < batchSize; batch++) {
-      GgufQuantizationSupport.quantizeQ8_0(
-          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
+      quantizeQ8_0ForQ4(
+          queries,
+          batch * cols,
+          cols,
+          q8Quants,
+          batch * cols,
+          q8Scales,
+          batch * blocks,
+          q8ZeroPointCorrections,
+          batch * blocks * 8,
+          useUnsignedPairwise);
     }
 
     long rowBytes = (long) blocks * GGUF_Q4_0_BLOCK_BYTES;
@@ -612,17 +702,32 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                     qWeight,
                     blockOffset + Short.BYTES,
                     ByteOrder.LITTLE_ENDIAN);
+            ByteVector lowNibbles = packed.and((byte) 0x0F);
+            ByteVector highNibbles = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+            if (useUnsignedPairwise) {
+              for (int batch = 0; batch < batchSize; batch++) {
+                int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+                accumulateQ4_0UnsignedBatchQuery(
+                    laneScratch,
+                    laneOffset,
+                    lowNibbles,
+                    highNibbles,
+                    q8Quants,
+                    (batch * cols) + block * GGUF_Q_BLOCK_SIZE,
+                    q8ZeroPointCorrections,
+                    (batch * blocks + block) * 8,
+                    weightScale * q8Scales[batch * blocks + block]);
+              }
+              continue;
+            }
             ShortVector low =
                 (ShortVector)
-                    packed
-                        .and((byte) 0x0F)
+                    lowNibbles
                         .sub((byte) 8)
                         .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
             ShortVector high =
                 (ShortVector)
-                    packed
-                        .lanewise(VectorOperators.LSHR, 4)
-                        .and((byte) 0x0F)
+                    highNibbles
                         .sub((byte) 8)
                         .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
 
@@ -661,6 +766,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     if (batchSize == 1) {
@@ -675,6 +781,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           cols,
           q8Quants,
           q8Scales,
+          q8ZeroPointCorrections,
           kernel);
       return;
     }
@@ -693,6 +800,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         laneScratch,
         kernel);
   }
@@ -713,6 +821,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     if (batchSize == 1) {
@@ -730,6 +839,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           cols,
           q8Quants,
           q8Scales,
+          q8ZeroPointCorrections,
           kernel);
       return;
     }
@@ -748,6 +858,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         laneScratch,
         kernel);
   }
@@ -767,6 +878,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     if (VECTOR_BITSIZE < 256) {
@@ -783,6 +895,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             cols,
             q8Quants,
             q8Scales,
+            q8ZeroPointCorrections,
             laneScratch,
             kernel);
       } else {
@@ -801,6 +914,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             cols,
             q8Quants,
             q8Scales,
+            q8ZeroPointCorrections,
             laneScratch,
             kernel);
       }
@@ -809,9 +923,19 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
+    boolean useUnsignedPairwise = useQ4UnsignedPairwise(kernel, blocks);
     for (int batch = 0; batch < batchSize; batch++) {
-      GgufQuantizationSupport.quantizeQ8_0(
-          queries, batch * cols, cols, q8Quants, batch * cols, q8Scales, batch * blocks);
+      quantizeQ8_0ForQ4(
+          queries,
+          batch * cols,
+          cols,
+          q8Quants,
+          batch * cols,
+          q8Scales,
+          batch * blocks,
+          q8ZeroPointCorrections,
+          batch * blocks * 8,
+          useUnsignedPairwise);
     }
 
     long rowBytes = (long) blocks * GGUF_Q4_0_BLOCK_BYTES;
@@ -863,17 +987,32 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                     qWeight,
                     blockOffset + Short.BYTES,
                     ByteOrder.LITTLE_ENDIAN);
+            ByteVector lowNibbles = packed.and((byte) 0x0F);
+            ByteVector highNibbles = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+            if (useUnsignedPairwise) {
+              for (int batch = 0; batch < batchSize; batch++) {
+                int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+                accumulateQ4_0UnsignedBatchQuery(
+                    laneScratch,
+                    laneOffset,
+                    lowNibbles,
+                    highNibbles,
+                    q8Quants,
+                    (batch * cols) + block * GGUF_Q_BLOCK_SIZE,
+                    q8ZeroPointCorrections,
+                    (batch * blocks + block) * 8,
+                    weightScale * q8Scales[batch * blocks + block]);
+              }
+              continue;
+            }
             ShortVector low =
                 (ShortVector)
-                    packed
-                        .and((byte) 0x0F)
+                    lowNibbles
                         .sub((byte) 8)
                         .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
             ShortVector high =
                 (ShortVector)
-                    packed
-                        .lanewise(VectorOperators.LSHR, 4)
-                        .and((byte) 0x0F)
+                    highNibbles
                         .sub((byte) 8)
                         .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
 
@@ -926,6 +1065,46 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset);
     fma(products, FloatVector.broadcast(FloatVector.SPECIES_256, scale), accumulator)
         .intoArray(laneScratch, laneOffset);
+  }
+
+  private static void accumulateQ4_0UnsignedBatchQuery(
+      float[] laneScratch,
+      int laneOffset,
+      ByteVector lowNibbles,
+      ByteVector highNibbles,
+      byte[] q8Quants,
+      int quantOffset,
+      int[] zeroPointCorrections,
+      int correctionOffset,
+      float scale) {
+    ShortVector pairFactors = ShortVector.fromArray(ShortVector.SPECIES_128, Q4_PAIR_FACTORS, 0);
+    IntVector lowGroups =
+        q4_0Q8_0UnsignedPairwiseGroups(
+            lowNibbles,
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset),
+            IntVector.fromArray(IntVector.SPECIES_128, zeroPointCorrections, correctionOffset),
+            pairFactors);
+    IntVector highGroups =
+        q4_0Q8_0UnsignedPairwiseGroups(
+            highNibbles,
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16),
+            IntVector.fromArray(IntVector.SPECIES_128, zeroPointCorrections, correctionOffset + 4),
+            pairFactors);
+    FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
+    FloatVector lowAccumulator =
+        FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset);
+    FloatVector highAccumulator =
+        FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset + 4);
+    fma(
+            (FloatVector) lowGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+            scaleVector,
+            lowAccumulator)
+        .intoArray(laneScratch, laneOffset);
+    fma(
+            (FloatVector) highGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+            scaleVector,
+            highAccumulator)
+        .intoArray(laneScratch, laneOffset + 4);
   }
 
   /** Fixed split-half hsum tree; Vector.reduceLanes does not guarantee an evaluation order. */
@@ -1090,6 +1269,70 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return fourProductLanesFromShortPairs(low16, high16, qLow16, qHigh16);
   }
 
+  static float q4_0Q8_0UnsignedPairwiseRowDot(
+      MemorySegment qWeight,
+      long rowOffset,
+      int blocks,
+      byte[] q8Quants,
+      float[] q8Scales,
+      int[] zeroPointCorrections) {
+    ShortVector pairFactors = ShortVector.fromArray(ShortVector.SPECIES_128, Q4_PAIR_FACTORS, 0);
+    FloatVector lowAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
+    FloatVector highAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
+      ByteVector packed =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128, qWeight, blockOffset + Short.BYTES, ByteOrder.LITTLE_ENDIAN);
+      ByteVector low = packed.and((byte) 0x0F);
+      ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+      int quantOffset = block * GGUF_Q_BLOCK_SIZE;
+      int correctionOffset = block * 8;
+      IntVector lowGroups =
+          q4_0Q8_0UnsignedPairwiseGroups(
+              low,
+              ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset),
+              IntVector.fromArray(IntVector.SPECIES_128, zeroPointCorrections, correctionOffset),
+              pairFactors);
+      IntVector highGroups =
+          q4_0Q8_0UnsignedPairwiseGroups(
+              high,
+              ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16),
+              IntVector.fromArray(
+                  IntVector.SPECIES_128, zeroPointCorrections, correctionOffset + 4),
+              pairFactors);
+      FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
+      lowAccumulator =
+          fma(
+              (FloatVector) lowGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+              scaleVector,
+              lowAccumulator);
+      highAccumulator =
+          fma(
+              (FloatVector)
+                  highGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+              scaleVector,
+              highAccumulator);
+    }
+    float even =
+        (highAccumulator.lane(0) + lowAccumulator.lane(0))
+            + (highAccumulator.lane(2) + lowAccumulator.lane(2));
+    float odd =
+        (highAccumulator.lane(1) + lowAccumulator.lane(1))
+            + (highAccumulator.lane(3) + lowAccumulator.lane(3));
+    return even + odd;
+  }
+
+  private static IntVector q4_0Q8_0UnsignedPairwiseGroups(
+      ByteVector unsignedNibbles,
+      ByteVector signedQ8,
+      IntVector zeroPointCorrection,
+      ShortVector pairFactors) {
+    ShortVector pairProducts = multiplyAddUnsignedSignedBytes128(unsignedNibbles, signedQ8);
+    return multiplyAddSignedShorts128(pairProducts, pairFactors).sub(zeroPointCorrection);
+  }
+
   private static IntVector fourProductLanesFromShortPairs(
       ShortVector low, ShortVector high, ShortVector qLow, ShortVector qHigh) {
     IntVector lowPairs = multiplyAddSignedShorts256(low, qLow);
@@ -1114,6 +1357,43 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         (IntVector) rightEven.convertShape(VectorOperators.S2I, IntVector.SPECIES_256, 0);
     IntVector rightOddInts =
         (IntVector) rightOdd.convertShape(VectorOperators.S2I, IntVector.SPECIES_256, 0);
+    return leftEvenInts.mul(rightEvenInts).add(leftOddInts.mul(rightOddInts));
+  }
+
+  private static ShortVector multiplyAddUnsignedSignedBytes128(
+      ByteVector unsigned, ByteVector signed) {
+    ByteVector unsignedEven = unsigned.rearrange(BYTE_128_EVEN_LANES);
+    ByteVector unsignedOdd = unsigned.rearrange(BYTE_128_ODD_LANES);
+    ByteVector signedEven = signed.rearrange(BYTE_128_EVEN_LANES);
+    ByteVector signedOdd = signed.rearrange(BYTE_128_ODD_LANES);
+    ShortVector unsignedEvenShorts =
+        (ShortVector)
+            unsignedEven.convertShape(VectorOperators.ZERO_EXTEND_B2S, ShortVector.SPECIES_128, 0);
+    ShortVector unsignedOddShorts =
+        (ShortVector)
+            unsignedOdd.convertShape(VectorOperators.ZERO_EXTEND_B2S, ShortVector.SPECIES_128, 0);
+    ShortVector signedEvenShorts =
+        (ShortVector) signedEven.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+    ShortVector signedOddShorts =
+        (ShortVector) signedOdd.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+    return unsignedEvenShorts
+        .mul(signedEvenShorts)
+        .lanewise(VectorOperators.SADD, unsignedOddShorts.mul(signedOddShorts));
+  }
+
+  private static IntVector multiplyAddSignedShorts128(ShortVector left, ShortVector right) {
+    ShortVector leftEven = left.rearrange(SHORT_128_EVEN_LANES);
+    ShortVector leftOdd = left.rearrange(SHORT_128_ODD_LANES);
+    ShortVector rightEven = right.rearrange(SHORT_128_EVEN_LANES);
+    ShortVector rightOdd = right.rearrange(SHORT_128_ODD_LANES);
+    IntVector leftEvenInts =
+        (IntVector) leftEven.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+    IntVector leftOddInts =
+        (IntVector) leftOdd.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+    IntVector rightEvenInts =
+        (IntVector) rightEven.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
+    IntVector rightOddInts =
+        (IntVector) rightOdd.convertShape(VectorOperators.S2I, IntVector.SPECIES_128, 0);
     return leftEvenInts.mul(rightEvenInts).add(leftOddInts.mul(rightOddInts));
   }
 

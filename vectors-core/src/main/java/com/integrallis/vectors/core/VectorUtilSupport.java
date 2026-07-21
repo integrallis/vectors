@@ -569,6 +569,7 @@ public interface VectorUtilSupport {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
     quantizeQ8_0(query, cols, q8Quants, q8Scales);
 
@@ -591,6 +592,7 @@ public interface VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
     quantizeQ8_0(query, cols, q8Quants, q8Scales);
 
@@ -621,6 +623,7 @@ public interface VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
     quantizeQ8_0(query, cols, q8Quants, q8Scales);
 
@@ -684,6 +687,7 @@ public interface VectorUtilSupport {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
@@ -734,6 +738,7 @@ public interface VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
@@ -785,6 +790,7 @@ public interface VectorUtilSupport {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     int blocks = cols / GGUF_Q_BLOCK_SIZE;

@@ -26,6 +26,7 @@ public record VectorRuntimeCapabilities(
     boolean fastScalarFma,
     boolean sve,
     boolean q4ShortPairwiseSupported,
+    boolean q4UnsignedPairwiseSupported,
     boolean ggufParallel,
     String ggufExecutor,
     int ggufThreads,

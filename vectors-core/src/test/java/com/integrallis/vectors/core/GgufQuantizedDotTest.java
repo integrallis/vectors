@@ -482,7 +482,7 @@ class GgufQuantizedDotTest {
       MemorySegment segment = copy(arena, concat(row0, row1));
 
       VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-          query, segment, 2, query.length, out, q8Quants, q8Scales);
+          query, segment, 2, query.length, out, q8Quants, q8Scales, q4Corrections(query.length));
 
       float q8Scale = Float.float16ToFloat(Float.floatToFloat16(1.0f / 127.0f));
       assertThat(out[0]).isCloseTo(189.0f * q8Scale, within(1e-6f));
@@ -500,6 +500,7 @@ class GgufQuantizedDotTest {
     byte[] weights = repeat(block, rows * (cols / 32));
     float[] widened = new float[rows];
     float[] pairwise = new float[rows];
+    float[] unsignedPairwise = new float[rows];
 
     MemorySegment segment = MemorySegment.ofArray(weights);
     VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
@@ -510,6 +511,7 @@ class GgufQuantizedDotTest {
         widened,
         new byte[cols],
         new float[cols / 32],
+        q4Corrections(cols),
         GgufQ4Kernel.WIDENED);
     VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
         query,
@@ -519,9 +521,21 @@ class GgufQuantizedDotTest {
         pairwise,
         new byte[cols],
         new float[cols / 32],
+        q4Corrections(cols),
         GgufQ4Kernel.SHORT_PAIRWISE);
+    VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+        query,
+        segment,
+        rows,
+        cols,
+        unsignedPairwise,
+        new byte[cols],
+        new float[cols / 32],
+        q4Corrections(cols),
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
 
     assertThat(pairwise).containsExactly(widened);
+    assertThat(unsignedPairwise).containsExactly(widened);
   }
 
   @Test
@@ -549,7 +563,14 @@ class GgufQuantizedDotTest {
     MemorySegment firstSegment = MemorySegment.ofArray(firstWeights);
     MemorySegment secondSegment = MemorySegment.ofArray(secondWeights);
     VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-        query, firstSegment, firstRows, cols, expectedFirst, new byte[cols], new float[cols / 32]);
+        query,
+        firstSegment,
+        firstRows,
+        cols,
+        expectedFirst,
+        new byte[cols],
+        new float[cols / 32],
+        q4Corrections(cols));
     VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
         query,
         secondSegment,
@@ -557,7 +578,8 @@ class GgufQuantizedDotTest {
         cols,
         expectedSecond,
         new byte[cols],
-        new float[cols / 32]);
+        new float[cols / 32],
+        q4Corrections(cols));
 
     VectorUtil.ggufQ4_0Q8_0DualBatchDotProduct(
         query,
@@ -570,6 +592,7 @@ class GgufQuantizedDotTest {
         cols,
         new byte[cols],
         new float[cols / 32],
+        q4Corrections(cols),
         GgufQ4Kernel.SHORT_PAIRWISE);
 
     assertThat(actualFirst).containsExactly(expectedFirst);
@@ -606,7 +629,14 @@ class GgufQuantizedDotTest {
     float[] actualThird = new float[thirdRows];
 
     VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-        query, firstWeight, firstRows, cols, expectedFirst, new byte[cols], new float[cols / 32]);
+        query,
+        firstWeight,
+        firstRows,
+        cols,
+        expectedFirst,
+        new byte[cols],
+        new float[cols / 32],
+        q4Corrections(cols));
     VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
         query,
         secondWeight,
@@ -614,9 +644,17 @@ class GgufQuantizedDotTest {
         cols,
         expectedSecond,
         new byte[cols],
-        new float[cols / 32]);
+        new float[cols / 32],
+        q4Corrections(cols));
     VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-        query, thirdWeight, thirdRows, cols, expectedThird, new byte[cols], new float[cols / 32]);
+        query,
+        thirdWeight,
+        thirdRows,
+        cols,
+        expectedThird,
+        new byte[cols],
+        new float[cols / 32],
+        q4Corrections(cols));
 
     VectorUtil.ggufQ4_0Q8_0TripleBatchDotProduct(
         query,
@@ -632,6 +670,7 @@ class GgufQuantizedDotTest {
         cols,
         new byte[cols],
         new float[cols / 32],
+        q4Corrections(cols),
         GgufQ4Kernel.SHORT_PAIRWISE);
 
     assertThat(actualFirst).containsExactly(expectedFirst);
@@ -655,6 +694,7 @@ class GgufQuantizedDotTest {
     byte[] row1 = repeat(q4Block(-0.25f, ones(cols), (lo, hi) -> (lo * 7 + hi) & 0xFF), cols / 32);
     float[] expected = new float[batchSize * rows];
     float[] actual = new float[batchSize * rows];
+    float[] unsignedActual = new float[batchSize * rows];
     byte[] q8Quants = new byte[batchSize * cols];
     float[] q8Scales = new float[batchSize * (cols / 32)];
 
@@ -665,7 +705,14 @@ class GgufQuantizedDotTest {
         System.arraycopy(queries, batch * cols, query, 0, cols);
         float[] result = new float[rows];
         VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-            query, segment, rows, cols, result, new byte[cols], new float[cols / 32]);
+            query,
+            segment,
+            rows,
+            cols,
+            result,
+            new byte[cols],
+            new float[cols / 32],
+            q4Corrections(cols));
         System.arraycopy(result, 0, expected, batch * rows, rows);
       }
 
@@ -678,9 +725,22 @@ class GgufQuantizedDotTest {
           actual,
           q8Quants,
           q8Scales,
+          q4Corrections(batchSize * cols),
           GgufQ4Kernel.SHORT_PAIRWISE);
+      VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+          queries,
+          segment,
+          batchSize,
+          rows,
+          cols,
+          unsignedActual,
+          new byte[batchSize * cols],
+          new float[batchSize * (cols / 32)],
+          q4Corrections(batchSize * cols),
+          GgufQ4Kernel.UNSIGNED_PAIRWISE);
 
       assertThat(actual).containsExactly(expected);
+      assertThat(unsignedActual).containsExactly(expected);
       assertThat(q8Quants[0]).isNotZero();
     }
   }
@@ -714,6 +774,7 @@ class GgufQuantizedDotTest {
         expectedFirst,
         quants,
         scales,
+        q4Corrections(batchSize * cols),
         new float[batchSize * firstRows * 8]);
     VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
         queries,
@@ -724,6 +785,7 @@ class GgufQuantizedDotTest {
         expectedSecond,
         quants,
         scales,
+        q4Corrections(batchSize * cols),
         new float[batchSize * secondRows * 8]);
 
     VectorUtil.ggufQ4_0Q8_0DualBatchedMatmul(
@@ -738,6 +800,7 @@ class GgufQuantizedDotTest {
         cols,
         quants,
         scales,
+        q4Corrections(batchSize * cols),
         new float[batchSize * (firstRows + secondRows) * 8],
         GgufQ4Kernel.SHORT_PAIRWISE);
 
@@ -768,6 +831,9 @@ class GgufQuantizedDotTest {
     float[] actualFirst = new float[batchSize * firstRows];
     float[] actualSecond = new float[batchSize * secondRows];
     float[] actualThird = new float[batchSize * thirdRows];
+    float[] unsignedFirst = new float[batchSize * firstRows];
+    float[] unsignedSecond = new float[batchSize * secondRows];
+    float[] unsignedThird = new float[batchSize * thirdRows];
     byte[] quants = new byte[batchSize * cols];
     float[] scales = new float[batchSize * (cols / 32)];
 
@@ -780,6 +846,7 @@ class GgufQuantizedDotTest {
         expectedFirst,
         quants,
         scales,
+        q4Corrections(batchSize * cols),
         new float[batchSize * firstRows * 8]);
     VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
         queries,
@@ -790,6 +857,7 @@ class GgufQuantizedDotTest {
         expectedSecond,
         quants,
         scales,
+        q4Corrections(batchSize * cols),
         new float[batchSize * secondRows * 8]);
     VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
         queries,
@@ -800,6 +868,7 @@ class GgufQuantizedDotTest {
         expectedThird,
         quants,
         scales,
+        q4Corrections(batchSize * cols),
         new float[batchSize * thirdRows * 8]);
 
     VectorUtil.ggufQ4_0Q8_0TripleBatchedMatmul(
@@ -817,12 +886,34 @@ class GgufQuantizedDotTest {
         cols,
         quants,
         scales,
+        q4Corrections(batchSize * cols),
         new float[batchSize * (firstRows + secondRows + thirdRows) * 8],
         GgufQ4Kernel.SHORT_PAIRWISE);
+    VectorUtil.ggufQ4_0Q8_0TripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        unsignedFirst,
+        secondWeight,
+        secondRows,
+        unsignedSecond,
+        thirdWeight,
+        thirdRows,
+        unsignedThird,
+        batchSize,
+        cols,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 32)],
+        q4Corrections(batchSize * cols),
+        new float[batchSize * (firstRows + secondRows + thirdRows) * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
 
     assertThat(actualFirst).containsExactly(expectedFirst);
     assertThat(actualSecond).containsExactly(expectedSecond);
     assertThat(actualThird).containsExactly(expectedThird);
+    assertThat(unsignedFirst).containsExactly(expectedFirst);
+    assertThat(unsignedSecond).containsExactly(expectedSecond);
+    assertThat(unsignedThird).containsExactly(expectedThird);
   }
 
   @Test
@@ -838,10 +929,25 @@ class GgufQuantizedDotTest {
     try (Arena arena = Arena.ofConfined()) {
       MemorySegment segment = copy(arena, concat(row0, row1));
       VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-          query, segment, rows, cols, expected, new byte[cols], new float[cols / 32]);
+          query,
+          segment,
+          rows,
+          cols,
+          expected,
+          new byte[cols],
+          new float[cols / 32],
+          q4Corrections(cols));
 
       VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
-          query, segment, 1, rows, cols, actual, new byte[cols], new float[cols / 32]);
+          query,
+          segment,
+          1,
+          rows,
+          cols,
+          actual,
+          new byte[cols],
+          new float[cols / 32],
+          q4Corrections(cols));
 
       assertThat(actual).containsExactly(expected);
     }
@@ -871,7 +977,14 @@ class GgufQuantizedDotTest {
         float[] result = new float[rows];
         System.arraycopy(queries, batch * cols, query, 0, cols);
         VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-            query, segment, rows, cols, result, new byte[cols], new float[cols / 32]);
+            query,
+            segment,
+            rows,
+            cols,
+            result,
+            new byte[cols],
+            new float[cols / 32],
+            q4Corrections(cols));
         System.arraycopy(result, 0, expected, batch * rows, rows);
       }
 
@@ -884,6 +997,7 @@ class GgufQuantizedDotTest {
           actual,
           new byte[batchSize * cols],
           new float[batchSize * (cols / 32)],
+          q4Corrections(batchSize * cols),
           new float[batchSize * rows * 8]);
 
       assertThat(actual).containsExactly(expected);
@@ -915,20 +1029,31 @@ class GgufQuantizedDotTest {
     float[] gemvOut = new float[rows];
     byte[] gemvQuants = new byte[cols];
     float[] gemvScales = new float[blocks];
+    int[] gemvCorrections = q4Corrections(cols);
     byte[] batchQuants = new byte[batchSize * cols];
     float[] batchScales = new float[batchSize * blocks];
+    int[] batchCorrections = q4Corrections(batchSize * cols);
     float[] batchLanes = new float[batchSize * rows * 8];
 
     for (int iteration = 0; iteration < 12; iteration++) {
       for (int batch = 0; batch < batchSize; batch++) {
         System.arraycopy(queries, batch * cols, query, 0, cols);
         VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-            query, weights, rows, cols, gemvOut, gemvQuants, gemvScales);
+            query, weights, rows, cols, gemvOut, gemvQuants, gemvScales, gemvCorrections);
         System.arraycopy(gemvOut, 0, expected, batch * rows, rows);
       }
 
       VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
-          queries, weights, batchSize, rows, cols, actual, batchQuants, batchScales, batchLanes);
+          queries,
+          weights,
+          batchSize,
+          rows,
+          cols,
+          actual,
+          batchQuants,
+          batchScales,
+          batchCorrections,
+          batchLanes);
       assertThat(actual).containsExactly(expected);
     }
   }
@@ -949,6 +1074,7 @@ class GgufQuantizedDotTest {
                       new float[2],
                       new byte[64],
                       new float[2],
+                      q4Corrections(64),
                       new float[15]))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("lane scratch");
@@ -1309,9 +1435,22 @@ class GgufQuantizedDotTest {
       assertThatThrownBy(
               () ->
                   VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
-                      ones(32), q4, 1, 32, new float[1], new byte[31], new float[1]))
+                      ones(32),
+                      q4,
+                      1,
+                      32,
+                      new float[1],
+                      new byte[31],
+                      new float[1],
+                      q4Corrections(32)))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("q8Quants.length");
+      assertThatThrownBy(
+              () ->
+                  VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+                      ones(32), q4, 1, 32, new float[1], new byte[32], new float[1], new int[7]))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("q8ZeroPointCorrections.length");
       assertThatThrownBy(
               () ->
                   VectorUtil.ggufQ8_0Q8_0BatchDotProduct(
@@ -2655,6 +2794,10 @@ class GgufQuantizedDotTest {
       }
     }
     return out;
+  }
+
+  private static int[] q4Corrections(int activationEntries) {
+    return new int[activationEntries / 4];
   }
 
   @FunctionalInterface
