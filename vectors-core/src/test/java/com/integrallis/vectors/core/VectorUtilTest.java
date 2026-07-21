@@ -109,6 +109,66 @@ class VectorUtilTest {
   }
 
   @Test
+  void addWeightedRowsInPlace_withOffsetsAndStride() {
+    float[] out = {99.0f, 1.0f, 2.0f, 98.0f};
+    float[] matrix = {
+      97.0f, 2.0f, 4.0f, 96.0f, 95.0f, 6.0f, 8.0f, 94.0f, 93.0f, 10.0f, 12.0f, 92.0f
+    };
+    float[] weights = {91.0f, 0.5f, -1.0f, 2.0f, 90.0f};
+
+    VectorUtil.addWeightedRowsInPlace(out, 1, matrix, 1, 4, weights, 1, 3, 2);
+
+    assertThat(out).containsExactly(99.0f, 16.0f, 20.0f, 98.0f);
+  }
+
+  @Test
+  void addWeightedRowsInPlace_rejectsInvalidArguments() {
+    float[] out = {1.0f, 2.0f};
+    float[] matrix = {3.0f, 4.0f, 5.0f, 6.0f};
+    float[] weights = {0.5f, 1.5f};
+
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(null, 0, matrix, 0, 2, weights, 0, 2, 2))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, 0, null, 0, 2, weights, 0, 2, 2))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> VectorUtil.addWeightedRowsInPlace(out, 0, matrix, 0, 2, null, 0, 2, 2))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, -1, matrix, 0, 2, weights, 0, 2, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, 0, matrix, -1, 2, weights, 0, 2, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, 0, matrix, 0, 2, weights, -1, 2, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, 0, matrix, 0, 2, weights, 0, -1, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, 0, matrix, 0, 2, weights, 0, 2, -1))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, 0, matrix, 0, 1, weights, 0, 2, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, 1, matrix, 0, 2, weights, 0, 2, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, 0, matrix, 1, 2, weights, 0, 2, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> VectorUtil.addWeightedRowsInPlace(out, 0, matrix, 0, 2, weights, 1, 2, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.addWeightedRowsInPlace(out, 0, out, 0, 2, weights, 0, 1, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> VectorUtil.addWeightedRowsInPlace(out, 0, matrix, 0, 2, out, 0, 1, 2))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
   void addScaledInPlace_rejectsInvalidArguments() {
     float[] out = {1.0f, 2.0f};
     float[] vector = {3.0f, 4.0f};

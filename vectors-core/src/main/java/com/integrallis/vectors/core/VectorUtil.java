@@ -140,6 +140,26 @@ public final class VectorUtil {
     IMPL.addScaledInPlace(out, outOffset, vector, vectorOffset, length, scale);
   }
 
+  /**
+   * Adds a weighted sum of flat, strided matrix rows to {@code out} in ascending row order. Inputs
+   * must not alias {@code out}.
+   */
+  public static void addWeightedRowsInPlace(
+      float[] out,
+      int outOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      float[] weights,
+      int weightsOffset,
+      int rows,
+      int columns) {
+    checkWeightedRowsArguments(
+        out, outOffset, matrix, matrixOffset, rowStride, weights, weightsOffset, rows, columns);
+    IMPL.addWeightedRowsInPlace(
+        out, outOffset, matrix, matrixOffset, rowStride, weights, weightsOffset, rows, columns);
+  }
+
   /** Subtracts v2 from v1 element-wise in place. */
   public static void subInPlace(float[] v1, float[] v2) {
     checkDimensions(v1.length, v2.length);
@@ -2291,6 +2311,45 @@ public final class VectorUtil {
               + length
               + " > "
               + vector.length);
+    }
+  }
+
+  private static void checkWeightedRowsArguments(
+      float[] out,
+      int outOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      float[] weights,
+      int weightsOffset,
+      int rows,
+      int columns) {
+    Objects.requireNonNull(out, "out");
+    Objects.requireNonNull(matrix, "matrix");
+    Objects.requireNonNull(weights, "weights");
+    if (out == matrix || out == weights) {
+      throw new IllegalArgumentException("matrix and weights must not alias out");
+    }
+    if (outOffset < 0 || matrixOffset < 0 || weightsOffset < 0) {
+      throw new IllegalArgumentException("offsets must be >= 0");
+    }
+    if (rows < 0 || columns < 0) {
+      throw new IllegalArgumentException("rows and columns must be >= 0");
+    }
+    if (rowStride < columns) {
+      throw new IllegalArgumentException(
+          "rowStride must be >= columns: " + rowStride + " < " + columns);
+    }
+    if ((long) outOffset + columns > out.length) {
+      throw new IllegalArgumentException("output range exceeds out.length");
+    }
+    if ((long) weightsOffset + rows > weights.length) {
+      throw new IllegalArgumentException("weight range exceeds weights.length");
+    }
+    long matrixEnd =
+        rows == 0 ? matrixOffset : (long) matrixOffset + (long) (rows - 1) * rowStride + columns;
+    if (matrixEnd > matrix.length) {
+      throw new IllegalArgumentException("matrix range exceeds matrix.length");
     }
   }
 

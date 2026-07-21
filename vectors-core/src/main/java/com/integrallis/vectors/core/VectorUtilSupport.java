@@ -114,6 +114,21 @@ public interface VectorUtilSupport {
     }
   }
 
+  /**
+   * Adds a weighted sum of flat, strided matrix rows to {@code out} in ascending row order.
+   * Implementations must preserve that row order for each output element.
+   */
+  void addWeightedRowsInPlace(
+      float[] out,
+      int outOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      float[] weights,
+      int weightsOffset,
+      int rows,
+      int columns);
+
   /** Subtracts v2 from v1 element-wise, storing the result in v1. */
   void subInPlace(float[] v1, float[] v2);
 
