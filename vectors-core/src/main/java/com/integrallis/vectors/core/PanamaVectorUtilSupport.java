@@ -4278,6 +4278,117 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
   // --- Fused batch matrix-vector kernels (GEMV) ---
 
+  /** Two-row strided GEMV with the same accumulator chains as the independent dot kernel. */
+  @Override
+  public void matVecDotExact(
+      float[] query,
+      int queryOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      int rows,
+      int columns,
+      float[] out,
+      int outOffset) {
+    int pairedRows = rows & ~1;
+    int speciesLength = FLOAT_SPECIES.length();
+
+    for (int row = 0; row < pairedRows; row += 2) {
+      int base0 = matrixOffset + row * rowStride;
+      int base1 = base0 + rowStride;
+      int column = 0;
+      float sum0 = 0.0f;
+      float sum1 = 0.0f;
+
+      if (columns > 2 * speciesLength) {
+        int vectorLimit = FLOAT_SPECIES.loopBound(columns);
+        int unrolledLimit = vectorLimit - 3 * speciesLength;
+        FloatVector acc00 = FloatVector.zero(FLOAT_SPECIES);
+        FloatVector acc01 = FloatVector.zero(FLOAT_SPECIES);
+        FloatVector acc02 = FloatVector.zero(FLOAT_SPECIES);
+        FloatVector acc03 = FloatVector.zero(FLOAT_SPECIES);
+        FloatVector acc10 = FloatVector.zero(FLOAT_SPECIES);
+        FloatVector acc11 = FloatVector.zero(FLOAT_SPECIES);
+        FloatVector acc12 = FloatVector.zero(FLOAT_SPECIES);
+        FloatVector acc13 = FloatVector.zero(FLOAT_SPECIES);
+
+        for (; column < unrolledLimit; column += 4 * speciesLength) {
+          FloatVector query0 = FloatVector.fromArray(FLOAT_SPECIES, query, queryOffset + column);
+          acc00 = fma(query0, FloatVector.fromArray(FLOAT_SPECIES, matrix, base0 + column), acc00);
+          acc10 = fma(query0, FloatVector.fromArray(FLOAT_SPECIES, matrix, base1 + column), acc10);
+
+          FloatVector query1 =
+              FloatVector.fromArray(FLOAT_SPECIES, query, queryOffset + column + speciesLength);
+          acc01 =
+              fma(
+                  query1,
+                  FloatVector.fromArray(FLOAT_SPECIES, matrix, base0 + column + speciesLength),
+                  acc01);
+          acc11 =
+              fma(
+                  query1,
+                  FloatVector.fromArray(FLOAT_SPECIES, matrix, base1 + column + speciesLength),
+                  acc11);
+
+          FloatVector query2 =
+              FloatVector.fromArray(FLOAT_SPECIES, query, queryOffset + column + 2 * speciesLength);
+          acc02 =
+              fma(
+                  query2,
+                  FloatVector.fromArray(FLOAT_SPECIES, matrix, base0 + column + 2 * speciesLength),
+                  acc02);
+          acc12 =
+              fma(
+                  query2,
+                  FloatVector.fromArray(FLOAT_SPECIES, matrix, base1 + column + 2 * speciesLength),
+                  acc12);
+
+          FloatVector query3 =
+              FloatVector.fromArray(FLOAT_SPECIES, query, queryOffset + column + 3 * speciesLength);
+          acc03 =
+              fma(
+                  query3,
+                  FloatVector.fromArray(FLOAT_SPECIES, matrix, base0 + column + 3 * speciesLength),
+                  acc03);
+          acc13 =
+              fma(
+                  query3,
+                  FloatVector.fromArray(FLOAT_SPECIES, matrix, base1 + column + 3 * speciesLength),
+                  acc13);
+        }
+
+        for (; column < vectorLimit; column += speciesLength) {
+          FloatVector queryVector =
+              FloatVector.fromArray(FLOAT_SPECIES, query, queryOffset + column);
+          acc00 =
+              fma(queryVector, FloatVector.fromArray(FLOAT_SPECIES, matrix, base0 + column), acc00);
+          acc10 =
+              fma(queryVector, FloatVector.fromArray(FLOAT_SPECIES, matrix, base1 + column), acc10);
+        }
+
+        FloatVector row0First = acc00.add(acc01);
+        FloatVector row0Second = acc02.add(acc03);
+        FloatVector row1First = acc10.add(acc11);
+        FloatVector row1Second = acc12.add(acc13);
+        sum0 += reduceAdd(row0First.add(row0Second));
+        sum1 += reduceAdd(row1First.add(row1Second));
+      }
+
+      for (; column < columns; column++) {
+        float queryValue = query[queryOffset + column];
+        sum0 = MathUtil.fma(queryValue, matrix[base0 + column], sum0);
+        sum1 = MathUtil.fma(queryValue, matrix[base1 + column], sum1);
+      }
+      out[outOffset + row] = sum0;
+      out[outOffset + row + 1] = sum1;
+    }
+
+    for (int row = pairedRows; row < rows; row++) {
+      out[outOffset + row] =
+          dotProduct(query, queryOffset, matrix, matrixOffset + row * rowStride, columns);
+    }
+  }
+
   /**
    * SIMD 4-row-unrolled fused GEMV for dot product.
    *

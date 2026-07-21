@@ -215,6 +215,29 @@ public final class VectorUtil {
   }
 
   /**
+   * Fills an output range from offset query and strided matrix rows. Every result is bit-identical
+   * to calling this provider's offset {@link #dotProduct(float[], int, float[], int, int)} for that
+   * row independently.
+   *
+   * <p>The output must not alias either input array.
+   */
+  public static void batchDotProductExact(
+      float[] query,
+      int queryOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      int rows,
+      int columns,
+      float[] out,
+      int outOffset) {
+    checkExactStridedBatchArguments(
+        query, queryOffset, matrix, matrixOffset, rowStride, rows, columns, out, outOffset);
+    IMPL.matVecDotExact(
+        query, queryOffset, matrix, matrixOffset, rowStride, rows, columns, out, outOffset);
+  }
+
+  /**
    * Fused GEMV over a little-endian GGUF F32 matrix stored in mapped or off-heap memory.
    *
    * <p>This avoids copying the full matrix to a temporary heap array before each projection.
@@ -2252,6 +2275,45 @@ public final class VectorUtil {
     if (out.length < rows) {
       throw new IllegalArgumentException(
           "out.length must be >= rows: " + out.length + " < " + rows);
+    }
+  }
+
+  private static void checkExactStridedBatchArguments(
+      float[] query,
+      int queryOffset,
+      float[] matrix,
+      int matrixOffset,
+      int rowStride,
+      int rows,
+      int columns,
+      float[] out,
+      int outOffset) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(matrix, "matrix");
+    Objects.requireNonNull(out, "out");
+    if (queryOffset < 0 || matrixOffset < 0 || outOffset < 0) {
+      throw new IllegalArgumentException("query, matrix, and output offsets must be >= 0");
+    }
+    if (rows < 0 || columns < 0) {
+      throw new IllegalArgumentException("rows and columns must be >= 0");
+    }
+    if (rowStride < columns) {
+      throw new IllegalArgumentException(
+          "rowStride must be >= columns: " + rowStride + " < " + columns);
+    }
+    if (queryOffset > query.length - columns) {
+      throw new IllegalArgumentException("query range exceeds query.length");
+    }
+    long matrixEnd =
+        rows == 0 ? matrixOffset : matrixOffset + (long) (rows - 1) * rowStride + columns;
+    if (matrixEnd > matrix.length) {
+      throw new IllegalArgumentException("strided matrix range exceeds matrix.length");
+    }
+    if (outOffset > out.length - rows) {
+      throw new IllegalArgumentException("output range exceeds out.length");
+    }
+    if (out == query || out == matrix) {
+      throw new IllegalArgumentException("out must not alias query or matrix");
     }
   }
 
