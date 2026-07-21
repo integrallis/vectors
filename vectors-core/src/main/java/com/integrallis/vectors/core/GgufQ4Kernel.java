@@ -21,5 +21,11 @@ public enum GgufQ4Kernel {
   WIDENED,
 
   /** Uses signed-short pairwise multiply-add when the active vector shape supports it. */
-  SHORT_PAIRWISE
+  SHORT_PAIRWISE,
+
+  /**
+   * Uses unsigned-Q4/signed-Q8 byte pairwise multiply-add with Q8 zero-point corrections computed
+   * once during activation quantization.
+   */
+  UNSIGNED_PAIRWISE
 }

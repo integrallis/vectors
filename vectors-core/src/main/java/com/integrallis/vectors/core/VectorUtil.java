@@ -458,6 +458,8 @@ public final class VectorUtil {
    *
    * @param q8Quants scratch space with at least {@code cols} entries
    * @param q8Scales scratch space with at least {@code cols / 32} entries
+   * @param q8ZeroPointCorrections scratch space with at least {@code cols / 4} entries; kernels
+   *     using unsigned Q4 arithmetic populate it during activation quantization
    */
   public static void ggufQ4_0Q8_0BatchDotProduct(
       float[] query,
@@ -466,9 +468,18 @@ public final class VectorUtil {
       int cols,
       float[] out,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      int[] q8ZeroPointCorrections) {
     ggufQ4_0Q8_0BatchDotProduct(
-        query, qWeight, rows, cols, out, q8Quants, q8Scales, GgufQ4Kernel.WIDENED);
+        query,
+        qWeight,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        q8ZeroPointCorrections,
+        GgufQ4Kernel.WIDENED);
   }
 
   /** Q4_0 by Q8_0 GEMV with an explicit arithmetic-kernel policy. */
@@ -480,10 +491,12 @@ public final class VectorUtil {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchArguments(
         query, qWeight, rows, cols, out, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
     checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    checkGgufQ4CorrectionScratch(q8ZeroPointCorrections, cols);
     IMPL.ggufQ4_0Q8_0MatVecDot(
         query,
         qWeight,
@@ -492,6 +505,7 @@ public final class VectorUtil {
         out,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         Objects.requireNonNull(kernel, "kernel"));
   }
 
@@ -512,7 +526,8 @@ public final class VectorUtil {
       float[] secondOut,
       int cols,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      int[] q8ZeroPointCorrections) {
     ggufQ4_0Q8_0DualBatchDotProduct(
         query,
         firstWeight,
@@ -524,6 +539,7 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         GgufQ4Kernel.WIDENED);
   }
 
@@ -539,12 +555,14 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchArguments(
         query, firstWeight, firstRows, cols, firstOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
     checkGgufQuantizedBatchArguments(
         query, secondWeight, secondRows, cols, secondOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
     checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    checkGgufQ4CorrectionScratch(q8ZeroPointCorrections, cols);
     IMPL.ggufQ4_0Q8_0DualMatVecDot(
         query,
         firstWeight,
@@ -556,6 +574,7 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         Objects.requireNonNull(kernel, "kernel"));
   }
 
@@ -578,7 +597,8 @@ public final class VectorUtil {
       float[] thirdOut,
       int cols,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      int[] q8ZeroPointCorrections) {
     ggufQ4_0Q8_0TripleBatchDotProduct(
         query,
         firstWeight,
@@ -593,6 +613,7 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         GgufQ4Kernel.WIDENED);
   }
 
@@ -611,6 +632,7 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchArguments(
         query, firstWeight, firstRows, cols, firstOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
@@ -619,6 +641,7 @@ public final class VectorUtil {
     checkGgufQuantizedBatchArguments(
         query, thirdWeight, thirdRows, cols, thirdOut, VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
     checkGgufActivationScratch(q8Quants, q8Scales, cols, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    checkGgufQ4CorrectionScratch(q8ZeroPointCorrections, cols);
     IMPL.ggufQ4_0Q8_0TripleMatVecDot(
         query,
         firstWeight,
@@ -633,6 +656,7 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         Objects.requireNonNull(kernel, "kernel"));
   }
 
@@ -645,6 +669,8 @@ public final class VectorUtil {
    *
    * @param q8Quants scratch space with at least {@code batchSize * cols} entries
    * @param q8Scales scratch space with at least {@code batchSize * (cols / 32)} entries
+   * @param q8ZeroPointCorrections scratch space with at least {@code batchSize * cols / 4} entries;
+   *     kernels using unsigned Q4 arithmetic populate it during activation quantization
    */
   public static void ggufQ4_0Q8_0BatchedMatmul(
       float[] queries,
@@ -654,9 +680,19 @@ public final class VectorUtil {
       int cols,
       float[] out,
       byte[] q8Quants,
-      float[] q8Scales) {
+      float[] q8Scales,
+      int[] q8ZeroPointCorrections) {
     ggufQ4_0Q8_0BatchedMatmul(
-        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, GgufQ4Kernel.WIDENED);
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        q8ZeroPointCorrections,
+        GgufQ4Kernel.WIDENED);
   }
 
   /** Q4_0 batched matrix multiplication with an explicit arithmetic-kernel policy. */
@@ -669,6 +705,7 @@ public final class VectorUtil {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       GgufQ4Kernel kernel) {
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
@@ -686,6 +723,7 @@ public final class VectorUtil {
         out,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         new float[checkedProduct(outputEntries, 8, "Q4 lane scratch")],
         kernel);
   }
@@ -693,6 +731,7 @@ public final class VectorUtil {
   /**
    * Allocation-free Q4_0 batched matrix multiplication with caller-owned reduction lanes.
    *
+   * @param q8ZeroPointCorrections scratch space with at least {@code batchSize * cols / 4} entries
    * @param laneScratch scratch space with at least {@code batchSize * rows * 8} entries
    */
   public static void ggufQ4_0Q8_0BatchedMatmul(
@@ -704,6 +743,7 @@ public final class VectorUtil {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch) {
     ggufQ4_0Q8_0BatchedMatmul(
         queries,
@@ -714,6 +754,7 @@ public final class VectorUtil {
         out,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         laneScratch,
         GgufQ4Kernel.WIDENED);
   }
@@ -728,6 +769,7 @@ public final class VectorUtil {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     if (batchSize < 1) {
@@ -737,6 +779,7 @@ public final class VectorUtil {
     Objects.requireNonNull(out, "out");
     Objects.requireNonNull(q8Quants, "q8Quants");
     Objects.requireNonNull(q8Scales, "q8Scales");
+    Objects.requireNonNull(q8ZeroPointCorrections, "q8ZeroPointCorrections");
     Objects.requireNonNull(laneScratch, "laneScratch");
     checkGgufQuantizedMatrixArguments(
         qWeight,
@@ -765,6 +808,7 @@ public final class VectorUtil {
       throw new IllegalArgumentException(
           "q8Scales.length must be >= batch scales: " + q8Scales.length + " < " + scaleEntries);
     }
+    checkGgufQ4CorrectionScratch(q8ZeroPointCorrections, queryEntries);
     if (laneScratch.length < laneEntries) {
       throw new IllegalArgumentException(
           "lane scratch length must be >= batchSize * rows * 8: "
@@ -781,6 +825,7 @@ public final class VectorUtil {
         out,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         laneScratch,
         Objects.requireNonNull(kernel, "kernel"));
   }
@@ -798,6 +843,7 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch) {
     ggufQ4_0Q8_0DualBatchedMatmul(
         queries,
@@ -811,6 +857,7 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         laneScratch,
         GgufQ4Kernel.WIDENED);
   }
@@ -828,6 +875,7 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchedArguments(
@@ -851,6 +899,7 @@ public final class VectorUtil {
     int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
     checkGgufActivationScratch(
         q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    checkGgufQ4CorrectionScratch(q8ZeroPointCorrections, activationEntries);
     checkGgufQ4LaneScratch(
         laneScratch, batchSize, Math.addExact(firstRows, secondRows), "dual Q4 lane scratch");
     IMPL.ggufQ4_0Q8_0DualBatchedMatmul(
@@ -865,6 +914,7 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         laneScratch,
         Objects.requireNonNull(kernel, "kernel"));
   }
@@ -885,6 +935,7 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch) {
     ggufQ4_0Q8_0TripleBatchedMatmul(
         queries,
@@ -901,6 +952,7 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         laneScratch,
         GgufQ4Kernel.WIDENED);
   }
@@ -921,6 +973,7 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales,
+      int[] q8ZeroPointCorrections,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
     checkGgufQuantizedBatchedArguments(
@@ -953,6 +1006,7 @@ public final class VectorUtil {
     int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
     checkGgufActivationScratch(
         q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    checkGgufQ4CorrectionScratch(q8ZeroPointCorrections, activationEntries);
     int totalRows = Math.addExact(Math.addExact(firstRows, secondRows), thirdRows);
     checkGgufQ4LaneScratch(laneScratch, batchSize, totalRows, "triple Q4 lane scratch");
     IMPL.ggufQ4_0Q8_0TripleBatchedMatmul(
@@ -970,6 +1024,7 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
+        q8ZeroPointCorrections,
         laneScratch,
         Objects.requireNonNull(kernel, "kernel"));
   }
@@ -2558,6 +2613,19 @@ public final class VectorUtil {
               + q8Sums.length
               + " < "
               + requiredSums);
+    }
+  }
+
+  private static void checkGgufQ4CorrectionScratch(
+      int[] q8ZeroPointCorrections, int activationEntries) {
+    Objects.requireNonNull(q8ZeroPointCorrections, "q8ZeroPointCorrections");
+    int required = activationEntries / 4;
+    if (q8ZeroPointCorrections.length < required) {
+      throw new IllegalArgumentException(
+          "q8ZeroPointCorrections.length must be >= activation entries / 4: "
+              + q8ZeroPointCorrections.length
+              + " < "
+              + required);
     }
   }
 

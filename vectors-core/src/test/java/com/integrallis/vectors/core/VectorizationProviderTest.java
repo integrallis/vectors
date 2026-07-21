@@ -51,6 +51,7 @@ class VectorizationProviderTest {
     assertThat(summary).contains("mappedKQuantLongOffsets=auto(");
     assertThat(summary).contains("q4=").contains("q5=").contains("q6=");
     assertThat(summary).contains("q4ShortPairwiseSupported=");
+    assertThat(summary).contains("q4UnsignedPairwiseSupported=");
     assertThat(summary).contains("toggles=[");
     assertThat(summary).endsWith("]");
   }
@@ -130,6 +131,10 @@ class VectorizationProviderTest {
             VectorizationProvider.isPanamaEnabled() ? PanamaVectorUtilSupport.VECTOR_BITSIZE : 0);
     assertThat(capabilities.ggufExecutor()).isEqualTo("persistent");
     assertThat(capabilities.q4ShortPairwiseSupported())
+        .isEqualTo(
+            VectorizationProvider.isPanamaEnabled()
+                && PanamaVectorUtilSupport.VECTOR_BITSIZE >= 256);
+    assertThat(capabilities.q4UnsignedPairwiseSupported())
         .isEqualTo(
             VectorizationProvider.isPanamaEnabled()
                 && PanamaVectorUtilSupport.VECTOR_BITSIZE >= 256);

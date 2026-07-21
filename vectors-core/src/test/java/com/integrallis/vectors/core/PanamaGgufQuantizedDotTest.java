@@ -19,16 +19,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Offset.offset;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Random;
+import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
+import jdk.incubator.vector.VectorOperators;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("unit")
 class PanamaGgufQuantizedDotTest {
+
+  private static final ValueLayout.OfShort LE_SHORT =
+      ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
   @Test
   void q4ShortPairwiseRequiresExplicitSelectionAvx2WidthAndModelSizedRows() {
@@ -50,6 +56,49 @@ class PanamaGgufQuantizedDotTest {
         .isFalse();
     assertThat(PanamaVectorUtilSupport.useQ4ShortPairwise(GgufQ4Kernel.SHORT_PAIRWISE, 256, 31))
         .isFalse();
+    assertThat(
+            PanamaVectorUtilSupport.useQ4UnsignedPairwise(GgufQ4Kernel.UNSIGNED_PAIRWISE, 128, 64))
+        .isFalse();
+    assertThat(
+            PanamaVectorUtilSupport.useQ4UnsignedPairwise(GgufQ4Kernel.UNSIGNED_PAIRWISE, 256, 31))
+        .isFalse();
+    assertThat(
+            PanamaVectorUtilSupport.useQ4UnsignedPairwise(GgufQ4Kernel.UNSIGNED_PAIRWISE, 256, 32))
+        .isTrue();
+    assertThat(PanamaVectorUtilSupport.useQ4UnsignedPairwise(GgufQ4Kernel.SHORT_PAIRWISE, 256, 64))
+        .isFalse();
+  }
+
+  @Test
+  void unsignedPairwiseFallbackDoesNotComputeUnusedCorrections() {
+    int blocks = 31;
+    int cols = blocks * 32;
+    float[] query = new float[cols];
+    byte[] weights = new byte[blocks * 18];
+    ByteBuffer weightBuffer = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
+    for (int block = 0; block < blocks; block++) {
+      weightBuffer.putShort(block * 18, Float.floatToFloat16(0.125f));
+      for (int index = 0; index < 32; index++) {
+        query[block * 32 + index] = (index - 15) / 17.0f;
+      }
+    }
+    int sentinel = 0x5148;
+    int[] corrections = new int[cols / 4];
+    java.util.Arrays.fill(corrections, sentinel);
+
+    new PanamaVectorUtilSupport()
+        .ggufQ4_0Q8_0MatVecDot(
+            query,
+            MemorySegment.ofArray(weights),
+            1,
+            cols,
+            new float[1],
+            new byte[cols],
+            new float[blocks],
+            corrections,
+            GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    assertThat(corrections).containsOnly(sentinel);
   }
 
   @Test
@@ -109,6 +158,93 @@ class PanamaGgufQuantizedDotTest {
       IntVector shortPairwise =
           PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(weights, 0, q8, 0);
       assertThat(shortPairwise.toArray()).containsExactly(expected.toArray());
+    }
+  }
+
+  @Test
+  void q4_0Q8_0UnsignedPairwiseRowMatchesShortPairwiseExactly() {
+    int blocks = 64;
+    byte[] weightBytes = new byte[blocks * 18];
+    byte[] q8 = new byte[blocks * 32];
+    float[] q8Scales = new float[blocks];
+    int[] zeroPointCorrections = new int[blocks * 8];
+    Random random = new Random(0x554e5349474e4544L);
+
+    for (int trial = 0; trial < 1_000; trial++) {
+      for (int block = 0; block < blocks; block++) {
+        int weightOffset = block * 18;
+        short scale = Float.floatToFloat16(0.001f + random.nextFloat() * 0.05f);
+        weightBytes[weightOffset] = (byte) scale;
+        weightBytes[weightOffset + 1] = (byte) (scale >>> 8);
+        for (int index = 0; index < 16; index++) {
+          weightBytes[weightOffset + Short.BYTES + index] = (byte) random.nextInt();
+        }
+        for (int index = 0; index < 32; index++) {
+          q8[block * 32 + index] = (byte) random.nextInt(-127, 128);
+        }
+        for (int group = 0; group < 8; group++) {
+          int offset = block * 32 + group * 4;
+          zeroPointCorrections[block * 8 + group] =
+              8 * (q8[offset] + q8[offset + 1] + q8[offset + 2] + q8[offset + 3]);
+        }
+        q8Scales[block] = 0.001f + random.nextFloat() * 0.05f;
+      }
+
+      MemorySegment weights = MemorySegment.ofArray(weightBytes);
+      FloatVector expectedLanes = FloatVector.zero(FloatVector.SPECIES_256);
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = (long) block * 18;
+        float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
+        IntVector groups =
+            PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(
+                weights, blockOffset + Short.BYTES, q8, block * 32);
+        expectedLanes =
+            PanamaVectorUtilSupport.fma(
+                (FloatVector) groups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0),
+                FloatVector.broadcast(FloatVector.SPECIES_256, scale),
+                expectedLanes);
+      }
+      float even =
+          (expectedLanes.lane(4) + expectedLanes.lane(0))
+              + (expectedLanes.lane(6) + expectedLanes.lane(2));
+      float odd =
+          (expectedLanes.lane(5) + expectedLanes.lane(1))
+              + (expectedLanes.lane(7) + expectedLanes.lane(3));
+      float expected = even + odd;
+
+      float actual =
+          PanamaVectorUtilSupport.q4_0Q8_0UnsignedPairwiseRowDot(
+              weights, 0, blocks, q8, q8Scales, zeroPointCorrections);
+
+      assertThat(Float.floatToRawIntBits(actual)).isEqualTo(Float.floatToRawIntBits(expected));
+    }
+  }
+
+  @Test
+  void q8_0QuantizationProducesExactQ4ZeroPointCorrections() {
+    float[] query = new float[96];
+    Random random = new Random(0x51385a504f494e54L);
+    for (int index = 0; index < query.length; index++) {
+      query[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+    byte[] quants = new byte[query.length];
+    float[] scales = new float[query.length / 32];
+    int[] zeroPointCorrections = new int[query.length / 4];
+    byte[] referenceQuants = new byte[query.length];
+    float[] referenceScales = new float[query.length / 32];
+
+    GgufQuantizationSupport.quantizeQ8_0(query, query.length, referenceQuants, referenceScales);
+
+    GgufQuantizationSupport.quantizeQ8_0WithQ4Corrections(
+        query, query.length, quants, scales, zeroPointCorrections);
+
+    assertThat(quants).containsExactly(referenceQuants);
+    assertThat(scales).containsExactly(referenceScales);
+    for (int group = 0; group < zeroPointCorrections.length; group++) {
+      int offset = group * 4;
+      assertThat(zeroPointCorrections[group])
+          .isEqualTo(
+              8 * (quants[offset] + quants[offset + 1] + quants[offset + 2] + quants[offset + 3]));
     }
   }
 
@@ -342,6 +478,7 @@ class PanamaGgufQuantizedDotTest {
             expected,
             expectedQuants,
             expectedScales,
+            new int[cols / 4],
             GgufQ4Kernel.WIDENED);
     new PanamaVectorUtilSupport()
         .ggufQ4_0Q8_0MatVecDot(
@@ -352,6 +489,7 @@ class PanamaGgufQuantizedDotTest {
             actual,
             actualQuants,
             actualScales,
+            new int[cols / 4],
             GgufQ4Kernel.WIDENED);
 
     assertThat(actualQuants).containsExactly(expectedQuants);
