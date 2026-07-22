@@ -15,12 +15,17 @@
  */
 package com.integrallis.vectors.core;
 
+import java.util.Objects;
 import java.util.function.IntConsumer;
 
 /** Internal execution contract for independent GGUF output rows. */
 interface GgufRowExecutor extends AutoCloseable {
 
   void forEach(int rows, IntConsumer rowOperation);
+
+  default void execute(GgufStagePlan plan) {
+    Objects.requireNonNull(plan, "plan").executeSerially();
+  }
 
   @Override
   default void close() {}

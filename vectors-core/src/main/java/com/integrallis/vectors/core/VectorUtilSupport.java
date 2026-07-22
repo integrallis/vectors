@@ -725,6 +725,37 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Q4_0 rows over a caller-prequantized Q8_0 activation batch without row scheduling. */
+  default void ggufQ4_0Q8_0BatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation,
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    long rowBytes = ggufQ4_0RowBytes(cols);
+    for (int batch = 0; batch < batchSize; batch++) {
+      int quantBatchOffset = batch * cols;
+      int scaleBatchOffset = batch * blocks;
+      for (int row = fromRow; row < toRow; row++) {
+        out[batch * rows + row] =
+            ggufQ4_0Q8_0ScalarRowDot(
+                qWeight,
+                row * rowBytes,
+                blocks,
+                activation.quants(),
+                quantBatchOffset,
+                activation.scales(),
+                scaleBatchOffset);
+      }
+    }
+  }
+
   /** Two Q4_0 projections over an activation batch sharing Q8_0 quantization and row dispatch. */
   default void ggufQ4_0Q8_0DualBatchedMatmul(
       float[] queries,

@@ -746,6 +746,126 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0PrequantizedRowRangesComposeToTheExactBatchedResult() {
+    int batchSize = 3;
+    int rows = 5;
+    int cols = 1024;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] firstRow =
+        repeat(q4Block(0.125f, ones(32), (lo, hi) -> (lo * 5 + hi * 3) & 0xFF), cols / 32);
+    byte[] secondRow =
+        repeat(q4Block(-0.25f, ones(32), (lo, hi) -> (lo * 7 + hi) & 0xFF), cols / 32);
+    MemorySegment weight =
+        MemorySegment.ofArray(
+            concat(concat(firstRow, secondRow), concat(concat(firstRow, secondRow), firstRow)));
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    GgufQ8_0Batch activation = GgufQ8_0Batch.allocate(batchSize, cols);
+
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+        queries,
+        weight,
+        batchSize,
+        rows,
+        cols,
+        expected,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 32)],
+        q4Corrections(batchSize * cols),
+        new float[batchSize * rows * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    activation.quantizeForQ4(queries, batchSize, GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmulRows(
+        weight,
+        batchSize,
+        rows,
+        cols,
+        0,
+        2,
+        actual,
+        activation,
+        new float[batchSize * rows * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmulRows(
+        weight,
+        batchSize,
+        rows,
+        cols,
+        2,
+        rows,
+        actual,
+        activation,
+        new float[batchSize * rows * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q4_0BlockRangeActivationQuantizationMatchesWholeBatchExactly() {
+    int batchSize = 3;
+    int rows = 5;
+    int cols = 1024;
+    int blocks = cols / 32;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] row = repeat(q4Block(0.125f, ones(32), (lo, hi) -> (lo * 11 + hi * 3) & 0xFF), blocks);
+    MemorySegment weight = MemorySegment.ofArray(repeat(row, rows));
+    GgufQ8_0Batch whole = GgufQ8_0Batch.allocate(batchSize, cols);
+    GgufQ8_0Batch rangeWise = GgufQ8_0Batch.allocate(batchSize, cols);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+
+    whole.quantizeForQ4(queries, batchSize, GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    int split = blocks / 3;
+    rangeWise.quantizeBlockRangeForQ4(queries, batchSize, 0, split, GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    rangeWise.quantizeBlockRangeForQ4(
+        queries, batchSize, split, blocks, GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmulRows(
+        weight,
+        batchSize,
+        rows,
+        cols,
+        0,
+        rows,
+        expected,
+        whole,
+        new float[batchSize * rows * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmulRows(
+        weight,
+        batchSize,
+        rows,
+        cols,
+        0,
+        rows,
+        actual,
+        rangeWise,
+        new float[batchSize * rows * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q8_0BatchRejectsInvalidShapeAndBlockRanges() {
+    assertThatThrownBy(() -> GgufQ8_0Batch.allocate(0, 32))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("batchCapacity");
+    assertThatThrownBy(() -> GgufQ8_0Batch.allocate(1, 33))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("dimensions");
+
+    GgufQ8_0Batch activation = GgufQ8_0Batch.allocate(1, 32);
+    assertThatThrownBy(
+            () ->
+                activation.quantizeBlockRangeForQ4(
+                    new float[32], 1, 1, 2, GgufQ4Kernel.UNSIGNED_PAIRWISE))
+        .isInstanceOf(IndexOutOfBoundsException.class)
+        .hasMessageContaining("block range");
+  }
+
+  @Test
   void q4_0Q8_0DualBatchedMatmulMatchesSeparateBatchedMatmulsExactly() {
     int batchSize = 3;
     int cols = 1024;

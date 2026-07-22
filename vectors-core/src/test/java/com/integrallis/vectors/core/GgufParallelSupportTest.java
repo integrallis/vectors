@@ -155,6 +155,113 @@ class GgufParallelSupportTest {
   }
 
   @Test
+  void persistentExecutorRunsOrderedStagesWithExactRangeCoverage() {
+    AtomicInteger firstCompleted = new AtomicInteger();
+    AtomicIntegerArray firstVisits = new AtomicIntegerArray(257);
+    AtomicIntegerArray secondVisits = new AtomicIntegerArray(61);
+    GgufStagePlan plan =
+        GgufStagePlan.of(
+            GgufStagePlan.stage(
+                firstVisits.length(),
+                (fromInclusive, toExclusive) -> {
+                  for (int item = fromInclusive; item < toExclusive; item++) {
+                    firstVisits.incrementAndGet(item);
+                    firstCompleted.incrementAndGet();
+                  }
+                }),
+            GgufStagePlan.stage(
+                secondVisits.length(),
+                (fromInclusive, toExclusive) -> {
+                  if (firstCompleted.get() != firstVisits.length()) {
+                    throw new AssertionError("second stage observed incomplete first stage");
+                  }
+                  for (int item = fromInclusive; item < toExclusive; item++) {
+                    secondVisits.incrementAndGet(item);
+                  }
+                }));
+
+    try (GgufPersistentRowExecutor executor = new GgufPersistentRowExecutor(4, 4, "vectors-test")) {
+      executor.execute(plan);
+    }
+
+    for (int item = 0; item < firstVisits.length(); item++) {
+      assertThat(firstVisits.get(item)).as("first stage item %s", item).isOne();
+    }
+    for (int item = 0; item < secondVisits.length(); item++) {
+      assertThat(secondVisits.get(item)).as("second stage item %s", item).isOne();
+    }
+  }
+
+  @Test
+  void persistentExecutorPropagatesStageFailureAndRemainsReusable() {
+    GgufStagePlan failing =
+        GgufStagePlan.of(
+            GgufStagePlan.stage(64, (fromInclusive, toExclusive) -> {}),
+            GgufStagePlan.stage(
+                64,
+                (fromInclusive, toExclusive) -> {
+                  if (fromInclusive <= 17 && 17 < toExclusive) {
+                    throw new IllegalStateException("stage boom");
+                  }
+                }));
+
+    try (GgufPersistentRowExecutor executor = new GgufPersistentRowExecutor(4, 4, "vectors-test")) {
+      assertThatThrownBy(() -> executor.execute(failing))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage("stage boom");
+
+      AtomicIntegerArray visits = new AtomicIntegerArray(64);
+      executor.execute(
+          GgufStagePlan.of(
+              GgufStagePlan.stage(
+                  visits.length(),
+                  (fromInclusive, toExclusive) -> {
+                    for (int item = fromInclusive; item < toExclusive; item++) {
+                      visits.incrementAndGet(item);
+                    }
+                  })));
+      for (int item = 0; item < visits.length(); item++) {
+        assertThat(visits.get(item)).as("reused item %s", item).isOne();
+      }
+    }
+  }
+
+  @Test
+  void persistentExecutorSerializesConcurrentStagePublishers() throws Exception {
+    try (GgufPersistentRowExecutor executor = new GgufPersistentRowExecutor(4, 4, "vectors-test");
+        ExecutorService publishers = Executors.newFixedThreadPool(4)) {
+      List<Future<AtomicIntegerArray>> results = new ArrayList<>();
+      for (int publisher = 0; publisher < 4; publisher++) {
+        results.add(
+            publishers.submit(
+                () -> {
+                  AtomicIntegerArray visits = new AtomicIntegerArray(97);
+                  GgufStagePlan plan =
+                      GgufStagePlan.of(
+                          GgufStagePlan.stage(
+                              visits.length(),
+                              (fromInclusive, toExclusive) -> {
+                                for (int item = fromInclusive; item < toExclusive; item++) {
+                                  visits.incrementAndGet(item);
+                                }
+                              }));
+                  for (int round = 0; round < 20; round++) {
+                    executor.execute(plan);
+                  }
+                  return visits;
+                }));
+      }
+
+      for (Future<AtomicIntegerArray> result : results) {
+        AtomicIntegerArray visits = result.get();
+        for (int item = 0; item < visits.length(); item++) {
+          assertThat(visits.get(item)).as("stage item %s", item).isEqualTo(20);
+        }
+      }
+    }
+  }
+
+  @Test
   void persistentExecutorSerializesConcurrentPublishersWithoutLosingRows() throws Exception {
     try (GgufPersistentRowExecutor executor = new GgufPersistentRowExecutor(4, 4, "vectors-test");
         ExecutorService publishers = Executors.newFixedThreadPool(4)) {
