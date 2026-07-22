@@ -702,6 +702,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                 q8Scales,
                 q8ZeroPointCorrections,
                 laneScratch,
+                0,
                 blocks,
                 rowBytes,
                 useShortPairwise,
@@ -720,9 +721,36 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       GgufQ8_0Batch activation,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
+    ggufQ4_0Q8_0BatchedMatmulRows(
+        qWeight, batchSize, rows, cols, fromRow, toRow, out, activation, laneScratch, 0, kernel);
+  }
+
+  @Override
+  public void ggufQ4_0Q8_0BatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation,
+      float[] laneScratch,
+      int laneScratchRowOffset,
+      GgufQ4Kernel kernel) {
     if (VECTOR_BITSIZE < 256) {
       VectorUtilSupport.super.ggufQ4_0Q8_0BatchedMatmulRows(
-          qWeight, batchSize, rows, cols, fromRow, toRow, out, activation, laneScratch, kernel);
+          qWeight,
+          batchSize,
+          rows,
+          cols,
+          fromRow,
+          toRow,
+          out,
+          activation,
+          laneScratch,
+          laneScratchRowOffset,
+          kernel);
       return;
     }
 
@@ -742,6 +770,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           activation.scales(),
           activation.zeroPointCorrections(),
           laneScratch,
+          laneScratchRowOffset,
           blocks,
           rowBytes,
           useShortPairwise,
@@ -760,12 +789,13 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] q8Scales,
       int[] q8ZeroPointCorrections,
       float[] laneScratch,
+      int laneScratchRowOffset,
       int blocks,
       long rowBytes,
       boolean useShortPairwise,
       boolean useUnsignedPairwise) {
     long rowOffset = row * rowBytes;
-    int rowLaneOffset = row * batchSize * FloatVector.SPECIES_256.length();
+    int rowLaneOffset = (laneScratchRowOffset + row) * batchSize * FloatVector.SPECIES_256.length();
     int rowLaneEnd = rowLaneOffset + batchSize * FloatVector.SPECIES_256.length();
     for (int lane = rowLaneOffset; lane < rowLaneEnd; lane++) {
       laneScratch[lane] = 0.0f;
