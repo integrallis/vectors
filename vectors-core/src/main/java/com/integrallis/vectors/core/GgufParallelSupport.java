@@ -135,6 +135,14 @@ final class GgufParallelSupport {
     return CHUNKS_PER_THREAD;
   }
 
+  static void execute(GgufStagePlan plan) {
+    if (ENABLED && PARALLELISM > 1) {
+      ExecutorHolder.INSTANCE.execute(plan);
+      return;
+    }
+    plan.executeSerially();
+  }
+
   static GgufRowExecutor newExecutor(
       ExecutionMode mode, int parallelism, int chunksPerThread, String threadNamePrefix) {
     return switch (mode) {

@@ -18,6 +18,7 @@ package com.integrallis.vectors.core;
 import java.util.Objects;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.IntConsumer;
@@ -33,7 +34,9 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   private final AtomicReference<Throwable> failure = new AtomicReference<>();
   private final Thread[] workers;
 
+  private AtomicIntegerArray stageNextChunks = new AtomicIntegerArray(0);
   private IntConsumer operation;
+  private GgufStagePlan stagePlan;
   private int rows;
   private int chunkSize;
   private boolean closed;
@@ -75,6 +78,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     try {
       ensureOpen();
       operation = rowOperation;
+      stagePlan = null;
       rows = rowCount;
       int targetChunks = (int) Math.min(rowCount, (long) parallelism * chunksPerWorker);
       chunkSize = (rowCount + targetChunks - 1) / targetChunks;
@@ -99,6 +103,31 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     return parallelism;
   }
 
+  @Override
+  public void execute(GgufStagePlan plan) {
+    Objects.requireNonNull(plan, "plan");
+
+    publicationLock.lock();
+    try {
+      ensureOpen();
+      operation = null;
+      stagePlan = plan;
+      prepareStageChunks(plan.stageCount());
+      failure.set(null);
+
+      phase.arriveAndAwaitAdvance();
+      executePublishedPlan(plan);
+
+      Throwable thrown = failure.get();
+      stagePlan = null;
+      if (thrown != null) {
+        rethrow(thrown);
+      }
+    } finally {
+      publicationLock.unlock();
+    }
+  }
+
   private void workerLoop() {
     while (true) {
       phase.arriveAndAwaitAdvance();
@@ -106,8 +135,54 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
         phase.arriveAndAwaitAdvance();
         return;
       }
-      executePublishedOperation();
+      GgufStagePlan publishedPlan = stagePlan;
+      if (publishedPlan != null) {
+        executePublishedPlan(publishedPlan);
+      } else {
+        executePublishedOperation();
+        phase.arriveAndAwaitAdvance();
+      }
+    }
+  }
+
+  private void executePublishedPlan(GgufStagePlan plan) {
+    for (int stageIndex = 0; stageIndex < plan.stageCount(); stageIndex++) {
+      executeStage(plan.stage(stageIndex), stageIndex);
       phase.arriveAndAwaitAdvance();
+    }
+  }
+
+  private void executeStage(GgufStagePlan.Stage stage, int stageIndex) {
+    if (failure.get() != null) {
+      return;
+    }
+    try {
+      int workItems = stage.workItems();
+      int targetChunks = (int) Math.min(workItems, (long) parallelism * (long) chunksPerWorker);
+      int stageChunkSize = (workItems + targetChunks - 1) / targetChunks;
+      while (failure.get() == null) {
+        int chunk = stageNextChunks.getAndIncrement(stageIndex);
+        if (chunk >= targetChunks) {
+          return;
+        }
+        int start = chunk * stageChunkSize;
+        int end = Math.min(start + stageChunkSize, workItems);
+        if (start < end) {
+          stage.operation().execute(start, end);
+        }
+      }
+    } catch (Throwable thrown) {
+      failure.compareAndSet(null, thrown);
+    }
+  }
+
+  private void prepareStageChunks(int stageCount) {
+    if (stageNextChunks.length() < stageCount) {
+      stageNextChunks = new AtomicIntegerArray(stageCount);
+      return;
+    }
+    for (int stage = 0; stage < stageCount; stage++) {
+      stageNextChunks.set(stage, 0);
     }
   }
 

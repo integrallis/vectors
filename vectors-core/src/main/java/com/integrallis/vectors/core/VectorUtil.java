@@ -830,6 +830,69 @@ public final class VectorUtil {
         Objects.requireNonNull(kernel, "kernel"));
   }
 
+  /**
+   * Computes a non-empty Q4_0 output-row range from a caller-prequantized activation batch.
+   *
+   * <p>This low-level operation performs no quantization and no worker publication, allowing a
+   * {@link GgufStagePlan} to compose dependent matrix stages without nested scheduling.
+   */
+  public static void ggufQ4_0Q8_0BatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation,
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
+    }
+    if (rows < 1) {
+      throw new IllegalArgumentException("rows must be >= 1: " + rows);
+    }
+    if (fromRow < 0 || fromRow >= toRow || toRow > rows) {
+      throw new IndexOutOfBoundsException(
+          "row range must satisfy 0 <= fromRow < toRow <= rows: "
+              + fromRow
+              + ".."
+              + toRow
+              + " for "
+              + rows);
+    }
+    Objects.requireNonNull(out, "out");
+    Objects.requireNonNull(activation, "activation");
+    Objects.requireNonNull(laneScratch, "laneScratch");
+    Objects.requireNonNull(kernel, "kernel");
+    checkGgufQuantizedMatrixArguments(
+        qWeight,
+        rows,
+        cols,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q4_0_BLOCK_BYTES);
+    if (batchSize > activation.batchCapacity()) {
+      throw new IllegalArgumentException(
+          "batchSize exceeds activation capacity: "
+              + batchSize
+              + " > "
+              + activation.batchCapacity());
+    }
+    if (cols != activation.dimensions()) {
+      throw new IllegalArgumentException(
+          "cols must equal activation dimensions: " + cols + " != " + activation.dimensions());
+    }
+    int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    if (out.length < outputEntries) {
+      throw new IllegalArgumentException(
+          "out.length must be >= batchSize * rows: " + out.length + " < " + outputEntries);
+    }
+    checkGgufQ4LaneScratch(laneScratch, batchSize, rows, "Q4 row-range lane scratch");
+    IMPL.ggufQ4_0Q8_0BatchedMatmulRows(
+        qWeight, batchSize, rows, cols, fromRow, toRow, out, activation, laneScratch, kernel);
+  }
+
   /** Two Q4_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */
   public static void ggufQ4_0Q8_0DualBatchedMatmul(
       float[] queries,
