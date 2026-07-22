@@ -773,6 +773,59 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Flattened row range across three Q4_0 matrices using one prequantized activation batch. */
+  default void ggufQ4_0Q8_0TripleBatchedMatmulRows(
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      int fromCombinedRow,
+      int toCombinedRow,
+      GgufQ8_0Batch activation,
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    long rowBytes = ggufQ4_0RowBytes(cols);
+    byte[] q8Quants = activation.quants();
+    float[] q8Scales = activation.scales();
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    for (int combinedRow = fromCombinedRow; combinedRow < toCombinedRow; combinedRow++) {
+      MemorySegment weight;
+      float[] output;
+      int row;
+      int rows;
+      if (combinedRow < secondStart) {
+        weight = firstWeight;
+        output = firstOut;
+        row = combinedRow;
+        rows = firstRows;
+      } else if (combinedRow < thirdStart) {
+        weight = secondWeight;
+        output = secondOut;
+        row = combinedRow - secondStart;
+        rows = secondRows;
+      } else {
+        weight = thirdWeight;
+        output = thirdOut;
+        row = combinedRow - thirdStart;
+        rows = thirdRows;
+      }
+      for (int batch = 0; batch < batchSize; batch++) {
+        output[batch * rows + row] =
+            ggufQ4_0Q8_0ScalarRowDot(
+                weight, row * rowBytes, blocks, q8Quants, batch * cols, q8Scales, batch * blocks);
+      }
+    }
+  }
+
   /** Two Q4_0 projections over an activation batch sharing Q8_0 quantization and row dispatch. */
   default void ggufQ4_0Q8_0DualBatchedMatmul(
       float[] queries,

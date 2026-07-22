@@ -17,6 +17,7 @@ package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.function.IntConsumer;
 import java.util.stream.IntStream;
 
@@ -108,6 +109,35 @@ final class GgufParallelSupport {
     for (int row = 0; row < rows; row++) {
       rowOperation.accept(row);
     }
+  }
+
+  static void forEachRange(
+      MemorySegment firstWeights,
+      MemorySegment secondWeights,
+      MemorySegment thirdWeights,
+      int workItems,
+      int cols,
+      GgufStagePlan.RangeOperation rangeOperation) {
+    Objects.requireNonNull(firstWeights, "firstWeights");
+    Objects.requireNonNull(secondWeights, "secondWeights");
+    Objects.requireNonNull(thirdWeights, "thirdWeights");
+    Objects.requireNonNull(rangeOperation, "rangeOperation");
+    if (workItems < 0) {
+      throw new IllegalArgumentException("workItems must not be negative: " + workItems);
+    }
+    if (workItems == 0) {
+      return;
+    }
+    boolean shareable =
+        firstWeights.isAccessibleBy(ACCESS_PROBE)
+            && secondWeights.isAccessibleBy(ACCESS_PROBE)
+            && thirdWeights.isAccessibleBy(ACCESS_PROBE);
+    if (shareable && shouldParallelize(workItems, cols, PARALLELISM, ENABLED, MIN_ELEMENTS)) {
+      ExecutorHolder.INSTANCE.execute(
+          GgufStagePlan.of(GgufStagePlan.stage(workItems, rangeOperation)));
+      return;
+    }
+    rangeOperation.execute(0, workItems);
   }
 
   static boolean shouldParallelize(

@@ -858,6 +858,177 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void ggufQ4_0Q8_0TripleBatchedMatmulRows(
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      int fromCombinedRow,
+      int toCombinedRow,
+      GgufQ8_0Batch activation,
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
+    if (VECTOR_BITSIZE < 256) {
+      VectorUtilSupport.super.ggufQ4_0Q8_0TripleBatchedMatmulRows(
+          firstWeight,
+          firstRows,
+          firstOut,
+          secondWeight,
+          secondRows,
+          secondOut,
+          thirdWeight,
+          thirdRows,
+          thirdOut,
+          batchSize,
+          cols,
+          fromCombinedRow,
+          toCombinedRow,
+          activation,
+          laneScratch,
+          kernel);
+      return;
+    }
+
+    ggufQ4_0Q8_0TripleBatchedMatmulRowsKernel(
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        fromCombinedRow,
+        toCombinedRow,
+        activation.quants(),
+        activation.scales(),
+        activation.zeroPointCorrections(),
+        laneScratch,
+        kernel);
+  }
+
+  private void ggufQ4_0Q8_0TripleBatchedMatmulRowsKernel(
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      int fromCombinedRow,
+      int toCombinedRow,
+      byte[] q8Quants,
+      float[] q8Scales,
+      int[] q8ZeroPointCorrections,
+      float[] laneScratch,
+      GgufQ4Kernel kernel) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    long rowBytes = (long) blocks * GGUF_Q4_0_BLOCK_BYTES;
+    boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
+    boolean useUnsignedPairwise = useQ4UnsignedPairwise(kernel, blocks);
+    int secondStart = firstRows;
+    int thirdStart = Math.addExact(firstRows, secondRows);
+    for (int combinedRow = fromCombinedRow; combinedRow < toCombinedRow; combinedRow++) {
+      MemorySegment weight;
+      float[] output;
+      int row;
+      int rows;
+      if (combinedRow < secondStart) {
+        weight = firstWeight;
+        output = firstOut;
+        row = combinedRow;
+        rows = firstRows;
+      } else if (combinedRow < thirdStart) {
+        weight = secondWeight;
+        output = secondOut;
+        row = combinedRow - secondStart;
+        rows = secondRows;
+      } else {
+        weight = thirdWeight;
+        output = thirdOut;
+        row = combinedRow - thirdStart;
+        rows = thirdRows;
+      }
+
+      long rowOffset = row * rowBytes;
+      int rowLaneOffset = combinedRow * batchSize * FloatVector.SPECIES_256.length();
+      int rowLaneEnd = rowLaneOffset + batchSize * FloatVector.SPECIES_256.length();
+      for (int lane = rowLaneOffset; lane < rowLaneEnd; lane++) {
+        laneScratch[lane] = 0.0f;
+      }
+
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+        float weightScale = Float.float16ToFloat(weight.get(GGUF_LE_SHORT, blockOffset));
+        ByteVector packed =
+            ByteVector.fromMemorySegment(
+                ByteVector.SPECIES_128, weight, blockOffset + Short.BYTES, ByteOrder.LITTLE_ENDIAN);
+        ByteVector lowNibbles = packed.and((byte) 0x0F);
+        ByteVector highNibbles = q4HighNibbles(packed);
+        if (useUnsignedPairwise) {
+          for (int batch = 0; batch < batchSize; batch++) {
+            int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+            accumulateQ4_0UnsignedBatchQuery(
+                laneScratch,
+                laneOffset,
+                lowNibbles,
+                highNibbles,
+                q8Quants,
+                (batch * cols) + block * GGUF_Q_BLOCK_SIZE,
+                q8ZeroPointCorrections,
+                (batch * blocks + block) * 8,
+                weightScale * q8Scales[batch * blocks + block]);
+          }
+          continue;
+        }
+        ShortVector low =
+            (ShortVector)
+                lowNibbles
+                    .sub((byte) 8)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+        ShortVector high =
+            (ShortVector)
+                highNibbles
+                    .sub((byte) 8)
+                    .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+
+        for (int batch = 0; batch < batchSize; batch++) {
+          int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+          accumulateQ4_0BatchQuery(
+              laneScratch,
+              laneOffset,
+              low,
+              high,
+              q8Quants,
+              (batch * cols) + block * GGUF_Q_BLOCK_SIZE,
+              weightScale * q8Scales[batch * blocks + block],
+              useShortPairwise);
+        }
+      }
+
+      for (int batch = 0; batch < batchSize; batch++) {
+        int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+        output[batch * rows + row] =
+            reduceAdd(FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset));
+      }
+    }
+  }
+
+  @Override
   public void ggufQ4_0Q8_0DualBatchedMatmul(
       float[] queries,
       MemorySegment firstWeight,
@@ -1026,7 +1197,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
-    boolean useShortPairwise = useQ4ShortPairwise(kernel, blocks);
     boolean useUnsignedPairwise = useQ4UnsignedPairwise(kernel, blocks);
     for (int batch = 0; batch < batchSize; batch++) {
       quantizeQ8_0ForQ4(
@@ -1042,104 +1212,34 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           useUnsignedPairwise);
     }
 
-    long rowBytes = (long) blocks * GGUF_Q4_0_BLOCK_BYTES;
-    int secondStart = firstRows;
     int thirdStart = Math.addExact(firstRows, secondRows);
     int totalRows = Math.addExact(thirdStart, thirdRows);
-    GgufParallelSupport.forEachRow(
+    GgufParallelSupport.forEachRange(
         firstWeight,
         secondWeight,
         thirdWeight,
         totalRows,
         cols,
-        // The combined row index gives every concurrent matrix row disjoint lane scratch.
-        row -> {
-          MemorySegment qWeight;
-          float[] out;
-          int matrixRow;
-          int matrixRows;
-          if (row < secondStart) {
-            qWeight = firstWeight;
-            out = firstOut;
-            matrixRow = row;
-            matrixRows = firstRows;
-          } else if (row < thirdStart) {
-            qWeight = secondWeight;
-            out = secondOut;
-            matrixRow = row - secondStart;
-            matrixRows = secondRows;
-          } else {
-            qWeight = thirdWeight;
-            out = thirdOut;
-            matrixRow = row - thirdStart;
-            matrixRows = thirdRows;
-          }
-
-          long rowOffset = matrixRow * rowBytes;
-          int rowLaneOffset = row * batchSize * FloatVector.SPECIES_256.length();
-          int rowLaneEnd = rowLaneOffset + batchSize * FloatVector.SPECIES_256.length();
-          for (int lane = rowLaneOffset; lane < rowLaneEnd; lane++) {
-            laneScratch[lane] = 0.0f;
-          }
-
-          for (int block = 0; block < blocks; block++) {
-            long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
-            float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
-            ByteVector packed =
-                ByteVector.fromMemorySegment(
-                    ByteVector.SPECIES_128,
-                    qWeight,
-                    blockOffset + Short.BYTES,
-                    ByteOrder.LITTLE_ENDIAN);
-            ByteVector lowNibbles = packed.and((byte) 0x0F);
-            ByteVector highNibbles = q4HighNibbles(packed);
-            if (useUnsignedPairwise) {
-              for (int batch = 0; batch < batchSize; batch++) {
-                int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
-                accumulateQ4_0UnsignedBatchQuery(
-                    laneScratch,
-                    laneOffset,
-                    lowNibbles,
-                    highNibbles,
-                    q8Quants,
-                    (batch * cols) + block * GGUF_Q_BLOCK_SIZE,
-                    q8ZeroPointCorrections,
-                    (batch * blocks + block) * 8,
-                    weightScale * q8Scales[batch * blocks + block]);
-              }
-              continue;
-            }
-            ShortVector low =
-                (ShortVector)
-                    lowNibbles
-                        .sub((byte) 8)
-                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
-            ShortVector high =
-                (ShortVector)
-                    highNibbles
-                        .sub((byte) 8)
-                        .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
-
-            for (int batch = 0; batch < batchSize; batch++) {
-              int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
-              accumulateQ4_0BatchQuery(
-                  laneScratch,
-                  laneOffset,
-                  low,
-                  high,
-                  q8Quants,
-                  (batch * cols) + block * GGUF_Q_BLOCK_SIZE,
-                  weightScale * q8Scales[batch * blocks + block],
-                  useShortPairwise);
-            }
-          }
-
-          for (int batch = 0; batch < batchSize; batch++) {
-            int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
-            out[batch * matrixRows + matrixRow] =
-                reduceAdd(FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset));
-          }
-        });
+        (fromCombinedRow, toCombinedRow) ->
+            ggufQ4_0Q8_0TripleBatchedMatmulRowsKernel(
+                firstWeight,
+                firstRows,
+                firstOut,
+                secondWeight,
+                secondRows,
+                secondOut,
+                thirdWeight,
+                thirdRows,
+                thirdOut,
+                batchSize,
+                cols,
+                fromCombinedRow,
+                toCombinedRow,
+                q8Quants,
+                q8Scales,
+                q8ZeroPointCorrections,
+                laneScratch,
+                kernel));
   }
 
   private static void accumulateQ4_0BatchQuery(

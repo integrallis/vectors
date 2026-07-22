@@ -890,6 +890,110 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0PrequantizedTripleRowRangesComposeToTheExactFusedResult() {
+    int batchSize = 3;
+    int firstRows = 5;
+    int secondRows = 3;
+    int thirdRows = 4;
+    int totalRows = firstRows + secondRows + thirdRows;
+    int cols = 1024;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] firstRow =
+        repeat(q4Block(0.125f, ones(32), (lo, hi) -> (lo * 5 + hi * 3) & 0xFF), cols / 32);
+    byte[] secondRow =
+        repeat(q4Block(-0.25f, ones(32), (lo, hi) -> (lo * 7 + hi) & 0xFF), cols / 32);
+    byte[] thirdRow =
+        repeat(q4Block(0.0625f, ones(32), (lo, hi) -> (lo * 11 + hi * 9) & 0xFF), cols / 32);
+    MemorySegment firstWeight = MemorySegment.ofArray(repeat(firstRow, firstRows));
+    MemorySegment secondWeight = MemorySegment.ofArray(repeat(secondRow, secondRows));
+    MemorySegment thirdWeight = MemorySegment.ofArray(repeat(thirdRow, thirdRows));
+    float[] expectedFirst = new float[batchSize * firstRows];
+    float[] expectedSecond = new float[batchSize * secondRows];
+    float[] expectedThird = new float[batchSize * thirdRows];
+    float[] actualFirst = new float[batchSize * firstRows];
+    float[] actualSecond = new float[batchSize * secondRows];
+    float[] actualThird = new float[batchSize * thirdRows];
+    GgufQ8_0Batch activation = GgufQ8_0Batch.allocate(batchSize, cols);
+
+    VectorUtil.ggufQ4_0Q8_0TripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        expectedFirst,
+        secondWeight,
+        secondRows,
+        expectedSecond,
+        thirdWeight,
+        thirdRows,
+        expectedThird,
+        batchSize,
+        cols,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 32)],
+        q4Corrections(batchSize * cols),
+        new float[batchSize * totalRows * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    activation.quantizeForQ4(queries, batchSize, GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    float[] laneScratch = new float[batchSize * totalRows * 8];
+
+    VectorUtil.ggufQ4_0Q8_0TripleBatchedMatmulRows(
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        thirdWeight,
+        thirdRows,
+        actualThird,
+        batchSize,
+        cols,
+        0,
+        firstRows - 1,
+        activation,
+        laneScratch,
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    VectorUtil.ggufQ4_0Q8_0TripleBatchedMatmulRows(
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        thirdWeight,
+        thirdRows,
+        actualThird,
+        batchSize,
+        cols,
+        firstRows - 1,
+        firstRows + secondRows + 1,
+        activation,
+        laneScratch,
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    VectorUtil.ggufQ4_0Q8_0TripleBatchedMatmulRows(
+        firstWeight,
+        firstRows,
+        actualFirst,
+        secondWeight,
+        secondRows,
+        actualSecond,
+        thirdWeight,
+        thirdRows,
+        actualThird,
+        batchSize,
+        cols,
+        firstRows + secondRows + 1,
+        totalRows,
+        activation,
+        laneScratch,
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    assertThat(actualFirst).containsExactly(expectedFirst);
+    assertThat(actualSecond).containsExactly(expectedSecond);
+    assertThat(actualThird).containsExactly(expectedThird);
+  }
+
+  @Test
   void q4_0BlockRangeActivationQuantizationMatchesWholeBatchExactly() {
     int batchSize = 3;
     int rows = 5;
