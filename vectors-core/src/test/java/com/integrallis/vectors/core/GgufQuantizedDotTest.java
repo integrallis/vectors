@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.IntUnaryOperator;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -848,6 +849,60 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0BatchRangeActivationQuantizationMatchesWholeBatchExactly() {
+    int batchSize = 5;
+    int rows = 7;
+    int cols = 1024;
+    int blocks = cols / 32;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] row = repeat(q4Block(-0.25f, ones(32), (lo, hi) -> (lo * 7 + hi * 5) & 0xFF), blocks);
+    MemorySegment weight = MemorySegment.ofArray(repeat(row, rows));
+    GgufQ8_0Batch whole = GgufQ8_0Batch.allocate(batchSize + 2, cols);
+    GgufQ8_0Batch rangeWise = GgufQ8_0Batch.allocate(batchSize + 2, cols);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+
+    whole.quantizeForQ4(queries, batchSize, GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    CompletableFuture.allOf(
+            CompletableFuture.runAsync(
+                () ->
+                    rangeWise.quantizeBatchRangeForQ4(
+                        queries, batchSize, 0, 2, GgufQ4Kernel.UNSIGNED_PAIRWISE)),
+            CompletableFuture.runAsync(
+                () ->
+                    rangeWise.quantizeBatchRangeForQ4(
+                        queries, batchSize, 2, batchSize, GgufQ4Kernel.UNSIGNED_PAIRWISE)))
+        .join();
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmulRows(
+        weight,
+        batchSize,
+        rows,
+        cols,
+        0,
+        rows,
+        expected,
+        whole,
+        new float[batchSize * rows * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmulRows(
+        weight,
+        batchSize,
+        rows,
+        cols,
+        0,
+        rows,
+        actual,
+        rangeWise,
+        new float[batchSize * rows * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    assertThat(rangeWise.quants()).containsExactly(whole.quants());
+    assertThat(rangeWise.scales()).containsExactly(whole.scales());
+    assertThat(rangeWise.zeroPointCorrections()).containsExactly(whole.zeroPointCorrections());
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
   void q8_0BatchRejectsInvalidShapeAndBlockRanges() {
     assertThatThrownBy(() -> GgufQ8_0Batch.allocate(0, 32))
         .isInstanceOf(IllegalArgumentException.class)
@@ -863,6 +918,12 @@ class GgufQuantizedDotTest {
                     new float[32], 1, 1, 2, GgufQ4Kernel.UNSIGNED_PAIRWISE))
         .isInstanceOf(IndexOutOfBoundsException.class)
         .hasMessageContaining("block range");
+    assertThatThrownBy(
+            () ->
+                activation.quantizeBatchRangeForQ4(
+                    new float[32], 1, 1, 2, GgufQ4Kernel.UNSIGNED_PAIRWISE))
+        .isInstanceOf(IndexOutOfBoundsException.class)
+        .hasMessageContaining("batch range");
   }
 
   @Test
