@@ -847,6 +847,28 @@ public final class VectorUtil {
       GgufQ8_0Batch activation,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
+    ggufQ4_0Q8_0BatchedMatmulRows(
+        qWeight, batchSize, rows, cols, fromRow, toRow, out, activation, laneScratch, 0, kernel);
+  }
+
+  /**
+   * Computes a Q4_0 output-row range using an interior row window of shared lane scratch.
+   *
+   * <p>Distinct matrix ranges may execute concurrently when their scratch-row windows do not
+   * overlap.
+   */
+  public static void ggufQ4_0Q8_0BatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation,
+      float[] laneScratch,
+      int laneScratchRowOffset,
+      GgufQ4Kernel kernel) {
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
     }
@@ -866,6 +888,10 @@ public final class VectorUtil {
     Objects.requireNonNull(activation, "activation");
     Objects.requireNonNull(laneScratch, "laneScratch");
     Objects.requireNonNull(kernel, "kernel");
+    if (laneScratchRowOffset < 0) {
+      throw new IllegalArgumentException(
+          "laneScratchRowOffset must be non-negative: " + laneScratchRowOffset);
+    }
     checkGgufQuantizedMatrixArguments(
         qWeight,
         rows,
@@ -888,9 +914,23 @@ public final class VectorUtil {
       throw new IllegalArgumentException(
           "out.length must be >= batchSize * rows: " + out.length + " < " + outputEntries);
     }
-    checkGgufQ4LaneScratch(laneScratch, batchSize, rows, "Q4 row-range lane scratch");
+    checkGgufQ4LaneScratch(
+        laneScratch,
+        batchSize,
+        Math.addExact(laneScratchRowOffset, rows),
+        "Q4 row-range lane scratch");
     IMPL.ggufQ4_0Q8_0BatchedMatmulRows(
-        qWeight, batchSize, rows, cols, fromRow, toRow, out, activation, laneScratch, kernel);
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        fromRow,
+        toRow,
+        out,
+        activation,
+        laneScratch,
+        laneScratchRowOffset,
+        kernel);
   }
 
   /** Two Q4_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */

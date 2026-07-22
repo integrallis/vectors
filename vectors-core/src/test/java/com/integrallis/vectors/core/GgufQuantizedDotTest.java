@@ -803,6 +803,93 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0PrequantizedRowRangeUsesAnInteriorLaneScratchWindow() {
+    int batchSize = 3;
+    int rows = 5;
+    int cols = 1024;
+    int scratchRowOffset = 2;
+    int scratchRows = scratchRowOffset + rows + 1;
+    int lanesPerScratchRow = batchSize * 8;
+    float marker = -777.25f;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] row =
+        repeat(q4Block(0.125f, ones(32), (lo, hi) -> (lo * 13 + hi * 7) & 0xFF), cols / 32);
+    MemorySegment weight = MemorySegment.ofArray(repeat(row, rows));
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] laneScratch = new float[scratchRows * lanesPerScratchRow];
+    java.util.Arrays.fill(laneScratch, marker);
+    GgufQ8_0Batch activation = GgufQ8_0Batch.allocate(batchSize, cols);
+
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+        queries,
+        weight,
+        batchSize,
+        rows,
+        cols,
+        expected,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 32)],
+        q4Corrections(batchSize * cols),
+        new float[batchSize * rows * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    activation.quantizeForQ4(queries, batchSize, GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmulRows(
+        weight,
+        batchSize,
+        rows,
+        cols,
+        0,
+        rows,
+        actual,
+        activation,
+        laneScratch,
+        scratchRowOffset,
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    assertThat(actual).containsExactly(expected);
+    assertThat(java.util.Arrays.copyOfRange(laneScratch, 0, scratchRowOffset * lanesPerScratchRow))
+        .containsOnly(marker);
+    assertThat(
+            java.util.Arrays.copyOfRange(
+                laneScratch, (scratchRowOffset + rows) * lanesPerScratchRow, laneScratch.length))
+        .containsOnly(marker);
+    assertThatThrownBy(
+            () ->
+                VectorUtil.ggufQ4_0Q8_0BatchedMatmulRows(
+                    weight,
+                    batchSize,
+                    rows,
+                    cols,
+                    0,
+                    rows,
+                    actual,
+                    activation,
+                    laneScratch,
+                    -1,
+                    GgufQ4Kernel.UNSIGNED_PAIRWISE))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("laneScratchRowOffset");
+    assertThatThrownBy(
+            () ->
+                VectorUtil.ggufQ4_0Q8_0BatchedMatmulRows(
+                    weight,
+                    batchSize,
+                    rows,
+                    cols,
+                    0,
+                    rows,
+                    actual,
+                    activation,
+                    new float[batchSize * rows * 8],
+                    1,
+                    GgufQ4Kernel.UNSIGNED_PAIRWISE))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("lane scratch length");
+  }
+
+  @Test
   void q4_0BlockRangeActivationQuantizationMatchesWholeBatchExactly() {
     int batchSize = 3;
     int rows = 5;

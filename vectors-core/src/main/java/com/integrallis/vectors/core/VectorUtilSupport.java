@@ -737,6 +737,23 @@ public interface VectorUtilSupport {
       GgufQ8_0Batch activation,
       float[] laneScratch,
       GgufQ4Kernel kernel) {
+    ggufQ4_0Q8_0BatchedMatmulRows(
+        qWeight, batchSize, rows, cols, fromRow, toRow, out, activation, laneScratch, 0, kernel);
+  }
+
+  /** Q4_0 rows using a non-overlapping row window in caller-owned lane scratch. */
+  default void ggufQ4_0Q8_0BatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation,
+      float[] laneScratch,
+      int laneScratchRowOffset,
+      GgufQ4Kernel kernel) {
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     long rowBytes = ggufQ4_0RowBytes(cols);
     for (int batch = 0; batch < batchSize; batch++) {
