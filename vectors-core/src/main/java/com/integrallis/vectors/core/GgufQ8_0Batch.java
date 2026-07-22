@@ -80,38 +80,17 @@ public final class GgufQ8_0Batch {
               + " for "
               + blocks);
     }
-    checkValuesLength(values, batchSize);
-    quantizeForQ4(values, 0, batchSize, fromBlock, toBlock, kernel);
-  }
-
-  /**
-   * Quantizes one non-empty contiguous range of active batch rows.
-   *
-   * <p>Distinct batch ranges may be written concurrently.
-   */
-  public void quantizeBatchRangeForQ4(
-      float[] values, int batchSize, int fromBatch, int toBatch, GgufQ4Kernel kernel) {
-    Objects.requireNonNull(values, "values");
-    Objects.requireNonNull(kernel, "kernel");
-    checkBatchSize(batchSize);
-    if (fromBatch < 0 || fromBatch >= toBatch || toBatch > batchSize) {
-      throw new IndexOutOfBoundsException(
-          "batch range must satisfy 0 <= fromBatch < toBatch <= batchSize: "
-              + fromBatch
-              + ".."
-              + toBatch
-              + " for "
-              + batchSize);
-    }
-    checkValuesLength(values, batchSize);
-    quantizeForQ4(values, fromBatch, toBatch, 0, blocks, kernel);
-  }
-
-  private void quantizeForQ4(
-      float[] values, int fromBatch, int toBatch, int fromBlock, int toBlock, GgufQ4Kernel kernel) {
     int length = (toBlock - fromBlock) * BLOCK_SIZE;
+    int requiredValues = checkedProduct(batchSize, dimensions, "batchSize * dimensions");
+    if (values.length < requiredValues) {
+      throw new IllegalArgumentException(
+          "values.length must be >= batchSize * dimensions: "
+              + values.length
+              + " < "
+              + requiredValues);
+    }
     boolean corrections = kernel == GgufQ4Kernel.UNSIGNED_PAIRWISE;
-    for (int batch = fromBatch; batch < toBatch; batch++) {
+    for (int batch = 0; batch < batchSize; batch++) {
       int valueOffset = batch * dimensions + fromBlock * BLOCK_SIZE;
       int scaleOffset = batch * blocks + fromBlock;
       if (corrections) {
@@ -129,17 +108,6 @@ public final class GgufQ8_0Batch {
         GgufQuantizationSupport.quantizeQ8_0(
             values, valueOffset, length, quants, valueOffset, scales, scaleOffset);
       }
-    }
-  }
-
-  private void checkValuesLength(float[] values, int batchSize) {
-    int requiredValues = checkedProduct(batchSize, dimensions, "batchSize * dimensions");
-    if (values.length < requiredValues) {
-      throw new IllegalArgumentException(
-          "values.length must be >= batchSize * dimensions: "
-              + values.length
-              + " < "
-              + requiredValues);
     }
   }
 
