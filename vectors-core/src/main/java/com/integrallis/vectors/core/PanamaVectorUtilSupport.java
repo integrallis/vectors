@@ -121,6 +121,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return requested && vectorBits >= 256 && blocks >= Q4_SHORT_PAIRWISE_MIN_BLOCKS;
   }
 
+  static ByteVector q4HighNibbles(ByteVector packed) {
+    // Logical shift zero-fills each byte lane, so the result is already in [0, 15].
+    return packed.lanewise(VectorOperators.LSHR, 4);
+  }
+
   private static boolean useQ4ShortPairwise(GgufQ4Kernel kernel, int blocks) {
     return useQ4ShortPairwise(kernel, VECTOR_BITSIZE, blocks);
   }
@@ -773,7 +778,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           ByteVector.fromMemorySegment(
               ByteVector.SPECIES_128, qWeight, blockOffset + Short.BYTES, ByteOrder.LITTLE_ENDIAN);
       ByteVector lowNibbles = packed.and((byte) 0x0F);
-      ByteVector highNibbles = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+      ByteVector highNibbles = q4HighNibbles(packed);
       if (useUnsignedPairwise) {
         for (int batch = 0; batch < batchSize; batch++) {
           int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
@@ -1057,7 +1062,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                     blockOffset + Short.BYTES,
                     ByteOrder.LITTLE_ENDIAN);
             ByteVector lowNibbles = packed.and((byte) 0x0F);
-            ByteVector highNibbles = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+            ByteVector highNibbles = q4HighNibbles(packed);
             if (useUnsignedPairwise) {
               for (int batch = 0; batch < batchSize; batch++) {
                 int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
@@ -1251,7 +1256,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           ByteVector.fromMemorySegment(
               ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
       ByteVector low = packed.and((byte) 0x0F).sub((byte) 8);
-      ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F).sub((byte) 8);
+      ByteVector high = q4HighNibbles(packed).sub((byte) 8);
       ShortVector low16 =
           (ShortVector) low.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
       ShortVector high16 =
@@ -1274,7 +1279,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           ByteVector.fromMemorySegment(
               ByteVector.SPECIES_64, qWeight, nibbleOffset + half, ByteOrder.LITTLE_ENDIAN);
       ByteVector low = packed.and((byte) 0x0F).sub((byte) 8);
-      ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F).sub((byte) 8);
+      ByteVector high = q4HighNibbles(packed).sub((byte) 8);
       ShortVector low16 =
           (ShortVector) low.convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
       ShortVector high16 =
@@ -1299,7 +1304,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         ByteVector.fromMemorySegment(
             ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
     ByteVector low = packed.and((byte) 0x0F).sub((byte) 8);
-    ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F).sub((byte) 8);
+    ByteVector high = q4HighNibbles(packed).sub((byte) 8);
     ShortVector lowProducts =
         ((ShortVector) low.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0))
             .mul(
@@ -1322,7 +1327,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         ByteVector.fromMemorySegment(
             ByteVector.SPECIES_128, qWeight, nibbleOffset, ByteOrder.LITTLE_ENDIAN);
     ByteVector low = packed.and((byte) 0x0F).sub((byte) 8);
-    ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F).sub((byte) 8);
+    ByteVector high = q4HighNibbles(packed).sub((byte) 8);
     ShortVector low16 =
         (ShortVector) low.convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
     ShortVector high16 =
@@ -1355,7 +1360,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           ByteVector.fromMemorySegment(
               ByteVector.SPECIES_128, qWeight, blockOffset + Short.BYTES, ByteOrder.LITTLE_ENDIAN);
       ByteVector low = packed.and((byte) 0x0F);
-      ByteVector high = packed.lanewise(VectorOperators.LSHR, 4).and((byte) 0x0F);
+      ByteVector high = q4HighNibbles(packed);
       int quantOffset = block * GGUF_Q_BLOCK_SIZE;
       int correctionOffset = block * 8;
       IntVector lowGroups =

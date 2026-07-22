@@ -24,9 +24,11 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Random;
+import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.VectorSpecies;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -99,6 +101,30 @@ class PanamaGgufQuantizedDotTest {
             GgufQ4Kernel.UNSIGNED_PAIRWISE);
 
     assertThat(corrections).containsOnly(sentinel);
+  }
+
+  @Test
+  void q4HighNibblesDecodeEveryUnsignedByteWithoutCrossLaneBits() {
+    assertQ4HighNibbles(ByteVector.SPECIES_64);
+    assertQ4HighNibbles(ByteVector.SPECIES_128);
+  }
+
+  private static void assertQ4HighNibbles(VectorSpecies<Byte> species) {
+    byte[] packed = new byte[species.length()];
+    byte[] expected = new byte[packed.length];
+
+    for (int first = 0; first < 256; first += packed.length) {
+      for (int lane = 0; lane < packed.length; lane++) {
+        int unsigned = first + lane;
+        packed[lane] = (byte) unsigned;
+        expected[lane] = (byte) (unsigned >>> 4);
+      }
+
+      ByteVector actual =
+          PanamaVectorUtilSupport.q4HighNibbles(ByteVector.fromArray(species, packed, 0));
+
+      assertThat(actual.toArray()).containsExactly(expected);
+    }
   }
 
   @Test
