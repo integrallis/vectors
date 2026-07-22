@@ -139,33 +139,6 @@ class GgufParallelSupportTest {
   }
 
   @Test
-  void groupedRangesRemainOnOwnerAndCoverEveryItemWhenAnySegmentIsConfined() {
-    AtomicIntegerArray visits = new AtomicIntegerArray(1024);
-    Set<Thread> threads = ConcurrentHashMap.newKeySet();
-    Thread owner = Thread.currentThread();
-
-    try (Arena arena = Arena.ofConfined()) {
-      GgufParallelSupport.forEachRange(
-          MemorySegment.ofArray(new byte[1]),
-          MemorySegment.ofArray(new byte[1]),
-          arena.allocate(1),
-          visits.length(),
-          2048,
-          (fromInclusive, toExclusive) -> {
-            threads.add(Thread.currentThread());
-            for (int item = fromInclusive; item < toExclusive; item++) {
-              visits.incrementAndGet(item);
-            }
-          });
-    }
-
-    for (int item = 0; item < visits.length(); item++) {
-      assertThat(visits.get(item)).as("range item %s", item).isOne();
-    }
-    assertThat(threads).containsExactly(owner);
-  }
-
-  @Test
   void persistentExecutorRunsEveryRowExactlyOnceAcrossRepeatedDispatches() {
     try (GgufPersistentRowExecutor executor = new GgufPersistentRowExecutor(4, 4, "vectors-test")) {
       for (int round = 0; round < 100; round++) {
