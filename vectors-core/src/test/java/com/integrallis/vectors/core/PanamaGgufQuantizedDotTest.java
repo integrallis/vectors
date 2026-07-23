@@ -525,7 +525,7 @@ class PanamaGgufQuantizedDotTest {
   void panamaProviderOwnsQ8_0Q8_0BatchedKernel() {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)
-        .contains("ggufQ8_0Q8_0BatchedMatmul");
+        .contains("ggufQ8_0Q8_0BatchedMatmul", "ggufQ8_0Q8_0BlockMajorBatchedMatmulRows");
   }
 
   @Test
@@ -763,6 +763,43 @@ class PanamaGgufQuantizedDotTest {
     support.ggufQ8_0Q8_0BatchedMatmulRows(
         weightSegment, batchSize, rows, cols, 0, 7, actual, activation);
     support.ggufQ8_0Q8_0BatchedMatmulRows(
+        weightSegment, batchSize, rows, cols, 7, rows, actual, activation);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q8_0Q8_0BlockMajorPrequantizedRowRangesMatchScalarReferenceExactly() {
+    int batchSize = 3;
+    int rows = 17;
+    int cols = 96;
+    Random random = new Random(0x5749_4445_4e45_44L);
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+
+    byte[] weights = new byte[rows * (cols / 32) * 34];
+    random.nextBytes(weights);
+    ByteBuffer buffer = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < weights.length; offset += 34) {
+      buffer.putShort(offset, Float.floatToFloat16(random.nextFloat() * 0.05f + 0.001f));
+    }
+
+    GgufQ8_0Batch activation =
+        GgufQ8_0Batch.allocate(batchSize, cols, GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES);
+    activation.quantize(queries, batchSize);
+    MemorySegment weightSegment = MemorySegment.ofArray(weights);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+
+    new ScalarVectorUtilSupport()
+        .ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+            weightSegment, batchSize, rows, cols, 0, rows, expected, activation);
+    PanamaVectorUtilSupport support = new PanamaVectorUtilSupport();
+    support.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weightSegment, batchSize, rows, cols, 0, 7, actual, activation);
+    support.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
         weightSegment, batchSize, rows, cols, 7, rows, actual, activation);
 
     assertThat(actual).containsExactly(expected);
