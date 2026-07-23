@@ -3776,6 +3776,44 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
+  /** SIMD Q8_0 row-range multiplication over caller-prequantized activation rows. */
+  @Override
+  public void ggufQ8_0Q8_0BatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    byte[] q8Quants = activation.quants();
+    float[] q8Scales = activation.scales();
+    long rowBytes = (long) blocks * GGUF_Q8_0_BLOCK_BYTES;
+    for (int row = fromRow; row < toRow; row++) {
+      for (int batch = 0; batch < batchSize; batch++) {
+        out[batch * rows + row] = 0.0f;
+      }
+
+      long rowOffset = row * rowBytes;
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+        float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+        long weightOffset = blockOffset + Short.BYTES;
+        int blockActivationOffset = block * GGUF_Q_BLOCK_SIZE;
+        for (int batch = 0; batch < batchSize; batch++) {
+          float scale = weightScale * q8Scales[batch * blocks + block];
+          int integerSum =
+              q8_0Q8_0IntegerDot(
+                  qWeight, weightOffset, q8Quants, batch * cols + blockActivationOffset);
+          int outputIndex = batch * rows + row;
+          out[outputIndex] = MathUtil.fma(scale, integerSum, out[outputIndex]);
+        }
+      }
+    }
+  }
+
   @Override
   public void ggufQ8_0Q8_0DualBatchedMatmul(
       float[] queries,
