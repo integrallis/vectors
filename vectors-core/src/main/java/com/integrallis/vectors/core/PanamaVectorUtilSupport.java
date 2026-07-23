@@ -764,6 +764,24 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       long rowBytes,
       boolean useShortPairwise,
       boolean useUnsignedPairwise) {
+    if (useUnsignedPairwise) {
+      ggufQ4_0Q8_0UnsignedPairwiseBatchedMatmulBlockPairRow(
+          qWeight,
+          batchSize,
+          rows,
+          cols,
+          row,
+          row,
+          out,
+          q8Quants,
+          q8Scales,
+          q8ZeroPointCorrections,
+          laneScratch,
+          blocks,
+          rowBytes);
+      return;
+    }
+
     long rowOffset = row * rowBytes;
     int rowLaneOffset = row * batchSize * FloatVector.SPECIES_256.length();
     int rowLaneEnd = rowLaneOffset + batchSize * FloatVector.SPECIES_256.length();
@@ -779,22 +797,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
               ByteVector.SPECIES_128, qWeight, blockOffset + Short.BYTES, ByteOrder.LITTLE_ENDIAN);
       ByteVector lowNibbles = packed.and((byte) 0x0F);
       ByteVector highNibbles = q4HighNibbles(packed);
-      if (useUnsignedPairwise) {
-        for (int batch = 0; batch < batchSize; batch++) {
-          int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
-          accumulateQ4_0UnsignedBatchQuery(
-              laneScratch,
-              laneOffset,
-              lowNibbles,
-              highNibbles,
-              q8Quants,
-              (batch * cols) + block * GGUF_Q_BLOCK_SIZE,
-              q8ZeroPointCorrections,
-              (batch * blocks + block) * 8,
-              weightScale * q8Scales[batch * blocks + block]);
-        }
-        continue;
-      }
       ShortVector low =
           (ShortVector)
               lowNibbles
@@ -817,6 +819,103 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             (batch * cols) + block * GGUF_Q_BLOCK_SIZE,
             weightScale * q8Scales[batch * blocks + block],
             useShortPairwise);
+      }
+    }
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+      out[batch * rows + row] =
+          reduceAdd(FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset));
+    }
+  }
+
+  private static void ggufQ4_0Q8_0UnsignedPairwiseBatchedMatmulBlockPairRow(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int row,
+      int scratchRow,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      int[] q8ZeroPointCorrections,
+      float[] laneScratch,
+      int blocks,
+      long rowBytes) {
+    long rowOffset = row * rowBytes;
+    int rowLaneOffset = scratchRow * batchSize * FloatVector.SPECIES_256.length();
+    int rowLaneEnd = rowLaneOffset + batchSize * FloatVector.SPECIES_256.length();
+    for (int lane = rowLaneOffset; lane < rowLaneEnd; lane++) {
+      laneScratch[lane] = 0.0f;
+    }
+
+    ShortVector pairFactors = ShortVector.fromArray(ShortVector.SPECIES_128, Q4_PAIR_FACTORS, 0);
+    int block = 0;
+    for (; block + 1 < blocks; block += 2) {
+      long firstBlockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+      ByteVector firstPacked =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128,
+              qWeight,
+              firstBlockOffset + Short.BYTES,
+              ByteOrder.LITTLE_ENDIAN);
+      ByteVector firstLowNibbles = firstPacked.and((byte) 0x0F);
+      ByteVector firstHighNibbles = q4HighNibbles(firstPacked);
+      float firstWeightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, firstBlockOffset));
+
+      long secondBlockOffset = firstBlockOffset + GGUF_Q4_0_BLOCK_BYTES;
+      ByteVector secondPacked =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128,
+              qWeight,
+              secondBlockOffset + Short.BYTES,
+              ByteOrder.LITTLE_ENDIAN);
+      ByteVector secondLowNibbles = secondPacked.and((byte) 0x0F);
+      ByteVector secondHighNibbles = q4HighNibbles(secondPacked);
+      float secondWeightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, secondBlockOffset));
+
+      for (int batch = 0; batch < batchSize; batch++) {
+        int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+        int blockIndex = batch * blocks + block;
+        accumulateQ4_0UnsignedBatchQueryBlockPair(
+            laneScratch,
+            laneOffset,
+            firstLowNibbles,
+            firstHighNibbles,
+            secondLowNibbles,
+            secondHighNibbles,
+            q8Quants,
+            batch * cols + block * GGUF_Q_BLOCK_SIZE,
+            q8ZeroPointCorrections,
+            blockIndex * 8,
+            firstWeightScale * q8Scales[blockIndex],
+            secondWeightScale * q8Scales[blockIndex + 1],
+            pairFactors);
+      }
+    }
+
+    if (block < blocks) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+      float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      ByteVector packed =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128, qWeight, blockOffset + Short.BYTES, ByteOrder.LITTLE_ENDIAN);
+      ByteVector lowNibbles = packed.and((byte) 0x0F);
+      ByteVector highNibbles = q4HighNibbles(packed);
+      for (int batch = 0; batch < batchSize; batch++) {
+        int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+        int blockIndex = batch * blocks + block;
+        accumulateQ4_0UnsignedBatchQuery(
+            laneScratch,
+            laneOffset,
+            lowNibbles,
+            highNibbles,
+            q8Quants,
+            batch * cols + block * GGUF_Q_BLOCK_SIZE,
+            q8ZeroPointCorrections,
+            blockIndex * 8,
+            weightScale * q8Scales[blockIndex]);
       }
     }
 
@@ -1045,6 +1144,24 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             matrixRows = thirdRows;
           }
 
+          if (useUnsignedPairwise) {
+            ggufQ4_0Q8_0UnsignedPairwiseBatchedMatmulBlockPairRow(
+                qWeight,
+                batchSize,
+                matrixRows,
+                cols,
+                matrixRow,
+                row,
+                out,
+                q8Quants,
+                q8Scales,
+                q8ZeroPointCorrections,
+                laneScratch,
+                blocks,
+                rowBytes);
+            return;
+          }
+
           long rowOffset = matrixRow * rowBytes;
           int rowLaneOffset = row * batchSize * FloatVector.SPECIES_256.length();
           int rowLaneEnd = rowLaneOffset + batchSize * FloatVector.SPECIES_256.length();
@@ -1063,22 +1180,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                     ByteOrder.LITTLE_ENDIAN);
             ByteVector lowNibbles = packed.and((byte) 0x0F);
             ByteVector highNibbles = q4HighNibbles(packed);
-            if (useUnsignedPairwise) {
-              for (int batch = 0; batch < batchSize; batch++) {
-                int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
-                accumulateQ4_0UnsignedBatchQuery(
-                    laneScratch,
-                    laneOffset,
-                    lowNibbles,
-                    highNibbles,
-                    q8Quants,
-                    (batch * cols) + block * GGUF_Q_BLOCK_SIZE,
-                    q8ZeroPointCorrections,
-                    (batch * blocks + block) * 8,
-                    weightScale * q8Scales[batch * blocks + block]);
-              }
-              continue;
-            }
             ShortVector low =
                 (ShortVector)
                     lowNibbles
@@ -1177,6 +1278,82 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     fma(
             (FloatVector) highGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
             scaleVector,
+            highAccumulator)
+        .intoArray(laneScratch, laneOffset + 4);
+  }
+
+  private static void accumulateQ4_0UnsignedBatchQueryBlockPair(
+      float[] laneScratch,
+      int laneOffset,
+      ByteVector firstLowNibbles,
+      ByteVector firstHighNibbles,
+      ByteVector secondLowNibbles,
+      ByteVector secondHighNibbles,
+      byte[] q8Quants,
+      int quantOffset,
+      int[] zeroPointCorrections,
+      int correctionOffset,
+      float firstScale,
+      float secondScale,
+      ShortVector pairFactors) {
+    FloatVector lowAccumulator =
+        FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset);
+    FloatVector highAccumulator =
+        FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset + 4);
+
+    IntVector firstLowGroups =
+        q4_0Q8_0UnsignedPairwiseGroups(
+            firstLowNibbles,
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset),
+            IntVector.fromArray(IntVector.SPECIES_128, zeroPointCorrections, correctionOffset),
+            pairFactors);
+    IntVector firstHighGroups =
+        q4_0Q8_0UnsignedPairwiseGroups(
+            firstHighNibbles,
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16),
+            IntVector.fromArray(IntVector.SPECIES_128, zeroPointCorrections, correctionOffset + 4),
+            pairFactors);
+    FloatVector firstScaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, firstScale);
+    lowAccumulator =
+        fma(
+            (FloatVector)
+                firstLowGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+            firstScaleVector,
+            lowAccumulator);
+    highAccumulator =
+        fma(
+            (FloatVector)
+                firstHighGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+            firstScaleVector,
+            highAccumulator);
+
+    int secondQuantOffset = quantOffset + GGUF_Q_BLOCK_SIZE;
+    int secondCorrectionOffset = correctionOffset + 8;
+    IntVector secondLowGroups =
+        q4_0Q8_0UnsignedPairwiseGroups(
+            secondLowNibbles,
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, secondQuantOffset),
+            IntVector.fromArray(
+                IntVector.SPECIES_128, zeroPointCorrections, secondCorrectionOffset),
+            pairFactors);
+    IntVector secondHighGroups =
+        q4_0Q8_0UnsignedPairwiseGroups(
+            secondHighNibbles,
+            ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, secondQuantOffset + 16),
+            IntVector.fromArray(
+                IntVector.SPECIES_128, zeroPointCorrections, secondCorrectionOffset + 4),
+            pairFactors);
+    FloatVector secondScaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, secondScale);
+    fma(
+            (FloatVector)
+                secondLowGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+            secondScaleVector,
+            lowAccumulator)
+        .intoArray(laneScratch, laneOffset);
+    fma(
+            (FloatVector)
+                secondHighGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+            secondScaleVector,
             highAccumulator)
         .intoArray(laneScratch, laneOffset + 4);
   }

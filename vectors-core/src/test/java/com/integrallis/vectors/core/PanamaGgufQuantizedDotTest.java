@@ -527,6 +527,64 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0UnsignedBlockPairsMatchGemvExactlyForOddAndEvenBlockCounts() {
+    int batchSize = 3;
+    int rows = 5;
+    Random random = new Random(0x5144_424c_4f43_4b53L);
+    PanamaVectorUtilSupport support = new PanamaVectorUtilSupport();
+
+    for (int blocks : new int[] {32, 33, 64}) {
+      int cols = blocks * 32;
+      float[] queries = new float[batchSize * cols];
+      for (int index = 0; index < queries.length; index++) {
+        queries[index] = random.nextFloat() * 4.0f - 2.0f;
+      }
+      byte[] weights = new byte[rows * blocks * 18];
+      random.nextBytes(weights);
+      ByteBuffer buffer = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
+      for (int block = 0; block < rows * blocks; block++) {
+        buffer.putShort(block * 18, Float.floatToFloat16(random.nextFloat() * 0.1f - 0.05f));
+      }
+
+      GgufQ8_0Batch activation = GgufQ8_0Batch.allocate(batchSize, cols);
+      activation.quantizeForQ4(queries, batchSize, GgufQ4Kernel.UNSIGNED_PAIRWISE);
+      MemorySegment weightSegment = MemorySegment.ofArray(weights);
+      float[] expected = new float[batchSize * rows];
+      float[] actual = new float[batchSize * rows];
+      float[] query = new float[cols];
+      float[] gemv = new float[rows];
+      for (int batch = 0; batch < batchSize; batch++) {
+        System.arraycopy(queries, batch * cols, query, 0, cols);
+        support.ggufQ4_0Q8_0MatVecDot(
+            query,
+            weightSegment,
+            rows,
+            cols,
+            gemv,
+            new byte[cols],
+            new float[blocks],
+            new int[blocks * 8],
+            GgufQ4Kernel.UNSIGNED_PAIRWISE);
+        System.arraycopy(gemv, 0, expected, batch * rows, rows);
+      }
+
+      support.ggufQ4_0Q8_0BatchedMatmulRows(
+          weightSegment,
+          batchSize,
+          rows,
+          cols,
+          0,
+          rows,
+          actual,
+          activation,
+          new float[batchSize * rows * 8],
+          GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+      assertThat(actual).containsExactly(expected);
+    }
+  }
+
+  @Test
   void q8_0Q8_0KernelMatchesScalarReferenceAcrossRowsAndBlocks() {
     int rows = 512;
     int cols = 2048;
