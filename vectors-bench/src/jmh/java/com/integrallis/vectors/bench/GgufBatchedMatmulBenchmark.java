@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.bench;
 
+import com.integrallis.vectors.core.GgufQ4Kernel;
 import com.integrallis.vectors.core.VectorUtil;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -46,7 +47,7 @@ import org.openjdk.jmh.infra.Blackhole;
 @Measurement(iterations = 5, time = 1)
 public class GgufBatchedMatmulBenchmark {
 
-  @Param({"1", "2", "4", "8", "32"})
+  @Param({"1", "2", "4", "8", "24", "32"})
   int batchSize;
 
   @Param("1024")
@@ -128,6 +129,40 @@ public class GgufBatchedMatmulBenchmark {
           independentQuants,
           independentScales,
           independentZeroPointCorrections);
+      blackhole.consume(independentOut);
+    }
+  }
+
+  @Benchmark
+  public void unsignedBatched(Blackhole blackhole) {
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        batchedOut,
+        batchedQuants,
+        batchedScales,
+        batchedZeroPointCorrections,
+        batchedLanes,
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+    blackhole.consume(batchedOut);
+  }
+
+  @Benchmark
+  public void unsignedIndependent(Blackhole blackhole) {
+    for (float[] query : independentQueries) {
+      VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+          query,
+          weights,
+          rows,
+          cols,
+          independentOut,
+          independentQuants,
+          independentScales,
+          independentZeroPointCorrections,
+          GgufQ4Kernel.UNSIGNED_PAIRWISE);
       blackhole.consume(independentOut);
     }
   }
