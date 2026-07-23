@@ -98,31 +98,34 @@ public class GgufQ4UnsignedDotBenchmark {
   }
 
   private float scalarReference() {
-    float[] accumulator = new float[4];
+    float[] lowAccumulator = new float[4];
+    float[] highAccumulator = new float[4];
     for (int block = 0; block < blocks; block++) {
       long blockOffset = (long) block * BLOCK_BYTES;
       float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
-      for (int group = 0; group < 4; group++) {
+      for (int group = 0; group < 8; group++) {
         int sum = 0;
-        for (int half = 0; half < 2; half++) {
-          for (int lane = 0; lane < 4; lane++) {
-            int index = half * 16 + group * 4 + lane;
-            int packed =
-                Byte.toUnsignedInt(
-                    weights.get(ValueLayout.JAVA_BYTE, blockOffset + 2 + (index & 15)));
-            int nibble = half == 0 ? packed & 0x0F : packed >>> 4;
-            sum += (nibble - 8) * q8Quants[block * BLOCK_SIZE + index];
-          }
+        for (int lane = 0; lane < 4; lane++) {
+          int index = group * 4 + lane;
+          int packedIndex = index & 15;
+          int packed =
+              Byte.toUnsignedInt(weights.get(ValueLayout.JAVA_BYTE, blockOffset + 2 + packedIndex));
+          int nibble = index < 16 ? packed & 0x0F : packed >>> 4;
+          sum += (nibble - 8) * q8Quants[block * BLOCK_SIZE + index];
         }
-        accumulator[group] = Math.fma(scale, sum, accumulator[group]);
+        if (group < 4) {
+          lowAccumulator[group] = Math.fma(scale, sum, lowAccumulator[group]);
+        } else {
+          highAccumulator[group - 4] = Math.fma(scale, sum, highAccumulator[group - 4]);
+        }
       }
     }
-    return reduce(accumulator);
+    return reduce(lowAccumulator, highAccumulator);
   }
 
-  private static float reduce(float[] accumulator) {
-    float even = accumulator[0] + accumulator[2];
-    float odd = accumulator[1] + accumulator[3];
+  private static float reduce(float[] low, float[] high) {
+    float even = (high[0] + low[0]) + (high[2] + low[2]);
+    float odd = (high[1] + low[1]) + (high[3] + low[3]);
     return even + odd;
   }
 }
