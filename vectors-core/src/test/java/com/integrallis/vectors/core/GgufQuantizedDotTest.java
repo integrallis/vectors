@@ -1397,6 +1397,65 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q8_0PrequantizedRowRangesComposeToTheExactBatchedResult() {
+    int batchSize = 3;
+    int rows = 5;
+    int cols = 64;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] firstRow = repeat(q8Block(0.125f, index -> index * 7 - 53), 2);
+    byte[] secondRow = repeat(q8Block(-0.25f, index -> 61 - index * 5), 2);
+    MemorySegment weights =
+        MemorySegment.ofArray(
+            concat(concat(firstRow, secondRow), concat(concat(firstRow, secondRow), firstRow)));
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    GgufQ8_0Batch activation = GgufQ8_0Batch.allocate(batchSize, cols);
+
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        expected,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 32)]);
+    activation.quantize(queries, batchSize);
+
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmulRows(
+        weights, batchSize, rows, cols, 0, 2, actual, activation);
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmulRows(
+        weights, batchSize, rows, cols, 2, rows, actual, activation);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q8_0BlockRangeActivationQuantizationMatchesWholeBatchExactly() {
+    int batchSize = 3;
+    int rows = 5;
+    int cols = 64;
+    int blocks = cols / 32;
+    float[] queries = patternedQueries(batchSize, cols);
+    byte[] row = repeat(q8Block(0.125f, index -> index * 11 - 47), blocks);
+    MemorySegment weights = MemorySegment.ofArray(repeat(row, rows));
+    GgufQ8_0Batch whole = GgufQ8_0Batch.allocate(batchSize, cols);
+    GgufQ8_0Batch rangeWise = GgufQ8_0Batch.allocate(batchSize, cols);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+
+    whole.quantize(queries, batchSize);
+    rangeWise.quantizeBlockRange(queries, batchSize, 0, 1);
+    rangeWise.quantizeBlockRange(queries, batchSize, 1, blocks);
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmulRows(
+        weights, batchSize, rows, cols, 0, rows, expected, whole);
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmulRows(
+        weights, batchSize, rows, cols, 0, rows, actual, rangeWise);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
   void q8_0Q8_0DualBatchedMatmulMatchesSeparateBatchedMatmulsExactly() {
     int batchSize = 3;
     int cols = 64;

@@ -1814,6 +1814,37 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Q8_0 row-range multiplication over caller-prequantized activation rows. */
+  default void ggufQ8_0Q8_0BatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    long rowBytes = ggufQ8_0RowBytes(cols);
+    byte[] q8Quants = activation.quants();
+    float[] q8Scales = activation.scales();
+    for (int batch = 0; batch < batchSize; batch++) {
+      int quantBatchOffset = batch * cols;
+      int scaleBatchOffset = batch * blocks;
+      for (int row = fromRow; row < toRow; row++) {
+        out[batch * rows + row] =
+            ggufQ8_0Q8_0ScalarRowDot(
+                qWeight,
+                row * rowBytes,
+                blocks,
+                q8Quants,
+                quantBatchOffset,
+                q8Scales,
+                scaleBatchOffset);
+      }
+    }
+  }
+
   /** Two Q8_0 projections over an activation batch sharing Q8_0 quantization and row dispatch. */
   default void ggufQ8_0Q8_0DualBatchedMatmul(
       float[] queries,

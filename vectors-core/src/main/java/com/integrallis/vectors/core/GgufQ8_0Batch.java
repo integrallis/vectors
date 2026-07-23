@@ -61,6 +61,20 @@ public final class GgufQ8_0Batch {
     quantizeBlockRangeForQ4(values, batchSize, 0, blocks, kernel);
   }
 
+  /** Quantizes complete batch rows for a subsequent Q8_0 operation. */
+  public void quantize(float[] values, int batchSize) {
+    quantizeBlockRange(values, batchSize, 0, blocks);
+  }
+
+  /**
+   * Quantizes one non-empty contiguous block range across active batch rows.
+   *
+   * <p>Distinct block ranges may be written concurrently.
+   */
+  public void quantizeBlockRange(float[] values, int batchSize, int fromBlock, int toBlock) {
+    quantizeBlockRange(values, batchSize, fromBlock, toBlock, false);
+  }
+
   /**
    * Quantizes one non-empty contiguous block range across active batch rows.
    *
@@ -68,8 +82,14 @@ public final class GgufQ8_0Batch {
    */
   public void quantizeBlockRangeForQ4(
       float[] values, int batchSize, int fromBlock, int toBlock, GgufQ4Kernel kernel) {
-    Objects.requireNonNull(values, "values");
     Objects.requireNonNull(kernel, "kernel");
+    quantizeBlockRange(
+        values, batchSize, fromBlock, toBlock, kernel == GgufQ4Kernel.UNSIGNED_PAIRWISE);
+  }
+
+  private void quantizeBlockRange(
+      float[] values, int batchSize, int fromBlock, int toBlock, boolean corrections) {
+    Objects.requireNonNull(values, "values");
     checkBatchSize(batchSize);
     if (fromBlock < 0 || fromBlock >= toBlock || toBlock > blocks) {
       throw new IndexOutOfBoundsException(
@@ -89,7 +109,6 @@ public final class GgufQ8_0Batch {
               + " < "
               + requiredValues);
     }
-    boolean corrections = kernel == GgufQ4Kernel.UNSIGNED_PAIRWISE;
     for (int batch = 0; batch < batchSize; batch++) {
       int valueOffset = batch * dimensions + fromBlock * BLOCK_SIZE;
       int scaleOffset = batch * blocks + fromBlock;
