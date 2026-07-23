@@ -188,7 +188,7 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
-  void q4_0Q8_0UnsignedPairwiseRowMatchesShortPairwiseExactly() {
+  void q4_0Q8_0UnsignedPairwiseRowCombinesIntegerHalvesBeforeScaling() {
     int blocks = 64;
     byte[] weightBytes = new byte[blocks * 18];
     byte[] q8 = new byte[blocks * 32];
@@ -217,25 +217,33 @@ class PanamaGgufQuantizedDotTest {
       }
 
       MemorySegment weights = MemorySegment.ofArray(weightBytes);
-      FloatVector expectedLanes = FloatVector.zero(FloatVector.SPECIES_256);
+      FloatVector expectedLanes = FloatVector.zero(FloatVector.SPECIES_128);
       for (int block = 0; block < blocks; block++) {
         long blockOffset = (long) block * 18;
         float scale = Float.float16ToFloat(weights.get(LE_SHORT, blockOffset)) * q8Scales[block];
-        IntVector groups =
+        int[] groups =
             PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(
-                weights, blockOffset + Short.BYTES, q8, block * 32);
+                    weights, blockOffset + Short.BYTES, q8, block * 32)
+                .toArray();
+        IntVector combinedGroups =
+            IntVector.fromArray(
+                IntVector.SPECIES_128,
+                new int[] {
+                  groups[0] + groups[4],
+                  groups[1] + groups[5],
+                  groups[2] + groups[6],
+                  groups[3] + groups[7]
+                },
+                0);
         expectedLanes =
             PanamaVectorUtilSupport.fma(
-                (FloatVector) groups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0),
-                FloatVector.broadcast(FloatVector.SPECIES_256, scale),
+                (FloatVector)
+                    combinedGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+                FloatVector.broadcast(FloatVector.SPECIES_128, scale),
                 expectedLanes);
       }
-      float even =
-          (expectedLanes.lane(4) + expectedLanes.lane(0))
-              + (expectedLanes.lane(6) + expectedLanes.lane(2));
-      float odd =
-          (expectedLanes.lane(5) + expectedLanes.lane(1))
-              + (expectedLanes.lane(7) + expectedLanes.lane(3));
+      float even = expectedLanes.lane(0) + expectedLanes.lane(2);
+      float odd = expectedLanes.lane(1) + expectedLanes.lane(3);
       float expected = even + odd;
 
       float actual =

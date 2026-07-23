@@ -693,6 +693,7 @@ class GgufQuantizedDotTest {
         repeat(q4Block(0.125f, ones(cols), (lo, hi) -> (lo * 5 + hi * 3) & 0xFF), cols / 32);
     byte[] row1 = repeat(q4Block(-0.25f, ones(cols), (lo, hi) -> (lo * 7 + hi) & 0xFF), cols / 32);
     float[] expected = new float[batchSize * rows];
+    float[] unsignedExpected = new float[batchSize * rows];
     float[] actual = new float[batchSize * rows];
     float[] unsignedActual = new float[batchSize * rows];
     byte[] q8Quants = new byte[batchSize * cols];
@@ -714,6 +715,17 @@ class GgufQuantizedDotTest {
             new float[cols / 32],
             q4Corrections(cols));
         System.arraycopy(result, 0, expected, batch * rows, rows);
+        VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+            query,
+            segment,
+            rows,
+            cols,
+            result,
+            new byte[cols],
+            new float[cols / 32],
+            q4Corrections(cols),
+            GgufQ4Kernel.UNSIGNED_PAIRWISE);
+        System.arraycopy(result, 0, unsignedExpected, batch * rows, rows);
       }
 
       VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
@@ -740,7 +752,7 @@ class GgufQuantizedDotTest {
           GgufQ4Kernel.UNSIGNED_PAIRWISE);
 
       assertThat(actual).containsExactly(expected);
-      assertThat(unsignedActual).containsExactly(expected);
+      assertThat(unsignedActual).containsExactly(unsignedExpected);
       assertThat(q8Quants[0]).isNotZero();
     }
   }

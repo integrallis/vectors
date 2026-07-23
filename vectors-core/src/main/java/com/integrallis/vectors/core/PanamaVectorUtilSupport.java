@@ -922,7 +922,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     for (int batch = 0; batch < batchSize; batch++) {
       int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
       out[batch * rows + row] =
-          reduceAdd(FloatVector.fromArray(FloatVector.SPECIES_256, laneScratch, laneOffset));
+          reduceAdd(FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset));
     }
   }
 
@@ -1265,21 +1265,15 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16),
             IntVector.fromArray(IntVector.SPECIES_128, zeroPointCorrections, correctionOffset + 4),
             pairFactors);
-    FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
-    FloatVector lowAccumulator =
+    IntVector combinedGroups = lowGroups.add(highGroups);
+    FloatVector accumulator =
         FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset);
-    FloatVector highAccumulator =
-        FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset + 4);
     fma(
-            (FloatVector) lowGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-            scaleVector,
-            lowAccumulator)
+            (FloatVector)
+                combinedGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+            FloatVector.broadcast(FloatVector.SPECIES_128, scale),
+            accumulator)
         .intoArray(laneScratch, laneOffset);
-    fma(
-            (FloatVector) highGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-            scaleVector,
-            highAccumulator)
-        .intoArray(laneScratch, laneOffset + 4);
   }
 
   private static void accumulateQ4_0UnsignedBatchQueryBlockPair(
@@ -1296,10 +1290,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float firstScale,
       float secondScale,
       ShortVector pairFactors) {
-    FloatVector lowAccumulator =
+    FloatVector accumulator =
         FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset);
-    FloatVector highAccumulator =
-        FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset + 4);
 
     IntVector firstLowGroups =
         q4_0Q8_0UnsignedPairwiseGroups(
@@ -1313,19 +1305,13 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             ByteVector.fromArray(ByteVector.SPECIES_128, q8Quants, quantOffset + 16),
             IntVector.fromArray(IntVector.SPECIES_128, zeroPointCorrections, correctionOffset + 4),
             pairFactors);
-    FloatVector firstScaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, firstScale);
-    lowAccumulator =
+    IntVector firstCombinedGroups = firstLowGroups.add(firstHighGroups);
+    accumulator =
         fma(
             (FloatVector)
-                firstLowGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-            firstScaleVector,
-            lowAccumulator);
-    highAccumulator =
-        fma(
-            (FloatVector)
-                firstHighGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-            firstScaleVector,
-            highAccumulator);
+                firstCombinedGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+            FloatVector.broadcast(FloatVector.SPECIES_128, firstScale),
+            accumulator);
 
     int secondQuantOffset = quantOffset + GGUF_Q_BLOCK_SIZE;
     int secondCorrectionOffset = correctionOffset + 8;
@@ -1343,19 +1329,13 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             IntVector.fromArray(
                 IntVector.SPECIES_128, zeroPointCorrections, secondCorrectionOffset + 4),
             pairFactors);
-    FloatVector secondScaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, secondScale);
+    IntVector secondCombinedGroups = secondLowGroups.add(secondHighGroups);
     fma(
             (FloatVector)
-                secondLowGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-            secondScaleVector,
-            lowAccumulator)
+                secondCombinedGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+            FloatVector.broadcast(FloatVector.SPECIES_128, secondScale),
+            accumulator)
         .intoArray(laneScratch, laneOffset);
-    fma(
-            (FloatVector)
-                secondHighGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-            secondScaleVector,
-            highAccumulator)
-        .intoArray(laneScratch, laneOffset + 4);
   }
 
   /** Fixed split-half hsum tree; Vector.reduceLanes does not guarantee an evaluation order. */
@@ -1528,8 +1508,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] q8Scales,
       int[] zeroPointCorrections) {
     ShortVector pairFactors = ShortVector.fromArray(ShortVector.SPECIES_128, Q4_PAIR_FACTORS, 0);
-    FloatVector lowAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
-    FloatVector highAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
+    FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_128);
     for (int block = 0; block < blocks; block++) {
       long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
       float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
@@ -1553,25 +1532,16 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
               IntVector.fromArray(
                   IntVector.SPECIES_128, zeroPointCorrections, correctionOffset + 4),
               pairFactors);
-      FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
-      lowAccumulator =
-          fma(
-              (FloatVector) lowGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-              scaleVector,
-              lowAccumulator);
-      highAccumulator =
+      IntVector combinedGroups = lowGroups.add(highGroups);
+      accumulator =
           fma(
               (FloatVector)
-                  highGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-              scaleVector,
-              highAccumulator);
+                  combinedGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+              FloatVector.broadcast(FloatVector.SPECIES_128, scale),
+              accumulator);
     }
-    float even =
-        (highAccumulator.lane(0) + lowAccumulator.lane(0))
-            + (highAccumulator.lane(2) + lowAccumulator.lane(2));
-    float odd =
-        (highAccumulator.lane(1) + lowAccumulator.lane(1))
-            + (highAccumulator.lane(3) + lowAccumulator.lane(3));
+    float even = accumulator.lane(0) + accumulator.lane(2);
+    float odd = accumulator.lane(1) + accumulator.lane(3);
     return even + odd;
   }
 
