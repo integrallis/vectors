@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.IntUnaryOperator;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -877,6 +878,9 @@ class GgufQuantizedDotTest {
                     new float[32], 1, 1, 2, GgufQ4Kernel.UNSIGNED_PAIRWISE))
         .isInstanceOf(IndexOutOfBoundsException.class)
         .hasMessageContaining("block range");
+    assertThatThrownBy(() -> activation.quantizeBatchRange(new float[32], 1, 1, 1))
+        .isInstanceOf(IndexOutOfBoundsException.class)
+        .hasMessageContaining("batch range");
   }
 
   @Test
@@ -1500,6 +1504,42 @@ class GgufQuantizedDotTest {
         weights, batchSize, rows, cols, 0, 2, actual, rangeWise);
     VectorUtil.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
         weights, batchSize, rows, cols, 2, rows, actual, rangeWise);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void blockMajorQ8_0BatchRangeQuantizationMatchesWholeBatchExactlyWhenConcurrent() {
+    int batchSize = 5;
+    int rows = 7;
+    int cols = 96;
+    int blocks = cols / 32;
+    float[] queries = patternedQueries(batchSize, cols);
+    GgufQ8_0Batch whole =
+        GgufQ8_0Batch.allocate(batchSize + 2, cols, GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES);
+    GgufQ8_0Batch rangeWise =
+        GgufQ8_0Batch.allocate(batchSize + 2, cols, GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES);
+
+    whole.quantize(queries, batchSize);
+    CompletableFuture.allOf(
+            CompletableFuture.runAsync(
+                () -> rangeWise.quantizeBatchRange(queries, batchSize, 0, 2)),
+            CompletableFuture.runAsync(
+                () -> rangeWise.quantizeBatchRange(queries, batchSize, 2, batchSize)))
+        .join();
+
+    assertThat(rangeWise.quants()).containsExactly(whole.quants());
+    assertThat(rangeWise.scales()).containsExactly(whole.scales());
+    assertThat(rangeWise.blockMajorQuants()).containsExactly(whole.blockMajorQuants());
+
+    byte[] row = repeat(q8Block(0.125f, index -> index * 13 - 117), blocks);
+    MemorySegment weights = MemorySegment.ofArray(repeat(row, rows));
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    VectorUtil.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weights, batchSize, rows, cols, 0, rows, expected, whole);
+    VectorUtil.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weights, batchSize, rows, cols, 0, rows, actual, rangeWise);
 
     assertThat(actual).containsExactly(expected);
   }

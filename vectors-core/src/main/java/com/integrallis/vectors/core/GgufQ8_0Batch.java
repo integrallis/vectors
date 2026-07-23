@@ -80,6 +80,15 @@ public final class GgufQ8_0Batch {
   }
 
   /**
+   * Quantizes one non-empty contiguous range of active batch rows for Q8_0 consumers.
+   *
+   * <p>Distinct batch ranges may be written concurrently.
+   */
+  public void quantizeBatchRange(float[] values, int batchSize, int fromBatch, int toBatch) {
+    quantizeRange(values, batchSize, fromBatch, toBatch, 0, blocks, false);
+  }
+
+  /**
    * Quantizes one non-empty contiguous block range across active batch rows.
    *
    * <p>Distinct block ranges may be written concurrently.
@@ -102,8 +111,28 @@ public final class GgufQ8_0Batch {
 
   private void quantizeBlockRange(
       float[] values, int batchSize, int fromBlock, int toBlock, boolean corrections) {
+    quantizeRange(values, batchSize, 0, batchSize, fromBlock, toBlock, corrections);
+  }
+
+  private void quantizeRange(
+      float[] values,
+      int batchSize,
+      int fromBatch,
+      int toBatch,
+      int fromBlock,
+      int toBlock,
+      boolean corrections) {
     Objects.requireNonNull(values, "values");
     checkBatchSize(batchSize);
+    if (fromBatch < 0 || fromBatch >= toBatch || toBatch > batchSize) {
+      throw new IndexOutOfBoundsException(
+          "batch range must satisfy 0 <= fromBatch < toBatch <= batchSize: "
+              + fromBatch
+              + ".."
+              + toBatch
+              + " for "
+              + batchSize);
+    }
     if (fromBlock < 0 || fromBlock >= toBlock || toBlock > blocks) {
       throw new IndexOutOfBoundsException(
           "block range must satisfy 0 <= fromBlock < toBlock <= blocks: "
@@ -122,7 +151,7 @@ public final class GgufQ8_0Batch {
               + " < "
               + requiredValues);
     }
-    for (int batch = 0; batch < batchSize; batch++) {
+    for (int batch = fromBatch; batch < toBatch; batch++) {
       int valueOffset = batch * dimensions + fromBlock * BLOCK_SIZE;
       int scaleOffset = batch * blocks + fromBlock;
       if (corrections) {
