@@ -806,6 +806,56 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q8_0BlockMajorRowAccumulatorMatchesScalarSplitRangeExactly() {
+    int batchSize = 7;
+    int batchCapacity = 9;
+    int rows = 17;
+    int cols = 96;
+    int fromRow = 3;
+    int toRow = 14;
+    Random random = new Random(0x5188_524f_5741L);
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+
+    byte[] weights = new byte[rows * (cols / 32) * 34];
+    random.nextBytes(weights);
+    ByteBuffer buffer = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < weights.length; offset += 34) {
+      buffer.putShort(offset, Float.floatToFloat16(random.nextFloat() * 0.05f + 0.001f));
+    }
+
+    GgufQ8_0Batch activation =
+        GgufQ8_0Batch.allocate(batchCapacity, cols, GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES);
+    activation.quantize(queries, batchSize);
+    MemorySegment weightSegment = MemorySegment.ofArray(weights);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    for (int index = 0; index < expected.length; index++) {
+      expected[index] = random.nextFloat() - 0.5f;
+      actual[index] = expected[index];
+    }
+
+    new ScalarVectorUtilSupport()
+        .ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+            weightSegment, batchSize, rows, cols, fromRow, toRow, expected, activation);
+    new PanamaVectorUtilSupport()
+        .ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+            weightSegment,
+            batchSize,
+            rows,
+            cols,
+            fromRow,
+            toRow,
+            actual,
+            activation,
+            GgufQ8BlockMajorKernel.ROW_ACCUMULATED);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
   void q4_KQ8_KKernelMatchesScalarReferenceAcrossRowsAndBlocks() {
     int rows = 512;
     int cols = 2048;

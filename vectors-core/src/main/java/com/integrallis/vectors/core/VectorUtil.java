@@ -1976,6 +1976,31 @@ public final class VectorUtil {
       int toRow,
       float[] out,
       GgufQ8_0Batch activation) {
+    ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        fromRow,
+        toRow,
+        out,
+        activation,
+        GgufQ8BlockMajorKernel.SCATTERED);
+  }
+
+  /**
+   * Computes a non-empty Q8_0 output-row range with an explicit block-major accumulation kernel.
+   */
+  public static void ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation,
+      GgufQ8BlockMajorKernel kernel) {
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
     }
@@ -1993,6 +2018,7 @@ public final class VectorUtil {
     }
     Objects.requireNonNull(out, "out");
     Objects.requireNonNull(activation, "activation");
+    Objects.requireNonNull(kernel, "kernel");
     if (activation.layout() != GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES) {
       throw new IllegalArgumentException(
           "activation layout must be BLOCK_MAJOR_BYTES: " + activation.layout());
@@ -2020,7 +2046,7 @@ public final class VectorUtil {
           "out.length must be >= batchSize * rows: " + out.length + " < " + outputEntries);
     }
     IMPL.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
-        qWeight, batchSize, rows, cols, fromRow, toRow, out, activation);
+        qWeight, batchSize, rows, cols, fromRow, toRow, out, activation, kernel);
   }
 
   /** Two Q8_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */

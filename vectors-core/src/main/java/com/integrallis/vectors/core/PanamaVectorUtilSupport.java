@@ -3836,9 +3836,16 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int fromRow,
       int toRow,
       float[] out,
-      GgufQ8_0Batch activation) {
+      GgufQ8_0Batch activation,
+      GgufQ8BlockMajorKernel kernel) {
+    Objects.requireNonNull(kernel, "kernel");
     if (batchSize == 1 || VECTOR_BITSIZE < 256) {
       ggufQ8_0Q8_0BatchedMatmulRows(
+          qWeight, batchSize, rows, cols, fromRow, toRow, out, activation);
+      return;
+    }
+    if (kernel == GgufQ8BlockMajorKernel.ROW_ACCUMULATED) {
+      ggufQ8_0Q8_0BlockMajorBatchedMatmulRowsWithRowAccumulator(
           qWeight, batchSize, rows, cols, fromRow, toRow, out, activation);
       return;
     }
@@ -3872,6 +3879,53 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             out,
             row,
             rows);
+      }
+    }
+  }
+
+  private static void ggufQ8_0Q8_0BlockMajorBatchedMatmulRowsWithRowAccumulator(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    byte[] blockMajorQuants = activation.blockMajorQuants();
+    float[] q8Scales = activation.scales();
+    long rowBytes = (long) blocks * GGUF_Q8_0_BLOCK_BYTES;
+    float[] rowAccumulator = new float[batchSize];
+    for (int row = fromRow; row < toRow; row++) {
+      for (int batch = 0; batch < batchSize; batch++) {
+        rowAccumulator[batch] = 0.0f;
+      }
+
+      long rowOffset = row * rowBytes;
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+        float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+        long weightOffset = blockOffset + Short.BYTES;
+        int blockActivationOffset = block * activation.batchCapacity() * GGUF_Q_BLOCK_SIZE;
+        q8_0Q8_0AccumulateBatchedBlock(
+            qWeight,
+            weightOffset,
+            blockMajorQuants,
+            blockActivationOffset,
+            GGUF_Q_BLOCK_SIZE,
+            batchSize,
+            weightScale,
+            q8Scales,
+            block,
+            blocks,
+            rowAccumulator,
+            0,
+            1);
+      }
+
+      for (int batch = 0; batch < batchSize; batch++) {
+        out[batch * rows + row] = rowAccumulator[batch];
       }
     }
   }
