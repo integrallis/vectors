@@ -880,6 +880,87 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     ShortVector pairFactors = ShortVector.fromArray(ShortVector.SPECIES_128, Q4_PAIR_FACTORS, 0);
     int block = 0;
+    for (; block + 3 < blocks; block += 4) {
+      long firstBlockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
+      ByteVector firstPacked =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128,
+              qWeight,
+              firstBlockOffset + Short.BYTES,
+              ByteOrder.LITTLE_ENDIAN);
+      ByteVector firstLowNibbles = firstPacked.and((byte) 0x0F);
+      ByteVector firstHighNibbles = q4HighNibbles(firstPacked);
+      float firstWeightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, firstBlockOffset));
+
+      long secondBlockOffset = firstBlockOffset + GGUF_Q4_0_BLOCK_BYTES;
+      ByteVector secondPacked =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128,
+              qWeight,
+              secondBlockOffset + Short.BYTES,
+              ByteOrder.LITTLE_ENDIAN);
+      ByteVector secondLowNibbles = secondPacked.and((byte) 0x0F);
+      ByteVector secondHighNibbles = q4HighNibbles(secondPacked);
+      float secondWeightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, secondBlockOffset));
+
+      long thirdBlockOffset = secondBlockOffset + GGUF_Q4_0_BLOCK_BYTES;
+      ByteVector thirdPacked =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128,
+              qWeight,
+              thirdBlockOffset + Short.BYTES,
+              ByteOrder.LITTLE_ENDIAN);
+      ByteVector thirdLowNibbles = thirdPacked.and((byte) 0x0F);
+      ByteVector thirdHighNibbles = q4HighNibbles(thirdPacked);
+      float thirdWeightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, thirdBlockOffset));
+
+      long fourthBlockOffset = thirdBlockOffset + GGUF_Q4_0_BLOCK_BYTES;
+      ByteVector fourthPacked =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128,
+              qWeight,
+              fourthBlockOffset + Short.BYTES,
+              ByteOrder.LITTLE_ENDIAN);
+      ByteVector fourthLowNibbles = fourthPacked.and((byte) 0x0F);
+      ByteVector fourthHighNibbles = q4HighNibbles(fourthPacked);
+      float fourthWeightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, fourthBlockOffset));
+
+      for (int batch = 0; batch < batchSize; batch++) {
+        int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+        int blockIndex = batch * blocks + block;
+        FloatVector accumulator =
+            FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset);
+        accumulator =
+            accumulateQ4_0UnsignedBatchQueryBlockPair(
+                accumulator,
+                firstLowNibbles,
+                firstHighNibbles,
+                secondLowNibbles,
+                secondHighNibbles,
+                q8Quants,
+                batch * cols + block * GGUF_Q_BLOCK_SIZE,
+                q8ZeroPointCorrections,
+                blockIndex * 4,
+                firstWeightScale * q8Scales[blockIndex],
+                secondWeightScale * q8Scales[blockIndex + 1],
+                pairFactors);
+        accumulateQ4_0UnsignedBatchQueryBlockPair(
+                accumulator,
+                thirdLowNibbles,
+                thirdHighNibbles,
+                fourthLowNibbles,
+                fourthHighNibbles,
+                q8Quants,
+                batch * cols + (block + 2) * GGUF_Q_BLOCK_SIZE,
+                q8ZeroPointCorrections,
+                (blockIndex + 2) * 4,
+                thirdWeightScale * q8Scales[blockIndex + 2],
+                fourthWeightScale * q8Scales[blockIndex + 3],
+                pairFactors)
+            .intoArray(laneScratch, laneOffset);
+      }
+    }
+
     for (; block + 1 < blocks; block += 2) {
       long firstBlockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
       ByteVector firstPacked =
@@ -1322,7 +1403,35 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       ShortVector pairFactors) {
     FloatVector accumulator =
         FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset);
+    accumulateQ4_0UnsignedBatchQueryBlockPair(
+            accumulator,
+            firstLowNibbles,
+            firstHighNibbles,
+            secondLowNibbles,
+            secondHighNibbles,
+            q8Quants,
+            quantOffset,
+            zeroPointCorrections,
+            correctionOffset,
+            firstScale,
+            secondScale,
+            pairFactors)
+        .intoArray(laneScratch, laneOffset);
+  }
 
+  static FloatVector accumulateQ4_0UnsignedBatchQueryBlockPair(
+      FloatVector accumulator,
+      ByteVector firstLowNibbles,
+      ByteVector firstHighNibbles,
+      ByteVector secondLowNibbles,
+      ByteVector secondHighNibbles,
+      byte[] q8Quants,
+      int quantOffset,
+      int[] zeroPointCorrections,
+      int correctionOffset,
+      float firstScale,
+      float secondScale,
+      ShortVector pairFactors) {
     IntVector firstLowProducts =
         q4_0Q8_0UnsignedPairwiseProducts(
             firstLowNibbles,
@@ -1363,12 +1472,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             .sub(
                 IntVector.fromArray(
                     IntVector.SPECIES_128, zeroPointCorrections, secondCorrectionOffset));
-    fma(
-            (FloatVector)
-                secondCombinedGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-            FloatVector.broadcast(FloatVector.SPECIES_128, secondScale),
-            accumulator)
-        .intoArray(laneScratch, laneOffset);
+    return fma(
+        (FloatVector)
+            secondCombinedGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+        FloatVector.broadcast(FloatVector.SPECIES_128, secondScale),
+        accumulator);
   }
 
   /** Fixed split-half hsum tree; Vector.reduceLanes does not guarantee an evaluation order. */

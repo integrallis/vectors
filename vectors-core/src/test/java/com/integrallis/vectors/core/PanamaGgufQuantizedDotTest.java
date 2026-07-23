@@ -27,6 +27,7 @@ import java.util.Random;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
+import jdk.incubator.vector.ShortVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
 import org.junit.jupiter.api.Tag;
@@ -319,6 +320,37 @@ class PanamaGgufQuantizedDotTest {
       assertThat(Float.floatToRawIntBits(actual[batch]))
           .isEqualTo(Float.floatToRawIntBits(expected));
     }
+  }
+
+  @Test
+  void q4_0Q8_0UnsignedBlockPairAccumulatesIntoCallerVectorExactly() {
+    byte[] packed = new byte[32];
+    java.util.Arrays.fill(packed, (byte) 0x99);
+    byte[] q8 = new byte[64];
+    java.util.Arrays.fill(q8, 0, 32, (byte) 1);
+    java.util.Arrays.fill(q8, 32, 64, (byte) 2);
+    int[] corrections = {64, 64, 64, 64, 128, 128, 128, 128};
+    ByteVector firstPacked = ByteVector.fromArray(ByteVector.SPECIES_128, packed, 0);
+    ByteVector secondPacked = ByteVector.fromArray(ByteVector.SPECIES_128, packed, 16);
+    FloatVector initial =
+        FloatVector.fromArray(FloatVector.SPECIES_128, new float[] {1, 2, 3, 4}, 0);
+
+    FloatVector actual =
+        PanamaVectorUtilSupport.accumulateQ4_0UnsignedBatchQueryBlockPair(
+            initial,
+            firstPacked.and((byte) 0x0F),
+            PanamaVectorUtilSupport.q4HighNibbles(firstPacked),
+            secondPacked.and((byte) 0x0F),
+            PanamaVectorUtilSupport.q4HighNibbles(secondPacked),
+            q8,
+            0,
+            corrections,
+            0,
+            0.5f,
+            0.25f,
+            ShortVector.broadcast(ShortVector.SPECIES_128, (short) 1));
+
+    assertThat(actual.toArray()).containsExactly(9.0f, 10.0f, 11.0f, 12.0f);
   }
 
   @Test
