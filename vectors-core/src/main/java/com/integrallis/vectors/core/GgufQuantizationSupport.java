@@ -38,7 +38,8 @@ final class GgufQuantizationSupport {
       int quantOffset,
       float[] scales,
       int scaleOffset) {
-    quantizeQ8_0(query, queryOffset, dimensions, quants, quantOffset, scales, scaleOffset, null, 0);
+    quantizeQ8_0(
+        query, queryOffset, dimensions, quants, quantOffset, scales, scaleOffset, null, 0, false);
   }
 
   private static void quantizeQ8_0(
@@ -50,8 +51,10 @@ final class GgufQuantizationSupport {
       float[] scales,
       int scaleOffset,
       int[] zeroPointCorrections,
-      int correctionOffset) {
+      int correctionOffset,
+      boolean combineCorrectionHalves) {
     int blocks = dimensions / VectorUtilSupport.GGUF_Q_BLOCK_SIZE;
+    int correctionsPerBlock = combineCorrectionHalves ? 4 : 8;
     for (int block = 0; block < blocks; block++) {
       int offset = block * VectorUtilSupport.GGUF_Q_BLOCK_SIZE;
       float absoluteMax = 0.0f;
@@ -69,8 +72,15 @@ final class GgufQuantizationSupport {
         if (zeroPointCorrections != null) {
           groupSum += quant;
           if ((index & 3) == 3) {
-            int group = block * 8 + (index >>> 2);
-            zeroPointCorrections[correctionOffset + group] = 8 * groupSum;
+            int group = index >>> 2;
+            int correctionGroup = combineCorrectionHalves ? group & 3 : group;
+            int correctionIndex = correctionOffset + block * correctionsPerBlock + correctionGroup;
+            int correction = 8 * groupSum;
+            if (combineCorrectionHalves && index >= 16) {
+              zeroPointCorrections[correctionIndex] += correction;
+            } else {
+              zeroPointCorrections[correctionIndex] = correction;
+            }
             groupSum = 0;
           }
         }
@@ -103,7 +113,31 @@ final class GgufQuantizationSupport {
         scales,
         scaleOffset,
         zeroPointCorrections,
-        correctionOffset);
+        correctionOffset,
+        false);
+  }
+
+  static void quantizeQ8_0WithCombinedQ4Corrections(
+      float[] query,
+      int queryOffset,
+      int dimensions,
+      byte[] quants,
+      int quantOffset,
+      float[] scales,
+      int scaleOffset,
+      int[] zeroPointCorrections,
+      int correctionOffset) {
+    quantizeQ8_0(
+        query,
+        queryOffset,
+        dimensions,
+        quants,
+        quantOffset,
+        scales,
+        scaleOffset,
+        zeroPointCorrections,
+        correctionOffset,
+        true);
   }
 
   static void quantizeQ8_K(

@@ -21,7 +21,7 @@ import java.util.Objects;
 public final class GgufQ8_0Batch {
 
   private static final int BLOCK_SIZE = VectorUtilSupport.GGUF_Q_BLOCK_SIZE;
-  private static final int CORRECTIONS_PER_BLOCK = BLOCK_SIZE / 4;
+  private static final int CORRECTIONS_PER_BLOCK = BLOCK_SIZE / 8;
 
   private final int batchCapacity;
   private final int dimensions;
@@ -94,7 +94,7 @@ public final class GgufQ8_0Batch {
       int valueOffset = batch * dimensions + fromBlock * BLOCK_SIZE;
       int scaleOffset = batch * blocks + fromBlock;
       if (corrections) {
-        GgufQuantizationSupport.quantizeQ8_0WithQ4Corrections(
+        GgufQuantizationSupport.quantizeQ8_0WithCombinedQ4Corrections(
             values,
             valueOffset,
             length,

@@ -350,6 +350,39 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q8_0BatchQuantizationCombinesQ4HalfCorrections() {
+    int batchSize = 2;
+    int dimensions = 64;
+    int blocks = dimensions / 32;
+    float[] values = new float[batchSize * dimensions];
+    Random random = new Random(0x434f4d42494e4544L);
+    for (int index = 0; index < values.length; index++) {
+      values[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+
+    GgufQ8_0Batch activation = GgufQ8_0Batch.allocate(batchSize, dimensions);
+    activation.quantizeForQ4(values, batchSize, GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    byte[] quants = activation.quants();
+    int[] corrections = activation.zeroPointCorrections();
+    assertThat(corrections).hasSize(batchSize * blocks * 4);
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int block = 0; block < blocks; block++) {
+        int quantOffset = batch * dimensions + block * 32;
+        int correctionOffset = (batch * blocks + block) * 4;
+        for (int group = 0; group < 4; group++) {
+          int groupSum = 0;
+          for (int lane = 0; lane < 4; lane++) {
+            groupSum += quants[quantOffset + group * 4 + lane];
+            groupSum += quants[quantOffset + 16 + group * 4 + lane];
+          }
+          assertThat(corrections[correctionOffset + group]).isEqualTo(8 * groupSum);
+        }
+      }
+    }
+  }
+
+  @Test
   void q4_KQ8_KIntegerDotDecodesBothNibbleHalves() {
     byte[] packed = new byte[32];
     byte[] q8 = new byte[32];
