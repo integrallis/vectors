@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.bench;
 
+import com.integrallis.vectors.core.GgufQ8_0Batch;
 import com.integrallis.vectors.core.VectorUtil;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -64,6 +65,7 @@ public class GgufQ8BatchedMatmulBenchmark {
   private float[] batchedScales;
   private byte[] independentQuants;
   private float[] independentScales;
+  private GgufQ8_0Batch prequantized;
 
   @Setup(Level.Trial)
   public void setUp() {
@@ -86,6 +88,8 @@ public class GgufQ8BatchedMatmulBenchmark {
     batchedScales = new float[batchSize * (cols / 32)];
     independentQuants = new byte[cols];
     independentScales = new float[cols / 32];
+    prequantized = GgufQ8_0Batch.allocate(batchSize, cols);
+    prequantized.quantize(queries, batchSize);
   }
 
   private static byte[] randomQ8Blocks(Random random, int byteCount) {
@@ -113,5 +117,12 @@ public class GgufQ8BatchedMatmulBenchmark {
           query, weights, rows, cols, independentOut, independentQuants, independentScales);
       blackhole.consume(independentOut);
     }
+  }
+
+  @Benchmark
+  public void prequantizedRows(Blackhole blackhole) {
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmulRows(
+        weights, batchSize, rows, cols, 0, rows, batchedOut, prequantized);
+    blackhole.consume(batchedOut);
   }
 }
