@@ -188,7 +188,7 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
-  void q4_0Q8_0UnsignedPairwiseRowMatchesShortPairwiseExactly() {
+  void q4_0Q8_0UnsignedPairwiseRowPreservesSplitHalfAccumulation() {
     int blocks = 64;
     byte[] weightBytes = new byte[blocks * 18];
     byte[] q8 = new byte[blocks * 32];
@@ -243,6 +243,81 @@ class PanamaGgufQuantizedDotTest {
               weights, 0, blocks, q8, q8Scales, zeroPointCorrections);
 
       assertThat(Float.floatToRawIntBits(actual)).isEqualTo(Float.floatToRawIntBits(expected));
+    }
+  }
+
+  @Test
+  void q4_0Q8_0UnsignedPairwiseBatchedMatmulCombinesIntegerHalvesBeforeScaling() {
+    int blocks = 65;
+    int cols = blocks * 32;
+    int batchSize = 2;
+    byte[] weightBytes = new byte[blocks * 18];
+    float[] queries = new float[batchSize * cols];
+    Random random = new Random(0x424154434845444cL);
+    for (int block = 0; block < blocks; block++) {
+      int weightOffset = block * 18;
+      short scale = Float.floatToFloat16(0.001f + random.nextFloat() * 0.05f);
+      weightBytes[weightOffset] = (byte) scale;
+      weightBytes[weightOffset + 1] = (byte) (scale >>> 8);
+      for (int index = 0; index < 16; index++) {
+        weightBytes[weightOffset + Short.BYTES + index] = (byte) random.nextInt();
+      }
+    }
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+
+    MemorySegment weights = MemorySegment.ofArray(weightBytes);
+    float[] actual = new float[batchSize];
+    byte[] q8 = new byte[batchSize * cols];
+    float[] q8Scales = new float[batchSize * blocks];
+    int[] zeroPointCorrections = new int[batchSize * blocks * 8];
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        1,
+        cols,
+        actual,
+        q8,
+        q8Scales,
+        zeroPointCorrections,
+        new float[batchSize * 8],
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      FloatVector expectedLanes = FloatVector.zero(FloatVector.SPECIES_128);
+      for (int block = 0; block < blocks; block++) {
+        long blockOffset = (long) block * 18;
+        float scale =
+            Float.float16ToFloat(weights.get(LE_SHORT, blockOffset))
+                * q8Scales[batch * blocks + block];
+        int[] groups =
+            PanamaVectorUtilSupport.q4_0Q8_0ShortPairwiseIntegerLanes(
+                    weights, blockOffset + Short.BYTES, q8, batch * cols + block * 32)
+                .toArray();
+        IntVector combinedGroups =
+            IntVector.fromArray(
+                IntVector.SPECIES_128,
+                new int[] {
+                  groups[0] + groups[4],
+                  groups[1] + groups[5],
+                  groups[2] + groups[6],
+                  groups[3] + groups[7]
+                },
+                0);
+        expectedLanes =
+            PanamaVectorUtilSupport.fma(
+                (FloatVector)
+                    combinedGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+                FloatVector.broadcast(FloatVector.SPECIES_128, scale),
+                expectedLanes);
+      }
+      float expected =
+          (expectedLanes.lane(2) + expectedLanes.lane(0))
+              + (expectedLanes.lane(3) + expectedLanes.lane(1));
+      assertThat(Float.floatToRawIntBits(actual[batch]))
+          .isEqualTo(Float.floatToRawIntBits(expected));
     }
   }
 
@@ -527,7 +602,7 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
-  void q4_0UnsignedBlockPairsMatchGemvExactlyForOddAndEvenBlockCounts() {
+  void q4_0UnsignedBlockPairsStayNumericallyCloseToGemvForOddAndEvenBlockCounts() {
     int batchSize = 3;
     int rows = 5;
     Random random = new Random(0x5144_424c_4f43_4b53L);
@@ -580,7 +655,9 @@ class PanamaGgufQuantizedDotTest {
           new float[batchSize * rows * 8],
           GgufQ4Kernel.UNSIGNED_PAIRWISE);
 
-      assertThat(actual).containsExactly(expected);
+      for (int index = 0; index < actual.length; index++) {
+        assertThat(actual[index]).isCloseTo(expected[index], offset(1e-5f));
+      }
     }
   }
 
