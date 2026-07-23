@@ -1456,6 +1456,74 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void blockMajorQ8_0ActivationLayoutMatchesPackedWholeAndSplitQuantizationExactly() {
+    int batchSize = 3;
+    int rows = 5;
+    int cols = 96;
+    int blocks = cols / 32;
+    float[] queries = patternedQueries(batchSize, cols);
+    GgufQ8_0Batch packed = GgufQ8_0Batch.allocate(batchSize, cols);
+    GgufQ8_0Batch whole =
+        GgufQ8_0Batch.allocate(batchSize, cols, GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES);
+    GgufQ8_0Batch rangeWise =
+        GgufQ8_0Batch.allocate(batchSize, cols, GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES);
+
+    packed.quantize(queries, batchSize);
+    whole.quantize(queries, batchSize);
+    rangeWise.quantizeBlockRange(queries, batchSize, 0, 1);
+    rangeWise.quantizeBlockRange(queries, batchSize, 1, blocks);
+
+    assertThat(packed.layout()).isEqualTo(GgufQ8ActivationLayout.PACKED_BYTES);
+    assertThat(packed.blockMajorQuants()).isNull();
+    assertThat(whole.layout()).isEqualTo(GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES);
+    assertThat(whole.quants()).containsExactly(packed.quants());
+    assertThat(whole.scales()).containsExactly(packed.scales());
+    assertThat(rangeWise.blockMajorQuants()).containsExactly(whole.blockMajorQuants());
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int block = 0; block < blocks; block++) {
+        for (int lane = 0; lane < 32; lane++) {
+          int packedIndex = batch * cols + block * 32 + lane;
+          int blockMajorIndex = (block * whole.batchCapacity() + batch) * 32 + lane;
+          assertThat(whole.blockMajorQuants()[blockMajorIndex])
+              .isEqualTo(whole.quants()[packedIndex]);
+        }
+      }
+    }
+
+    byte[] row = repeat(q8Block(0.125f, index -> index * 9 - 128), blocks);
+    MemorySegment weights = MemorySegment.ofArray(repeat(row, rows));
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmulRows(
+        weights, batchSize, rows, cols, 0, rows, expected, packed);
+    VectorUtil.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weights, batchSize, rows, cols, 0, 2, actual, rangeWise);
+    VectorUtil.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weights, batchSize, rows, cols, 2, rows, actual, rangeWise);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void blockMajorQ8_0RowsRequireExplicitBlockMajorActivationStorage() {
+    GgufQ8_0Batch packed = GgufQ8_0Batch.allocate(2, 32);
+
+    assertThatThrownBy(
+            () ->
+                VectorUtil.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+                    MemorySegment.ofArray(q8Block(0.125f, index -> index - 16)),
+                    2,
+                    1,
+                    32,
+                    0,
+                    1,
+                    new float[2],
+                    packed))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("BLOCK_MAJOR_BYTES");
+  }
+
+  @Test
   void q8_0Q8_0DualBatchedMatmulMatchesSeparateBatchedMatmulsExactly() {
     int batchSize = 3;
     int cols = 64;

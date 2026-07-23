@@ -1845,6 +1845,19 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Q8_0 row-range multiplication over block-major caller-prequantized activation rows. */
+  default void ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation) {
+    ggufQ8_0Q8_0BatchedMatmulRows(qWeight, batchSize, rows, cols, fromRow, toRow, out, activation);
+  }
+
   /** Two Q8_0 projections over an activation batch sharing Q8_0 quantization and row dispatch. */
   default void ggufQ8_0Q8_0DualBatchedMatmul(
       float[] queries,

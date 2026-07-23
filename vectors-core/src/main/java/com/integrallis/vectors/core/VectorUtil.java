@@ -1961,6 +1961,68 @@ public final class VectorUtil {
         qWeight, batchSize, rows, cols, fromRow, toRow, out, activation);
   }
 
+  /**
+   * Computes a non-empty Q8_0 output-row range from block-major caller-prequantized activations.
+   *
+   * <p>This opt-in operation reads each block's activation rows sequentially while traversing the
+   * matrix. The activation must use {@link GgufQ8ActivationLayout#BLOCK_MAJOR_BYTES}.
+   */
+  public static void ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation) {
+    if (batchSize < 1) {
+      throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
+    }
+    if (rows < 1) {
+      throw new IllegalArgumentException("rows must be >= 1: " + rows);
+    }
+    if (fromRow < 0 || fromRow >= toRow || toRow > rows) {
+      throw new IndexOutOfBoundsException(
+          "row range must satisfy 0 <= fromRow < toRow <= rows: "
+              + fromRow
+              + ".."
+              + toRow
+              + " for "
+              + rows);
+    }
+    Objects.requireNonNull(out, "out");
+    Objects.requireNonNull(activation, "activation");
+    if (activation.layout() != GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES) {
+      throw new IllegalArgumentException(
+          "activation layout must be BLOCK_MAJOR_BYTES: " + activation.layout());
+    }
+    checkGgufQuantizedMatrixArguments(
+        qWeight,
+        rows,
+        cols,
+        VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+        VectorUtilSupport.GGUF_Q8_0_BLOCK_BYTES);
+    if (batchSize > activation.batchCapacity()) {
+      throw new IllegalArgumentException(
+          "batchSize exceeds activation capacity: "
+              + batchSize
+              + " > "
+              + activation.batchCapacity());
+    }
+    if (cols != activation.dimensions()) {
+      throw new IllegalArgumentException(
+          "cols must equal activation dimensions: " + cols + " != " + activation.dimensions());
+    }
+    int outputEntries = checkedProduct(batchSize, rows, "batchSize * rows");
+    if (out.length < outputEntries) {
+      throw new IllegalArgumentException(
+          "out.length must be >= batchSize * rows: " + out.length + " < " + outputEntries);
+    }
+    IMPL.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        qWeight, batchSize, rows, cols, fromRow, toRow, out, activation);
+  }
+
   /** Two Q8_0 matrices over an activation batch with one Q8_0 quantization and row dispatch. */
   public static void ggufQ8_0Q8_0DualBatchedMatmul(
       float[] queries,

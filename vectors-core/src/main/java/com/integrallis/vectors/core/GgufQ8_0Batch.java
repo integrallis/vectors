@@ -26,15 +26,22 @@ public final class GgufQ8_0Batch {
   private final int batchCapacity;
   private final int dimensions;
   private final int blocks;
+  private final GgufQ8ActivationLayout layout;
   private final byte[] quants;
+  private final byte[] blockMajorQuants;
   private final float[] scales;
   private final int[] zeroPointCorrections;
 
-  private GgufQ8_0Batch(int batchCapacity, int dimensions) {
+  private GgufQ8_0Batch(int batchCapacity, int dimensions, GgufQ8ActivationLayout layout) {
     this.batchCapacity = batchCapacity;
     this.dimensions = dimensions;
     this.blocks = dimensions / BLOCK_SIZE;
+    this.layout = layout;
     this.quants = new byte[checkedProduct(batchCapacity, dimensions, "Q8_0 quants")];
+    this.blockMajorQuants =
+        layout == GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES
+            ? new byte[checkedProduct(batchCapacity, dimensions, "block-major Q8_0 quants")]
+            : null;
     this.scales = new float[checkedProduct(batchCapacity, blocks, "Q8_0 scales")];
     this.zeroPointCorrections =
         new int
@@ -46,6 +53,12 @@ public final class GgufQ8_0Batch {
 
   /** Allocates reusable storage for {@code batchCapacity} activation rows. */
   public static GgufQ8_0Batch allocate(int batchCapacity, int dimensions) {
+    return allocate(batchCapacity, dimensions, GgufQ8ActivationLayout.PACKED_BYTES);
+  }
+
+  /** Allocates reusable storage with an explicit retained activation layout. */
+  public static GgufQ8_0Batch allocate(
+      int batchCapacity, int dimensions, GgufQ8ActivationLayout layout) {
     if (batchCapacity < 1) {
       throw new IllegalArgumentException("batchCapacity must be positive: " + batchCapacity);
     }
@@ -53,7 +66,7 @@ public final class GgufQ8_0Batch {
       throw new IllegalArgumentException(
           "dimensions must be a positive multiple of " + BLOCK_SIZE + ": " + dimensions);
     }
-    return new GgufQ8_0Batch(batchCapacity, dimensions);
+    return new GgufQ8_0Batch(batchCapacity, dimensions, Objects.requireNonNull(layout, "layout"));
   }
 
   /** Quantizes complete batch rows for a subsequent Q4_0 operation. */
@@ -127,6 +140,13 @@ public final class GgufQ8_0Batch {
         GgufQuantizationSupport.quantizeQ8_0(
             values, valueOffset, length, quants, valueOffset, scales, scaleOffset);
       }
+      if (blockMajorQuants != null) {
+        for (int block = fromBlock; block < toBlock; block++) {
+          int sourceOffset = batch * dimensions + block * BLOCK_SIZE;
+          int blockMajorOffset = (block * batchCapacity + batch) * BLOCK_SIZE;
+          System.arraycopy(quants, sourceOffset, blockMajorQuants, blockMajorOffset, BLOCK_SIZE);
+        }
+      }
     }
   }
 
@@ -140,8 +160,17 @@ public final class GgufQ8_0Batch {
     return dimensions;
   }
 
+  /** Returns the retained activation layout. */
+  public GgufQ8ActivationLayout layout() {
+    return layout;
+  }
+
   byte[] quants() {
     return quants;
+  }
+
+  byte[] blockMajorQuants() {
+    return blockMajorQuants;
   }
 
   float[] scales() {
