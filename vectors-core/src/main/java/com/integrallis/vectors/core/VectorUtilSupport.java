@@ -18,6 +18,7 @@ package com.integrallis.vectors.core;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+import java.util.Objects;
 
 /**
  * Interface for all SIMD-accelerable vector operations. Implementations are selected at runtime by
@@ -1855,6 +1856,30 @@ public interface VectorUtilSupport {
       int toRow,
       float[] out,
       GgufQ8_0Batch activation) {
+    ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        fromRow,
+        toRow,
+        out,
+        activation,
+        GgufQ8BlockMajorKernel.SCATTERED);
+  }
+
+  /** Q8_0 row-range multiplication with an explicit block-major output accumulation strategy. */
+  default void ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation,
+      GgufQ8BlockMajorKernel kernel) {
+    Objects.requireNonNull(kernel, "kernel");
     ggufQ8_0Q8_0BatchedMatmulRows(qWeight, batchSize, rows, cols, fromRow, toRow, out, activation);
   }
 

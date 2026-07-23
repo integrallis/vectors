@@ -1509,6 +1509,51 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void explicitBlockMajorQ8KernelsMatchPackedRowsExactly() {
+    int batchSize = 3;
+    int rows = 5;
+    int cols = 96;
+    int blocks = cols / 32;
+    float[] queries = patternedQueries(batchSize, cols);
+    GgufQ8_0Batch packed = GgufQ8_0Batch.allocate(batchSize, cols);
+    GgufQ8_0Batch blockMajor =
+        GgufQ8_0Batch.allocate(batchSize, cols, GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES);
+    packed.quantize(queries, batchSize);
+    blockMajor.quantize(queries, batchSize);
+    byte[] row = repeat(q8Block(0.125f, index -> index * 7 - 109), blocks);
+    MemorySegment weights = MemorySegment.ofArray(repeat(row, rows));
+    float[] expected = new float[batchSize * rows];
+    float[] scattered = new float[batchSize * rows];
+    float[] rowAccumulated = new float[batchSize * rows];
+
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmulRows(
+        weights, batchSize, rows, cols, 0, rows, expected, packed);
+    VectorUtil.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weights,
+        batchSize,
+        rows,
+        cols,
+        0,
+        rows,
+        scattered,
+        blockMajor,
+        GgufQ8BlockMajorKernel.SCATTERED);
+    VectorUtil.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weights,
+        batchSize,
+        rows,
+        cols,
+        0,
+        rows,
+        rowAccumulated,
+        blockMajor,
+        GgufQ8BlockMajorKernel.ROW_ACCUMULATED);
+
+    assertThat(scattered).containsExactly(expected);
+    assertThat(rowAccumulated).containsExactly(expected);
+  }
+
+  @Test
   void blockMajorQ8_0BatchRangeQuantizationMatchesWholeBatchExactlyWhenConcurrent() {
     int batchSize = 5;
     int rows = 7;

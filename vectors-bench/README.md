@@ -33,6 +33,25 @@ outputs. A direct dual-only versus dual-plus-triple Q/K/V gate produced only a 0
 three faster and three slower pairs, and 6.68 MB higher median RSS. Models therefore keeps Q8_0
 Q/K/V independent. The exact generic triple API remains available for other model-specific gates.
 
+## Q8_0 block-major row accumulation gate
+
+The original block-major Q8_0 row kernel updated `out[batch * rows + row]` after every weight
+block. At batch 32 those outputs are widely spaced, so a 1024x2048 projection performed 64
+scattered read/modify/write cycles per output. The explicit `ROW_ACCUMULATED` kernel instead reuses
+one contiguous batch-sized scratch array for the row range and scatters each completed output once.
+Arithmetic order and output bits are unchanged.
+
+On GraalVM Java 25 and the controlled eight-vCPU AMD EPYC-Milan host, three warmups and five
+measurements reduced the batch-32 block-major JMH path from 20.571 to 4.335 ms/op (-78.9%). The
+same local Java 25 HotSpot/C2 comparison was neutral at 17.713 versus 17.480 ms/op, so Vectors keeps
+`SCATTERED` as the compatibility default and exposes the optimized strategy explicitly for measured
+model/runtime plans. A six-pair SmolLM2 360M Q8_0 gate in Models reduced p50 TTFT by 2.22%, p95
+TTFT by 3.67%, and median process CPU by 2.34%; all 30 corresponding outputs were exact.
+
+A separate llama.cpp-style signed-byte pairwise probe lowered one 32-byte dot from 2.566 to 2.291
+ns/op on Graal and helped batches 1 through 8, but the repeated batch-32 gate regressed from 20.648
+to 20.758 ms/op. That candidate remains unselected pending a decode-specific gate.
+
 ## Q5_0 batched prefill gate
 
 The Q5_0/Q8_0 batch-major kernel closes the last missing batched prefill format used by the tested
