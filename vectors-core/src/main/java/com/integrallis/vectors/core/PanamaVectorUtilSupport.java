@@ -872,8 +872,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int blocks,
       long rowBytes) {
     long rowOffset = row * rowBytes;
-    int rowLaneOffset = scratchRow * batchSize * FloatVector.SPECIES_256.length();
-    int rowLaneEnd = rowLaneOffset + batchSize * FloatVector.SPECIES_256.length();
+    int laneCount = FloatVector.SPECIES_128.length();
+    int rowLaneOffset = scratchRow * batchSize * laneCount;
+    int rowLaneEnd = rowLaneOffset + batchSize * laneCount;
     for (int lane = rowLaneOffset; lane < rowLaneEnd; lane++) {
       laneScratch[lane] = 0.0f;
     }
@@ -904,7 +905,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float secondWeightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, secondBlockOffset));
 
       for (int batch = 0; batch < batchSize; batch++) {
-        int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+        int laneOffset = rowLaneOffset + batch * laneCount;
         int blockIndex = batch * blocks + block;
         accumulateQ4_0UnsignedBatchQueryBlockPair(
             laneScratch,
@@ -932,7 +933,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       ByteVector lowNibbles = packed.and((byte) 0x0F);
       ByteVector highNibbles = q4HighNibbles(packed);
       for (int batch = 0; batch < batchSize; batch++) {
-        int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+        int laneOffset = rowLaneOffset + batch * laneCount;
         int blockIndex = batch * blocks + block;
         accumulateQ4_0UnsignedBatchQuery(
             laneScratch,
@@ -948,7 +949,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
 
     for (int batch = 0; batch < batchSize; batch++) {
-      int laneOffset = rowLaneOffset + batch * FloatVector.SPECIES_256.length();
+      int laneOffset = rowLaneOffset + batch * laneCount;
       out[batch * rows + row] =
           reduceAdd(FloatVector.fromArray(FloatVector.SPECIES_128, laneScratch, laneOffset));
     }

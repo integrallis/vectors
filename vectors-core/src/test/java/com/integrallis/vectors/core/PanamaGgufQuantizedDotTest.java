@@ -322,6 +322,48 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q4_0Q8_0UnsignedPairwiseBatchedMatmulUsesCompactFourLaneScratchRows() {
+    int blocks = 65;
+    int cols = blocks * 32;
+    int batchSize = 2;
+    int rows = 3;
+    Random random = new Random(0x51434f4d50414354L);
+    byte[] weightBytes = new byte[rows * blocks * 18];
+    random.nextBytes(weightBytes);
+    ByteBuffer weights = ByteBuffer.wrap(weightBytes).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < weightBytes.length; offset += 18) {
+      weights.putShort(offset, Float.floatToFloat16(0.001f + random.nextFloat() * 0.05f));
+    }
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+
+    float[] laneScratch = new float[batchSize * rows * 8];
+    java.util.Arrays.fill(laneScratch, Float.NaN);
+    VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+        queries,
+        MemorySegment.ofArray(weightBytes),
+        batchSize,
+        rows,
+        cols,
+        new float[batchSize * rows],
+        new byte[batchSize * cols],
+        new float[batchSize * blocks],
+        new int[batchSize * blocks * 8],
+        laneScratch,
+        GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    int compactEntries = batchSize * rows * FloatVector.SPECIES_128.length();
+    for (int index = 0; index < compactEntries; index++) {
+      assertThat(laneScratch[index]).as("active scratch lane %s", index).isNotNaN();
+    }
+    for (int index = compactEntries; index < laneScratch.length; index++) {
+      assertThat(laneScratch[index]).as("unused scratch lane %s", index).isNaN();
+    }
+  }
+
+  @Test
   void q8_0QuantizationProducesExactQ4ZeroPointCorrections() {
     float[] query = new float[96];
     Random random = new Random(0x51385a504f494e54L);
