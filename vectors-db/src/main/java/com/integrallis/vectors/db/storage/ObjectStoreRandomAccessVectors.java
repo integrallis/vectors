@@ -1,0 +1,212 @@
+/*
+ * Copyright 2025-2026 Integrallis Software, LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.integrallis.vectors.db.storage;
+
+import com.integrallis.vectors.storage.backend.StorageBackend;
+import com.integrallis.vectors.storage.memory.AlignmentUtil;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+/**
+ * Object-storage-backed {@link com.integrallis.vectors.hnsw.RandomAccessVectors} — the query-time
+ * full-vector tier of the SOTA object-storage index. Full float32 vectors stay on object storage
+ * ({@code vectors.bin}); each {@link #getVector(int)} pulls exactly one vector via a {@linkplain
+ * StorageBackend#getRange ranged GET}. This is the drop-in remote counterpart to {@link
+ * MemorySegmentRandomAccessVectors} (local mmap): the graph adjacency and the compact Ext-RaBitQ
+ * codes stay resident in RAM for navigation, and the only object-storage reads are the rerank
+ * fetches for the small over-query candidate set — the design validated in P1–P7.
+ *
+ * <p><b>Layout parity.</b> {@code vectors.bin} is headerless, row-major, little-endian float32 with
+ * each vector padded to a 64-byte-aligned slot: {@code stride = alignUp(dimension * 4, 64)}, so the
+ * vector at {@code ordinal} occupies {@code [ordinal * stride, ordinal * stride + dimension * 4)}
+ * (the trailing bytes to {@code stride} are alignment padding and are not fetched). This matches
+ * {@link MemorySegmentVectors} verbatim, so a generation reads identically whether mmapped or
+ * served over the network.
+ *
+ * <p><b>Shared-buffer invariant.</b> {@link #getVector(int)} returns a per-thread scratch {@code
+ * float[dimension]} overwritten on every call — same contract as {@link
+ * MemorySegmentRandomAccessVectors}. Callers must not retain the array across a subsequent call on
+ * the same thread. Because reads hit the network, callers on the hot path should batch the rerank
+ * candidate fetches rather than issue one blocking {@code getRange} per candidate serially.
+ *
+ * <p>Implements both the {@code hnsw} and {@code vamana} {@code RandomAccessVectors} interfaces
+ * (they are structurally identical) so it is a drop-in for either paged index adapter.
+ */
+public final class ObjectStoreRandomAccessVectors
+    implements com.integrallis.vectors.hnsw.RandomAccessVectors,
+        com.integrallis.vectors.vamana.RandomAccessVectors {
+
+  private final StorageBackend backend;
+  private final String key;
+  private final int size;
+  private final int dimension;
+  private final long stride;
+  private final int rawVectorByteSize;
+  // Overwritten on every getVector() call on this thread; callers MUST NOT retain across calls.
+  private final ThreadLocal<float[]> scratch;
+
+  /**
+   * @param backend the object-storage backend serving {@code vectors.bin}
+   * @param key the object key for the vectors blob (e.g. {@code "vectors.bin"} within the
+   *     generation)
+   * @param size number of vectors stored
+   * @param dimension float32 components per vector
+   * @throws IllegalArgumentException if {@code size < 0} or {@code dimension < 1}
+   */
+  public ObjectStoreRandomAccessVectors(
+      StorageBackend backend, String key, int size, int dimension) {
+    this.backend = Objects.requireNonNull(backend, "backend");
+    this.key = Objects.requireNonNull(key, "key");
+    if (size < 0) {
+      throw new IllegalArgumentException("size must be >= 0: " + size);
+    }
+    if (dimension < 1) {
+      throw new IllegalArgumentException("dimension must be >= 1: " + dimension);
+    }
+    this.size = size;
+    this.dimension = dimension;
+    this.stride =
+        AlignmentUtil.alignUp((long) dimension * Float.BYTES, AlignmentUtil.VECTOR_ALIGNMENT);
+    this.rawVectorByteSize = dimension * Float.BYTES;
+    this.scratch = ThreadLocal.withInitial(() -> new float[dimension]);
+  }
+
+  @Override
+  public int size() {
+    return size;
+  }
+
+  @Override
+  public int dimension() {
+    return dimension;
+  }
+
+  /**
+   * Fetches the vector at {@code ordinal} via a single ranged GET and decodes it (little-endian
+   * float32) into this thread's scratch buffer.
+   *
+   * @param ordinal the 0-based vector index
+   * @return a per-thread {@code float[dimension]} — do NOT retain across subsequent calls on this
+   *     thread
+   * @throws IndexOutOfBoundsException if {@code ordinal} is out of range
+   * @throws UncheckedIOException if the backend read fails or the object is missing
+   */
+  @Override
+  public float[] getVector(int ordinal) {
+    float[] dst = scratch.get();
+    ByteBuffer.wrap(rangeBytes(ordinal)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(dst);
+    return dst;
+  }
+
+  /**
+   * Bulk-fetches candidate vectors <b>concurrently</b> (one virtual thread per ranged GET), each
+   * into its own array. This is the rerank hot path: the two-pass search hands the whole over-query
+   * candidate set here at once, so issuing the independent GETs in parallel collapses N serial
+   * round-trips into roughly one — the difference between ~4 s and ~150 ms per query on
+   * internet-latency object storage. The backend's HTTP connection pool bounds real concurrency.
+   */
+  @Override
+  public float[][] getVectors(int[] ordinals) {
+    if (ordinals.length == 0) {
+      return new float[0][];
+    }
+    if (ordinals.length == 1) {
+      float[] one = new float[dimension];
+      ByteBuffer.wrap(rangeBytes(ordinals[0]))
+          .order(ByteOrder.LITTLE_ENDIAN)
+          .asFloatBuffer()
+          .get(one);
+      return new float[][] {one};
+    }
+    float[][] out = new float[ordinals.length][];
+    List<Callable<Void>> tasks = new ArrayList<>(ordinals.length);
+    for (int i = 0; i < ordinals.length; i++) {
+      final int idx = i;
+      final int ord = ordinals[i];
+      tasks.add(
+          () -> {
+            float[] dst = new float[dimension];
+            ByteBuffer.wrap(rangeBytes(ord))
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .asFloatBuffer()
+                .get(dst);
+            out[idx] = dst;
+            return null;
+          });
+    }
+    try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
+      for (Future<Void> f : exec.invokeAll(tasks)) {
+        f.get(); // propagate the first failure
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new UncheckedIOException(new IOException("interrupted during bulk ranged GET", e));
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof UncheckedIOException u) {
+        throw u;
+      }
+      throw new UncheckedIOException(new IOException("bulk ranged GET failed", cause));
+    }
+    return out;
+  }
+
+  /** Fetches one vector's raw little-endian float32 bytes via a single ranged GET. */
+  private byte[] rangeBytes(int ordinal) {
+    Objects.checkIndex(ordinal, size);
+    byte[] raw;
+    try {
+      raw = backend.getRange(key, ordinal * stride, rawVectorByteSize);
+    } catch (IOException e) {
+      throw new UncheckedIOException("ranged GET failed for " + key + " ordinal " + ordinal, e);
+    }
+    if (raw == null) {
+      throw new UncheckedIOException(
+          "object not found: " + key, new IOException("getRange returned null"));
+    }
+    return raw;
+  }
+
+  /**
+   * Per-thread scratch buffer is overwritten on every call — resolves the dual-interface default.
+   */
+  @Override
+  public boolean sharesReturnBuffer() {
+    return true;
+  }
+
+  /** No stable zero-copy segment over a ranged GET; rerank uses the {@code float[]} path. */
+  @Override
+  public boolean supportsSegments() {
+    return false;
+  }
+
+  /** Segments are unsupported for network-backed reads; returns {@code null} per the contract. */
+  @Override
+  public MemorySegment vectorSegment(int ordinal) {
+    return null;
+  }
+}
