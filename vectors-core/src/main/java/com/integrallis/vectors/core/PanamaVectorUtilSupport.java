@@ -1508,7 +1508,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] q8Scales,
       int[] zeroPointCorrections) {
     ShortVector pairFactors = ShortVector.fromArray(ShortVector.SPECIES_128, Q4_PAIR_FACTORS, 0);
-    FloatVector accumulator = FloatVector.zero(FloatVector.SPECIES_128);
+    FloatVector lowAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
+    FloatVector highAccumulator = FloatVector.zero(FloatVector.SPECIES_128);
     for (int block = 0; block < blocks; block++) {
       long blockOffset = rowOffset + (long) block * GGUF_Q4_0_BLOCK_BYTES;
       float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset)) * q8Scales[block];
@@ -1532,16 +1533,25 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
               IntVector.fromArray(
                   IntVector.SPECIES_128, zeroPointCorrections, correctionOffset + 4),
               pairFactors);
-      IntVector combinedGroups = lowGroups.add(highGroups);
-      accumulator =
+      FloatVector scaleVector = FloatVector.broadcast(FloatVector.SPECIES_128, scale);
+      lowAccumulator =
+          fma(
+              (FloatVector) lowGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+              scaleVector,
+              lowAccumulator);
+      highAccumulator =
           fma(
               (FloatVector)
-                  combinedGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
-              FloatVector.broadcast(FloatVector.SPECIES_128, scale),
-              accumulator);
+                  highGroups.convertShape(VectorOperators.I2F, FloatVector.SPECIES_128, 0),
+              scaleVector,
+              highAccumulator);
     }
-    float even = accumulator.lane(0) + accumulator.lane(2);
-    float odd = accumulator.lane(1) + accumulator.lane(3);
+    float even =
+        (highAccumulator.lane(0) + lowAccumulator.lane(0))
+            + (highAccumulator.lane(2) + lowAccumulator.lane(2));
+    float odd =
+        (highAccumulator.lane(1) + lowAccumulator.lane(1))
+            + (highAccumulator.lane(3) + lowAccumulator.lane(3));
     return even + odd;
   }
 
