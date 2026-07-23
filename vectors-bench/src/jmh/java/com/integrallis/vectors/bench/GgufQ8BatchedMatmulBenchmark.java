@@ -153,4 +153,19 @@ public class GgufQ8BatchedMatmulBenchmark {
         GgufQ8BlockMajorKernel.ROW_ACCUMULATED);
     blackhole.consume(batchedOut);
   }
+
+  @Benchmark
+  public void blockMajorFloatLaneAccumulatedPrequantizedRows(Blackhole blackhole) {
+    VectorUtil.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weights,
+        batchSize,
+        rows,
+        cols,
+        0,
+        rows,
+        batchedOut,
+        blockMajorPrequantized,
+        GgufQ8BlockMajorKernel.FLOAT_LANE_ACCUMULATED);
+    blackhole.consume(batchedOut);
+  }
 }

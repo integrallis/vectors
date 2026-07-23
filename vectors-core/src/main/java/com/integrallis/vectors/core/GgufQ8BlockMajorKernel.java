@@ -21,5 +21,12 @@ public enum GgufQ8BlockMajorKernel {
   SCATTERED,
 
   /** Accumulates one output row contiguously and scatters it once after all weight blocks. */
-  ROW_ACCUMULATED
+  ROW_ACCUMULATED,
+
+  /**
+   * Retains eight strided floating lanes across weight blocks and reduces once per batch output.
+   * This non-associative order is deterministic but need not be bit-identical to scalar block
+   * accumulation.
+   */
+  FLOAT_LANE_ACCUMULATED
 }
