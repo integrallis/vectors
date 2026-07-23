@@ -24,6 +24,7 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicReference;
 import jdk.incubator.vector.ByteVector;
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
@@ -853,6 +854,107 @@ class PanamaGgufQuantizedDotTest {
             GgufQ8BlockMajorKernel.ROW_ACCUMULATED);
 
     assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q8FloatLaneScratchReusesCapacityPerThread() throws InterruptedException {
+    float[] initial = PanamaVectorUtilSupport.q8FloatLaneScratch(8);
+    assertThat(PanamaVectorUtilSupport.q8FloatLaneScratch(8)).isSameAs(initial);
+
+    float[] grown = PanamaVectorUtilSupport.q8FloatLaneScratch(initial.length + 1);
+    assertThat(grown).hasSize(initial.length + 1).isNotSameAs(initial);
+    assertThat(PanamaVectorUtilSupport.q8FloatLaneScratch(grown.length)).isSameAs(grown);
+
+    AtomicReference<float[]> otherThreadScratch = new AtomicReference<>();
+    Thread thread =
+        new Thread(() -> otherThreadScratch.set(PanamaVectorUtilSupport.q8FloatLaneScratch(32)));
+    thread.start();
+    thread.join();
+
+    assertThat(otherThreadScratch.get()).isNotSameAs(grown);
+  }
+
+  @Test
+  void q8_0BlockMajorFloatLaneAccumulatorIsDeterministicAndBoundedAcrossModelSizedInputs() {
+    int[][] shapes = {{1, 2048}, {2, 32}, {7, 96}, {7, 2048}, {32, 2048}, {7, 8192}};
+    for (int[] shape : shapes) {
+      assertFloatLaneAccumulatorIsDeterministicAndBounded(shape[0], shape[1]);
+    }
+  }
+
+  private static void assertFloatLaneAccumulatorIsDeterministicAndBounded(int batchSize, int cols) {
+    int batchCapacity = batchSize + 2;
+    int rows = 17;
+    int fromRow = 3;
+    int toRow = 14;
+    Random random = new Random(0x5188_4c41_4e45L ^ ((long) batchSize << 32) ^ cols);
+    float[] queries = new float[batchSize * cols];
+    for (int index = 0; index < queries.length; index++) {
+      queries[index] = random.nextFloat() * 4.0f - 2.0f;
+    }
+
+    byte[] weights = new byte[rows * (cols / 32) * 34];
+    random.nextBytes(weights);
+    ByteBuffer buffer = ByteBuffer.wrap(weights).order(ByteOrder.LITTLE_ENDIAN);
+    for (int offset = 0; offset < weights.length; offset += 34) {
+      buffer.putShort(offset, Float.floatToFloat16(random.nextFloat() * 0.05f + 0.001f));
+    }
+
+    GgufQ8_0Batch activation =
+        GgufQ8_0Batch.allocate(batchCapacity, cols, GgufQ8ActivationLayout.BLOCK_MAJOR_BYTES);
+    activation.quantize(queries, batchSize);
+    MemorySegment weightSegment = MemorySegment.ofArray(weights);
+    float[] expected = new float[batchSize * rows];
+    float[] first = new float[batchSize * rows];
+    float[] second = new float[batchSize * rows];
+    for (int index = 0; index < expected.length; index++) {
+      expected[index] = random.nextFloat() - 0.5f;
+      first[index] = expected[index];
+      second[index] = expected[index];
+    }
+
+    new ScalarVectorUtilSupport()
+        .ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+            weightSegment, batchSize, rows, cols, fromRow, toRow, expected, activation);
+    PanamaVectorUtilSupport support = new PanamaVectorUtilSupport();
+    support.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weightSegment,
+        batchSize,
+        rows,
+        cols,
+        fromRow,
+        toRow,
+        first,
+        activation,
+        GgufQ8BlockMajorKernel.FLOAT_LANE_ACCUMULATED);
+    support.ggufQ8_0Q8_0BlockMajorBatchedMatmulRows(
+        weightSegment,
+        batchSize,
+        rows,
+        cols,
+        fromRow,
+        toRow,
+        second,
+        activation,
+        GgufQ8BlockMajorKernel.FLOAT_LANE_ACCUMULATED);
+
+    assertThat(second).containsExactly(first);
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int row = 0; row < rows; row++) {
+        int index = batch * rows + row;
+        if (row >= fromRow && row < toRow) {
+          float absoluteError = Math.abs(first[index] - expected[index]);
+          float tolerance = Math.max(1.0e-3f, Math.abs(expected[index]) * 2.0e-6f);
+          assertThat(absoluteError)
+              .as(
+                  "batchSize=%s, cols=%s, batch=%s, row=%s, expected=%s, actual=%s",
+                  batchSize, cols, batch, row, expected[index], first[index])
+              .isLessThanOrEqualTo(tolerance);
+        } else {
+          assertThat(first[index]).isEqualTo(expected[index]);
+        }
+      }
+    }
   }
 
   @Test

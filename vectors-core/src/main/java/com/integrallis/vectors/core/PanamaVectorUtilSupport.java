@@ -46,6 +46,8 @@ import jdk.incubator.vector.VectorSpecies;
 final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
   private static final int Q4_SHORT_PAIRWISE_MIN_BLOCKS = 32;
+  private static final ThreadLocal<float[]> Q8_FLOAT_LANE_SCRATCH =
+      ThreadLocal.withInitial(() -> new float[0]);
 
   // Species are capped to PanamaConstants.MAX_BITS (default 256) to avoid AVX-512 frequency
   // downclock; opt into wider with -Dvectors.maxBits=512. The cap only ever narrows below the
@@ -3849,6 +3851,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           qWeight, batchSize, rows, cols, fromRow, toRow, out, activation);
       return;
     }
+    if (kernel == GgufQ8BlockMajorKernel.FLOAT_LANE_ACCUMULATED && VECTOR_BITSIZE == 256) {
+      ggufQ8_0Q8_0BlockMajorBatchedMatmulRowsWithFloatLaneAccumulator(
+          qWeight, batchSize, rows, cols, fromRow, toRow, out, activation);
+      return;
+    }
 
     int blocks = cols / GGUF_Q_BLOCK_SIZE;
     byte[] blockMajorQuants = activation.blockMajorQuants();
@@ -3927,6 +3934,125 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       for (int batch = 0; batch < batchSize; batch++) {
         out[batch * rows + row] = rowAccumulator[batch];
       }
+    }
+  }
+
+  private static void ggufQ8_0Q8_0BlockMajorBatchedMatmulRowsWithFloatLaneAccumulator(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      int fromRow,
+      int toRow,
+      float[] out,
+      GgufQ8_0Batch activation) {
+    int blocks = cols / GGUF_Q_BLOCK_SIZE;
+    int laneCount = FloatVector.SPECIES_256.length();
+    float[] laneAccumulator = q8FloatLaneScratch(Math.multiplyExact(batchSize, laneCount));
+    for (int row = fromRow; row < toRow; row++) {
+      ggufQ8_0Q8_0BlockMajorFloatLaneRow(
+          qWeight, batchSize, rows, blocks, row, out, activation, laneAccumulator);
+    }
+  }
+
+  static float[] q8FloatLaneScratch(int minimumLength) {
+    if (minimumLength < 0) {
+      throw new IllegalArgumentException("minimumLength must be non-negative: " + minimumLength);
+    }
+    float[] scratch = Q8_FLOAT_LANE_SCRATCH.get();
+    if (scratch.length < minimumLength) {
+      scratch = new float[minimumLength];
+      Q8_FLOAT_LANE_SCRATCH.set(scratch);
+    }
+    return scratch;
+  }
+
+  private static void ggufQ8_0Q8_0BlockMajorFloatLaneRow(
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int blocks,
+      int row,
+      float[] out,
+      GgufQ8_0Batch activation,
+      float[] laneAccumulator) {
+    byte[] blockMajorQuants = activation.blockMajorQuants();
+    float[] q8Scales = activation.scales();
+    int laneCount = FloatVector.SPECIES_256.length();
+    int activeLanes = batchSize * laneCount;
+    for (int lane = 0; lane < activeLanes; lane++) {
+      laneAccumulator[lane] = 0.0f;
+    }
+
+    long rowOffset = (long) row * blocks * GGUF_Q8_0_BLOCK_BYTES;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q8_0_BLOCK_BYTES;
+      float weightScale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      long weightOffset = blockOffset + Short.BYTES;
+      IntVector weight0 =
+          (IntVector)
+              ByteVector.fromMemorySegment(
+                      ByteVector.SPECIES_64, qWeight, weightOffset, ByteOrder.LITTLE_ENDIAN)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector weight1 =
+          (IntVector)
+              ByteVector.fromMemorySegment(
+                      ByteVector.SPECIES_64, qWeight, weightOffset + 8, ByteOrder.LITTLE_ENDIAN)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector weight2 =
+          (IntVector)
+              ByteVector.fromMemorySegment(
+                      ByteVector.SPECIES_64, qWeight, weightOffset + 16, ByteOrder.LITTLE_ENDIAN)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      IntVector weight3 =
+          (IntVector)
+              ByteVector.fromMemorySegment(
+                      ByteVector.SPECIES_64, qWeight, weightOffset + 24, ByteOrder.LITTLE_ENDIAN)
+                  .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+      int blockActivationOffset = block * activation.batchCapacity() * GGUF_Q_BLOCK_SIZE;
+      for (int batch = 0; batch < batchSize; batch++) {
+        int quantOffset = blockActivationOffset + batch * GGUF_Q_BLOCK_SIZE;
+        IntVector quant0 =
+            (IntVector)
+                ByteVector.fromArray(ByteVector.SPECIES_64, blockMajorQuants, quantOffset)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+        IntVector quant1 =
+            (IntVector)
+                ByteVector.fromArray(ByteVector.SPECIES_64, blockMajorQuants, quantOffset + 8)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+        IntVector quant2 =
+            (IntVector)
+                ByteVector.fromArray(ByteVector.SPECIES_64, blockMajorQuants, quantOffset + 16)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+        IntVector quant3 =
+            (IntVector)
+                ByteVector.fromArray(ByteVector.SPECIES_64, blockMajorQuants, quantOffset + 24)
+                    .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+        IntVector integerLanes =
+            weight0
+                .mul(quant0)
+                .add(weight1.mul(quant1))
+                .add(weight2.mul(quant2))
+                .add(weight3.mul(quant3));
+        FloatVector products =
+            (FloatVector)
+                integerLanes.convertShape(VectorOperators.I2F, FloatVector.SPECIES_256, 0);
+        int laneOffset = batch * laneCount;
+        FloatVector accumulator =
+            FloatVector.fromArray(FloatVector.SPECIES_256, laneAccumulator, laneOffset);
+        fma(
+                products,
+                FloatVector.broadcast(
+                    FloatVector.SPECIES_256, weightScale * q8Scales[batch * blocks + block]),
+                accumulator)
+            .intoArray(laneAccumulator, laneOffset);
+      }
+    }
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      out[batch * rows + row] =
+          reduceAdd(
+              FloatVector.fromArray(FloatVector.SPECIES_256, laneAccumulator, batch * laneCount));
     }
   }
 
