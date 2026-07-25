@@ -424,6 +424,27 @@ public interface VectorUtilSupport {
     return sum;
   }
 
+  /** Dequantizes GGUF Q5_0 blocks into a caller-owned float array. */
+  default void ggufQ5_0Dequantize(
+      MemorySegment qWeight, long byteOffset, float[] out, int outOffset, int dimensions) {
+    checkGgufBlockAligned(dimensions);
+    int blocks = dimensions / GGUF_Q_BLOCK_SIZE;
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = byteOffset + (long) block * GGUF_Q5_0_BLOCK_BYTES;
+      float scale = Float.float16ToFloat(qWeight.get(GGUF_LE_SHORT, blockOffset));
+      int highBits = qWeight.get(GGUF_LE_INT, blockOffset + Short.BYTES);
+      long quantsOffset = blockOffset + Short.BYTES + Integer.BYTES;
+      int outputOffset = outOffset + block * GGUF_Q_BLOCK_SIZE;
+      for (int index = 0; index < 16; index++) {
+        int packed = qWeight.get(ValueLayout.JAVA_BYTE, quantsOffset + index) & 0xFF;
+        int low = (packed & 0x0F) | (((highBits >>> index) & 1) << 4);
+        int high = (packed >>> 4) | (((highBits >>> (index + 16)) & 1) << 4);
+        out[outputOffset + index] = (low - 16) * scale;
+        out[outputOffset + index + 16] = (high - 16) * scale;
+      }
+    }
+  }
+
   /**
    * Dot product of a full-precision query with one GGUF Q8_0 quantized row.
    *

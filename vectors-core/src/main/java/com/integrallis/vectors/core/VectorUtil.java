@@ -374,6 +374,43 @@ public final class VectorUtil {
     return IMPL.ggufQ5_0DotProduct(query, qWeight, byteOffset, dimensions);
   }
 
+  /** Dequantizes GGUF Q5_0 blocks into a caller-owned float array. */
+  public static void ggufQ5_0Dequantize(
+      MemorySegment qWeight, long byteOffset, float[] out, int outOffset, int dimensions) {
+    Objects.requireNonNull(qWeight, "qWeight");
+    Objects.requireNonNull(out, "out");
+    if (byteOffset < 0) {
+      throw new IllegalArgumentException("byteOffset must be >= 0: " + byteOffset);
+    }
+    if (outOffset < 0 || dimensions < 0 || outOffset > out.length - dimensions) {
+      throw new IllegalArgumentException(
+          "out range is invalid: offset="
+              + outOffset
+              + ", dimensions="
+              + dimensions
+              + ", length="
+              + out.length);
+    }
+    if (dimensions % VectorUtilSupport.GGUF_Q_BLOCK_SIZE != 0) {
+      throw new IllegalArgumentException(
+          "GGUF Q5_0 dimensions must be a multiple of 32: " + dimensions);
+    }
+    long required =
+        byteOffset
+            + ggufQuantizedRowBytes(
+                dimensions,
+                VectorUtilSupport.GGUF_Q_BLOCK_SIZE,
+                VectorUtilSupport.GGUF_Q5_0_BLOCK_BYTES);
+    if (required < byteOffset || required > qWeight.byteSize()) {
+      throw new IllegalArgumentException(
+          "qWeight byteSize is too small for requested values: "
+              + qWeight.byteSize()
+              + " < "
+              + required);
+    }
+    IMPL.ggufQ5_0Dequantize(qWeight, byteOffset, out, outOffset, dimensions);
+  }
+
   /**
    * Dot product of a full-precision query with one GGUF Q8_0 quantized row.
    *
