@@ -449,6 +449,26 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q5_0Dequantize_matchesDecodedReferenceAtOutputOffset() {
+    byte[] block = q5Block(0.25f, index -> (index * 7) % 32 - 16);
+    float[] decoded = new float[34];
+    decoded[0] = 99.0f;
+    decoded[33] = 98.0f;
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment segment = copy(arena, block);
+
+      VectorUtil.ggufQ5_0Dequantize(segment, 0, decoded, 1, 32);
+    }
+
+    assertThat(decoded[0]).isEqualTo(99.0f);
+    assertThat(decoded[33]).isEqualTo(98.0f);
+    for (int index = 0; index < 32; index++) {
+      assertThat(decoded[index + 1]).isEqualTo(0.25f * ((index * 7) % 32 - 16));
+    }
+  }
+
+  @Test
   void q4_0BatchDotProduct_respectsRowOffsets() {
     float[] query = ones(32);
     byte[] row0 = q4Block(1.0f, query, (lo, hi) -> 0x98);
