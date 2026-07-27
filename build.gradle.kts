@@ -1,3 +1,6 @@
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
 plugins {
     java
     `java-library`
@@ -10,10 +13,22 @@ plugins {
     jacoco
 }
 
+val notebookRepositoryUrl = providers.gradleProperty("notebookRepository")
+    .orElse(providers.environmentVariable("VECTORS_NOTEBOOK_REPOSITORY"))
+
 allprojects {
     group = "com.integrallis"
 
     repositories {
+        if (project == rootProject && notebookRepositoryUrl.isPresent) {
+            maven {
+                name = "notebookCandidate"
+                url = uri(notebookRepositoryUrl.get())
+                content {
+                    includeGroup("com.integrallis")
+                }
+            }
+        }
         mavenCentral()
     }
 }
@@ -48,7 +63,67 @@ val publishedModuleNames = setOf(
     "vectors-cache-semantic-db",
     "vectors-cache-spring-ai"
 )
+extra["publishedModuleNames"] = publishedModuleNames
+extra["publishedJavadocModuleNames"] = publishedModuleNames - "vectors"
 val publishedProjects = libraryProjects.filter { it.name in publishedModuleNames }
+
+// JJava notebooks consume one generated classpath so notebook cells never encode module JAR names
+// or versions. Source mode resolves project runtime variants; release mode resolves the exact
+// Maven Central artifacts selected with -PnotebookVersion (or VECTORS_VERSION).
+val notebookMode = providers.gradleProperty("notebookMode")
+    .orElse(providers.environmentVariable("VECTORS_NOTEBOOK_MODE"))
+    .orElse("source")
+val notebookVersion = providers.gradleProperty("notebookVersion")
+    .orElse(providers.environmentVariable("VECTORS_VERSION"))
+    .orElse(provider { project.version.toString() })
+
+fun Configuration.asNotebookRuntimeClasspath() {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    attributes {
+        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+    }
+}
+
+val notebookSourceClasspath by configurations.creating {
+    description = "Runtime classpath for notebooks using the current project sources"
+    asNotebookRuntimeClasspath()
+}
+val notebookReleaseClasspath by configurations.creating {
+    description = "Runtime classpath for notebooks using released com.integrallis artifacts"
+    asNotebookRuntimeClasspath()
+}
+
+dependencies {
+    listOf(
+        ":vectors",
+        ":vectors-spring-ai",
+        ":vectors-langchain4j",
+        ":vectors-cache-langchain4j",
+        ":vectors-vcr-serde-jackson"
+    ).forEach { notebookSourceClasspath(project(it)) }
+
+    listOf(
+        "vectors",
+        "vectors-spring-ai",
+        "vectors-langchain4j",
+        "vectors-cache-langchain4j"
+    ).forEach { artifact ->
+        notebookReleaseClasspath("com.integrallis:$artifact:${notebookVersion.get()}")
+    }
+
+    listOf(
+        "org.springframework.ai:spring-ai-vector-store:1.1.4",
+        "org.springframework.ai:spring-ai-model:1.1.4",
+        "io.micrometer:micrometer-observation:1.14.4",
+        "dev.langchain4j:langchain4j-core:1.13.1",
+        "org.slf4j:slf4j-nop:2.0.17"
+    ).forEach { dependency ->
+        notebookSourceClasspath(dependency)
+        notebookReleaseClasspath(dependency)
+    }
+}
 
 // ---------------------------------------------------------------------------
 // MFCQI (Multi-Factor Code Quality Index) — https://github.com/integrallis/mfcqi-java
@@ -659,7 +734,8 @@ tasks.register("verifyGithubWorkflows") {
     description = "Verify GitHub Actions workflow files exist"
     doLast {
         val workflowDir = rootProject.file(".github/workflows")
-        listOf("ci.yml", "scorecard.yml", "mfcqi.yml", "release.yml").forEach { name ->
+        listOf("ci.yml", "docs.yml", "scorecard.yml", "mfcqi.yml", "release.yml")
+            .forEach { name ->
             val f = workflowDir.resolve(name)
             require(f.exists()) { "Missing workflow: ${f.absolutePath}" }
             val content = f.readText()
@@ -673,6 +749,266 @@ tasks.register("verifyGithubWorkflows") {
     }
 }
 
+tasks.register("verifyNotebooks") {
+    group = "verification"
+    description = "Verify that JJava notebooks are portable, current, and free of checked-in errors"
+
+    val notebookFiles = fileTree("notebooks") {
+        include("*.ipynb")
+    }
+    val kernelFile = file("notebooks/jupyter/kernel.json")
+    val notebookReadme = file("notebooks/README.md")
+    inputs.files(notebookFiles, kernelFile, notebookReadme)
+
+    doLast {
+        val forbiddenText = mapOf(
+            "0.1.0-SNAPSHOT" to "hardcoded snapshot dependency",
+            "/build/libs/" to "hardcoded module JAR path",
+            "%classpath" to "notebook-local classpath setup",
+            "%%loadFromPOM" to "notebook-local Maven dependency setup",
+            "com.integrallis.vectors.db.Document" to "stale Document package",
+            "langchain4j-core:1.0.0-beta1" to "outdated LangChain4j dependency"
+        )
+        val expectedOutput = mapOf(
+            "01_getting_started.ipynb" to listOf("collection size: 500"),
+            "02_quantization_tour.ipynb" to listOf("recall regression floors satisfied"),
+            "03_spring_ai_integration.ipynb" to
+                listOf("SIMD via Panama Vector API", "after delete, collection size: 4"),
+            "04_langchain4j_integration.ipynb" to listOf("[1] score=", "SIMD via Panama"),
+            "05_embedding_cache.ipynb" to
+                listOf("delegateCalls=4", "delegateCalls=5"),
+            "06_vcr_test_harness.ipynb" to
+                listOf("model=text-embedding-3-small", "vec[0]=0.110000")
+        )
+
+        notebookFiles.files.sorted().forEach { notebookFile ->
+            val notebook = JsonSlurper().parse(notebookFile) as Map<*, *>
+            val metadata = notebook["metadata"] as? Map<*, *> ?: emptyMap<Any, Any>()
+            val kernelSpec = metadata["kernelspec"] as? Map<*, *> ?: emptyMap<Any, Any>()
+            require(kernelSpec["name"] == "java") {
+                "${notebookFile.name} must use the JJava kernel"
+            }
+
+            val cells = notebook["cells"] as? List<*> ?: emptyList<Any>()
+            fun fragments(value: Any?): String = when (value) {
+                is List<*> -> value.joinToString("") { it.toString() }
+                null -> ""
+                else -> value.toString()
+            }
+            val executionSourceDigest = MessageDigest.getInstance("SHA-256")
+            cells.mapNotNull { it as? Map<*, *> }.forEach { cell ->
+                executionSourceDigest.update(cell["cell_type"].toString().toByteArray())
+                executionSourceDigest.update(0)
+                executionSourceDigest.update(fragments(cell["source"]).toByteArray())
+                executionSourceDigest.update(0)
+            }
+            val executionSourceSha256 =
+                executionSourceDigest.digest().joinToString("") { "%02x".format(it) }
+            val vectorsMetadata =
+                metadata["vectors"] as? Map<*, *> ?: emptyMap<Any, Any>()
+            require(vectorsMetadata["execution_source_sha256"] == executionSourceSha256) {
+                "${notebookFile.name} outputs were not executed from its current cell sources"
+            }
+
+            val codeCells = cells
+                .mapNotNull { it as? Map<*, *> }
+                .filter { it["cell_type"] == "code" }
+            require(codeCells.isNotEmpty()) {
+                "${notebookFile.name} must contain executable code"
+            }
+            require(codeCells.all { it["execution_count"] is Number }) {
+                "${notebookFile.name} must ship with every code cell executed"
+            }
+
+            val source = cells.joinToString("\n") { cell ->
+                val sourceLines = (cell as? Map<*, *>)?.get("source") as? List<*> ?: emptyList<Any>()
+                sourceLines.joinToString("") { it.toString() }
+            }
+            forbiddenText.forEach { (needle, description) ->
+                require(needle !in source) {
+                    "${notebookFile.name} contains $description: $needle"
+                }
+            }
+
+            val outputs = codeCells.flatMap { cell ->
+                (cell["outputs"] as? List<*> ?: emptyList<Any>())
+                    .mapNotNull { it as? Map<*, *> }
+            }
+            val checkedInErrors = outputs.filter { it["output_type"] == "error" }
+            require(checkedInErrors.isEmpty()) {
+                "${notebookFile.name} contains ${checkedInErrors.size} checked-in execution error(s)"
+            }
+            val checkedInStderr = outputs.filter {
+                it["output_type"] == "stream" && it["name"] == "stderr"
+            }
+            require(checkedInStderr.isEmpty()) {
+                "${notebookFile.name} contains ${checkedInStderr.size} checked-in stderr output(s)"
+            }
+
+            val renderedOutput = outputs.joinToString("") { output ->
+                when (output["output_type"]) {
+                    "stream" -> fragments(output["text"])
+                    "execute_result", "display_data" ->
+                        fragments((output["data"] as? Map<*, *>)?.get("text/plain"))
+                    else -> ""
+                }
+            }
+            expectedOutput.getValue(notebookFile.name).forEach { expected ->
+                require(expected in renderedOutput) {
+                    "${notebookFile.name} is missing checked-in output: $expected"
+                }
+            }
+            println("  Notebook: ${notebookFile.name}")
+        }
+
+        val kernel = JsonSlurper().parse(kernelFile) as Map<*, *>
+        val kernelEnv = kernel["env"] as? Map<*, *> ?: emptyMap<Any, Any>()
+        require(kernelEnv["JJAVA_CLASSPATH"] ==
+            "/home/jovyan/work/vectors/build/notebooks/classpath/*") {
+            "JJava kernel must load the generated notebook classpath"
+        }
+
+        val readmeText = notebookReadme.readText()
+        require("install.sh" !in readmeText) {
+            "Notebook README references the nonexistent jupyter/install.sh"
+        }
+    }
+}
+
+tasks.register("verifyDocumentation") {
+    group = "verification"
+    description = "Verify README, Antora content, landing page, and documentation toolchain"
+
+    val readmeFile = file("README.md")
+    val docsFiles = fileTree("docs") {
+        include("**/*.adoc", "**/*.html", "**/*.hbs", "**/*.yml", "**/*.yaml")
+        exclude("build/**", "node_modules/**", ".gradle/**", "content/**/attachments/**")
+    }
+    val docsPackageFile = file("docs/package.json")
+    val docsLockFile = file("docs/package-lock.json")
+    val docsBuildFile = file("docs/build.gradle")
+    val ciWorkflowFile = file(".github/workflows/ci.yml")
+    val docsWorkflowFile = file(".github/workflows/docs.yml")
+    val releaseWorkflowFile = file(".github/workflows/release.yml")
+    inputs.files(
+        readmeFile,
+        docsFiles,
+        docsPackageFile,
+        docsLockFile,
+        docsBuildFile,
+        ciWorkflowFile,
+        docsWorkflowFile,
+        releaseWorkflowFile
+    )
+
+    doLast {
+        val staleRepositoryUrl = "https://github.com/integrallis/java-vectors"
+        val staleReferences = docsFiles.files.filter { staleRepositoryUrl in it.readText() }
+        require(staleReferences.isEmpty()) {
+            "Documentation contains stale repository URLs: " +
+                staleReferences.joinToString { it.relativeTo(rootDir).path }
+        }
+
+        val readme = readmeFile.readText()
+        publishedModuleNames.forEach { module ->
+            require("`$module`" in readme) {
+                "README module inventory is missing $module"
+            }
+        }
+        require("https://integrallis.github.io/vectors/" in readme) {
+            "README must link to the published documentation site"
+        }
+        require("notebooks/README.md" in readme) {
+            "README must link to the executable notebooks"
+        }
+
+        val docsIndex = file("docs/content/modules/ROOT/pages/index.adoc").readText()
+        publishedModuleNames.forEach { module ->
+            require("`$module`" in docsIndex) {
+                "Documentation module inventory is missing $module"
+            }
+        }
+
+        val docsNav = file("docs/content/modules/ROOT/nav.adoc").readText()
+        require("notebooks.adoc" in docsNav) {
+            "Antora navigation must link to the notebook guide"
+        }
+        require("studio.adoc" in docsNav) {
+            "Antora navigation must link to the Vectors Studio guide"
+        }
+
+        val landingPage = file("docs/landing/index.html").readText()
+        require("collection.search(query, 10)" !in landingPage) {
+            "Landing page uses a nonexistent VectorCollection.search overload"
+        }
+
+        require(docsLockFile.exists()) {
+            "docs/package-lock.json must be committed for reproducible documentation builds"
+        }
+        val docsPackage = JsonSlurper().parse(docsPackageFile) as Map<*, *>
+        val dependencies = docsPackage["dependencies"] as? Map<*, *> ?: emptyMap<Any, Any>()
+        listOf("@antora/cli", "@antora/site-generator", "@antora/site-generator-default")
+            .forEach { dependency ->
+                require(dependencies[dependency] == "3.1.12") {
+                    "$dependency must be pinned exactly to 3.1.12"
+                }
+            }
+        val overrides = docsPackage["overrides"] as? Map<*, *> ?: emptyMap<Any, Any>()
+        require(overrides["js-yaml"] == "4.3.0") {
+            "Documentation dependencies must override js-yaml to 4.3.0"
+        }
+        require("args = ['ci']" in docsBuildFile.readText()) {
+            "Documentation build must use npm ci"
+        }
+        require(":docs:build" in ciWorkflowFile.readText()) {
+            "CI must execute the documentation build"
+        }
+        require("test-notebooks.sh" in ciWorkflowFile.readText()) {
+            "CI must execute and validate the Java notebooks"
+        }
+        require(":docs:build" in docsWorkflowFile.readText()) {
+            "GitHub Pages workflow must execute the documentation build"
+        }
+        require(":docs:build" in releaseWorkflowFile.readText()) {
+            "Release workflow must execute the documentation build"
+        }
+        require("-PnotebookMode=release" in releaseWorkflowFile.readText()) {
+            "Release workflow must validate notebooks against staged release artifacts"
+        }
+    }
+}
+
+tasks.register<Sync>("prepareNotebookClasspath") {
+    group = "documentation"
+    description = "Prepare the JJava runtime classpath from source or released artifacts"
+
+    val selectedMode = notebookMode.map { it.lowercase() }
+    val selectedClasspath = when (selectedMode.get()) {
+        "source" -> notebookSourceClasspath
+        "release" -> notebookReleaseClasspath
+        else -> throw GradleException(
+            "Unsupported notebookMode '${notebookMode.get()}'; expected 'source' or 'release'"
+        )
+    }
+
+    from(selectedClasspath)
+    into(layout.buildDirectory.dir("notebooks/classpath"))
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+    inputs.property("notebookMode", selectedMode)
+    inputs.property("notebookVersion", notebookVersion)
+    inputs.property("notebookRepository", notebookRepositoryUrl.orElse(""))
+
+    doLast {
+        val details = if (selectedMode.get() == "release") {
+            "com.integrallis ${notebookVersion.get()}"
+        } else {
+            "current project sources"
+        }
+        println("  Notebook classpath: ${destinationDir.absolutePath}")
+        println("  Dependency mode: $details")
+    }
+}
+
 tasks.register("complianceCheck") {
     group = "verification"
     description = "Run all compliance verification tasks"
@@ -683,7 +1019,9 @@ tasks.register("complianceCheck") {
         "verifyPublishingConfigured",
         "verifyStagedPublications",
         "verifyReproducibleBuild",
-        "verifyGithubWorkflows"
+        "verifyGithubWorkflows",
+        "verifyNotebooks",
+        "verifyDocumentation"
     )
 }
 
@@ -704,9 +1042,11 @@ val aggregateJavadocClasspath: Configuration by configurations.creating {
 }
 
 dependencies {
-    libraryProjects
-        .filter { it.name != "vectors-bench" }
-        .forEach { aggregateJavadocClasspath(project(it.path)) }
+    publishedProjects.forEach { aggregateJavadocClasspath(project(it.path)) }
+    // vectors-db keeps its optional cuVS adapter compile-only so CPU consumers never resolve GPU
+    // artifacts. Javadoc still parses those adapter sources and therefore needs the GPU types on
+    // its documentation-only classpath.
+    aggregateJavadocClasspath(project(":vectors-gpu"))
     aggregateJavadocClasspath("dev.langchain4j:langchain4j-core:1.13.1")
     aggregateJavadocClasspath("org.springframework.ai:spring-ai-vector-store:1.1.4")
     aggregateJavadocClasspath("org.springframework.ai:spring-ai-model:1.1.4")
@@ -717,12 +1057,24 @@ dependencies {
     aggregateJavadocClasspath("org.testng:testng:7.10.2")
 }
 
+val cleanCollectedJavadocs by tasks.registering(Delete::class) {
+    description = "Remove stale Javadocs before collecting the published API"
+    group = "documentation"
+    delete(layout.buildDirectory.dir("docs/javadoc"))
+}
+
 // Aggregated Javadoc generation
 tasks.register<Javadoc>("aggregateJavadoc") {
     description = "Generate aggregated Javadoc for all library modules"
     group = "documentation"
+    dependsOn(cleanCollectedJavadocs)
+    javadocTool.set(
+        javaToolchains.javadocToolFor {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    )
 
-    val libProjects = libraryProjects.filter { it.name != "vectors-bench" }
+    val libProjects = publishedProjects
     // Library projects are evaluated before :docs (the caller), so the main source sets are
     // already realised by the time this task's configure lambda runs. Using afterEvaluate here
     // fails under Gradle 9 because the callback would fire on an already-evaluated project.
@@ -755,13 +1107,13 @@ tasks.register<Javadoc>("aggregateJavadoc") {
 // Sync is a built-in, configuration-cache-compatible task type; wiring `from` to each module's
 // javadoc task carries the cross-project dependency without serializing a Project.
 val perModuleJavadocCopies =
-    libraryProjects
-        .filter { it.name != "vectors-bench" }
+    publishedProjects
         .map { proj ->
             val moduleName = proj.name.removePrefix("vectors-")
             tasks.register<Sync>("copyJavadoc_$moduleName") {
                 description = "Collects $moduleName Javadoc into the aggregate docs tree"
                 group = "documentation"
+                dependsOn(cleanCollectedJavadocs)
                 from(proj.tasks.named<Javadoc>("javadoc"))
                 into(layout.buildDirectory.dir("docs/javadoc/modules/$moduleName"))
             }

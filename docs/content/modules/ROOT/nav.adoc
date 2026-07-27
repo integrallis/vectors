@@ -26,6 +26,10 @@
 * xref:server.adoc[HTTP Server]
 * xref:testing.adoc[VCR Test Harness]
 
+.Tools
+* xref:notebooks.adoc[Executable Notebooks]
+* xref:studio.adoc[Vectors Studio]
+
 .API Reference
 * xref:api-reference.adoc[Javadoc]
 

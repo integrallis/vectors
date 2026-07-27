@@ -66,6 +66,40 @@ class CachingEmbeddingModelTest {
   }
 
   @Test
+  void embedAllDeduplicatesRepeatedColdMissesWithinTheBatch() {
+    FakeEmbeddingModel fake = new FakeEmbeddingModel();
+    CachingEmbeddingModel model = new CachingEmbeddingModel(fake, newCache());
+    List<TextSegment> segments =
+        List.of(
+            TextSegment.from("repeat"),
+            TextSegment.from("unique"),
+            TextSegment.from("repeat"),
+            TextSegment.from("repeat"));
+
+    List<Embedding> out = model.embedAll(segments).content();
+
+    assertThat(fake.batchCalls.get()).isEqualTo(1);
+    assertThat(fake.batchItems.get()).isEqualTo(2);
+    assertThat(out).hasSize(4);
+    assertThat(out.get(0).vector()).containsExactly(out.get(2).vector());
+    assertThat(out.get(0).vector()).containsExactly(out.get(3).vector());
+  }
+
+  @Test
+  void embedAllDoesNotExposeTheVectorStoredInTheCache() {
+    FakeEmbeddingModel fake = new FakeEmbeddingModel();
+    CachingEmbeddingModel model = new CachingEmbeddingModel(fake, newCache());
+
+    List<Embedding> first = model.embedAll(List.of(TextSegment.from("stable"))).content();
+    float expected = first.getFirst().vector()[0];
+    first.getFirst().vector()[0] = expected + 1000.0f;
+
+    List<Embedding> cached = model.embedAll(List.of(TextSegment.from("stable"))).content();
+
+    assertThat(cached.getFirst().vector()[0]).isEqualTo(expected);
+  }
+
+  @Test
   void embedAllPreservesRequestOrder() {
     FakeEmbeddingModel fake = new FakeEmbeddingModel();
     CachingEmbeddingModel model = new CachingEmbeddingModel(fake, newCache());

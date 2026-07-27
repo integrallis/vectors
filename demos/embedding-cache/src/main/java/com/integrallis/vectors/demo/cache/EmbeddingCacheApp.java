@@ -41,7 +41,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <ol>
  *   <li>Single-text and batch embed paths both consult the cache.
- *   <li>All batch misses are coalesced into a single delegate {@code embedAll} round-trip.
+ *   <li>Repeated cold inputs are deduplicated and unique misses are coalesced into one delegate
+ *       {@code embedAll} round-trip.
  *   <li>Re-embedding already-seen texts hits the cache without invoking the delegate.
  * </ol>
  *

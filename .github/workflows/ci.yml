@@ -32,6 +32,15 @@ jobs:
       - name: Build + Test
         run: ./gradlew spotlessCheck build -x :docs:build
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Build Documentation
+        run: ./gradlew :docs:build
+
       # P1.1 recall@10 regression gate: deterministic, no dataset download. Fails the build if
       # recall on any gated index (HNSW/VAMANA/IVF_FLAT/IVF_PQ) drops > 0.005 vs the committed
       # baseline. Re-baseline an intentional change with -Drecall.gate.mode=record.
@@ -58,3 +67,45 @@ jobs:
           name: test-reports
           path: '*/build/reports/tests/'
           retention-days: 30
+
+  notebooks:
+    name: Execute Java Notebooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Prepare source classpath
+        run: ./gradlew prepareNotebookClasspath -PnotebookMode=source
+
+      - name: Prepare writable notebook output
+        run: install -d -m 0777 build/notebooks/executed
+
+      - name: Build JJava image
+        working-directory: notebooks
+        run: docker compose build
+
+      - name: Execute and validate all notebooks
+        working-directory: notebooks
+        env:
+          VECTORS_NOTEBOOK_PREPARE: "false"
+          VECTORS_NOTEBOOK_MODE: source
+        run: >
+          docker compose run --rm --no-deps jupyter
+          bash /home/jovyan/work/vectors/notebooks/scripts/test-notebooks.sh
+
+      - name: Upload executed notebooks
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: executed-notebooks
+          path: build/notebooks/executed/
+          retention-days: 14

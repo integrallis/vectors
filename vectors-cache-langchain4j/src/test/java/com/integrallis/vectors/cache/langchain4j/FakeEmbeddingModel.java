@@ -30,6 +30,7 @@ final class FakeEmbeddingModel implements EmbeddingModel {
 
   final AtomicInteger singleCalls = new AtomicInteger();
   final AtomicInteger batchCalls = new AtomicInteger();
+  final AtomicInteger batchItems = new AtomicInteger();
 
   @Override
   public Response<Embedding> embed(String text) {
@@ -45,6 +46,7 @@ final class FakeEmbeddingModel implements EmbeddingModel {
   @Override
   public Response<List<Embedding>> embedAll(List<TextSegment> segments) {
     batchCalls.incrementAndGet();
+    batchItems.addAndGet(segments.size());
     List<Embedding> out = new ArrayList<>(segments.size());
     for (TextSegment s : segments) {
       out.add(Embedding.from(encode(s.text())));

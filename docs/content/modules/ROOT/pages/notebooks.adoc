@@ -1,0 +1,93 @@
+= Executable Notebooks
+:navtitle: Executable Notebooks
+
+The repository includes six Java notebooks that run on JDK 25 through the DFLib JJava kernel.
+They exercise the real Vectors APIs with deterministic local data; no API keys or external model
+services are required.
+Each checked-in notebook includes its last certified source-mode outputs, so GitHub and other
+notebook viewers show complete results without requiring readers to run a local kernel.
+
+[cols="1,3,1", options="header"]
+|===
+|Notebook |Coverage |Modes
+
+|`01_getting_started.ipynb`
+|FLAT and HNSW collections, commits, search, and result comparison
+|Source, release
+
+|`02_quantization_tour.ipynb`
+|SQ8, PQ, and BQ compression and deterministic recall floors
+|Source, release
+
+|`03_spring_ai_integration.ipynb`
+|Spring AI `VectorStore` ingestion, retrieval, and deletion
+|Source, release
+
+|`04_langchain4j_integration.ipynb`
+|LangChain4j `EmbeddingStore` ingestion and retrieval
+|Source, release
+
+|`05_embedding_cache.ipynb`
+|Cold-batch deduplication, cache hits/misses, and delegate-call counts
+|Source, release
+
+|`06_vcr_test_harness.ipynb`
+|Cassette record, replay, listing, and cleanup
+|Source only
+|===
+
+Browse the {url-vectors-github}/tree/main/notebooks[notebook sources on GitHub^].
+
+== Run from Source
+
+Docker and Docker Compose are the only host prerequisites. The container installs JDK 25 and the
+JJava kernel; Gradle prepares a stable classpath from the current project outputs before Jupyter
+starts.
+
+[source,bash]
+----
+cd notebooks
+docker compose up --build
+----
+
+Open `http://localhost:8888`. The local development server does not require a token.
+
+== Run Against a Release
+
+Select the dependency mode and version once rather than editing individual notebook cells:
+
+[source,bash,subs="attributes+"]
+----
+cd notebooks
+VECTORS_NOTEBOOK_MODE=release \
+VECTORS_VERSION={vectors-version} \
+docker compose up --build
+----
+
+Release mode resolves `com.integrallis` artifacts from Maven Central. Notebook 06 is source-only
+because the VCR modules are not in the 0.1.0 publication set.
+
+== Verify Every Output Cell
+
+[source,bash]
+----
+cd notebooks
+docker compose build
+docker compose run --rm --no-deps jupyter \
+  bash /home/jovyan/work/vectors/notebooks/scripts/test-notebooks.sh
+----
+
+The verification run executes notebooks into `build/notebooks/executed/`. It fails on Java
+exceptions, stderr, unexecuted cells, suspicious exception text, unexpected display values, or
+incorrect semantic results such as recall below the fixed-workload floors, wrong retrieval order,
+cache counts, or VCR replay mismatches.
+
+Maintainers promote a successful source-mode run into the checked-in notebooks with
+`notebooks/scripts/update_notebook_outputs.py`. The script refuses to update a notebook if its cell
+types, ordering, or source text differ from the executed copy, copies only outputs and execution
+counts, strips volatile execution timestamps, and records a source SHA-256.
+`./gradlew verifyNotebooks` then verifies that the distributable notebooks remain fully executed,
+error-free, and tied to their current cell sources.
+
+For the dependency bootstrap and local staged-release commands, see the
+{url-vectors-github}/blob/main/notebooks/README.md[notebook README^].

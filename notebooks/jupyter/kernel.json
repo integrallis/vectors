@@ -8,11 +8,12 @@
         "{resource_dir}/jjava.jar",
         "{connection_file}"
     ],
-    "display_name": "Java (java-vectors, JDK 25)",
+    "display_name": "Java (Vectors, JDK 25)",
     "language": "java",
     "interrupt_mode": "message",
     "env": {
         "JJAVA_TIMEOUT": "-1",
+        "JJAVA_CLASSPATH": "/home/jovyan/work/vectors/build/notebooks/classpath/*",
         "JJAVA_COMPILER_OPTS": "--add-modules jdk.incubator.vector",
         "JJAVA_JVM_OPTS": "--add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED"
     }

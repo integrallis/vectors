@@ -69,9 +69,12 @@ NOTE: Requires JDK 25 with `--add-modules jdk.incubator.vector` at compile and r
 
 == Modules
 
-[cols="1,3"]
+[cols="2,5", options="header"]
 |===
 |Module |Description
+
+|`vectors`
+|Single umbrella dependency for the embedded engine. Re-exports `vectors-db` and its index, storage, and quantization dependencies.
 
 |`vectors-db`
 |Embedded database facade: the `VectorCollection` API over every index and quantizer, with metadata filtering, persistence, deletion, and compaction. The entry point for most applications.
@@ -94,22 +97,47 @@ NOTE: Requires JDK 25 with `--add-modules jdk.incubator.vector` at compile and r
 |`vectors-ivf`
 |IVF family indexes (IVF_FLAT, IVF_PQ).
 
+|`vectors-hybrid`
+|Framework-neutral dense/text retrieval SPIs and reciprocal-rank/weighted fusion.
+
 |`vectors-spring-ai`
-|Spring AI `VectorStore` adapter and Spring Boot starter.
+|Spring AI `VectorStore` adapter.
 
 |`vectors-langchain4j`
 |LangChain4j `EmbeddingStore` adapter.
 
-|`vectors-bench`
-|JMH microbenchmarks and an ANN-Benchmarks-compatible macrobenchmark harness.
+|`vectors-spring-boot-starter`
+|Spring Boot auto-configuration for the Spring AI adapter and embedded collection.
+
+|`vectors-cache`
+|Framework-neutral exact and semantic cache SPIs with a Caffeine implementation.
+
+|`vectors-cache-jcache`
+|JSR-107 bridge for `VectorCache`.
+
+|`vectors-cache-langchain4j`
+|Caching decorator for LangChain4j embedding models.
+
+|`vectors-cache-semantic-db`
+|Semantic cache backed by `VectorCollection`.
+
+|`vectors-cache-spring-ai`
+|Caching decorators for Spring AI embedding and chat clients.
 |===
 
-See xref:architecture.adoc[Architecture] for the full module graph and design.
+All 17 modules above are Apache-2.0 artifacts in the 0.1.0 Maven Central publication set.
+The repository also contains benchmarks, demos, Vectors Studio, VCR test tooling, and the
+separately licensed distributed tier; those are not silently added by the umbrella dependency.
+See xref:architecture.adoc[Architecture] for the module graph and design.
 
 == Requirements
 
 * **JDK 25** with `--add-modules jdk.incubator.vector`. The Vector API is a hard requirement; SIMD distance kernels are the core of the library.
 * **Gradle** (the wrapper is included) or **Maven 3.9+**.
+
+The published artifacts are Java-only JARs with no JNI or bundled native libraries. The
+repository's optional xref:studio.adoc[Vectors Studio] application uses native OpenBLAS for
+dimensionality reduction.
 
 == Roadmap
 

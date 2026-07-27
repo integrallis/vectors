@@ -3,17 +3,22 @@ services:
     build:
       context: .
       dockerfile: jupyter/Dockerfile
-    image: java-vectors-jjava:latest
-    container_name: java-vectors-jjava
+    image: vectors-jjava:latest
+    container_name: vectors-jjava
     ports:
-      - "8888:8888"
+      - "127.0.0.1:8888:8888"
     volumes:
-      # Mount the repository root so notebooks can resolve /home/jovyan/work/vectors/*/build/libs
+      # Mount the repository root so Gradle can prepare the selected notebook classpath.
       - ../..:/home/jovyan/work:cached
+      - vectors-notebook-gradle-cache:/home/jovyan/.gradle
     environment:
-      # Passthrough for demos that use external embedding APIs.
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - VECTORS_NOTEBOOK_MODE=${VECTORS_NOTEBOOK_MODE:-source}
+      - VECTORS_VERSION=${VECTORS_VERSION:-0.1.0}
+      - VECTORS_NOTEBOOK_REPOSITORY=${VECTORS_NOTEBOOK_REPOSITORY:-}
+      - VECTORS_NOTEBOOK_PREPARE=${VECTORS_NOTEBOOK_PREPARE:-true}
       - JUPYTER_ENABLE_LAB=yes
     restart: unless-stopped
     working_dir: /home/jovyan/work/vectors/notebooks
+
+volumes:
+  vectors-notebook-gradle-cache:

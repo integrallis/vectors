@@ -8,9 +8,12 @@ This page describes the module layout, dependency graph, and key architectural d
 Vectors is a multi-module Gradle project.
 Each module has a single responsibility and exposes its API via `api` dependencies so that downstream modules can compose them.
 
-[cols="2,4", options="header"]
+[cols="2,5", options="header"]
 |===
 | Module | Description
+
+| `vectors`
+| Umbrella artifact for the embedded engine. Re-exports `vectors-db`.
 
 | `vectors-core`
 | SIMD distance kernels (dot product, L2, cosine), vector type abstractions, similarity functions.
@@ -40,44 +43,86 @@ Inverted file with k-means clustering, ADC lookup tables, and optional rescore.
 | Embedded vector database facade.
 Unified `VectorCollection` API over all backends with metadata filtering, persistence, deletion, and compaction.
 
-| `vectors-distributed`
-| Scatter-gather distributed search.
-Part of the xref:distributed.adoc[distributed tier].
+| `vectors-hybrid`
+| Dense and text retriever SPIs with reciprocal-rank and weighted fusion.
 
-| `vectors-server`
-| HTTP server (Helidon SE 4).
-Part of the xref:distributed.adoc[distributed tier].
+| `vectors-spring-ai`
+| Spring AI `VectorStore` adapter.
+
+| `vectors-langchain4j`
+| LangChain4j `EmbeddingStore` adapter.
+
+| `vectors-spring-boot-starter`
+| Spring Boot auto-configuration over `vectors-spring-ai`.
+
+| `vectors-cache`
+| Cache SPI and Caffeine implementation.
+
+| `vectors-cache-jcache`
+| JSR-107 bridge for `VectorCache`.
+
+| `vectors-cache-langchain4j`
+| LangChain4j embedding-model cache decorator.
+
+| `vectors-cache-semantic-db`
+| Semantic cache backed by `VectorCollection`.
+
+| `vectors-cache-spring-ai`
+| Spring AI embedding/chat cache decorators.
+|===
+
+These are the 17 Apache-2.0 modules published in 0.1.0.
+
+== Repository Tools and Additional Tiers
+
+[cols="2,5", options="header"]
+|===
+| Module | Description
 
 | `vectors-bench`
-| JMH benchmarks and ANN-Benchmarks-compatible harness.
-Dataset loading, checkpoint/resume, recall/QPS measurement.
+| JMH and ANN-Benchmarks-compatible harnesses, deterministic recall gates, and performance evidence.
+
+| `vectors-studio-*`
+| Interactive collection browser and projection workbench. See xref:studio.adoc[Vectors Studio].
+
+| `vectors-vcr-*`
+| Source-level record/replay test tooling. See xref:testing.adoc[VCR Test Harness].
+
+| `vectors-distributed`, `vectors-cluster`, `vectors-server`
+| Object-storage-backed distributed tier. See xref:distributed.adoc[Distributed Database].
 
 | `vectors-gpu`
-| cuVS GPU backend integration.
-Part of the xref:distributed.adoc[distributed tier]; requires an external native NVIDIA runtime.
+| cuVS backend. Requires an external native NVIDIA runtime and belongs to the separately licensed distributed tier.
 |===
 
 == Module Dependency Graph
 
 [source]
 ----
-vectors-core
-└── vectors-storage
-    └── vectors-quantization
-        ├── vectors-hnsw
-        ├── vectors-vamana
-        └── vectors-ivf
-            └── vectors-db
-                ├── vectors-distributed
-                ├── vectors-server
-                ├── vectors-spring-ai
-                │   └── vectors-spring-boot-starter
-                ├── vectors-langchain4j
-                └── vectors-cache-semantic-db
+vectors
+└── vectors-db
+    ├── vectors-core
+    ├── vectors-storage ────────────> vectors-core
+    ├── vectors-quantization ───────> vectors-core, vectors-storage
+    ├── vectors-hnsw ───────────────> core, storage, quantization
+    ├── vectors-vamana ─────────────> core, quantization
+    └── vectors-ivf ────────────────> core, storage, quantization
+
+vectors-hybrid ─────────────────────> vectors-core
+vectors-spring-ai ──────────────────> vectors-db, vectors-hybrid
+vectors-langchain4j ────────────────> vectors-db, vectors-hybrid
+vectors-spring-boot-starter ────────> vectors-spring-ai
+
+vectors-cache
+├── vectors-cache-jcache
+├── vectors-cache-langchain4j
+├── vectors-cache-spring-ai
+└── vectors-cache-semantic-db ──────> vectors-db
 ----
 
 Pick the module you need and transitive dependencies are resolved automatically.
-For most applications, `vectors-db` is the entry point.
+For most applications, `vectors` is the dependency entry point and `VectorCollection` from
+`vectors-db` is the API entry point.
 
 == Dual-Mode Operation
 

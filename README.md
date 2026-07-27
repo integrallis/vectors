@@ -25,6 +25,10 @@ first-class Spring AI and LangChain4j adapters.
 [![JDK 25+](https://img.shields.io/badge/JDK-25%2B-orange.svg)](https://openjdk.org/projects/jdk/25/)
 [![MFCQI](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/integrallis/vectors/main/.github/badges/mfcqi.json)](https://github.com/integrallis/mfcqi-java)
 
+[Documentation](https://integrallis.github.io/vectors/docs/) ·
+[Executable notebooks](notebooks/README.md) ·
+[Maven Central](https://central.sonatype.com/namespace/com.integrallis)
+
 ## Where it fits
 
 A JVM application that needs vector search has two common starting points:
@@ -49,6 +53,14 @@ dependencies {
 Create, commit, and search a persistent collection:
 
 ```java
+import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.db.IndexType;
+import com.integrallis.vectors.db.SearchRequest;
+import com.integrallis.vectors.db.SearchResult;
+import com.integrallis.vectors.db.VectorCollection;
+import java.nio.file.Path;
+
 Path data = Path.of("/var/lib/myapp/vectors");
 
 try (VectorCollection collection = VectorCollection.builder()
@@ -73,6 +85,8 @@ is configured.
 
 ### Spring AI
 
+Add `com.integrallis:vectors-spring-ai:0.1.0` alongside the Spring AI BOM:
+
 ```java
 VectorCollection collection = VectorCollection.builder()
     .dimension(embeddingModel.dimensions())
@@ -85,6 +99,8 @@ VectorStore store =
 ```
 
 ### LangChain4j
+
+Add `com.integrallis:vectors-langchain4j:0.1.0` alongside LangChain4j:
 
 ```java
 VectorCollection collection = VectorCollection.builder()
@@ -126,8 +142,10 @@ warnings:
 --enable-native-access=ALL-UNNAMED
 ```
 
-No JNI library is required for the CPU artifacts. The optional Arrow IPC
-exporter/ingester additionally needs the opens Arrow's allocator requires:
+Every published 0.1.0 artifact is a Java-only JAR with no JNI or bundled native
+library. The storage module uses the standard JDK FFM API for an optional
+`posix_madvise` optimization. The optional Arrow IPC exporter/ingester
+additionally needs the module opens required by Arrow's allocator:
 
 ```text
 --add-opens=java.base/java.nio=ALL-UNNAMED
@@ -163,8 +181,10 @@ path, and durable state that lives with the application.
 
 Published to Maven Central (Apache-2.0):
 
+- Entry point: `vectors` (umbrella dependency)
 - Core: `vectors-core`, `vectors-storage`, `vectors-quantization`
-- Indexes & database: `vectors-hnsw`, `vectors-vamana`, `vectors-ivf`, `vectors-db`
+- Indexes & database: `vectors-hnsw`, `vectors-vamana`, `vectors-ivf`, `vectors-db`,
+  `vectors-hybrid`
 - Frameworks: `vectors-spring-ai`, `vectors-langchain4j`, `vectors-spring-boot-starter`
 - Caching: `vectors-cache`, `vectors-cache-jcache`, `vectors-cache-langchain4j`,
   `vectors-cache-semantic-db`, `vectors-cache-spring-ai`
@@ -176,11 +196,23 @@ documented change date; see [`LICENSING.md`](LICENSING.md).
 
 ## Building
 
-JDK 25 is required. With SDKMAN:
+JDK 25 is required. The published libraries are Java-only. The repository build
+also tests the Vectors Studio application, whose Smile projections require
+OpenBLAS:
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install -y libopenblas-dev
+
+# macOS
+brew install openblas
+```
+
+With SDKMAN:
 
 ```bash
 sdk use java 25.0.3-tem
-./gradlew spotlessCheck build -x :docs:build
+./gradlew spotlessCheck build
 ./gradlew :vectors-bench:recallGate
 ./gradlew complianceCheck
 ```
@@ -200,6 +232,9 @@ Release mechanics and required secrets are in [`RELEASING.md`](RELEASING.md).
 
 ## Documentation
 
+- [Published documentation](https://integrallis.github.io/vectors/docs/)
+- [Jupyter notebooks](notebooks/README.md)
+- [Vectors Studio](vectors-studio-web/README.md)
 - [`CHANGELOG.md`](CHANGELOG.md)
 - [`RELEASING.md`](RELEASING.md)
 - [`LICENSING.md`](LICENSING.md)

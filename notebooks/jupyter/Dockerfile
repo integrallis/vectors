@@ -1,4 +1,4 @@
-# JDK 25 + Jupyter Lab + DFLib JJava kernel for the java-vectors notebooks.
+# JDK 25 + Jupyter Lab + DFLib JJava kernel for the Vectors notebooks.
 #
 # Base image: jupyter/base-notebook ships Python 3.12 + JupyterLab + a non-root
 # 'jovyan' user. We layer Temurin JDK 25 and the JJava 1.0-a7 kernel on top.
@@ -34,11 +34,14 @@ RUN cd /tmp && \
 # Replace the installed kernel.json with our customized version that adds the
 # Vector API incubator and native access flags to the JShell JVM.
 COPY jupyter/kernel.json /opt/conda/share/jupyter/kernels/java/kernel.json
+COPY jupyter/prepare-classpath.sh /usr/local/bin/before-notebook.d/20-vectors-classpath.sh
+RUN chmod +x /usr/local/bin/before-notebook.d/20-vectors-classpath.sh
 
 # `jupyter kernelspec install` (run as root) leaves /home/jovyan/.local and
 # /home/jovyan/.ipython owned by root, which breaks JUPYTER_RUNTIME_DIR on
 # first launch. Repair the ownership before dropping to NB_UID.
-RUN chown -R ${NB_UID}:${NB_GID} /home/jovyan
+RUN mkdir -p /home/jovyan/.gradle && \
+    chown -R ${NB_UID}:${NB_GID} /home/jovyan
 
 USER ${NB_UID}
 
