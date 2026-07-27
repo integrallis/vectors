@@ -42,7 +42,7 @@ depending on another system.
 
 ```kotlin
 dependencies {
-    implementation("com.integrallis:vectors-db:0.1.0")
+    implementation("com.integrallis:vectors:0.1.0")
 }
 ```
 

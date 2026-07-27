@@ -4,6 +4,8 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-26
+
 ### Added
 
 - `com.integrallis:vectors` — a single umbrella dependency that re-exports `vectors-db` (core,
