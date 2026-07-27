@@ -31,17 +31,17 @@ class EmbeddingCacheAppTest {
   void cacheServesRepeatedTextsWithoutInvokingTheDelegate() {
     EmbeddingCacheApp.DemoResult r = EmbeddingCacheApp.runDemo();
 
-    // Phase 1: a batch of 6 segments (4 unique) — CachingEmbeddingModel's embedAll forwards the
-    //          whole list opaquely, so all 6 hit the delegate; cache then holds 4 entries.
+    // Phase 1: a batch of 6 segments (4 unique) — repeated cold inputs are deduplicated, so only
+    //          the 4 unique texts hit the delegate; cache then holds 4 entries.
     // Phase 2: 3 segments (2 cached hits + 1 new "What is ANN?") — 1 delegate call.
     // Phase 3: 1 segment, already in cache — 0 delegate calls.
-    // Total: 7 delegate invocations, 5 unique cache entries, 3 hits, 7 misses.
+    // Total: 5 delegate invocations, 5 unique cache entries, 3 hits, 7 cache lookups that miss.
     assertThat(r.delegateCalls())
         .as(
-            "phases 2+3 combined send 4 requests but should produce only 1 delegate call "
-                + "(the new \"What is ANN?\"); observed %s",
+            "four unique phase-1 texts plus the new phase-2 text should reach the delegate; "
+                + "observed %s",
             r.delegateCalls())
-        .isEqualTo(7);
+        .isEqualTo(5);
     assertThat(r.stats().size()).as("cache must hold all 5 distinct texts ever seen").isEqualTo(5L);
     assertThat(r.stats().hits())
         .as("phase 2 contributes 2 hits, phase 3 contributes 1 — totalling 3")

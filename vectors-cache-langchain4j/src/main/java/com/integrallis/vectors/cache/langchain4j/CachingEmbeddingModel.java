@@ -21,7 +21,9 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
 import java.util.logging.Level;
@@ -33,8 +35,8 @@ import java.util.logging.Logger;
  * is cached under the normalized key.
  *
  * <p>The single-text {@link #embed(String)} and {@link #embed(TextSegment)} paths share keys — only
- * the raw text is hashed, segment metadata is ignored. {@link #embedAll(List)} coalesces cache
- * misses into a single delegate round-trip.
+ * the raw text is hashed, segment metadata is ignored. {@link #embedAll(List)} deduplicates
+ * repeated cold keys and coalesces the unique cache misses into a single delegate round-trip.
  */
 public class CachingEmbeddingModel implements EmbeddingModel {
 
@@ -90,9 +92,10 @@ public class CachingEmbeddingModel implements EmbeddingModel {
     Objects.requireNonNull(segments, "segments");
     int n = segments.size();
     Embedding[] out = new Embedding[n];
-    List<Integer> missIndexes = new ArrayList<>();
+    List<List<Integer>> missIndexes = new ArrayList<>();
     List<TextSegment> missSegments = new ArrayList<>();
     List<String> missKeys = new ArrayList<>();
+    Map<String, Integer> missByKey = new LinkedHashMap<>();
     for (int i = 0; i < n; i++) {
       TextSegment seg = Objects.requireNonNull(segments.get(i), "segments[i]");
       String key = keyFn.apply(seg.text());
@@ -100,9 +103,15 @@ public class CachingEmbeddingModel implements EmbeddingModel {
       if (hit.isPresent()) {
         out[i] = Embedding.from(hit.get().clone());
       } else {
-        missIndexes.add(i);
-        missSegments.add(seg);
-        missKeys.add(key);
+        Integer missIndex = missByKey.get(key);
+        if (missIndex == null) {
+          missIndex = missSegments.size();
+          missByKey.put(key, missIndex);
+          missIndexes.add(new ArrayList<>());
+          missSegments.add(seg);
+          missKeys.add(key);
+        }
+        missIndexes.get(missIndex).add(i);
       }
     }
     if (!missSegments.isEmpty()) {
@@ -116,10 +125,11 @@ public class CachingEmbeddingModel implements EmbeddingModel {
                 + " inputs");
       }
       for (int j = 0; j < fresh.size(); j++) {
-        int i = missIndexes.get(j);
-        Embedding e = fresh.get(j);
-        out[i] = e;
-        cache.put(missKeys.get(j), e.vector());
+        float[] vector = fresh.get(j).vector();
+        cache.put(missKeys.get(j), vector.clone());
+        for (int outputIndex : missIndexes.get(j)) {
+          out[outputIndex] = Embedding.from(vector.clone());
+        }
       }
     }
     return Response.from(List.of(out));
