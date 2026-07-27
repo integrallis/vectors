@@ -1,0 +1,80 @@
+= Vectors Studio
+:navtitle: Vectors Studio
+
+Vectors Studio is the repository's interactive collection browser and dimensionality-reduction
+workbench. It is an application built on Vectors, not a Maven library dependency.
+
+Studio can open an embedded collection directory or connect to a running `vectors-server`. It
+supports collection and document browsing, search, content inspection, and PCA, t-SNE, and UMAP
+projections.
+
+== Native BLAS Requirement
+
+The 17 published Vectors 0.1.0 artifacts are Java-only JARs. Studio is different: its Smile-backed
+projection algorithms load native BLAS/LAPACK through FFM. Install OpenBLAS before building or
+running Studio:
+
+[tabs]
+====
+Debian / Ubuntu::
++
+[source,bash]
+----
+sudo apt-get install -y libopenblas-dev
+----
+
+Fedora / RHEL::
++
+[source,bash]
+----
+sudo dnf install -y openblas-devel
+----
+
+macOS::
++
+[source,bash]
+----
+brew install openblas
+----
+
+Arch Linux::
++
+[source,bash]
+----
+sudo pacman -S openblas
+----
+====
+
+The development package is preferred on Linux because it provides the unversioned
+`libopenblas.so` loader name.
+
+== Run with an Embedded Collection
+
+[source,bash]
+----
+./gradlew :vectors-studio-web:run \
+  --args="--connection embedded:/absolute/path/to/data"
+----
+
+== Run Against the HTTP Server
+
+[source,bash]
+----
+./gradlew :vectors-studio-web:run \
+  --args="--connection http://localhost:8287 --token <bearer-token>"
+----
+
+Studio listens on port `8288` by default. Override it with `--port`.
+
+== Verify Studio
+
+[source,bash]
+----
+./gradlew :vectors-studio-core:test
+./gradlew :vectors-studio-web:test
+./gradlew :vectors-studio-web:integrationTest
+----
+
+See the {url-vectors-github}/tree/main/vectors-studio-web[web module^] and
+{url-vectors-github}/tree/main/vectors-studio-core[core module^] for the complete endpoint and SPI
+reference.

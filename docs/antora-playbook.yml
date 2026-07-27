@@ -2,7 +2,7 @@ site:
   title: Vectors Documentation
   start_page: vectors::index.adoc
   keys:
-    repo_url: https://github.com/integrallis/java-vectors
+    repo_url: https://github.com/integrallis/vectors
 
 content:
   sources:

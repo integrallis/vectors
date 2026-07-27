@@ -34,18 +34,49 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
       - name: Install native BLAS (Vectors Studio)
         run: sudo apt-get update && sudo apt-get install -y libopenblas-dev
 
       - name: Build, test, and stage artifacts
         run: >
-          ./gradlew clean spotlessCheck build
+          ./gradlew clean spotlessCheck build :docs:build
           :vectors-bench:recallGate complianceCheck publish
-          -x :docs:build --no-daemon --stacktrace
+          --no-daemon --stacktrace
 
       - name: Resolve project version
         id: version
         run: echo "version=$(grep -E '^version' gradle.properties | sed -E 's/.*=[[:space:]]*//')" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare staged-release notebook classpath
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: >
+          ./gradlew prepareNotebookClasspath
+          -PnotebookMode=release
+          -PnotebookVersion="$VERSION"
+          -PnotebookRepository="$GITHUB_WORKSPACE/build/staging-deploy"
+
+      - name: Prepare writable notebook output
+        run: install -d -m 0777 build/notebooks/executed
+
+      - name: Build JJava notebook image
+        working-directory: notebooks
+        run: docker compose build
+
+      - name: Execute notebooks against staged artifacts
+        working-directory: notebooks
+        env:
+          VECTORS_NOTEBOOK_PREPARE: "false"
+          VECTORS_NOTEBOOK_MODE: release
+        run: >
+          docker compose run --rm --no-deps jupyter
+          bash /home/jovyan/work/vectors/notebooks/scripts/test-notebooks.sh
 
       - name: Reject snapshot release
         env:
@@ -94,7 +125,7 @@ jobs:
           else
             gh release create "$TAG" \
               --target "$GITHUB_SHA" \
-              --title "java-vectors $VERSION" \
+              --title "vectors $VERSION" \
               --generate-notes
           fi
 

@@ -145,9 +145,13 @@ link:{javadoc-aggregate-url}/index.html[Complete Javadoc (all modules)^]
 
 === Per-Module Javadoc
 
-[cols="1,2,1"]
+[cols="2,4,2"]
 |===
 |Module |Description |Javadoc
+
+|`vectors`
+|Umbrella dependency; contains no API classes
+|Use the `vectors-db` Javadoc
 
 |`vectors-db`
 |Public collection API: `VectorCollection`, builder, search, persistence
@@ -176,4 +180,40 @@ link:{javadoc-aggregate-url}/index.html[Complete Javadoc (all modules)^]
 |`vectors-ivf`
 |IVF family indexes
 |link:{javadoc-base-url}/modules/ivf/index.html[Javadoc^]
+
+|`vectors-hybrid`
+|Retriever SPIs and rank-fusion strategies
+|link:{javadoc-base-url}/modules/hybrid/index.html[Javadoc^]
+
+|`vectors-spring-ai`
+|Spring AI `VectorStore` adapter
+|link:{javadoc-base-url}/modules/spring-ai/index.html[Javadoc^]
+
+|`vectors-langchain4j`
+|LangChain4j `EmbeddingStore` adapter
+|link:{javadoc-base-url}/modules/langchain4j/index.html[Javadoc^]
+
+|`vectors-spring-boot-starter`
+|Spring Boot auto-configuration
+|link:{javadoc-base-url}/modules/spring-boot-starter/index.html[Javadoc^]
+
+|`vectors-cache`
+|Cache SPI and Caffeine implementation
+|link:{javadoc-base-url}/modules/cache/index.html[Javadoc^]
+
+|`vectors-cache-jcache`
+|JSR-107 cache bridge
+|link:{javadoc-base-url}/modules/cache-jcache/index.html[Javadoc^]
+
+|`vectors-cache-langchain4j`
+|LangChain4j embedding cache
+|link:{javadoc-base-url}/modules/cache-langchain4j/index.html[Javadoc^]
+
+|`vectors-cache-semantic-db`
+|`VectorCollection` semantic cache
+|link:{javadoc-base-url}/modules/cache-semantic-db/index.html[Javadoc^]
+
+|`vectors-cache-spring-ai`
+|Spring AI cache decorators
+|link:{javadoc-base-url}/modules/cache-spring-ai/index.html[Javadoc^]
 |===
