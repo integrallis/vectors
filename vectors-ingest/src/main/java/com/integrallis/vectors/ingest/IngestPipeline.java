@@ -77,6 +77,15 @@ final class IngestPipeline {
   private final AtomicReference<Throwable> firstError = new AtomicReference<>();
   private volatile int currentQueueDepth;
 
+  // Only the single commit thread (run()/commitBatch) touches resume-cursor gap tracking, but the
+  // fields are volatile so the 64-bit writes are atomic (the class spawns a producer thread).
+  // Once a batch is dropped under continueOnError, the durable cursor must not advance past the
+  // dropped range, or a restart would skip it forever (silent doc loss). Set in run() before the
+  // commit loop.
+  private volatile long sourceBaseline;
+  private volatile long resumeCeiling;
+  private volatile long lastCommittedOffset;
+
   IngestPipeline(
       IngestSource source,
       Embedder embedder,
@@ -112,14 +121,28 @@ final class IngestPipeline {
     LinkedBlockingQueue<EmbeddedDoc> queue = new LinkedBlockingQueue<>(queueCapacity);
     AtomicReference<Throwable> producerError = new AtomicReference<>();
     BatchAccumulator accumulator = new BatchAccumulator(batchPolicy);
-    long startOffset = source.startOffset();
-    long lastSavedOffset = startOffset;
+    long sourceStart = source.startOffset();
+    // Durable resume: seed from the persisted cursor so a restart does not re-ingest from the
+    // start.
+    // The cursor holds the last committed 0-based offset (0 is also the "no cursor" default), so we
+    // resume at cursor+1 when there is real progress, never earlier than the source's own baseline.
+    long persisted = cursor.load(source.name());
+    long startOffset = Math.max(sourceStart, persisted > 0 ? persisted + 1 : 0);
+    // Docs already committed in a prior run beyond the source's own skip — advanced past in the
+    // producer so they are not re-embedded/re-committed.
+    long resumeSkip = startOffset - sourceStart;
+    long lastSavedOffset = persisted > 0 ? persisted : sourceStart;
+    // Resume-cursor gap tracking (see commitBatch): the last contiguously-committed offset is the
+    // safe resume point; resumeCeiling caps how far the cursor may advance once a gap opens.
+    this.sourceBaseline = sourceStart;
+    this.resumeCeiling = Long.MAX_VALUE;
+    this.lastCommittedOffset = persisted > 0 ? persisted : sourceStart - 1;
 
     try (ExecutorService embedExec = Executors.newVirtualThreadPerTaskExecutor()) {
       Thread producer =
           Thread.ofVirtual()
               .name("ingest-producer-" + source.name())
-              .start(() -> runProducer(queue, embedExec, producerError, startOffset));
+              .start(() -> runProducer(queue, embedExec, producerError, startOffset, resumeSkip));
       try {
         long pollTimeoutNs = Math.max(1_000_000L, batchPolicy.maxLatency().toNanos() / 4);
         while (true) {
@@ -175,9 +198,17 @@ final class IngestPipeline {
       LinkedBlockingQueue<EmbeddedDoc> queue,
       ExecutorService embedExec,
       AtomicReference<Throwable> errorSlot,
-      long startOffset) {
+      long startOffset,
+      long resumeSkip) {
+    Iterator<IngestDoc> it = null;
     try {
-      Iterator<IngestDoc> it = source.iterator();
+      it = source.iterator();
+      // The source iterator has already skipped source.startOffset(); advance past any additional
+      // already-committed docs (durable resume) so they are not re-ingested. These are not counted
+      // in docsRead — they were read and committed on the prior run.
+      for (long i = 0; i < resumeSkip && it.hasNext(); i++) {
+        it.next();
+      }
       long offset = startOffset;
       Deque<Future<List<EmbeddedDoc>>> pending = new ArrayDeque<>();
       int maxInFlight = Math.max(1, embeddingConcurrency * 2);
@@ -205,6 +236,16 @@ final class IngestPipeline {
       errorSlot.compareAndSet(null, t);
       lastError.compareAndSet(null, t.getMessage() != null ? t.getMessage() : t.toString());
     } finally {
+      // Release the source iterator's resources (e.g. a JsonlSource file descriptor) whether we
+      // drained it to EOF or aborted early on error/backpressure. Without this, a source whose
+      // iterator only self-closes on natural EOF leaks one FD per aborted ingest.
+      if (it instanceof AutoCloseable ac) {
+        try {
+          ac.close();
+        } catch (Exception closeError) {
+          log.warn("Failed to close source iterator for '{}'", source.name(), closeError);
+        }
+      }
       try {
         queue.put(EOS_SENTINEL);
       } catch (InterruptedException ie) {
@@ -271,7 +312,17 @@ final class IngestPipeline {
             sidecartSink.writeAll(batch);
             return null;
           });
-      cursor.save(source.name(), batch.lastSourceOffset());
+      // Advance the durable resume cursor — but never past a gap left by an earlier dropped batch.
+      // `resumeCeiling` freezes at the last contiguously-committed offset once a batch is dropped,
+      // so
+      // a later successful batch cannot push the cursor beyond the dropped range (which would make
+      // a
+      // restart skip those docs forever). Persist only a real advance at/above the source baseline.
+      long safe = Math.min(batch.lastSourceOffset(), resumeCeiling);
+      if (safe >= sourceBaseline) {
+        cursor.save(source.name(), safe);
+        lastCommittedOffset = safe;
+      }
     } catch (Exception e) {
       lastError.compareAndSet(null, e.getMessage() != null ? e.getMessage() : e.toString());
       ErrorHandler.IngestErrorContext ctx =
@@ -283,6 +334,10 @@ final class IngestPipeline {
         if (e instanceof RuntimeException re) throw re;
         throw new IOException("commit failed for batch " + batch.batchId(), e);
       }
+      // continueOnError: this batch's docs were NOT committed. Freeze the resume cursor at the last
+      // contiguously-committed offset so the dropped range is re-processed on restart instead of
+      // being skipped past by the next successful batch (which is what silently lost docs before).
+      resumeCeiling = Math.min(resumeCeiling, lastCommittedOffset);
       log.warn("ingest: continuing past commit failure on batch {}", batch.batchId(), e);
       return batch.lastSourceOffset();
     }

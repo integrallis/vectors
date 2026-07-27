@@ -581,7 +581,7 @@ class HnswGraphCodecTest {
 
     @Test
     void decodeRejectsNullBytes() {
-      assertThatNullPointerException().isThrownBy(() -> HnswGraphCodec.decode(null));
+      assertThatNullPointerException().isThrownBy(() -> HnswGraphCodec.decode((byte[]) null));
     }
 
     @Test

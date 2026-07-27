@@ -17,6 +17,10 @@ package com.integrallis.vectors.ivf;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.storage.backend.StorageBackend;
+import com.integrallis.vectors.storage.manifest.ManifestConflictException;
+import com.integrallis.vectors.storage.manifest.ManifestGenerationPublisher.GenerationAnnouncer;
+import com.integrallis.vectors.storage.manifest.ManifestStore;
+import com.integrallis.vectors.storage.manifest.StorageManifest;
 import com.integrallis.vectors.storage.wal.SegmentedWriteAheadLog;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -28,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A WAL-durable, multi-cluster vector collection that coordinates {@link TieredCluster}s routed by
@@ -48,12 +54,30 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public final class DistributedVectorCollection implements AutoCloseable {
 
+  private static final Logger LOG = LoggerFactory.getLogger(DistributedVectorCollection.class);
+
   // ─── WAL record tags ─────────────────────────────────────────────────────
   private static final byte TAG_ADD = 1;
   private static final byte TAG_COMMIT = 4;
 
   /** T3 key under which the encoded {@link BuoyIndex} is persisted for WAL replay. */
   private static final String ROUTING_KEY = "_routing-index";
+
+  /**
+   * Object-storage key of the durable generation manifest. The manifest is a CAS-published pointer
+   * (via {@link ManifestStore}) that makes the committed generation <em>discoverable</em> to remote
+   * readers — the WAL is local-only — and monotonic across writers. It is published <em>after</em>
+   * the WAL COMMIT, so the WAL remains the authority for local crash recovery while the manifest
+   * gives DartVault an object-storage-native, race-safe generation pointer (the same shape
+   * TurboPuffer/Lance/Delta use).
+   */
+  private static final String MANIFEST_KEY = "_manifest";
+
+  /** Manifest entry key prefix for a cluster's committed generation ({@code cluster-<id>}). */
+  private static final String MANIFEST_CLUSTER_PREFIX = "cluster-";
+
+  private static final int MAX_MANIFEST_ATTEMPTS = 16;
+  private static final String DEFAULT_WRITER = "dartvault";
 
   // ─── routing ─────────────────────────────────────────────────────────────
   private final BuoyIndex routingIndex;
@@ -76,6 +100,11 @@ public final class DistributedVectorCollection implements AutoCloseable {
   private final SegmentedWriteAheadLog wal;
   private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
   private long generation;
+
+  // Manifest-publish configuration (opt-in gossip + multi-writer provenance). Volatile: set by the
+  // owning node after build()/open(), read on the commit path.
+  private volatile GenerationAnnouncer generationAnnouncer = GenerationAnnouncer.NONE;
+  private volatile String writerId = DEFAULT_WRITER;
 
   private DistributedVectorCollection(
       BuoyIndex routingIndex,
@@ -100,6 +129,84 @@ public final class DistributedVectorCollection implements AutoCloseable {
     this.t3Backend = t3Backend;
     this.wal = wal;
     this.generation = generation;
+  }
+
+  /**
+   * Wires an announcer that receives {@code (generation, contentHash)} after every committed
+   * manifest publish — bridge it to {@code GossipClusterMembership.announceVersion(long, String)}
+   * so a commit tells followers to reload, guarded by the gossip max-wins monotonicity check.
+   * Defaults to a no-op (single-node / no gossip).
+   */
+  public void setGenerationAnnouncer(GenerationAnnouncer announcer) {
+    this.generationAnnouncer = java.util.Objects.requireNonNull(announcer, "announcer");
+  }
+
+  /** Sets the writer id recorded as manifest provenance (distinct per writer for multi-writer). */
+  public void setWriterId(String writerId) {
+    this.writerId = java.util.Objects.requireNonNull(writerId, "writerId");
+  }
+
+  /**
+   * Publishes {@code generation} to the durable object-storage manifest via a monotonic CAS, then
+   * announces it. If the manifest is already at or past {@code generation} (a concurrent writer, or
+   * an idempotent re-publish) it does not regress. Called <em>after</em> the WAL COMMIT, so the WAL
+   * stays authoritative for local recovery; the manifest is the discoverable, race-safe pointer for
+   * remote readers and the gossip generation source.
+   */
+  private static void publishManifest(
+      StorageBackend backend,
+      String writerId,
+      GenerationAnnouncer announcer,
+      long generation,
+      Map<String, Long> clusterGenerations,
+      long committedAtEpochMs)
+      throws IOException {
+    ManifestStore store = new ManifestStore(backend, MANIFEST_KEY);
+    for (int attempt = 0; attempt < MAX_MANIFEST_ATTEMPTS; attempt++) {
+      ManifestStore.Loaded loaded = store.load();
+      StorageManifest current = loaded.manifest();
+      if (!current.isEmpty() && current.generation() >= generation) {
+        return; // already at/past this generation — idempotent, never regress
+      }
+      StorageManifest next =
+          new StorageManifest(
+              generation,
+              contentHash(generation, clusterGenerations),
+              clusterGenerations,
+              committedAtEpochMs,
+              writerId);
+      if (store.compareAndPut(next, loaded.etag()) != null) {
+        announcer.announce(generation, next.contentHash());
+        return;
+      }
+      // CAS lost to a concurrent writer — retry; the guard above returns if they reached >= us.
+    }
+    throw new ManifestConflictException(
+        "manifest publish for generation "
+            + generation
+            + " lost after "
+            + MAX_MANIFEST_ATTEMPTS
+            + " attempts");
+  }
+
+  /**
+   * The per-cluster committed generations ({@code cluster-<id> → generation}) for this collection's
+   * current state — the manifest entry map. Only clusters rewritten by a commit advance; a reader
+   * fetches each cluster's payload from its own generation's key.
+   */
+  private Map<String, Long> clusterGenerations() {
+    Map<String, Long> entries = new java.util.TreeMap<>();
+    for (int c = 0; c < k; c++) {
+      entries.put(MANIFEST_CLUSTER_PREFIX + c, clusters[c].t3Generation());
+    }
+    return entries;
+  }
+
+  /**
+   * Cheap, deterministic fingerprint (generation + per-cluster generations) for the content hash.
+   */
+  private static String contentHash(long generation, Map<String, Long> clusterGenerations) {
+    return Integer.toHexString(Long.hashCode(generation) ^ clusterGenerations.hashCode());
   }
 
   /**
@@ -133,12 +240,13 @@ public final class DistributedVectorCollection implements AutoCloseable {
       clusterOrdinals.get(cid).add(i);
     }
 
-    // Build TieredClusters and store T3 snapshots
+    // Build TieredClusters and store T3 snapshots under generation-0 keys.
     float[][] centroids = routingIndex.buoyVectors();
     TieredCluster[] clusters = new TieredCluster[k];
     for (int c = 0; c < k; c++) {
       int[] ords = clusterOrdinals.get(c).stream().mapToInt(Integer::intValue).toArray();
       clusters[c] = new TieredCluster(ClusterPartition.of(c, centroids[c], ords), vectors, metric);
+      clusters[c].setT3Generation(0L);
       clusters[c].storeT3(t3Backend);
     }
 
@@ -155,6 +263,13 @@ public final class DistributedVectorCollection implements AutoCloseable {
       wal.append(encodeAdd(docId, vectors[i]));
     }
     wal.append(encodeCommit(0L));
+
+    // Publish the durable generation-0 manifest (every cluster at generation 0) so a remote reader
+    // can discover the collection and resolve each cluster's generation-scoped payload key.
+    Map<String, Long> gen0 = new java.util.TreeMap<>();
+    for (int c = 0; c < k; c++) gen0.put(MANIFEST_CLUSTER_PREFIX + c, 0L);
+    publishManifest(
+        t3Backend, DEFAULT_WRITER, GenerationAnnouncer.NONE, 0L, gen0, System.currentTimeMillis());
 
     return new DistributedVectorCollection(
         routingIndex,
@@ -230,6 +345,25 @@ public final class DistributedVectorCollection implements AutoCloseable {
       clusters[c] = new TieredCluster(ClusterPartition.of(c, centroids[c], ords), vecArray, metric);
     }
 
+    // 5. Resolve the live generation. The local WAL is authoritative for recovery, but a durable
+    // manifest may be ahead of (or the only source for) a reader with no local WAL — take the max
+    // so
+    // a remote/replica reader discovers the published generation. Absent manifest → WAL only.
+    long resolvedGeneration = gen[0];
+    StorageManifest manifest = new ManifestStore(t3Backend, MANIFEST_KEY).load().manifest();
+    if (!manifest.isEmpty()) {
+      resolvedGeneration = Math.max(resolvedGeneration, manifest.generation());
+      // Point each cluster's payload key at the generation the manifest recorded it under, so
+      // read-through fetches the correct generation-scoped object (only rewritten clusters
+      // advanced).
+      for (int c = 0; c < k; c++) {
+        Long clusterGen = manifest.entries().get(MANIFEST_CLUSTER_PREFIX + c);
+        if (clusterGen != null) {
+          clusters[c].setT3Generation(clusterGen);
+        }
+      }
+    }
+
     return new DistributedVectorCollection(
         routingIndex,
         k,
@@ -241,7 +375,7 @@ public final class DistributedVectorCollection implements AutoCloseable {
         metric,
         t3Backend,
         wal,
-        gen[0]);
+        resolvedGeneration);
   }
 
   // ─── write path ──────────────────────────────────────────────────────────
@@ -252,6 +386,23 @@ public final class DistributedVectorCollection implements AutoCloseable {
     try {
       staging.add(vector);
       stagingIds.add(id);
+    } finally {
+      rwLock.writeLock().unlock();
+    }
+  }
+
+  /**
+   * Discards all staged-but-uncommitted vectors (the buffer that {@link #add} appends to and {@link
+   * #commit} consumes). Nothing durable is affected — staged vectors were never written to the WAL
+   * or the tiered clusters. This lets a caller that re-runs a partially-applied {@code add()} loop
+   * (e.g. a retried batch stage) start from a clean slate instead of double-staging the docs it had
+   * already added on the failed attempt.
+   */
+  public void discardStaging() {
+    rwLock.writeLock().lock();
+    try {
+      staging.clear();
+      stagingIds.clear();
     } finally {
       rwLock.writeLock().unlock();
     }
@@ -274,6 +425,13 @@ public final class DistributedVectorCollection implements AutoCloseable {
     if (staging.isEmpty()) {
       generation++;
       wal.append(encodeCommit(generation));
+      publishManifest(
+          t3Backend,
+          writerId,
+          generationAnnouncer,
+          generation,
+          clusterGenerations(),
+          System.currentTimeMillis());
       applyTierPolicy();
       return;
     }
@@ -294,7 +452,13 @@ public final class DistributedVectorCollection implements AutoCloseable {
     staging.clear();
     stagingIds.clear();
 
-    // Rebuild only clusters that received new vectors
+    // The generation the rewritten clusters are stored under. Only dirty clusters advance to it;
+    // untouched clusters keep their prior generation-scoped objects — so a crash before the
+    // manifest
+    // CAS leaves the live generation's objects intact and orphans only the just-written gen-N ones.
+    generation++;
+
+    // Rebuild only clusters that received new vectors, storing under the new generation's keys.
     float[][] newVecArray = allVectors.toArray(new float[0][]);
     float[][] centroids = routingIndex.buoyVectors();
     for (int c = 0; c < k; c++) {
@@ -305,12 +469,21 @@ public final class DistributedVectorCollection implements AutoCloseable {
       clusters[c] =
           new TieredCluster(
               ClusterPartition.of(c, centroids[c], ords), newVecArray, metric, prevCount);
+      clusters[c].setT3Generation(generation);
       clusters[c].storeT3(t3Backend);
       if (hadT1) clusters[c].materializeT1();
     }
 
-    generation++;
     wal.append(encodeCommit(generation));
+    // Manifest CAS is the object-storage commit point: it atomically switches the per-cluster
+    // generation set (dirty → new, untouched → prior) that readers resolve payload keys from.
+    publishManifest(
+        t3Backend,
+        writerId,
+        generationAnnouncer,
+        generation,
+        clusterGenerations(),
+        System.currentTimeMillis());
     applyTierPolicy();
   }
 
@@ -518,7 +691,9 @@ public final class DistributedVectorCollection implements AutoCloseable {
       try {
         clusters[c].evictToTier(tiers.get(c), t3Backend);
       } catch (java.io.IOException e) {
-        // Log and continue — tier promotion/demotion failure should not break commit
+        // Tier promotion/demotion failure must not break commit, but it must be visible: a cluster
+        // that silently fails to persist/demote is otherwise invisible to operators.
+        LOG.warn("tier eviction failed for cluster {} (continuing commit)", c, e);
       }
     }
   }

@@ -230,9 +230,10 @@ class BuoyIndexTest {
   @Test
   void memoryFootprintWithinBound_K1024_D128() {
     // At K=1024, D=128: buoys[]=512KB + spill[]=4KB + sizes[]=4KB + radii[]=4KB ≈ 524KB
+    // Encoding size depends on K and D, not training-corpus size. Keep N=K so this release gate
+    // validates the production encoder without performing a multi-billion-operation K-means run.
     BuoyIndex idx =
-        BuoyIndex.train(
-            randomVecs(1024 * 256, 128, 11L), 1024, SimilarityFunction.EUCLIDEAN, true, 1L);
+        BuoyIndex.train(randomVecs(1024, 128, 11L), 1024, SimilarityFunction.EUCLIDEAN, false, 1L);
     byte[] encoded = idx.encode();
     // Encoded size: 4+4+UTF(metric)+1024*128*4 floats + 3*(1024*4) ints/floats ≈ 536KB
     assertThat(encoded.length).isLessThan(600 * 1024); // 600 KB generous upper bound

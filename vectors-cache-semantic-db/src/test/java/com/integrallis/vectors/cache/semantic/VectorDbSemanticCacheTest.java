@@ -108,6 +108,7 @@ class VectorDbSemanticCacheTest {
     cache.put("k1", new float[] {1f, 0f, 0f, 0f}, "reply");
     Optional<SemanticCache.Hit<String>> hit = cache.lookup(new float[] {0.999f, 0.01f, 0f, 0f});
     assertThat(hit).isPresent();
+    assertThat(hit.get().key()).isEqualTo("k1"); // matched-key is now exposed on the Hit
     assertThat(hit.get().value()).isEqualTo("reply");
     assertThat(hit.get().score()).isGreaterThan(0.92);
   }

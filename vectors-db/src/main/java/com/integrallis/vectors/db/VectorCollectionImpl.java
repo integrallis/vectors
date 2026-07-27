@@ -1972,10 +1972,27 @@ final class VectorCollectionImpl implements VectorCollection {
       if (ord < 0 || gen.tombstones.get(ord)) {
         return null;
       }
-      return gen.metadataStore.get(ord);
+      Document doc = gen.metadataStore.get(ord);
+      return doc == null ? null : hydrateVector(gen, ord, doc);
     } finally {
       gen.release();
     }
+  }
+
+  /**
+   * Returns {@code doc} with its vector populated. For persistent generations the metadata store
+   * holds the document without its vector (it lives in the mmap store), so both {@link
+   * #get(String)} and {@link #documents()} must hydrate it from {@code mappedVectors} to stay
+   * consistent.
+   */
+  private Document hydrateVector(Generation gen, int ord, Document doc) {
+    if (doc.vector() != null || gen.mappedVectors == null) {
+      return doc;
+    }
+    float[] v = new float[config.dimension()];
+    MemorySegment.copy(
+        gen.mappedVectors.vectorSlice(ord), ValueLayout.JAVA_FLOAT, 0L, v, 0, config.dimension());
+    return new Document(doc.id(), v, doc.text(), doc.metadata());
   }
 
   @Override
@@ -2000,18 +2017,7 @@ final class VectorCollectionImpl implements VectorCollection {
         Document doc = gen.metadataStore.get(i);
         if (doc == null) continue;
         // Hydrate vector from mmap if not embedded in the document (persistent generations).
-        if (doc.vector() == null && gen.mappedVectors != null) {
-          float[] v = new float[config.dimension()];
-          MemorySegment.copy(
-              gen.mappedVectors.vectorSlice(i),
-              ValueLayout.JAVA_FLOAT,
-              0L,
-              v,
-              0,
-              config.dimension());
-          doc = new Document(doc.id(), v, doc.text(), doc.metadata());
-        }
-        result.add(doc);
+        result.add(hydrateVector(gen, i, doc));
       }
       return Collections.unmodifiableList(result);
     } finally {

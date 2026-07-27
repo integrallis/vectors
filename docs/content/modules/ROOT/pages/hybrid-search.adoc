@@ -1,0 +1,86 @@
+= Hybrid Search
+:navtitle: Hybrid Search
+
+Dense vector search finds semantically similar text; keyword search finds exact terms, names, and
+codes. **Hybrid search** runs both and fuses the rankings, so a query like `"HNSW efConstruction"`
+matches on meaning *and* on the literal token. `vectors-hybrid` orchestrates the retrievers and the
+fusion; `vectors-text-h2` provides a dependency-free full-text index backed by embedded H2.
+
+== Dependencies
+
+[cols="2,3"]
+|===
+| Artifact | Use it for
+
+| `com.integrallis:vectors-hybrid`
+| The orchestrator (`HybridSearch`), the `Retriever` SPI, and fusion strategies (RRF, weighted).
+
+| `com.integrallis:vectors-text-h2`
+| An H2-backed `TextIndexSpi` for the keyword side — full-text search with no Lucene dependency.
+|===
+
+NOTE: `vectors-text-h2` is source-available in the repository and not yet published to Maven Central.
+
+== The model
+
+A `Retriever` is any ranked source of results — a functional interface returning `List<ScoredId>`:
+
+[source,java]
+----
+@FunctionalInterface
+public interface Retriever {
+  List<ScoredId> retrieve(int k);   // ScoredId(String id, float score)
+}
+----
+
+`HybridSearch` takes a `FusionStrategy` and any number of retrievers, runs them **in parallel** on
+virtual threads, and fuses the ranked lists:
+
+[source,java]
+----
+List<ScoredId> results = new HybridSearch(fusion, retriever1, retriever2).search(k);
+----
+
+Two fusion strategies ship:
+
+* `RRFFusion` — Reciprocal Rank Fusion. Parameter-free (a smoothing constant, default 60); combines
+  by rank, so retrievers with incomparable score scales fuse cleanly. The safe default.
+* `WeightedFusion(float... weights)` — min-max normalizes each retriever's scores and combines with
+  per-retriever weights, when you want to bias toward one signal.
+
+== Dense + keyword, fused
+
+Back the dense side with a `VectorCollection` and the keyword side with an `H2TextIndex`, then fuse:
+
+[source,java]
+----
+// Keyword index (full-text, embedded H2)
+H2TextIndex text = new H2TextIndex("docs");
+text.index(List.of(
+    new TextDocument("doc-1", "HNSW is a graph-based ANN index", Map.of(), null),
+    new TextDocument("doc-2", "Product quantization compresses vectors", Map.of(), null)));
+
+// Dense retriever: a vector search mapped to ScoredId
+Retriever dense = k ->
+    collection.search(SearchRequest.builder(queryVector, k).build())
+        .hits().stream()
+        .map(h -> new ScoredId(h.id(), (float) h.score()))
+        .toList();
+
+// Keyword retriever: a full-text search mapped to ScoredId (rank-scored)
+Retriever keyword = k -> {
+  TextSearchOutcome out = text.search(queryText, k);
+  List<ScoredId> hits = new ArrayList<>();
+  List<String> ids = out.ids();
+  for (int i = 0; i < ids.size(); i++) hits.add(new ScoredId(ids.get(i), 1f / (i + 1)));
+  return hits;
+};
+
+List<ScoredId> fused = new HybridSearch(new RRFFusion(), dense, keyword).search(10);
+----
+
+Because `RRFFusion` fuses on rank, the dense cosine scores and the keyword ranks combine without
+needing a shared scale. Swap in `new WeightedFusion(0.7f, 0.3f)` to weight the dense signal higher.
+
+`H2TextIndex` also stores JSON metadata and blobs (`getBlob(id)`), runs in-memory or disk-backed
+(`new H2TextIndex(name, dataDir)`), and is safe under concurrent load.

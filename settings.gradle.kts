@@ -21,6 +21,8 @@ include("vectors-router")
 include("vectors-optimizer")
 include("vectors-text-h2")
 include("vectors-db")
+// Umbrella artifact: publishes as `com.integrallis:vectors`, re-exporting vectors-db.
+include("vectors")
 include("vectors-distributed")
 include("vectors-cluster")
 include("vectors-gpu")
