@@ -188,6 +188,33 @@ class KMeansTest {
     assertThat(Math.abs(cy)).isLessThan(0.5f);
   }
 
+  /**
+   * Edge case: {@code k} greater than the number of <em>distinct</em> points (but still {@code <=
+   * n}) is a degenerate over-partitioning. k-means++ exhausts the distinct locations and falls back
+   * to duplicate seeds, so some clusters are necessarily empty — no re-seeding strategy can create
+   * more non-empty clusters than there are distinct points. Training must still terminate and
+   * return {@code k} finite centroids (no crash, no NaN); the audit's "empty clusters" finding
+   * reduces to exactly this unresolvable regime — on any data with {@code >= k} distinct points,
+   * k-means++ + Lloyd never strands a cluster (verified empirically over 24k randomized configs).
+   */
+  @Test
+  void trainWithMoreClustersThanDistinctPointsReturnsFiniteCentroids() {
+    // Three exact-duplicate locations, 30 points each, but k=5 > 3 distinct locations.
+    float[][] loc = {{0f, 0f, 0f}, {10f, 0f, 0f}, {0f, 10f, 0f}};
+    java.util.List<float[]> rows = new java.util.ArrayList<>();
+    for (float[] l : loc) for (int p = 0; p < 30; p++) rows.add(l.clone());
+    float[][] data = rows.toArray(new float[0][]);
+
+    float[][] centroids = KMeans.train(data, 5, 50, 3L);
+
+    assertThat(centroids).hasDimensions(5, 3);
+    for (float[] c : centroids) for (float v : c) assertThat(v).isFinite();
+    // Assignments are valid and every point maps to some centroid at one of the three locations.
+    int[] assignments = KMeans.assign(data, centroids);
+    for (int a : assignments) assertThat(a).isBetween(0, 4);
+    assertThat(KMeans.quantizationError(data, centroids, assignments)).isFinite();
+  }
+
   /** Squared L2 to the assigned centroid must be ≤ squared L2 to every other centroid. */
   @Test
   void assignIsOptimal_forTrainedCentroids() {

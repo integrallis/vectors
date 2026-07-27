@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorEncoding;
@@ -141,7 +142,12 @@ class MappedVamanaPagedIndexAdapterTest {
           SearchResult ref = reference.search(q, 10, searchL);
           SearchOutcome p = paged.search(q, 10, searchL, 1.0f);
           assertThat(p.ordinals()).as("ids @L=%d q=%d", searchL, qi).containsExactly(ref.nodeIds());
-          assertThat(p.scores()).as("scores @L=%d q=%d", searchL, qi).containsExactly(ref.scores());
+          // Scores are compared within a small epsilon rather than bit-for-bit: the paged and
+          // in-memory scorers can reduce a dot product in a different SIMD lane order, which is
+          // exact-associative in real arithmetic but differs by up to ~1 ULP in float32.
+          assertThat(p.scores())
+              .as("scores @L=%d q=%d", searchL, qi)
+              .containsExactly(ref.scores(), within(1e-5f));
         }
       }
     }

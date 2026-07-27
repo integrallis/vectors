@@ -199,8 +199,13 @@ public final class CentroidIndex {
     if (metric == SimilarityFunction.EUCLIDEAN) {
       VectorUtil.batchSquaredL2(query, centroids, out);
     } else if (metric == SimilarityFunction.COSINE) {
+      // Degrade gracefully on a zero-norm query (degenerate embedding) instead of throwing: a zero
+      // query must not crash the whole COSINE search. l2normalize(v, false) leaves a zero vector
+      // unchanged → all-zero dots → all centroids equidistant → arbitrary (but valid) routing, and
+      // the per-cluster scan returns 0 scores (guarded there). throwOnZero=true would AIOOBE the
+      // caller mid-search.
       float[] normalizedQuery = Arrays.copyOf(query, query.length);
-      VectorUtil.l2normalize(normalizedQuery, true);
+      VectorUtil.l2normalize(normalizedQuery, false);
       VectorUtil.batchDotProduct(normalizedQuery, centroids, out);
       for (int i = 0; i < out.length; i++) out[i] = -out[i];
     } else {

@@ -40,6 +40,25 @@ public interface RandomAccessVectors {
   float[] getVector(int ordinal);
 
   /**
+   * Bulk-fetches the vectors at the given ordinals, each into its OWN array (never a shared scratch
+   * buffer). The default fetches serially; implementations backed by high-latency storage (e.g.
+   * object-storage ranged GETs) should override to fetch concurrently — the two-pass rerank hands
+   * the whole candidate set here at once, so parallelizing the fetches collapses N serial
+   * round-trips into roughly one.
+   *
+   * @param ordinals the 0-based vector indices to fetch
+   * @return {@code ordinals.length} distinct vectors, index-aligned with {@code ordinals}
+   */
+  default float[][] getVectors(int[] ordinals) {
+    float[][] out = new float[ordinals.length][];
+    for (int i = 0; i < ordinals.length; i++) {
+      float[] v = getVector(ordinals[i]);
+      out[i] = sharesReturnBuffer() ? v.clone() : v;
+    }
+    return out;
+  }
+
+  /**
    * {@code true} when every call to {@link #getVector(int)} may overwrite the buffer returned by
    * previous calls (e.g. mmap-backed implementations with a single scratch row). Callers that want
    * to gather multiple vectors into a reusable {@code float[][]} pool before a fused SIMD scan must

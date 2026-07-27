@@ -1,2 +1,19 @@
 <link rel="icon" type="image/x-icon" href="{{uiRootPath}}/img/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="{{uiRootPath}}/img/favicon-32x32.png">
+<script>
+  /* Resolve the theme before first paint to avoid a flash of the wrong colours. */
+  (function () {
+    try {
+      var t = localStorage.getItem('vectors-theme');
+      if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{uiRootPath}}/css/vectors-theme.css">
+<script defer src="{{uiRootPath}}/js/vectors-theme.js"></script>

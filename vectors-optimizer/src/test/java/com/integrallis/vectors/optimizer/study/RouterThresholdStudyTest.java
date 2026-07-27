@@ -17,6 +17,7 @@ package com.integrallis.vectors.optimizer.study;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.integrallis.vectors.optimizer.objective.ObjectiveWeights;
 import com.integrallis.vectors.optimizer.sampler.RandomSampler;
 import com.integrallis.vectors.optimizer.space.ParamSpec;
 import com.integrallis.vectors.optimizer.space.SearchSpace;
@@ -137,5 +138,40 @@ class RouterThresholdStudyTest {
       if (tr.objectiveScore() > bestAccuracy) bestAccuracy = tr.objectiveScore();
     }
     assertThat(bestAccuracy).isGreaterThanOrEqualTo(0.8);
+  }
+
+  @Test
+  void objectiveScoreHonorsWeights_notHardcodedAccuracy() {
+    // Regression (audit optimizer #20): the study hardcoded objectiveScore=accuracy and never
+    // called Objective.score(...), so configured latency/cost/quality weights were silent no-ops.
+    RouterThresholdStudy.RouterFactory factory = factoryWithRoutes();
+    List<LabeledQuery> probes = labeledProbes();
+    Map<String, Object> params = new HashMap<>();
+    params.put("threshold_sports", 0.5);
+    params.put("threshold_food", 0.5);
+    params.put("threshold_weather", 0.5);
+    Trial trial = new Trial("t-0", params);
+
+    // Default (recall-only) weights preserve the historical behaviour: objective == accuracy.
+    TrialResult base = new RouterThresholdStudy(factory, probes).runOne(trial);
+    assertThat(base.recallAtK()).as("fixture must yield non-trivial accuracy").isGreaterThan(0.0);
+    assertThat(base.objectiveScore()).isEqualTo(base.recallAtK());
+
+    // Doubling the recall weight must double the composite — a deterministic proof the weights are
+    // actually applied. A hardcoded objectiveScore=accuracy would ignore this.
+    ObjectiveWeights doubled = ObjectiveWeights.builder().recallWeight(2.0).build();
+    TrialResult w = new RouterThresholdStudy(factory, probes, doubled).runOne(trial);
+    assertThat(w.recallAtK()).isEqualTo(base.recallAtK());
+    assertThat(w.objectiveScore()).isEqualTo(2.0 * base.recallAtK());
+
+    // A latency weight (a MIN cost axis) can only reduce, never increase, the composite.
+    ObjectiveWeights withLatency =
+        ObjectiveWeights.builder()
+            .recallWeight(1.0)
+            .latencyP95Weight(0.5)
+            .latencyP95ReferenceUs(1.0)
+            .build();
+    TrialResult wl = new RouterThresholdStudy(factory, probes, withLatency).runOne(trial);
+    assertThat(wl.objectiveScore()).isLessThanOrEqualTo(base.objectiveScore());
   }
 }

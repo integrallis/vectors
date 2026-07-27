@@ -147,7 +147,7 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
       return Optional.empty();
     }
     hits.increment();
-    return Optional.of(new Hit<>(decodePayload(top.document()), top.score()));
+    return Optional.of(new Hit<>(top.id(), decodePayload(top.document()), top.score()));
   }
 
   @Override

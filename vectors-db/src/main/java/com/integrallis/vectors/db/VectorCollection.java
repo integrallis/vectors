@@ -63,6 +63,40 @@ public interface VectorCollection extends AutoCloseable {
    */
   void add(Document doc);
 
+  /**
+   * Stages an id + vector document, returning this collection so inserts chain:
+   *
+   * <pre>{@code
+   * collection.add("a", embedding1)
+   *           .add("b", embedding2)
+   *           .commit();
+   * }</pre>
+   *
+   * @return this collection, for fluent chaining
+   * @throws IllegalArgumentException under the same conditions as {@link #add(Document)}
+   */
+  default VectorCollection add(String id, float[] vector) {
+    add(Document.of(id, vector));
+    return this;
+  }
+
+  /**
+   * Stages an id + vector + text document, returning this collection so inserts chain:
+   *
+   * <pre>{@code
+   * collection.add("a", embedding1, "hello world")
+   *           .add("b", embedding2, "goodbye world")
+   *           .commit();
+   * }</pre>
+   *
+   * @return this collection, for fluent chaining
+   * @throws IllegalArgumentException under the same conditions as {@link #add(Document)}
+   */
+  default VectorCollection add(String id, float[] vector, String text) {
+    add(Document.of(id, vector, text));
+    return this;
+  }
+
   /** Stages a batch of documents. Equivalent to calling {@link #add(Document)} for each one. */
   void addAll(Collection<Document> docs);
 

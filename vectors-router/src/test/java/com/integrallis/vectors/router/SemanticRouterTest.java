@@ -59,6 +59,21 @@ class SemanticRouterTest {
           .distanceThreshold(0.2)
           .build();
 
+  @Test
+  void rejectsDuplicateRouteNames() {
+    // Regression: a second route with the same name used to silently overwrite the first (and the
+    // exemplars we already paid to embed). It must fail fast instead.
+    Route sportsDuplicate =
+        Route.builder()
+            .name("sports")
+            .references(List.of("pasta recipe"))
+            .distanceThreshold(0.2)
+            .build();
+    assertThatThrownBy(() -> new SemanticRouter(FAKE_EMBEDDER, List.of(SPORTS, sportsDuplicate)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("sports");
+  }
+
   @Nested
   class Routing {
 

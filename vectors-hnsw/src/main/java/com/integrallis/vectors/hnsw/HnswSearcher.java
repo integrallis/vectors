@@ -535,9 +535,13 @@ public final class HnswSearcher {
    */
   public SearchResult rescore(float[] query, int[] candidateNodeIds, int k) {
     rescoreHeap.clear();
-    for (int nodeId : candidateNodeIds) {
-      float score = similarityFunction.compare(query, vectors.getVector(nodeId));
-      rescoreHeap.insertWithOverflow(nodeId, score, k);
+    // Bulk-fetch all candidates up front so high-latency backings (object-storage ranged GETs) can
+    // parallelize the fetches — collapsing N serial round-trips into ~one. In-RAM/mmap backings use
+    // the trivial serial default.
+    float[][] fetched = vectors.getVectors(candidateNodeIds);
+    for (int i = 0; i < candidateNodeIds.length; i++) {
+      float score = similarityFunction.compare(query, fetched[i]);
+      rescoreHeap.insertWithOverflow(candidateNodeIds[i], score, k);
     }
 
     int resultSize = rescoreHeap.size();

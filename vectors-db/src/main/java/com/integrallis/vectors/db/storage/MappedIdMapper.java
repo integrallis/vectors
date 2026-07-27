@@ -102,14 +102,32 @@ public final class MappedIdMapper implements IdMapper {
     Objects.requireNonNull(arena, "arena must not be null");
 
     MemorySegment seg;
-    long fileSize;
     try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
-      fileSize = ch.size();
+      long fileSize = ch.size();
       if (fileSize < HEADER_SIZE) {
         throw new IOException(
             "idmap.bin truncated: expected at least " + HEADER_SIZE + " bytes, got " + fileSize);
       }
       seg = ch.map(FileChannel.MapMode.READ_ONLY, 0, fileSize, arena);
+    }
+    return open(seg);
+  }
+
+  /**
+   * Materializes a read-only id mapper from an in-memory {@code idmap.bin} image — e.g. an
+   * object-storage {@code get}. The mapping is fully copied into heap arrays, so the segment (and
+   * its backing bytes) need not outlive this call.
+   *
+   * @param seg the full {@code idmap.bin} image
+   * @return a read-only id mapper
+   * @throws IOException if the image is truncated or has a bad magic/version
+   */
+  public static MappedIdMapper open(MemorySegment seg) throws IOException {
+    Objects.requireNonNull(seg, "seg must not be null");
+    long fileSize = seg.byteSize();
+    if (fileSize < HEADER_SIZE) {
+      throw new IOException(
+          "idmap.bin truncated: expected at least " + HEADER_SIZE + " bytes, got " + fileSize);
     }
 
     int magic = seg.get(INT_LE, 0);
