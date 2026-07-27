@@ -666,6 +666,10 @@ tasks.register("verifyGithubWorkflows") {
             require(content.contains("jobs:")) { "$name missing 'jobs:' section" }
             println("  Workflow: $name")
         }
+        val releaseWorkflow = workflowDir.resolve("release.yml").readText()
+        require("libopenblas-dev" in releaseWorkflow) {
+            "release.yml runs the all-project build and must install OpenBLAS for Vectors Studio"
+        }
     }
 }
 
