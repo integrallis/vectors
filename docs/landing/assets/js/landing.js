@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     maven: {
       copy: '<dependency>\n  <groupId>com.integrallis</groupId>\n  <artifactId>vectors</artifactId>\n  <version>0.1.1</version>\n</dependency>',
-      show: '<dependency>com.integrallis:vectors:0.1.1</dependency>',
+      show: '<dependency>\n  <groupId>com.integrallis</groupId>\n  <artifactId>vectors</artifactId>\n  <version>0.1.1</version>\n</dependency>',
     },
     sbt: {
       copy: 'libraryDependencies += "com.integrallis" % "vectors" % "0.1.1"',

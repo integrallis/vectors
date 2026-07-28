@@ -31,9 +31,11 @@
                 <a href="https://integrallis.com" class="brand-mark" aria-label="Integrallis"><img class="ilogo" src="assets/images/integrallis-logo.png" alt="Integrallis"></a>
                 <span class="sep">/</span>
                 <a href="#top" class="product">vectors</a>
+                <a href="https://github.com/integrallis/vectors/releases" class="version-pill" title="Release notes">v0.1.1</a>
             </div>
             <div class="nav-right">
                 <div class="nav-links">
+                    <a href="#compare">Spring AI</a>
                     <a href="#how">How it works</a>
                     <a href="#features">Features</a>
                     <a href="docs/">Docs</a>
@@ -143,6 +145,52 @@ var matches = store.search(EmbeddingSearchRequest.builder()
             </div>
         </div>
         <div class="scroll-indicator"><div class="scroll-line"></div></div>
+    </section>
+
+    <!-- Coming from Spring AI -->
+    <section class="section section-divider" id="compare">
+        <div class="container">
+            <div class="section-header reveal">
+                <span class="section-label">coming from spring ai</span>
+                <h2 class="section-title">Already using SimpleVectorStore?</h2>
+                <p class="section-description">
+                    <code>SimpleVectorStore</code> is Spring AI's in-memory reference <code>VectorStore</code>:
+                    it holds every vector in a map and scans the whole set on each query. Vectors is a drop-in
+                    replacement that swaps that linear scan for a real index, adds quantization, and persists to
+                    disk — while staying in-process. Only the construction changes; your call sites don't.
+                </p>
+            </div>
+            <div class="compare">
+                <div class="compare-col reveal">
+                    <div class="compare-head">
+                        <span class="compare-tag">SimpleVectorStore</span>
+                        <span class="compare-sub">in-memory reference</span>
+                    </div>
+                    <ul class="compare-list">
+                        <li>In-memory map; a full linear scan on every query</li>
+                        <li>Recall is exact, but query cost grows with the corpus</li>
+                        <li>Persistence is JSON <code>save()</code> / <code>load()</code> to a file</li>
+                        <li>Ideal for prototypes and small collections</li>
+                    </ul>
+                </div>
+                <div class="compare-col accent reveal">
+                    <div class="compare-head">
+                        <span class="compare-tag">Vectors</span>
+                        <span class="compare-sub">indexed &amp; durable</span>
+                    </div>
+                    <ul class="compare-list">
+                        <li>HNSW, IVF, and DiskANN indexes for approximate search over large corpora</li>
+                        <li>Scalar, product, and binary quantization to shrink the footprint</li>
+                        <li>Durable memory-mapped storage with atomic commits and crash recovery</li>
+                        <li>Still in-process — same JVM, no service, no network hop</li>
+                    </ul>
+                </div>
+            </div>
+            <p class="compare-note reveal">
+                Recall, throughput, and footprint depend on your corpus, hardware, and index settings — measure on your data.
+                <a href="docs/vectors/current/migration-from-simplevectorstore.html">See the migration guide →</a>
+            </p>
+        </div>
     </section>
 
     <!-- How it works -->

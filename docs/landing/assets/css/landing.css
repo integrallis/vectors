@@ -103,6 +103,8 @@ img { max-width: 100%; height: auto; }
 .nav-brand .sep { color: var(--subtle); font-weight: 300; }
 .nav-brand .product { font-family: var(--font-mono); font-size: 15px; font-weight: 500; color: var(--fg); transition: color var(--transition); }
 .nav-brand .product:hover { color: var(--accent-orange); }
+.nav-brand .version-pill { font-family: var(--font-mono); font-size: 11px; font-weight: 500; line-height: 1; color: var(--muted); background: var(--card); border: 1px solid var(--border); border-radius: 100px; padding: 3px 8px; letter-spacing: 0.01em; transition: var(--transition); }
+.nav-brand .version-pill:hover { color: var(--fg); border-color: var(--border-strong); }
 .nav-right { display: flex; align-items: center; gap: 8px; }
 .nav-links { display: flex; align-items: center; gap: 26px; margin-right: 10px; }
 .nav-links a { font-size: 14px; font-weight: 500; color: var(--muted); transition: var(--transition); }
@@ -178,7 +180,7 @@ img { max-width: 100%; height: auto; }
 .install-tab.active { color: var(--fg); background: var(--card); }
 .install-tab.active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--fg); }
 .install-cmd { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; min-height: 50px; }
-.install-cmd code { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.25; color: var(--fg); white-space: nowrap; overflow-x: auto; text-align: left; scrollbar-width: none; }
+.install-cmd code { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; color: var(--fg); white-space: pre; overflow-x: auto; text-align: left; scrollbar-width: none; }
 .install-cmd code::-webkit-scrollbar { display: none; }
 .install-cmd .prompt { color: var(--subtle); user-select: none; }
 .install-copy { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; background: transparent; border: 1px solid var(--border); color: var(--muted); cursor: pointer; transition: var(--transition); }
@@ -235,6 +237,25 @@ img { max-width: 100%; height: auto; }
 .card-title { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; margin-bottom: 9px; }
 .card-description { font-size: 0.92rem; color: var(--muted); line-height: 1.6; }
 
+/* Comparison (coming from Spring AI) */
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; max-width: 900px; margin: 0 auto; }
+@media (max-width: 720px) { .compare { grid-template-columns: 1fr; } }
+.compare-col { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 24px 26px; }
+.compare-col.accent { border-color: color-mix(in srgb, var(--accent-orange) 45%, var(--border)); }
+.compare-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.compare-tag { font-family: var(--font-mono); font-size: 0.95rem; font-weight: 500; color: var(--fg); }
+.compare-col.accent .compare-tag { color: var(--accent-orange); }
+.compare-sub { font-size: 12px; color: var(--subtle); }
+.compare-list { list-style: none; display: flex; flex-direction: column; gap: 11px; }
+.compare-list li { position: relative; padding-left: 20px; font-size: 0.92rem; color: var(--muted); line-height: 1.55; }
+.compare-list li::before { content: ''; position: absolute; left: 4px; top: 9px; width: 5px; height: 5px; border-radius: 50%; background: var(--subtle); }
+.compare-col.accent .compare-list li::before { background: var(--accent-orange); }
+.compare-list code { font-family: var(--font-mono); font-size: 0.85em; color: var(--fg); }
+.compare-note { max-width: 760px; margin: 22px auto 0; text-align: center; font-size: 0.9rem; color: var(--muted); line-height: 1.6; }
+.compare-note a { color: var(--fg); border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+.compare-note a:hover { border-color: var(--fg); }
+.section-description code { font-family: var(--font-mono); font-size: 0.88em; color: var(--fg); }
+
 /* Metrics */
 .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; max-width: 900px; margin: 0 auto; }
 @media (max-width: 700px) { .metrics-grid { grid-template-columns: 1fr; } }
@@ -275,6 +296,9 @@ img { max-width: 100%; height: auto; }
 /* Reveal */
 .reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
 .reveal.visible { opacity: 1; transform: translateY(0); }
+/* The hero is above the fold on load; animating it in reads as a jarring flash/shift.
+   Render it statically and reserve the scroll-reveal for the sections below. */
+.hero .reveal { opacity: 1; transform: none; transition: none; }
 .cards-grid .reveal:nth-child(2), .metrics-grid .reveal:nth-child(2), .install-grid .reveal:nth-child(2) { transition-delay: 0.06s; }
 .cards-grid .reveal:nth-child(3), .install-grid .reveal:nth-child(3) { transition-delay: 0.12s; }
 .cards-grid .reveal:nth-child(4) { transition-delay: 0.18s; }
