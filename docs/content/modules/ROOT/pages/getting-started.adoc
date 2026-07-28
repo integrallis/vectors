@@ -69,6 +69,23 @@ Configure the compiler plugin to add the incubator module:
 
 Run your application and tests with `--add-modules jdk.incubator.vector` on the JVM command line as well.
 
+=== Opt-in integrations
+
+The base facade resolves 9 runtime JARs totaling less than 1 MiB. Add a feature
+artifact only when the application uses S3-compatible storage or Arrow IPC:
+
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors-storage-s3:{vectors-version}")
+    implementation("com.integrallis:vectors-db-arrow:{vectors-version}")
+}
+----
+
+`vectors-storage-s3` supplies the AWS SDK used by `S3StorageBackend`.
+`vectors-db-arrow` supplies the Arrow runtime used by `ArrowIpcExporter` and
+`ArrowIpcIngester`.
+
 == Your First Collection
 
 Create an in-memory collection, add documents, commit, and search:
@@ -138,11 +155,13 @@ See xref:architecture.adoc#_index_type_comparison[the index comparison] and the 
 ----
 vectors-core              foundation, no internal dependencies
 vectors-storage           depends on core
+vectors-storage-s3        opt-in; depends on storage and AWS SDK S3
 vectors-quantization      depends on core, storage
 vectors-hnsw              depends on core, storage, quantization
 vectors-vamana            depends on core, storage, quantization
 vectors-ivf               depends on core, storage, quantization
 vectors-db                depends on the index modules above
+vectors-db-arrow          opt-in; depends on vectors-db and Apache Arrow
 ----
 
 == Next Steps

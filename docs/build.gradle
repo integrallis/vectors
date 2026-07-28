@@ -73,10 +73,10 @@ task verifyJavadocAttachments {
 			layout.projectDirectory
 				.dir('content/modules/ROOT/attachments/javadoc/aggregate/com/integrallis/vectors')
 				.asFile
-		def unpublishedPackages = [
-			'cluster', 'distributed', 'gpu', 'ingest', 'optimizer', 'router', 'server',
-			'studio', 'text', 'vcr'
-		]
+			def unpublishedPackages = [
+				'cluster', 'distributed', 'gpu', 'ingest', 'optimizer', 'router', 'server',
+				'studio', 'text'
+			]
 		def leakedPackages = unpublishedPackages.findAll {
 			new File(aggregatePackageDirectory, it).directory
 		}

@@ -17,6 +17,7 @@ package com.integrallis.vectors.vcr.junit5;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.integrallis.vectors.vcr.VCRDisabled;
 import com.integrallis.vectors.vcr.VCRMode;
 import com.integrallis.vectors.vcr.VCRModel;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,5 +47,14 @@ public class RecordPlaybackScenario {
     float[] v = embedder.embed("hello");
     assertThat(v[0]).isEqualTo(5f);
     assertThat(v[1]).isEqualTo(42f);
+  }
+
+  @Test
+  @VCRDisabled
+  void bypassesVcr() {
+    float[] v = embedder.embed("disabled");
+    float expected =
+        "PLAYBACK".equals(System.getProperty(VCRExtensionEngineTest.MODE_PROP)) ? -1f : 8f;
+    assertThat(v[0]).isEqualTo(expected);
   }
 }

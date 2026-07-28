@@ -1,16 +1,10 @@
 description = "Vectors Studio distributed backend — DistributedVectorCollection on R2 + sidecart text/blob"
 
-val awsSdkVersion = "2.29.52"
-
 dependencies {
     api(project(":vectors-studio-core"))
     api(project(":vectors-studio-sidecart"))
     api(project(":vectors-ivf"))
-    api(project(":vectors-storage"))
-
-    // S3StorageBackend lives in vectors-storage but the AWS SDK is brought in here so the
-    // Cloudflare R2 path (and LocalStack for tests) can construct an S3Client.
-    implementation("software.amazon.awssdk:s3:$awsSdkVersion")
+    api(project(":vectors-storage-s3"))
 
     runtimeOnly("ch.qos.logback:logback-classic:1.5.15")
 

@@ -2,7 +2,6 @@ description = "Inverted File (IVF) family indexes"
 
 // Keep in sync with vectors-storage/build.gradle.kts
 val testcontainersVersion = "1.21.4"
-val awsSdkVersion = "2.29.52"
 
 dependencies {
     api(project(":vectors-core"))
@@ -16,7 +15,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers:$testcontainersVersion")
     testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
     testImplementation("org.testcontainers:localstack:$testcontainersVersion")
-    testImplementation("software.amazon.awssdk:s3:$awsSdkVersion")
+    testImplementation(project(":vectors-storage-s3"))
 
     // DistributedVectorCollectionR2IT: real end-user flow against Cloudflare R2 with
     // real text embeddings produced by an in-process ONNX sentence-transformer.

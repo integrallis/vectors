@@ -11,6 +11,7 @@ rootProject.name = "vectors"
 
 include("vectors-core")
 include("vectors-storage")
+include("vectors-storage-s3")
 include("vectors-quantization")
 include("vectors-hnsw")
 include("vectors-vamana")
@@ -21,6 +22,7 @@ include("vectors-router")
 include("vectors-optimizer")
 include("vectors-text-h2")
 include("vectors-db")
+include("vectors-db-arrow")
 // Umbrella artifact: publishes as `com.integrallis:vectors`, re-exporting vectors-db.
 include("vectors")
 include("vectors-distributed")

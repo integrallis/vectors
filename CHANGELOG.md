@@ -4,6 +4,31 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-27
+
+### Added
+
+- `vectors-storage-s3`, an explicit opt-in artifact for the AWS SDK-backed
+  `S3StorageBackend`.
+- `vectors-db-arrow`, an explicit opt-in artifact for Arrow IPC import and
+  export.
+- The complete VCR family as Maven Central artifacts: `vectors-vcr-core`,
+  `vectors-vcr-semantic-db`, `vectors-vcr-serde-avaje`,
+  `vectors-vcr-serde-jackson`, `vectors-vcr-junit5`, `vectors-vcr-testng`,
+  `vectors-vcr-spring-ai`, and `vectors-vcr-langchain4j`.
+- A release gate that permits only Vectors modules and SLF4J in the
+  `com.integrallis:vectors` runtime graph and caps the complete graph at 2 MiB.
+
+### Fixed
+
+- Removed unconditional AWS, Netty, Apache HTTP, Arrow, Jackson, and
+  FlatBuffers transitives from the `vectors` facade. Its runtime graph is now
+  9 JARs totaling 922,356 bytes, down from 63 JARs and 19,074,004 bytes.
+- Release-mode notebook verification now executes all six notebooks, including
+  the VCR record/replay harness, from the staged Maven artifacts.
+- Empty `VECTORS_NOTEBOOK_REPOSITORY` values no longer fail source-mode
+  notebook startup with an invalid URI.
+
 ## [0.1.0] - 2026-07-26
 
 ### Added

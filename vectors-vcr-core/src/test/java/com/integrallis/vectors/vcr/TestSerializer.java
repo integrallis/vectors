@@ -29,7 +29,7 @@ import java.util.Map;
  * Test-only {@link CassetteSerializer} using raw Java {@code DataOutput}. Avoids depending on any
  * JSON library in the core module's unit tests.
  */
-final class TestSerializer implements CassetteSerializer {
+public final class TestSerializer implements CassetteSerializer {
 
   private static final byte TYPE_EMBEDDING = 1;
   private static final byte TYPE_BATCH_EMBEDDING = 2;

@@ -15,6 +15,8 @@ plugins {
 
 val notebookRepositoryUrl = providers.gradleProperty("notebookRepository")
     .orElse(providers.environmentVariable("VECTORS_NOTEBOOK_REPOSITORY"))
+    .map { it.trim() }
+    .filter { it.isNotEmpty() }
 
 allprojects {
     group = "com.integrallis"
@@ -47,11 +49,13 @@ val fslModules = setOf("vectors-distributed", "vectors-cluster", "vectors-server
 val publishedModuleNames = setOf(
     "vectors-core",
     "vectors-storage",
+    "vectors-storage-s3",
     "vectors-quantization",
     "vectors-hnsw",
     "vectors-vamana",
     "vectors-ivf",
     "vectors-db",
+    "vectors-db-arrow",
     "vectors",
     "vectors-hybrid",
     "vectors-spring-ai",
@@ -61,10 +65,19 @@ val publishedModuleNames = setOf(
     "vectors-cache-jcache",
     "vectors-cache-langchain4j",
     "vectors-cache-semantic-db",
-    "vectors-cache-spring-ai"
+    "vectors-cache-spring-ai",
+    "vectors-vcr-core",
+    "vectors-vcr-semantic-db",
+    "vectors-vcr-serde-avaje",
+    "vectors-vcr-serde-jackson",
+    "vectors-vcr-junit5",
+    "vectors-vcr-testng",
+    "vectors-vcr-spring-ai",
+    "vectors-vcr-langchain4j"
 )
 extra["publishedModuleNames"] = publishedModuleNames
-extra["publishedJavadocModuleNames"] = publishedModuleNames - "vectors"
+extra["publishedJavadocModuleNames"] =
+    publishedModuleNames - setOf("vectors", "vectors-storage-s3", "vectors-db-arrow")
 val publishedProjects = libraryProjects.filter { it.name in publishedModuleNames }
 
 // JJava notebooks consume one generated classpath so notebook cells never encode module JAR names
@@ -108,7 +121,8 @@ dependencies {
         "vectors",
         "vectors-spring-ai",
         "vectors-langchain4j",
-        "vectors-cache-langchain4j"
+        "vectors-cache-langchain4j",
+        "vectors-vcr-serde-jackson"
     ).forEach { artifact ->
         notebookReleaseClasspath("com.integrallis:$artifact:${notebookVersion.get()}")
     }
@@ -667,6 +681,12 @@ tasks.register("verifyPublishingConfigured") {
     }
 }
 
+tasks.register("verifyFacadeRuntimeFootprint") {
+    group = "verification"
+    description = "Verify the vectors facade stays lightweight and free of optional integrations"
+    dependsOn(":vectors:verifyRuntimeFootprint")
+}
+
 tasks.register("verifyStagedPublications") {
     group = "verification"
     description = "Stage and validate every Maven Central artifact and its internal dependencies"
@@ -697,6 +717,31 @@ tasks.register("verifyStagedPublications") {
             val pom = pomFile.readText()
             require("<licenses>" in pom && "<developers>" in pom && "<scm>" in pom) {
                 "Incomplete Maven Central metadata in ${proj.name} POM"
+            }
+            when (proj.name) {
+                "vectors-storage" ->
+                    require("<groupId>software.amazon.awssdk</groupId>" !in pom) {
+                        "vectors-storage must not publish the opt-in AWS SDK dependency"
+                    }
+                "vectors-db" ->
+                    require("<groupId>org.apache.arrow</groupId>" !in pom) {
+                        "vectors-db must not publish the opt-in Apache Arrow dependencies"
+                    }
+                "vectors-storage-s3" ->
+                    require(
+                        "<artifactId>vectors-storage</artifactId>" in pom &&
+                            "<artifactId>s3</artifactId>" in pom
+                    ) {
+                        "vectors-storage-s3 must publish both storage and AWS S3 dependencies"
+                    }
+                "vectors-db-arrow" ->
+                    require(
+                        "<artifactId>vectors-db</artifactId>" in pom &&
+                            "<artifactId>arrow-vector</artifactId>" in pom &&
+                            "<artifactId>arrow-memory-unsafe</artifactId>" in pom
+                    ) {
+                        "vectors-db-arrow must publish the database and Arrow runtime dependencies"
+                    }
             }
             internalDependency.findAll(pom).forEach { match ->
                 val artifactId = match.groupValues[1]
@@ -1017,6 +1062,7 @@ tasks.register("complianceCheck") {
         "verifyGovernanceFiles",
         "verifyLockfiles",
         "verifyPublishingConfigured",
+        "verifyFacadeRuntimeFootprint",
         "verifyStagedPublications",
         "verifyReproducibleBuild",
         "verifyGithubWorkflows",

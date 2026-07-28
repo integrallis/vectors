@@ -17,6 +17,7 @@ package com.integrallis.vectors.vcr.springai;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -24,17 +25,25 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.integrallis.vectors.storage.backend.HeapStorageBackend;
+import com.integrallis.vectors.vcr.CassetteKey;
+import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
 import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -76,5 +85,34 @@ class VCRSpringAIChatModelTest {
     when(delegate.call(anyString())).thenReturn("live");
     VCRSpringAIChatModel off = new VCRSpringAIChatModel(delegate, "T:off", VCRMode.OFF, "m", store);
     assertThat(off.call("x")).isEqualTo("live");
+  }
+
+  @Test
+  void promptAndMessageOverloadsDelegateAndExposeDelegate() {
+    Prompt prompt = new Prompt("prompt");
+    Message message = new AssistantMessage("message");
+    when(delegate.call(prompt))
+        .thenReturn(
+            new ChatResponse(List.of(new Generation(new AssistantMessage("prompt response")))));
+    when(delegate.call(any(Message[].class))).thenReturn("message response");
+    VCRSpringAIChatModel off =
+        new VCRSpringAIChatModel(delegate, "T:overloads", VCRMode.OFF, "m", store);
+
+    assertThat(off.call(prompt).getResult().getOutput().getText()).isEqualTo("prompt response");
+    assertThat(off.call(message)).isEqualTo("message response");
+    assertThat(off.getDelegate()).isSameAs(delegate);
+  }
+
+  @Test
+  void playbackRejectsWrongCassetteType() {
+    store.store(
+        new CassetteKey("chat", "T:wrong", 1),
+        new CassetteRecord.Embedding("T:wrong", "m", 1L, new float[] {1f}));
+    VCRSpringAIChatModel player =
+        new VCRSpringAIChatModel(delegate, "T:wrong", VCRMode.PLAYBACK, "m", store);
+
+    assertThatThrownBy(() -> player.call("anything"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Embedding");
   }
 }

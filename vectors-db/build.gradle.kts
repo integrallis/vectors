@@ -20,7 +20,10 @@ dependencies {
     compileOnly(project(":vectors-gpu"))
     testImplementation(project(":vectors-gpu"))
 
-    // Apache Arrow IPC — batch ingestion / export (G6)
-    implementation("org.apache.arrow:arrow-vector:19.0.0")
-    implementation("org.apache.arrow:arrow-memory-unsafe:19.0.0")
+    // Arrow IPC is an opt-in capability. vectors-db-arrow supplies these at runtime without
+    // imposing Arrow, Jackson, and FlatBuffers on every embedded database consumer.
+    compileOnly("org.apache.arrow:arrow-vector:19.0.0")
+    compileOnly("org.apache.arrow:arrow-memory-unsafe:19.0.0")
+    testImplementation("org.apache.arrow:arrow-vector:19.0.0")
+    testImplementation("org.apache.arrow:arrow-memory-unsafe:19.0.0")
 }

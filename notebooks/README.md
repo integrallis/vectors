@@ -13,7 +13,7 @@ rendered, pre-executed documentation.
 | [03_spring_ai_integration.ipynb](03_spring_ai_integration.ipynb) | `JavaVectorsVectorStore` for Spring AI | Source, release |
 | [04_langchain4j_integration.ipynb](04_langchain4j_integration.ipynb) | `JavaVectorsEmbeddingStore` for LangChain4j | Source, release |
 | [05_embedding_cache.ipynb](05_embedding_cache.ipynb) | `CachingEmbeddingModel` and `CaffeineVectorCache` | Source, release |
-| [06_vcr_test_harness.ipynb](06_vcr_test_harness.ipynb) | Record, replay, and inspect a VCR cassette | Source only |
+| [06_vcr_test_harness.ipynb](06_vcr_test_harness.ipynb) | Record, replay, and inspect a VCR cassette | Source, release |
 
 ## Dependency modes
 
@@ -26,16 +26,13 @@ directory through `JJAVA_CLASSPATH`.
 - `release` resolves the selected `com.integrallis` artifacts from Maven
   Central. Set `VECTORS_VERSION` once to test a specific release.
 
-The VCR modules are not in the 0.1.0 publication set, so notebook 06 is
-intentionally source-only.
-
 You can prepare either classpath without Docker:
 
 ```bash
 ./gradlew prepareNotebookClasspath -PnotebookMode=source
 ./gradlew prepareNotebookClasspath \
   -PnotebookMode=release \
-  -PnotebookVersion=0.1.0
+  -PnotebookVersion=0.1.1
 ```
 
 Before a release reaches Central, resolve the same artifacts from the local
@@ -45,7 +42,7 @@ staging repository:
 ./gradlew verifyStagedPublications
 ./gradlew prepareNotebookClasspath \
   -PnotebookMode=release \
-  -PnotebookVersion=0.1.0 \
+  -PnotebookVersion=0.1.1 \
   -PnotebookRepository=build/staging-deploy
 ```
 
@@ -63,7 +60,7 @@ development token. To exercise a published release instead:
 
 ```bash
 VECTORS_NOTEBOOK_MODE=release \
-VECTORS_VERSION=0.1.0 \
+VECTORS_VERSION=0.1.1 \
 docker compose up --build
 ```
 
@@ -81,11 +78,11 @@ docker compose run --rm --no-deps jupyter \
   bash /home/jovyan/work/vectors/notebooks/scripts/test-notebooks.sh
 ```
 
-Release mode executes notebooks 01 through 05:
+Release mode executes all six notebooks from the selected Maven artifacts:
 
 ```bash
 VECTORS_NOTEBOOK_MODE=release \
-VECTORS_VERSION=0.1.0 \
+VECTORS_VERSION=0.1.1 \
 docker compose run --rm --no-deps jupyter \
   bash /home/jovyan/work/vectors/notebooks/scripts/test-notebooks.sh
 ```

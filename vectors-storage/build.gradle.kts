@@ -9,11 +9,10 @@ val awsSdkVersion = "2.29.52"
 dependencies {
     api(project(":vectors-core"))
 
-    // AWS SDK v2 S3: promoted to implementation so that S3StorageBackend is available
-    // to runtime consumers (e.g. vectors-ivf integration tests) without them needing to
-    // declare a separate S3 dependency. Public API of S3StorageBackend uses only java.net.URI
-    // and java.lang.String so callers do not need the SDK on their compile classpath.
-    implementation("software.amazon.awssdk:s3:$awsSdkVersion")
+    // S3 is an opt-in capability. The implementation remains in this module so its established
+    // package and API stay stable, while vectors-storage-s3 supplies the SDK at runtime.
+    compileOnly("software.amazon.awssdk:s3:$awsSdkVersion")
+    testImplementation("software.amazon.awssdk:s3:$awsSdkVersion")
 
     // Integration tests: LocalStack container exercises the real S3 API surface.
     testImplementation("org.testcontainers:testcontainers:$testcontainersVersion")

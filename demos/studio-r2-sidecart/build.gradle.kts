@@ -1,18 +1,14 @@
 description = "Demo: seed an R2 prefix + sidecart with the 24-doc demo corpus via BulkIngestor"
 
 val langchain4jVersion = "1.13.1"
-val awsSdkVersion = "2.29.52"
 
 dependencies {
     implementation(project(":vectors-core"))
-    implementation(project(":vectors-storage"))
+    implementation(project(":vectors-storage-s3"))
     implementation(project(":vectors-ivf"))
     implementation(project(":vectors-ingest"))
     implementation(project(":vectors-studio-distributed"))
     implementation(project(":vectors-studio-sidecart"))
-
-    // S3 client used by S3StorageBackend / Cloudflare R2.
-    implementation("software.amazon.awssdk:s3:$awsSdkVersion")
 
     // PicoCLI for the seeder, dotenv-java for .env loading, langchain4j for embeddings.
     implementation("info.picocli:picocli:4.7.6")

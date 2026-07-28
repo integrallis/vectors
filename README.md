@@ -46,7 +46,7 @@ depending on another system.
 
 ```kotlin
 dependencies {
-    implementation("com.integrallis:vectors:0.1.0")
+    implementation("com.integrallis:vectors:0.1.1")
 }
 ```
 
@@ -85,7 +85,7 @@ is configured.
 
 ### Spring AI
 
-Add `com.integrallis:vectors-spring-ai:0.1.0` alongside the Spring AI BOM:
+Add `com.integrallis:vectors-spring-ai:0.1.1` alongside the Spring AI BOM:
 
 ```java
 VectorCollection collection = VectorCollection.builder()
@@ -100,7 +100,7 @@ VectorStore store =
 
 ### LangChain4j
 
-Add `com.integrallis:vectors-langchain4j:0.1.0` alongside LangChain4j:
+Add `com.integrallis:vectors-langchain4j:0.1.1` alongside LangChain4j:
 
 ```java
 VectorCollection collection = VectorCollection.builder()
@@ -112,6 +112,24 @@ VectorCollection collection = VectorCollection.builder()
 EmbeddingStore<TextSegment> store =
     JavaVectorsEmbeddingStore.builder(collection).build();
 ```
+
+### Optional S3 and Arrow runtimes
+
+The base `vectors` dependency resolves only the local engine and SLF4J: 9 JARs
+totaling less than 1 MiB. Add a feature artifact only when the application uses
+that integration:
+
+```kotlin
+dependencies {
+    implementation("com.integrallis:vectors-storage-s3:0.1.1")
+    implementation("com.integrallis:vectors-db-arrow:0.1.1")
+}
+```
+
+`vectors-storage-s3` supplies the AWS SDK used by `S3StorageBackend`.
+`vectors-db-arrow` supplies Apache Arrow, Jackson, and FlatBuffers for
+`ArrowIpcExporter` and `ArrowIpcIngester`. The build rejects a facade runtime
+larger than 2 MiB or any external runtime module other than SLF4J.
 
 ## Capabilities
 
@@ -142,7 +160,7 @@ warnings:
 --enable-native-access=ALL-UNNAMED
 ```
 
-Every published 0.1.0 artifact is a Java-only JAR with no JNI or bundled native
+Every published 0.1.1 artifact is a Java-only JAR with no JNI or bundled native
 library. The storage module uses the standard JDK FFM API for an optional
 `posix_madvise` optimization. The optional Arrow IPC exporter/ingester
 additionally needs the module opens required by Arrow's allocator:
@@ -183,11 +201,16 @@ Published to Maven Central (Apache-2.0):
 
 - Entry point: `vectors` (umbrella dependency)
 - Core: `vectors-core`, `vectors-storage`, `vectors-quantization`
+- Optional runtimes: `vectors-storage-s3`, `vectors-db-arrow`
 - Indexes & database: `vectors-hnsw`, `vectors-vamana`, `vectors-ivf`, `vectors-db`,
   `vectors-hybrid`
 - Frameworks: `vectors-spring-ai`, `vectors-langchain4j`, `vectors-spring-boot-starter`
 - Caching: `vectors-cache`, `vectors-cache-jcache`, `vectors-cache-langchain4j`,
   `vectors-cache-semantic-db`, `vectors-cache-spring-ai`
+- VCR testing: `vectors-vcr-core`, `vectors-vcr-semantic-db`,
+  `vectors-vcr-serde-avaje`, `vectors-vcr-serde-jackson`,
+  `vectors-vcr-junit5`, `vectors-vcr-testng`, `vectors-vcr-spring-ai`,
+  `vectors-vcr-langchain4j`
 
 Beyond the embedded library, `vectors-distributed`, `vectors-cluster`,
 `vectors-server`, and `vectors-gpu` build the object-storage-backed distributed

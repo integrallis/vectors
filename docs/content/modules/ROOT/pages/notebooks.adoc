@@ -33,7 +33,7 @@ notebook viewers show complete results without requiring readers to run a local 
 
 |`06_vcr_test_harness.ipynb`
 |Cassette record, replay, listing, and cleanup
-|Source only
+|Source, release
 |===
 
 Browse the {url-vectors-github}/tree/main/notebooks[notebook sources on GitHub^].
@@ -64,8 +64,8 @@ VECTORS_VERSION={vectors-version} \
 docker compose up --build
 ----
 
-Release mode resolves `com.integrallis` artifacts from Maven Central. Notebook 06 is source-only
-because the VCR modules are not in the 0.1.0 publication set.
+Release mode resolves every notebook dependency, including the VCR record/replay modules, from
+Maven Central.
 
 == Verify Every Output Cell
 

@@ -164,6 +164,9 @@ Apache library.
 Any S3-compatible endpoint works — AWS S3, Cloudflare R2, Google Cloud Storage, or a local MinIO —
 because the backend supports an endpoint override, path-style addressing, and static credentials:
 
+Add `com.integrallis:vectors-storage-s3:{vectors-version}` alongside the base
+`vectors` dependency before using `S3StorageBackend`.
+
 [source,java]
 ----
 StorageBackend objectStore = S3StorageBackend.create(

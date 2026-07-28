@@ -23,6 +23,9 @@ Foundation module with no internal dependencies.
 | Off-heap memory management via `MemorySegment` and `Arena`.
 Arena-scoped allocation, mmap file I/O, storage backend abstraction.
 
+| `vectors-storage-s3`
+| Opt-in AWS SDK runtime for `S3StorageBackend`.
+
 | `vectors-quantization`
 | Scalar (int8/int4), product (PQ), binary (BQ/BBQ), RaBitQ, extended RaBitQ, TurboQuant, and NVQ quantizers.
 Training, encoding, and asymmetric distance estimation.
@@ -42,6 +45,9 @@ Inverted file with k-means clustering, ADC lookup tables, and optional rescore.
 | `vectors-db`
 | Embedded vector database facade.
 Unified `VectorCollection` API over all backends with metadata filtering, persistence, deletion, and compaction.
+
+| `vectors-db-arrow`
+| Opt-in Apache Arrow runtime for IPC import and export.
 
 | `vectors-hybrid`
 | Dense and text retriever SPIs with reciprocal-rank and weighted fusion.
@@ -69,9 +75,33 @@ Unified `VectorCollection` API over all backends with metadata filtering, persis
 
 | `vectors-cache-spring-ai`
 | Spring AI embedding/chat cache decorators.
+
+| `vectors-vcr-core`
+| Framework-neutral model-call record/replay engine and cassette storage API.
+
+| `vectors-vcr-semantic-db`
+| Similarity-based cassette lookup backed by `VectorCollection`.
+
+| `vectors-vcr-serde-avaje`
+| Avaje JsonB cassette serialization.
+
+| `vectors-vcr-serde-jackson`
+| Jackson cassette serialization.
+
+| `vectors-vcr-junit5`
+| JUnit 5 lifecycle integration for VCR tests.
+
+| `vectors-vcr-testng`
+| TestNG lifecycle integration for VCR tests.
+
+| `vectors-vcr-spring-ai`
+| Spring AI chat and embedding model wrappers.
+
+| `vectors-vcr-langchain4j`
+| LangChain4j chat, embedding, and interceptor wrappers.
 |===
 
-These are the 17 Apache-2.0 modules published in 0.1.0.
+These are the 27 Apache-2.0 modules published in 0.1.1.
 
 == Repository Tools and Additional Tiers
 
@@ -84,9 +114,6 @@ These are the 17 Apache-2.0 modules published in 0.1.0.
 
 | `vectors-studio-*`
 | Interactive collection browser and projection workbench. See xref:studio.adoc[Vectors Studio].
-
-| `vectors-vcr-*`
-| Source-level record/replay test tooling. See xref:testing.adoc[VCR Test Harness].
 
 | `vectors-distributed`, `vectors-cluster`, `vectors-server`
 | Object-storage-backed distributed tier. See xref:distributed.adoc[Distributed Database].
@@ -108,6 +135,9 @@ vectors
     ├── vectors-vamana ─────────────> core, quantization
     └── vectors-ivf ────────────────> core, storage, quantization
 
+vectors-storage-s3 ─────────────────> vectors-storage, AWS SDK S3
+vectors-db-arrow ───────────────────> vectors-db, Apache Arrow
+
 vectors-hybrid ─────────────────────> vectors-core
 vectors-spring-ai ──────────────────> vectors-db, vectors-hybrid
 vectors-langchain4j ────────────────> vectors-db, vectors-hybrid
@@ -118,6 +148,15 @@ vectors-cache
 ├── vectors-cache-langchain4j
 ├── vectors-cache-spring-ai
 └── vectors-cache-semantic-db ──────> vectors-db
+
+vectors-vcr-core ───────────────────> vectors-storage
+├── vectors-vcr-semantic-db ────────> vectors-db
+├── vectors-vcr-serde-avaje
+├── vectors-vcr-serde-jackson
+├── vectors-vcr-junit5
+├── vectors-vcr-testng
+├── vectors-vcr-spring-ai
+└── vectors-vcr-langchain4j
 ----
 
 Pick the module you need and transitive dependencies are resolved automatically.

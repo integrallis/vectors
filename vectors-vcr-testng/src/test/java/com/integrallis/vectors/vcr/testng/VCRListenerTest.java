@@ -81,8 +81,11 @@ public class VCRListenerTest {
     ExactCassetteStore exact = new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
     CassetteKey expected =
         new CassetteKey("embedding", RecordPlaybackScenario.class.getName() + ":embeds", 1);
+    CassetteKey disabled =
+        new CassetteKey("embedding", RecordPlaybackScenario.class.getName() + ":bypassesVcr", 1);
     Optional<CassetteRecord> stored = exact.retrieve(expected);
     assertTrue(stored.isPresent(), "cassette must have been recorded");
+    assertTrue(exact.retrieve(disabled).isEmpty(), "disabled calls must not be recorded");
     CassetteRecord.Embedding emb = (CassetteRecord.Embedding) stored.get();
     assertEquals(emb.embedding()[0], 5f);
     assertEquals(emb.embedding()[1], 42f);
@@ -111,6 +114,17 @@ public class VCRListenerTest {
     assertEquals(thrown.getSuppressed().length, 1);
     assertEquals(thrown.getSuppressed()[0].getMessage(), "close failed");
     assertTrue(store.closed, "close must still be attempted after flush failure");
+  }
+
+  @Test(groups = "unit")
+  public void closeFailurePropagatesWhenFlushSucceeds() {
+    FailingCassetteStore store = new FailingCassetteStore(false, true);
+
+    IOException thrown = expectThrows(IOException.class, () -> VCRListener.flushAndClose(store));
+
+    assertEquals(thrown.getMessage(), "close failed");
+    assertEquals(thrown.getSuppressed().length, 0);
+    assertTrue(store.closed, "close must be attempted");
   }
 
   private static void runScenario() {

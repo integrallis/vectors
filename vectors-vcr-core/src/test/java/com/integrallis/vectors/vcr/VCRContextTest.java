@@ -90,5 +90,9 @@ class VCRContextTest {
     VCRContext ctx = newContext(VCRMode.PLAYBACK);
     ctx.setEffectiveMode(VCRMode.RECORD);
     assertEquals(VCRMode.RECORD, ctx.getEffectiveMode());
+
+    ctx.resetCallCounters();
+
+    assertEquals(VCRMode.PLAYBACK, ctx.getEffectiveMode());
   }
 }

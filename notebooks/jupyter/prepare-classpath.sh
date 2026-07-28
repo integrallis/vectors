@@ -6,7 +6,7 @@ fi
 
 repository=/home/jovyan/work/vectors
 mode=${VECTORS_NOTEBOOK_MODE:-source}
-version=${VECTORS_VERSION:-0.1.0}
+version=${VECTORS_VERSION:-0.1.1}
 repository_url=${VECTORS_NOTEBOOK_REPOSITORY:-}
 
 case "$mode" in

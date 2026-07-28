@@ -13,7 +13,7 @@ services:
       - vectors-notebook-gradle-cache:/home/jovyan/.gradle
     environment:
       - VECTORS_NOTEBOOK_MODE=${VECTORS_NOTEBOOK_MODE:-source}
-      - VECTORS_VERSION=${VECTORS_VERSION:-0.1.0}
+      - VECTORS_VERSION=${VECTORS_VERSION:-0.1.1}
       - VECTORS_NOTEBOOK_REPOSITORY=${VECTORS_NOTEBOOK_REPOSITORY:-}
       - VECTORS_NOTEBOOK_PREPARE=${VECTORS_NOTEBOOK_PREPARE:-true}
       - JUPYTER_ENABLE_LAB=yes

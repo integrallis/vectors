@@ -25,18 +25,26 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.integrallis.vectors.storage.backend.HeapStorageBackend;
+import com.integrallis.vectors.vcr.CassetteKey;
+import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
 import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
+import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.content.Media;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingRequest;
+import org.springframework.util.MimeTypeUtils;
 
 @Tag("unit")
 @ExtendWith(MockitoExtension.class)
@@ -102,5 +110,80 @@ class VCRSpringAIEmbeddingModelTest {
     assertThat(played.get(0)).containsExactly(1f, 2f);
     assertThat(played.get(1)).containsExactly(3f, 4f);
     verify(delegate, times(1)).embed((List<String>) any(List.class));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void responseOverloadsExposeDelegateDimensionsAndOrderedResults() {
+    when(delegate.dimensions()).thenReturn(2);
+    when(delegate.embed((List<String>) any(List.class)))
+        .thenReturn(List.of(new float[] {1f, 2f}, new float[] {3f, 4f}));
+    VCRSpringAIEmbeddingModel model =
+        new VCRSpringAIEmbeddingModel(delegate, "T:response", VCRMode.OFF, "m", store);
+
+    var response = model.call(new EmbeddingRequest(List.of("a", "b"), null));
+    var convenienceResponse = model.embedForResponse(List.of("c", "d"));
+
+    assertThat(response.getResults()).hasSize(2);
+    assertThat(response.getResults().get(0).getOutput()).containsExactly(1f, 2f);
+    assertThat(response.getResults().get(1).getOutput()).containsExactly(3f, 4f);
+    assertThat(convenienceResponse.getResults()).hasSize(2);
+    assertThat(model.dimensions()).isEqualTo(2);
+    assertThat(model.getDelegate()).isSameAs(delegate);
+    verify(delegate, times(2)).embed((List<String>) any(List.class));
+  }
+
+  @Test
+  void documentEmbeddingNormalizesNullText() {
+    Media media =
+        new Media(MimeTypeUtils.IMAGE_PNG, URI.create("https://example.invalid/test-document.png"));
+    Document document = new Document(media, Map.of());
+    when(delegate.embed("")).thenReturn(new float[] {7f});
+    VCRSpringAIEmbeddingModel model =
+        new VCRSpringAIEmbeddingModel(delegate, "T:document", VCRMode.OFF, "m", store);
+
+    assertThat(document.getText()).isNull();
+    assertThat(model.embed(document)).containsExactly(7f);
+    verify(delegate).embed("");
+  }
+
+  @Test
+  void playbackRejectsWrongSingleCassetteType() {
+    store.store(
+        new CassetteKey("embedding", "T:wrong-single", 1),
+        new CassetteRecord.BatchEmbedding("T:wrong-single", "m", 1L, new float[][] {{1f}}));
+    VCRSpringAIEmbeddingModel model =
+        new VCRSpringAIEmbeddingModel(delegate, "T:wrong-single", VCRMode.PLAYBACK, "m", store);
+
+    assertThatThrownBy(() -> model.embed("x"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("BatchEmbedding");
+  }
+
+  @Test
+  void playbackRejectsWrongOrMissingBatchCassette() {
+    store.store(
+        new CassetteKey("batch_embedding", "T:wrong-batch", 1),
+        new CassetteRecord.Embedding("T:wrong-batch", "m", 1L, new float[] {1f}));
+    VCRSpringAIEmbeddingModel wrong =
+        new VCRSpringAIEmbeddingModel(delegate, "T:wrong-batch", VCRMode.PLAYBACK, "m", store);
+    VCRSpringAIEmbeddingModel missing =
+        new VCRSpringAIEmbeddingModel(delegate, "T:missing-batch", VCRMode.PLAYBACK, "m", store);
+
+    assertThatThrownBy(() -> wrong.embed(List.of("x")))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Embedding");
+    assertThatThrownBy(() -> missing.embed(List.of("x")))
+        .isInstanceOf(VCRCassetteMissingException.class);
+  }
+
+  @Test
+  void dimensionDetectionFailureUsesUnknownSentinel() {
+    when(delegate.dimensions()).thenThrow(new IllegalStateException("not initialized"));
+
+    VCRSpringAIEmbeddingModel model =
+        new VCRSpringAIEmbeddingModel(delegate, "T:dimensions", VCRMode.OFF, "m", store);
+
+    assertThat(model.dimensions()).isEqualTo(-1);
   }
 }

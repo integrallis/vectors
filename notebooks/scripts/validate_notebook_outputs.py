@@ -2,14 +2,12 @@
 
 import json
 import math
-import os
 from pathlib import Path
 import re
 import sys
 
 
 output_dir = Path(sys.argv[1])
-mode = os.environ.get("VECTORS_NOTEBOOK_MODE", "source")
 expected_output = {
     "01_getting_started.ipynb": ["collection size: 500", "doc-374"],
     "02_quantization_tour.ipynb": [
@@ -52,13 +50,7 @@ def text_fragments(value):
     return [str(value)]
 
 
-names = [
-    name
-    for name in expected_output
-    if mode == "source" or name != "06_vcr_test_harness.ipynb"
-]
-
-for name in names:
+for name in expected_output:
     file = output_dir / name
     if not file.exists():
         raise RuntimeError(f"Executed notebook is missing: {file}")

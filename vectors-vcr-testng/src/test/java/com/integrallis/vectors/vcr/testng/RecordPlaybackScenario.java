@@ -17,6 +17,7 @@ package com.integrallis.vectors.vcr.testng;
 
 import static org.testng.Assert.assertEquals;
 
+import com.integrallis.vectors.vcr.VCRDisabled;
 import com.integrallis.vectors.vcr.VCRMode;
 import com.integrallis.vectors.vcr.VCRModel;
 import org.testng.annotations.BeforeMethod;
@@ -45,5 +46,13 @@ public class RecordPlaybackScenario {
     float[] v = embedder.embed("hello");
     assertEquals(v[0], 5f);
     assertEquals(v[1], 42f);
+  }
+
+  @Test
+  @VCRDisabled
+  public void bypassesVcr() {
+    float[] v = embedder.embed("disabled");
+    float expected = "PLAYBACK".equals(System.getProperty(VCRListenerTest.MODE_PROP)) ? -1f : 8f;
+    assertEquals(v[0], expected);
   }
 }

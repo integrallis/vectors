@@ -85,6 +85,9 @@ NOTE: Requires JDK 25 with `--add-modules jdk.incubator.vector` at compile and r
 |`vectors-storage`
 |Off-heap memory, mmap file I/O, and arena-scoped storage.
 
+|`vectors-storage-s3`
+|Opt-in AWS SDK runtime for `S3StorageBackend` and S3-compatible object stores.
+
 |`vectors-quantization`
 |Scalar, product, binary, RaBitQ, NVQ, and TurboQuant quantizers.
 
@@ -96,6 +99,9 @@ NOTE: Requires JDK 25 with `--add-modules jdk.incubator.vector` at compile and r
 
 |`vectors-ivf`
 |IVF family indexes (IVF_FLAT, IVF_PQ).
+
+|`vectors-db-arrow`
+|Opt-in Apache Arrow runtime for IPC import and export.
 
 |`vectors-hybrid`
 |Framework-neutral dense/text retrieval SPIs and reciprocal-rank/weighted fusion.
@@ -123,10 +129,34 @@ NOTE: Requires JDK 25 with `--add-modules jdk.incubator.vector` at compile and r
 
 |`vectors-cache-spring-ai`
 |Caching decorators for Spring AI embedding and chat clients.
+
+|`vectors-vcr-core`
+|Framework-neutral model-call record/replay engine and cassette storage API.
+
+|`vectors-vcr-semantic-db`
+|Similarity-based cassette lookup backed by `VectorCollection`.
+
+|`vectors-vcr-serde-avaje`
+|Avaje JsonB cassette serialization.
+
+|`vectors-vcr-serde-jackson`
+|Jackson cassette serialization.
+
+|`vectors-vcr-junit5`
+|JUnit 5 lifecycle integration for VCR tests.
+
+|`vectors-vcr-testng`
+|TestNG lifecycle integration for VCR tests.
+
+|`vectors-vcr-spring-ai`
+|Spring AI chat and embedding model wrappers.
+
+|`vectors-vcr-langchain4j`
+|LangChain4j chat, embedding, and interceptor wrappers.
 |===
 
-All 17 modules above are Apache-2.0 artifacts in the 0.1.0 Maven Central publication set.
-The repository also contains benchmarks, demos, Vectors Studio, VCR test tooling, and the
+All 27 modules above are Apache-2.0 artifacts in the 0.1.1 Maven Central publication set.
+The repository also contains benchmarks, demos, Vectors Studio, and the
 separately licensed distributed tier; those are not silently added by the umbrella dependency.
 See xref:architecture.adoc[Architecture] for the module graph and design.
 

@@ -49,10 +49,11 @@ public final class VCRContext {
 
   private final CassetteStore cassetteStore;
   private final VCRRegistry registry;
-  private VCRMode effectiveMode;
+  private final VCRMode configuredMode;
 
   private static final class TestState {
     String currentTestId;
+    VCRMode effectiveMode;
     final List<CassetteKey> cassetteKeys = new ArrayList<>();
     final Map<String, AtomicInteger> callCounters = new HashMap<>();
   }
@@ -74,7 +75,7 @@ public final class VCRContext {
   public VCRContext(CassetteStore cassetteStore, VCRRegistry registry, VCRMode annotationMode) {
     this.cassetteStore = Objects.requireNonNull(cassetteStore, "cassetteStore");
     this.registry = Objects.requireNonNull(registry, "registry");
-    this.effectiveMode = resolveMode(Objects.requireNonNull(annotationMode, "annotationMode"));
+    this.configuredMode = resolveMode(Objects.requireNonNull(annotationMode, "annotationMode"));
   }
 
   private static VCRMode resolveMode(VCRMode annotationMode) {
@@ -111,10 +112,11 @@ public final class VCRContext {
   }
 
   /**
-   * @return the effective VCR mode for the current session
+   * @return the effective VCR mode for the current test
    */
   public VCRMode getEffectiveMode() {
-    return effectiveMode;
+    VCRMode effectiveMode = threadState.get().effectiveMode;
+    return effectiveMode != null ? effectiveMode : configuredMode;
   }
 
   /**
@@ -123,7 +125,7 @@ public final class VCRContext {
    * @param mode the new effective mode
    */
   public void setEffectiveMode(VCRMode mode) {
-    this.effectiveMode = Objects.requireNonNull(mode, "mode");
+    threadState.get().effectiveMode = Objects.requireNonNull(mode, "mode");
   }
 
   /**
@@ -135,6 +137,7 @@ public final class VCRContext {
     TestState s = threadState.get();
     s.callCounters.clear();
     s.cassetteKeys.clear();
+    s.effectiveMode = null;
   }
 
   /**

@@ -15,6 +15,7 @@ dependencies {
     implementation(project(":vectors-ivf"))
     implementation(project(":vectors-db"))
     implementation(project(":vectors-distributed"))
+    implementation(project(":vectors-storage-s3"))
 
     // Cache layer (P1.6 benchmarks) — declared on the jmh source set ONLY, not main. vectors-bench
     // is an implementation dependency of vectors-optimizer (and thus vectors-studio-web), so putting
@@ -29,11 +30,6 @@ dependencies {
 
     // HDF5 reader for ANN-Benchmarks datasets (MIT, pure Java, no native code)
     implementation("io.jhdf:jhdf:0.9.4")
-
-    // AWS SDK v2 S3: required by WriteAheadLogS3Benchmark to construct the S3 client that
-    // fronts S3StorageBackend. vectors-storage keeps it as `implementation` so it is not on
-    // public consumers' compile classpath; benchmarks declare it directly.
-    implementation("software.amazon.awssdk:s3:2.29.52")
 
     implementation("org.openjdk.jmh:jmh-core:1.37")
     annotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")

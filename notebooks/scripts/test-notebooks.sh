@@ -18,6 +18,7 @@ case "$mode" in
             "$notebook_dir"/03_spring_ai_integration.ipynb
             "$notebook_dir"/04_langchain4j_integration.ipynb
             "$notebook_dir"/05_embedding_cache.ipynb
+            "$notebook_dir"/06_vcr_test_harness.ipynb
         )
         ;;
     *)

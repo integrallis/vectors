@@ -88,13 +88,16 @@ class VCRExtensionEngineTest {
             .selectors(DiscoverySelectors.selectClass(RecordPlaybackScenario.class))
             .execute()
             .testEvents();
-    record.assertStatistics(stats -> stats.succeeded(1).failed(0));
+    record.assertStatistics(stats -> stats.succeeded(2).failed(0));
 
     ExactCassetteStore exact = new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
     CassetteKey expected =
         new CassetteKey("embedding", RecordPlaybackScenario.class.getName() + ":embeds", 1);
+    CassetteKey disabled =
+        new CassetteKey("embedding", RecordPlaybackScenario.class.getName() + ":bypassesVcr", 1);
     Optional<CassetteRecord> stored = exact.retrieve(expected);
     assertThat(stored).isPresent();
+    assertThat(exact.retrieve(disabled)).isEmpty();
     CassetteRecord.Embedding emb = (CassetteRecord.Embedding) stored.get();
     assertThat(emb.embedding()).containsExactly(5f, 42f);
 
@@ -104,7 +107,7 @@ class VCRExtensionEngineTest {
             .selectors(DiscoverySelectors.selectClass(RecordPlaybackScenario.class))
             .execute()
             .testEvents();
-    playback.assertStatistics(stats -> stats.succeeded(1).failed(0));
+    playback.assertStatistics(stats -> stats.succeeded(2).failed(0));
   }
 
   @Test
@@ -126,6 +129,17 @@ class VCRExtensionEngineTest {
         .hasMessage("flush failed")
         .satisfies(t -> assertThat(t.getSuppressed()).hasSize(1))
         .satisfies(t -> assertThat(t.getSuppressed()[0]).hasMessage("close failed"));
+    assertThat(store.closed).isTrue();
+  }
+
+  @Test
+  void closeFailurePropagatesWhenFlushSucceeds() {
+    FailingCassetteStore store = new FailingCassetteStore(false, true);
+
+    assertThatThrownBy(() -> VCRExtension.flushAndClose(store))
+        .isInstanceOf(IOException.class)
+        .hasMessage("close failed")
+        .satisfies(t -> assertThat(t.getSuppressed()).isEmpty());
     assertThat(store.closed).isTrue();
   }
 
