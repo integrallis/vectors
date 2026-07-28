@@ -9,7 +9,7 @@ Vectors runs in-process. There is no separate service to deploy, no network hop,
 Vectors provides:
 
 * **SIMD distance kernels** -- dot product, L2 (Euclidean), and cosine similarity vectorized with the Java Vector API, with a pure-scalar fallback for platforms without vector hardware.
-* **Five CPU index types** -- FLAT (exact), HNSW, Vamana/DiskANN, IVF_FLAT, and IVF_PQ. (GPU-accelerated CUVS indexes are part of the separately-licensed DartVault tier.)
+* **Five CPU index types** -- FLAT (exact), HNSW, Vamana/DiskANN, IVF_FLAT, and IVF_PQ.
 * **Vector quantization** -- scalar (SQ8/SQ4), product (PQ), binary (BQ/BBQ), RaBitQ, NVQ, and TurboQuant.
 * **Durable persistence** -- memory-mapped storage with atomic, generation-based commits, recovery on restart, tombstone deletes, and background compaction.
 * **Framework adapters** -- Spring AI `VectorStore`, LangChain4j `EmbeddingStore`, a Spring Boot starter, and semantic-cache modules.

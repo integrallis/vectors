@@ -32,10 +32,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Verifies DartVault's durable object-storage generation manifest: {@code build}/{@code commit}
- * publish a CAS'd, monotonic {@code _manifest} pointer so a remote reader can discover the live
- * generation ({@code open} resolves from it), and commits announce the generation to a gossip
- * bridge. The WAL stays the local recovery authority; the manifest is the discoverable layer.
+ * Verifies the durable object-storage generation manifest: {@code build}/{@code commit} publish a
+ * CAS'd, monotonic {@code _manifest} pointer so a remote reader can discover the live generation
+ * ({@code open} resolves from it), and commits announce the generation to a gossip bridge. The WAL
+ * stays the local recovery authority; the manifest is the discoverable layer.
  */
 @Tag("unit")
 class DistributedVectorCollectionManifestTest {

@@ -116,7 +116,7 @@ These are the 27 Apache-2.0 modules published in 0.1.1.
 | Interactive collection browser and projection workbench. See xref:studio.adoc[Vectors Studio].
 
 | `vectors-distributed`, `vectors-cluster`, `vectors-server`
-| Object-storage-backed distributed tier. See xref:distributed.adoc[Distributed Database].
+| Repository tools for object-storage-backed deployments. See xref:distributed.adoc[Object-Storage Persistence].
 
 | `vectors-gpu`
 | cuVS backend. Requires an external native NVIDIA runtime and belongs to the separately licensed distributed tier.

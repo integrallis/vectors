@@ -68,7 +68,7 @@ public final class DistributedVectorCollection implements AutoCloseable {
    * (via {@link ManifestStore}) that makes the committed generation <em>discoverable</em> to remote
    * readers — the WAL is local-only — and monotonic across writers. It is published <em>after</em>
    * the WAL COMMIT, so the WAL remains the authority for local crash recovery while the manifest
-   * gives DartVault an object-storage-native, race-safe generation pointer (the same shape
+   * gives remote readers an object-storage-native, race-safe generation pointer (the same shape
    * TurboPuffer/Lance/Delta use).
    */
   private static final String MANIFEST_KEY = "_manifest";

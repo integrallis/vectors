@@ -87,13 +87,14 @@ All notable changes to java-vectors are documented here.
   pointer (monotonic `generation`, content hash, shard→generation map) advanced via the object-storage
   conditional-put — the object-storage-native commit-point pattern used by Iceberg/Delta/Lance/
   TurboPuffer, with an optimistic read→rebase→CAS commit loop.
-- **DartVault** (the object-storage `DistributedVectorCollection`) now publishes a **durable,
+- The object-storage `DistributedVectorCollection` now publishes a **durable,
   CAS-protected generation manifest** on `commit()` (and resolves it on `open()`): the committed
   generation — previously in-memory only — is now discoverable by remote/replica readers and monotonic
   across concurrent writers, with an optional gossip announce bridge (`setGenerationAnnouncer`) into
   `announceVersion`. The WAL remains the authority for local crash recovery; the manifest is the
   discoverable, race-safe object-storage pointer.
-- **DartVault** now writes cluster payloads under **generation-scoped keys** (`gen-<N>/cluster-<id>`)
+- `DistributedVectorCollection` now writes cluster payloads under **generation-scoped keys**
+  (`gen-<N>/cluster-<id>`)
   and the manifest records a per-cluster generation map. A commit rewrites only the clusters it
   dirtied — advancing just those to the new generation (no write amplification) — and the manifest
   CAS is the atomic commit point that switches the live per-cluster generation set. A crash after the
