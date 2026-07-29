@@ -60,6 +60,16 @@ class VectorUtilTest {
   }
 
   @Test
+  void cosine_zeroNormVector_isNaN() {
+    // Documented behavior: a zero-magnitude vector has no direction, so cosine is NaN. Pinned here
+    // so the contract is intentional — callers must filter zero vectors before indexing under
+    // COSINE (a NaN score is rejected by top-k selection).
+    float[] zero = {0.0f, 0.0f};
+    float[] b = {1.0f, 1.0f};
+    assertThat(Float.isNaN(VectorUtil.cosine(zero, b))).isTrue();
+  }
+
+  @Test
   void dotProduct_dimensionMismatchThrows() {
     float[] a = {1.0f, 2.0f};
     float[] b = {1.0f, 2.0f, 3.0f};

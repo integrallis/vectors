@@ -155,7 +155,10 @@ public class CachingEmbeddingModel implements EmbeddingModel {
       for (int j = 0; j < fresh.size(); j++) {
         int i = missIndexes.get(j);
         float[] v = fresh.get(j);
-        out[i] = v;
+        // Return a clone and keep the delegate's array in the cache. Handing back the same instance
+        // we cache lets a caller that mutates a returned embedding corrupt the cached value; the
+        // single-embed and cache-hit paths clone for exactly this reason.
+        out[i] = v.clone();
         cache.put(keyFn.apply(missTexts.get(j)), v);
       }
     }

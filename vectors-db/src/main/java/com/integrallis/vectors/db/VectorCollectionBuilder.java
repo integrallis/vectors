@@ -366,7 +366,8 @@ public final class VectorCollectionBuilder {
 
   /**
    * Sets the IVF number of clusters (K). Ignored unless {@link #indexType(IndexType)} is {@link
-   * IndexType#IVF_FLAT}. Must be positive. Default: {@value #DEFAULT_IVF_K}.
+   * IndexType#IVF_FLAT} or {@link IndexType#IVF_PQ}. Must be positive. Default: {@value
+   * #DEFAULT_IVF_K}.
    */
   public VectorCollectionBuilder ivfK(int k) {
     if (k <= 0) throw new IllegalArgumentException("IVF k must be positive: " + k);
@@ -376,8 +377,9 @@ public final class VectorCollectionBuilder {
 
   /**
    * Sets the IVF probe count — the number of clusters searched per query. Ignored unless {@link
-   * #indexType(IndexType)} is {@link IndexType#IVF_FLAT}. Must be in [1, k]. Default: {@value
-   * #DEFAULT_IVF_NPROBE}.
+   * #indexType(IndexType)} is {@link IndexType#IVF_FLAT} or {@link IndexType#IVF_PQ}. Must be
+   * positive; values greater than the cluster count {@code k} are clamped to {@code k} at {@link
+   * #build()}. Default: {@value #DEFAULT_IVF_NPROBE}.
    */
   public VectorCollectionBuilder ivfNprobe(int nprobe) {
     if (nprobe <= 0) throw new IllegalArgumentException("IVF nprobe must be positive: " + nprobe);
@@ -387,8 +389,8 @@ public final class VectorCollectionBuilder {
 
   /**
    * Sets the maximum KMeans iterations for IVF cluster training. Ignored unless {@link
-   * #indexType(IndexType)} is {@link IndexType#IVF_FLAT}. Must be positive. Default: {@value
-   * #DEFAULT_IVF_MAX_ITER}.
+   * #indexType(IndexType)} is {@link IndexType#IVF_FLAT} or {@link IndexType#IVF_PQ}. Must be
+   * positive. Default: {@value #DEFAULT_IVF_MAX_ITER}.
    */
   public VectorCollectionBuilder ivfMaxIter(int maxIter) {
     if (maxIter <= 0)

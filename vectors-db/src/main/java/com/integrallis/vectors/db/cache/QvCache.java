@@ -245,12 +245,36 @@ public final class QvCache {
    * @param query full-precision query vector
    * @param k number of results requested
    * @param filter filter predicate (may be {@code null})
-   * @return the cache key
+   * @return the cache key, using the default projection ({@code minScore = -Float.MAX_VALUE}, text
+   *     and metadata included)
    */
   public QvCacheKey buildKey(float[] query, int k, Filter filter) {
+    return buildKey(query, k, filter, -Float.MAX_VALUE, true, true);
+  }
+
+  /**
+   * Builds the cache key for a query, including the score cutoff and field projection so that
+   * requests differing only in {@code minScore}/{@code includeText}/{@code includeMetadata} do not
+   * collide (each caches a different {@link SearchResult}).
+   *
+   * @param query full-precision query vector
+   * @param k number of results requested
+   * @param filter filter predicate (may be {@code null})
+   * @param minScore the request's minimum-score cutoff
+   * @param includeText whether the cached documents carry their text
+   * @param includeMetadata whether the cached documents carry their metadata
+   * @return the cache key
+   */
+  public QvCacheKey buildKey(
+      float[] query,
+      int k,
+      Filter filter,
+      float minScore,
+      boolean includeText,
+      boolean includeMetadata) {
     byte[] quantized = quantize(query);
     long filterHash = FilterHasher.hash(filter);
-    return new QvCacheKey(quantized, k, filterHash);
+    return new QvCacheKey(quantized, k, filterHash, minScore, includeText, includeMetadata);
   }
 
   /**

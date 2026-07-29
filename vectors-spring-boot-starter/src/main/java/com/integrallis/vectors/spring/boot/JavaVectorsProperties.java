@@ -44,14 +44,21 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 public class JavaVectorsProperties {
 
   // -------------------------------------------------------------------------
-  // Required
+  // Core (sensible defaults; override as needed)
   // -------------------------------------------------------------------------
 
-  /** Vector dimension. <strong>Required.</strong> Must be positive. */
+  /**
+   * Vector dimension. Must be positive.
+   *
+   * <p>Optional when Spring AI is on the classpath: if left unset (or non-positive) the starter
+   * infers the dimension from the application's {@code EmbeddingModel} bean via {@code
+   * EmbeddingModel.dimensions()}. Set it explicitly to pin a dimension or when no {@code
+   * EmbeddingModel} is available.
+   */
   private int dimension;
 
-  /** Similarity function used for distance computation. <strong>Required.</strong> */
-  private SimilarityFunction metric;
+  /** Similarity function used for distance computation. Default: {@code COSINE}. */
+  private SimilarityFunction metric = SimilarityFunction.COSINE;
 
   // -------------------------------------------------------------------------
   // Core optional
@@ -82,6 +89,14 @@ public class JavaVectorsProperties {
    * of the query vector combined with {@code k} and a filter predicate hash.
    */
   private int cacheSize = 0;
+
+  /**
+   * When Spring AI is present, whether the auto-configured {@code JavaVectorsVectorStore} commits
+   * after each {@code add(...)} so writes are immediately searchable. Default: {@code true}. Set to
+   * {@code false} for batch ingestion where the application commits once per batch. Ignored when no
+   * Spring AI {@code EmbeddingModel} is on the classpath (no store is created).
+   */
+  private boolean commitAfterAdd = true;
 
   // -------------------------------------------------------------------------
   // HNSW parameters
@@ -310,6 +325,14 @@ public class JavaVectorsProperties {
 
   public void setCacheSize(int cacheSize) {
     this.cacheSize = cacheSize;
+  }
+
+  public boolean isCommitAfterAdd() {
+    return commitAfterAdd;
+  }
+
+  public void setCommitAfterAdd(boolean commitAfterAdd) {
+    this.commitAfterAdd = commitAfterAdd;
   }
 
   public HnswProperties getHnsw() {

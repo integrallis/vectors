@@ -110,7 +110,9 @@ public final class SegmentedWriteAheadLog implements WriteAheadLog {
    * Group-commit fast path: writes every entry in {@code entries} and forces the segment to disk
    * exactly once, instead of once per entry. On return the whole batch is durable. Crash
    * consistency is preserved per batch: a crash mid-batch leaves a prefix of intact, CRC-verified
-   * frames followed by at most one torn trailing frame, which replay rejects (EOF / CRC mismatch).
+   * frames followed by at most one torn trailing frame. Recovery replays the intact prefix and
+   * stops at the torn frame (treating it as end-of-log); a CRC mismatch on a <em>complete</em>
+   * frame is still surfaced as corruption.
    *
    * @param entries payloads to append, in order
    * @return the sequence numbers assigned to {@code entries}, in the same order
@@ -274,14 +276,44 @@ public final class SegmentedWriteAheadLog implements WriteAheadLog {
       byte[] lenBuf = new byte[4];
       while (true) {
         int r = in.readNBytes(lenBuf, 0, 4);
-        if (r == 0) break;
-        if (r < 4) throw new EOFException("truncated WAL entry length at seq " + seq);
+        // r == 0 is a clean end of segment; 0 < r < 4 is a torn length prefix from a crash
+        // mid-append. Either way the last durable entry ended before this frame, so stop.
+        if (r < 4) break;
         int len = ByteBuffer.wrap(lenBuf).order(ByteOrder.BIG_ENDIAN).getInt();
-        in.skipNBytes(len + 4); // payload + CRC
+        if (len < 0) {
+          throw new IOException("negative WAL entry length in " + segmentPath(segStart));
+        }
+        long frameRemainder = (long) len + 4; // payload + CRC
+        // A short skip means the payload/CRC of this frame was never fully written (torn trailing
+        // frame). That entry was not durable, so treat it as the end of the log.
+        if (skipUpTo(in, frameRemainder) < frameRemainder) {
+          break;
+        }
         seq++;
       }
     }
     return seq;
+  }
+
+  /**
+   * Skips up to {@code n} bytes from {@code in}, returning the number actually skipped. Unlike
+   * {@link InputStream#skipNBytes}, reaching end-of-stream is reported via the return value rather
+   * than an {@link EOFException}, so callers can distinguish a torn trailing WAL frame from a
+   * complete one.
+   */
+  private static long skipUpTo(InputStream in, long n) throws IOException {
+    long remaining = n;
+    while (remaining > 0) {
+      long s = in.skip(remaining);
+      if (s > 0) {
+        remaining -= s;
+      } else if (in.read() < 0) {
+        break; // end of stream
+      } else {
+        remaining -= 1;
+      }
+    }
+    return n - remaining;
   }
 
   private void replaySegment(Path segPath, Consumer<byte[]> handler) throws IOException {
@@ -315,23 +347,27 @@ public final class SegmentedWriteAheadLog implements WriteAheadLog {
   private static byte[] readPayload(InputStream in, byte[] lenBuf, Path segPath)
       throws IOException {
     int r = in.readNBytes(lenBuf, 0, 4);
-    if (r == 0) return null;
-    if (r < 4) throw new EOFException("truncated WAL entry in " + segPath);
+    // A clean end of segment (r == 0) or a torn length prefix (0 < r < 4) both mean there is no
+    // further complete frame — stop replaying this segment here.
+    if (r < 4) return null;
     int len = ByteBuffer.wrap(lenBuf).order(ByteOrder.BIG_ENDIAN).getInt();
     if (len < 0) {
       throw new IOException("negative WAL entry length in " + segPath);
     }
     byte[] payload = in.readNBytes(len);
+    // A crash mid-append can leave the trailing frame's payload or CRC truncated. That entry was
+    // never made durable, so treat the torn tail as end-of-log rather than corruption.
     if (payload.length < len) {
-      throw new EOFException("truncated WAL payload in " + segPath);
+      return null;
     }
     byte[] crcBuf = in.readNBytes(4);
     if (crcBuf.length < 4) {
-      throw new EOFException("truncated WAL checksum in " + segPath);
+      return null;
     }
     int storedCrc = ByteBuffer.wrap(crcBuf).order(ByteOrder.BIG_ENDIAN).getInt();
     CRC32 crc = new CRC32();
     crc.update(payload);
+    // A CRC mismatch on a *complete* frame is genuine corruption, not a torn tail — fail loudly.
     if ((int) crc.getValue() != storedCrc) {
       throw new IOException("CRC mismatch in WAL segment " + segPath);
     }

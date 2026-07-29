@@ -5,41 +5,16 @@ Vectors provides a Spring AI `VectorStore` adapter and a Spring Boot starter. `J
 
 NOTE: Vectors requires JDK 25 with the Vector API enabled: run with `--add-modules jdk.incubator.vector`.
 
-The adapter's Spring AI dependency is `compileOnly` and it binds only to the stable `VectorStore` SPI, so one artifact works across Spring AI **1.0.x, 1.1.x, and 2.0.x** — you bring your own Spring AI version. CI compiles and runs the adapter's tests against each line on every change.
+There are two ways to use Vectors with Spring AI:
 
-== Dependency Setup
+* **Spring Boot starter** (recommended) — add one dependency and both a `VectorCollection` and a
+  `VectorStore` are auto-configured for you. Start here.
+* **Direct adapter** — build the `VectorCollection` and `JavaVectorsVectorStore` yourself. Use this
+  when you are not on Spring Boot, or when you want full programmatic control over both objects.
 
-=== Direct Adapter
+== Quick Start (Spring Boot)
 
-Add `vectors-spring-ai` to use `JavaVectorsVectorStore` directly:
-
-[tabs]
-====
-Gradle::
-+
-[source,kotlin,subs="attributes+"]
-----
-dependencies {
-    implementation("com.integrallis:vectors-spring-ai:{vectors-version}")
-    implementation("org.springframework.ai:spring-ai-vector-store:1.1.4")
-}
-----
-
-Maven::
-+
-[source,xml,subs="attributes+"]
-----
-<dependency>
-    <groupId>com.integrallis</groupId>
-    <artifactId>vectors-spring-ai</artifactId>
-    <version>{vectors-version}</version>
-</dependency>
-----
-====
-
-=== Spring Boot Starter
-
-For auto-configuration, add the starter instead:
+Add the starter:
 
 [tabs]
 ====
@@ -64,7 +39,66 @@ Maven::
 ----
 ====
 
-== Using JavaVectorsVectorStore
+With an `EmbeddingModel` already on the classpath, that is all the configuration you need. The
+starter auto-configures **both** beans — you do not declare a `VectorCollection` yourself:
+
+* `metric` defaults to `COSINE`.
+* the collection `dimension` is inferred from `EmbeddingModel.dimensions()`.
+
+Inject the auto-configured `VectorStore` and use the standard Spring AI API:
+
+[source,java]
+----
+@Autowired
+VectorStore vectorStore;   // auto-configured; no VectorCollection bean required
+
+vectorStore.add(List.of(
+    new Document("hello world"),
+    new Document("goodbye world")));
+
+List<Document> results = vectorStore.similaritySearch(
+    SearchRequest.builder().query("hello").topK(5).build());
+----
+
+Override any default — index type, metric, an explicit dimension, on-disk persistence — through
+`java-vectors.*` properties; see <<Spring Boot Properties>>. To supply your own `VectorCollection`
+or `VectorStore`, declare a `@Bean` of that type and the matching auto-configured bean backs off
+(`@ConditionalOnMissingBean`).
+
+TIP: The adapter's Spring AI dependency is `compileOnly` and it binds only to the stable
+`VectorStore` SPI, so one artifact works across Spring AI **1.0.x, 1.1.x, and 2.0.x** — you bring
+your own Spring AI version. CI compiles and runs the adapter's tests against each line on every
+change.
+
+== Manual Wiring (Direct Adapter)
+
+Without the starter, add `vectors-spring-ai` and wire the two objects yourself. This path needs
+**both** a `VectorCollection` and a `JavaVectorsVectorStore` — the starter above creates them for
+you:
+
+[tabs]
+====
+Gradle::
++
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors-spring-ai:{vectors-version}")
+    implementation("org.springframework.ai:spring-ai-vector-store:1.1.4")
+}
+----
+
+Maven::
++
+[source,xml,subs="attributes+"]
+----
+<dependency>
+    <groupId>com.integrallis</groupId>
+    <artifactId>vectors-spring-ai</artifactId>
+    <version>{vectors-version}</version>
+</dependency>
+----
+====
 
 Build a `VectorCollection`, then pass it together with an `EmbeddingModel` to
 `JavaVectorsVectorStore.builder(embeddingModel, collection)`:
@@ -120,17 +154,18 @@ small candidate set, not the whole corpus, so the overhead is sub-millisecond fo
 
 == Spring Boot Properties
 
-When using the starter, configure via `application.yml`:
+Every setting is optional. When using the starter, override defaults via `application.yml`:
 
 [source,yaml]
 ----
 java-vectors:
-  dimension: 1536
-  metric: COSINE
-  index-type: HNSW
-  quantizer: SQ8
-  storage-path: /var/lib/vectors/my-collection
+  dimension: 1536          # optional — inferred from EmbeddingModel.dimensions() when unset
+  metric: COSINE           # optional — defaults to COSINE
+  index-type: HNSW         # defaults to FLAT
+  quantizer: SQ8           # defaults to NONE
+  storage-path: /var/lib/vectors/my-collection   # omit for a purely in-memory collection
   auto-commit-threshold: 1
+  commit-after-add: true   # commit after each store.add(); set false for batch ingestion
   hnsw:
     m: 16
     ef-construction: 200
@@ -142,10 +177,14 @@ java-vectors:
 
 The starter auto-configures:
 
-* A `VectorCollection` bean from the properties above.
+* A `VectorCollection` bean. When a Spring AI `EmbeddingModel` bean is present, its `dimension` is
+  inferred from the model unless you set `java-vectors.dimension` explicitly. Without an
+  `EmbeddingModel`, `java-vectors.dimension` is required — the context fails at startup with a clear
+  message if it is missing.
 * A `JavaVectorsVectorStore` bean (conditional on an `EmbeddingModel` bean being present).
 
-Both beans are `@ConditionalOnMissingBean`, so you can override them with custom `@Bean` definitions.
+Both beans are `@ConditionalOnMissingBean`, so you can override either with a custom `@Bean`
+definition.
 
 == Filter Translation
 

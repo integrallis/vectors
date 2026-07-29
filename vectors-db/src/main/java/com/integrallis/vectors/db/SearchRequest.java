@@ -66,6 +66,16 @@ public record SearchRequest(
     if (k <= 0) {
       throw new IllegalArgumentException("k must be positive: " + k);
     }
+    if (searchListSize <= 0) {
+      throw new IllegalArgumentException("searchListSize must be positive: " + searchListSize);
+    }
+    // Guard the two candidate-pool multipliers. The !(x > 0) form also rejects NaN.
+    if (!(overQueryFactor > 0)) {
+      throw new IllegalArgumentException("overQueryFactor must be positive: " + overQueryFactor);
+    }
+    if (!(filterExpansion > 0)) {
+      throw new IllegalArgumentException("filterExpansion must be positive: " + filterExpansion);
+    }
     if (searchMultiStart < 1) {
       throw new IllegalArgumentException("searchMultiStart must be >= 1: " + searchMultiStart);
     }

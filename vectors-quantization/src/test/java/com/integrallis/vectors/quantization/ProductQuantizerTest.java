@@ -93,6 +93,27 @@ class ProductQuantizerTest {
     }
 
     @Test
+    void train_fewerVectorsThanClusters_stillEncodesAndRoundTrips() {
+      // 50 training vectors but the default 256 clusters per subspace: most centroids are
+      // degenerate (the code logs a WARN). The quantizer must still build, encode to valid code
+      // indices, and decode to a finite vector of the right length — no crash, no NaN.
+      float[][] vectors = generateVectors(50, 32, 42L);
+      var dataset = new ArrayVectorDataset(vectors);
+
+      var pq = ProductQuantizer.train(dataset, 8); // default 256 clusters, 50 < 256
+      assertThat(pq.numClusters()).isEqualTo(256);
+
+      byte[] encoded = pq.encode(vectors[0]);
+      assertThat(encoded).hasSize(8);
+
+      float[] decoded = pq.decode(encoded);
+      assertThat(decoded).hasSize(32);
+      for (float value : decoded) {
+        assertThat(Float.isFinite(value)).isTrue();
+      }
+    }
+
+    @Test
     void train_unevenDimensionSplit() {
       // dim=100, M=7: baseSize=100/7=14, remainder=100%7=2 -> sizes [15, 15, 14, 14, 14, 14, 14]
       float[][] vectors = generateVectors(300, 100, 42L);

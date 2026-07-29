@@ -4,6 +4,44 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-29
+
+### Added
+
+- Spring Boot starter zero-config path: `java-vectors.metric` now defaults to
+  `COSINE`, and the collection `dimension` is inferred from the Spring AI
+  `EmbeddingModel` when unset — adding the starter with an `EmbeddingModel` bean
+  is enough to get an indexed `VectorStore`. A missing dimension with no
+  `EmbeddingModel` now fails at startup with an actionable message.
+- `java-vectors.commit-after-add` starter property to control whether the
+  auto-configured `JavaVectorsVectorStore` commits after each `add(...)`.
+
+### Fixed
+
+- **WAL recovery no longer bricks on a torn trailing frame.** A crash mid-append
+  could leave a truncated final frame that made the segmented write-ahead log
+  un-reopenable; recovery now treats an incomplete trailing frame as end-of-log
+  while still surfacing a CRC mismatch on a *complete* frame as corruption.
+- **Query cache is invalidated on auto-commit and compaction**, not only on the
+  explicit `commit()`. Collections configured with both `autoCommitThreshold`
+  and `cacheSize` no longer return stale results that omit newly added documents.
+- **Query-cache keys now include the score cutoff and field projection.** Two
+  otherwise-identical searches differing only in `minScore`, `includeText`, or
+  `includeMetadata` no longer collide on one cache entry.
+- **Spring AI embedding cache no longer aliases cached arrays.** The batched
+  cache-miss path now returns a clone, so a caller mutating a returned embedding
+  cannot corrupt the cached value.
+- `SearchRequest` now rejects a non-positive `searchListSize` and non-positive
+  `overQueryFactor`/`filterExpansion` instead of passing them through silently.
+
+### Changed
+
+- Product-quantizer training logs a warning when the training set has fewer
+  vectors than the requested cluster count (a silent recall-collapse footgun).
+- Documentation: the Spring AI guide now leads with the Spring Boot starter as
+  the quick start; clarified IVF `nprobe` clamping and `VectorUtil.cosine`
+  zero-norm (`NaN`) behavior.
+
 ## [0.1.1] - 2026-07-27
 
 ### Added

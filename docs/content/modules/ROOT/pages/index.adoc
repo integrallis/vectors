@@ -155,7 +155,7 @@ NOTE: Requires JDK 25 with `--add-modules jdk.incubator.vector` at compile and r
 |LangChain4j chat, embedding, and interceptor wrappers.
 |===
 
-All 27 modules above are Apache-2.0 artifacts in the 0.1.1 Maven Central publication set.
+All 27 modules above are Apache-2.0 artifacts in the 0.1.2 Maven Central publication set.
 The repository also contains benchmarks, demos, Vectors Studio, and the
 separately licensed distributed tier; those are not silently added by the umbrella dependency.
 See xref:architecture.adoc[Architecture] for the module graph and design.

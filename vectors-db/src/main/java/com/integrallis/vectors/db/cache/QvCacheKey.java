@@ -20,7 +20,7 @@ import java.util.Arrays;
 /**
  * Immutable cache key for {@link QvCache} entries.
  *
- * <p>Three components contribute to key equality:
+ * <p>These components contribute to key equality:
  *
  * <ol>
  *   <li>{@link #quantizedQuery} — the query vector quantized to signed int8 (one byte per
@@ -30,6 +30,9 @@ import java.util.Arrays;
  *   <li>{@link #k} — number of results requested.
  *   <li>{@link #filterHash} — stable hash of the filter expression, as computed by {@link
  *       FilterHasher#hash(com.integrallis.vectors.core.filter.Filter)}.
+ *   <li>{@link #minScore} and the {@link #includeText}/{@link #includeMetadata} projection flags —
+ *       these are baked into the cached {@code SearchResult} (score cutoff and which fields are
+ *       populated), so two otherwise-identical queries that differ in them must not share an entry.
  * </ol>
  *
  * <p>{@code equals} and {@code hashCode} use {@link Arrays#equals} / {@link Arrays#hashCode} for
@@ -40,10 +43,16 @@ public final class QvCacheKey {
   private final byte[] quantizedQuery;
   private final int k;
   private final long filterHash;
+  private final float minScore;
+  private final boolean includeText;
+  private final boolean includeMetadata;
   private final int cachedHashCode;
 
   /**
-   * Constructs a cache key.
+   * Constructs a cache key with the default projection ({@code minScore = -Float.MAX_VALUE}, text
+   * and metadata included). Retained for backward compatibility; prefer {@link #QvCacheKey(byte[],
+   * int, long, float, boolean, boolean)} so score-cutoff and projection differences are reflected
+   * in the key.
    *
    * @param quantizedQuery int8-quantized query vector (one byte per dimension); not null; will be
    *     stored by reference — callers must not mutate after passing
@@ -51,9 +60,34 @@ public final class QvCacheKey {
    * @param filterHash hash produced by {@link FilterHasher}
    */
   public QvCacheKey(byte[] quantizedQuery, int k, long filterHash) {
+    this(quantizedQuery, k, filterHash, -Float.MAX_VALUE, true, true);
+  }
+
+  /**
+   * Constructs a cache key that also distinguishes the score cutoff and field projection baked into
+   * the cached result.
+   *
+   * @param quantizedQuery int8-quantized query vector (one byte per dimension); not null; will be
+   *     stored by reference — callers must not mutate after passing
+   * @param k number of requested results
+   * @param filterHash hash produced by {@link FilterHasher}
+   * @param minScore the request's minimum-score cutoff
+   * @param includeText whether the cached documents carry their text
+   * @param includeMetadata whether the cached documents carry their metadata
+   */
+  public QvCacheKey(
+      byte[] quantizedQuery,
+      int k,
+      long filterHash,
+      float minScore,
+      boolean includeText,
+      boolean includeMetadata) {
     this.quantizedQuery = quantizedQuery;
     this.k = k;
     this.filterHash = filterHash;
+    this.minScore = minScore;
+    this.includeText = includeText;
+    this.includeMetadata = includeMetadata;
     this.cachedHashCode = computeHashCode();
   }
 
@@ -73,6 +107,18 @@ public final class QvCacheKey {
     return filterHash;
   }
 
+  public float minScore() {
+    return minScore;
+  }
+
+  public boolean includeText() {
+    return includeText;
+  }
+
+  public boolean includeMetadata() {
+    return includeMetadata;
+  }
+
   // ---------------------------------------------------------------------------
   // equals / hashCode — Arrays.equals for byte array
   // ---------------------------------------------------------------------------
@@ -83,6 +129,9 @@ public final class QvCacheKey {
     if (!(o instanceof QvCacheKey other)) return false;
     return k == other.k
         && filterHash == other.filterHash
+        && Float.compare(minScore, other.minScore) == 0
+        && includeText == other.includeText
+        && includeMetadata == other.includeMetadata
         && Arrays.equals(quantizedQuery, other.quantizedQuery);
   }
 
@@ -95,6 +144,9 @@ public final class QvCacheKey {
     int result = Arrays.hashCode(quantizedQuery);
     result = 31 * result + k;
     result = 31 * result + Long.hashCode(filterHash);
+    result = 31 * result + Float.hashCode(minScore);
+    result = 31 * result + Boolean.hashCode(includeText);
+    result = 31 * result + Boolean.hashCode(includeMetadata);
     return result;
   }
 
@@ -104,6 +156,12 @@ public final class QvCacheKey {
         + k
         + ", filterHash="
         + filterHash
+        + ", minScore="
+        + minScore
+        + ", includeText="
+        + includeText
+        + ", includeMetadata="
+        + includeMetadata
         + ", dim="
         + quantizedQuery.length
         + "}";

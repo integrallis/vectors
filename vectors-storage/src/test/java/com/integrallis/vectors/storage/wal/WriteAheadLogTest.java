@@ -19,8 +19,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -158,6 +160,57 @@ class WriteAheadLogTest {
     try (SegmentedWriteAheadLog wal = new SegmentedWriteAheadLog(tmp)) {
       assertThatThrownBy(() -> wal.replay(b -> {})).isInstanceOf(IOException.class);
     }
+  }
+
+  @Test
+  void tornTrailingFrame_isTreatedAsEndOfLog_notCorruption() throws IOException {
+    // Three durable entries, then a crash that left a fourth frame torn (length prefix promises a
+    // 16-byte payload but only part of it reached disk before the process died).
+    try (SegmentedWriteAheadLog wal = new SegmentedWriteAheadLog(tmp)) {
+      wal.append("entry-0".getBytes());
+      wal.append("entry-1".getBytes());
+      wal.append("entry-2".getBytes());
+      wal.seal();
+    }
+    Path seg = Files.list(tmp).filter(p -> p.toString().endsWith(".seg")).findFirst().orElseThrow();
+    try (OutputStream out = Files.newOutputStream(seg, StandardOpenOption.APPEND)) {
+      out.write(new byte[] {0, 0, 0, 16}); // big-endian length = 16
+      out.write("short".getBytes()); // only 5 of the promised 16 payload bytes, no CRC
+    }
+
+    // Reopen must not brick: the intact prefix replays and the torn entry's seq is reused.
+    List<String> replayed = new ArrayList<>();
+    try (SegmentedWriteAheadLog wal = new SegmentedWriteAheadLog(tmp)) {
+      wal.replay(b -> replayed.add(new String(b)));
+      assertThat(wal.append("entry-3".getBytes())).isEqualTo(3L);
+    }
+    assertThat(replayed).containsExactly("entry-0", "entry-1", "entry-2");
+
+    // The re-appended entry is durable across the torn frame on the next recovery.
+    List<String> all = new ArrayList<>();
+    try (SegmentedWriteAheadLog wal = new SegmentedWriteAheadLog(tmp)) {
+      wal.replay(b -> all.add(new String(b)));
+    }
+    assertThat(all).containsExactly("entry-0", "entry-1", "entry-2", "entry-3");
+  }
+
+  @Test
+  void tornLengthPrefix_isTreatedAsEndOfLog() throws IOException {
+    try (SegmentedWriteAheadLog wal = new SegmentedWriteAheadLog(tmp)) {
+      wal.append("only".getBytes());
+      wal.seal();
+    }
+    Path seg = Files.list(tmp).filter(p -> p.toString().endsWith(".seg")).findFirst().orElseThrow();
+    try (OutputStream out = Files.newOutputStream(seg, StandardOpenOption.APPEND)) {
+      out.write(new byte[] {0, 0}); // only 2 of the 4 length-prefix bytes were written
+    }
+
+    List<String> replayed = new ArrayList<>();
+    try (SegmentedWriteAheadLog wal = new SegmentedWriteAheadLog(tmp)) {
+      wal.replay(b -> replayed.add(new String(b)));
+      assertThat(wal.append("next".getBytes())).isEqualTo(1L);
+    }
+    assertThat(replayed).containsExactly("only");
   }
 
   @Test

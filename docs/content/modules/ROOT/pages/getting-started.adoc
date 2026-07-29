@@ -140,6 +140,34 @@ VectorCollection collection = VectorCollection.builder()
 
 Reopening the same directory recovers the last committed generation. See xref:persistence.adoc[Persistence] for the storage format, recovery, and compaction.
 
+== Spring Boot (Auto-Configuration)
+
+On Spring Boot with Spring AI, skip the manual wiring entirely. Add the starter:
+
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors-spring-boot-starter:{vectors-version}")
+}
+----
+
+With an `EmbeddingModel` bean on the classpath, the starter auto-configures both a `VectorCollection`
+and a Spring AI `VectorStore` — no beans to declare. `metric` defaults to `COSINE` and the
+`dimension` is inferred from `EmbeddingModel.dimensions()`, so adding the dependency is enough:
+
+[source,java]
+----
+@Autowired
+VectorStore vectorStore;   // auto-configured
+
+vectorStore.add(List.of(new Document("hello world")));
+List<Document> hits = vectorStore.similaritySearch(
+    SearchRequest.builder().query("hello").topK(5).build());
+----
+
+Override any default through `java-vectors.*` properties. See xref:spring-ai.adoc[Spring AI] for the
+full property reference and the direct-adapter (non-Boot) path.
+
 == Choosing an Index and Quantizer
 
 * Start with `IndexType.HNSW` for general-purpose approximate search, or `IndexType.FLAT` for exact results on small datasets.

@@ -81,6 +81,8 @@ final class FilterConverter {
   }
 
   private static Filter convertIn(String field, java.util.Collection<?> values) {
+    // LangChain4j's IsIn/IsNotIn constructors already reject a null/empty value list, so `values`
+    // is guaranteed non-empty here.
     Object first = values.iterator().next();
     if (first instanceof String) {
       return Filters.inStr(field, values.stream().map(Object::toString).toArray(String[]::new));

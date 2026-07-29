@@ -18,6 +18,7 @@ package com.integrallis.vectors.db;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.cache.QvCache;
 import java.util.Arrays;
@@ -112,6 +113,89 @@ class VectorDbQvCacheTest {
         assertThat(after.hits().stream().anyMatch(h -> h.id().equals("near"))).isTrue();
         // The result object must differ (cache was invalidated)
         assertThat(after).isNotSameAs(before);
+      }
+    }
+
+    @Test
+    void cacheInvalidation_onAutoCommit_causesSearchToReExecute() {
+      // Auto-commit publishes a new generation without an explicit commit() call. The cache must
+      // still be invalidated, otherwise the search returns stale hits that omit the new document.
+      try (VectorCollection col =
+          VectorCollection.builder()
+              .dimension(DIM)
+              .metric(SimilarityFunction.EUCLIDEAN)
+              .indexType(IndexType.FLAT)
+              .cacheSize(256)
+              .autoCommitThreshold(1) // every add triggers an implicit commit
+              .build()) {
+        col.add(new Document("d0", new float[] {0f, 0f, 0f, 0f}, null, Map.of()));
+        float[] q = {99f, 99f, 99f, 99f};
+        SearchRequest req = SearchRequest.builder(q, 3).includeVector(false).build();
+
+        SearchResult before = col.search(req); // cached
+
+        // Add a doc near the query. autoCommitThreshold=1 auto-commits with no explicit commit().
+        col.add(new Document("near", new float[] {99f, 99f, 99f, 99f}, null, Map.of()));
+
+        SearchResult after = col.search(req);
+        assertThat(after.hits().stream().anyMatch(h -> h.id().equals("near"))).isTrue();
+        assertThat(after).isNotSameAs(before);
+      }
+    }
+
+    @Test
+    void cacheKey_distinguishesMinScore() {
+      // Same query/k/filter but different score cutoffs must not share a cache entry: the cached
+      // SearchResult bakes in the minScore, so a collision would return the wrong hit set.
+      try (VectorCollection col = newCachedCollection(256)) {
+        populate(col, 20);
+        float[] q = {1f, 1f, 1f, 1f};
+
+        SearchResult loose =
+            col.search(
+                SearchRequest.builder(q, 10)
+                    .includeVector(false)
+                    .minScore(-Float.MAX_VALUE)
+                    .build());
+        SearchResult strict =
+            col.search(SearchRequest.builder(q, 10).includeVector(false).minScore(-1f).build());
+
+        // Different cutoffs → different cache entries → different objects, and strict returns
+        // fewer.
+        assertThat(strict).isNotSameAs(loose);
+        assertThat(strict.hits().size()).isLessThanOrEqualTo(loose.hits().size());
+      }
+    }
+
+    @Test
+    void cacheKey_distinguishesMetadataProjection() {
+      // includeMetadata differs, so the cached documents differ (metadata present vs null). The two
+      // requests must not collide on the same cache entry.
+      try (VectorCollection col = newCachedCollection(256)) {
+        for (int i = 0; i < 5; i++) {
+          float v = i;
+          col.add(
+              new Document(
+                  "d" + i,
+                  new float[] {v, v, v, v},
+                  null,
+                  Map.of("tag", MetadataValue.of("t" + i))));
+        }
+        col.commit();
+        float[] q = {1f, 1f, 1f, 1f};
+
+        SearchResult withMeta =
+            col.search(
+                SearchRequest.builder(q, 3).includeVector(false).includeMetadata(true).build());
+        SearchResult withoutMeta =
+            col.search(
+                SearchRequest.builder(q, 3).includeVector(false).includeMetadata(false).build());
+
+        assertThat(withoutMeta).isNotSameAs(withMeta);
+        // includeMetadata(true) projects the stored metadata; includeMetadata(false) drops it (a
+        // null metadata map is normalised to empty by Document).
+        assertThat(withMeta.hits().getFirst().document().metadata()).containsKey("tag");
+        assertThat(withoutMeta.hits().getFirst().document().metadata()).isEmpty();
       }
     }
 

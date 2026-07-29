@@ -264,6 +264,19 @@ public final class ProductQuantizer implements Quantizer<PQVectors> {
     // Sample training data if dataset is large
     float[][] trainingData = sampleTrainingData(dataset, centroid);
 
+    // Too few training vectors for the requested codebook size leaves many centroids degenerate
+    // (all-zero), silently collapsing recall. Warn so the caller can lower numClusters or train on
+    // more data; the encoder still builds and round-trips, this only signals poor quantization.
+    if (trainingData.length < numClusters) {
+      LOG.warn(
+          "PQ training set has {} vectors but {} clusters per subspace were requested; "
+              + "{} centroids per subspace will be degenerate and recall will suffer. "
+              + "Train on more vectors or lower numClusters (Ks).",
+          trainingData.length,
+          numClusters,
+          numClusters - trainingData.length);
+    }
+
     float[][] codebooks = new float[numSubspaces][];
     int anisoIters =
         anisotropicThreshold >= 0f ? KMeansPlusPlusClusterer.DEFAULT_MAX_ITERATIONS : 0;

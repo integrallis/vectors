@@ -223,6 +223,60 @@ class JavaVectorsAutoConfigurationTest {
                     .isSameAs(ctx.getBean("userCollection"));
               });
     }
+
+    @Test
+    void metric_defaultsToCosine_whenUnset() {
+      // Only dimension is set; metric must default to COSINE (no metric property).
+      runner
+          .withPropertyValues("java-vectors.dimension=4")
+          .run(
+              ctx -> {
+                assertThat(ctx).hasSingleBean(VectorCollection.class);
+                assertThat(ctx.getBean(VectorCollection.class).config().metric())
+                    .isEqualTo(SimilarityFunction.COSINE);
+              });
+    }
+
+    @Test
+    void dimension_isInferred_fromEmbeddingModel_whenUnset() {
+      // No java-vectors.dimension and no metric: the stub EmbeddingModel reports dimensions()==4,
+      // so the collection (and a wired VectorStore) come up with zero java-vectors.* config.
+      runner
+          .withUserConfiguration(StubEmbeddingModelConfig.class)
+          .run(
+              ctx -> {
+                assertThat(ctx).hasSingleBean(VectorCollection.class);
+                assertThat(ctx).hasSingleBean(JavaVectorsVectorStore.class);
+                VectorCollection col = ctx.getBean(VectorCollection.class);
+                assertThat(col.config().dimension()).isEqualTo(4);
+                assertThat(col.config().metric()).isEqualTo(SimilarityFunction.COSINE);
+              });
+    }
+
+    @Test
+    void commitAfterAdd_bindsFromProperties_andStoreComesUp() {
+      // java-vectors.commit-after-add reaches the JavaVectorsVectorStore builder; a healthy context
+      // with the store bean present is the gate (the flag is not observable across the boundary).
+      runner
+          .withUserConfiguration(StubEmbeddingModelConfig.class)
+          .withPropertyValues("java-vectors.dimension=4", "java-vectors.commit-after-add=false")
+          .run(
+              ctx -> {
+                assertThat(ctx).hasSingleBean(JavaVectorsVectorStore.class);
+                assertThat(ctx.getBean(JavaVectorsProperties.class).isCommitAfterAdd()).isFalse();
+              });
+    }
+
+    @Test
+    void missingDimension_withoutEmbeddingModel_failsWithClearMessage() {
+      // No dimension property and no EmbeddingModel to infer from: the context must fail with a
+      // message that tells the user how to fix it.
+      runner.run(
+          ctx -> {
+            assertThat(ctx).hasFailed();
+            assertThat(ctx).getFailure().hasStackTraceContaining("java-vectors.dimension");
+          });
+    }
   }
 
   @Configuration

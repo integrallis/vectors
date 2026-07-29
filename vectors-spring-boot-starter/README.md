@@ -11,15 +11,29 @@ Spring Boot auto-configuration for java-vectors. Registers `VectorCollection` an
 - Conditionally wires `JavaVectorsVectorStore` when an `EmbeddingModel` is on the classpath
 - All beans are `@ConditionalOnMissingBean` for easy overrides
 
+## Quick start
+
+With an `EmbeddingModel` bean on the classpath, adding the dependency is enough — `metric` defaults
+to `COSINE` and `dimension` is inferred from `EmbeddingModel.dimensions()`, so no `java-vectors.*`
+configuration is required:
+
+```java
+@Autowired
+VectorStore vectorStore; // auto-configured; no VectorCollection bean to declare
+```
+
 ## Configuration
+
+Every setting is optional; override defaults as needed:
 
 ```yaml
 java-vectors:
-  dimension: 1536
-  metric: COSINE
-  index-type: HNSW
-  quantizer: SQ8
+  dimension: 1536          # optional — inferred from EmbeddingModel.dimensions() when unset
+  metric: COSINE           # optional — defaults to COSINE
+  index-type: HNSW         # defaults to FLAT
+  quantizer: SQ8           # defaults to NONE
   storage-path: /var/lib/vectors/my-collection
+  commit-after-add: true   # commit after each store.add(); set false for batch ingestion
   hnsw:
     m: 16
     ef-construction: 200
@@ -28,6 +42,9 @@ java-vectors:
     search-list-size: 128
     alpha: 1.2
 ```
+
+Without an `EmbeddingModel` on the classpath, `java-vectors.dimension` is required; the context
+fails at startup with a clear message if it is missing.
 
 ## Key Types
 

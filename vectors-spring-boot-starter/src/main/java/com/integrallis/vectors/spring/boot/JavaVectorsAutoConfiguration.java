@@ -32,12 +32,18 @@ import org.springframework.context.annotation.Bean;
  * com.integrallis.vectors.spring.ai.JavaVectorsVectorStore} bean is registered, wiring the
  * collection to the application's {@code EmbeddingModel}.
  *
- * <p>Typical {@code application.yml}:
+ * <p><strong>Zero-config path.</strong> With the starter and a Spring AI {@code EmbeddingModel}
+ * bean on the classpath, no {@code java-vectors.*} configuration is required: {@code metric}
+ * defaults to {@code COSINE} and the collection {@code dimension} is inferred from {@code
+ * EmbeddingModel.dimensions()}. Adding the dependency is enough to get an indexed {@code
+ * VectorStore}.
+ *
+ * <p>Override any default via {@code application.yml}:
  *
  * <pre>{@code
  * java-vectors:
- *   dimension: 1536
- *   metric: COSINE
+ *   dimension: 1536          # optional when an EmbeddingModel is present (inferred otherwise)
+ *   metric: COSINE           # optional; defaults to COSINE
  *   index-type: HNSW
  *   quantizer: SQ8
  *   storage-path: /var/lib/vectors/my-collection
@@ -55,7 +61,14 @@ import org.springframework.context.annotation.Bean;
 public class JavaVectorsAutoConfiguration {
 
   /**
-   * Creates and configures a {@link VectorCollection} from the bound properties.
+   * Creates a {@link VectorCollection} when Spring AI is <em>not</em> in play (no {@code
+   * EmbeddingModel} bean is available to infer the dimension from). In that case the {@code
+   * java-vectors.dimension} property is required.
+   *
+   * <p>When an {@code EmbeddingModel} bean is present, {@link
+   * SpringAiConfiguration#vectorCollection} takes over instead and infers the dimension. The two
+   * beans are mutually exclusive by condition — this one only matches when no {@code
+   * EmbeddingModel} bean exists — so ordering between the auto-configurations does not matter.
    *
    * <p>The bean is {@link AutoCloseable}; Spring Boot closes it on application shutdown.
    *
@@ -63,11 +76,29 @@ public class JavaVectorsAutoConfiguration {
    * @return a fully configured, open {@link VectorCollection}
    */
   @Bean
-  @ConditionalOnMissingBean
+  @ConditionalOnMissingBean(
+      value = VectorCollection.class,
+      type = "org.springframework.ai.embedding.EmbeddingModel")
   public VectorCollection vectorCollection(JavaVectorsProperties props) {
+    if (props.getDimension() <= 0) {
+      throw new IllegalStateException(
+          "java-vectors.dimension must be set to a positive value. No Spring AI EmbeddingModel bean "
+              + "is available to infer it from — set java-vectors.dimension in your configuration, "
+              + "or add a Spring AI EmbeddingModel bean so the dimension can be inferred.");
+    }
+    return buildCollection(props, props.getDimension());
+  }
+
+  /**
+   * Builds a {@link VectorCollection} from {@code props} using an explicit {@code dimension}.
+   *
+   * <p>Shared by both the plain and Spring-AI auto-configured beans so the property-to-builder
+   * mapping lives in one place; only the dimension source differs between the two.
+   */
+  static VectorCollection buildCollection(JavaVectorsProperties props, int dimension) {
     VectorCollectionBuilder builder =
         VectorCollection.builder()
-            .dimension(props.getDimension())
+            .dimension(dimension)
             .metric(props.getMetric())
             .indexType(props.getIndexType())
             .quantizer(props.getQuantizer())
@@ -112,17 +143,37 @@ public class JavaVectorsAutoConfiguration {
   }
 
   /**
-   * Registers a {@link com.integrallis.vectors.spring.ai.JavaVectorsVectorStore} bean that wires
-   * the auto-configured {@link VectorCollection} to the application's Spring AI {@code
-   * EmbeddingModel}.
+   * Spring AI wiring, activated only when {@code EmbeddingModel} is on the classpath so the starter
+   * remains usable without Spring AI.
    *
-   * <p>This inner configuration class is only activated when Spring AI's {@code EmbeddingModel} is
-   * on the classpath, so the starter remains usable without Spring AI.
+   * <p>Registers two beans: a {@link VectorCollection} whose dimension is inferred from the {@code
+   * EmbeddingModel} when {@code java-vectors.dimension} is unset, and a {@link
+   * com.integrallis.vectors.spring.ai.JavaVectorsVectorStore} that wires that collection to the
+   * model. Both are {@code @ConditionalOnMissingBean}, so a user-declared bean of either type wins.
    */
   @AutoConfiguration
   @ConditionalOnClass(name = "org.springframework.ai.embedding.EmbeddingModel")
   @EnableConfigurationProperties(JavaVectorsProperties.class)
   public static class SpringAiConfiguration {
+
+    /**
+     * Creates a {@link VectorCollection}, inferring the dimension from the {@code EmbeddingModel}
+     * when {@code java-vectors.dimension} is unset (or non-positive). An explicit positive {@code
+     * java-vectors.dimension} always takes precedence.
+     *
+     * @param props the bound {@code java-vectors.*} properties
+     * @param embeddingModel the application's Spring AI embedding model
+     * @return a fully configured, open {@link VectorCollection}
+     */
+    @Bean
+    @ConditionalOnBean(type = "org.springframework.ai.embedding.EmbeddingModel")
+    @ConditionalOnMissingBean(VectorCollection.class)
+    public VectorCollection vectorCollection(
+        JavaVectorsProperties props,
+        org.springframework.ai.embedding.EmbeddingModel embeddingModel) {
+      int dimension = props.getDimension() > 0 ? props.getDimension() : embeddingModel.dimensions();
+      return buildCollection(props, dimension);
+    }
 
     @Bean
     @ConditionalOnBean(type = "org.springframework.ai.embedding.EmbeddingModel")
@@ -131,9 +182,11 @@ public class JavaVectorsAutoConfiguration {
         value = com.integrallis.vectors.spring.ai.JavaVectorsVectorStore.class)
     public com.integrallis.vectors.spring.ai.JavaVectorsVectorStore javaVectorsVectorStore(
         org.springframework.ai.embedding.EmbeddingModel embeddingModel,
-        VectorCollection collection) {
+        VectorCollection collection,
+        JavaVectorsProperties props) {
       return com.integrallis.vectors.spring.ai.JavaVectorsVectorStore.builder(
               embeddingModel, collection)
+          .commitAfterAdd(props.isCommitAfterAdd())
           .build();
     }
   }

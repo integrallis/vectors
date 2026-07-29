@@ -184,6 +184,48 @@ class JavaVectorsVectorStoreTest {
     }
 
     @Test
+    void filterExpression_restrictsResultsToMatchingMetadata() {
+      createStore(IndexType.FLAT, true);
+      store.add(
+          List.of(
+              new Document("d1", "alpha", Map.of("author", "alice")),
+              new Document("d2", "beta", Map.of("author", "bob")),
+              new Document("d3", "gamma", Map.of("author", "alice"))));
+
+      List<Document> results =
+          store.similaritySearch(
+              SearchRequest.builder()
+                  .query("alpha")
+                  .topK(10)
+                  .filterExpression("author == 'alice'")
+                  .build());
+
+      assertThat(results).extracting(Document::getId).containsExactlyInAnyOrder("d1", "d3");
+      assertThat(results)
+          .allSatisfy(d -> assertThat(d.getMetadata()).containsEntry("author", "alice"));
+    }
+
+    @Test
+    void filterExpression_inOperator_restrictsToListedValues() {
+      createStore(IndexType.FLAT, true);
+      store.add(
+          List.of(
+              new Document("d1", "alpha", Map.of("category", "news")),
+              new Document("d2", "beta", Map.of("category", "sports")),
+              new Document("d3", "gamma", Map.of("category", "weather"))));
+
+      List<Document> results =
+          store.similaritySearch(
+              SearchRequest.builder()
+                  .query("alpha")
+                  .topK(10)
+                  .filterExpression("category in ['news', 'weather']")
+                  .build());
+
+      assertThat(results).extracting(Document::getId).containsExactlyInAnyOrder("d1", "d3");
+    }
+
+    @Test
     void emptyAddIsNoOp() {
       createStore(IndexType.FLAT, true);
       store.add(List.of());

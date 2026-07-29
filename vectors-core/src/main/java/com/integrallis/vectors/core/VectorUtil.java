@@ -74,7 +74,14 @@ public final class VectorUtil {
     return IMPL.squareDistance(a, aOffset, b, bOffset, length);
   }
 
-  /** Computes the cosine similarity between two float vectors. Returns value in [-1, 1]. */
+  /**
+   * Computes the cosine similarity between two float vectors. Returns a value in {@code [-1, 1]}
+   * for non-zero inputs.
+   *
+   * <p><strong>Zero-norm inputs:</strong> if either vector has zero magnitude the result is {@code
+   * NaN} (the direction is undefined). Callers that may pass zero/near-zero vectors under a cosine
+   * metric should filter them before indexing — a {@code NaN} score is rejected by top-k selection.
+   */
   public static float cosine(float[] a, float[] b) {
     checkDimensions(a.length, b.length);
     return IMPL.cosine(a, b);

@@ -10,7 +10,7 @@ projections.
 
 == Native BLAS Requirement
 
-The 27 published Vectors 0.1.1 artifacts are Java-only JARs. Studio is different: its Smile-backed
+The 27 published Vectors 0.1.2 artifacts are Java-only JARs. Studio is different: its Smile-backed
 projection algorithms load native BLAS/LAPACK through FFM. Install OpenBLAS before building or
 running Studio:
 

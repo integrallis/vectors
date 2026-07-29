@@ -936,9 +936,7 @@ final class VectorCollectionImpl implements VectorCollection {
     acquireWriterLockOrThrow("commit");
     try {
       ensureOpenUnderLock();
-      commitUnderLock();
-      // Invalidate cached query results so subsequent searches reflect the new generation.
-      queryCache.invalidateAll();
+      commitUnderLock(); // invalidates the query cache when a new generation is published
     } finally {
       writerLock.unlock();
     }
@@ -986,6 +984,10 @@ final class VectorCollectionImpl implements VectorCollection {
     } else {
       commitPersistent(oldGen);
     }
+    // A new generation is now live. Drop cached query results here — not only in the public
+    // commit() — so that an auto-commit (maybeAutoCommit) or compact()-triggered commit also
+    // prevents stale hits that omit the newly committed documents.
+    queryCache.invalidateAll();
   }
 
   // ---------------------------------------------------------------------------
@@ -1830,7 +1832,17 @@ final class VectorCollectionImpl implements VectorCollection {
     boolean cacheEligible = !request.includeVector() && queryCache.isEnabled();
     QvCacheKey cacheKey = null;
     if (cacheEligible) {
-      cacheKey = queryCache.buildKey(query, request.k(), filter);
+      // Fold the score cutoff and field projection into the key: the cached SearchResult bakes in
+      // minScore and the text/metadata projection, so requests differing only in those must not
+      // share a cache entry.
+      cacheKey =
+          queryCache.buildKey(
+              query,
+              request.k(),
+              filter,
+              request.minScore(),
+              request.includeText(),
+              request.includeMetadata());
       var cached = queryCache.get(cacheKey);
       if (cached.isPresent()) return cached.get();
     }
