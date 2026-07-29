@@ -17,10 +17,11 @@ package com.integrallis.vectors.spring.boot;
 
 import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.db.VectorCollectionBuilder;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
@@ -61,14 +62,17 @@ import org.springframework.context.annotation.Bean;
 public class JavaVectorsAutoConfiguration {
 
   /**
-   * Creates a {@link VectorCollection} when Spring AI is <em>not</em> in play (no {@code
-   * EmbeddingModel} bean is available to infer the dimension from). In that case the {@code
-   * java-vectors.dimension} property is required.
+   * Creates a {@link VectorCollection} when Spring AI is <em>not</em> on the classpath. In that
+   * case there is no {@code EmbeddingModel} to infer from, so the {@code java-vectors.dimension}
+   * property is required.
    *
-   * <p>When an {@code EmbeddingModel} bean is present, {@link
+   * <p>When Spring AI's {@code EmbeddingModel} class is present, {@link
    * SpringAiConfiguration#vectorCollection} takes over instead and infers the dimension. The two
-   * beans are mutually exclusive by condition — this one only matches when no {@code
-   * EmbeddingModel} bean exists — so ordering between the auto-configurations does not matter.
+   * beans are mutually exclusive on a <em>classpath</em> condition
+   * ({@code @ConditionalOnMissingClass} here vs. {@code @ConditionalOnClass} on {@link
+   * SpringAiConfiguration}), which is evaluated from the classpath rather than from beans
+   * registered so far — so this does not depend on the order in which auto-configurations run or on
+   * when the {@code EmbeddingModel} bean is registered.
    *
    * <p>The bean is {@link AutoCloseable}; Spring Boot closes it on application shutdown.
    *
@@ -76,15 +80,14 @@ public class JavaVectorsAutoConfiguration {
    * @return a fully configured, open {@link VectorCollection}
    */
   @Bean
-  @ConditionalOnMissingBean(
-      value = VectorCollection.class,
-      type = "org.springframework.ai.embedding.EmbeddingModel")
+  @ConditionalOnMissingBean(VectorCollection.class)
+  @ConditionalOnMissingClass("org.springframework.ai.embedding.EmbeddingModel")
   public VectorCollection vectorCollection(JavaVectorsProperties props) {
     if (props.getDimension() <= 0) {
       throw new IllegalStateException(
-          "java-vectors.dimension must be set to a positive value. No Spring AI EmbeddingModel bean "
-              + "is available to infer it from — set java-vectors.dimension in your configuration, "
-              + "or add a Spring AI EmbeddingModel bean so the dimension can be inferred.");
+          "java-vectors.dimension must be set to a positive value. Spring AI is not on the classpath,"
+              + " so there is no EmbeddingModel to infer the dimension from — set"
+              + " java-vectors.dimension in your configuration.");
     }
     return buildCollection(props, props.getDimension());
   }
@@ -161,32 +164,63 @@ public class JavaVectorsAutoConfiguration {
      * when {@code java-vectors.dimension} is unset (or non-positive). An explicit positive {@code
      * java-vectors.dimension} always takes precedence.
      *
+     * <p>The model is resolved through an {@link ObjectProvider} at bean-instantiation time rather
+     * than via {@code @ConditionalOnBean}: bean-presence conditions are evaluated while this
+     * auto-configuration is processed, which can run <em>before</em> a Spring AI provider
+     * auto-configuration has registered the {@code EmbeddingModel}. Resolving lazily is
+     * order-independent — every bean definition exists by the time this factory method runs.
+     *
      * @param props the bound {@code java-vectors.*} properties
-     * @param embeddingModel the application's Spring AI embedding model
+     * @param embeddingModelProvider provider for the application's Spring AI embedding model
      * @return a fully configured, open {@link VectorCollection}
      */
     @Bean
-    @ConditionalOnBean(type = "org.springframework.ai.embedding.EmbeddingModel")
     @ConditionalOnMissingBean(VectorCollection.class)
     public VectorCollection vectorCollection(
         JavaVectorsProperties props,
-        org.springframework.ai.embedding.EmbeddingModel embeddingModel) {
-      int dimension = props.getDimension() > 0 ? props.getDimension() : embeddingModel.dimensions();
+        ObjectProvider<org.springframework.ai.embedding.EmbeddingModel> embeddingModelProvider) {
+      int dimension = props.getDimension();
+      if (dimension <= 0) {
+        org.springframework.ai.embedding.EmbeddingModel embeddingModel =
+            embeddingModelProvider.getIfAvailable();
+        if (embeddingModel == null) {
+          throw new IllegalStateException(
+              "java-vectors.dimension must be set to a positive value, or a Spring AI EmbeddingModel"
+                  + " bean must be available to infer it from. Configure an embedding model (for"
+                  + " example add a spring-ai-starter-model-* dependency) or set"
+                  + " java-vectors.dimension.");
+        }
+        dimension = embeddingModel.dimensions();
+      }
       return buildCollection(props, dimension);
     }
 
+    /**
+     * Registers a {@link com.integrallis.vectors.spring.ai.JavaVectorsVectorStore} when an {@code
+     * EmbeddingModel} bean is available.
+     *
+     * <p>The model is resolved through an {@link ObjectProvider} at instantiation time —
+     * <em>not</em> via {@code @ConditionalOnBean} — because a bean-presence condition is evaluated
+     * while this auto-configuration is processed, which can be before a Spring AI provider
+     * auto-configuration has registered the {@code EmbeddingModel} (this was the ordering bug that
+     * left a Spring AI app with "no VectorStore bean"). If no {@code EmbeddingModel} is present the
+     * method returns {@code null} so no store is registered — the collection remains usable on its
+     * own — rather than forcing a store that cannot exist without a model.
+     */
     @Bean
-    @ConditionalOnBean(type = "org.springframework.ai.embedding.EmbeddingModel")
     @ConditionalOnMissingBean(
         name = "javaVectorsVectorStore",
         value = com.integrallis.vectors.spring.ai.JavaVectorsVectorStore.class)
     public com.integrallis.vectors.spring.ai.JavaVectorsVectorStore javaVectorsVectorStore(
-        org.springframework.ai.embedding.EmbeddingModel embeddingModel,
+        ObjectProvider<org.springframework.ai.embedding.EmbeddingModel> embeddingModelProvider,
         VectorCollection collection,
         JavaVectorsProperties props,
-        org.springframework.beans.factory.ObjectProvider<
-                org.springframework.ai.embedding.BatchingStrategy>
-            batchingStrategy) {
+        ObjectProvider<org.springframework.ai.embedding.BatchingStrategy> batchingStrategy) {
+      org.springframework.ai.embedding.EmbeddingModel embeddingModel =
+          embeddingModelProvider.getIfAvailable();
+      if (embeddingModel == null) {
+        return null; // no embedding model → no store; the VectorCollection bean stands alone
+      }
       var builder =
           com.integrallis.vectors.spring.ai.JavaVectorsVectorStore.builder(
                   embeddingModel, collection)

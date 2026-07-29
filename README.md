@@ -46,7 +46,7 @@ depending on another system.
 
 ```kotlin
 dependencies {
-    implementation("com.integrallis:vectors:0.1.3")
+    implementation("com.integrallis:vectors:0.1.4")
 }
 ```
 
@@ -85,7 +85,7 @@ is configured.
 
 ### Spring AI
 
-Add `com.integrallis:vectors-spring-ai:0.1.3` alongside the Spring AI BOM:
+Add `com.integrallis:vectors-spring-ai:0.1.4` alongside the Spring AI BOM:
 
 ```java
 VectorCollection collection = VectorCollection.builder()
@@ -100,7 +100,7 @@ VectorStore store =
 
 ### LangChain4j
 
-Add `com.integrallis:vectors-langchain4j:0.1.3` alongside LangChain4j:
+Add `com.integrallis:vectors-langchain4j:0.1.4` alongside LangChain4j:
 
 ```java
 VectorCollection collection = VectorCollection.builder()
@@ -121,8 +121,8 @@ that integration:
 
 ```kotlin
 dependencies {
-    implementation("com.integrallis:vectors-storage-s3:0.1.3")
-    implementation("com.integrallis:vectors-db-arrow:0.1.3")
+    implementation("com.integrallis:vectors-storage-s3:0.1.4")
+    implementation("com.integrallis:vectors-db-arrow:0.1.4")
 }
 ```
 
@@ -160,7 +160,7 @@ warnings:
 --enable-native-access=ALL-UNNAMED
 ```
 
-Every published 0.1.3 artifact is a Java-only JAR with no JNI or bundled native
+Every published 0.1.4 artifact is a Java-only JAR with no JNI or bundled native
 library. The storage module uses the standard JDK FFM API for an optional
 `posix_madvise` optimization. The optional Arrow IPC exporter/ingester
 additionally needs the module opens required by Arrow's allocator:

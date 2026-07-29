@@ -32,7 +32,7 @@ You can prepare either classpath without Docker:
 ./gradlew prepareNotebookClasspath -PnotebookMode=source
 ./gradlew prepareNotebookClasspath \
   -PnotebookMode=release \
-  -PnotebookVersion=0.1.3
+  -PnotebookVersion=0.1.4
 ```
 
 Before a release reaches Central, resolve the same artifacts from the local
@@ -42,7 +42,7 @@ staging repository:
 ./gradlew verifyStagedPublications
 ./gradlew prepareNotebookClasspath \
   -PnotebookMode=release \
-  -PnotebookVersion=0.1.3 \
+  -PnotebookVersion=0.1.4 \
   -PnotebookRepository=build/staging-deploy
 ```
 
@@ -60,7 +60,7 @@ development token. To exercise a published release instead:
 
 ```bash
 VECTORS_NOTEBOOK_MODE=release \
-VECTORS_VERSION=0.1.3 \
+VECTORS_VERSION=0.1.4 \
 docker compose up --build
 ```
 
@@ -82,7 +82,7 @@ Release mode executes all six notebooks from the selected Maven artifacts:
 
 ```bash
 VECTORS_NOTEBOOK_MODE=release \
-VECTORS_VERSION=0.1.3 \
+VECTORS_VERSION=0.1.4 \
 docker compose run --rm --no-deps jupyter \
   bash /home/jovyan/work/vectors/notebooks/scripts/test-notebooks.sh
 ```

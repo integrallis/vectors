@@ -32,7 +32,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -83,6 +85,20 @@ class JavaVectorsAutoConfigurationTest {
 
   @Configuration
   static class StubEmbeddingModelConfig {
+    @Bean
+    EmbeddingModel embeddingModel() {
+      return new StubEmbeddingModel();
+    }
+  }
+
+  /**
+   * Contributes the {@link EmbeddingModel} from a separate auto-configuration ordered AFTER {@link
+   * JavaVectorsAutoConfiguration}, mirroring how Spring AI's provider starters register the model.
+   * This is the ordering that broke the real app when our beans used bean-presence conditions.
+   */
+  @AutoConfiguration
+  @AutoConfigureAfter(JavaVectorsAutoConfiguration.class)
+  static class LateEmbeddingModelAutoConfiguration {
     @Bean
     EmbeddingModel embeddingModel() {
       return new StubEmbeddingModel();
@@ -250,6 +266,28 @@ class JavaVectorsAutoConfigurationTest {
                 VectorCollection col = ctx.getBean(VectorCollection.class);
                 assertThat(col.config().dimension()).isEqualTo(4);
                 assertThat(col.config().metric()).isEqualTo(SimilarityFunction.COSINE);
+              });
+    }
+
+    @Test
+    void embeddingModelFromLaterAutoConfiguration_stillWiresStoreAndInfersDimension() {
+      // Reproduces the real Spring AI app failure: the EmbeddingModel is contributed by ANOTHER
+      // auto-configuration (as Spring AI's provider starters do), ordered AFTER ours. Bean-presence
+      // conditions on the EmbeddingModel (@ConditionalOnBean / @ConditionalOnMissingBean type=...)
+      // misfire here because the model bean is not yet registered when our conditions are
+      // evaluated,
+      // so the store is never created and the collection bean wrongly reports "no EmbeddingModel".
+      // No java-vectors.dimension is set, so this also exercises dimension inference.
+      new ApplicationContextRunner()
+          .withConfiguration(
+              AutoConfigurations.of(
+                  JavaVectorsAutoConfiguration.class, LateEmbeddingModelAutoConfiguration.class))
+          .run(
+              ctx -> {
+                assertThat(ctx).hasNotFailed();
+                assertThat(ctx).hasSingleBean(VectorCollection.class);
+                assertThat(ctx).hasSingleBean(JavaVectorsVectorStore.class);
+                assertThat(ctx.getBean(VectorCollection.class).config().dimension()).isEqualTo(4);
               });
     }
 

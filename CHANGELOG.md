@@ -4,6 +4,22 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-29
+
+### Fixed
+
+- **Spring Boot starter now wires the `VectorStore` regardless of auto-configuration
+  order.** The auto-config resolved the Spring AI `EmbeddingModel` through
+  bean-presence conditions (`@ConditionalOnBean` / `@ConditionalOnMissingBean`),
+  which are evaluated while our auto-configuration is processed — before a Spring
+  AI provider auto-configuration (OpenAI, etc.) had registered the model. In a
+  real app this left "no VectorStore bean" and a spurious "java-vectors.dimension
+  must be set" error even though an `EmbeddingModel` was present. The model is now
+  resolved through an `ObjectProvider` at bean-instantiation time and the plain vs.
+  Spring-AI collection beans are separated on a classpath condition, so wiring and
+  dimension inference no longer depend on auto-configuration ordering. Verified
+  against a real Spring Boot 4.1.0 / Spring AI 2.0.0 application.
+
 ## [0.1.3] - 2026-07-29
 
 ### Changed
