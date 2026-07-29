@@ -23,7 +23,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.BatchingStrategy;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingOptions;
+import org.springframework.ai.embedding.TokenCountBatchingStrategy;
 import org.springframework.ai.vectorstore.AbstractVectorStoreBuilder;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.observation.AbstractObservationVectorStore;
@@ -60,6 +63,7 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
   private final VectorCollection collection;
   private final String collectionName;
   private final boolean commitAfterAdd;
+  private final BatchingStrategy batchingStrategy;
   private final Float mmrLambda; // null = MMR disabled
   private final int mmrFetchMultiplier;
 
@@ -68,6 +72,7 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
     this.collection = builder.collection;
     this.collectionName = builder.collectionName;
     this.commitAfterAdd = builder.commitAfterAdd;
+    this.batchingStrategy = builder.batchingStrategy;
     this.mmrLambda = builder.mmrLambda;
     this.mmrFetchMultiplier = builder.mmrFetchMultiplier;
   }
@@ -89,13 +94,21 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
       return;
     }
 
+    // Embed the whole batch at once. The BatchingStrategy coalesces documents into token-limited
+    // sub-batches, so ingesting N documents costs a handful of provider round-trips instead of N,
+    // composes with a CachingEmbeddingModel's batch de-duplication, and respects the model's token
+    // limit. Embeddings are returned in request order.
+    List<float[]> embeddings =
+        this.embeddingModel.embed(
+            documents, EmbeddingOptions.builder().build(), this.batchingStrategy);
+
     List<com.integrallis.vectors.core.Document> jvDocs = new ArrayList<>(documents.size());
-    for (Document doc : documents) {
-      float[] embedding = this.embeddingModel.embed(doc);
+    for (int i = 0; i < documents.size(); i++) {
+      Document doc = documents.get(i);
       Map<String, MetadataValue> jvMetadata = MetadataConverter.toJavaVectors(doc.getMetadata());
       jvDocs.add(
           new com.integrallis.vectors.core.Document(
-              doc.getId(), embedding, doc.getText(), jvMetadata));
+              doc.getId(), embeddings.get(i), doc.getText(), jvMetadata));
     }
     collection.addAll(jvDocs);
 
@@ -199,6 +212,7 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
     private final VectorCollection collection;
     private String collectionName = "default";
     private boolean commitAfterAdd = true;
+    private BatchingStrategy batchingStrategy = new TokenCountBatchingStrategy();
     private Float mmrLambda = null; // null = MMR disabled
     private int mmrFetchMultiplier = 4;
 
@@ -223,6 +237,17 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
      */
     public Builder commitAfterAdd(boolean commitAfterAdd) {
       this.commitAfterAdd = commitAfterAdd;
+      return this;
+    }
+
+    /**
+     * Sets the {@link BatchingStrategy} used to group documents for embedding during {@code add()}.
+     * Defaults to {@link TokenCountBatchingStrategy}, which packs documents into sub-batches under
+     * the model's token limit. Supply your own to tune batch sizing.
+     */
+    public Builder batchingStrategy(BatchingStrategy batchingStrategy) {
+      this.batchingStrategy =
+          Objects.requireNonNull(batchingStrategy, "batchingStrategy must not be null");
       return this;
     }
 

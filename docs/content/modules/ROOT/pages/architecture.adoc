@@ -101,7 +101,7 @@ Unified `VectorCollection` API over all backends with metadata filtering, persis
 | LangChain4j chat, embedding, and interceptor wrappers.
 |===
 
-These are the 27 Apache-2.0 modules published in 0.1.2.
+These are the 27 Apache-2.0 modules published in 0.1.3.
 
 == Repository Tools and Additional Tiers
 

@@ -261,12 +261,23 @@ configure(libraryProjects) {
         ))
     }
 
+    // Mockito's inline mock-maker must be attached as a Java agent on JDK 25+. Self-attaching is
+    // deprecated and intermittently crashes the test worker once enough mocking happens in one JVM
+    // ("Could not complete execution for Gradle Test Executor"). Resolve just the mockito-core jar
+    // and pass it as -javaagent to every Test task; a Provider keeps it configuration-cache safe.
+    val mockitoAgent = configurations.create("mockitoAgent")
+    dependencies.add("mockitoAgent", "org.mockito:mockito-core:5.15.2")?.let {
+        (it as ExternalModuleDependency).isTransitive = false
+    }
+    val mockitoAgentArg = mockitoAgent.elements.map { "-javaagent:" + it.single().asFile.absolutePath }
+
     // Common JVM args and logging for ALL Test tasks — no tag filters here.
     // Tag filters must live on each individual task so they do not accumulate
     // (tasks.withType<Test> applies to every Test task including slowTest and
     // unitTest; adding excludeTags here would fight with their includeTags).
     tasks.withType<Test> {
         jvmArgs("--add-modules", "jdk.incubator.vector")
+        jvmArgumentProviders.add(CommandLineArgumentProvider { listOf(mockitoAgentArg.get()) })
         testLogging {
             events("passed", "skipped", "failed")
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

@@ -125,10 +125,15 @@ List<Document> results = vectorStore.similaritySearch(
     SearchRequest.builder().query("hello").topK(5).build());
 ----
 
-The builder embeds each `Document` through the supplied `EmbeddingModel` before staging it in the
-collection, and validates at build time that the model's dimension matches the collection's.
-`similaritySearch` embeds the query, translates any filter expression, and maps hits back to Spring
-AI `Document` instances with their similarity `score` populated.
+On `add()`, the store embeds the whole document list in one call through the model's batching API
+(`embed(List, EmbeddingOptions, BatchingStrategy)`), so ingesting N chunks costs a few token-limited
+provider round-trips rather than N — and it composes with the batch de-duplication in
+`CachingEmbeddingModel`. The default `TokenCountBatchingStrategy` packs documents under the model's
+token limit; override it with `.batchingStrategy(...)` (the Spring Boot starter reuses your
+application's `BatchingStrategy` bean when one is present). The builder also validates at build time
+that the model's dimension matches the collection's. `similaritySearch` embeds the query, translates
+any filter expression, and maps hits back to Spring AI `Document` instances with their similarity
+`score` populated.
 
 === Diversity re-ranking (MMR)
 

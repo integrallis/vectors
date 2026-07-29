@@ -183,11 +183,18 @@ public class JavaVectorsAutoConfiguration {
     public com.integrallis.vectors.spring.ai.JavaVectorsVectorStore javaVectorsVectorStore(
         org.springframework.ai.embedding.EmbeddingModel embeddingModel,
         VectorCollection collection,
-        JavaVectorsProperties props) {
-      return com.integrallis.vectors.spring.ai.JavaVectorsVectorStore.builder(
-              embeddingModel, collection)
-          .commitAfterAdd(props.isCommitAfterAdd())
-          .build();
+        JavaVectorsProperties props,
+        org.springframework.beans.factory.ObjectProvider<
+                org.springframework.ai.embedding.BatchingStrategy>
+            batchingStrategy) {
+      var builder =
+          com.integrallis.vectors.spring.ai.JavaVectorsVectorStore.builder(
+                  embeddingModel, collection)
+              .commitAfterAdd(props.isCommitAfterAdd());
+      // Reuse the application's BatchingStrategy bean (Spring AI's auto-config provides one) so
+      // batched ingest honors the same token-limit sizing; fall back to the store's default.
+      batchingStrategy.ifAvailable(builder::batchingStrategy);
+      return builder.build();
     }
   }
 }

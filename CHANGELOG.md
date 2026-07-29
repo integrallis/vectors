@@ -4,6 +4,23 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-29
+
+### Changed
+
+- **Spring AI `JavaVectorsVectorStore` now embeds documents in batches.** `add()`
+  routes the whole document list through the embedding model's batching API
+  (`embed(List, EmbeddingOptions, BatchingStrategy)`) instead of one call per
+  document, so ingesting N chunks costs a handful of token-limited provider
+  round-trips rather than N. This also composes with the batch de-duplication in
+  `CachingEmbeddingModel` and honors the model's token limit.
+
+### Added
+
+- `JavaVectorsVectorStore.Builder.batchingStrategy(...)` to override the batching
+  strategy (defaults to `TokenCountBatchingStrategy`). The Spring Boot starter
+  reuses the application's `BatchingStrategy` bean when one is present.
+
 ## [0.1.2] - 2026-07-29
 
 ### Added

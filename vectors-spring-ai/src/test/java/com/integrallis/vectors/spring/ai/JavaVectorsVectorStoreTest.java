@@ -18,7 +18,11 @@ package com.integrallis.vectors.spring.ai;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.integrallis.vectors.core.SimilarityFunction;
@@ -32,7 +36,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.BatchingStrategy;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingOptions;
 import org.springframework.ai.vectorstore.SearchRequest;
 
 class JavaVectorsVectorStoreTest {
@@ -73,6 +79,15 @@ class JavaVectorsVectorStoreTest {
             });
     when(embeddingModel.embed(any(String.class)))
         .thenAnswer(inv -> deterministicEmbedding(inv.getArgument(0)));
+    // doAdd() embeds the whole batch via embed(List, options, strategy). Fan the stub out to the
+    // per-Document stub so tests that override embed(Document) still take effect, and embeddings
+    // come back in request order.
+    when(embeddingModel.embed(anyList(), any(EmbeddingOptions.class), any(BatchingStrategy.class)))
+        .thenAnswer(
+            inv -> {
+              List<Document> docs = inv.getArgument(0);
+              return docs.stream().map(d -> embeddingModel.embed(d)).toList();
+            });
   }
 
   @AfterEach
@@ -96,6 +111,10 @@ class JavaVectorsVectorStoreTest {
     store =
         JavaVectorsVectorStore.builder(embeddingModel, collection)
             .commitAfterAdd(commitAfterAdd)
+            // Trivial one-batch strategy: embed(List, options, strategy) is mocked, so the strategy
+            // is never invoked. This avoids constructing a real TokenCountBatchingStrategy (which
+            // loads JTokkit's large encoding) in every test.
+            .batchingStrategy(docs -> List.of(docs))
             .build();
   }
 
@@ -223,6 +242,36 @@ class JavaVectorsVectorStoreTest {
                   .build());
 
       assertThat(results).extracting(Document::getId).containsExactlyInAnyOrder("d1", "d3");
+    }
+
+    @Test
+    void add_embedsTheBatchInOneCall_notPerDocument() {
+      createStore(IndexType.FLAT, true);
+      // Override the setUp fan-out so the batched stub computes embeddings directly (without
+      // delegating to embed(Document)); this lets us assert the per-document path is never taken.
+      when(embeddingModel.embed(
+              anyList(), any(EmbeddingOptions.class), any(BatchingStrategy.class)))
+          .thenAnswer(
+              inv -> {
+                List<Document> docs = inv.getArgument(0);
+                return docs.stream().map(d -> deterministicEmbedding(d.getText())).toList();
+              });
+
+      store.add(
+          List.of(
+              new Document("d1", "alpha", Map.of()),
+              new Document("d2", "beta", Map.of()),
+              new Document("d3", "gamma", Map.of())));
+
+      // Ingest goes through the batched embed(List, options, strategy) exactly once — not one
+      // provider round-trip per document.
+      verify(embeddingModel, times(1))
+          .embed(anyList(), any(EmbeddingOptions.class), any(BatchingStrategy.class));
+      verify(embeddingModel, never()).embed(any(Document.class));
+
+      // And all three documents are searchable, embedded in request order.
+      assertThat(store.similaritySearch(SearchRequest.builder().query("alpha").topK(3).build()))
+          .hasSize(3);
     }
 
     @Test
