@@ -1,0 +1,8 @@
+quality_gates:
+  overall:
+    mfcqi_score: 0.70
+  metrics:
+    security: 0.80
+    Cyclomatic Complexity: 0.70
+    Cognitive Complexity: 0.70
+    Maintainability Index: 0.70
