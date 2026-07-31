@@ -59,6 +59,8 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
     implements AutoCloseable {
 
   static final String DATABASE_SYSTEM = "java-vectors";
+  private static final EmbeddingOptions DEFAULT_EMBEDDING_OPTIONS =
+      DefaultEmbeddingOptions.INSTANCE;
 
   private final VectorCollection collection;
   private final String collectionName;
@@ -99,8 +101,7 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
     // composes with a CachingEmbeddingModel's batch de-duplication, and respects the model's token
     // limit. Embeddings are returned in request order.
     List<float[]> embeddings =
-        this.embeddingModel.embed(
-            documents, EmbeddingOptions.builder().build(), this.batchingStrategy);
+        this.embeddingModel.embed(documents, DEFAULT_EMBEDDING_OPTIONS, this.batchingStrategy);
 
     List<com.integrallis.vectors.core.Document> jvDocs = new ArrayList<>(documents.size());
     for (int i = 0; i < documents.size(); i++) {
@@ -204,6 +205,20 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
   @Override
   public void close() {
     collection.close();
+  }
+
+  private enum DefaultEmbeddingOptions implements EmbeddingOptions {
+    INSTANCE;
+
+    @Override
+    public String getModel() {
+      return null;
+    }
+
+    @Override
+    public Integer getDimensions() {
+      return null;
+    }
   }
 
   /** Builder for {@link JavaVectorsVectorStore}. */
