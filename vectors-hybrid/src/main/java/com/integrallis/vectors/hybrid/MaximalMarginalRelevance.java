@@ -53,12 +53,7 @@ public final class MaximalMarginalRelevance {
    */
   public static int[] select(
       float[] query, float[][] candidates, int k, float lambda, SimilarityFunction similarity) {
-    if (query == null || candidates == null || similarity == null) {
-      throw new IllegalArgumentException("query, candidates, and similarity must be non-null");
-    }
-    if (lambda < 0f || lambda > 1f) {
-      throw new IllegalArgumentException("lambda must be in [0, 1], got " + lambda);
-    }
+    validateArguments(query, candidates, lambda, similarity);
     int n = candidates.length;
     int target = Math.min(Math.max(k, 0), n);
     int[] selected = new int[target];
@@ -66,22 +61,15 @@ public final class MaximalMarginalRelevance {
       return selected;
     }
 
-    // COSINE has no fused kernel (it needs per-vector norms), so instead of paying that norm on
-    // every
-    // one of the O(k*n) scalar compares, normalize the query + candidates ONCE and score via the
-    // fused DOT_PRODUCT path — for unit vectors, dot == cosine, and (1+dot)/2 == compare(COSINE),
-    // so
-    // results are numerically identical. Other metrics score in place.
+    // COSINE has no fused kernel. Normalize once, then use the fused DOT_PRODUCT path because dot
+    // equals cosine for unit vectors and has the same score transform.
     SimilarityFunction metric = similarity;
     float[] scoreQuery = query;
     float[][] pool = candidates;
     if (similarity == SimilarityFunction.COSINE) {
       metric = SimilarityFunction.DOT_PRODUCT;
       scoreQuery = VectorUtil.l2normalize(query.clone(), false);
-      pool = new float[n][];
-      for (int i = 0; i < n; i++) {
-        pool[i] = VectorUtil.l2normalize(candidates[i].clone(), false);
-      }
+      pool = normalizedCopy(candidates);
     }
 
     // Fused-SIMD batch scoring: one kernel sweep over the whole candidate pool instead of n scalar
@@ -98,31 +86,58 @@ public final class MaximalMarginalRelevance {
     float[] simToBest = new float[n];
 
     for (int step = 0; step < target; step++) {
-      int best = -1;
-      float bestScore = Float.NEGATIVE_INFINITY;
-      for (int i = 0; i < n; i++) {
-        if (taken[i]) {
-          continue;
-        }
-        // No redundancy on the first pick (nothing selected yet).
-        float redundancy = (step == 0) ? 0f : maxSimToSelected[i];
-        float mmr = lambda * relToQuery[i] - (1f - lambda) * redundancy;
-        if (mmr > bestScore) {
-          bestScore = mmr;
-          best = i;
-        }
-      }
+      int best = bestCandidate(taken, relToQuery, maxSimToSelected, step, lambda);
       selected[step] = best;
       taken[best] = true;
       // Fold the newly selected candidate into every remaining candidate's redundancy — one fused
       // sweep of sim(selected, pool).
       FusedSimilarity.bulkCompare(metric, pool[best], pool, scratch, simToBest, n);
-      for (int i = 0; i < n; i++) {
-        if (!taken[i] && simToBest[i] > maxSimToSelected[i]) {
-          maxSimToSelected[i] = simToBest[i];
-        }
-      }
+      updateRedundancy(taken, simToBest, maxSimToSelected);
     }
     return selected;
+  }
+
+  private static void validateArguments(
+      float[] query, float[][] candidates, float lambda, SimilarityFunction similarity) {
+    if (query == null || candidates == null || similarity == null) {
+      throw new IllegalArgumentException("query, candidates, and similarity must be non-null");
+    }
+    if (lambda < 0f || lambda > 1f) {
+      throw new IllegalArgumentException("lambda must be in [0, 1], got " + lambda);
+    }
+  }
+
+  private static float[][] normalizedCopy(float[][] candidates) {
+    float[][] normalized = new float[candidates.length][];
+    for (int i = 0; i < candidates.length; i++) {
+      normalized[i] = VectorUtil.l2normalize(candidates[i].clone(), false);
+    }
+    return normalized;
+  }
+
+  private static int bestCandidate(
+      boolean[] taken, float[] relevance, float[] maxSimilarity, int step, float lambda) {
+    int best = -1;
+    float bestScore = Float.NEGATIVE_INFINITY;
+    for (int i = 0; i < taken.length; i++) {
+      if (taken[i]) {
+        continue;
+      }
+      float redundancy = step == 0 ? 0f : maxSimilarity[i];
+      float score = lambda * relevance[i] - (1f - lambda) * redundancy;
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  private static void updateRedundancy(boolean[] taken, float[] similarity, float[] maxSimilarity) {
+    for (int i = 0; i < taken.length; i++) {
+      if (!taken[i] && similarity[i] > maxSimilarity[i]) {
+        maxSimilarity[i] = similarity[i];
+      }
+    }
   }
 }
