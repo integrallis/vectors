@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-31",
+  "technique": "q5_k_q8_k_four_query_register_tile",
+  "environment": {
+    "os": "Ubuntu Linux 6.8",
+    "cpu": "AMD EPYC-Milan Processor",
+    "logicalProcessors": 8,
+    "jvm": "Eclipse Temurin 25.0.3+9-LTS",
+    "vectorBits": 256,
+    "workers": 8
+  },
+  "jmh": {
+    "benchmark": "com.integrallis.vectors.bench.GgufQ5KBatchedMatmulBenchmark.batched",
+    "baselineJarSha256": "019624c8f86fd217760478f591b8121bad8ca8ec11bac3542614f97bd484c2a3",
+    "candidateJarSha256": "0f9712eb96cdd847eec94364292a7d1531a7645582cd9342207c6b36d4d8a165",
+    "rows": 1024,
+    "cols": 2048,
+    "forks": 3,
+    "warmupIterations": 3,
+    "measurementIterations": 5,
+    "unit": "ms/op",
+    "results": [
+      {
+        "batchSize": 4,
+        "baseline": {"score": 1.1052129052, "ci99_9": [1.1001104191, 1.1103153912]},
+        "candidate": {"score": 0.5413606587, "ci99_9": [0.5291319558, 0.5535893615]},
+        "improvementPercent": 51.02
+      },
+      {
+        "batchSize": 32,
+        "baseline": {"score": 8.7042851869, "ci99_9": [8.6756095350, 8.7329608388]},
+        "candidate": {"score": 4.2860953985, "ci99_9": [4.2364221917, 4.3357686054]},
+        "improvementPercent": 50.76
+      }
+    ],
+    "allocationBatch32BytesPerOperation": {
+      "baseline": {"score": 499.4534, "ci99_9": [437.5415, 561.3653]},
+      "candidate": {"score": 538.1148, "ci99_9": [410.1987, 666.0309]},
+      "collections": 0,
+      "claim": null
+    }
+  },
+  "fullModel": {
+    "modelsRevision": "c0513b7b70d5865211c3d066a75e5b62df89bfe0",
+    "model": "SQLCoder-7B-2 Q5_K_M",
+    "artifactBytes": 4783256288,
+    "artifactSha256": "0068f25d1fc37cb25aa6be85064432eeeb1a0754d97139c0d2eb3529fc8fc32b",
+    "prompt": "models-bench/prompts/sqlcoder.txt",
+    "promptSha256": "30f6a0295f161a7ead0a95049f492a711aea3921908b8ae9bf27589c41abe8c7",
+    "inputTokenRange": [57, 61],
+    "contextLength": 128,
+    "maxOutputTokens": 1,
+    "warmupsPerProcess": 2,
+    "processesPerRevision": 2,
+    "trialsPerRevision": 16,
+    "baselineVectorsJarSha256": "194335b24e0f9a535af07f14aa08112641f0a57c096424d09ac7588058b8c61c",
+    "candidateVectorsJarSha256": "d861ca0e49f1bf4b6fe135a809d1f9d71be5f65eb0c187e440d4b65b5cbca51d",
+    "baseline": {
+      "medianTtftMillis": 44780.685381,
+      "p95TtftMillis": 45721.394181,
+      "medianPrefillTokensPerSecond": 1.3264517509,
+      "observedPeakRssBytes": 5167296512
+    },
+    "candidate": {
+      "medianTtftMillis": 26585.761660,
+      "p95TtftMillis": 28019.745619,
+      "medianPrefillTokensPerSecond": 2.2361297185,
+      "observedPeakRssBytes": 5950337024
+    },
+    "outputSha256": "71d94190e40b85351e9312a4d1e72ab121fc539d0dbfd8ff4ec800511984f639",
+    "claims": {
+      "medianTtftImprovementPercent": 40.63,
+      "p95TtftImprovementPercent": 38.72,
+      "medianPrefillImprovementPercent": 68.58,
+      "memoryCapacity": null
+    }
+  }
+}

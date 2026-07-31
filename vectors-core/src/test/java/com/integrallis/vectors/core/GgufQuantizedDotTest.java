@@ -312,6 +312,49 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q5_KMappedBatchedMatmulMatchesDirectKernelExactly() throws IOException {
+    int batchSize = 5;
+    int rows = 2;
+    int cols = 512;
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] firstRow = repeat(q5KBlock(0.125f, 0.0625f, i -> (i * 7 + 3) & 0x1F, scales, mins), 2);
+    byte[] secondRow = repeat(q5KBlock(-0.25f, 0.03125f, i -> 31 - (i & 0x1F), scales, mins), 2);
+    byte[] matrix = concat(firstRow, secondRow);
+    float[] queries = patternedQueries(batchSize, cols);
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    byte[] q8Quants = new byte[batchSize * cols];
+    float[] q8Scales = new float[batchSize * (cols / 256)];
+    short[] q8Sums = new short[batchSize * (cols / 16)];
+    Path path = Files.createTempFile("vectors-q5-k-batch-", ".bin");
+    Files.write(path, matrix);
+
+    try (Arena arena = Arena.ofConfined();
+        FileChannel channel = FileChannel.open(path, StandardOpenOption.READ)) {
+      MemorySegment mapped = channel.map(FileChannel.MapMode.READ_ONLY, 0, matrix.length, arena);
+      assertThat(mapped.isMapped()).isTrue();
+
+      VectorUtil.ggufQ5_KQ8_KBatchedMatmul(
+          queries,
+          MemorySegment.ofArray(matrix),
+          batchSize,
+          rows,
+          cols,
+          expected,
+          q8Quants,
+          q8Scales,
+          q8Sums);
+      VectorUtil.ggufQ5_KQ8_KBatchedMatmul(
+          queries, mapped, batchSize, rows, cols, actual, q8Quants, q8Scales, q8Sums);
+
+      assertThat(actual).containsExactly(expected);
+    } finally {
+      Files.deleteIfExists(path);
+    }
+  }
+
+  @Test
   void q6_KDequantize_matchesDecodedReferenceAtOutputOffset() {
     byte[] block = q6KBlock(0.125f, i -> (i % 64) - 32, i -> (i % 7) - 3);
     float[] decoded = new float[258];
@@ -2683,7 +2726,7 @@ class GgufQuantizedDotTest {
 
   @Test
   void q5_KQ8_KBatchedMatmulMatchesIndependentQueriesExactly() {
-    int batchSize = 3;
+    int batchSize = 5;
     int rows = 2;
     int cols = 512;
     float[] queries = new float[batchSize * cols];
@@ -2735,7 +2778,7 @@ class GgufQuantizedDotTest {
 
   @Test
   void q5_KQ8_KBatchedMatmulMatchesGemvAtProjectionScaleAfterWarmup() {
-    int batchSize = 4;
+    int batchSize = 5;
     int rows = 512;
     int cols = 2_048;
     int blocks = cols / 256;

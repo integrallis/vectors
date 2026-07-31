@@ -59,6 +59,35 @@ ARM/SVE retains the established path pending platform evidence. The model-level 
 not lifecycle-aligned and support no footprint or capacity claim. The machine-readable aggregate
 is in `jmh-results/q4k-register-tile-20260731.json`.
 
+## Q5_K four-query register tile gate
+
+Q5_K adds a separate fifth-bit plane to the packed four-bit values. The established batched kernel
+reloaded and reconstructed both planes for every query. The retained x86 path reconstructs each
+weight vector once and consumes four Q8_K queries while it is live, using explicit scalar locals so
+JDK 25 can keep the vectors and accumulators out of arrays.
+
+The controlled 1024x2048 JMH gate used the same eight-vCPU AMD EPYC-Milan host, Temurin 25.0.3,
+three forks, three one-second warmups, five one-second measurements, and eight persistent workers:
+
+| Batch | Established kernel | Four-query tile | Change |
+| ---: | ---: | ---: | ---: |
+| 4 | 1.105 ms/op | 0.541 ms/op | -51.0% |
+| 32 | 8.704 ms/op | 4.286 ms/op | -50.8% |
+
+Both 99.9% confidence-interval pairs are non-overlapping. At batch 32, allocation measured 499.5
+B/op for the baseline and 538.1 B/op for the candidate, with overlapping confidence intervals and
+zero collections; the data establishes no allocation change.
+
+The ABBA full-model gate used SQLCoder-7B-2 Q5_K_M, its exact 4,783,256,288-byte artifact, the
+committed SQL prompt, two warmups per process, and 16 one-token prefill trials per revision. Median
+TTFT fell from 44,780.7 to 26,585.8 ms (-40.6%), p95 TTFT fell from 45,721.4 to 28,019.7 ms
+(-38.7%), and median prefill rose from 1.326 to 2.236 tok/s (+68.6%). Corresponding input-token
+series and all 32 output hashes were identical.
+
+Automatic dispatch has the same x86, 256-bit, and batch-four envelope as Q4_K. Process RSS differed
+between runs and was not lifecycle-aligned, so it supports no memory-capacity claim. The
+machine-readable aggregate is in `jmh-results/q5k-register-tile-20260731.json`.
+
 ## Q8_0 block-major row accumulation gate
 
 The original block-major Q8_0 row kernel updated `out[batch * rows + row]` after every weight
