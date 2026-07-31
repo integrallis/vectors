@@ -45,6 +45,14 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
   private static final String TYPE_BATCH_EMBEDDING = "batch_embedding";
   private static final String TYPE_CHAT = "chat";
 
+  /**
+   * Serializes one embedding, batch-embedding, or chat cassette record as compact JSON.
+   *
+   * @param record cassette record to encode
+   * @return encoded JSON bytes
+   * @throws IllegalArgumentException if the record implementation is unsupported
+   * @throws UncheckedIOException if Jackson cannot write the JSON document
+   */
   @Override
   public byte[] serialize(CassetteRecord record) {
     try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -78,6 +86,13 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
     }
   }
 
+  /**
+   * Deserializes a cassette record written by either the Jackson or Avaje serializer.
+   *
+   * @param bytes encoded cassette JSON
+   * @return the decoded cassette record
+   * @throws UncheckedIOException if the document is malformed or contains an unknown record type
+   */
   @Override
   public CassetteRecord deserialize(byte[] bytes) {
     try (JsonParser p = FACTORY.createParser(new ByteArrayInputStream(bytes))) {

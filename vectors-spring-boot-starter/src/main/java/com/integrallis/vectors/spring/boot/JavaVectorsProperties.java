@@ -141,18 +141,30 @@ public class JavaVectorsProperties {
      */
     private int efConstruction = VectorCollectionBuilder.DEFAULT_HNSW_EF_CONSTRUCTION;
 
+    /** Returns the maximum number of connections per HNSW node. */
     public int getM() {
       return m;
     }
 
+    /**
+     * Sets the maximum number of connections per HNSW node.
+     *
+     * @param m maximum connections per node
+     */
     public void setM(int m) {
       this.m = m;
     }
 
+    /** Returns the HNSW construction beam width. */
     public int getEfConstruction() {
       return efConstruction;
     }
 
+    /**
+     * Sets the HNSW construction beam width.
+     *
+     * @param efConstruction construction beam width
+     */
     public void setEfConstruction(int efConstruction) {
       this.efConstruction = efConstruction;
     }
@@ -175,26 +187,44 @@ public class JavaVectorsProperties {
     /** Pruning factor alpha. Default: {@value VectorCollectionBuilder#DEFAULT_VAMANA_ALPHA}. */
     private float alpha = VectorCollectionBuilder.DEFAULT_VAMANA_ALPHA;
 
+    /** Returns the maximum out-degree after Vamana robust pruning. */
     public int getMaxDegree() {
       return maxDegree;
     }
 
+    /**
+     * Sets the maximum out-degree after Vamana robust pruning.
+     *
+     * @param maxDegree maximum graph out-degree
+     */
     public void setMaxDegree(int maxDegree) {
       this.maxDegree = maxDegree;
     }
 
+    /** Returns the Vamana construction search-list size. */
     public int getSearchListSize() {
       return searchListSize;
     }
 
+    /**
+     * Sets the Vamana construction search-list size.
+     *
+     * @param searchListSize construction search-list size
+     */
     public void setSearchListSize(int searchListSize) {
       this.searchListSize = searchListSize;
     }
 
+    /** Returns the Vamana robust-pruning alpha factor. */
     public float getAlpha() {
       return alpha;
     }
 
+    /**
+     * Sets the Vamana robust-pruning alpha factor.
+     *
+     * @param alpha robust-pruning factor
+     */
     public void setAlpha(float alpha) {
       this.alpha = alpha;
     }
@@ -214,26 +244,44 @@ public class JavaVectorsProperties {
     /** Max KMeans iterations. Default: {@value VectorCollectionBuilder#DEFAULT_IVF_MAX_ITER}. */
     private int maxIter = VectorCollectionBuilder.DEFAULT_IVF_MAX_ITER;
 
+    /** Returns the number of IVF clusters. */
     public int getK() {
       return k;
     }
 
+    /**
+     * Sets the number of IVF clusters.
+     *
+     * @param k cluster count
+     */
     public void setK(int k) {
       this.k = k;
     }
 
+    /** Returns the number of IVF clusters probed per query. */
     public int getNprobe() {
       return nprobe;
     }
 
+    /**
+     * Sets the number of IVF clusters probed per query.
+     *
+     * @param nprobe clusters to probe
+     */
     public void setNprobe(int nprobe) {
       this.nprobe = nprobe;
     }
 
+    /** Returns the maximum number of KMeans training iterations. */
     public int getMaxIter() {
       return maxIter;
     }
 
+    /**
+     * Sets the maximum number of KMeans training iterations.
+     *
+     * @param maxIter maximum training iterations
+     */
     public void setMaxIter(int maxIter) {
       this.maxIter = maxIter;
     }
@@ -250,18 +298,30 @@ public class JavaVectorsProperties {
      */
     private int clusters = VectorCollectionBuilder.DEFAULT_PQ_CLUSTERS;
 
+    /** Returns the configured PQ subspace count, or {@code null} to use the builder default. */
     public Integer getSubspaces() {
       return subspaces;
     }
 
+    /**
+     * Sets the PQ subspace count.
+     *
+     * @param subspaces subspace count, or {@code null} to use the builder default
+     */
     public void setSubspaces(Integer subspaces) {
       this.subspaces = subspaces;
     }
 
+    /** Returns the number of clusters in each PQ subspace. */
     public int getClusters() {
       return clusters;
     }
 
+    /**
+     * Sets the number of clusters in each PQ subspace.
+     *
+     * @param clusters clusters per subspace
+     */
     public void setClusters(int clusters) {
       this.clusters = clusters;
     }
@@ -271,98 +331,172 @@ public class JavaVectorsProperties {
   // Top-level getters and setters
   // =========================================================================
 
+  /**
+   * Returns the configured vector dimension, or a non-positive value when it should be inferred.
+   */
   public int getDimension() {
     return dimension;
   }
 
+  /**
+   * Sets the vector dimension.
+   *
+   * @param dimension positive dimension, or a non-positive value to infer it from Spring AI
+   */
   public void setDimension(int dimension) {
     this.dimension = dimension;
   }
 
+  /** Returns the similarity function used by the collection. */
   public SimilarityFunction getMetric() {
     return metric;
   }
 
+  /**
+   * Sets the similarity function used by the collection.
+   *
+   * @param metric similarity function
+   */
   public void setMetric(SimilarityFunction metric) {
     this.metric = metric;
   }
 
+  /** Returns the configured index backend. */
   public IndexType getIndexType() {
     return indexType;
   }
 
+  /**
+   * Sets the index backend.
+   *
+   * @param indexType index backend
+   */
   public void setIndexType(IndexType indexType) {
     this.indexType = indexType;
   }
 
+  /** Returns the configured vector quantizer. */
   public QuantizerKind getQuantizer() {
     return quantizer;
   }
 
+  /**
+   * Sets the vector quantizer.
+   *
+   * @param quantizer quantizer kind
+   */
   public void setQuantizer(QuantizerKind quantizer) {
     this.quantizer = quantizer;
   }
 
+  /** Returns the staged-document count that triggers an automatic commit. */
   public int getAutoCommitThreshold() {
     return autoCommitThreshold;
   }
 
+  /**
+   * Sets the staged-document count that triggers an automatic commit.
+   *
+   * @param autoCommitThreshold automatic commit threshold
+   */
   public void setAutoCommitThreshold(int autoCommitThreshold) {
     this.autoCommitThreshold = autoCommitThreshold;
   }
 
+  /** Returns the persistent collection path, or {@code null} for an in-memory collection. */
   public Path getStoragePath() {
     return storagePath;
   }
 
+  /**
+   * Sets the persistent collection path.
+   *
+   * @param storagePath collection path, or {@code null} for in-memory storage
+   */
   public void setStoragePath(Path storagePath) {
     this.storagePath = storagePath;
   }
 
+  /** Returns the maximum number of cached query results. */
   public int getCacheSize() {
     return cacheSize;
   }
 
+  /**
+   * Sets the maximum number of cached query results.
+   *
+   * @param cacheSize cache capacity; zero disables the cache
+   */
   public void setCacheSize(int cacheSize) {
     this.cacheSize = cacheSize;
   }
 
+  /** Returns whether the Spring AI vector store commits after every add operation. */
   public boolean isCommitAfterAdd() {
     return commitAfterAdd;
   }
 
+  /**
+   * Sets whether the Spring AI vector store commits after every add operation.
+   *
+   * @param commitAfterAdd {@code true} to make each add immediately searchable
+   */
   public void setCommitAfterAdd(boolean commitAfterAdd) {
     this.commitAfterAdd = commitAfterAdd;
   }
 
+  /** Returns the HNSW-specific properties. */
   public HnswProperties getHnsw() {
     return hnsw;
   }
 
+  /**
+   * Sets the HNSW-specific properties.
+   *
+   * @param hnsw HNSW configuration
+   */
   public void setHnsw(HnswProperties hnsw) {
     this.hnsw = hnsw;
   }
 
+  /** Returns the Vamana-specific properties. */
   public VamanaProperties getVamana() {
     return vamana;
   }
 
+  /**
+   * Sets the Vamana-specific properties.
+   *
+   * @param vamana Vamana configuration
+   */
   public void setVamana(VamanaProperties vamana) {
     this.vamana = vamana;
   }
 
+  /** Returns the IVF-specific properties. */
   public IvfProperties getIvf() {
     return ivf;
   }
 
+  /**
+   * Sets the IVF-specific properties.
+   *
+   * @param ivf IVF configuration
+   */
   public void setIvf(IvfProperties ivf) {
     this.ivf = ivf;
   }
 
+  /** Returns the PQ-specific properties. */
   public PqProperties getPq() {
     return pq;
   }
 
+  /**
+   * Sets the PQ-specific properties.
+   *
+   * @param pq PQ configuration
+   */
   public void setPq(PqProperties pq) {
     this.pq = pq;
   }
