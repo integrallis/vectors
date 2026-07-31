@@ -44,8 +44,8 @@ jobs:
           done
           echo "MFCQI_STAGE=$STAGE" >> "$GITHUB_ENV"
 
-      - name: Generate MFCQI badges (aggregate + per-module)
-        run: ./gradlew mfcqiBadge -Pmfcqi.sourceDir="$MFCQI_STAGE" --no-daemon
+      - name: Enforce MFCQI gates and generate badges (aggregate + per-module)
+        run: ./gradlew mfcqiGate mfcqiBadge -Pmfcqi.sourceDir="$MFCQI_STAGE" --no-daemon
 
       - name: Commit badge updates
         if: github.event_name == 'push'

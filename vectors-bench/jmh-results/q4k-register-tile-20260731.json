@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-31",
+  "technique": "q4_k_q8_k_four_query_register_tile",
+  "environment": {
+    "os": "Ubuntu Linux 6.8",
+    "cpu": "AMD EPYC-Milan Processor",
+    "logicalProcessors": 8,
+    "jvm": "Eclipse Temurin 25.0.3+9-LTS",
+    "vectorBits": 256,
+    "workers": 8
+  },
+  "jmh": {
+    "benchmark": "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.batched",
+    "candidateJarSha256": "019624c8f86fd217760478f591b8121bad8ca8ec11bac3542614f97bd484c2a3",
+    "rows": 1024,
+    "cols": 2048,
+    "forks": 3,
+    "warmupIterations": 3,
+    "measurementIterations": 5,
+    "unit": "ms/op",
+    "results": [
+      {
+        "batchSize": 4,
+        "baseline": {"score": 0.6566208726, "ci99_9": [0.6530602315, 0.6601815137]},
+        "candidate": {"score": 0.4875614916, "ci99_9": [0.4844367531, 0.4906862302]},
+        "improvementPercent": 25.75
+      },
+      {
+        "batchSize": 32,
+        "baseline": {"score": 5.1363045480, "ci99_9": [5.1167622505, 5.1558468455]},
+        "candidate": {"score": 3.8530789581, "ci99_9": [3.8021118341, 3.9040460820]},
+        "improvementPercent": 24.98
+      }
+    ],
+    "allocationBatch32BytesPerOperation": {
+      "baseline": 466.495,
+      "candidate": 437.585,
+      "collections": 0
+    }
+  },
+  "fullModel": {
+    "model": "MiniCPM5 1B Q4_K_M",
+    "artifactBytes": 688065920,
+    "artifactSha256": "81b64d05a23b17b34c475f42b3e72fbde62d4b92cc34541f7a8031d0752deafa",
+    "promptWords": 100,
+    "inputTokenRange": [149, 152],
+    "warmupsPerProcess": 2,
+    "trialsPerRevision": 16,
+    "baseline": {
+      "medianTtftMillis": 7958.532814,
+      "p95TtftMillis": 8080.010592,
+      "medianPrefillTokensPerSecond": 18.82807651
+    },
+    "candidate": {
+      "medianTtftMillis": 6779.9963715,
+      "p95TtftMillis": 6872.367567,
+      "medianPrefillTokensPerSecond": 22.09890218
+    },
+    "outputSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "claims": {
+      "medianTtftImprovementPercent": 14.81,
+      "p95TtftImprovementPercent": 14.95,
+      "medianPrefillImprovementPercent": 17.37,
+      "memoryCapacity": null
+    }
+  }
+}

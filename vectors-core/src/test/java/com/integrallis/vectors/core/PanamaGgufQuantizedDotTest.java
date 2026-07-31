@@ -544,6 +544,22 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void panamaProviderOwnsQ4_KFourQueryRegisterTile() {
+    assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
+        .extracting(Method::getName)
+        .contains("ggufQ4_KQ8_KFourQueryBatchedRow");
+  }
+
+  @Test
+  void q4_KFourQueryRegisterTileRequiresMeasuredX86VectorEnvelope() {
+    assertThat(PanamaVectorUtilSupport.useQ4KFourQueryTile("amd64", 256, 4)).isTrue();
+    assertThat(PanamaVectorUtilSupport.useQ4KFourQueryTile("x86_64", 512, 32)).isTrue();
+    assertThat(PanamaVectorUtilSupport.useQ4KFourQueryTile("amd64", 128, 4)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4KFourQueryTile("amd64", 256, 3)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ4KFourQueryTile("aarch64", 256, 4)).isFalse();
+  }
+
+  @Test
   void panamaProviderOwnsQ5_KQ8_KKernel() {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)

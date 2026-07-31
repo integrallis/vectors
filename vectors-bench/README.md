@@ -33,6 +33,32 @@ outputs. A direct dual-only versus dual-plus-triple Q/K/V gate produced only a 0
 three faster and three slower pairs, and 6.68 MB higher median RSS. Models therefore keeps Q8_0
 Q/K/V independent. The exact generic triple API remains available for other model-specific gates.
 
+## Q4_K four-query register tile gate
+
+The original Q4_K/Q8_K batched kernel reused a weight row across the activation batch but unpacked
+the same Q4 nibbles separately for every query. The x86 register-tiled path keeps each unpacked
+256-bit weight vector live while multiplying four Q8_K queries. Its four accumulators are explicit
+locals because a `FloatVector[]` accumulator array prevents JDK 25 C2 scalar replacement.
+
+On Temurin 25.0.3 and an idle eight-vCPU AMD EPYC-Milan host, the 1024x2048 projection gate used
+three forks, three one-second warmups, five one-second measurements, and eight persistent workers:
+
+| Batch | Established kernel | Four-query tile | Change |
+| ---: | ---: | ---: | ---: |
+| 4 | 0.657 ms/op | 0.488 ms/op | -25.7% |
+| 32 | 5.136 ms/op | 3.853 ms/op | -25.0% |
+
+The 99.9% confidence intervals do not overlap. Batch-32 allocation remained noise-equivalent at
+466 versus 438 B/op with zero collections. A counterbalanced MiniCPM5 1B Q4_K_M gate then combined
+16 trials per revision against the same 688,065,920-byte artifact and 100-word prompt. Median TTFT
+fell from 7958.5 to 6780.0 ms (-14.8%), p95 TTFT fell from 8080.0 to 6872.4 ms (-14.9%), and median
+prefill rose from 18.83 to 22.10 tok/s (+17.4%). All 32 outputs had the same SHA-256.
+
+Automatic dispatch is limited to x86 with at least 256-bit vectors and batches of four or more.
+ARM/SVE retains the established path pending platform evidence. The model-level RSS readings were
+not lifecycle-aligned and support no footprint or capacity claim. The machine-readable aggregate
+is in `jmh-results/q4k-register-tile-20260731.json`.
+
 ## Q8_0 block-major row accumulation gate
 
 The original block-major Q8_0 row kernel updated `out[batch * rows + row]` after every weight

@@ -227,7 +227,7 @@ class GgufQuantizedDotTest {
 
   @Test
   void q4_KLongOffsetBatchedMatmulMatchesTheEstablishedKernelExactly() throws IOException {
-    int batchSize = 3;
+    int batchSize = 5;
     int rows = 2;
     int cols = 512;
     int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
@@ -2100,7 +2100,7 @@ class GgufQuantizedDotTest {
 
   @Test
   void q4_KQ8_KBatchedMatmulMatchesIndependentQueriesExactly() {
-    int batchSize = 3;
+    int batchSize = 5;
     int rows = 2;
     int cols = 512;
     float[] queries = new float[batchSize * cols];
@@ -2221,7 +2221,7 @@ class GgufQuantizedDotTest {
 
   @Test
   void q4_KQ8_KDualBatchedMatmulMatchesSeparateBatchedMatmulsExactly() {
-    int batchSize = 3;
+    int batchSize = 5;
     int cols = 512;
     int firstRows = 2;
     int secondRows = 3;
@@ -2480,7 +2480,7 @@ class GgufQuantizedDotTest {
 
   @Test
   void q4_KQ4_KQ6_KQ8_KTripleBatchedMatmulMatchesSeparateBatchedMatmulsExactly() {
-    int batchSize = 3;
+    int batchSize = 5;
     int cols = 256;
     int firstRows = 2;
     int secondRows = 3;

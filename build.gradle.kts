@@ -153,8 +153,9 @@ mfcqi {
     source.set(
         layout.projectDirectory.dir(providers.gradleProperty("mfcqi.sourceDir").getOrElse("."))
     )
+    gateFile.set(layout.projectDirectory.file(".mfcqi.yaml"))
     bytecodeSecurity.set(false)
-    failOnGate.set(false)
+    failOnGate.set(true)
 }
 
 // Per-module MFCQI: every library module with production sources gets its own score + badge JSON.
@@ -162,8 +163,9 @@ configure(libraryProjects.filter { it.file("src/main/java").isDirectory }) {
     apply(plugin = "com.integrallis.mfcqi")
     configure<com.integrallis.mfcqi.gradle.MfcqiExtension> {
         source.set(layout.projectDirectory.dir("src/main/java"))
+        gateFile.set(rootProject.layout.projectDirectory.file(".mfcqi.yaml"))
         bytecodeSecurity.set(false)
-        failOnGate.set(false)
+        failOnGate.set(true)
     }
 }
 
