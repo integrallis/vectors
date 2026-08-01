@@ -419,6 +419,22 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
+  void q6_KOneQueryBlockHelperReturnsPrimitiveSum() {
+    assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
+        .filteredOn(method -> method.getName().equals("q6_KQ8_KOneQueryBlockDot"))
+        .singleElement()
+        .satisfies(method -> assertThat(method.getReturnType()).isEqualTo(int.class));
+  }
+
+  @Test
+  void q6_KTwoQueryBlockHelperPacksPrimitiveSums() {
+    assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
+        .filteredOn(method -> method.getName().equals("q6_KQ8_KTwoQueryBlockDot"))
+        .singleElement()
+        .satisfies(method -> assertThat(method.getReturnType()).isEqualTo(long.class));
+  }
+
+  @Test
   void q5_KQ8_KIntegerDotDecodesPerElementHighBits() {
     byte[] weights = new byte[64];
     byte[] q8 = new byte[32];
@@ -601,6 +617,22 @@ class PanamaGgufQuantizedDotTest {
     assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
         .extracting(Method::getName)
         .contains("ggufQ6_KQ8_KBatchedMatmul");
+  }
+
+  @Test
+  void panamaProviderOwnsQ6_KFourQueryRegisterTile() {
+    assertThat(PanamaVectorUtilSupport.class.getDeclaredMethods())
+        .extracting(Method::getName)
+        .contains("ggufQ6_KQ8_KFourQueryBatchedRow");
+  }
+
+  @Test
+  void q6_KFourQueryRegisterTileRequiresMeasuredX86VectorEnvelope() {
+    assertThat(PanamaVectorUtilSupport.useQ6KFourQueryTile("amd64", 256, 4)).isTrue();
+    assertThat(PanamaVectorUtilSupport.useQ6KFourQueryTile("x86_64", 512, 32)).isTrue();
+    assertThat(PanamaVectorUtilSupport.useQ6KFourQueryTile("amd64", 128, 4)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ6KFourQueryTile("amd64", 256, 3)).isFalse();
+    assertThat(PanamaVectorUtilSupport.useQ6KFourQueryTile("aarch64", 256, 4)).isFalse();
   }
 
   @Test

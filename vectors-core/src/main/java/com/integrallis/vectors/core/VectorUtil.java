@@ -1495,6 +1495,47 @@ public final class VectorUtil {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums,
+        GgufQ6BatchedKernel.ONE_QUERY_BLOCK);
+  }
+
+  /**
+   * Multiplies two Q4_K matrices and one Q6_K matrix by a batch of activations using an explicit
+   * Q6_K register-tile strategy.
+   */
+  public static void ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums,
+      GgufQ6BatchedKernel q6Kernel) {
+    Objects.requireNonNull(q6Kernel, "q6Kernel");
     checkGgufQuantizedBatchedArguments(
         queries,
         firstWeight,
@@ -1541,7 +1582,8 @@ public final class VectorUtil {
         cols,
         q8Quants,
         q8Scales,
-        q8Sums);
+        q8Sums,
+        q6Kernel);
   }
 
   /** Batched row-major GEMV over GGUF Q5_K rows. */
@@ -2341,6 +2383,34 @@ public final class VectorUtil {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ6_KQ8_KBatchedMatmul(
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        GgufQ6BatchedKernel.ONE_QUERY_BLOCK);
+  }
+
+  /**
+   * Multiplies one Q6_K matrix by batch-major activation vectors using {@code kernel}.
+   *
+   * <p>The kernel changes only the SIMD register-tile shape. Both strategies preserve the same
+   * output layout and arithmetic order for each query.
+   */
+  public static void ggufQ6_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufQ6BatchedKernel kernel) {
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
     }
@@ -2351,6 +2421,7 @@ public final class VectorUtil {
     Objects.requireNonNull(out, "out");
     Objects.requireNonNull(q8Quants, "q8Quants");
     Objects.requireNonNull(q8Scales, "q8Scales");
+    Objects.requireNonNull(kernel, "kernel");
     checkGgufQuantizedMatrixArguments(
         qWeight,
         rows,
@@ -2382,7 +2453,7 @@ public final class VectorUtil {
               + scaleEntries);
     }
     IMPL.ggufQ6_KQ8_KBatchedMatmul(
-        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
+        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, kernel);
   }
 
   /**

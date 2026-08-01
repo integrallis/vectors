@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-31",
+  "technique": "q6_k_q8_k_profiled_register_tiles",
+  "environment": {
+    "os": "Ubuntu Linux 6.8",
+    "cpu": "AMD EPYC-Milan Processor",
+    "logicalProcessors": 8,
+    "jvm": "Eclipse Temurin 25.0.3+9-LTS",
+    "vectorBits": 256,
+    "workers": 8
+  },
+  "control": {
+    "vectorsRevision": "73c882f3c90a83d59a3b5846948fd9a084088fa5",
+    "baselineCoreJarSha256": "d861ca0e49f1bf4b6fe135a809d1f9d71be5f65eb0c187e440d4b65b5cbca51d",
+    "baselineJmhJarSha256": "ddc28961c19b13f790472636b8176224f4cdb366f2f2837dcaa578b1680fe99f",
+    "rejectedControl": {
+      "reason": "The initial full-model baseline resolved the older Maven Central 0.1.4 artifact instead of the exact merged-main branch artifact.",
+      "retainedInClaims": false
+    }
+  },
+  "jmh": {
+    "benchmark": "com.integrallis.vectors.bench.GgufQ6KBatchedMatmulBenchmark",
+    "rows": 1024,
+    "cols": 2048,
+    "forks": 3,
+    "warmupIterations": 3,
+    "measurementIterations": 5,
+    "unit": "ms/op",
+    "finalCoreJarSha256": "f2671118ad1be7ff142eb68ea71647d95341f2c375415a6c1b1b10973947630f",
+    "finalJmhJarSha256": "6c03cd4d0ee7eb7e130bfec081f1482a9256e371d22622e2efb18290f9d75f1b",
+    "results": [
+      {
+        "batchSize": 4,
+        "baseline": {
+          "score": 0.8573125423,
+          "ci99_9": [0.8500759641, 0.8645491205]
+        },
+        "oneQueryBlock": {
+          "score": 0.4836016977,
+          "ci99_9": [0.4743511193, 0.4928522762],
+          "improvementFromBaselinePercent": 43.59
+        },
+        "twoQueryBlock": {
+          "score": 0.3266434035,
+          "ci99_9": [0.3245438733, 0.3287429337],
+          "improvementFromBaselinePercent": 61.90,
+          "improvementFromOneQueryPercent": 32.46
+        }
+      },
+      {
+        "batchSize": 32,
+        "baseline": {
+          "score": 6.7735450907,
+          "ci99_9": [6.7538168329, 6.7932733485]
+        },
+        "oneQueryBlock": {
+          "score": 3.8042380250,
+          "ci99_9": [3.7906677145, 3.8178083355],
+          "improvementFromBaselinePercent": 43.84
+        },
+        "twoQueryBlock": {
+          "score": 2.6006294899,
+          "ci99_9": [2.5889537591, 2.6123052206],
+          "improvementFromBaselinePercent": 61.61,
+          "improvementFromOneQueryPercent": 31.64
+        }
+      }
+    ],
+    "allocationBatch32BytesPerOperation": {
+      "baseline": {
+        "score": 469.3418,
+        "ci99_9": [429.3655, 509.3182]
+      },
+      "oneQueryBlock": {
+        "score": 461.2458,
+        "ci99_9": [421.4562, 501.0358]
+      },
+      "twoQueryBlock": {
+        "score": 436.9873,
+        "ci99_9": [412.3410, 461.6336]
+      },
+      "collectionsPerMode": 0,
+      "claim": null
+    }
+  },
+  "fullModel": {
+    "modelsRevision": "c0513b7b70d5865211c3d066a75e5b62df89bfe0",
+    "model": "MiniCPM5 1B Q4_K_M",
+    "artifactBytes": 688065920,
+    "artifactSha256": "81b64d05a23b17b34c475f42b3e72fbde62d4b92cc34541f7a8031d0752deafa",
+    "prompt": "models-bench/prompts/completion.txt",
+    "promptSha256": "2db2d875631cc7e3af3f6e4471ae4c9b2b7dfdb31ab561a41ef78182a31532e6",
+    "inputTokenRange": [149, 152],
+    "contextLength": 2048,
+    "maxOutputTokens": 1,
+    "warmupsPerProcess": 2,
+    "threads": 8,
+    "batchSize": 32,
+    "baselineCoreJarSha256": "d861ca0e49f1bf4b6fe135a809d1f9d71be5f65eb0c187e440d4b65b5cbca51d",
+    "oneQueryPrototypeCoreJarSha256": "211986ca8ce8c75c4834e01ea0e124b4c0122b3b093296a1801ca3737ea80a1f",
+    "twoQueryPrototypeCoreJarSha256": "ce851b73f1d5af02085722d50db9408d93732b98a87dcef7073a9069c221bfb3",
+    "counterbalancedTwoQueryGate": {
+      "processesPerRevision": 2,
+      "trialsPerRevision": 16,
+      "baseline": {
+        "meanProcessMedianTtftMillis": 6762.176816,
+        "meanProcessP95TtftMillis": 6844.847148,
+        "meanProcessMedianPrefillTokensPerSecond": 22.18104876
+      },
+      "twoQueryBlock": {
+        "meanProcessMedianTtftMillis": 5896.225335,
+        "meanProcessP95TtftMillis": 5954.213445,
+        "meanProcessMedianPrefillTokensPerSecond": 25.39481983
+      },
+      "claims": {
+        "medianTtftImprovementPercent": 12.81,
+        "p95TtftImprovementPercent": 13.01,
+        "medianPrefillImprovementPercent": 14.49
+      }
+    },
+    "fixedHeapGate": {
+      "heap": "1g",
+      "trialsPerMode": 8,
+      "baseline": {
+        "medianTtftMillis": 6761.051949,
+        "p95TtftMillis": 6857.196875,
+        "medianPrefillTokensPerSecond": 22.17922335,
+        "youngCollections": 33,
+        "youngCollectionMillis": 110.542
+      },
+      "oneQueryBlock": {
+        "medianTtftMillis": 6100.994450,
+        "p95TtftMillis": 6167.955353,
+        "medianPrefillTokensPerSecond": 24.56436133,
+        "youngCollections": 4,
+        "youngCollectionMillis": 28.584
+      },
+      "twoQueryBlock": {
+        "medianTtftMillis": 5915.352564,
+        "p95TtftMillis": 5962.565839,
+        "medianPrefillTokensPerSecond": 25.36473232,
+        "youngCollections": 19,
+        "youngCollectionMillis": 97.994
+      }
+    },
+    "outputSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "memoryCapacityClaim": null
+  },
+  "selection": {
+    "default": "ONE_QUERY_BLOCK",
+    "reason": "It retains most of the model-level gain and produced the lowest fixed-heap collection pressure on the measured Java 25 graph.",
+    "profiledAlternative": "TWO_QUERY_BLOCK",
+    "profiledAlternativeReason": "It is the highest-throughput shape and may be selected by a Models execution profile after an exact artifact and runtime gate.",
+    "automaticHardwareEnvelope": "x86 with at least 256-bit vectors and batchSize >= 4",
+    "armStatus": "Established scalar-batch path retained pending Apple Silicon or SVE evidence."
+  }
+}

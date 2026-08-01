@@ -1191,6 +1191,44 @@ public interface VectorUtilSupport {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums,
+        GgufQ6BatchedKernel.ONE_QUERY_BLOCK);
+  }
+
+  /** Grouped Q4_K/Q4_K/Q6_K batched projection with an explicit Q6_K tile strategy. */
+  default void ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums,
+      GgufQ6BatchedKernel q6Kernel) {
+    Objects.requireNonNull(q6Kernel, "q6Kernel");
     int blocks = cols / GGUF_Q4_K_BLOCK_SIZE;
     int sumsPerBatch = cols / GGUF_Q8_K_SUM_BLOCK_SIZE;
     for (int batch = 0; batch < batchSize; batch++) {
@@ -1677,6 +1715,30 @@ public interface VectorUtilSupport {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ6_KQ8_KBatchedMatmul(
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        GgufQ6BatchedKernel.ONE_QUERY_BLOCK);
+  }
+
+  /** Q6_K batched matrix multiplication using an explicit register-tile strategy. */
+  default void ggufQ6_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufQ6BatchedKernel kernel) {
+    Objects.requireNonNull(kernel, "kernel");
     int blocks = cols / GGUF_Q6_K_BLOCK_SIZE;
     for (int batch = 0; batch < batchSize; batch++) {
       GgufQuantizationSupport.quantizeQ8_K(

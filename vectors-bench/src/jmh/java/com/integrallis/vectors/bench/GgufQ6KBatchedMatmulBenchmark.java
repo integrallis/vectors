@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.bench;
 
+import com.integrallis.vectors.core.GgufQ6BatchedKernel;
 import com.integrallis.vectors.core.VectorUtil;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -102,7 +103,30 @@ public class GgufQ6KBatchedMatmulBenchmark {
   @Benchmark
   public void batched(Blackhole blackhole) {
     VectorUtil.ggufQ6_KQ8_KBatchedMatmul(
-        queries, weights, batchSize, rows, cols, batchedOut, batchedQuants, batchedScales);
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        batchedOut,
+        batchedQuants,
+        batchedScales,
+        GgufQ6BatchedKernel.ONE_QUERY_BLOCK);
+    blackhole.consume(batchedOut);
+  }
+
+  @Benchmark
+  public void batchedTwoQueryBlock(Blackhole blackhole) {
+    VectorUtil.ggufQ6_KQ8_KBatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        batchedOut,
+        batchedQuants,
+        batchedScales,
+        GgufQ6BatchedKernel.TWO_QUERY_BLOCK);
     blackhole.consume(batchedOut);
   }
 
