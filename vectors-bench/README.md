@@ -88,6 +88,34 @@ Automatic dispatch has the same x86, 256-bit, and batch-four envelope as Q4_K. P
 between runs and was not lifecycle-aligned, so it supports no memory-capacity claim. The
 machine-readable aggregate is in `jmh-results/q5k-register-tile-20260731.json`.
 
+## Q6_K profiled register-tile gate
+
+Q6_K reconstructs signed six-bit weights from separate low- and high-bit planes. The retained x86
+kernel processes four queries per row and exposes two register shapes. `ONE_QUERY_BLOCK` limits
+live vector state and is the API default. `TWO_QUERY_BLOCK` reuses each reconstructed weight vector
+across two queries and is available for a model execution plan that has passed a full-graph gate.
+Neither shape stores Vector API accumulators in an array.
+
+On the controlled eight-vCPU AMD EPYC-Milan host with Temurin 25.0.3, the exact merged-main
+baseline and final policy artifact produced:
+
+| Batch | Established | One-query block | Two-query block |
+| ---: | ---: | ---: | ---: |
+| 4 | 0.857 ms/op | 0.484 ms/op (-43.6%) | 0.327 ms/op (-61.9%) |
+| 32 | 6.774 ms/op | 3.804 ms/op (-43.8%) | 2.601 ms/op (-61.6%) |
+
+All 99.9% baseline/candidate confidence intervals are disjoint. At batch 32, JMH measured 469,
+461, and 437 B/op respectively, with overlapping intervals and zero collections. A fixed-heap
+MiniCPM5 1B gate exposed a whole-graph tradeoff that the hot microbenchmark did not: one-query
+blocks reduced p95 TTFT by 10.1% with four young collections, while two-query blocks reduced it by
+13.0% with 19 young collections; the baseline collected 33 times. All generated outputs were
+bit-identical.
+
+The first baseline attempt accidentally resolved an older Maven Central artifact and is excluded.
+The retained baseline is the SHA-pinned merged-main JAR. Automatic tiling is restricted to x86,
+at least 256-bit vectors, and batches of four or more; ARM/SVE retains the established path until
+measured. The complete evidence is in `jmh-results/q6k-register-tile-20260731.json`.
+
 ## Q8_0 block-major row accumulation gate
 
 The original block-major Q8_0 row kernel updated `out[batch * rows + row]` after every weight

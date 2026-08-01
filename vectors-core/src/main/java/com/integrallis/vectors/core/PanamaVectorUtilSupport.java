@@ -69,6 +69,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       useQ4KFourQueryTile(System.getProperty("os.arch", ""), VECTOR_BITSIZE, 4);
   private static final boolean Q5_K_FOUR_QUERY_TILE_SUPPORTED =
       useQ5KFourQueryTile(System.getProperty("os.arch", ""), VECTOR_BITSIZE, 4);
+  private static final boolean Q6_K_FOUR_QUERY_TILE_SUPPORTED =
+      useQ6KFourQueryTile(System.getProperty("os.arch", ""), VECTOR_BITSIZE, 4);
   private static final VectorShuffle<Short> SWAP_ADJACENT_SHORTS =
       VectorShuffle.fromValues(
           ShortVector.SPECIES_256, 1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14);
@@ -147,6 +149,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   static boolean useQ5KFourQueryTile(String arch, int vectorBits, int batchSize) {
+    return useKQuantFourQueryTile(arch, vectorBits, batchSize);
+  }
+
+  static boolean useQ6KFourQueryTile(String arch, int vectorBits, int batchSize) {
     return useKQuantFourQueryTile(arch, vectorBits, batchSize);
   }
 
@@ -2293,6 +2299,44 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums,
+        GgufQ6BatchedKernel.ONE_QUERY_BLOCK);
+  }
+
+  @Override
+  public void ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums,
+      GgufQ6BatchedKernel q6Kernel) {
+    Objects.requireNonNull(q6Kernel, "q6Kernel");
     if (batchSize == 1) {
       ggufQ4_KQ4_KQ6_KQ8_KTripleMatVecDot(
           queries,
@@ -2327,7 +2371,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           cols,
           q8Quants,
           q8Scales,
-          q8Sums);
+          q8Sums,
+          q6Kernel);
       return;
     }
 
@@ -2393,7 +2438,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                 blocks,
                 thirdOut,
                 q8Quants,
-                q8Scales);
+                q8Scales,
+                q6Kernel);
           }
         });
   }
@@ -2731,9 +2777,31 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int blocks,
       float[] out,
       byte[] q8Quants,
-      float[] q8Scales) {
-    for (int batch = 0; batch < batchSize; batch++) {
+      float[] q8Scales,
+      GgufQ6BatchedKernel kernel) {
+    int scalarBatchStart = 0;
+    if (Q6_K_FOUR_QUERY_TILE_SUPPORTED) {
+      for (; scalarBatchStart + 4 <= batchSize; scalarBatchStart += 4) {
+        ggufQ6_KQ8_KFourQueryBatchedRow(
+            qWeight,
+            rowOffset,
+            scalarBatchStart,
+            rows,
+            row,
+            cols,
+            blocks,
+            out,
+            q8Quants,
+            q8Scales,
+            kernel);
+      }
+    }
+
+    for (int batch = scalarBatchStart; batch < batchSize; batch++) {
       out[batch * rows + row] = 0.0f;
+    }
+    if (scalarBatchStart == batchSize) {
+      return;
     }
 
     for (int block = 0; block < blocks; block++) {
@@ -2748,7 +2816,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
       int blockActivationOffset = block * GGUF_Q6_K_BLOCK_SIZE;
 
-      for (int batch = 0; batch < batchSize; batch++) {
+      for (int batch = scalarBatchStart; batch < batchSize; batch++) {
         int quantBatchOffset = batch * cols;
         int scaleBatchOffset = batch * blocks;
         int blockSum = 0;
@@ -2784,6 +2852,391 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         out[outputOffset] = MathUtil.fma(d, blockSum, out[outputOffset]);
       }
     }
+  }
+
+  /** Multiplies one Q6_K row by four Q8_K queries while sharing block metadata and scale loads. */
+  private static void ggufQ6_KQ8_KFourQueryBatchedRow(
+      MemorySegment qWeight,
+      long rowOffset,
+      int firstBatch,
+      int rows,
+      int row,
+      int cols,
+      int blocks,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufQ6BatchedKernel kernel) {
+    if (kernel == GgufQ6BatchedKernel.TWO_QUERY_BLOCK) {
+      ggufQ6_KQ8_KFourQueryTwoQueryBlockRow(
+          qWeight, rowOffset, firstBatch, rows, row, cols, blocks, out, q8Quants, q8Scales);
+      return;
+    }
+    ggufQ6_KQ8_KFourQueryOneQueryBlockRow(
+        qWeight, rowOffset, firstBatch, rows, row, cols, blocks, out, q8Quants, q8Scales);
+  }
+
+  private static void ggufQ6_KQ8_KFourQueryOneQueryBlockRow(
+      MemorySegment qWeight,
+      long rowOffset,
+      int firstBatch,
+      int rows,
+      int row,
+      int cols,
+      int blocks,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    int quantOffset0 = firstBatch * cols;
+    int quantOffset1 = quantOffset0 + cols;
+    int quantOffset2 = quantOffset1 + cols;
+    int quantOffset3 = quantOffset2 + cols;
+    int scaleOffset0 = firstBatch * blocks;
+    int scaleOffset1 = scaleOffset0 + blocks;
+    int scaleOffset2 = scaleOffset1 + blocks;
+    int scaleOffset3 = scaleOffset2 + blocks;
+    float sum0 = 0.0f;
+    float sum1 = 0.0f;
+    float sum2 = 0.0f;
+    float sum3 = 0.0f;
+
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+      float weightScale =
+          Float.float16ToFloat(
+              qWeight.get(
+                  GGUF_LE_SHORT,
+                  blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES));
+      int blockActivationOffset = block * GGUF_Q6_K_BLOCK_SIZE;
+      int blockSum0 =
+          q6_KQ8_KOneQueryBlockDot(
+              qWeight, blockOffset, q8Quants, quantOffset0 + blockActivationOffset);
+      int blockSum1 =
+          q6_KQ8_KOneQueryBlockDot(
+              qWeight, blockOffset, q8Quants, quantOffset1 + blockActivationOffset);
+      int blockSum2 =
+          q6_KQ8_KOneQueryBlockDot(
+              qWeight, blockOffset, q8Quants, quantOffset2 + blockActivationOffset);
+      int blockSum3 =
+          q6_KQ8_KOneQueryBlockDot(
+              qWeight, blockOffset, q8Quants, quantOffset3 + blockActivationOffset);
+
+      sum0 = MathUtil.fma(weightScale * q8Scales[scaleOffset0 + block], blockSum0, sum0);
+      sum1 = MathUtil.fma(weightScale * q8Scales[scaleOffset1 + block], blockSum1, sum1);
+      sum2 = MathUtil.fma(weightScale * q8Scales[scaleOffset2 + block], blockSum2, sum2);
+      sum3 = MathUtil.fma(weightScale * q8Scales[scaleOffset3 + block], blockSum3, sum3);
+    }
+
+    out[firstBatch * rows + row] = sum0;
+    out[(firstBatch + 1) * rows + row] = sum1;
+    out[(firstBatch + 2) * rows + row] = sum2;
+    out[(firstBatch + 3) * rows + row] = sum3;
+  }
+
+  private static void ggufQ6_KQ8_KFourQueryTwoQueryBlockRow(
+      MemorySegment qWeight,
+      long rowOffset,
+      int firstBatch,
+      int rows,
+      int row,
+      int cols,
+      int blocks,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales) {
+    int quantOffset0 = firstBatch * cols;
+    int quantOffset1 = quantOffset0 + cols;
+    int quantOffset2 = quantOffset1 + cols;
+    int quantOffset3 = quantOffset2 + cols;
+    int scaleOffset0 = firstBatch * blocks;
+    int scaleOffset1 = scaleOffset0 + blocks;
+    int scaleOffset2 = scaleOffset1 + blocks;
+    int scaleOffset3 = scaleOffset2 + blocks;
+    float sum0 = 0.0f;
+    float sum1 = 0.0f;
+    float sum2 = 0.0f;
+    float sum3 = 0.0f;
+
+    for (int block = 0; block < blocks; block++) {
+      long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
+      float weightScale =
+          Float.float16ToFloat(
+              qWeight.get(
+                  GGUF_LE_SHORT,
+                  blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES));
+      int blockActivationOffset = block * GGUF_Q6_K_BLOCK_SIZE;
+      long blockSums01 =
+          q6_KQ8_KTwoQueryBlockDot(
+              qWeight,
+              blockOffset,
+              q8Quants,
+              quantOffset0 + blockActivationOffset,
+              quantOffset1 + blockActivationOffset);
+      long blockSums23 =
+          q6_KQ8_KTwoQueryBlockDot(
+              qWeight,
+              blockOffset,
+              q8Quants,
+              quantOffset2 + blockActivationOffset,
+              quantOffset3 + blockActivationOffset);
+      int blockSum0 = (int) (blockSums01 >> Integer.SIZE);
+      int blockSum1 = (int) blockSums01;
+      int blockSum2 = (int) (blockSums23 >> Integer.SIZE);
+      int blockSum3 = (int) blockSums23;
+
+      sum0 = MathUtil.fma(weightScale * q8Scales[scaleOffset0 + block], blockSum0, sum0);
+      sum1 = MathUtil.fma(weightScale * q8Scales[scaleOffset1 + block], blockSum1, sum1);
+      sum2 = MathUtil.fma(weightScale * q8Scales[scaleOffset2 + block], blockSum2, sum2);
+      sum3 = MathUtil.fma(weightScale * q8Scales[scaleOffset3 + block], blockSum3, sum3);
+    }
+
+    out[firstBatch * rows + row] = sum0;
+    out[(firstBatch + 1) * rows + row] = sum1;
+    out[(firstBatch + 2) * rows + row] = sum2;
+    out[(firstBatch + 3) * rows + row] = sum3;
+  }
+
+  private static int q6_KQ8_KOneQueryBlockDot(
+      MemorySegment qWeight, long blockOffset, byte[] q8Quants, int quantOffset) {
+    long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+    long scalesOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+    IntVector accumulator = IntVector.zero(IntVector.SPECIES_256);
+
+    for (int superBlock = 0; superBlock < 2; superBlock++) {
+      long qlBase = blockOffset + (long) superBlock * 64;
+      long qhBase = qhOffset + (long) superBlock * 32;
+      long scaleBase = scalesOffset + (long) superBlock * 8;
+      int activationBase = superBlock * 128;
+
+      for (int chunk = 0; chunk < 32; chunk += 16) {
+        int scaleIndex = chunk / 16;
+        int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
+        int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
+        int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
+        int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
+        int activationOffset = activationBase + chunk;
+
+        for (int index = 0; index < 16; index += 8) {
+          ByteVector ql1 =
+              ByteVector.fromMemorySegment(
+                  ByteVector.SPECIES_64, qWeight, qlBase + chunk + index, ByteOrder.LITTLE_ENDIAN);
+          ByteVector ql2 =
+              ByteVector.fromMemorySegment(
+                  ByteVector.SPECIES_64,
+                  qWeight,
+                  qlBase + 32L + chunk + index,
+                  ByteOrder.LITTLE_ENDIAN);
+          ByteVector qh =
+              ByteVector.fromMemorySegment(
+                  ByteVector.SPECIES_64, qWeight, qhBase + chunk + index, ByteOrder.LITTLE_ENDIAN);
+          IntVector weights =
+              ((IntVector)
+                      ql1.and((byte) 0x0F)
+                          .add(qh.and((byte) 0x03).lanewise(VectorOperators.LSHL, 4))
+                          .sub((byte) 32)
+                          .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                  .mul(s1);
+          IntVector quants =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64, q8Quants, quantOffset + activationOffset + index)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          accumulator = accumulator.add(weights.mul(quants));
+
+          weights =
+              ((IntVector)
+                      ql2.and((byte) 0x0F)
+                          .add(qh.and((byte) 0x0C).lanewise(VectorOperators.LSHL, 2))
+                          .sub((byte) 32)
+                          .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                  .mul(s2);
+          quants =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64,
+                          q8Quants,
+                          quantOffset + activationOffset + index + 32)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          accumulator = accumulator.add(weights.mul(quants));
+
+          weights =
+              ((IntVector)
+                      ql1.lanewise(VectorOperators.LSHR, 4)
+                          .and((byte) 0x0F)
+                          .add(qh.and((byte) 0x30))
+                          .sub((byte) 32)
+                          .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                  .mul(s3);
+          quants =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64,
+                          q8Quants,
+                          quantOffset + activationOffset + index + 64)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          accumulator = accumulator.add(weights.mul(quants));
+
+          weights =
+              ((IntVector)
+                      ql2.lanewise(VectorOperators.LSHR, 4)
+                          .and((byte) 0x0F)
+                          .add(qh.and((byte) 0xC0).lanewise(VectorOperators.LSHR, 2))
+                          .sub((byte) 32)
+                          .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                  .mul(s4);
+          quants =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64,
+                          q8Quants,
+                          quantOffset + activationOffset + index + 96)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          accumulator = accumulator.add(weights.mul(quants));
+        }
+      }
+    }
+
+    return accumulator.reduceLanes(VectorOperators.ADD);
+  }
+
+  private static long q6_KQ8_KTwoQueryBlockDot(
+      MemorySegment qWeight,
+      long blockOffset,
+      byte[] q8Quants,
+      int quantOffset0,
+      int quantOffset1) {
+    long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
+    long scalesOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
+    IntVector accumulator0 = IntVector.zero(IntVector.SPECIES_256);
+    IntVector accumulator1 = IntVector.zero(IntVector.SPECIES_256);
+
+    for (int superBlock = 0; superBlock < 2; superBlock++) {
+      long qlBase = blockOffset + (long) superBlock * 64;
+      long qhBase = qhOffset + (long) superBlock * 32;
+      long scaleBase = scalesOffset + (long) superBlock * 8;
+      int activationBase = superBlock * 128;
+
+      for (int chunk = 0; chunk < 32; chunk += 16) {
+        int scaleIndex = chunk / 16;
+        int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
+        int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
+        int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
+        int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
+        int activationOffset = activationBase + chunk;
+
+        for (int index = 0; index < 16; index += 8) {
+          ByteVector ql1 =
+              ByteVector.fromMemorySegment(
+                  ByteVector.SPECIES_64, qWeight, qlBase + chunk + index, ByteOrder.LITTLE_ENDIAN);
+          ByteVector ql2 =
+              ByteVector.fromMemorySegment(
+                  ByteVector.SPECIES_64,
+                  qWeight,
+                  qlBase + 32L + chunk + index,
+                  ByteOrder.LITTLE_ENDIAN);
+          ByteVector qh =
+              ByteVector.fromMemorySegment(
+                  ByteVector.SPECIES_64, qWeight, qhBase + chunk + index, ByteOrder.LITTLE_ENDIAN);
+          IntVector weights =
+              ((IntVector)
+                      ql1.and((byte) 0x0F)
+                          .add(qh.and((byte) 0x03).lanewise(VectorOperators.LSHL, 4))
+                          .sub((byte) 32)
+                          .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                  .mul(s1);
+          IntVector quants0 =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64, q8Quants, quantOffset0 + activationOffset + index)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          IntVector quants1 =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64, q8Quants, quantOffset1 + activationOffset + index)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          accumulator0 = accumulator0.add(weights.mul(quants0));
+          accumulator1 = accumulator1.add(weights.mul(quants1));
+
+          weights =
+              ((IntVector)
+                      ql2.and((byte) 0x0F)
+                          .add(qh.and((byte) 0x0C).lanewise(VectorOperators.LSHL, 2))
+                          .sub((byte) 32)
+                          .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                  .mul(s2);
+          quants0 =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64,
+                          q8Quants,
+                          quantOffset0 + activationOffset + index + 32)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          quants1 =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64,
+                          q8Quants,
+                          quantOffset1 + activationOffset + index + 32)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          accumulator0 = accumulator0.add(weights.mul(quants0));
+          accumulator1 = accumulator1.add(weights.mul(quants1));
+
+          weights =
+              ((IntVector)
+                      ql1.lanewise(VectorOperators.LSHR, 4)
+                          .and((byte) 0x0F)
+                          .add(qh.and((byte) 0x30))
+                          .sub((byte) 32)
+                          .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                  .mul(s3);
+          quants0 =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64,
+                          q8Quants,
+                          quantOffset0 + activationOffset + index + 64)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          quants1 =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64,
+                          q8Quants,
+                          quantOffset1 + activationOffset + index + 64)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          accumulator0 = accumulator0.add(weights.mul(quants0));
+          accumulator1 = accumulator1.add(weights.mul(quants1));
+
+          weights =
+              ((IntVector)
+                      ql2.lanewise(VectorOperators.LSHR, 4)
+                          .and((byte) 0x0F)
+                          .add(qh.and((byte) 0xC0).lanewise(VectorOperators.LSHR, 2))
+                          .sub((byte) 32)
+                          .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                  .mul(s4);
+          quants0 =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64,
+                          q8Quants,
+                          quantOffset0 + activationOffset + index + 96)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          quants1 =
+              (IntVector)
+                  ByteVector.fromArray(
+                          ByteVector.SPECIES_64,
+                          q8Quants,
+                          quantOffset1 + activationOffset + index + 96)
+                      .convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0);
+          accumulator0 = accumulator0.add(weights.mul(quants0));
+          accumulator1 = accumulator1.add(weights.mul(quants1));
+        }
+      }
+    }
+
+    int sum0 = accumulator0.reduceLanes(VectorOperators.ADD);
+    int sum1 = accumulator1.reduceLanes(VectorOperators.ADD);
+    return ((long) sum0 << Integer.SIZE) | (sum1 & 0xFFFF_FFFFL);
   }
 
   static int q4_KQ8_KIntegerDot(
@@ -3950,13 +4403,38 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ6_KQ8_KBatchedMatmul(
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        GgufQ6BatchedKernel.ONE_QUERY_BLOCK);
+  }
+
+  /** SIMD Q6_K by a batch of Q8_K activations with an explicit register-tile strategy. */
+  @Override
+  public void ggufQ6_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufQ6BatchedKernel kernel) {
+    Objects.requireNonNull(kernel, "kernel");
     if (batchSize == 1) {
       ggufQ6_KQ8_KMatVecDot(queries, qWeight, rows, cols, out, q8Quants, q8Scales);
       return;
     }
     if (VECTOR_BITSIZE < 256) {
       VectorUtilSupport.super.ggufQ6_KQ8_KBatchedMatmul(
-          queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
+          queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, kernel);
       return;
     }
 
@@ -3971,61 +4449,19 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         qWeight,
         rows,
         cols,
-        row -> {
-          for (int batch = 0; batch < batchSize; batch++) {
-            out[batch * rows + row] = 0.0f;
-          }
-
-          long rowOffset = row * rowBytes;
-          for (int block = 0; block < blocks; block++) {
-            long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
-            float weightScale =
-                Float.float16ToFloat(
-                    qWeight.get(
-                        GGUF_LE_SHORT,
-                        blockOffset + GGUF_Q6_K_QL_BYTES + GGUF_Q6_K_QH_BYTES + GGUF_Q6_K_SCALES));
-            long qlOffset = blockOffset;
-            long qhOffset = blockOffset + GGUF_Q6_K_QL_BYTES;
-            long scaleOffset = qhOffset + GGUF_Q6_K_QH_BYTES;
-            int blockActivationOffset = block * GGUF_Q6_K_BLOCK_SIZE;
-
-            for (int batch = 0; batch < batchSize; batch++) {
-              int quantBatchOffset = batch * cols;
-              int scaleBatchOffset = batch * blocks;
-              int blockSum = 0;
-
-              for (int superBlock = 0; superBlock < 2; superBlock++) {
-                long qlBase = qlOffset + (long) superBlock * 64;
-                long qhBase = qhOffset + (long) superBlock * 32;
-                long scaleBase = scaleOffset + (long) superBlock * 8;
-                int quantBase = quantBatchOffset + blockActivationOffset + superBlock * 128;
-                for (int chunk = 0; chunk < 32; chunk += 16) {
-                  int scaleIndex = chunk / 16;
-                  int s1 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex);
-                  int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
-                  int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
-                  int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
-                  blockSum +=
-                      q6_KQ8_KIntegerDot(
-                          qWeight,
-                          qlBase + chunk,
-                          qlBase + 32L + chunk,
-                          qhBase + chunk,
-                          q8Quants,
-                          quantBase + chunk,
-                          s1,
-                          s2,
-                          s3,
-                          s4);
-                }
-              }
-
-              int outputOffset = batch * rows + row;
-              float d = weightScale * q8Scales[scaleBatchOffset + block];
-              out[outputOffset] = MathUtil.fma(d, blockSum, out[outputOffset]);
-            }
-          }
-        });
+        row ->
+            ggufQ6_KQ8_KBatchedRowDot(
+                qWeight,
+                row * rowBytes,
+                batchSize,
+                rows,
+                row,
+                cols,
+                blocks,
+                out,
+                q8Quants,
+                q8Scales,
+                kernel));
   }
 
   static int q6_KQ8_KIntegerDot(
