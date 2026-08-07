@@ -4,6 +4,74 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-07
+
+### Added
+
+- **`vectors-router`** — semantic routing. Classifies a query into named routes by
+  embedding similarity: each route carries reference phrases, and a query takes the
+  route of its nearest reference when that reference is within the route's distance
+  threshold. References are L2-normalized once at construction so routing is a dot
+  product per candidate.
+
+- **`vectors-cache-semantic-spring-ai`** and **`vectors-cache-semantic-langchain4j`** —
+  chat-model decorators that answer from a *semantically* similar earlier prompt.
+  The existing `vectors-cache-spring-ai` / `vectors-cache-langchain4j` decorators key
+  on an exact request string, so "how do I reset my password" and "I forgot my
+  password" are separate entries; these embed the request and serve a hit when an
+  earlier one is within the cache's threshold. Responses carrying tool calls are
+  returned but never stored, since replaying one would skip the tool.
+
+- **Entry attributes and `CacheFilter` on `SemanticCache`.** Similarity alone cannot
+  decide that a cached answer may be served: a completion generated at temperature
+  0.9, for another tenant, or by another model can be an excellent semantic match and
+  still be the wrong thing to return. Entries now carry attributes describing the
+  conditions they were produced under, and `lookup(float[], CacheFilter)` scopes a
+  search to the conditions the caller accepts.
+
+  Filtering runs inside the search rather than over the nearest result. The nearest
+  entry overall is frequently not the nearest *usable* one — a verbatim repeat of the
+  prompt at the wrong temperature sits closer than a paraphrase at the right one — so
+  testing a top-1 result after the fact reports a miss where a usable entry exists.
+
+- `SemanticCache.lookupTopK(float[], int)` exposing the same ranking directly.
+
+- `SemanticCache.supportsAttributes()` reporting whether an implementation stores
+  attributes. An implementation that does not rejects a non-empty attribute map from
+  `put` rather than dropping it, because a filtered lookup over entries with missing
+  attributes serves exactly the answers the filter was added to prevent. The framework
+  decorators require attribute support and check it at construction.
+
+### Fixed
+
+- **A Spring AI chat prompt carrying options never hit the semantic cache.** The
+  decorator derived its options signature from `ChatOptions.toString()`, and
+  `DefaultChatOptions` inherits the identity `toString()`, so two separately built but
+  identical option sets produced different signatures and every such request missed.
+  The signature is now built from the option values.
+
+### Changed
+
+- `SemanticCache.Hit` and `SemanticCache.Entry` gained an `attributes` component.
+  Both keep their previous constructors, which default to no attributes.
+
+## [0.1.5] - 2026-07-31
+
+### Added
+
+- MFCQI quality watermarks enforced in CI.
+
+### Changed
+
+- **Register-tiled prefill kernels for Q4_K, Q5_K and Q6_K.** Prefill now tiles across
+  four queries at a time, reusing each dequantized weight block across the tile instead
+  of re-reading it per query.
+- Simplified MMR candidate selection in `vectors-hybrid`.
+
+### Fixed
+
+- Spring AI 1.0 embedding options are accepted again.
+
 ## [0.1.4] - 2026-07-29
 
 ### Fixed
