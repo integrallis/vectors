@@ -50,6 +50,8 @@ include("vectors-server-client")
 include("vectors-cache")
 include("vectors-cache-jcache")
 include("vectors-cache-semantic-db")
+include("vectors-cache-semantic-langchain4j")
+include("vectors-cache-semantic-spring-ai")
 include("vectors-cache-spring-ai")
 include("vectors-cache-langchain4j")
 

@@ -206,8 +206,10 @@ Published to Maven Central (Apache-2.0):
   `vectors-hybrid`
 - Frameworks: `vectors-spring-ai`, `vectors-langchain4j`, `vectors-spring-boot-starter`
 - Semantic routing: `vectors-router`
-- Caching: `vectors-cache`, `vectors-cache-jcache`, `vectors-cache-langchain4j`,
-  `vectors-cache-semantic-db`, `vectors-cache-spring-ai`
+- Exact-key caching: `vectors-cache`, `vectors-cache-jcache`, `vectors-cache-langchain4j`,
+  `vectors-cache-spring-ai`
+- Semantic caching: `vectors-cache-semantic-db`, `vectors-cache-semantic-langchain4j`,
+  `vectors-cache-semantic-spring-ai`
 - VCR testing: `vectors-vcr-core`, `vectors-vcr-semantic-db`,
   `vectors-vcr-serde-avaje`, `vectors-vcr-serde-jackson`,
   `vectors-vcr-junit5`, `vectors-vcr-testng`, `vectors-vcr-spring-ai`,
