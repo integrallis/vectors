@@ -157,5 +157,4 @@ public class SemanticCachingChatModel implements ChatModel {
     }
     return text.toString();
   }
-
 }

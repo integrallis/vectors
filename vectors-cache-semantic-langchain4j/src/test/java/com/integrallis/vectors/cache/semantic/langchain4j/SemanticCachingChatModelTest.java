@@ -15,6 +15,9 @@
  */
 package com.integrallis.vectors.cache.semantic.langchain4j;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.integrallis.vectors.cache.CacheStats;
 import com.integrallis.vectors.cache.SemanticCache;
 import com.integrallis.vectors.cache.langchain4j.CachingChatModel;
@@ -36,8 +39,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SemanticCachingChatModelTest {
 
@@ -70,7 +71,8 @@ class SemanticCachingChatModelTest {
     }
 
     @Override
-    public void put(String key, float[] embedding, String value, Map<String, String> entryAttributes) {
+    public void put(
+        String key, float[] embedding, String value, Map<String, String> entryAttributes) {
       embeddings.put(key, embedding.clone());
       values.put(key, value);
       attributes.put(key, Map.copyOf(entryAttributes));
@@ -202,10 +204,7 @@ class SemanticCachingChatModelTest {
   }
 
   private static ChatRequest at(String text, double temperature) {
-    return ChatRequest.builder()
-        .messages(UserMessage.from(text))
-        .temperature(temperature)
-        .build();
+    return ChatRequest.builder().messages(UserMessage.from(text)).temperature(temperature).build();
   }
 
   // "reset my password" embeds to {password, reset} and "I forgot my password" to {password},

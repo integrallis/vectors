@@ -150,8 +150,8 @@ public class SemanticCachingChatModel implements ChatModel {
    *
    * <p>Built from the option values rather than {@code toString()}. {@code DefaultChatOptions}
    * inherits the identity {@code toString()}, so two separately built but identical option sets
-   * would otherwise produce different signatures and no request carrying options would ever hit
-   * the cache.
+   * would otherwise produce different signatures and no request carrying options would ever hit the
+   * cache.
    *
    * <p>Override to include provider-specific options a subclass knows about; the base signature
    * covers only the portable {@link ChatOptions} properties.

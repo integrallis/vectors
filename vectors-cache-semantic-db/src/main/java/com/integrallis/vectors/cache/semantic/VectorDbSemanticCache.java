@@ -139,7 +139,8 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
     md.put(PAYLOAD_FIELD, new MetadataValue.Str(codec.encode(value)));
     entry
         .attributes()
-        .forEach((name, attribute) -> md.put(ATTRIBUTE_PREFIX + name, new MetadataValue.Str(attribute)));
+        .forEach(
+            (name, attribute) -> md.put(ATTRIBUTE_PREFIX + name, new MetadataValue.Str(attribute)));
     return new Document(key, embedding, null, md);
   }
 

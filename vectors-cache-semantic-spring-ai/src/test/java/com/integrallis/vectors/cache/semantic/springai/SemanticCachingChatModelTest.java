@@ -15,6 +15,9 @@
  */
 package com.integrallis.vectors.cache.semantic.springai;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.integrallis.vectors.cache.CacheStats;
 import com.integrallis.vectors.cache.SemanticCache;
 import com.integrallis.vectors.cache.springai.CachingChatModel;
@@ -29,8 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SemanticCachingChatModelTest {
 
@@ -63,7 +64,8 @@ class SemanticCachingChatModelTest {
     }
 
     @Override
-    public void put(String key, float[] embedding, String value, Map<String, String> entryAttributes) {
+    public void put(
+        String key, float[] embedding, String value, Map<String, String> entryAttributes) {
       embeddings.put(key, embedding.clone());
       values.put(key, value);
       attributes.put(key, Map.copyOf(entryAttributes));
@@ -259,8 +261,7 @@ class SemanticCachingChatModelTest {
     // {password, reset}, cosine 1.0 against the query, but temperature 0.9.
     model.call(new Prompt("reset password", ChatOptions.builder().temperature(0.9).build()));
     // {password, reset, login}, cosine 0.816 against the query, at the temperature we want.
-    model.call(
-        new Prompt("reset password login", ChatOptions.builder().temperature(0.0).build()));
+    model.call(new Prompt("reset password login", ChatOptions.builder().temperature(0.0).build()));
     int afterWarmup = fake.calls.get();
 
     ChatResponse response =
