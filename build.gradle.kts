@@ -66,6 +66,7 @@ val publishedModuleNames = setOf(
     "vectors-cache-langchain4j",
     "vectors-cache-semantic-db",
     "vectors-cache-spring-ai",
+    "vectors-router",
     "vectors-vcr-core",
     "vectors-vcr-semantic-db",
     "vectors-vcr-serde-avaje",
