@@ -22,6 +22,23 @@
   under one comment to keep the file scannable.
 -->
 <FindBugsFilter>
+    <!-- SemanticCachingChatModel rejects a cache that cannot store entry attributes from its -->
+    <!-- constructor. Without attributes the decorator cannot tell which request options produced -->
+    <!-- an entry and would serve completions across temperatures, so failing at wiring time is -->
+    <!-- the point; deferring the check to the first call would hide it until production traffic. -->
+    <!-- The classes are extensible on purpose (subclasses override the options signature), so -->
+    <!-- they cannot be made final, and they hold no native resources or security state that a -->
+    <!-- finalizer attack on a partially constructed instance could reach. -->
+    <!-- Pattern: CT_CONSTRUCTOR_THROW. -->
+    <Match>
+        <Class name="com.integrallis.vectors.cache.semantic.springai.SemanticCachingChatModel"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+    <Match>
+        <Class name="com.integrallis.vectors.cache.semantic.langchain4j.SemanticCachingChatModel"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+
     <!-- SemanticCachingChatModel.cache() returns the SemanticCache the caller itself passed to -->
     <!-- the constructor, so the reference is already theirs; the accessor exists so they can read -->
     <!-- stats() and call invalidateAll() on the decorator they installed. Copying is not possible -->
