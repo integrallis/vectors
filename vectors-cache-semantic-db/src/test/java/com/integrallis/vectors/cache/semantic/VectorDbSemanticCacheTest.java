@@ -18,6 +18,7 @@ package com.integrallis.vectors.cache.semantic;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.integrallis.vectors.cache.CacheAdmissionPolicy;
+import com.integrallis.vectors.cache.CacheFilter;
 import com.integrallis.vectors.cache.LLMResponseFilters;
 import com.integrallis.vectors.cache.SemanticCache;
 import com.integrallis.vectors.core.SimilarityFunction;
@@ -26,6 +27,7 @@ import com.integrallis.vectors.db.VectorCollection;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
@@ -221,5 +223,60 @@ class VectorDbSemanticCacheTest {
                 throw e.getCause();
               }
             });
+  }
+
+  @Test
+  void storesAndReturnsEntryAttributes() {
+    cache.put("a", unit(1, 0), "answer", Map.of("model", "gpt-5", "temperature", "0.0"));
+
+    SemanticCache.Hit<String> hit = cache.lookup(unit(1, 0)).orElseThrow();
+
+    assertThat(hit.attributes())
+        .containsEntry("model", "gpt-5")
+        .containsEntry("temperature", "0.0");
+  }
+
+  @Test
+  void filtersInsideTheSearchRatherThanAfterIt() {
+    // The nearest entry overall is the one the filter rejects. Post-filtering a top-1 result
+    // would report a miss even though a usable entry sits just behind it.
+    cache.put("near-wrong", unit(1.0f, 0.0f), "hot", Map.of("temperature", "0.9"));
+    cache.put("far-right", unit(0.97f, 0.24f), "cold", Map.of("temperature", "0.0"));
+
+    assertThat(cache.lookup(unit(1.0f, 0.0f)).orElseThrow().value()).isEqualTo("hot");
+
+    SemanticCache.Hit<String> hit =
+        cache.lookup(unit(1.0f, 0.0f), CacheFilter.matching("temperature", "0.0")).orElseThrow();
+
+    assertThat(hit.value()).isEqualTo("cold");
+    assertThat(hit.key()).isEqualTo("far-right");
+  }
+
+  @Test
+  void reportsAMissWhenNoNeighbourSatisfiesTheFilter() {
+    cache.put("a", unit(1, 0), "hot", Map.of("temperature", "0.9"));
+
+    assertThat(cache.lookup(unit(1, 0), CacheFilter.matching("temperature", "0.0"))).isEmpty();
+  }
+
+  @Test
+  void returnsSeveralNeighboursForTopK() {
+    cache.put("a", unit(1.0f, 0.0f), "one", Map.of());
+    cache.put("b", unit(0.99f, 0.14f), "two", Map.of());
+
+    assertThat(cache.lookupTopK(unit(1.0f, 0.0f), 2)).hasSize(2);
+  }
+
+  @Test
+  void anUnfilteredLookupStillSeesEntriesThatCarryAttributes() {
+    cache.put("a", unit(1, 0), "answer", Map.of("tenant", "acme"));
+
+    assertThat(cache.lookup(unit(1, 0))).isPresent();
+  }
+
+  /** A unit-length 4-d vector in the first two dimensions. */
+  private static float[] unit(float x, float y) {
+    double norm = Math.sqrt((double) x * x + (double) y * y);
+    return new float[] {(float) (x / norm), (float) (y / norm), 0f, 0f};
   }
 }

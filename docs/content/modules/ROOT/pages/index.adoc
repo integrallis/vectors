@@ -130,6 +130,12 @@ NOTE: Requires JDK 25 with `--add-modules jdk.incubator.vector` at compile and r
 |`vectors-cache-spring-ai`
 |Caching decorators for Spring AI embedding and chat clients.
 
+|`vectors-cache-semantic-langchain4j`
+|Similarity-matched LangChain4j chat cache.
+
+|`vectors-cache-semantic-spring-ai`
+|Similarity-matched Spring AI chat cache.
+
 |`vectors-router`
 |Semantic routing: classifies a query into named routes by embedding similarity.
 

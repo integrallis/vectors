@@ -22,6 +22,22 @@
   under one comment to keep the file scannable.
 -->
 <FindBugsFilter>
+    <!-- SemanticCachingChatModel.cache() returns the SemanticCache the caller itself passed to -->
+    <!-- the constructor, so the reference is already theirs; the accessor exists so they can read -->
+    <!-- stats() and call invalidateAll() on the decorator they installed. Copying is not possible -->
+    <!-- (SemanticCache is an interface over live storage) and would defeat the accessor's purpose. -->
+    <!-- Pattern: EI_EXPOSE_REP. -->
+    <Match>
+        <Class name="com.integrallis.vectors.cache.semantic.springai.SemanticCachingChatModel"/>
+        <Method name="cache"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="com.integrallis.vectors.cache.semantic.langchain4j.SemanticCachingChatModel"/>
+        <Method name="cache"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+
     <!-- VectorizationProvider.getInstance() returns an immutable interface reference -->
     <!-- (the singleton holder field is never reassigned after class init). -->
     <!-- See: vectors-core/src/main/java/.../VectorizationProvider.java -->

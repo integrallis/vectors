@@ -114,8 +114,69 @@ cache.put("hello", embeddingModel.embed("hello"));
 
 == Framework decorators
 
-For Spring AI and LangChain4j, the cache is applied as a drop-in decorator around the model or store
-— no call-site changes. Those are documented with each integration:
+For Spring AI and LangChain4j the cache is applied as a drop-in decorator around the model or store
+— no call-site changes. Each framework offers both kinds, and the distinction matters:
 
-* **Spring AI** — `CachingEmbeddingModel` / `CachingChatModel`: xref:spring-ai.adoc[Spring AI Integration].
-* **LangChain4j** — `CachingEmbeddingModel` and `CachingEmbeddingStore`: xref:langchain4j.adoc[LangChain4j Integration].
+[cols="2,1,3", options="header"]
+|===
+| Decorator | Matching | Use when
+
+| `CachingEmbeddingModel`, `CachingChatModel`
+| Exact key
+| The same prompt recurs verbatim. Cheapest lookup, no embedding call on the read path.
+
+| `SemanticCachingChatModel`
+| Similarity
+| Users phrase the same question differently. "How do I reset my password" is served from
+  "I forgot my password".
+|===
+
+`SemanticCachingChatModel` embeds the request and serves a hit when an earlier request is within the
+cache's threshold. Two responses are deliberately never served from it:
+
+* **Tool calls.** A response asking the caller to run a tool is an instruction, not an answer.
+  Replaying it would skip the tool and hand back a stale result, so those responses are returned but
+  never stored.
+* **Output generated under different request options.** An embedding captures only the text, so a
+  hit could otherwise return output produced at a different temperature or token limit. Each entry
+  records its options as an attribute and every lookup filters on them.
+
+[source,java]
+----
+ChatModel cached = new SemanticCachingChatModel(delegate, embeddingModel, semanticCache);
+----
+
+The decorators require a cache that stores attributes and reject one that does not at construction,
+so the mismatch surfaces when you wire the application rather than mid-conversation.
+
+Integration details: xref:spring-ai.adoc[Spring AI] and xref:langchain4j.adoc[LangChain4j].
+
+== Scoping a lookup with attributes
+
+Similarity alone does not decide whether a cached answer may be served. A completion generated at
+temperature 0.9, for another tenant, or by another model can be an excellent semantic match and
+still be the wrong thing to return. Entries carry attributes describing the conditions they were
+produced under, and a `CacheFilter` names the conditions the caller accepts.
+
+[source,java]
+----
+cache.put("reset password", embedding, answer,
+    Map.of("tenant", "acme", "model", "gpt-5"));
+
+Optional<SemanticCache.Hit<String>> hit = cache.lookup(embedding,
+    CacheFilter.matching("tenant", "acme").and(CacheFilter.matching("model", "gpt-5")));
+----
+
+A filter constrains only the attributes it names; anything else on the entry is free to vary.
+`CacheFilter.all(Map)` matches a whole map at once, and `CacheFilter.any()` accepts everything.
+
+Filtering runs inside the search rather than over the single nearest result. The nearest entry
+overall is frequently not the nearest entry the caller may use — a verbatim repeat of the prompt at
+the wrong temperature sits closer than a paraphrase at the right one — so testing a top-1 result
+after the fact reports a miss where a usable entry exists. `lookupTopK` exposes the same ranking
+directly.
+
+`supportsAttributes()` reports whether an implementation stores them. `VectorDbSemanticCache` does;
+an implementation that does not rejects a non-empty attribute map from `put` rather than dropping
+it, because a filtered lookup over entries with missing attributes serves exactly the answers the
+filter was added to prevent.

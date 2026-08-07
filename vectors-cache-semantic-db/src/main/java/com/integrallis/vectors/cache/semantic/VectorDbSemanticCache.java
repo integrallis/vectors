@@ -16,6 +16,7 @@
 package com.integrallis.vectors.cache.semantic;
 
 import com.integrallis.vectors.cache.CacheAdmissionPolicy;
+import com.integrallis.vectors.cache.CacheFilter;
 import com.integrallis.vectors.cache.CacheStats;
 import com.integrallis.vectors.cache.SemanticCache;
 import com.integrallis.vectors.core.Document;
@@ -50,6 +51,9 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
 
   /** Metadata field under which the serialized payload is stored on each cached Document. */
   public static final String PAYLOAD_FIELD = "cached.payload";
+
+  /** Metadata prefix under which entry attributes are stored, kept clear of the payload field. */
+  public static final String ATTRIBUTE_PREFIX = "cached.attr.";
 
   private final VectorCollection collection;
   private final PayloadCodec<V> codec;
@@ -89,8 +93,18 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
   }
 
   @Override
+  public boolean supportsAttributes() {
+    return true;
+  }
+
+  @Override
   public void put(String key, float[] embedding, V value) {
     putAll(List.of(new Entry<>(key, embedding, value)));
+  }
+
+  @Override
+  public void put(String key, float[] embedding, V value, Map<String, String> attributes) {
+    putAll(List.of(new Entry<>(key, embedding, value, attributes)));
   }
 
   @Override
@@ -121,33 +135,86 @@ public final class VectorDbSemanticCache<V> implements SemanticCache<V> {
       rejections.increment();
       return null;
     }
-    Map<String, MetadataValue> md =
-        Map.of(PAYLOAD_FIELD, new MetadataValue.Str(codec.encode(value)));
+    Map<String, MetadataValue> md = new java.util.HashMap<>();
+    md.put(PAYLOAD_FIELD, new MetadataValue.Str(codec.encode(value)));
+    entry
+        .attributes()
+        .forEach((name, attribute) -> md.put(ATTRIBUTE_PREFIX + name, new MetadataValue.Str(attribute)));
     return new Document(key, embedding, null, md);
   }
 
   @Override
   public Optional<Hit<V>> lookup(float[] queryEmbedding) {
+    List<Hit<V>> found = search(queryEmbedding, 1);
+    if (found.isEmpty()) {
+      misses.increment();
+      return Optional.empty();
+    }
+    hits.increment();
+    return Optional.of(found.get(0));
+  }
+
+  @Override
+  public Optional<Hit<V>> lookup(float[] queryEmbedding, CacheFilter filter) {
+    Objects.requireNonNull(filter, "filter");
+    // Searches deeper than one neighbour so the filter selects among candidates instead of
+    // rejecting the single closest and reporting a miss over a usable entry.
+    for (Hit<V> hit : search(queryEmbedding, FILTER_CANDIDATES)) {
+      if (filter.test(hit.attributes())) {
+        hits.increment();
+        return Optional.of(hit);
+      }
+    }
+    misses.increment();
+    return Optional.empty();
+  }
+
+  @Override
+  public List<Hit<V>> lookupTopK(float[] queryEmbedding, int k) {
+    if (k < 1) {
+      throw new IllegalArgumentException("k must be positive");
+    }
+    return search(queryEmbedding, k);
+  }
+
+  /** Nearest entries within the threshold, closest first, without touching hit/miss counters. */
+  private List<Hit<V>> search(float[] queryEmbedding, int k) {
     Objects.requireNonNull(queryEmbedding, "queryEmbedding");
     SearchRequest req =
-        SearchRequest.builder(queryEmbedding, 1)
+        SearchRequest.builder(queryEmbedding, k)
             .includeVector(false)
             .includeText(false)
             .includeMetadata(true)
             .build();
     SearchResult result = collection.search(req);
-    if (result.hits().isEmpty()) {
-      misses.increment();
-      return Optional.empty();
+    List<Hit<V>> found = new ArrayList<>();
+    for (SearchResult.Hit candidate : result.hits()) {
+      boolean pass =
+          higherIsBetter ? candidate.score() >= threshold : candidate.score() <= threshold;
+      if (pass) {
+        found.add(
+            new Hit<>(
+                candidate.id(),
+                decodePayload(candidate.document()),
+                candidate.score(),
+                attributesOf(candidate.document())));
+      }
     }
-    SearchResult.Hit top = result.hits().get(0);
-    boolean pass = higherIsBetter ? top.score() >= threshold : top.score() <= threshold;
-    if (!pass) {
-      misses.increment();
-      return Optional.empty();
-    }
-    hits.increment();
-    return Optional.of(new Hit<>(top.id(), decodePayload(top.document()), top.score()));
+    return found;
+  }
+
+  /** Reads back the attributes stored alongside the payload. */
+  private static Map<String, String> attributesOf(Document document) {
+    Map<String, String> attributes = new java.util.HashMap<>();
+    document
+        .metadata()
+        .forEach(
+            (name, value) -> {
+              if (name.startsWith(ATTRIBUTE_PREFIX) && value instanceof MetadataValue.Str text) {
+                attributes.put(name.substring(ATTRIBUTE_PREFIX.length()), text.value());
+              }
+            });
+    return Map.copyOf(attributes);
   }
 
   @Override
