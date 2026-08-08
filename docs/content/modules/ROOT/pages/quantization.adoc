@@ -80,6 +80,37 @@ Available `QuantizerKind` values: `NONE`, `SQ8`, `SQ4`, `FP16`, `PQ`, `BQ`, `RAB
 BBQ is a mode of the binary quantizer and Extended RaBitQ is the multi-bit form of RaBitQ.
 Both are configured through their respective quantizer families rather than as standalone `QuantizerKind` values.
 
+== Quantized-Only Persistent Collections
+
+By default, persistent quantization writes compressed codes alongside `vectors.bin` so search can
+rescore candidates using the original vectors. If artifact or deployment size matters more than
+exact final scores, a persistent `FLAT` collection can discard the full-precision copy:
+
+[source,java]
+----
+try (VectorCollection collection = VectorCollection.builder()
+    .dimension(768)
+    .metric(SimilarityFunction.COSINE)
+    .indexType(IndexType.FLAT)
+    .quantizer(QuantizerKind.SQ4)
+    .quantizedOnly(true)
+    .storagePath(Path.of("embedding-index"))
+    .build()) {
+  collection.addAll(documents);
+  collection.commit();
+}
+----
+
+The resulting generation contains `quantized.bin` but no full-precision `vectors.bin`. Search scans
+the codes directly, so returned scores and ordering are approximate and there is no exact rescore
+pass. SQ4 uses roughly one eighth of the vector payload of float32 storage; collection metadata and
+IDs are unchanged.
+
+A quantized-only collection is sealed after its first commit because later appends would require
+the discarded source vectors to rebuild all codes. Rebuild a new collection from the original
+documents when its contents must change. Existing collections reopen from their manifest, so
+readers do not need to repeat `.quantizer(...)` or `.quantizedOnly(true)`.
+
 == Two-Pass Search
 
 When a quantizer is enabled, search uses a two-pass strategy:

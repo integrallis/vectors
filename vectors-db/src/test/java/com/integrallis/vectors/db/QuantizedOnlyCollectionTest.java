@@ -141,10 +141,16 @@ class QuantizedOnlyCollectionTest {
       collection.commit();
     }
 
-    // Reopened with quantizedOnly(false): the manifest, not the caller's settings, decides how a
-    // generation is read. Otherwise a default-configured reader would try to map a vectors.bin
-    // that is not there.
-    try (VectorCollection reopened = open(storage, false)) {
+    // Reopen with the ordinary defaults — neither a quantizer nor quantizedOnly is specified. The
+    // manifest, not the caller's settings, decides how an existing generation is read. Otherwise
+    // this reader would try to map a vectors.bin that is intentionally not there.
+    try (VectorCollection reopened =
+        VectorCollection.builder()
+            .dimension(DIMENSION)
+            .metric(SimilarityFunction.COSINE)
+            .indexType(IndexType.FLAT)
+            .storagePath(storage.toAbsolutePath())
+            .build()) {
       SearchResult result =
           reopened.search(SearchRequest.builder(documents.get(0).vector(), 1).build());
       assertThat(result.hits()).hasSize(1);

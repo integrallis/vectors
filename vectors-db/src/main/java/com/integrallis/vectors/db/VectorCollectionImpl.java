@@ -624,6 +624,21 @@ final class VectorCollectionImpl implements VectorCollection {
             java.nio.file.Files.readAllBytes(genDir.resolve(FileFormat.QUANTIZED_FILE));
         try {
           CompressedVectors compressed = QuantizedVectorsCodec.decode(quantizedBytes);
+          if (compressed.size() != physicalCount
+              || compressed.dimension() != manifest.dimension()) {
+            int compressedSize = compressed.size();
+            int compressedDimension = compressed.dimension();
+            compressed.close();
+            throw new IOException(
+                "quantized.bin shape "
+                    + compressedSize
+                    + "x"
+                    + compressedDimension
+                    + " does not match manifest shape "
+                    + physicalCount
+                    + "x"
+                    + manifest.dimension());
+          }
           if (quantizedOnly) {
             spi = new QuantizedOnlyScanAdapter(compressed, indexMetric());
           } else if (spi instanceof MappedFlatScanAdapter fa) {
