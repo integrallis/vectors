@@ -64,7 +64,59 @@ public record VectorCollectionConfig(
     IvfParams ivfParams,
     CuVsParams cuvsParams,
     IvfPqParams ivfPqParams,
-    boolean normalizeCosineVectors) {
+    boolean normalizeCosineVectors,
+    boolean quantizedOnly) {
+
+  /**
+   * 13-arg convenience constructor that defaults {@link #quantizedOnly()} to {@code false} (the
+   * full-precision vectors are kept alongside any quantized codes, which is what a queryable
+   * collection wants). Preserves the shape of every call site written before {@code quantizedOnly}
+   * was added.
+   *
+   * @param dimension vector width
+   * @param metric similarity function
+   * @param indexType index backend
+   * @param quantizerKind quantizer backend
+   * @param autoCommitThreshold staged documents before an implicit commit
+   * @param storageRoot persistent storage root, or null for in-memory
+   * @param hnswParams HNSW parameters, or null
+   * @param vamanaParams Vamana parameters, or null
+   * @param quantizerParams quantizer parameters, or null
+   * @param ivfParams IVF parameters, or null
+   * @param cuvsParams cuVS parameters, or null
+   * @param ivfPqParams IVF-PQ parameters, or null
+   * @param normalizeCosineVectors whether COSINE vectors are unit-normalized at ingest
+   */
+  public VectorCollectionConfig(
+      int dimension,
+      SimilarityFunction metric,
+      IndexType indexType,
+      QuantizerKind quantizerKind,
+      int autoCommitThreshold,
+      Path storageRoot,
+      HnswParams hnswParams,
+      VamanaParams vamanaParams,
+      QuantizerParams quantizerParams,
+      IvfParams ivfParams,
+      CuVsParams cuvsParams,
+      IvfPqParams ivfPqParams,
+      boolean normalizeCosineVectors) {
+    this(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        autoCommitThreshold,
+        storageRoot,
+        hnswParams,
+        vamanaParams,
+        quantizerParams,
+        ivfParams,
+        cuvsParams,
+        ivfPqParams,
+        normalizeCosineVectors,
+        false);
+  }
 
   /**
    * Returns {@code true} when vectors should be L2-unit-normalized at ingest/search so the index
@@ -96,6 +148,24 @@ public record VectorCollectionConfig(
     Objects.requireNonNull(metric, "metric must not be null");
     Objects.requireNonNull(indexType, "indexType must not be null");
     Objects.requireNonNull(quantizerKind, "quantizerKind must not be null");
+    if (quantizedOnly) {
+      if (quantizerKind == QuantizerKind.NONE) {
+        throw new IllegalArgumentException(
+            "quantizedOnly needs a quantizer: there would be nothing to store");
+      }
+      if (indexType != IndexType.FLAT) {
+        throw new IllegalArgumentException(
+            "quantizedOnly is only supported for FLAT collections; "
+                + indexType
+                + " builds its graph from full-precision vectors, which a quantized-only"
+                + " collection does not keep");
+      }
+      if (storageRoot == null) {
+        throw new IllegalArgumentException(
+            "quantizedOnly only applies to persistent collections; an in-memory one keeps its"
+                + " vectors either way");
+      }
+    }
     if (autoCommitThreshold <= 0) {
       throw new IllegalArgumentException(
           "autoCommitThreshold must be positive (use Integer.MAX_VALUE to disable): "

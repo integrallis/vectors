@@ -33,6 +33,7 @@ import com.integrallis.vectors.db.index.IvfFlatAdapter;
 import com.integrallis.vectors.db.index.IvfPqAdapter;
 import com.integrallis.vectors.db.index.MappedFlatScanAdapter;
 import com.integrallis.vectors.db.index.QuantizedFlatScanAdapter;
+import com.integrallis.vectors.db.index.QuantizedOnlyScanAdapter;
 import com.integrallis.vectors.db.index.VamanaIndexAdapter;
 import com.integrallis.vectors.db.internal.StagingBuffer;
 import com.integrallis.vectors.db.metadata.InMemoryMetadataStore;
@@ -562,9 +563,21 @@ final class VectorCollectionImpl implements VectorCollection {
       // non-tombstoned vectors)
       int physicalCount = Math.toIntExact(manifest.liveCount() + manifest.tombstoneCount());
 
+      // A quantized-only generation has no full-precision vectors: quantized.bin is the index.
+      // Read from the manifest rather than the config so a collection opened with default settings
+      // cannot mistake one for an ordinary generation whose vectors.bin failed to load.
+      boolean quantizedOnly =
+          manifest.vectorsBinLength() == 0L
+              && manifest.quantizedBinLength() > 0L
+              && physicalCount > 0;
       MemorySegmentVectors mapped =
-          MemorySegmentVectors.open(
-              genDir.resolve(FileFormat.VECTORS_FILE), physicalCount, manifest.dimension(), arena);
+          quantizedOnly
+              ? null
+              : MemorySegmentVectors.open(
+                  genDir.resolve(FileFormat.VECTORS_FILE),
+                  physicalCount,
+                  manifest.dimension(),
+                  arena);
       IdMapper idMapper = MappedIdMapper.open(genDir.resolve(FileFormat.IDMAP_FILE), arena);
       MetadataStore metadataStore =
           MappedMetadataStore.open(genDir.resolve(FileFormat.METADATA_FILE), arena);
@@ -580,36 +593,40 @@ final class VectorCollectionImpl implements VectorCollection {
       }
 
       IndexSpi spi =
-          switch (manifest.indexType()) {
-            case FLAT -> new MappedFlatScanAdapter(mapped, indexMetric());
-            case HNSW ->
-                manifest.graphBinLength() > 0L
-                    ? openHnswAdapter(genDir, manifest, mapped)
-                    : new MappedFlatScanAdapter(mapped, indexMetric());
-            case VAMANA ->
-                manifest.graphBinLength() > 0L
-                    ? openVamanaAdapter(genDir, manifest, mapped, arena)
-                    : new MappedFlatScanAdapter(mapped, indexMetric());
-            case IVF_FLAT ->
-                manifest.graphBinLength() > 0L
-                    ? openIvfFlatAdapter(genDir, manifest, mapped)
-                    : new MappedFlatScanAdapter(mapped, indexMetric());
-            case IVF_PQ ->
-                manifest.graphBinLength() > 0L
-                    ? openIvfPqAdapter(genDir, manifest, mapped)
-                    : new MappedFlatScanAdapter(mapped, indexMetric());
-            case CUVS_BRUTEFORCE, CUVS_CAGRA ->
-                throw new UnsupportedOperationException(
-                    "CUVS_* index types do not support persistent storage yet: "
-                        + manifest.indexType());
-          };
+          quantizedOnly
+              ? null
+              : switch (manifest.indexType()) {
+                case FLAT -> new MappedFlatScanAdapter(mapped, indexMetric());
+                case HNSW ->
+                    manifest.graphBinLength() > 0L
+                        ? openHnswAdapter(genDir, manifest, mapped)
+                        : new MappedFlatScanAdapter(mapped, indexMetric());
+                case VAMANA ->
+                    manifest.graphBinLength() > 0L
+                        ? openVamanaAdapter(genDir, manifest, mapped, arena)
+                        : new MappedFlatScanAdapter(mapped, indexMetric());
+                case IVF_FLAT ->
+                    manifest.graphBinLength() > 0L
+                        ? openIvfFlatAdapter(genDir, manifest, mapped)
+                        : new MappedFlatScanAdapter(mapped, indexMetric());
+                case IVF_PQ ->
+                    manifest.graphBinLength() > 0L
+                        ? openIvfPqAdapter(genDir, manifest, mapped)
+                        : new MappedFlatScanAdapter(mapped, indexMetric());
+                case CUVS_BRUTEFORCE, CUVS_CAGRA ->
+                    throw new UnsupportedOperationException(
+                        "CUVS_* index types do not support persistent storage yet: "
+                            + manifest.indexType());
+              };
 
       if (manifest.quantizedBinLength() > 0L) {
         byte[] quantizedBytes =
             java.nio.file.Files.readAllBytes(genDir.resolve(FileFormat.QUANTIZED_FILE));
         try {
           CompressedVectors compressed = QuantizedVectorsCodec.decode(quantizedBytes);
-          if (spi instanceof MappedFlatScanAdapter fa) {
+          if (quantizedOnly) {
+            spi = new QuantizedOnlyScanAdapter(compressed, indexMetric());
+          } else if (spi instanceof MappedFlatScanAdapter fa) {
             spi = new QuantizedFlatScanAdapter(fa, fa, indexMetric(), compressed);
           } else if (spi instanceof MappedHnswIndexAdapter ha) {
             ha.enableQuantization(compressed);
@@ -1118,6 +1135,14 @@ final class VectorCollectionImpl implements VectorCollection {
             || config.indexType() == IndexType.FLAT && config.quantizerKind() != QuantizerKind.NONE
             || config.indexType() == IndexType.IVF_FLAT
             || config.indexType() == IndexType.IVF_PQ;
+    if (oldGen.mappedVectors == null && oldPhysicalCount > 0) {
+      // Quantized-only: the full-precision vectors this would have to re-encode are gone by
+      // design. Failing here beats writing a generation whose codes silently omit every row that
+      // is already stored.
+      throw new IllegalStateException(
+          "this collection stores only quantized codes and is sealed after its first commit;"
+              + " rebuild it from the source vectors to change it");
+    }
     Materialized materialized =
         materializeSuccessor(
             oldGen.mappedVectors, oldPhysicalCount, staging.documents(), dim, needMatrix);
@@ -1173,6 +1198,17 @@ final class VectorCollectionImpl implements VectorCollection {
     long tombstonesBinLength = (long) tombstonesBin.length;
     long tombstonesBinCrc = tombstonesBin.length > 0 ? Checksums.ofBytes(tombstonesBin) : 0L;
     int tombstoneCount = newTombstones.cardinality();
+
+    if (config.quantizedOnly()) {
+      if (quantizedBin == null) {
+        throw new IllegalStateException(
+            "quantizedOnly collection produced no codes to store; refusing to write a generation"
+                + " with neither vectors nor quantization");
+      }
+      // The point of the mode: quantized.bin becomes the index rather than an addition to it.
+      // A zero-length vectors.bin is what the open path reads back as quantized-only.
+      vectorsBin = new byte[0];
+    }
 
     // 3. Build the manifest.
     long newGenNumber = nextGenerationNumber;

@@ -121,6 +121,7 @@ public final class VectorCollectionBuilder {
   private boolean normalizeCosineVectors = false;
   private IndexType indexType = IndexType.FLAT;
   private QuantizerKind quantizerKind = QuantizerKind.NONE;
+  private boolean quantizedOnly;
   private int autoCommitThreshold = Integer.MAX_VALUE;
   private Path storageRoot;
   private int hnswM = DEFAULT_HNSW_M;
@@ -225,6 +226,28 @@ public final class VectorCollectionBuilder {
       throw new IllegalArgumentException("indexType must not be null");
     }
     this.indexType = indexType;
+    return this;
+  }
+
+  /**
+   * Stores only the quantized codes, discarding the full-precision vectors.
+   *
+   * <p>Ordinarily a quantizer <em>adds</em> a compressed copy beside {@code vectors.bin}: search
+   * ranks cheaply on the codes and then rescores the candidates exactly, so the collection grows
+   * rather than shrinks. That is the right trade for a queryable database and the wrong one for an
+   * index that ships inside an artifact, where size is the point and exact scores are never read.
+   *
+   * <p>This drops the full-precision copy. Scores become approximate and final — there is nothing
+   * left to rescore against — and the collection is sealed once committed, because re-encoding on a
+   * later append would need the vectors that are no longer there.
+   *
+   * <p>Only valid for a persistent {@link IndexType#FLAT} collection with a quantizer set.
+   *
+   * @param quantizedOnly whether to discard full-precision vectors
+   * @return this builder
+   */
+  public VectorCollectionBuilder quantizedOnly(boolean quantizedOnly) {
+    this.quantizedOnly = quantizedOnly;
     return this;
   }
 
@@ -822,7 +845,8 @@ public final class VectorCollectionBuilder {
             ivfParams,
             effectiveCuvsParams,
             ivfPqParams,
-            normalizeCosineVectors);
+            normalizeCosineVectors,
+            quantizedOnly);
     java.util.List<GenerationSubscriber> effectiveSubscribers = subscribers;
     if (objectStoreBackend != null) {
       if (storageRoot == null) {
