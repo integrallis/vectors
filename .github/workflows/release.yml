@@ -1,6 +1,9 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -53,6 +56,16 @@ jobs:
         id: version
         run: echo "version=$(grep -E '^version' gradle.properties | sed -E 's/.*=[[:space:]]*//')" >> "$GITHUB_OUTPUT"
 
+      - name: Validate release tag
+        if: ${{ github.event_name == 'push' }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/tags/v$VERSION" ]]; then
+            echo "::error::Release tag $GITHUB_REF does not match project version v$VERSION"
+            exit 1
+          fi
+
       - name: Prepare staged-release notebook classpath
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -88,7 +101,7 @@ jobs:
           fi
 
       - name: Validate Maven Central deployment
-        if: ${{ inputs.dry_run }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         uses: jreleaser/release-action@v2
         with:
           arguments: deploy --dry-run
@@ -101,7 +114,7 @@ jobs:
           JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Deploy to Maven Central
-        if: ${{ !inputs.dry_run && !inputs.skip_deploy }}
+        if: ${{ github.event_name == 'push' || (!inputs.dry_run && !inputs.skip_deploy) }}
         uses: jreleaser/release-action@v2
         with:
           arguments: deploy
@@ -114,7 +127,7 @@ jobs:
           JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Publish GitHub release
-        if: ${{ !inputs.dry_run }}
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
