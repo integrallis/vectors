@@ -4,6 +4,24 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-08-07
+
+### Added
+
+- **Quantized-only persistent collections.** A persistent `FLAT` collection can now
+  store only its compressed codes by setting `.quantizedOnly(true)`. This removes the
+  full-precision `vectors.bin` payload for substantially smaller distributable indexes;
+  search scores are approximate and the collection is sealed after its first commit.
+  Existing collections reopen from their manifest without repeating the quantizer or
+  quantized-only builder settings, and compressed payload dimensions are validated on
+  open.
+
+### Changed
+
+- **Faster Q4 batched dot products.** The Panama kernel accumulates four Q4 blocks per
+  scratch write, reducing intermediate traffic. Controlled benchmarks improved batch
+  sizes 4 through 32 by roughly 4–7 percent.
+
 ## [0.1.6] - 2026-08-07
 
 ### Added
