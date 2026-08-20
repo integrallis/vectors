@@ -971,6 +971,17 @@ tasks.register("verifyDocumentation") {
         }
 
         val readme = readmeFile.readText()
+        val hardcodedReadmeCoordinate =
+            Regex(
+                """com\.integrallis:vectors(?:-[A-Za-z0-9.-]+)?:\d+\.\d+\.\d+""" +
+                    """(?:[-+][A-Za-z0-9._-]+)?"""
+            )
+        require(!hardcodedReadmeCoordinate.containsMatchIn(readme)) {
+            "README must use the vectorsVersion property in dependency snippets, not hardcoded versions"
+        }
+        require("\$vectorsVersion" in readme) {
+            "README dependency snippets must pull the Vectors version from vectorsVersion"
+        }
         publishedModuleNames.forEach { module ->
             require("`$module`" in readme) {
                 "README module inventory is missing $module"
