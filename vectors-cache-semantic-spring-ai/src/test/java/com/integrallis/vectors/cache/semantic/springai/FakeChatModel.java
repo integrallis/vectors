@@ -18,6 +18,7 @@ package com.integrallis.vectors.cache.semantic.springai;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -32,7 +33,8 @@ final class FakeChatModel implements ChatModel {
   public ChatResponse call(Prompt prompt) {
     calls.incrementAndGet();
     return new ChatResponse(
-        List.of(new Generation(new AssistantMessage("echo: " + prompt.getContents()))));
+        List.of(new Generation(new AssistantMessage("echo: " + prompt.getContents()))),
+        ChatResponseMetadata.builder().model("fake-chat-model").build());
   }
 
   @Override

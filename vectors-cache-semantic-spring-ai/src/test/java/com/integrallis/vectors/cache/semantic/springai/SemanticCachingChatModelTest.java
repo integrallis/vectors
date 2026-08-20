@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -214,6 +215,23 @@ class SemanticCachingChatModelTest {
   }
 
   @Test
+  void identifiesCacheHitsAndPreservesTheirModelAndSimilarity() {
+    FakeChatModel fake = new FakeChatModel();
+    SemanticCachingChatModel model =
+        new SemanticCachingChatModel(
+            fake, new TopicEmbeddingModel(), new InMemorySemanticCache(0.60));
+
+    ChatResponse miss = model.call(new Prompt(QUERY));
+    ChatResponse hit = model.call(new Prompt(PARAPHRASE));
+
+    assertThat(SemanticCachingChatModel.isCacheHit(miss)).isFalse();
+    assertThat(SemanticCachingChatModel.isCacheHit(hit)).isTrue();
+    assertThat(SemanticCachingChatModel.cacheSimilarity(hit).orElseThrow())
+        .isBetween(0.7070, 0.7072);
+    assertThat(hit.getMetadata().getModel()).isEqualTo("fake-chat-model");
+  }
+
+  @Test
   void anExactKeyCacheWouldHaveMissedThatParaphrase() {
     // Guards the distinction from CachingChatModel: these prompts share no normalized key.
     assertThat(CachingChatModel.defaultPromptKey(new Prompt(QUERY)))
@@ -231,6 +249,27 @@ class SemanticCachingChatModelTest {
     model.call(new Prompt("what is the weather forecast"));
 
     assertThat(fake.calls.get()).isEqualTo(2);
+  }
+
+  @Test
+  void usesAnExplicitSemanticKeyInsteadOfSharedRagScaffolding() {
+    FakeChatModel fake = new FakeChatModel();
+    SemanticCachingChatModel model =
+        new SemanticCachingChatModel(
+            fake, new TopicEmbeddingModel(), new InMemorySemanticCache(0.70));
+
+    model.call(ragPrompt("what is the weather forecast", "weather forecast"));
+    model.call(ragPrompt("can I log in", "login"));
+
+    assertThat(fake.calls.get()).isEqualTo(2);
+  }
+
+  private static Prompt ragPrompt(String question, String semanticKey) {
+    return new Prompt(
+        UserMessage.builder()
+            .text("Shared password reset instructions. Question: " + question)
+            .metadata(Map.of(SemanticCachingChatModel.CACHE_KEY_METADATA, semanticKey))
+            .build());
   }
 
   @Test

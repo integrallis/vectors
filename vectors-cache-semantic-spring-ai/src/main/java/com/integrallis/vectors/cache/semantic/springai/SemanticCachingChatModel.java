@@ -17,12 +17,15 @@ package com.integrallis.vectors.cache.semantic.springai;
 
 import com.integrallis.vectors.cache.CacheFilter;
 import com.integrallis.vectors.cache.SemanticCache;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalDouble;
 import java.util.StringJoiner;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -58,6 +61,23 @@ public class SemanticCachingChatModel implements ChatModel {
 
   /** Attribute recording the request options an entry was produced under. */
   public static final String OPTIONS_ATTRIBUTE = "options";
+
+  /** Response metadata key whose Boolean value is true when an answer came from this cache. */
+  public static final String CACHE_HIT_METADATA = "vectors.semantic-cache.hit";
+
+  /** Response metadata key carrying the cosine similarity of a cache hit. */
+  public static final String CACHE_SIMILARITY_METADATA = "vectors.semantic-cache.similarity";
+
+  /**
+   * Message metadata key whose String value selects the text embedded for cache lookup.
+   *
+   * <p>This is useful for RAG prompts, where repeated instructions and retrieved evidence can
+   * overwhelm the user's intent. When absent, the complete prompt remains the semantic key for
+   * backwards compatibility.
+   */
+  public static final String CACHE_KEY_METADATA = "vectors.semantic-cache.key";
+
+  private static final String RESPONSE_MODEL_ATTRIBUTE = "response.model";
 
   private final ChatModel delegate;
   private final EmbeddingModel embeddingModel;
@@ -106,15 +126,12 @@ public class SemanticCachingChatModel implements ChatModel {
   @Override
   public ChatResponse call(Prompt prompt) {
     Objects.requireNonNull(prompt, "prompt");
-    String contents = prompt.getContents();
+    String contents = semanticKey(prompt);
     String signature = optionsSignature(prompt);
     float[] embedding = embeddingModel.embed(contents);
 
-    String hit =
-        cache
-            .lookup(embedding, CacheFilter.matching(OPTIONS_ATTRIBUTE, signature))
-            .map(SemanticCache.Hit::value)
-            .orElse(null);
+    SemanticCache.Hit<String> hit =
+        cache.lookup(embedding, CacheFilter.matching(OPTIONS_ATTRIBUTE, signature)).orElse(null);
     if (hit != null) {
       return textResponse(hit);
     }
@@ -122,9 +139,51 @@ public class SemanticCachingChatModel implements ChatModel {
     ChatResponse response = delegate.call(prompt);
     String text = textOf(response);
     if (text != null && !carriesToolCalls(response)) {
-      cache.put(contents, embedding, text, Map.of(OPTIONS_ATTRIBUTE, signature));
+      Map<String, String> attributes = new HashMap<>();
+      attributes.put(OPTIONS_ATTRIBUTE, signature);
+      String responseModel = response.getMetadata().getModel();
+      if (responseModel != null && !responseModel.isBlank()) {
+        attributes.put(RESPONSE_MODEL_ATTRIBUTE, responseModel);
+      }
+      cache.put(contents, embedding, text, attributes);
     }
     return response;
+  }
+
+  private static String semanticKey(Prompt prompt) {
+    List<Message> messages = prompt.getInstructions();
+    for (int index = messages.size() - 1; index >= 0; index--) {
+      Object candidate = messages.get(index).getMetadata().get(CACHE_KEY_METADATA);
+      if (candidate instanceof String key && !key.isBlank()) {
+        return key;
+      }
+    }
+    return prompt.getContents();
+  }
+
+  /**
+   * Reports whether a response was served by this decorator rather than its delegate.
+   *
+   * @param response response returned by a chat model
+   * @return true for a semantic-cache hit
+   */
+  public static boolean isCacheHit(ChatResponse response) {
+    Objects.requireNonNull(response, "response");
+    return Boolean.TRUE.equals(response.getMetadata().get(CACHE_HIT_METADATA));
+  }
+
+  /**
+   * Returns the similarity score attached to a cache hit.
+   *
+   * @param response response returned by a chat model
+   * @return the hit similarity, or empty for a delegated response
+   */
+  public static OptionalDouble cacheSimilarity(ChatResponse response) {
+    Objects.requireNonNull(response, "response");
+    Object similarity = response.getMetadata().get(CACHE_SIMILARITY_METADATA);
+    return similarity instanceof Number number
+        ? OptionalDouble.of(number.doubleValue())
+        : OptionalDouble.empty();
   }
 
   @Override
@@ -193,7 +252,16 @@ public class SemanticCachingChatModel implements ChatModel {
     return response.getResult().getOutput().getText();
   }
 
-  private static ChatResponse textResponse(String text) {
-    return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+  private static ChatResponse textResponse(SemanticCache.Hit<String> hit) {
+    ChatResponseMetadata.Builder metadata =
+        ChatResponseMetadata.builder()
+            .keyValue(CACHE_HIT_METADATA, true)
+            .keyValue(CACHE_SIMILARITY_METADATA, hit.score());
+    String responseModel = hit.attributes().get(RESPONSE_MODEL_ATTRIBUTE);
+    if (responseModel != null && !responseModel.isBlank()) {
+      metadata.model(responseModel);
+    }
+    return new ChatResponse(
+        List.of(new Generation(new AssistantMessage(hit.value()))), metadata.build());
   }
 }
