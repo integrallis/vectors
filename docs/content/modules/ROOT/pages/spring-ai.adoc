@@ -188,6 +188,10 @@ The starter auto-configures:
   message if it is missing.
 * A `JavaVectorsVectorStore` bean (conditional on an `EmbeddingModel` bean being present).
 
+When an `ObservationRegistry` is available, the starter passes it to the vector
+store. With Spring Boot Actuator this produces the standard
+`db.vector.client.operation` metrics and traces without additional wiring.
+
 Both beans are `@ConditionalOnMissingBean`, so you can override either with a custom `@Bean`
 definition.
 

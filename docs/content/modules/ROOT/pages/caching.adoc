@@ -146,6 +146,34 @@ cache's threshold. Two responses are deliberately never served from it:
 ChatModel cached = new SemanticCachingChatModel(delegate, embeddingModel, semanticCache);
 ----
 
+Cache hits retain the model name from the original response and expose both the
+hit and its similarity through response metadata. Prefer the typed helpers when
+updating usage or cost displays:
+
+[source,java]
+----
+ChatResponse response = cached.call(prompt);
+if (SemanticCachingChatModel.isCacheHit(response)) {
+  double similarity = SemanticCachingChatModel.cacheSimilarity(response).orElseThrow();
+}
+----
+
+For a composed RAG prompt, mark the message metadata with the text that represents
+the user's semantic intent. This prevents shared instructions and retrieved context
+from making unrelated questions look similar:
+
+[source,java]
+----
+var message = UserMessage.builder()
+    .text(completeRagPrompt)
+    .metadata(Map.of(SemanticCachingChatModel.CACHE_KEY_METADATA, contextualUserQuery))
+    .build();
+ChatResponse response = cached.call(new Prompt(message));
+----
+
+Without this metadata, the complete prompt remains the key for backwards
+compatibility.
+
 The decorators require a cache that stores attributes and reject one that does not at construction,
 so the mismatch surfaces when you wire the application rather than mid-conversation.
 

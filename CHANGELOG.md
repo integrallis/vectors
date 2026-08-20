@@ -4,6 +4,26 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-08-20
+
+### Fixed
+
+- Spring AI semantic-cache hits now preserve the response model and expose
+  `vectors.semantic-cache.hit` plus the matching similarity in response metadata.
+  `SemanticCachingChatModel.isCacheHit(...)` and `cacheSimilarity(...)` provide
+  typed access so applications can report avoided model calls accurately.
+- RAG applications can mark the user intent with
+  `vectors.semantic-cache.key` instead of embedding repeated instructions and
+  retrieved context as the cache key.
+
+## [0.1.8] - 2026-08-20
+
+### Fixed
+
+- The Spring Boot starter now supplies the application's `ObservationRegistry`
+  to `JavaVectorsVectorStore`, enabling the standard
+  `db.vector.client.operation` metrics and traces when Actuator is present.
+
 ## [0.1.7] - 2026-08-07
 
 ### Added
