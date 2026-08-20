@@ -22,6 +22,9 @@ import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.QuantizerKind;
 import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.spring.ai.JavaVectorsVectorStore;
+import io.micrometer.core.instrument.observation.DefaultMeterObservationHandler;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,6 +35,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
+import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
@@ -88,6 +92,23 @@ class JavaVectorsAutoConfigurationTest {
     @Bean
     EmbeddingModel embeddingModel() {
       return new StubEmbeddingModel();
+    }
+  }
+
+  @Configuration
+  static class ObservationConfig {
+    @Bean
+    SimpleMeterRegistry meterRegistry() {
+      return new SimpleMeterRegistry();
+    }
+
+    @Bean
+    ObservationRegistry observationRegistry(SimpleMeterRegistry meterRegistry) {
+      ObservationRegistry registry = ObservationRegistry.create();
+      registry
+          .observationConfig()
+          .observationHandler(new DefaultMeterObservationHandler(meterRegistry));
+      return registry;
     }
   }
 
@@ -190,6 +211,27 @@ class JavaVectorsAutoConfigurationTest {
           .run(
               ctx -> {
                 assertThat(ctx).hasSingleBean(JavaVectorsVectorStore.class);
+              });
+    }
+
+    @Test
+    void springAiVectorStore_usesApplicationObservationRegistry() {
+      runner
+          .withUserConfiguration(StubEmbeddingModelConfig.class, ObservationConfig.class)
+          .withPropertyValues("java-vectors.dimension=4", "java-vectors.metric=COSINE")
+          .run(
+              ctx -> {
+                JavaVectorsVectorStore store = ctx.getBean(JavaVectorsVectorStore.class);
+                store.similaritySearch(SearchRequest.builder().query("transit").topK(1).build());
+
+                SimpleMeterRegistry meters = ctx.getBean(SimpleMeterRegistry.class);
+                assertThat(
+                        meters
+                            .find("db.vector.client.operation")
+                            .tag("db.operation.name", "query")
+                            .timer())
+                    .isNotNull()
+                    .satisfies(timer -> assertThat(timer.count()).isEqualTo(1));
               });
     }
 

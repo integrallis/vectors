@@ -46,6 +46,16 @@ java-vectors:
 Without an `EmbeddingModel` on the classpath, `java-vectors.dimension` is required; the context
 fails at startup with a clear message if it is missing.
 
+## Observability
+
+When Spring Boot Actuator provides an `ObservationRegistry`, the auto-configured vector store uses
+that registry for Spring AI's standard `db.vector.client.operation` observation. Query, add, and
+delete timings therefore appear in Micrometer metrics and tracing without a custom store bean.
+
+Spring AI's vector-store query observation includes the embedding call performed for a text query.
+Use the nested `gen_ai.client.operation` embedding observation when that stage must be reported
+separately.
+
 ## Key Types
 
 - `JavaVectorsAutoConfiguration` — auto-configuration with nested Spring AI configuration

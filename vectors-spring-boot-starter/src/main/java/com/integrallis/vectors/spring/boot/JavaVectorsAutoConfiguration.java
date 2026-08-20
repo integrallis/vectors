@@ -215,7 +215,8 @@ public class JavaVectorsAutoConfiguration {
         ObjectProvider<org.springframework.ai.embedding.EmbeddingModel> embeddingModelProvider,
         VectorCollection collection,
         JavaVectorsProperties props,
-        ObjectProvider<org.springframework.ai.embedding.BatchingStrategy> batchingStrategy) {
+        ObjectProvider<org.springframework.ai.embedding.BatchingStrategy> batchingStrategy,
+        ObjectProvider<io.micrometer.observation.ObservationRegistry> observationRegistry) {
       org.springframework.ai.embedding.EmbeddingModel embeddingModel =
           embeddingModelProvider.getIfAvailable();
       if (embeddingModel == null) {
@@ -228,6 +229,10 @@ public class JavaVectorsAutoConfiguration {
       // Reuse the application's BatchingStrategy bean (Spring AI's auto-config provides one) so
       // batched ingest honors the same token-limit sizing; fall back to the store's default.
       batchingStrategy.ifAvailable(builder::batchingStrategy);
+      // Spring AI builders default to ObservationRegistry.NOOP. Reuse Spring Boot's application
+      // registry when Actuator is present so the store emits db.vector.client.operation metrics
+      // and traces alongside the configured embedding and chat models.
+      observationRegistry.ifAvailable(builder::observationRegistry);
       return builder.build();
     }
   }
