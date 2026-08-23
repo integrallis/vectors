@@ -4,6 +4,15 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-08-23
+
+### Fixed
+
+- VCR model wrappers now register every successfully written cassette with the active
+  JUnit 5 or TestNG test lifecycle. If a recording test fails after a model call, the
+  framework deletes the cassettes written by that test instead of leaving partial
+  fixtures behind.
+
 ## [0.1.9] - 2026-08-20
 
 ### Fixed
