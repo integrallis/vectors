@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.integrallis.vectors.storage.backend.HeapStorageBackend;
+import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -57,6 +58,21 @@ class VCRContextTest {
     ctx.resetCallCounters();
     assertTrue(ctx.getCurrentCassetteKeys().isEmpty());
     assertEquals(1, ctx.generateCassetteKey("embedding").callIndex());
+  }
+
+  @Test
+  void recordsCassetteKeysWrittenThroughTheContextStore() {
+    VCRContext ctx = newContext(VCRMode.RECORD);
+    ctx.setCurrentTest("Suite:test1");
+    CassetteKey key = new CassetteKey("embedding", "Suite:test1", 1);
+
+    ctx.getCassetteStore()
+        .store(
+            key,
+            new CassetteRecord.Embedding(
+                "Suite:test1", "test-model", System.currentTimeMillis(), new float[] {1f, 2f}));
+
+    assertEquals(List.of(key), ctx.getCurrentCassetteKeys());
   }
 
   @Test

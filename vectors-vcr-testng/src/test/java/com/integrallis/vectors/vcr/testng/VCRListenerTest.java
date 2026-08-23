@@ -95,6 +95,25 @@ public class VCRListenerTest {
   }
 
   @Test(groups = "unit")
+  public void failedRecordingDeletesCassettesWrittenByWrappedModels() throws IOException {
+    TestNG testng = new TestNG();
+    testng.setTestClasses(new Class<?>[] {FailedRecordingScenario.class});
+    testng.setVerbose(0);
+    testng.setUseDefaultListeners(false);
+    testng.run();
+    assertTrue(testng.getStatus() != 0, "scenario must fail after writing its cassette");
+
+    ExactCassetteStore exact = new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
+    CassetteKey writtenBeforeFailure =
+        new CassetteKey(
+            "embedding", FailedRecordingScenario.class.getName() + ":recordsThenFails", 1);
+
+    assertTrue(
+        exact.retrieve(writtenBeforeFailure).isEmpty(),
+        "failed recording cassette must be deleted");
+  }
+
+  @Test(groups = "unit")
   public void flushFailureFailsTeardownAndStillClosesStore() {
     FailingCassetteStore store = new FailingCassetteStore(true, false);
 

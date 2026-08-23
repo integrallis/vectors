@@ -17,6 +17,7 @@ package com.integrallis.vectors.vcr;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,7 +55,7 @@ public final class VCRContext {
   private static final class TestState {
     String currentTestId;
     VCRMode effectiveMode;
-    final List<CassetteKey> cassetteKeys = new ArrayList<>();
+    final LinkedHashSet<CassetteKey> cassetteKeys = new LinkedHashSet<>();
     final Map<String, AtomicInteger> callCounters = new HashMap<>();
   }
 
@@ -73,7 +74,9 @@ public final class VCRContext {
    *     VCR_MODE} environment variable
    */
   public VCRContext(CassetteStore cassetteStore, VCRRegistry registry, VCRMode annotationMode) {
-    this.cassetteStore = Objects.requireNonNull(cassetteStore, "cassetteStore");
+    this.cassetteStore =
+        TrackingCassetteStore.wrap(
+            Objects.requireNonNull(cassetteStore, "cassetteStore"), this::trackCassetteKey);
     this.registry = Objects.requireNonNull(registry, "registry");
     this.configuredMode = resolveMode(Objects.requireNonNull(annotationMode, "annotationMode"));
   }
@@ -182,6 +185,10 @@ public final class VCRContext {
    */
   public List<CassetteKey> getCurrentCassetteKeys() {
     return new ArrayList<>(threadState.get().cassetteKeys);
+  }
+
+  private void trackCassetteKey(CassetteKey key) {
+    threadState.get().cassetteKeys.add(Objects.requireNonNull(key, "key"));
   }
 
   /** Records a cache hit. */

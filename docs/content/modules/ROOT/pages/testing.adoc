@@ -6,7 +6,7 @@ Record responses from embedding and chat models during development, then replay 
 
 == Concepts
 
-* **Cassette** -- a stored request/response pair, identified by test class, test method, and call index.
+* **Cassette** -- a stored model response, identified by call type, test class, test method, and call index.
 * **Mode** -- controls VCR behavior:
 ** `PLAYBACK` -- serve from cassettes only; fail if missing.
 ** `RECORD` -- always call the real model and store the response.
@@ -40,7 +40,6 @@ Annotate your test class:
 ----
 @VCRTest(mode = VCRMode.PLAYBACK_OR_RECORD,
          dataDir = "src/test/resources/vcr-data")  // this is the default; omit to inherit it
-@ExtendWith(VCRExtension.class)
 class EmbeddingTest {
 
     @VCRModel
@@ -69,6 +68,10 @@ class EmbeddingTest {
 On the first run, the real model is called and responses are saved to cassette files under `dataDir`.
 On subsequent runs, responses are replayed from cassettes -- no API key or network needed.
 
+If a recording test fails after one or more model calls, the JUnit 5 extension deletes every
+cassette written by that test and marks the test failed in the registry. A later
+`RECORD_FAILED` run can then create a complete replacement without replaying partial fixtures.
+
 == TestNG Setup
 
 [source,kotlin,subs="attributes+"]
@@ -83,7 +86,6 @@ dependencies {
 ----
 @VCRTestNG(mode = VCRMode.PLAYBACK_OR_RECORD,
            dataDir = "src/test/resources/vcr-data")
-@Listeners(VCRListener.class)
 public class EmbeddingTest {
 
     @VCRModel
@@ -95,6 +97,10 @@ public class EmbeddingTest {
     }
 }
 ----
+
+The TestNG listener is discovered through the service provider shipped by the module. If a
+recording test fails, it marks the registry entry failed and deletes every cassette successfully
+written by that test.
 
 == Spring AI Integration
 
@@ -132,11 +138,13 @@ which decorate the LangChain4j `EmbeddingModel` and `ChatModel` interfaces.
 
 === File-Based (Default)
 
-Cassettes are stored as JSON files on disk under the configured `dataDir`.
+Cassettes are stored under the configured `dataDir` using the Vectors local-file backend.
+Avaje and Jackson serialize the cassette payload as JSON inside the backend's file framing.
 
 === Semantic Store
 
-Use `vectors-vcr-semantic-db` for fuzzy matching of prompts via vector similarity:
+`vectors-vcr-semantic-db` provides a lower-level `SemanticCassetteStore` for reusing nearby
+recorded embeddings in a manually configured LangChain4j embedding wrapper:
 
 [source,kotlin,subs="attributes+"]
 ----
@@ -145,8 +153,11 @@ dependencies {
 }
 ----
 
-The semantic store finds cassettes for prompts that are semantically similar (not byte-identical), which handles non-deterministic prompt formatting or minor prompt variations.
-Configure the similarity threshold (default: 0.95) to control matching strictness.
+Adding the dependency does not replace the JUnit cassette-store factory automatically. In
+`PLAYBACK_OR_RECORD`, the wrapper computes the current embedding with the live delegate before
+querying the semantic store. A match above the configured cosine threshold (default: 0.95) can
+reuse an existing embedding cassette instead of writing another one. This is not offline
+playback, and it does not apply to chat calls or the Spring AI adapter.
 
 == Serializer Choice
 

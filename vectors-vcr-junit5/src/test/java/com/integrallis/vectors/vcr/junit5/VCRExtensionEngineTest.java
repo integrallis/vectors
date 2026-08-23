@@ -111,6 +111,23 @@ class VCRExtensionEngineTest {
   }
 
   @Test
+  void failedRecordingDeletesCassettesWrittenByWrappedModels() throws IOException {
+    Events failed =
+        EngineTestKit.engine("junit-jupiter")
+            .selectors(DiscoverySelectors.selectClass(FailedRecordingScenario.class))
+            .execute()
+            .testEvents();
+    failed.assertStatistics(stats -> stats.succeeded(0).failed(1));
+
+    ExactCassetteStore exact = new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
+    CassetteKey writtenBeforeFailure =
+        new CassetteKey(
+            "embedding", FailedRecordingScenario.class.getName() + ":recordsThenFails", 1);
+
+    assertThat(exact.retrieve(writtenBeforeFailure)).isEmpty();
+  }
+
+  @Test
   void flushFailureFailsTeardownAndStillClosesStore() {
     FailingCassetteStore store = new FailingCassetteStore(true, false);
 
