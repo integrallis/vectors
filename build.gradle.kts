@@ -942,7 +942,7 @@ tasks.register("verifyDocumentation") {
 
     val readmeFile = file("README.md")
     val docsFiles = fileTree("docs") {
-        include("**/*.adoc", "**/*.html", "**/*.hbs", "**/*.yml", "**/*.yaml")
+        include("**/*.adoc", "**/*.html", "**/*.hbs", "**/*.js", "**/*.yml", "**/*.yaml")
         exclude("build/**", "node_modules/**", ".gradle/**", "content/**/attachments/**")
     }
     val docsPackageFile = file("docs/package.json")
@@ -1010,8 +1010,22 @@ tasks.register("verifyDocumentation") {
         }
 
         val landingPage = file("docs/landing/index.html").readText()
+        val landingScript = file("docs/landing/assets/js/landing.js").readText()
+        val releaseVersion = project.version.toString()
         require("collection.search(query, 10)" !in landingPage) {
             "Landing page uses a nonexistent VectorCollection.search overload"
+        }
+        require("v$releaseVersion" in landingPage) {
+            "Landing page version pill must match project version $releaseVersion"
+        }
+        require("com.integrallis:vectors:$releaseVersion" in landingPage) {
+            "Landing page dependency must match project version $releaseVersion"
+        }
+        require("com.integrallis:vectors:$releaseVersion" in landingScript) {
+            "Landing page copyable coordinates must match project version $releaseVersion"
+        }
+        require("VCR testing for AI calls" in landingPage) {
+            "Landing page must expose the VCR testing capability"
         }
 
         require(docsLockFile.exists()) {

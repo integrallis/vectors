@@ -31,7 +31,7 @@
                 <a href="https://integrallis.com" class="brand-mark" aria-label="Integrallis"><img class="ilogo" src="assets/images/integrallis-logo.png" alt="Integrallis"></a>
                 <span class="sep">/</span>
                 <a href="#top" class="product">vectors</a>
-                <a href="https://github.com/integrallis/vectors/releases" class="version-pill" title="Release notes">v0.1.4</a>
+                <a href="https://github.com/integrallis/vectors/releases" class="version-pill" title="Release notes">v0.1.11</a>
             </div>
             <div class="nav-right">
                 <div class="nav-links">
@@ -124,7 +124,7 @@ var matches = store.search(EmbeddingSearchRequest.builder()
                     <button class="install-tab" data-target="sbt">sbt</button>
                 </div>
                 <div class="install-cmd">
-                    <code><span class="prompt" id="install-prompt" style="display:none">$ </span><span id="install-text">implementation("com.integrallis:vectors:0.1.4")</span></code>
+                    <code><span class="prompt" id="install-prompt" style="display:none">$ </span><span id="install-text">implementation("com.integrallis:vectors:0.1.11")</span></code>
                     <button class="install-copy" id="install-copy" aria-label="Copy dependency" title="Copy">
                         <svg class="clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                         <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
@@ -259,12 +259,12 @@ collection.search(SearchRequest.builder(query, 10).build());</code></pre>
                 <div class="card reveal">
                     <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10h10V2Z"/><path d="M22 12h-10v10h10V12Z"/><path d="M12 12H2v10h10V12Z"/><path d="M22 2h-10v10h10V2Z"/></svg></div>
                     <h3 class="card-title">Framework adapters</h3>
-                    <p class="card-description">Spring AI <code>VectorStore</code>, LangChain4j <code>EmbeddingStore</code>, a Spring Boot starter, and semantic-cache modules.</p>
+                    <p class="card-description">Spring AI <code>VectorStore</code>, LangChain4j <code>EmbeddingStore</code>, a Spring Boot starter, semantic caching, and routing.</p>
                 </div>
                 <div class="card reveal">
-                    <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg></div>
-                    <h3 class="card-title">Off-heap memory</h3>
-                    <p class="card-description">Vectors live in <code>MemorySegment</code> / <code>Arena</code> via the Foreign Function &amp; Memory API — large collections don't pressure the garbage collector.</p>
+                    <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m7 9 3 3-3 3"/><path d="M13 15h4"/></svg></div>
+                    <h3 class="card-title"><a href="docs/vectors/current/testing.html">VCR testing for AI calls</a></h3>
+                    <p class="card-description">Record Spring AI and LangChain4j chat, streaming, tool-call, and embedding responses once; replay signed cassettes offline in JUnit 5 or TestNG.</p>
                 </div>
             </div>
             <div class="hero-cta reveal" style="justify-content:center;margin-top:2.5rem">
