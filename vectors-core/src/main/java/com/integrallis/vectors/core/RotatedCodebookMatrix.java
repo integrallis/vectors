@@ -219,6 +219,75 @@ public final class RotatedCodebookMatrix {
     }
   }
 
+  /**
+   * Returns a zero-copy view over a contiguous range of matrix rows.
+   *
+   * @param fromRow first logical row in this matrix
+   * @param rowCount number of rows in the result
+   * @return a matrix sharing this matrix's packed codes and norms
+   */
+  public RotatedCodebookMatrix rowSlice(int fromRow, int rowCount) {
+    if (fromRow < 0 || rowCount <= 0 || fromRow > rows - rowCount) {
+      throw new IndexOutOfBoundsException(
+          "row range [" + fromRow + ", " + ((long) fromRow + rowCount) + ") exceeds " + rows);
+    }
+    long packedOffset = Math.multiplyExact((long) fromRow, rowBytes);
+    long packedLength = Math.multiplyExact((long) rowCount, rowBytes);
+    long normRowBytes = Math.multiplyExact((long) groupsPerRow, Short.BYTES);
+    long normOffset = Math.multiplyExact(fromRow, normRowBytes);
+    long normLength = Math.multiplyExact(rowCount, normRowBytes);
+    return new RotatedCodebookMatrix(
+        packedCodes.asSlice(packedOffset, packedLength),
+        norms.asSlice(normOffset, normLength),
+        rowCount,
+        columns,
+        groupSize,
+        paddedColumns,
+        groupsPerRow,
+        rowBytes,
+        encoding,
+        codebook);
+  }
+
+  /**
+   * Reconstructs one logical row without expanding any other matrix rows.
+   *
+   * @param row logical row index
+   * @param output destination with room for every logical column
+   */
+  public void decodeRow(int row, float[] output) {
+    Objects.requireNonNull(output, "output");
+    if (row < 0 || row >= rows) {
+      throw new IndexOutOfBoundsException("row " + row + " is outside [0, " + rows + ")");
+    }
+    if (output.length < columns) {
+      throw new IllegalArgumentException(
+          "output length must be at least matrix columns " + columns + "; got " + output.length);
+    }
+
+    float[] groupValues = new float[groupSize];
+    float hadamardScale = (float) (1.0 / Math.sqrt(groupSize));
+    long rowOffset = (long) row * rowBytes;
+    int normBase = row * groupsPerRow;
+    for (int group = 0; group < groupsPerRow; group++) {
+      int valueBase = group * groupSize;
+      for (int index = 0; index < groupSize; index++) {
+        int code = extractCode(rowOffset, valueBase + index);
+        int codebookIndex = encoding.codebookIndex(code);
+        if (codebookIndex < 0) {
+          throw new IllegalArgumentException("packed codes contain invalid ternary crumb 2");
+        }
+        groupValues[index] = codebook[codebookIndex];
+      }
+      hadamardInPlace(groupValues, 0, groupSize);
+      float scale = norm(normBase + group) * hadamardScale;
+      int copyLength = Math.min(groupSize, columns - valueBase);
+      for (int index = 0; index < copyLength; index++) {
+        output[valueBase + index] = groupValues[index] * scale;
+      }
+    }
+  }
+
   private void multiplyWithByteLookup(PreparedActivation activation, float[] output) {
     int bytesPerGroup = rowBytes / groupsPerRow;
     for (int row = 0; row < rows; row++) {

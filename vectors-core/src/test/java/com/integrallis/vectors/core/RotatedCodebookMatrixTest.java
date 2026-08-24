@@ -82,6 +82,38 @@ class RotatedCodebookMatrixTest {
     assertThat(secondOutput).containsExactly(firstOutput);
   }
 
+  @ParameterizedTest(name = "decode {0}")
+  @MethodSource("needleFixtures")
+  void decodedRowsReproduceNeedleReferenceDotProducts(String name, String resource)
+      throws IOException {
+    Fixture fixture = readFixture(resource);
+    RotatedCodebookMatrix matrix = fixture.matrix();
+    float[] row = new float[fixture.columns()];
+
+    for (int index = 0; index < fixture.rows(); index++) {
+      matrix.decodeRow(index, row);
+      float dot = VectorUtil.dotProduct(row, fixture.input());
+      assertThat(dot).isCloseTo(fixture.expected()[index], within(REFERENCE_TOLERANCE));
+    }
+  }
+
+  @Test
+  void rowSliceSharesStorageAndMatchesTheFullMatrix() throws IOException {
+    Fixture fixture = readFixture("needle-cq3-v7bd8a63.b64");
+    RotatedCodebookMatrix matrix = fixture.matrix();
+    RotatedCodebookMatrix slice = matrix.rowSlice(1, 2);
+    float[] complete = new float[fixture.rows()];
+    float[] selected = new float[2];
+
+    matrix.multiply(matrix.prepare(fixture.input()), complete);
+    slice.multiply(slice.prepare(fixture.input()), selected);
+
+    assertThat(slice.rows()).isEqualTo(2);
+    assertThat(selected).containsExactly(complete[1], complete[2]);
+    assertThatThrownBy(() -> matrix.rowSlice(-1, 1)).isInstanceOf(IndexOutOfBoundsException.class);
+    assertThatThrownBy(() -> matrix.rowSlice(2, 2)).isInstanceOf(IndexOutOfBoundsException.class);
+  }
+
   @Test
   void readsCodesAndNormsFromMappedFileSlices(@TempDir Path directory) throws IOException {
     Fixture fixture = readFixture("needle-cq4-v7bd8a63.b64");
