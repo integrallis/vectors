@@ -7,6 +7,7 @@ Framework-neutral record/replay engine for AI model API calls. Records embedding
 ## Responsibility
 
 - VCR mode management: PLAYBACK, RECORD, RECORD_NEW, RECORD_FAILED, PLAYBACK_OR_RECORD, OFF
+- Canonical request signatures: strict playback rejects stale cassettes; PLAYBACK_OR_RECORD refreshes them
 - `CassetteRecord` sealed interface with Embedding, BatchEmbedding, and Chat payload types
 - `CassetteStore` — persistence abstraction for cassette storage (exact lookup, CRUD, filtering)
 - `VCRRegistry` — tracks per-test recording status (RECORDED, FAILED, MISSING) across runs
@@ -22,6 +23,7 @@ Framework-neutral record/replay engine for AI model API calls. Records embedding
 - `CassetteSerializer` — serialization SPI (JSON format)
 - `VCRContext` — per-test runtime state
 - `VCRRegistry` — cross-run status tracker
+- `VCRReplayPolicy` — shared missing/stale/matching cassette decision policy
 
 ## Dependencies
 

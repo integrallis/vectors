@@ -18,8 +18,10 @@ package com.integrallis.vectors.vcr.testng;
 import com.integrallis.vectors.vcr.CassetteKey;
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
-import com.integrallis.vectors.vcr.VCRCassetteMissingException;
+import com.integrallis.vectors.vcr.RequestSignature;
 import com.integrallis.vectors.vcr.VCRMode;
+import com.integrallis.vectors.vcr.VCRReplayPolicy;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -47,15 +49,20 @@ final class VCRFakeEmbeddingModel implements FakeEmbeddingModel {
     if (mode == VCRMode.OFF) {
       return delegate.embed(prompt);
     }
-    if (mode == VCRMode.PLAYBACK) {
-      Optional<CassetteRecord> hit = store.retrieve(key);
-      if (hit.isPresent()) {
-        return ((CassetteRecord.Embedding) hit.get()).embedding();
-      }
-      throw new VCRCassetteMissingException(key.serializedKey(), testId);
+    String signature =
+        RequestSignature.create(
+            Map.of("operation", "embedding", "model", "fake", "prompt", prompt));
+    Optional<CassetteRecord> hit = store.retrieve(key);
+    if (hit.isPresent() && !(hit.get() instanceof CassetteRecord.Embedding)) {
+      throw new IllegalStateException("Expected an embedding cassette");
+    }
+    if (VCRReplayPolicy.shouldReplay(mode, hit, key, signature)) {
+      return ((CassetteRecord.Embedding) hit.orElseThrow()).embedding();
     }
     float[] out = delegate.embed(prompt);
-    store.store(key, new CassetteRecord.Embedding(testId, "fake", System.currentTimeMillis(), out));
+    store.store(
+        key,
+        new CassetteRecord.Embedding(testId, "fake", System.currentTimeMillis(), out, signature));
     return out;
   }
 }

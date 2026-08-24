@@ -56,11 +56,13 @@ class VCRRegistryTest {
   }
 
   @Test
-  void playbackOrRecordRoutesOnStatus() {
+  void playbackOrRecordRemainsRequestAwareRegardlessOfStatus() {
     VCRRegistry reg = new VCRRegistry(new HeapStorageBackend());
-    assertEquals(VCRMode.RECORD, reg.determineEffectiveMode("T:m", VCRMode.PLAYBACK_OR_RECORD));
+    assertEquals(
+        VCRMode.PLAYBACK_OR_RECORD, reg.determineEffectiveMode("T:m", VCRMode.PLAYBACK_OR_RECORD));
     reg.registerSuccess("T:m");
-    assertEquals(VCRMode.PLAYBACK, reg.determineEffectiveMode("T:m", VCRMode.PLAYBACK_OR_RECORD));
+    assertEquals(
+        VCRMode.PLAYBACK_OR_RECORD, reg.determineEffectiveMode("T:m", VCRMode.PLAYBACK_OR_RECORD));
   }
 
   @Test

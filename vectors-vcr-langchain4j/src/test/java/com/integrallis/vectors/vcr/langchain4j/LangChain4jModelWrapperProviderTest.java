@@ -16,6 +16,8 @@
 package com.integrallis.vectors.vcr.langchain4j;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.withSettings;
 
 import com.integrallis.vectors.storage.backend.HeapStorageBackend;
 import com.integrallis.vectors.vcr.CassetteStore;
@@ -23,6 +25,7 @@ import com.integrallis.vectors.vcr.ExactCassetteStore;
 import com.integrallis.vectors.vcr.VCRMode;
 import com.integrallis.vectors.vcr.VCRModelWrapper;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,7 @@ class LangChain4jModelWrapperProviderTest {
 
   @Mock EmbeddingModel embeddingDelegate;
   @Mock ChatModel chatDelegate;
+  @Mock StreamingChatModel streamingDelegate;
 
   private final CassetteStore store = new ExactCassetteStore(new HeapStorageBackend());
 
@@ -50,5 +54,25 @@ class LangChain4jModelWrapperProviderTest {
   void wrapsChatModelThroughServiceLoader() {
     Object wrapped = VCRModelWrapper.wrapModel(chatDelegate, "T:c", VCRMode.RECORD, "m", store);
     assertThat(wrapped).isInstanceOf(VCRChatModel.class);
+  }
+
+  @Test
+  void wrapsStreamingModelThroughServiceLoader() {
+    Object wrapped =
+        VCRModelWrapper.wrapModel(streamingDelegate, "T:s", VCRMode.RECORD, "m", store);
+    assertThat(wrapped).isInstanceOf(VCRStreamingChatModel.class);
+  }
+
+  @Test
+  void preservesBothInterfacesForDualModeModels() {
+    Object delegate =
+        mock(ChatModel.class, withSettings().extraInterfaces(StreamingChatModel.class));
+
+    Object wrapped = VCRModelWrapper.wrapModel(delegate, "T:dual", VCRMode.RECORD, "m", store);
+
+    assertThat(wrapped)
+        .isInstanceOf(VCRChatAndStreamingModel.class)
+        .isInstanceOf(ChatModel.class)
+        .isInstanceOf(StreamingChatModel.class);
   }
 }

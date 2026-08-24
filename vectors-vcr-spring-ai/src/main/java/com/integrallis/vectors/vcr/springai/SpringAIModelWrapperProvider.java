@@ -19,6 +19,7 @@ import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ModelWrapperProvider;
 import com.integrallis.vectors.vcr.VCRMode;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 
 /**
@@ -36,6 +37,10 @@ public final class SpringAIModelWrapperProvider implements ModelWrapperProvider 
     }
     if (model instanceof ChatModel cm && !(model instanceof VCRSpringAIChatModel)) {
       return new VCRSpringAIChatModel(cm, testId, mode, modelName, cassetteStore);
+    }
+    if (model instanceof StreamingChatModel scm
+        && !(model instanceof VCRSpringAIStreamingChatModel)) {
+      return new VCRSpringAIStreamingChatModel(scm, testId, mode, modelName, cassetteStore);
     }
     return null;
   }

@@ -102,6 +102,36 @@ class VCRChatModelTest {
   }
 
   @Test
+  void playbackOrRecordRefreshesWhenRequestParametersChange() {
+    when(delegate.doChat(any(ChatRequest.class)))
+        .thenReturn(response("deterministic"), response("creative"));
+    ChatRequest deterministic =
+        ChatRequest.builder()
+            .messages(UserMessage.from("same prompt"))
+            .temperature(0.0)
+            .maxOutputTokens(32)
+            .build();
+    ChatRequest creative =
+        ChatRequest.builder()
+            .messages(UserMessage.from("same prompt"))
+            .temperature(0.9)
+            .maxOutputTokens(32)
+            .build();
+
+    new VCRChatModel(delegate, "T:signature", VCRMode.RECORD, "gpt", store).doChat(deterministic);
+    ChatResponse unchanged =
+        new VCRChatModel(delegate, "T:signature", VCRMode.PLAYBACK_OR_RECORD, "gpt", store)
+            .doChat(deterministic);
+    ChatResponse changed =
+        new VCRChatModel(delegate, "T:signature", VCRMode.PLAYBACK_OR_RECORD, "gpt", store)
+            .doChat(creative);
+
+    assertThat(unchanged.aiMessage().text()).isEqualTo("deterministic");
+    assertThat(changed.aiMessage().text()).isEqualTo("creative");
+    verify(delegate, times(2)).doChat(any(ChatRequest.class));
+  }
+
+  @Test
   void playbackThrowsWhenMissing() {
     ChatRequest request = ChatRequest.builder().messages(UserMessage.from("x")).build();
 
@@ -109,5 +139,9 @@ class VCRChatModelTest {
     assertThatThrownBy(() -> player.doChat(request))
         .isInstanceOf(VCRCassetteMissingException.class);
     verify(delegate, never()).doChat(any(ChatRequest.class));
+  }
+
+  private static ChatResponse response(String text) {
+    return ChatResponse.builder().aiMessage(AiMessage.from(text)).build();
   }
 }

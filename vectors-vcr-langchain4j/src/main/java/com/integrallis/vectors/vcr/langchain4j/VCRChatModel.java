@@ -18,8 +18,8 @@ package com.integrallis.vectors.vcr.langchain4j;
 import com.integrallis.vectors.vcr.CassetteKey;
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
-import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
+import com.integrallis.vectors.vcr.VCRReplayPolicy;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.ChatModel;
@@ -68,32 +68,30 @@ public final class VCRChatModel implements ChatModel {
       return delegate.doChat(request);
     }
     CassetteKey key = new CassetteKey(TYPE_CHAT, testId, callCounter.incrementAndGet());
-    if (mode.isPlaybackMode()) {
-      Optional<CassetteRecord> hit = store.retrieve(key);
-      if (hit.isPresent()) {
-        if (!(hit.get() instanceof CassetteRecord.Chat c)) {
-          throw new IllegalStateException(
-              "Expected Chat cassette for key "
-                  + key.serializedKey()
-                  + " but got "
-                  + hit.get().getClass().getSimpleName());
-        }
-        return toChatResponse(c.response());
-      }
-      if (mode == VCRMode.PLAYBACK) {
-        throw new VCRCassetteMissingException(key.serializedKey(), testId);
-      }
+    String signature =
+        LangChain4jRequestSignatures.chat(modelName, request, delegate.defaultRequestParameters());
+    Optional<CassetteRecord> hit = store.retrieve(key);
+    if (hit.isPresent() && !(hit.get() instanceof CassetteRecord.Chat)) {
+      throw new IllegalStateException(
+          "Expected Chat cassette for key "
+              + key.serializedKey()
+              + " but got "
+              + hit.get().getClass().getSimpleName());
+    }
+    if (VCRReplayPolicy.shouldReplay(mode, hit, key, signature)) {
+      CassetteRecord.Chat c = (CassetteRecord.Chat) hit.orElseThrow();
+      return toChatResponse(c.response());
     }
     ChatResponse response = delegate.doChat(request);
     String prompt = String.valueOf(request.messages());
     store.store(
         key,
         new CassetteRecord.Chat(
-            testId, modelName, System.currentTimeMillis(), prompt, toPayload(response)));
+            testId, modelName, System.currentTimeMillis(), prompt, toPayload(response), signature));
     return response;
   }
 
-  private static CassetteRecord.ChatPayload toPayload(ChatResponse response) {
+  static CassetteRecord.ChatPayload toPayload(ChatResponse response) {
     AiMessage ai = response.aiMessage();
     CassetteRecord.AiMessagePayload aiPayload =
         new CassetteRecord.AiMessagePayload(
@@ -126,7 +124,7 @@ public final class VCRChatModel implements ChatModel {
         .toList();
   }
 
-  private static ChatResponse toChatResponse(CassetteRecord.ChatPayload payload) {
+  static ChatResponse toChatResponse(CassetteRecord.ChatPayload payload) {
     CassetteRecord.AiMessagePayload ai = payload.aiMessage();
     AiMessage aiMessage =
         AiMessage.builder()

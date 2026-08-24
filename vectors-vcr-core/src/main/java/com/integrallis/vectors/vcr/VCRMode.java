@@ -24,8 +24,9 @@ package com.integrallis.vectors.vcr;
 public enum VCRMode {
 
   /**
-   * Use cached responses only. Fails if no cassette exists for a call. This is the default mode for
-   * CI/CD environments where API calls should not be made.
+   * Use cached responses only. Fails if no matching cassette exists for a call or the recorded
+   * request signature is stale. This is the default mode for CI/CD environments where API calls
+   * should not be made.
    */
   PLAYBACK,
 
@@ -45,8 +46,8 @@ public enum VCRMode {
   RECORD_FAILED,
 
   /**
-   * Smart mode: use cache if it exists, otherwise record. Good for development when you want
-   * automatic recording of new tests.
+   * Smart mode: replay a cassette whose request signature matches, otherwise record and replace the
+   * missing or stale interaction. Good for automatic fixture maintenance during development.
    */
   PLAYBACK_OR_RECORD,
 

@@ -18,8 +18,8 @@ package com.integrallis.vectors.vcr.springai;
 import com.integrallis.vectors.vcr.CassetteKey;
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
-import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
+import com.integrallis.vectors.vcr.VCRReplayPolicy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -82,26 +82,21 @@ public final class VCRSpringAIEmbeddingModel implements EmbeddingModel {
       return delegate.embed(text);
     }
     CassetteKey key = new CassetteKey(TYPE_SINGLE, testId, singleCalls.incrementAndGet());
-    if (mode.isPlaybackMode()) {
-      Optional<CassetteRecord> cached = store.retrieve(key);
-      if (cached.isPresent()) {
-        if (cached.get() instanceof CassetteRecord.Embedding e) {
-          return e.embedding();
-        }
-        throw new IllegalStateException(
-            "Expected Embedding cassette for key "
-                + key.serializedKey()
-                + " but got "
-                + cached.get().getClass().getSimpleName());
-      }
-      if (mode == VCRMode.PLAYBACK) {
-        throw new VCRCassetteMissingException(key.serializedKey(), testId);
-      }
+    String signature =
+        SpringAIRequestSignatures.embedding(
+            "embedding", modelName, List.of(text == null ? "" : text), null);
+    Optional<CassetteRecord> cached = store.retrieve(key);
+    if (cached.isPresent() && !(cached.get() instanceof CassetteRecord.Embedding)) {
+      throw wrongType(key, cached.get(), "Embedding");
+    }
+    if (VCRReplayPolicy.shouldReplay(mode, cached, key, signature)) {
+      return ((CassetteRecord.Embedding) cached.orElseThrow()).embedding();
     }
     float[] embedding = delegate.embed(text);
     store.store(
         key,
-        new CassetteRecord.Embedding(testId, modelName, System.currentTimeMillis(), embedding));
+        new CassetteRecord.Embedding(
+            testId, modelName, System.currentTimeMillis(), embedding, signature));
     return embedding;
   }
 
@@ -117,32 +112,30 @@ public final class VCRSpringAIEmbeddingModel implements EmbeddingModel {
       return delegate.embed(texts);
     }
     CassetteKey key = new CassetteKey(TYPE_BATCH, testId, batchCalls.incrementAndGet());
-    if (mode.isPlaybackMode()) {
-      Optional<CassetteRecord> cached = store.retrieve(key);
-      if (cached.isPresent()) {
-        if (!(cached.get() instanceof CassetteRecord.BatchEmbedding b)) {
-          throw new IllegalStateException(
-              "Expected BatchEmbedding cassette for key "
-                  + key.serializedKey()
-                  + " but got "
-                  + cached.get().getClass().getSimpleName());
-        }
-        float[][] arr = b.embeddings();
-        List<float[]> result = new ArrayList<>(arr.length);
-        for (float[] v : arr) {
-          result.add(v);
-        }
-        return result;
+    String signature =
+        SpringAIRequestSignatures.embedding("batch_embedding", modelName, texts, null);
+    Optional<CassetteRecord> cached = store.retrieve(key);
+    if (cached.isPresent() && !(cached.get() instanceof CassetteRecord.BatchEmbedding)) {
+      throw wrongType(key, cached.get(), "BatchEmbedding");
+    }
+    if (VCRReplayPolicy.shouldReplay(mode, cached, key, signature)) {
+      CassetteRecord.BatchEmbedding batch = (CassetteRecord.BatchEmbedding) cached.orElseThrow();
+      float[][] arr = batch.embeddings();
+      List<float[]> result = new ArrayList<>(arr.length);
+      for (float[] v : arr) {
+        result.add(v);
       }
-      if (mode == VCRMode.PLAYBACK) {
-        throw new VCRCassetteMissingException(key.serializedKey(), testId);
-      }
+      return result;
     }
     List<float[]> embeddings = delegate.embed(texts);
     store.store(
         key,
         new CassetteRecord.BatchEmbedding(
-            testId, modelName, System.currentTimeMillis(), embeddings.toArray(new float[0][])));
+            testId,
+            modelName,
+            System.currentTimeMillis(),
+            embeddings.toArray(new float[0][]),
+            signature));
     return embeddings;
   }
 
@@ -176,5 +169,16 @@ public final class VCRSpringAIEmbeddingModel implements EmbeddingModel {
           e);
       return -1;
     }
+  }
+
+  private static IllegalStateException wrongType(
+      CassetteKey key, CassetteRecord record, String expected) {
+    return new IllegalStateException(
+        "Expected "
+            + expected
+            + " cassette for key "
+            + key.serializedKey()
+            + " but got "
+            + record.getClass().getSimpleName());
   }
 }

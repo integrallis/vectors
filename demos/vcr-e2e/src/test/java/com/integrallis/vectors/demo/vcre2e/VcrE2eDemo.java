@@ -44,6 +44,7 @@ import org.junit.jupiter.api.Test;
  *
  * <pre>
  *   ./gradlew :demos:vcr-e2e:test   # strict playback; committed cassettes are required
+ *   VCR_MODE=RECORD ./gradlew :demos:vcr-e2e:test   # deliberately refresh cassettes
  * </pre>
  */
 @VCRTest(mode = VCRMode.PLAYBACK, dataDir = "src/test/resources/vcr-data")
@@ -58,7 +59,7 @@ public class VcrE2eDemo {
     realEmbedderCalls.set(0);
     Response<Embedding> r = embedder.embed("what is HNSW?");
     assertThat(r.content().vector()).hasSize(4);
-    assertThat(realEmbedderCalls).hasValue(0);
+    assertOfflinePlaybackDidNotCallDelegate();
   }
 
   @Test
@@ -68,7 +69,14 @@ public class VcrE2eDemo {
         embedder.embedAll(List.of(TextSegment.from("hello"), TextSegment.from("world")));
     assertThat(r.content()).hasSize(2);
     assertThat(r.content().get(0).vector()).hasSize(4);
-    assertThat(realEmbedderCalls).hasValue(0);
+    assertOfflinePlaybackDidNotCallDelegate();
+  }
+
+  private static void assertOfflinePlaybackDidNotCallDelegate() {
+    String override = System.getenv("VCR_MODE");
+    if (override == null || override.equals(VCRMode.PLAYBACK.name())) {
+      assertThat(realEmbedderCalls).hasValue(0);
+    }
   }
 
   /** Minimal LangChain4j {@code EmbeddingModel} standing in for an external provider. */

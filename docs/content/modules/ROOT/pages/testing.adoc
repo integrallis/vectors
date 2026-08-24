@@ -8,11 +8,11 @@ Record responses from embedding and chat models during development, then replay 
 
 * **Cassette** -- a stored model response, identified by call type, test class, test method, and call index.
 * **Mode** -- controls VCR behavior:
-** `PLAYBACK` -- serve from cassettes only; fail if missing.
+** `PLAYBACK` -- serve only a cassette whose request signature matches; fail if missing or stale.
 ** `RECORD` -- always call the real model and store the response.
 ** `RECORD_NEW` -- record only if no cassette exists; replay otherwise.
 ** `RECORD_FAILED` -- re-record only for tests that previously failed.
-** `PLAYBACK_OR_RECORD` -- try playback first; fall back to recording if no cassette exists.
+** `PLAYBACK_OR_RECORD` -- replay a matching cassette; record when it is missing or its request signature is stale.
 ** `OFF` -- bypass VCR entirely; all calls go to the real model.
 * **Registry** -- tracks per-test status (RECORDED, FAILED, MISSING) across test runs.
 * **Serializer** -- encodes cassettes to JSON. Two implementations: Avaje Jsonb (default) and Jackson.
@@ -68,6 +68,18 @@ class EmbeddingTest {
 On the first run, the real model is called and responses are saved to cassette files under `dataDir`.
 On subsequent runs, responses are replayed from cassettes -- no API key or network needed.
 
+Each framework wrapper signs the complete canonical request. Chat signatures include the messages,
+the configured model label, request options such as temperature and token limits, provider request
+parameters, tool specifications, and model defaults exposed by the framework. Embedding signatures
+include the input text or batch and model label. The ordinal key locates the cassette; the signature
+then proves that the current call is the interaction that was recorded there.
+
+`PLAYBACK_OR_RECORD` is therefore the automatic maintenance mode: an unchanged request replays,
+while a changed prompt, model setting, tool definition, or embedding input invokes the delegate and
+replaces the stale cassette. Strict `PLAYBACK` never refreshes fixtures and throws
+`VCRCassetteStaleException` on a mismatch. Legacy cassettes without signatures are refreshed by
+`PLAYBACK_OR_RECORD` and rejected by strict `PLAYBACK`.
+
 If a recording test fails after one or more model calls, the JUnit 5 extension deletes every
 cassette written by that test and marks the test failed in the registry. A later
 `RECORD_FAILED` run can then create a complete replacement without replaying partial fixtures.
@@ -115,7 +127,11 @@ EmbeddingModel embeddingModel = new OpenAiEmbeddingModel(apiKey);
 ChatModel chatModel = new OpenAiChatModel(apiKey);
 ----
 
-The `vectors-vcr-spring-ai` module provides `VCRSpringAIEmbeddingModel` and `VCRSpringAIChatModel` wrappers.
+The `vectors-vcr-spring-ai` module provides `VCRSpringAIEmbeddingModel`,
+`VCRSpringAIChatModel`, and `VCRSpringAIStreamingChatModel` wrappers. Blocking chat replay preserves
+assistant messages, tool calls, all generations, generation metadata, response attributes, token
+usage, rate limits, and prompt-filter metadata. Streaming replay preserves the ordered
+`ChatResponse` chunks.
 Field wrapping happens automatically when `@VCRModel` is used with the JUnit 5 or TestNG extension.
 
 == LangChain4j Integration
@@ -131,8 +147,10 @@ dev.langchain4j.model.chat.ChatModel chatModel = OpenAiChatModel.builder()
     .apiKey(apiKey).build();
 ----
 
-The `vectors-vcr-langchain4j` module provides `VCREmbeddingModel` and `VCRChatModel` wrappers,
-which decorate the LangChain4j `EmbeddingModel` and `ChatModel` interfaces.
+The `vectors-vcr-langchain4j` module provides `VCREmbeddingModel`, `VCRChatModel`, and
+`VCRStreamingChatModel` wrappers, which decorate the LangChain4j embedding, blocking chat, and
+streaming chat interfaces. Streaming cassettes preserve partial text, thinking, partial and
+complete tool calls, and the final structured response.
 
 == Cassette Storage Options
 

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 
 @Tag("unit")
@@ -36,6 +37,7 @@ class SpringAIModelWrapperProviderTest {
 
   @Mock EmbeddingModel embeddingDelegate;
   @Mock ChatModel chatDelegate;
+  @Mock StreamingChatModel streamingDelegate;
 
   private final CassetteStore store = new ExactCassetteStore(new HeapStorageBackend());
 
@@ -50,5 +52,12 @@ class SpringAIModelWrapperProviderTest {
   void wrapsChatModelThroughServiceLoader() {
     Object wrapped = VCRModelWrapper.wrapModel(chatDelegate, "T:c", VCRMode.RECORD, "m", store);
     assertThat(wrapped).isInstanceOf(VCRSpringAIChatModel.class);
+  }
+
+  @Test
+  void wrapsStandaloneStreamingModelThroughServiceLoader() {
+    Object wrapped =
+        VCRModelWrapper.wrapModel(streamingDelegate, "T:s", VCRMode.RECORD, "m", store);
+    assertThat(wrapped).isInstanceOf(VCRSpringAIStreamingChatModel.class);
   }
 }

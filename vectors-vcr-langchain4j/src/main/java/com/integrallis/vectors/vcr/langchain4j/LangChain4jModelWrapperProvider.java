@@ -19,6 +19,7 @@ import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ModelWrapperProvider;
 import com.integrallis.vectors.vcr.VCRMode;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 
 /**
@@ -33,8 +34,16 @@ public final class LangChain4jModelWrapperProvider implements ModelWrapperProvid
     if (model instanceof EmbeddingModel em && !(model instanceof VCREmbeddingModel)) {
       return new VCREmbeddingModel(em, testId, mode, modelName, cassetteStore);
     }
+    if (model instanceof ChatModel cm
+        && model instanceof StreamingChatModel scm
+        && !(model instanceof VCRChatAndStreamingModel)) {
+      return new VCRChatAndStreamingModel(cm, scm, testId, mode, modelName, cassetteStore);
+    }
     if (model instanceof ChatModel cm && !(model instanceof VCRChatModel)) {
       return new VCRChatModel(cm, testId, mode, modelName, cassetteStore);
+    }
+    if (model instanceof StreamingChatModel scm && !(model instanceof VCRStreamingChatModel)) {
+      return new VCRStreamingChatModel(scm, testId, mode, modelName, cassetteStore);
     }
     return null;
   }

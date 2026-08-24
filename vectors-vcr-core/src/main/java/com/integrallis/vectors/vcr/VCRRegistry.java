@@ -115,8 +115,7 @@ public final class VCRRegistry {
           (status == RecordingStatus.FAILED || status == RecordingStatus.MISSING)
               ? VCRMode.RECORD
               : VCRMode.PLAYBACK;
-      case PLAYBACK_OR_RECORD ->
-          status == RecordingStatus.RECORDED ? VCRMode.PLAYBACK : VCRMode.RECORD;
+      case PLAYBACK_OR_RECORD -> VCRMode.PLAYBACK_OR_RECORD;
       default -> globalMode;
     };
   }

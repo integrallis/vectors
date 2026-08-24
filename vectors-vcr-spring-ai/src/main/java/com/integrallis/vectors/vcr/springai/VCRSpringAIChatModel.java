@@ -18,26 +18,24 @@ package com.integrallis.vectors.vcr.springai;
 import com.integrallis.vectors.vcr.CassetteKey;
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
-import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
+import com.integrallis.vectors.vcr.VCRReplayPolicy;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import reactor.core.publisher.Flux;
 
-/**
- * Spring AI {@link ChatModel} wrapper that records/replays chat responses via a {@link
- * CassetteStore}.
- */
+/** Spring AI chat wrapper that losslessly records blocking and streaming responses. */
 public final class VCRSpringAIChatModel implements ChatModel {
 
   private static final String TYPE_CHAT = "chat";
+  private static final String TYPE_CHAT_STREAM = "chat_stream";
 
   private final ChatModel delegate;
   private final CassetteStore store;
@@ -45,14 +43,9 @@ public final class VCRSpringAIChatModel implements ChatModel {
   private final String modelName;
   private final VCRMode mode;
   private final AtomicInteger callCounter = new AtomicInteger();
+  private final AtomicInteger streamCounter = new AtomicInteger();
 
-  /**
-   * @param delegate real Spring AI chat model
-   * @param testId test identifier
-   * @param mode VCR mode
-   * @param modelName model name for cassette metadata
-   * @param store cassette store
-   */
+  /** Creates a VCR wrapper around a real Spring AI chat model. */
   public VCRSpringAIChatModel(
       ChatModel delegate, String testId, VCRMode mode, String modelName, CassetteStore store) {
     this.delegate = delegate;
@@ -64,60 +57,140 @@ public final class VCRSpringAIChatModel implements ChatModel {
 
   @Override
   public ChatResponse call(Prompt prompt) {
-    String text =
-        dispatch(
-            () -> delegate.call(prompt).getResult().getOutput().getText(),
-            prompt == null ? "" : String.valueOf(prompt));
-    return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+    if (mode == VCRMode.OFF) {
+      return delegate.call(prompt);
+    }
+    CassetteKey key = new CassetteKey(TYPE_CHAT, testId, callCounter.incrementAndGet());
+    String signature =
+        SpringAIRequestSignatures.chat("call", modelName, prompt, delegate.getDefaultOptions());
+    Optional<CassetteRecord> existing = store.retrieve(key);
+    validateType(existing, key);
+    if (VCRReplayPolicy.shouldReplay(mode, existing, key, signature)) {
+      CassetteRecord.Chat chat = (CassetteRecord.Chat) existing.orElseThrow();
+      return SpringAIChatPayloadMapper.toResponse(chat.response());
+    }
+    ChatResponse response = delegate.call(prompt);
+    store.store(
+        key,
+        new CassetteRecord.Chat(
+            testId,
+            modelName,
+            System.currentTimeMillis(),
+            prompt == null ? "" : prompt.getContents(),
+            SpringAIChatPayloadMapper.toPayload(response),
+            signature));
+    return response;
   }
 
   @Override
   public String call(String message) {
-    return dispatch(() -> delegate.call(message), message == null ? "" : message);
+    String text = message == null ? "" : message;
+    return dispatchText(new Prompt(text), () -> delegate.call(text));
   }
 
   @Override
   public String call(Message... messages) {
-    String joined = messages == null ? "" : List.of(messages).toString();
-    return dispatch(() -> delegate.call(messages), joined);
+    Message[] safeMessages = messages == null ? new Message[0] : messages;
+    return dispatchText(new Prompt(safeMessages), () -> delegate.call(safeMessages));
   }
 
-  private String dispatch(Supplier<String> supplier, String prompt) {
+  @Override
+  public Flux<ChatResponse> stream(Prompt prompt) {
     if (mode == VCRMode.OFF) {
-      return supplier.get();
+      return delegate.stream(prompt);
     }
-    CassetteKey key = new CassetteKey(TYPE_CHAT, testId, callCounter.incrementAndGet());
-    if (mode.isPlaybackMode()) {
-      Optional<CassetteRecord> cached = store.retrieve(key);
-      if (cached.isPresent()) {
-        if (cached.get() instanceof CassetteRecord.Chat c) {
-          return c.response().aiMessage().text();
-        }
-        throw new IllegalStateException(
-            "Expected Chat cassette for key "
-                + key.serializedKey()
-                + " but got "
-                + cached.get().getClass().getSimpleName());
-      }
-      if (mode == VCRMode.PLAYBACK) {
-        throw new VCRCassetteMissingException(key.serializedKey(), testId);
-      }
-    }
-    String response = supplier.get();
+    return Flux.defer(
+        () -> {
+          CassetteKey key =
+              new CassetteKey(TYPE_CHAT_STREAM, testId, streamCounter.incrementAndGet());
+          String signature =
+              SpringAIRequestSignatures.chat(
+                  "stream", modelName, prompt, delegate.getDefaultOptions());
+          Optional<CassetteRecord> existing = store.retrieve(key);
+          validateType(existing, key);
+          if (VCRReplayPolicy.shouldReplay(mode, existing, key, signature)) {
+            CassetteRecord.Chat chat = (CassetteRecord.Chat) existing.orElseThrow();
+            return Flux.fromIterable(chat.response().streamChunks())
+                .map(SpringAIChatPayloadMapper::toResponse);
+          }
+
+          List<CassetteRecord.ChatPayload> chunks = new ArrayList<>();
+          return delegate.stream(prompt)
+              .doOnNext(response -> chunks.add(SpringAIChatPayloadMapper.toPayload(response)))
+              .doOnComplete(() -> storeStream(key, prompt, chunks, signature));
+        });
+  }
+
+  @Override
+  public ChatOptions getDefaultOptions() {
+    return delegate.getDefaultOptions();
+  }
+
+  private void storeStream(
+      CassetteKey key, Prompt prompt, List<CassetteRecord.ChatPayload> chunks, String signature) {
+    CassetteRecord.ChatPayload last =
+        chunks.isEmpty()
+            ? new CassetteRecord.ChatPayload(
+                new CassetteRecord.AiMessagePayload("", null, List.of(), null), null)
+            : chunks.getLast();
+    CassetteRecord.ChatPayload recorded =
+        new CassetteRecord.ChatPayload(
+            last.aiMessage(),
+            last.metadata(),
+            last.generationMetadata(),
+            last.additionalGenerations(),
+            List.of(),
+            chunks);
     store.store(
         key,
         new CassetteRecord.Chat(
-            testId, modelName, System.currentTimeMillis(), prompt, payload(response)));
+            testId,
+            modelName,
+            System.currentTimeMillis(),
+            prompt == null ? "" : prompt.getContents(),
+            recorded,
+            signature));
+  }
+
+  private String dispatchText(Prompt prompt, java.util.function.Supplier<String> liveCall) {
+    if (mode == VCRMode.OFF) {
+      return liveCall.get();
+    }
+    CassetteKey key = new CassetteKey(TYPE_CHAT, testId, callCounter.incrementAndGet());
+    String signature =
+        SpringAIRequestSignatures.chat("call", modelName, prompt, delegate.getDefaultOptions());
+    Optional<CassetteRecord> existing = store.retrieve(key);
+    validateType(existing, key);
+    if (VCRReplayPolicy.shouldReplay(mode, existing, key, signature)) {
+      CassetteRecord.Chat chat = (CassetteRecord.Chat) existing.orElseThrow();
+      return chat.response().aiMessage().text();
+    }
+    String response = liveCall.get();
+    store.store(
+        key,
+        new CassetteRecord.Chat(
+            testId,
+            modelName,
+            System.currentTimeMillis(),
+            prompt.getContents(),
+            new CassetteRecord.ChatPayload(
+                new CassetteRecord.AiMessagePayload(response, null, List.of(), null), null),
+            signature));
     return response;
   }
 
-  private static CassetteRecord.ChatPayload payload(String text) {
-    return new CassetteRecord.ChatPayload(
-        new CassetteRecord.AiMessagePayload(text, null, List.of(), null), null);
+  private static void validateType(Optional<CassetteRecord> existing, CassetteKey key) {
+    if (existing.isPresent() && !(existing.get() instanceof CassetteRecord.Chat)) {
+      throw new IllegalStateException(
+          "Expected Chat cassette for key "
+              + key.serializedKey()
+              + " but got "
+              + existing.get().getClass().getSimpleName());
+    }
   }
 
   /**
-   * @return the underlying delegate (for diagnostics)
+   * @return the underlying delegate for diagnostics
    */
   public ChatModel getDelegate() {
     return delegate;

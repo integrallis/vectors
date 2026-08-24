@@ -34,12 +34,13 @@ class AvajeCassetteSerializerTest {
   @Test
   void roundTripEmbedding() {
     CassetteRecord.Embedding in =
-        new CassetteRecord.Embedding("T:1", "m", 42L, new float[] {1f, -2.5f, 3e-3f});
+        new CassetteRecord.Embedding("T:1", "m", 42L, new float[] {1f, -2.5f, 3e-3f}, "sha256:one");
     CassetteRecord.Embedding back =
         (CassetteRecord.Embedding) serializer.deserialize(serializer.serialize(in));
     assertEquals("T:1", back.testId());
     assertEquals("m", back.model());
     assertEquals(42L, back.timestamp());
+    assertEquals("sha256:one", back.requestSignature());
     assertArrayEquals(in.embedding(), back.embedding());
   }
 
@@ -49,10 +50,12 @@ class AvajeCassetteSerializerTest {
       {1f, 2f},
       {3f, 4f, 5f}
     };
-    CassetteRecord.BatchEmbedding in = new CassetteRecord.BatchEmbedding("T:b", "m", 0L, batch);
+    CassetteRecord.BatchEmbedding in =
+        new CassetteRecord.BatchEmbedding("T:b", "m", 0L, batch, "sha256:batch");
     CassetteRecord.BatchEmbedding back =
         (CassetteRecord.BatchEmbedding) serializer.deserialize(serializer.serialize(in));
     assertEquals(2, back.embeddings().length);
+    assertEquals("sha256:batch", back.requestSignature());
     assertArrayEquals(batch[0], back.embeddings()[0]);
     assertArrayEquals(batch[1], back.embeddings()[1]);
   }
@@ -72,7 +75,8 @@ class AvajeCassetteSerializerTest {
                     List.of(new CassetteRecord.ToolCall("call-1", "search", "{\"q\":\"x\"}")),
                     Map.of("source", "unit")),
                 new CassetteRecord.ChatMetadata(
-                    "resp-1", "gpt-4", new CassetteRecord.TokenUsage(2, 3, 5), "TOOL_EXECUTION")));
+                    "resp-1", "gpt-4", new CassetteRecord.TokenUsage(2, 3, 5), "TOOL_EXECUTION")),
+            "sha256:chat");
     CassetteRecord.Chat back =
         (CassetteRecord.Chat) serializer.deserialize(serializer.serialize(in));
     assertEquals("hello", back.prompt());
@@ -80,6 +84,7 @@ class AvajeCassetteSerializerTest {
     assertEquals("search", back.response().aiMessage().toolExecutionRequests().getFirst().name());
     assertEquals(5, back.response().metadata().tokenUsage().totalTokenCount());
     assertEquals("TOOL_EXECUTION", back.response().metadata().finishReason());
+    assertEquals("sha256:chat", back.requestSignature());
   }
 
   @Test

@@ -62,12 +62,14 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
       tree.put("testId", e.testId());
       tree.put("model", e.model());
       tree.put("timestamp", e.timestamp());
+      tree.put("requestSignature", e.requestSignature());
       tree.put("embedding", asList(e.embedding()));
     } else if (record instanceof CassetteRecord.BatchEmbedding b) {
       tree.put("type", TYPE_BATCH_EMBEDDING);
       tree.put("testId", b.testId());
       tree.put("model", b.model());
       tree.put("timestamp", b.timestamp());
+      tree.put("requestSignature", b.requestSignature());
       List<List<Double>> outer = new ArrayList<>(b.embeddings().length);
       for (float[] v : b.embeddings()) {
         outer.add(asList(v));
@@ -78,6 +80,7 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
       tree.put("testId", c.testId());
       tree.put("model", c.model());
       tree.put("timestamp", c.timestamp());
+      tree.put("requestSignature", c.requestSignature());
       tree.put("prompt", c.prompt());
       tree.put("response", chatPayloadToTree(c.response()));
     } else {
@@ -91,22 +94,28 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
     String testId = (String) map.get("testId");
     String model = (String) map.get("model");
     long timestamp = ((Number) map.get("timestamp")).longValue();
+    String requestSignature = asString(map.get("requestSignature"));
     return switch (type) {
       case TYPE_EMBEDDING ->
           new CassetteRecord.Embedding(
-              testId, model, timestamp, toFloatArray((List<?>) map.get("embedding")));
+              testId,
+              model,
+              timestamp,
+              toFloatArray((List<?>) map.get("embedding")),
+              requestSignature);
       case TYPE_BATCH_EMBEDDING -> {
         List<?> outer = (List<?>) map.get("embeddings");
         float[][] embeddings = new float[outer.size()][];
         for (int i = 0; i < outer.size(); i++) {
           embeddings[i] = toFloatArray((List<?>) outer.get(i));
         }
-        yield new CassetteRecord.BatchEmbedding(testId, model, timestamp, embeddings);
+        yield new CassetteRecord.BatchEmbedding(
+            testId, model, timestamp, embeddings, requestSignature);
       }
       case TYPE_CHAT -> {
         String prompt = (String) map.get("prompt");
         yield new CassetteRecord.Chat(
-            testId, model, timestamp, prompt, toChatPayload(map.get("response")));
+            testId, model, timestamp, prompt, toChatPayload(map.get("response")), requestSignature);
       }
       default -> throw new IllegalArgumentException("unknown cassette type: " + type);
     };
@@ -130,6 +139,7 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
     for (CassetteRecord.ToolCall tool : aiMessage.toolExecutionRequests()) {
       Map<String, Object> item = new LinkedHashMap<>();
       item.put("id", tool.id());
+      item.put("type", tool.type());
       item.put("name", tool.name());
       item.put("arguments", tool.arguments());
       tools.add(item);
@@ -137,6 +147,33 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
     ai.put("toolExecutionRequests", tools);
     ai.put("attributes", new LinkedHashMap<>(aiMessage.attributes()));
     tree.put("aiMessage", ai);
+
+    tree.put("generationMetadata", generationMetadataToTree(response.generationMetadata()));
+    List<Map<String, Object>> additional = new ArrayList<>(response.additionalGenerations().size());
+    for (CassetteRecord.ChatGenerationPayload generation : response.additionalGenerations()) {
+      Map<String, Object> item = new LinkedHashMap<>();
+      item.put("aiMessage", aiMessageToTree(generation.aiMessage()));
+      item.put("metadata", generationMetadataToTree(generation.metadata()));
+      additional.add(item);
+    }
+    tree.put("additionalGenerations", additional);
+
+    List<Map<String, Object>> events = new ArrayList<>(response.streamEvents().size());
+    for (CassetteRecord.StreamEvent event : response.streamEvents()) {
+      Map<String, Object> item = new LinkedHashMap<>();
+      item.put("type", event.type());
+      item.put("text", event.text());
+      item.put("index", event.index());
+      item.put("toolCall", event.toolCall() == null ? null : toolCallToTree(event.toolCall()));
+      events.add(item);
+    }
+    tree.put("streamEvents", events);
+
+    List<Map<String, Object>> chunks = new ArrayList<>(response.streamChunks().size());
+    for (CassetteRecord.ChatPayload chunk : response.streamChunks()) {
+      chunks.add(chatPayloadToTree(chunk));
+    }
+    tree.put("streamChunks", chunks);
 
     CassetteRecord.ChatMetadata metadata = response.metadata();
     Map<String, Object> md = new LinkedHashMap<>();
@@ -150,9 +187,65 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
       usage.put("inputTokenCount", metadata.tokenUsage().inputTokenCount());
       usage.put("outputTokenCount", metadata.tokenUsage().outputTokenCount());
       usage.put("totalTokenCount", metadata.tokenUsage().totalTokenCount());
+      usage.put("nativeUsage", metadata.tokenUsage().nativeUsage());
       md.put("tokenUsage", usage);
     }
+    md.put("attributes", new LinkedHashMap<>(metadata.attributes()));
+    md.put("rateLimit", rateLimitToTree(metadata.rateLimit()));
+    List<Map<String, Object>> promptMetadata = new ArrayList<>(metadata.promptMetadata().size());
+    for (CassetteRecord.PromptFilter filter : metadata.promptMetadata()) {
+      Map<String, Object> item = new LinkedHashMap<>();
+      item.put("promptIndex", filter.promptIndex());
+      item.put("contentFilterMetadata", filter.contentFilterMetadata());
+      promptMetadata.add(item);
+    }
+    md.put("promptMetadata", promptMetadata);
     tree.put("metadata", md);
+    return tree;
+  }
+
+  private static Map<String, Object> aiMessageToTree(CassetteRecord.AiMessagePayload aiMessage) {
+    Map<String, Object> ai = new LinkedHashMap<>();
+    ai.put("text", aiMessage.text());
+    ai.put("thinking", aiMessage.thinking());
+    List<Map<String, Object>> tools = new ArrayList<>(aiMessage.toolExecutionRequests().size());
+    for (CassetteRecord.ToolCall tool : aiMessage.toolExecutionRequests()) {
+      tools.add(toolCallToTree(tool));
+    }
+    ai.put("toolExecutionRequests", tools);
+    ai.put("attributes", new LinkedHashMap<>(aiMessage.attributes()));
+    return ai;
+  }
+
+  private static Map<String, Object> toolCallToTree(CassetteRecord.ToolCall tool) {
+    Map<String, Object> item = new LinkedHashMap<>();
+    item.put("id", tool.id());
+    item.put("type", tool.type());
+    item.put("name", tool.name());
+    item.put("arguments", tool.arguments());
+    return item;
+  }
+
+  private static Map<String, Object> generationMetadataToTree(
+      CassetteRecord.GenerationMetadata metadata) {
+    Map<String, Object> tree = new LinkedHashMap<>();
+    tree.put("finishReason", metadata.finishReason());
+    tree.put("contentFilters", new ArrayList<>(metadata.contentFilters()));
+    tree.put("attributes", new LinkedHashMap<>(metadata.attributes()));
+    return tree;
+  }
+
+  private static Map<String, Object> rateLimitToTree(CassetteRecord.RateLimit rateLimit) {
+    if (rateLimit == null) {
+      return null;
+    }
+    Map<String, Object> tree = new LinkedHashMap<>();
+    tree.put("requestsLimit", rateLimit.requestsLimit());
+    tree.put("requestsRemaining", rateLimit.requestsRemaining());
+    tree.put("requestsResetMillis", rateLimit.requestsResetMillis());
+    tree.put("tokensLimit", rateLimit.tokensLimit());
+    tree.put("tokensRemaining", rateLimit.tokensRemaining());
+    tree.put("tokensResetMillis", rateLimit.tokensResetMillis());
     return tree;
   }
 
@@ -167,7 +260,12 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
   private static CassetteRecord.ChatPayload toChatPayload(Object raw) {
     Map<?, ?> map = requireMap(raw, "response");
     return new CassetteRecord.ChatPayload(
-        toAiMessage(map.get("aiMessage")), toChatMetadata(map.get("metadata")));
+        toAiMessage(map.get("aiMessage")),
+        toChatMetadata(map.get("metadata")),
+        toGenerationMetadata(map.get("generationMetadata")),
+        toAdditionalGenerations(map.get("additionalGenerations")),
+        toStreamEvents(map.get("streamEvents")),
+        toStreamChunks(map.get("streamChunks")));
   }
 
   private static CassetteRecord.AiMessagePayload toAiMessage(Object raw) {
@@ -180,6 +278,7 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
         tools.add(
             new CassetteRecord.ToolCall(
                 asString(tool.get("id")),
+                asString(tool.get("type")),
                 requireString(tool.get("name"), "toolExecutionRequests[].name"),
                 asString(tool.get("arguments"))));
       }
@@ -200,7 +299,10 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
         asString(map.get("id")),
         asString(map.get("modelName")),
         toTokenUsage(map.get("tokenUsage")),
-        asString(map.get("finishReason")));
+        asString(map.get("finishReason")),
+        toObjectMap(map.get("attributes")),
+        toRateLimit(map.get("rateLimit")),
+        toPromptMetadata(map.get("promptMetadata")));
   }
 
   private static CassetteRecord.TokenUsage toTokenUsage(Object raw) {
@@ -211,7 +313,106 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
     return new CassetteRecord.TokenUsage(
         asInteger(map.get("inputTokenCount")),
         asInteger(map.get("outputTokenCount")),
-        asInteger(map.get("totalTokenCount")));
+        asInteger(map.get("totalTokenCount")),
+        map.get("nativeUsage"));
+  }
+
+  private static CassetteRecord.GenerationMetadata toGenerationMetadata(Object raw) {
+    if (raw == null) {
+      return CassetteRecord.GenerationMetadata.empty();
+    }
+    Map<?, ?> map = requireMap(raw, "generationMetadata");
+    java.util.Set<String> filters = new java.util.LinkedHashSet<>();
+    if (map.get("contentFilters") instanceof List<?> list) {
+      for (Object item : list) {
+        filters.add(String.valueOf(item));
+      }
+    }
+    return new CassetteRecord.GenerationMetadata(
+        asString(map.get("finishReason")), filters, toObjectMap(map.get("attributes")));
+  }
+
+  private static List<CassetteRecord.ChatGenerationPayload> toAdditionalGenerations(Object raw) {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<CassetteRecord.ChatGenerationPayload> result = new ArrayList<>();
+    for (Object item : list) {
+      Map<?, ?> map = requireMap(item, "additionalGenerations[]");
+      result.add(
+          new CassetteRecord.ChatGenerationPayload(
+              toAiMessage(map.get("aiMessage")), toGenerationMetadata(map.get("metadata"))));
+    }
+    return result;
+  }
+
+  private static List<CassetteRecord.StreamEvent> toStreamEvents(Object raw) {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<CassetteRecord.StreamEvent> result = new ArrayList<>();
+    for (Object item : list) {
+      Map<?, ?> map = requireMap(item, "streamEvents[]");
+      result.add(
+          new CassetteRecord.StreamEvent(
+              requireString(map.get("type"), "streamEvents[].type"),
+              asString(map.get("text")),
+              asInteger(map.get("index")),
+              toToolCall(map.get("toolCall"))));
+    }
+    return result;
+  }
+
+  private static List<CassetteRecord.ChatPayload> toStreamChunks(Object raw) {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<CassetteRecord.ChatPayload> result = new ArrayList<>();
+    for (Object item : list) {
+      result.add(toChatPayload(item));
+    }
+    return result;
+  }
+
+  private static CassetteRecord.ToolCall toToolCall(Object raw) {
+    if (raw == null) {
+      return null;
+    }
+    Map<?, ?> map = requireMap(raw, "toolCall");
+    return new CassetteRecord.ToolCall(
+        asString(map.get("id")),
+        asString(map.get("type")),
+        requireString(map.get("name"), "toolCall.name"),
+        asString(map.get("arguments")));
+  }
+
+  private static CassetteRecord.RateLimit toRateLimit(Object raw) {
+    if (raw == null) {
+      return null;
+    }
+    Map<?, ?> map = requireMap(raw, "rateLimit");
+    return new CassetteRecord.RateLimit(
+        asLong(map.get("requestsLimit")),
+        asLong(map.get("requestsRemaining")),
+        asLong(map.get("requestsResetMillis")),
+        asLong(map.get("tokensLimit")),
+        asLong(map.get("tokensRemaining")),
+        asLong(map.get("tokensResetMillis")));
+  }
+
+  private static List<CassetteRecord.PromptFilter> toPromptMetadata(Object raw) {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<CassetteRecord.PromptFilter> result = new ArrayList<>();
+    for (Object item : list) {
+      Map<?, ?> map = requireMap(item, "promptMetadata[]");
+      Integer index = asInteger(map.get("promptIndex"));
+      result.add(
+          new CassetteRecord.PromptFilter(
+              index == null ? 0 : index, map.get("contentFilterMetadata")));
+    }
+    return result;
   }
 
   private static Map<String, Object> toObjectMap(Object raw) {
@@ -246,5 +447,9 @@ public final class AvajeCassetteSerializer implements CassetteSerializer {
 
   private static Integer asInteger(Object raw) {
     return raw instanceof Number n ? n.intValue() : null;
+  }
+
+  private static Long asLong(Object raw) {
+    return raw instanceof Number n ? n.longValue() : null;
   }
 }

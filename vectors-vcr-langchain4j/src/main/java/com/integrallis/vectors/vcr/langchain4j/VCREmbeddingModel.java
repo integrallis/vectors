@@ -19,8 +19,8 @@ import com.integrallis.vectors.vcr.CassetteKey;
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.SimilarityCassetteStore;
-import com.integrallis.vectors.vcr.VCRCassetteMissingException;
 import com.integrallis.vectors.vcr.VCRMode;
+import com.integrallis.vectors.vcr.VCRReplayPolicy;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -96,14 +96,13 @@ public final class VCREmbeddingModel implements EmbeddingModel {
       return delegate.embed(text).content().vector();
     }
     CassetteKey key = new CassetteKey(TYPE_SINGLE, testId, singleCalls.incrementAndGet());
-    if (mode.isPlaybackMode()) {
-      Optional<CassetteRecord> hit = store.retrieve(key);
-      if (hit.isPresent()) {
-        return requireEmbedding(key, hit.get());
-      }
-      if (mode == VCRMode.PLAYBACK) {
-        throw new VCRCassetteMissingException(key.serializedKey(), testId);
-      }
+    String signature = LangChain4jRequestSignatures.embedding(modelName, text);
+    Optional<CassetteRecord> hit = store.retrieve(key);
+    if (hit.isPresent() && !(hit.get() instanceof CassetteRecord.Embedding)) {
+      requireEmbedding(key, hit.get());
+    }
+    if (VCRReplayPolicy.shouldReplay(mode, hit, key, signature)) {
+      return requireEmbedding(key, hit.orElseThrow());
     }
     float[] vector = delegate.embed(text).content().vector();
     if (mode == VCRMode.PLAYBACK_OR_RECORD) {
@@ -113,7 +112,9 @@ public final class VCREmbeddingModel implements EmbeddingModel {
       }
     }
     store.store(
-        key, new CassetteRecord.Embedding(testId, modelName, System.currentTimeMillis(), vector));
+        key,
+        new CassetteRecord.Embedding(
+            testId, modelName, System.currentTimeMillis(), vector, signature));
     return vector;
   }
 
@@ -122,14 +123,13 @@ public final class VCREmbeddingModel implements EmbeddingModel {
       return callDelegateBatch(texts);
     }
     CassetteKey key = new CassetteKey(TYPE_BATCH, testId, batchCalls.incrementAndGet());
-    if (mode.isPlaybackMode()) {
-      Optional<CassetteRecord> hit = store.retrieve(key);
-      if (hit.isPresent()) {
-        return toVectorList(requireBatchEmbedding(key, hit.get()));
-      }
-      if (mode == VCRMode.PLAYBACK) {
-        throw new VCRCassetteMissingException(key.serializedKey(), testId);
-      }
+    String signature = LangChain4jRequestSignatures.batchEmbedding(modelName, texts);
+    Optional<CassetteRecord> hit = store.retrieve(key);
+    if (hit.isPresent() && !(hit.get() instanceof CassetteRecord.BatchEmbedding)) {
+      requireBatchEmbedding(key, hit.get());
+    }
+    if (VCRReplayPolicy.shouldReplay(mode, hit, key, signature)) {
+      return toVectorList(requireBatchEmbedding(key, hit.orElseThrow()));
     }
     List<float[]> vectors = callDelegateBatch(texts);
     if (mode == VCRMode.PLAYBACK_OR_RECORD && !vectors.isEmpty()) {
@@ -142,7 +142,11 @@ public final class VCREmbeddingModel implements EmbeddingModel {
     store.store(
         key,
         new CassetteRecord.BatchEmbedding(
-            testId, modelName, System.currentTimeMillis(), vectors.toArray(new float[0][])));
+            testId,
+            modelName,
+            System.currentTimeMillis(),
+            vectors.toArray(new float[0][]),
+            signature));
     return vectors;
   }
 

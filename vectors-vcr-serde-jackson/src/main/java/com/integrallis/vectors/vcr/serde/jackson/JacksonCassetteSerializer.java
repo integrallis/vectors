@@ -25,6 +25,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -60,11 +61,11 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
       g.writeStartObject();
       if (record instanceof CassetteRecord.Embedding e) {
         g.writeStringField("type", TYPE_EMBEDDING);
-        writeCommon(g, e.testId(), e.model(), e.timestamp());
+        writeCommon(g, e.testId(), e.model(), e.timestamp(), e.requestSignature());
         writeFloatArray(g, "embedding", e.embedding());
       } else if (record instanceof CassetteRecord.BatchEmbedding b) {
         g.writeStringField("type", TYPE_BATCH_EMBEDDING);
-        writeCommon(g, b.testId(), b.model(), b.timestamp());
+        writeCommon(g, b.testId(), b.model(), b.timestamp(), b.requestSignature());
         g.writeArrayFieldStart("embeddings");
         for (float[] v : b.embeddings()) {
           writeFloatArrayBody(g, v);
@@ -72,7 +73,7 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
         g.writeEndArray();
       } else if (record instanceof CassetteRecord.Chat c) {
         g.writeStringField("type", TYPE_CHAT);
-        writeCommon(g, c.testId(), c.model(), c.timestamp());
+        writeCommon(g, c.testId(), c.model(), c.timestamp(), c.requestSignature());
         g.writeStringField("prompt", c.prompt());
         writeChatPayload(g, c.response());
       } else {
@@ -109,22 +110,33 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
       String testId = (String) fields.get("testId");
       String model = (String) fields.get("model");
       long timestamp = ((Number) fields.get("timestamp")).longValue();
+      String requestSignature = asString(fields.get("requestSignature"));
       return switch (type) {
         case TYPE_EMBEDDING ->
             new CassetteRecord.Embedding(
-                testId, model, timestamp, toFloatArray((List<?>) fields.get("embedding")));
+                testId,
+                model,
+                timestamp,
+                toFloatArray((List<?>) fields.get("embedding")),
+                requestSignature);
         case TYPE_BATCH_EMBEDDING -> {
           List<?> arr = (List<?>) fields.get("embeddings");
           float[][] embeddings = new float[arr.size()][];
           for (int i = 0; i < arr.size(); i++) {
             embeddings[i] = toFloatArray((List<?>) arr.get(i));
           }
-          yield new CassetteRecord.BatchEmbedding(testId, model, timestamp, embeddings);
+          yield new CassetteRecord.BatchEmbedding(
+              testId, model, timestamp, embeddings, requestSignature);
         }
         case TYPE_CHAT -> {
           String prompt = (String) fields.get("prompt");
           yield new CassetteRecord.Chat(
-              testId, model, timestamp, prompt, toChatPayload(fields.get("response")));
+              testId,
+              model,
+              timestamp,
+              prompt,
+              toChatPayload(fields.get("response")),
+              requestSignature);
         }
         default -> throw new IOException("unknown cassette type: " + type);
       };
@@ -133,11 +145,13 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
     }
   }
 
-  private static void writeCommon(JsonGenerator g, String testId, String model, long timestamp)
+  private static void writeCommon(
+      JsonGenerator g, String testId, String model, long timestamp, String requestSignature)
       throws IOException {
     g.writeStringField("testId", testId);
     g.writeStringField("model", model);
     g.writeNumberField("timestamp", timestamp);
+    writeNullableString(g, "requestSignature", requestSignature);
   }
 
   private static void writeFloatArray(JsonGenerator g, String fieldName, float[] values)
@@ -160,9 +174,46 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
   private static void writeChatPayload(JsonGenerator g, CassetteRecord.ChatPayload response)
       throws IOException {
     g.writeObjectFieldStart("response");
+    writeChatPayloadFields(g, response);
+    g.writeEndObject();
+  }
+
+  private static void writeChatPayloadFields(JsonGenerator g, CassetteRecord.ChatPayload response)
+      throws IOException {
     writeAiMessage(g, response.aiMessage());
     writeChatMetadata(g, response.metadata());
-    g.writeEndObject();
+    writeGenerationMetadata(g, "generationMetadata", response.generationMetadata());
+    g.writeArrayFieldStart("additionalGenerations");
+    for (CassetteRecord.ChatGenerationPayload generation : response.additionalGenerations()) {
+      g.writeStartObject();
+      writeAiMessage(g, generation.aiMessage());
+      writeGenerationMetadata(g, "metadata", generation.metadata());
+      g.writeEndObject();
+    }
+    g.writeEndArray();
+    g.writeArrayFieldStart("streamEvents");
+    for (CassetteRecord.StreamEvent event : response.streamEvents()) {
+      g.writeStartObject();
+      g.writeStringField("type", event.type());
+      writeNullableString(g, "text", event.text());
+      writeNullableNumber(g, "index", event.index());
+      if (event.toolCall() == null) {
+        g.writeNullField("toolCall");
+      } else {
+        g.writeObjectFieldStart("toolCall");
+        writeToolCall(g, event.toolCall());
+        g.writeEndObject();
+      }
+      g.writeEndObject();
+    }
+    g.writeEndArray();
+    g.writeArrayFieldStart("streamChunks");
+    for (CassetteRecord.ChatPayload chunk : response.streamChunks()) {
+      g.writeStartObject();
+      writeChatPayloadFields(g, chunk);
+      g.writeEndObject();
+    }
+    g.writeEndArray();
   }
 
   private static void writeAiMessage(JsonGenerator g, CassetteRecord.AiMessagePayload aiMessage)
@@ -173,18 +224,24 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
     g.writeArrayFieldStart("toolExecutionRequests");
     for (CassetteRecord.ToolCall tool : aiMessage.toolExecutionRequests()) {
       g.writeStartObject();
-      writeNullableString(g, "id", tool.id());
-      g.writeStringField("name", tool.name());
-      writeNullableString(g, "arguments", tool.arguments());
+      writeToolCall(g, tool);
       g.writeEndObject();
     }
     g.writeEndArray();
     g.writeObjectFieldStart("attributes");
     for (Map.Entry<String, Object> entry : aiMessage.attributes().entrySet()) {
-      g.writeObjectField(entry.getKey(), entry.getValue());
+      writeAnyField(g, entry.getKey(), entry.getValue());
     }
     g.writeEndObject();
     g.writeEndObject();
+  }
+
+  private static void writeToolCall(JsonGenerator g, CassetteRecord.ToolCall tool)
+      throws IOException {
+    writeNullableString(g, "id", tool.id());
+    writeNullableString(g, "type", tool.type());
+    g.writeStringField("name", tool.name());
+    writeNullableString(g, "arguments", tool.arguments());
   }
 
   private static void writeChatMetadata(JsonGenerator g, CassetteRecord.ChatMetadata metadata)
@@ -199,9 +256,45 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
       writeNullableNumber(g, "inputTokenCount", metadata.tokenUsage().inputTokenCount());
       writeNullableNumber(g, "outputTokenCount", metadata.tokenUsage().outputTokenCount());
       writeNullableNumber(g, "totalTokenCount", metadata.tokenUsage().totalTokenCount());
+      writeAnyField(g, "nativeUsage", metadata.tokenUsage().nativeUsage());
       g.writeEndObject();
     }
     writeNullableString(g, "finishReason", metadata.finishReason());
+    writeAnyField(g, "attributes", metadata.attributes());
+    if (metadata.rateLimit() == null) {
+      g.writeNullField("rateLimit");
+    } else {
+      g.writeObjectFieldStart("rateLimit");
+      writeNullableLong(g, "requestsLimit", metadata.rateLimit().requestsLimit());
+      writeNullableLong(g, "requestsRemaining", metadata.rateLimit().requestsRemaining());
+      writeNullableLong(g, "requestsResetMillis", metadata.rateLimit().requestsResetMillis());
+      writeNullableLong(g, "tokensLimit", metadata.rateLimit().tokensLimit());
+      writeNullableLong(g, "tokensRemaining", metadata.rateLimit().tokensRemaining());
+      writeNullableLong(g, "tokensResetMillis", metadata.rateLimit().tokensResetMillis());
+      g.writeEndObject();
+    }
+    g.writeArrayFieldStart("promptMetadata");
+    for (CassetteRecord.PromptFilter filter : metadata.promptMetadata()) {
+      g.writeStartObject();
+      g.writeNumberField("promptIndex", filter.promptIndex());
+      writeAnyField(g, "contentFilterMetadata", filter.contentFilterMetadata());
+      g.writeEndObject();
+    }
+    g.writeEndArray();
+    g.writeEndObject();
+  }
+
+  private static void writeGenerationMetadata(
+      JsonGenerator g, String fieldName, CassetteRecord.GenerationMetadata metadata)
+      throws IOException {
+    g.writeObjectFieldStart(fieldName);
+    writeNullableString(g, "finishReason", metadata.finishReason());
+    g.writeArrayFieldStart("contentFilters");
+    for (String filter : metadata.contentFilters()) {
+      g.writeString(filter);
+    }
+    g.writeEndArray();
+    writeAnyField(g, "attributes", metadata.attributes());
     g.writeEndObject();
   }
 
@@ -220,6 +313,63 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
       g.writeNullField(fieldName);
     } else {
       g.writeNumberField(fieldName, value);
+    }
+  }
+
+  private static void writeNullableLong(JsonGenerator g, String fieldName, Long value)
+      throws IOException {
+    if (value == null) {
+      g.writeNullField(fieldName);
+    } else {
+      g.writeNumberField(fieldName, value);
+    }
+  }
+
+  private static void writeAnyField(JsonGenerator g, String fieldName, Object value)
+      throws IOException {
+    g.writeFieldName(fieldName);
+    writeAny(g, value);
+  }
+
+  private static void writeAny(JsonGenerator g, Object value) throws IOException {
+    if (value == null) {
+      g.writeNull();
+    } else if (value instanceof String string) {
+      g.writeString(string);
+    } else if (value instanceof Integer number) {
+      g.writeNumber(number);
+    } else if (value instanceof Long number) {
+      g.writeNumber(number);
+    } else if (value instanceof Float number) {
+      g.writeNumber(number);
+    } else if (value instanceof Double number) {
+      g.writeNumber(number);
+    } else if (value instanceof Number number) {
+      g.writeNumber(number.toString());
+    } else if (value instanceof Boolean bool) {
+      g.writeBoolean(bool);
+    } else if (value instanceof Enum<?> enumValue) {
+      g.writeString(enumValue.name());
+    } else if (value instanceof Map<?, ?> map) {
+      g.writeStartObject();
+      for (Map.Entry<?, ?> entry : map.entrySet()) {
+        writeAnyField(g, String.valueOf(entry.getKey()), entry.getValue());
+      }
+      g.writeEndObject();
+    } else if (value instanceof Iterable<?> iterable) {
+      g.writeStartArray();
+      for (Object item : iterable) {
+        writeAny(g, item);
+      }
+      g.writeEndArray();
+    } else if (value.getClass().isArray()) {
+      g.writeStartArray();
+      for (int i = 0; i < Array.getLength(value); i++) {
+        writeAny(g, Array.get(value, i));
+      }
+      g.writeEndArray();
+    } else {
+      g.writeString(value.toString());
     }
   }
 
@@ -262,7 +412,13 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
     Map<?, ?> map = requireMap(raw, "response");
     CassetteRecord.AiMessagePayload aiMessage = toAiMessage(map.get("aiMessage"));
     CassetteRecord.ChatMetadata metadata = toChatMetadata(map.get("metadata"));
-    return new CassetteRecord.ChatPayload(aiMessage, metadata);
+    return new CassetteRecord.ChatPayload(
+        aiMessage,
+        metadata,
+        toGenerationMetadata(map.get("generationMetadata")),
+        toAdditionalGenerations(map.get("additionalGenerations")),
+        toStreamEvents(map.get("streamEvents")),
+        toStreamChunks(map.get("streamChunks")));
   }
 
   private static CassetteRecord.AiMessagePayload toAiMessage(Object raw) throws IOException {
@@ -275,6 +431,7 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
         tools.add(
             new CassetteRecord.ToolCall(
                 asString(tool.get("id")),
+                asString(tool.get("type")),
                 requireString(tool.get("name"), "toolExecutionRequests[].name"),
                 asString(tool.get("arguments"))));
       }
@@ -295,7 +452,10 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
         asString(map.get("id")),
         asString(map.get("modelName")),
         toTokenUsage(map.get("tokenUsage")),
-        asString(map.get("finishReason")));
+        asString(map.get("finishReason")),
+        toObjectMap(map.get("attributes")),
+        toRateLimit(map.get("rateLimit")),
+        toPromptMetadata(map.get("promptMetadata")));
   }
 
   private static CassetteRecord.TokenUsage toTokenUsage(Object raw) throws IOException {
@@ -306,7 +466,108 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
     return new CassetteRecord.TokenUsage(
         asInteger(map.get("inputTokenCount")),
         asInteger(map.get("outputTokenCount")),
-        asInteger(map.get("totalTokenCount")));
+        asInteger(map.get("totalTokenCount")),
+        map.get("nativeUsage"));
+  }
+
+  private static CassetteRecord.GenerationMetadata toGenerationMetadata(Object raw)
+      throws IOException {
+    if (raw == null) {
+      return CassetteRecord.GenerationMetadata.empty();
+    }
+    Map<?, ?> map = requireMap(raw, "generationMetadata");
+    java.util.Set<String> filters = new java.util.LinkedHashSet<>();
+    if (map.get("contentFilters") instanceof List<?> list) {
+      for (Object item : list) {
+        filters.add(String.valueOf(item));
+      }
+    }
+    return new CassetteRecord.GenerationMetadata(
+        asString(map.get("finishReason")), filters, toObjectMap(map.get("attributes")));
+  }
+
+  private static List<CassetteRecord.ChatGenerationPayload> toAdditionalGenerations(Object raw)
+      throws IOException {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<CassetteRecord.ChatGenerationPayload> result = new ArrayList<>();
+    for (Object item : list) {
+      Map<?, ?> map = requireMap(item, "additionalGenerations[]");
+      result.add(
+          new CassetteRecord.ChatGenerationPayload(
+              toAiMessage(map.get("aiMessage")), toGenerationMetadata(map.get("metadata"))));
+    }
+    return result;
+  }
+
+  private static List<CassetteRecord.StreamEvent> toStreamEvents(Object raw) throws IOException {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<CassetteRecord.StreamEvent> result = new ArrayList<>();
+    for (Object item : list) {
+      Map<?, ?> map = requireMap(item, "streamEvents[]");
+      result.add(
+          new CassetteRecord.StreamEvent(
+              requireString(map.get("type"), "streamEvents[].type"),
+              asString(map.get("text")),
+              asInteger(map.get("index")),
+              toToolCall(map.get("toolCall"))));
+    }
+    return result;
+  }
+
+  private static List<CassetteRecord.ChatPayload> toStreamChunks(Object raw) throws IOException {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<CassetteRecord.ChatPayload> result = new ArrayList<>();
+    for (Object item : list) {
+      result.add(toChatPayload(item));
+    }
+    return result;
+  }
+
+  private static CassetteRecord.ToolCall toToolCall(Object raw) throws IOException {
+    if (raw == null) {
+      return null;
+    }
+    Map<?, ?> map = requireMap(raw, "toolCall");
+    return new CassetteRecord.ToolCall(
+        asString(map.get("id")),
+        asString(map.get("type")),
+        requireString(map.get("name"), "toolCall.name"),
+        asString(map.get("arguments")));
+  }
+
+  private static CassetteRecord.RateLimit toRateLimit(Object raw) throws IOException {
+    if (raw == null) {
+      return null;
+    }
+    Map<?, ?> map = requireMap(raw, "rateLimit");
+    return new CassetteRecord.RateLimit(
+        asLong(map.get("requestsLimit")),
+        asLong(map.get("requestsRemaining")),
+        asLong(map.get("requestsResetMillis")),
+        asLong(map.get("tokensLimit")),
+        asLong(map.get("tokensRemaining")),
+        asLong(map.get("tokensResetMillis")));
+  }
+
+  private static List<CassetteRecord.PromptFilter> toPromptMetadata(Object raw) throws IOException {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    List<CassetteRecord.PromptFilter> result = new ArrayList<>();
+    for (Object item : list) {
+      Map<?, ?> map = requireMap(item, "promptMetadata[]");
+      Integer index = asInteger(map.get("promptIndex"));
+      result.add(
+          new CassetteRecord.PromptFilter(
+              index == null ? 0 : index, map.get("contentFilterMetadata")));
+    }
+    return result;
   }
 
   private static Map<String, Object> toObjectMap(Object raw) throws IOException {
@@ -341,5 +602,9 @@ public final class JacksonCassetteSerializer implements CassetteSerializer {
 
   private static Integer asInteger(Object raw) {
     return raw instanceof Number n ? n.intValue() : null;
+  }
+
+  private static Long asLong(Object raw) {
+    return raw instanceof Number n ? n.longValue() : null;
   }
 }
