@@ -130,6 +130,20 @@ class ScalarVectorUtilSupportTest {
   }
 
   @Test
+  void mappedBfloat16KernelReadsLittleEndianRows() {
+    float[] query = {0.25f, -0.5f, 4.0f};
+    ByteBuffer matrix = ByteBuffer.allocate(6 * Short.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+    for (int bits : new int[] {0x3f80, 0xc000, 0x3f00, 0x4040, 0xbf80, 0x4000}) {
+      matrix.putShort((short) bits);
+    }
+    float[] out = new float[2];
+
+    scalar.bfloat16MatVecDot(query, MemorySegment.ofArray(matrix.array()), 2, 3, out);
+
+    assertThat(out).containsExactly(3.25f, 9.25f);
+  }
+
+  @Test
   void q4_KBatchedMatmulMatchesIndependentScalarQueriesExactly() {
     int batchSize = 3;
     int rows = 2;
