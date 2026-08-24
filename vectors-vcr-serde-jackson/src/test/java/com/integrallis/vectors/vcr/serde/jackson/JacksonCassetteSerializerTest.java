@@ -18,11 +18,15 @@ package com.integrallis.vectors.vcr.serde.jackson;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteSerializer;
 import com.integrallis.vectors.vcr.serde.avaje.AvajeCassetteSerializer;
+import java.io.UncheckedIOException;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -131,6 +135,66 @@ class JacksonCassetteSerializerTest {
 
     assertSameRecord(in, serializer.deserialize(new AvajeCassetteSerializer().serialize(in)));
     assertSameRecord(in, new AvajeCassetteSerializer().deserialize(serializer.serialize(in)));
+  }
+
+  @Test
+  void roundTripPreservesJsonCompatibleAttributeShapes() {
+    Map<String, Object> attributes =
+        Map.ofEntries(
+            Map.entry("boolean", true),
+            Map.entry("integer", 2),
+            Map.entry("long", 3L),
+            Map.entry("float", 1.25f),
+            Map.entry("double", 2.5d),
+            Map.entry("decimal", new BigDecimal("3.75")),
+            Map.entry("enum", TestValue.VALUE),
+            Map.entry("map", Map.of("nested", false)),
+            Map.entry("iterable", List.of("one", 2)),
+            Map.entry("array", new String[] {"left", "right"}),
+            Map.entry("fallback", new StringBuilder("text")));
+    CassetteRecord.Chat input =
+        new CassetteRecord.Chat(
+            "T:json-types",
+            "chat-model",
+            126L,
+            "hello",
+            new CassetteRecord.ChatPayload(
+                new CassetteRecord.AiMessagePayload("world", null, List.of(), attributes),
+                CassetteRecord.ChatMetadata.empty()));
+
+    CassetteRecord.Chat output =
+        assertInstanceOf(
+            CassetteRecord.Chat.class, serializer.deserialize(serializer.serialize(input)));
+    Map<String, Object> decoded = output.response().aiMessage().attributes();
+
+    assertEquals(true, decoded.get("boolean"));
+    assertEquals(2L, decoded.get("integer"));
+    assertEquals(3L, decoded.get("long"));
+    assertEquals(1.25d, decoded.get("float"));
+    assertEquals(2.5d, decoded.get("double"));
+    assertEquals(3.75d, decoded.get("decimal"));
+    assertEquals("VALUE", decoded.get("enum"));
+    assertEquals(Map.of("nested", false), decoded.get("map"));
+    assertEquals(List.of("one", 2L), decoded.get("iterable"));
+    assertEquals(List.of("left", "right"), decoded.get("array"));
+    assertEquals("text", decoded.get("fallback"));
+  }
+
+  @Test
+  void rejectsNonObjectAndMalformedCassetteDocuments() {
+    assertThrows(
+        UncheckedIOException.class,
+        () -> serializer.deserialize("[]".getBytes(StandardCharsets.UTF_8)));
+    assertThrows(
+        UncheckedIOException.class,
+        () -> serializer.deserialize("{\"type\":\"embedding\"}".getBytes(StandardCharsets.UTF_8)));
+    assertThrows(
+        UncheckedIOException.class,
+        () -> serializer.deserialize("{\"type\":".getBytes(StandardCharsets.UTF_8)));
+  }
+
+  private enum TestValue {
+    VALUE
   }
 
   private static void assertSameRecord(CassetteRecord expected, CassetteRecord actual) {

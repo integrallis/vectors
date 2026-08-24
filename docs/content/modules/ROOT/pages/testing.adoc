@@ -194,4 +194,5 @@ Two cassette serializers are available:
 | Streaming API (JsonGenerator/JsonParser). Lower memory for large cassettes.
 |===
 
-Both produce identical JSON, so cassettes are interchangeable between serializers.
+Both delegate the cassette shape to the core `CassetteTreeCodec`, so cassettes are interchangeable
+between serializers and new response fields cannot drift between the two implementations.

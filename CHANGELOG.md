@@ -4,6 +4,12 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Avaje and Jackson VCR serializers now share one canonical cassette-tree codec in
+  `vectors-vcr-core`. Their JSON remains cross-compatible while new structured and streaming
+  fields have a single mapping implementation.
+
 ## [0.1.11] - 2026-08-23
 
 ### Added

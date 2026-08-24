@@ -24,8 +24,8 @@ import java.util.ServiceLoader;
  * the classpath: {@code vectors-vcr-serde-avaje} (default, Avaje JsonB) or {@code
  * vectors-vcr-serde-jackson} (alternate, Jackson).
  *
- * <p>The on-disk shape is implementation-defined. The SPI contract is "whatever wrote it reads it
- * back" — cross-implementation interoperability is not guaranteed.
+ * <p>The built-in Avaje and Jackson implementations use {@link CassetteTreeCodec} and are
+ * cross-compatible. Third-party SPI implementations may use another representation.
  */
 public interface CassetteSerializer {
 

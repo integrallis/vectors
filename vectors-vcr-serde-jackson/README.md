@@ -8,7 +8,8 @@ VCR cassette serialization using Jackson. Alternative serializer for cassette st
 
 - `JacksonCassetteSerializer` implements `CassetteSerializer` using Jackson's streaming API (JsonGenerator/JsonParser)
 - Handles all three `CassetteRecord` types: Embedding, BatchEmbedding, Chat
-- Produces the same JSON shape as the Avaje serializer for cross-serializer interoperability
+- Delegates the cassette shape to the shared core `CassetteTreeCodec`, guaranteeing
+  cross-serializer interoperability with Avaje
 
 ## Key Types
 
@@ -16,5 +17,5 @@ VCR cassette serialization using Jackson. Alternative serializer for cassette st
 
 ## Dependencies
 
-- `vectors-vcr-core` — CassetteSerializer SPI
+- `vectors-vcr-core` — `CassetteSerializer` SPI and canonical `CassetteTreeCodec`
 - Jackson Databind 2.18.2

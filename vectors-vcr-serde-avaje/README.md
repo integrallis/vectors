@@ -9,7 +9,8 @@ VCR cassette serialization using Avaje Jsonb. Default serializer for cassette st
 - `AvajeCassetteSerializer` implements `CassetteSerializer` using Avaje Jsonb's tree API
 - Zero-annotation JSON serialization (no annotation processor required)
 - Handles all three `CassetteRecord` types: Embedding, BatchEmbedding, Chat
-- Produces the same JSON shape as the Jackson serializer for cross-serializer interoperability
+- Delegates the cassette shape to the shared core `CassetteTreeCodec`, guaranteeing
+  cross-serializer interoperability with Jackson
 
 ## Key Types
 
@@ -17,5 +18,5 @@ VCR cassette serialization using Avaje Jsonb. Default serializer for cassette st
 
 ## Dependencies
 
-- `vectors-vcr-core` — CassetteSerializer SPI
+- `vectors-vcr-core` — `CassetteSerializer` SPI and canonical `CassetteTreeCodec`
 - Avaje Jsonb 3.11
