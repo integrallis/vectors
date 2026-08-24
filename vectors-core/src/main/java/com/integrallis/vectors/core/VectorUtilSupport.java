@@ -221,6 +221,22 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Batched row-major GEMV over little-endian bfloat16 rows without expanding the matrix. */
+  default void bfloat16MatVecDot(
+      float[] query, MemorySegment weight, int rows, int cols, float[] out) {
+    long rowBytes = (long) cols * Short.BYTES;
+    for (int row = 0; row < rows; row++) {
+      long rowOffset = row * rowBytes;
+      float sum = 0.0f;
+      for (int col = 0; col < cols; col++) {
+        short bits = weight.get(GGUF_LE_SHORT, rowOffset + (long) col * Short.BYTES);
+        float value = Float.intBitsToFloat(Short.toUnsignedInt(bits) << Short.SIZE);
+        sum = MathUtil.fma(query[col], value, sum);
+      }
+      out[row] = sum;
+    }
+  }
+
   /**
    * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
    *

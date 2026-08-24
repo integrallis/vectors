@@ -111,6 +111,17 @@
         <Class name="com.integrallis.vectors.bench.GgufBatchedMatmulBenchmark"/>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
+    <!-- vectors-bench: the rotated-codebook and BF16 matrix benchmarks each reuse one fixed-seed
+         Random throughout @Setup to generate every weight and activation. SpotBugs reports the
+         loop-contained calls as one-shot uses, but deterministic data is required for comparable
+         JMH forks and cross-host runs. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.bench.RotatedCodebookMatrixBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.BFloat16MatrixBenchmark"/>
+        </Or>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
     <!-- vectors-bench: GgufRowDispatchBenchmark's query, weights, and IntConsumer are JMH
          @State read from a method-reference callback reached by the @Benchmark method. The
          generated JMH caller is unavailable during SpotBugs analysis, producing UrF warnings. -->
