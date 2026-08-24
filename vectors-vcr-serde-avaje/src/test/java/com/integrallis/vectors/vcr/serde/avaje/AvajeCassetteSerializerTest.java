@@ -88,8 +88,68 @@ class AvajeCassetteSerializerTest {
   }
 
   @Test
+  void roundTripStructuredAndStreamingChatPayload() {
+    CassetteRecord.Chat in =
+        new CassetteRecord.Chat(
+            "T:rich", "chat-model", 6L, "hello", richChatPayload(), "sha256:rich");
+
+    CassetteRecord.Chat back =
+        (CassetteRecord.Chat) serializer.deserialize(serializer.serialize(in));
+
+    assertEquals(in.testId(), back.testId());
+    assertEquals(in.model(), back.model());
+    assertEquals(in.timestamp(), back.timestamp());
+    assertEquals(in.prompt(), back.prompt());
+    assertEquals(in.requestSignature(), back.requestSignature());
+    assertEquals(in.response(), back.response());
+  }
+
+  @Test
   void serviceLoaderFindsSerializer() {
     CassetteSerializer loaded = CassetteSerializer.load();
     assertInstanceOf(AvajeCassetteSerializer.class, loaded);
+  }
+
+  private static CassetteRecord.ChatPayload richChatPayload() {
+    CassetteRecord.AiMessagePayload primary =
+        new CassetteRecord.AiMessagePayload(
+            "world",
+            "thinking",
+            List.of(new CassetteRecord.ToolCall("call-1", "function", "search", "{}")),
+            Map.of("message", "primary"));
+    CassetteRecord.ChatMetadata metadata =
+        new CassetteRecord.ChatMetadata(
+            "resp-1",
+            "chat-model",
+            new CassetteRecord.TokenUsage(5, 6, 11, Map.of("cached", "yes")),
+            "STOP",
+            Map.of("fingerprint", "fp-1"),
+            new CassetteRecord.RateLimit(10L, 9L, 1000L, 100L, 90L, 2000L),
+            List.of(new CassetteRecord.PromptFilter(0, Map.of("safe", "true"))));
+    CassetteRecord.GenerationMetadata generation =
+        new CassetteRecord.GenerationMetadata(
+            "STOP", java.util.Set.of("safe"), Map.of("generation", "g-1"));
+    CassetteRecord.ChatGenerationPayload additional =
+        new CassetteRecord.ChatGenerationPayload(
+            new CassetteRecord.AiMessagePayload("alternate", null, List.of(), Map.of()),
+            generation);
+    CassetteRecord.StreamEvent responseEvent =
+        new CassetteRecord.StreamEvent("partial_response", "wor", null, null);
+    CassetteRecord.StreamEvent toolEvent =
+        new CassetteRecord.StreamEvent(
+            "complete_tool_call",
+            null,
+            0,
+            new CassetteRecord.ToolCall("call-1", "function", "search", "{}"));
+    CassetteRecord.ChatPayload chunk =
+        new CassetteRecord.ChatPayload(
+            new CassetteRecord.AiMessagePayload("wor", null, List.of(), Map.of()), metadata);
+    return new CassetteRecord.ChatPayload(
+        primary,
+        metadata,
+        generation,
+        List.of(additional),
+        List.of(responseEvent, toolEvent),
+        List.of(chunk));
   }
 }

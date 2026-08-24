@@ -15,8 +15,6 @@
  */
 package com.integrallis.vectors.vcr;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -152,6 +150,14 @@ public sealed interface CassetteRecord
           toolExecutionRequests == null ? List.of() : List.copyOf(toolExecutionRequests);
       attributes = immutableMap(attributes);
     }
+
+    /**
+     * @return an immutable snapshot of the message attributes
+     */
+    @Override
+    public Map<String, Object> attributes() {
+      return immutableMap(attributes);
+    }
   }
 
   /** A framework-neutral tool execution request. */
@@ -187,6 +193,14 @@ public sealed interface CassetteRecord
       promptMetadata = promptMetadata == null ? List.of() : List.copyOf(promptMetadata);
     }
 
+    /**
+     * @return an immutable snapshot of the response attributes
+     */
+    @Override
+    public Map<String, Object> attributes() {
+      return immutableMap(attributes);
+    }
+
     /** Shared empty metadata value. */
     public static ChatMetadata empty() {
       return new ChatMetadata(null, null, null, null, Map.of(), null, List.of());
@@ -212,6 +226,14 @@ public sealed interface CassetteRecord
     public GenerationMetadata {
       contentFilters = contentFilters == null ? Set.of() : Set.copyOf(contentFilters);
       attributes = immutableMap(attributes);
+    }
+
+    /**
+     * @return an immutable snapshot of the generation attributes
+     */
+    @Override
+    public Map<String, Object> attributes() {
+      return immutableMap(attributes);
     }
 
     /** Shared empty generation metadata. */
@@ -253,6 +275,6 @@ public sealed interface CassetteRecord
     if (values == null || values.isEmpty()) {
       return Map.of();
     }
-    return Collections.unmodifiableMap(new LinkedHashMap<>(values));
+    return Map.copyOf(values);
   }
 }

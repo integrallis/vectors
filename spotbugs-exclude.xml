@@ -571,8 +571,9 @@
     </Match>
 
     <!-- vectors-vcr-*: CassetteRecord subtypes, VCRContext, and wrapper classes intentionally
-         share float[] embedding references and framework-specific model instances by reference
-         (zero-copy recording path; wrapping must not clone the underlying model). -->
+         share float[] embedding references, framework-specific model instances, and the
+         caller-owned CassetteStore by reference. Wrapping must use the same model and recording
+         lifecycle; none of these interface collaborators can be defensively cloned. -->
     <Match>
         <Or>
             <Class name="com.integrallis.vectors.vcr.CassetteRecord$Embedding"/>
@@ -588,8 +589,10 @@
         <Or>
             <Class name="com.integrallis.vectors.vcr.springai.VCRSpringAIEmbeddingModel"/>
             <Class name="com.integrallis.vectors.vcr.springai.VCRSpringAIChatModel"/>
+            <Class name="com.integrallis.vectors.vcr.springai.VCRSpringAIStreamingChatModel"/>
             <Class name="com.integrallis.vectors.vcr.langchain4j.VCREmbeddingModel"/>
             <Class name="com.integrallis.vectors.vcr.langchain4j.VCRChatModel"/>
+            <Class name="com.integrallis.vectors.vcr.langchain4j.VCRStreamingChatModel"/>
         </Or>
         <Or>
             <Bug pattern="EI_EXPOSE_REP"/>

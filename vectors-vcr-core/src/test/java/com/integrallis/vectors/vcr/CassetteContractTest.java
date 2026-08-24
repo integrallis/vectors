@@ -17,6 +17,7 @@ package com.integrallis.vectors.vcr;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,6 +61,8 @@ class CassetteContractTest {
 
     assertThat(message.toolExecutionRequests()).hasSize(1);
     assertThat(message.attributes()).containsEntry("provider", "test");
+    assertThatThrownBy(() -> message.attributes().put("mutable", true))
+        .isInstanceOf(UnsupportedOperationException.class);
     assertThat(payload.metadata()).isEqualTo(CassetteRecord.ChatMetadata.empty());
   }
 

@@ -51,13 +51,10 @@ final class SpringAIRequestSignatures {
     request.put("model", modelName);
     request.put("texts", texts);
     if (options instanceof EmbeddingOptions embeddingOptions) {
-      request.put(
-          "options",
-          Map.of(
-              "model",
-              nullSafe(embeddingOptions.getModel()),
-              "dimensions",
-              embeddingOptions.getDimensions() == null ? -1 : embeddingOptions.getDimensions()));
+      Map<String, Object> embeddingValues = new LinkedHashMap<>();
+      embeddingValues.put("model", embeddingOptions.getModel());
+      embeddingValues.put("dimensions", embeddingOptions.getDimensions());
+      request.put("options", embeddingValues);
     } else {
       request.put("options", stable(options));
     }
@@ -112,11 +109,7 @@ final class SpringAIRequestSignatures {
       value.put("toolContext", stable(tools.getToolContext()));
       value.put(
           "toolCallbacks",
-          tools.getToolCallbacks() == null
-              ? List.of()
-              : tools.getToolCallbacks().stream()
-                  .map(SpringAIRequestSignatures::toolCallback)
-                  .toList());
+          tools.getToolCallbacks().stream().map(SpringAIRequestSignatures::toolCallback).toList());
     }
     if (options instanceof StructuredOutputChatOptions structured) {
       value.put("outputSchema", structured.getOutputSchema());
