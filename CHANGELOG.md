@@ -4,6 +4,28 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-08-23
+
+### Added
+
+- Spring AI and LangChain4j streaming chat interfaces now record and replay ordered
+  response chunks, thinking updates, and tool-call events. Dual-mode LangChain4j
+  models retain both their blocking and streaming interfaces when wrapped.
+- Cassettes now carry canonical SHA-256 request signatures covering model inputs,
+  generation settings, tools, response formats, and framework-exposed defaults.
+
+### Fixed
+
+- `PLAYBACK_OR_RECORD` now replays only matching signed requests and automatically
+  replaces missing, unsigned legacy, or stale interactions. Strict `PLAYBACK`
+  rejects stale cassettes instead of returning a response recorded for different
+  inputs or settings.
+- Spring AI chat playback now reconstructs structured assistant messages, tool calls,
+  all generations, generation metadata, response attributes, token usage, rate
+  limits, and prompt-filter metadata rather than returning assistant text alone.
+- Avaje and Jackson cassette serializers now preserve the expanded structured and
+  streaming payloads while remaining interoperable with each other.
+
 ## [0.1.10] - 2026-08-23
 
 ### Fixed
