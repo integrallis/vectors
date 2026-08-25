@@ -6534,6 +6534,19 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     BFloat16Matrix.vectorMultiply(query, weight, rows, cols, out);
   }
 
+  /** SIMD GEMV over little-endian mapped bfloat16 weights with array offsets. */
+  @Override
+  public void bfloat16MatVecDot(
+      float[] query,
+      int queryOffset,
+      MemorySegment weight,
+      int rows,
+      int cols,
+      float[] out,
+      int outOffset) {
+    BFloat16Matrix.vectorMultiply(query, queryOffset, weight, rows, cols, out, outOffset);
+  }
+
   /**
    * SIMD 4-row-unrolled fused GEMV for squared L2 distance.
    *

@@ -86,10 +86,29 @@ public final class BFloat16Matrix {
           "output length must be at least matrix rows " + rows + "; got " + output.length);
     }
 
-    if (VECTOR_SUPPORT instanceof PanamaVectorUtilSupport) {
-      vectorMultiply(input, data, rows, columns, output);
-    } else {
-      VECTOR_SUPPORT.bfloat16MatVecDot(input, data, rows, columns, output);
+    VECTOR_SUPPORT.bfloat16MatVecDot(input, data, rows, columns, output);
+  }
+
+  /**
+   * Multiplies consecutive batch-major F32 activations without copying them into temporary arrays.
+   */
+  public void multiplyBatch(
+      float[] input, int inputOffset, int batchSize, float[] output, int outputOffset) {
+    Objects.requireNonNull(input, "input");
+    Objects.requireNonNull(output, "output");
+    requirePositive(batchSize, "batchSize");
+    requireArrayRange(input.length, inputOffset, Math.multiplyExact(batchSize, columns), "input");
+    requireArrayRange(output.length, outputOffset, Math.multiplyExact(batchSize, rows), "output");
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      VECTOR_SUPPORT.bfloat16MatVecDot(
+          input,
+          inputOffset + batch * columns,
+          data,
+          rows,
+          columns,
+          output,
+          outputOffset + batch * rows);
     }
   }
 
@@ -120,17 +139,34 @@ public final class BFloat16Matrix {
 
   static void vectorMultiply(
       float[] input, MemorySegment weight, int rows, int columns, float[] output) {
+    vectorMultiply(input, 0, weight, rows, columns, output, 0);
+  }
+
+  static void vectorMultiply(
+      float[] input,
+      int inputOffset,
+      MemorySegment weight,
+      int rows,
+      int columns,
+      float[] output,
+      int outputOffset) {
     // Four interleaved rows reuse activations for ordinary transformer projections. Very tall
     // vocabulary matrices perform better as one sequential weight stream on both tested x86 hosts.
     if (rows >= SEQUENTIAL_ROW_THRESHOLD) {
-      vectorMultiplySequential(input, weight, rows, columns, output);
+      vectorMultiplySequential(input, inputOffset, weight, rows, columns, output, outputOffset);
     } else {
-      vectorMultiplyFourRows(input, weight, rows, columns, output);
+      vectorMultiplyFourRows(input, inputOffset, weight, rows, columns, output, outputOffset);
     }
   }
 
   private static void vectorMultiplyFourRows(
-      float[] input, MemorySegment weight, int rows, int columns, float[] output) {
+      float[] input,
+      int inputOffset,
+      MemorySegment weight,
+      int rows,
+      int columns,
+      float[] output,
+      int outputOffset) {
     int rowGroup = rows & ~3;
     int vectorBound = columns - columns % VALUES_PER_VECTOR;
     long rowBytes = (long) columns * Short.BYTES;
@@ -145,12 +181,13 @@ public final class BFloat16Matrix {
       FloatVector sum3 = FloatVector.zero(PanamaVectorUtilSupport.FLOAT_SPECIES);
       for (int column = 0; column < vectorBound; column += VALUES_PER_VECTOR) {
         FloatVector first =
-            FloatVector.fromArray(PanamaVectorUtilSupport.FLOAT_SPECIES, input, column);
+            FloatVector.fromArray(
+                PanamaVectorUtilSupport.FLOAT_SPECIES, input, inputOffset + column);
         FloatVector second =
             FloatVector.fromArray(
                 PanamaVectorUtilSupport.FLOAT_SPECIES,
                 input,
-                column + PanamaVectorUtilSupport.FLOAT_SPECIES.length());
+                inputOffset + column + PanamaVectorUtilSupport.FLOAT_SPECIES.length());
         FloatVector evenInputs = first.rearrange(EVEN_INPUTS, second);
         FloatVector oddInputs = first.rearrange(ODD_INPUTS, second);
         long byteOffset = (long) column * Short.BYTES;
@@ -159,21 +196,38 @@ public final class BFloat16Matrix {
         sum2 = accumulate(weight, sum2, evenInputs, oddInputs, base2 + byteOffset);
         sum3 = accumulate(weight, sum3, evenInputs, oddInputs, base3 + byteOffset);
       }
-      output[row] = finishRow(weight, sum0, input, columns, base0, vectorBound);
-      output[row + 1] = finishRow(weight, sum1, input, columns, base1, vectorBound);
-      output[row + 2] = finishRow(weight, sum2, input, columns, base2, vectorBound);
-      output[row + 3] = finishRow(weight, sum3, input, columns, base3, vectorBound);
+      output[outputOffset + row] =
+          finishRow(weight, sum0, input, inputOffset, columns, base0, vectorBound);
+      output[outputOffset + row + 1] =
+          finishRow(weight, sum1, input, inputOffset, columns, base1, vectorBound);
+      output[outputOffset + row + 2] =
+          finishRow(weight, sum2, input, inputOffset, columns, base2, vectorBound);
+      output[outputOffset + row + 3] =
+          finishRow(weight, sum3, input, inputOffset, columns, base3, vectorBound);
     }
-    vectorMultiplyRows(input, weight, rowGroup, rows, columns, output);
+    vectorMultiplyRows(input, inputOffset, weight, rowGroup, rows, columns, output, outputOffset);
   }
 
   private static void vectorMultiplySequential(
-      float[] input, MemorySegment weight, int rows, int columns, float[] output) {
-    vectorMultiplyRows(input, weight, 0, rows, columns, output);
+      float[] input,
+      int inputOffset,
+      MemorySegment weight,
+      int rows,
+      int columns,
+      float[] output,
+      int outputOffset) {
+    vectorMultiplyRows(input, inputOffset, weight, 0, rows, columns, output, outputOffset);
   }
 
   private static void vectorMultiplyRows(
-      float[] input, MemorySegment weight, int firstRow, int rows, int columns, float[] output) {
+      float[] input,
+      int inputOffset,
+      MemorySegment weight,
+      int firstRow,
+      int rows,
+      int columns,
+      float[] output,
+      int outputOffset) {
     int vectorBound = columns - columns % VALUES_PER_VECTOR;
     long rowBytes = (long) columns * Short.BYTES;
     for (int row = firstRow; row < rows; row++) {
@@ -181,12 +235,13 @@ public final class BFloat16Matrix {
       FloatVector sum = FloatVector.zero(PanamaVectorUtilSupport.FLOAT_SPECIES);
       for (int column = 0; column < vectorBound; column += VALUES_PER_VECTOR) {
         FloatVector first =
-            FloatVector.fromArray(PanamaVectorUtilSupport.FLOAT_SPECIES, input, column);
+            FloatVector.fromArray(
+                PanamaVectorUtilSupport.FLOAT_SPECIES, input, inputOffset + column);
         FloatVector second =
             FloatVector.fromArray(
                 PanamaVectorUtilSupport.FLOAT_SPECIES,
                 input,
-                column + PanamaVectorUtilSupport.FLOAT_SPECIES.length());
+                inputOffset + column + PanamaVectorUtilSupport.FLOAT_SPECIES.length());
         sum =
             accumulate(
                 weight,
@@ -195,7 +250,8 @@ public final class BFloat16Matrix {
                 first.rearrange(ODD_INPUTS, second),
                 rowOffset + (long) column * Short.BYTES);
       }
-      output[row] = finishRow(weight, sum, input, columns, rowOffset, vectorBound);
+      output[outputOffset + row] =
+          finishRow(weight, sum, input, inputOffset, columns, rowOffset, vectorBound);
     }
   }
 
@@ -219,13 +275,14 @@ public final class BFloat16Matrix {
       MemorySegment weight,
       FloatVector vectorSum,
       float[] input,
+      int inputOffset,
       int columns,
       long rowOffset,
       int vectorBound) {
     float sum = vectorSum.reduceLanes(VectorOperators.ADD);
     for (int column = vectorBound; column < columns; column++) {
       float value = decode(weight.get(LE_SHORT, rowOffset + (long) column * Short.BYTES));
-      sum = MathUtil.fma(input[column], value, sum);
+      sum = MathUtil.fma(input[inputOffset + column], value, sum);
     }
     return sum;
   }
@@ -233,6 +290,13 @@ public final class BFloat16Matrix {
   private static void requirePositive(int value, String name) {
     if (value <= 0) {
       throw new IllegalArgumentException(name + " must be positive; got " + value);
+    }
+  }
+
+  private static void requireArrayRange(int length, int offset, int count, String name) {
+    if (offset < 0 || count < 0 || offset > length - count) {
+      throw new IllegalArgumentException(
+          name + " range [" + offset + ", " + ((long) offset + count) + ") exceeds " + length);
     }
   }
 }
