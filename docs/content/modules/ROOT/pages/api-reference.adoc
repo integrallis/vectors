@@ -81,6 +81,18 @@ Run many queries at once with `searchBatch`, which fans each request out on a vi
 List<SearchResult> results = collection.searchBatch(List.of(requestA, requestB));
 ----
 
+=== Compact Model Matrices
+
+`vectors-core` also exposes zero-copy primitives used by model runtimes. `BFloat16Matrix`
+multiplies mapped little-endian BF16 weights without first expanding the matrix to F32 and supports
+both one activation and a batch. `RotatedCodebookMatrix` executes grouped Hadamard-rotated CQ2,
+CQ3, CQ4, and ternary rows and can reuse one prepared activation across row slices. Both validate
+the complete storage geometry when the view is created and retain scalar fallbacks behind the
+same public API.
+
+These are matrix execution primitives, not `VectorCollection` storage formats. Application code
+normally reaches them through a model runtime such as Integrallis Models.
+
 === Metadata Filters
 
 Filters are built with the `Filters` factory and compose into a sealed `Filter` tree:
