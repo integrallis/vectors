@@ -251,6 +251,22 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Batch-major BF16 matrix multiplication with explicit activation and result offsets. */
+  default void bfloat16BatchedMatmul(
+      float[] query,
+      int queryOffset,
+      MemorySegment weight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      int outOffset) {
+    for (int batch = 0; batch < batchSize; batch++) {
+      bfloat16MatVecDot(
+          query, queryOffset + batch * cols, weight, rows, cols, out, outOffset + batch * rows);
+    }
+  }
+
   /**
    * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
    *

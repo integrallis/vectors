@@ -158,6 +158,20 @@ class ScalarVectorUtilSupportTest {
   }
 
   @Test
+  void mappedBfloat16BatchHonorsActivationAndResultOffsets() {
+    float[] query = {99.0f, 0.25f, -0.5f, 4.0f, -1.0f, 0.5f, 4.0f, 99.0f};
+    ByteBuffer matrix = ByteBuffer.allocate(6 * Short.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+    for (int bits : new int[] {0x3f80, 0xc000, 0x3f00, 0x4040, 0xbf80, 0x4000}) {
+      matrix.putShort((short) bits);
+    }
+    float[] out = {77.0f, 0.0f, 0.0f, 0.0f, 0.0f, 77.0f};
+
+    scalar.bfloat16BatchedMatmul(query, 1, MemorySegment.ofArray(matrix.array()), 2, 2, 3, out, 1);
+
+    assertThat(out).containsExactly(77.0f, 3.25f, 9.25f, 0.0f, 4.5f, 77.0f);
+  }
+
+  @Test
   void q4_KBatchedMatmulMatchesIndependentScalarQueriesExactly() {
     int batchSize = 3;
     int rows = 2;

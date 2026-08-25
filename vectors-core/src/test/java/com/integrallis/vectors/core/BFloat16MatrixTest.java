@@ -132,6 +132,42 @@ class BFloat16MatrixTest {
   }
 
   @Test
+  void sharedLargeBatchMatchesIndependentMatrixVectorProductsExactly() {
+    int rows = 1024;
+    int columns = 1024;
+    int batchSize = 3;
+    byte[] bits = new byte[Math.multiplyExact(Math.multiplyExact(rows, columns), Short.BYTES)];
+    ByteBuffer weights = ByteBuffer.wrap(bits).order(ByteOrder.LITTLE_ENDIAN);
+    for (int index = 0; index < rows * columns; index++) {
+      float value = ((index * 17L % 127) - 63) / 1024.0f;
+      weights.putShort((short) (Float.floatToRawIntBits(value) >>> Short.SIZE));
+    }
+    float[] input = new float[batchSize * columns];
+    for (int index = 0; index < input.length; index++) {
+      input[index] = ((index * 13L % 89) - 44) / 128.0f;
+    }
+
+    try (Arena arena = Arena.ofShared()) {
+      MemorySegment data = arena.allocate(bits.length, Long.BYTES);
+      data.copyFrom(MemorySegment.ofArray(bits));
+      BFloat16Matrix matrix = BFloat16Matrix.of(data, rows, columns);
+      float[] expected = new float[batchSize * rows];
+      for (int batch = 0; batch < batchSize; batch++) {
+        float[] activation =
+            java.util.Arrays.copyOfRange(input, batch * columns, (batch + 1) * columns);
+        float[] result = new float[rows];
+        matrix.multiply(activation, result);
+        System.arraycopy(result, 0, expected, batch * rows, rows);
+      }
+      float[] actual = new float[expected.length];
+
+      matrix.multiplyBatch(input, 0, batchSize, actual, 0);
+
+      assertThat(actual).containsExactly(expected);
+    }
+  }
+
+  @Test
   void multipliesLargeRowCountsWithSequentialMemoryAccess() {
     int rows = 8192;
     int columns = 3;

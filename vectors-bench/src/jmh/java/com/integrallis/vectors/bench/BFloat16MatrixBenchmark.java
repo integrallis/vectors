@@ -57,8 +57,10 @@ public class BFloat16MatrixBenchmark {
   private Arena arena;
   private MemorySegment mappedExpanded;
   private float[] input;
+  private float[] batchInput;
   private float[] expanded;
   private float[] output;
+  private float[] batchOutput;
   private int rows;
   private int columns;
 
@@ -77,7 +79,9 @@ public class BFloat16MatrixBenchmark {
     ByteBuffer expandedBits = ByteBuffer.wrap(expandedBytes).order(ByteOrder.LITTLE_ENDIAN);
     expanded = new float[values];
     input = new float[columns];
+    batchInput = new float[Math.multiplyExact(13, columns)];
     output = new float[rows];
+    batchOutput = new float[Math.multiplyExact(13, rows)];
     Random random = new Random(0xBF16L + rows * 31L + columns);
     for (int index = 0; index < values; index++) {
       float sample = (random.nextFloat() - 0.5f) * 0.125f;
@@ -88,6 +92,11 @@ public class BFloat16MatrixBenchmark {
     }
     for (int index = 0; index < columns; index++) {
       input[index] = random.nextFloat() * 2.0f - 1.0f;
+    }
+    for (int batch = 0; batch < 13; batch++) {
+      for (int index = 0; index < columns; index++) {
+        batchInput[batch * columns + index] = input[index] + batch * 0.0001f;
+      }
     }
     arena = Arena.ofShared();
     MemorySegment mappedPacked = arena.allocate(packed.length, Long.BYTES);
@@ -120,6 +129,13 @@ public class BFloat16MatrixBenchmark {
   public void mappedBfloat16MatVec(Blackhole blackhole) {
     matrix.multiply(input, output);
     blackhole.consume(output);
+  }
+
+  /** Measures a representative 13-token Qwen 2.5 prompt projection. */
+  @Benchmark
+  public void mappedBfloat16PromptBatch(Blackhole blackhole) {
+    matrix.multiplyBatch(batchInput, 0, 13, batchOutput, 0);
+    blackhole.consume(batchOutput);
   }
 
   /** Measures the existing SIMD F32 matvec over a matrix expanded to twice the storage. */
