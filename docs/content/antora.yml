@@ -1,7 +1,7 @@
 name: vectors
 title: Vectors
 version: 'current'
-display_version: '0.1.11'
+display_version: '0.1.12'
 prerelease: false
 start_page: ROOT:index.adoc
 nav:
@@ -10,7 +10,7 @@ asciidoc:
   attributes:
     source-language: java
     source-highlighter: highlight.js
-    vectors-version: '0.1.11'
+    vectors-version: '0.1.12'
     url-vectors-github: https://github.com/integrallis/vectors
     url-jdk-vector-api: https://docs.oracle.com/en/java/javase/25/docs/api/jdk.incubator.vector/jdk/incubator/vector/package-summary.html
     url-ffm-api: https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/foreign/package-summary.html
