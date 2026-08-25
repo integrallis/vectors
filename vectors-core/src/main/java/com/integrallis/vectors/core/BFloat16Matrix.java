@@ -100,16 +100,8 @@ public final class BFloat16Matrix {
     requireArrayRange(input.length, inputOffset, Math.multiplyExact(batchSize, columns), "input");
     requireArrayRange(output.length, outputOffset, Math.multiplyExact(batchSize, rows), "output");
 
-    for (int batch = 0; batch < batchSize; batch++) {
-      VECTOR_SUPPORT.bfloat16MatVecDot(
-          input,
-          inputOffset + batch * columns,
-          data,
-          rows,
-          columns,
-          output,
-          outputOffset + batch * rows);
-    }
+    VECTOR_SUPPORT.bfloat16BatchedMatmul(
+        input, inputOffset, data, batchSize, rows, columns, output, outputOffset);
   }
 
   /** Reads one stored matrix value as F32 without changing its exact bfloat16 value. */
@@ -285,6 +277,61 @@ public final class BFloat16Matrix {
       sum = MathUtil.fma(input[inputOffset + column], value, sum);
     }
     return sum;
+  }
+
+  static void vectorMultiplyBatch(
+      float[] input,
+      int inputOffset,
+      MemorySegment weight,
+      int batchSize,
+      int rows,
+      int columns,
+      float[] output,
+      int outputOffset) {
+    GgufParallelSupport.forEachRow(
+        weight,
+        rows,
+        columns,
+        row ->
+            vectorMultiplyBatchRow(
+                input, inputOffset, weight, batchSize, rows, columns, output, outputOffset, row));
+  }
+
+  private static void vectorMultiplyBatchRow(
+      float[] input,
+      int inputOffset,
+      MemorySegment weight,
+      int batchSize,
+      int rows,
+      int columns,
+      float[] output,
+      int outputOffset,
+      int row) {
+    int vectorBound = columns - columns % VALUES_PER_VECTOR;
+    long rowOffset = (long) row * columns * Short.BYTES;
+    for (int batch = 0; batch < batchSize; batch++) {
+      int activationOffset = inputOffset + batch * columns;
+      FloatVector sum = FloatVector.zero(PanamaVectorUtilSupport.FLOAT_SPECIES);
+      for (int column = 0; column < vectorBound; column += VALUES_PER_VECTOR) {
+        FloatVector first =
+            FloatVector.fromArray(
+                PanamaVectorUtilSupport.FLOAT_SPECIES, input, activationOffset + column);
+        FloatVector second =
+            FloatVector.fromArray(
+                PanamaVectorUtilSupport.FLOAT_SPECIES,
+                input,
+                activationOffset + column + PanamaVectorUtilSupport.FLOAT_SPECIES.length());
+        sum =
+            accumulate(
+                weight,
+                sum,
+                first.rearrange(EVEN_INPUTS, second),
+                first.rearrange(ODD_INPUTS, second),
+                rowOffset + (long) column * Short.BYTES);
+      }
+      output[outputOffset + batch * rows + row] =
+          finishRow(weight, sum, input, activationOffset, columns, rowOffset, vectorBound);
+    }
   }
 
   private static void requirePositive(int value, String name) {
