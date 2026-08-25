@@ -119,6 +119,19 @@ class BFloat16MatrixTest {
   }
 
   @Test
+  void multipliesBatchMajorActivationsIntoAnOffsetOutputRegion() {
+    BFloat16Matrix matrix =
+        BFloat16Matrix.of(
+            MemorySegment.ofArray(bf16Bits(0x3f80, 0x4000, 0xbf80, 0x3f00, 0xc000, 0x4040)), 2, 3);
+    float[] input = {99.0f, 1.0f, 2.0f, 3.0f, -1.0f, 0.5f, 4.0f, 99.0f};
+    float[] output = {77.0f, 0.0f, 0.0f, 0.0f, 0.0f, 77.0f};
+
+    matrix.multiplyBatch(input, 1, 2, output, 1);
+
+    assertThat(output).containsExactly(77.0f, 2.0f, 5.5f, -4.0f, 10.5f, 77.0f);
+  }
+
+  @Test
   void multipliesLargeRowCountsWithSequentialMemoryAccess() {
     int rows = 8192;
     int columns = 3;
@@ -153,6 +166,12 @@ class BFloat16MatrixTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("input");
     assertThatThrownBy(() -> matrix.multiply(new float[2], new float[0]))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("output");
+    assertThatThrownBy(() -> matrix.multiplyBatch(new float[4], 1, 2, new float[2], 0))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("input");
+    assertThatThrownBy(() -> matrix.multiplyBatch(new float[4], 0, 1, new float[1], 1))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("output");
     assertThatThrownBy(() -> matrix.rowSlice(1, 1)).isInstanceOf(IndexOutOfBoundsException.class);

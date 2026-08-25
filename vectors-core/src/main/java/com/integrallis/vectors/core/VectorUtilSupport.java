@@ -224,6 +224,20 @@ public interface VectorUtilSupport {
   /** Batched row-major GEMV over little-endian bfloat16 rows without expanding the matrix. */
   default void bfloat16MatVecDot(
       float[] query, MemorySegment weight, int rows, int cols, float[] out) {
+    bfloat16MatVecDot(query, 0, weight, rows, cols, out, 0);
+  }
+
+  /**
+   * Row-major GEMV over little-endian bfloat16 rows using explicit activation and result offsets.
+   */
+  default void bfloat16MatVecDot(
+      float[] query,
+      int queryOffset,
+      MemorySegment weight,
+      int rows,
+      int cols,
+      float[] out,
+      int outOffset) {
     long rowBytes = (long) cols * Short.BYTES;
     for (int row = 0; row < rows; row++) {
       long rowOffset = row * rowBytes;
@@ -231,9 +245,9 @@ public interface VectorUtilSupport {
       for (int col = 0; col < cols; col++) {
         short bits = weight.get(GGUF_LE_SHORT, rowOffset + (long) col * Short.BYTES);
         float value = Float.intBitsToFloat(Short.toUnsignedInt(bits) << Short.SIZE);
-        sum = MathUtil.fma(query[col], value, sum);
+        sum = MathUtil.fma(query[queryOffset + col], value, sum);
       }
-      out[row] = sum;
+      out[outOffset + row] = sum;
     }
   }
 
