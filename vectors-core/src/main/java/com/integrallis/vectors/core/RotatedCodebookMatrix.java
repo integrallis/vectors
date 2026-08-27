@@ -204,7 +204,7 @@ public final class RotatedCodebookMatrix {
   public void multiply(PreparedActivation activation, float[] output) {
     Objects.requireNonNull(activation, "activation");
     Objects.requireNonNull(output, "output");
-    if (!activation.compatible(columns, groupSize, rowBytes, encoding, codebook)) {
+    if (!accepts(activation)) {
       throw new IllegalArgumentException("prepared activation is incompatible with this matrix");
     }
     if (output.length < rows) {
@@ -217,6 +217,12 @@ public final class RotatedCodebookMatrix {
     } else {
       multiplyDirect(activation, output);
     }
+  }
+
+  /** Returns whether a prepared activation can be reused by this matrix. */
+  public boolean accepts(PreparedActivation activation) {
+    return activation != null
+        && activation.compatible(columns, groupSize, rowBytes, encoding, codebook);
   }
 
   /**
