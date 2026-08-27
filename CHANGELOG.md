@@ -4,6 +4,13 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-08-27
+
+### Added
+
+- `RotatedCodebookMatrix.accepts(...)` lets Java inference runtimes safely reuse one
+  prepared activation across compatible compact matrices without relying on exceptions.
+
 ## [0.1.12] - 2026-08-25
 
 ### Added
