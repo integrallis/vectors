@@ -80,6 +80,8 @@ class RotatedCodebookMatrixTest {
     second.multiply(activation, secondOutput);
 
     assertThat(secondOutput).containsExactly(firstOutput);
+    assertThat(first.accepts(activation)).isTrue();
+    assertThat(second.accepts(activation)).isTrue();
   }
 
   @ParameterizedTest(name = "decode {0}")
@@ -215,6 +217,7 @@ class RotatedCodebookMatrixTest {
     Fixture cq4 = readFixture("needle-cq4-v7bd8a63.b64");
     RotatedCodebookMatrix cq2Matrix = cq2.matrix();
     RotatedCodebookMatrix cq4Matrix = cq4.matrix();
+    RotatedCodebookMatrix.PreparedActivation cq2Activation = cq2Matrix.prepare(cq2.input());
 
     assertThatThrownBy(() -> cq2Matrix.prepare(new float[cq2.columns() - 1]))
         .isInstanceOf(IllegalArgumentException.class)
@@ -223,10 +226,10 @@ class RotatedCodebookMatrixTest {
             () -> cq2Matrix.multiply(cq2Matrix.prepare(cq2.input()), new float[cq2.rows() - 1]))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("output");
-    assertThatThrownBy(
-            () -> cq4Matrix.multiply(cq2Matrix.prepare(cq2.input()), new float[cq4.rows()]))
+    assertThatThrownBy(() -> cq4Matrix.multiply(cq2Activation, new float[cq4.rows()]))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("incompatible");
+    assertThat(cq4Matrix.accepts(cq2Activation)).isFalse();
   }
 
   @Test
