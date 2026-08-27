@@ -126,6 +126,65 @@ jobs:
           JRELEASER_GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
           JRELEASER_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
+      - name: Verify Maven Central publication
+        if: ${{ github.event_name == 'push' || (!inputs.dry_run && !inputs.skip_deploy) }}
+        env:
+          MAVENCENTRAL_USERNAME: ${{ secrets.MAVENCENTRAL_USERNAME }}
+          MAVENCENTRAL_PASSWORD: ${{ secrets.MAVENCENTRAL_PASSWORD }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          deployment_id="$(sed -n 's/^deployMavenCentralSonatypeDeploymentId=//p' \
+            out/jreleaser/output.properties)"
+          if [[ ! "$deployment_id" =~ ^[0-9a-f-]{36}$ ]]; then
+            echo "::error::JReleaser did not record a valid Maven Central deployment ID"
+            exit 1
+          fi
+
+          auth="$(printf '%s:%s' "$MAVENCENTRAL_USERNAME" "$MAVENCENTRAL_PASSWORD" \
+            | base64 | tr -d '\n')"
+          published=false
+          for attempt in $(seq 1 120); do
+            response="$(curl --fail --silent --show-error --request POST \
+              --header "Authorization: Bearer $auth" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$deployment_id")"
+            state="$(jq -er '.deploymentState' <<<"$response")"
+            echo "Maven Central deployment $deployment_id: $state ($attempt/120)"
+            case "$state" in
+              PUBLISHED)
+                published=true
+                break
+                ;;
+              FAILED)
+                jq -c '.errors // []' <<<"$response"
+                echo "::error::Maven Central deployment $deployment_id failed"
+                exit 1
+                ;;
+              PENDING|VALIDATING|VALIDATED|PUBLISHING)
+                sleep 30
+                ;;
+              *)
+                echo "::error::Unknown Maven Central deployment state: $state"
+                exit 1
+                ;;
+            esac
+          done
+          if [[ "$published" != true ]]; then
+            echo "::error::Maven Central deployment $deployment_id did not reach PUBLISHED"
+            exit 1
+          fi
+
+          artifact_url="https://repo1.maven.org/maven2/com/integrallis/vectors-core/$VERSION/vectors-core-$VERSION.pom"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error \
+              "$artifact_url?release=$GITHUB_RUN_ID-$attempt" --output /dev/null; then
+              echo "Verified published artifact: $artifact_url"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Published deployment did not synchronize to $artifact_url"
+          exit 1
+
       - name: Publish GitHub release
         if: ${{ github.event_name == 'push' || !inputs.dry_run }}
         env:
