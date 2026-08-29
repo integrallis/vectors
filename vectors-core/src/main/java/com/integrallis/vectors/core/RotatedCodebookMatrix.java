@@ -37,6 +37,7 @@ public final class RotatedCodebookMatrix {
   private static final ValueLayout.OfShort LE_SHORT =
       ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
   private static final int LOOKUP_VALUES = 256;
+  private static final long MIN_PARALLEL_ELEMENTS = 131_072L;
 
   private final MemorySegment packedCodes;
   private final MemorySegment norms;
@@ -295,46 +296,67 @@ public final class RotatedCodebookMatrix {
   }
 
   private void multiplyWithByteLookup(PreparedActivation activation, float[] output) {
+    GgufParallelSupport.forEachRow(
+        packedCodes,
+        norms,
+        rows,
+        columns,
+        MIN_PARALLEL_ELEMENTS,
+        row -> multiplyWithByteLookupRow(activation, output, row));
+  }
+
+  private void multiplyWithByteLookupRow(PreparedActivation activation, float[] output, int row) {
     int bytesPerGroup = rowBytes / groupsPerRow;
-    for (int row = 0; row < rows; row++) {
-      float sum = 0.0f;
-      long rowOffset = (long) row * rowBytes;
-      int normBase = row * groupsPerRow;
-      for (int group = 0; group < groupsPerRow; group++) {
-        float inner = 0.0f;
-        int byteBase = group * bytesPerGroup;
-        for (int index = 0; index < bytesPerGroup; index++) {
-          int bytePosition = byteBase + index;
-          int packed =
-              Byte.toUnsignedInt(packedCodes.get(ValueLayout.JAVA_BYTE, rowOffset + bytePosition));
-          float contribution = activation.byteLookup[bytePosition * LOOKUP_VALUES + packed];
-          if (Float.isNaN(contribution)) {
-            throw new IllegalArgumentException("packed codes contain invalid ternary crumb 2");
-          }
-          inner += contribution;
+    float sum = 0.0f;
+    long rowOffset = (long) row * rowBytes;
+    int normBase = row * groupsPerRow;
+    for (int group = 0; group < groupsPerRow; group++) {
+      float inner = 0.0f;
+      int byteBase = group * bytesPerGroup;
+      for (int index = 0; index < bytesPerGroup; index++) {
+        int bytePosition = byteBase + index;
+        int packed =
+            Byte.toUnsignedInt(packedCodes.get(ValueLayout.JAVA_BYTE, rowOffset + bytePosition));
+        float contribution = activation.byteLookup[bytePosition * LOOKUP_VALUES + packed];
+        if (Float.isNaN(contribution)) {
+          throw new IllegalArgumentException("packed codes contain invalid ternary crumb 2");
         }
-        sum += norm(normBase + group) * inner;
+        inner += contribution;
       }
-      output[row] = sum;
+      sum += norm(normBase + group) * inner;
     }
+    output[row] = sum;
   }
 
   private void multiplyDirect(PreparedActivation activation, float[] output) {
-    for (int row = 0; row < rows; row++) {
-      float sum = 0.0f;
-      long rowOffset = (long) row * rowBytes;
-      int normBase = row * groupsPerRow;
-      for (int group = 0; group < groupsPerRow; group++) {
-        float inner = 0.0f;
-        int valueBase = group * groupSize;
-        for (int index = 0; index < groupSize; index++) {
-          int code = extractCode(rowOffset, valueBase + index);
-          inner += codebook[code] * activation.transformed[valueBase + index];
-        }
-        sum += norm(normBase + group) * inner;
+    GgufParallelSupport.forEachRow(
+        packedCodes,
+        norms,
+        rows,
+        columns,
+        MIN_PARALLEL_ELEMENTS,
+        row -> multiplyDirectRow(activation, output, row));
+  }
+
+  private void multiplyDirectRow(PreparedActivation activation, float[] output, int row) {
+    float sum = 0.0f;
+    long rowOffset = (long) row * rowBytes;
+    int normBase = row * groupsPerRow;
+    for (int group = 0; group < groupsPerRow; group++) {
+      float inner = 0.0f;
+      int valueBase = group * groupSize;
+      for (int index = 0; index < groupSize; index++) {
+        int code = extractCode(rowOffset, valueBase + index);
+        inner += codebook[code] * activation.transformed[valueBase + index];
       }
-      output[row] = sum;
+      sum += norm(normBase + group) * inner;
     }
+    output[row] = sum;
+  }
+
+  static boolean shouldParallelize(int rows, int columns, int processors, boolean enabled) {
+    return GgufParallelSupport.shouldParallelize(
+        rows, columns, processors, enabled, MIN_PARALLEL_ELEMENTS);
   }
 
   private float[] buildByteLookup(float[] transformed) {

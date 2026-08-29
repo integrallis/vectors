@@ -54,6 +54,14 @@ class RotatedCodebookMatrixTest {
           "needle-ternary-v7bd8a63.b64",
           "6b53746785cfbbfee07ab5caf9bbbd999e3641251cf9d02f6731925624ce6cb3");
 
+  @Test
+  void parallelizesNeedleSizedProjectionMatricesButNotTinyRoutingMatrices() {
+    assertThat(RotatedCodebookMatrix.shouldParallelize(512, 512, 4, true)).isTrue();
+    assertThat(RotatedCodebookMatrix.shouldParallelize(16, 2_048, 4, true)).isFalse();
+    assertThat(RotatedCodebookMatrix.shouldParallelize(512, 512, 1, true)).isFalse();
+    assertThat(RotatedCodebookMatrix.shouldParallelize(512, 512, 4, false)).isFalse();
+  }
+
   @ParameterizedTest(name = "{0}")
   @MethodSource("needleFixtures")
   void matchesFixturesGeneratedByNeedleReferenceCode(String name, String resource)
