@@ -2,7 +2,13 @@
 
 All notable changes to java-vectors are documented here.
 
-## [Unreleased]
+## [0.1.14] - 2026-08-29
+
+### Changed
+
+- Parallelized large CQ2, CQ3, CQ4, and ternary rotated-codebook row projections while retaining
+  the serial path for small routing matrices. Needle-sized CQ2 and CQ4 projections improved by
+  roughly `4.9x` and `5.7x`, respectively, in the targeted Java benchmark.
 
 ## [0.1.13] - 2026-08-27
 

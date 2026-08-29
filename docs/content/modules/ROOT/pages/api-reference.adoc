@@ -88,7 +88,8 @@ multiplies mapped little-endian BF16 weights without first expanding the matrix 
 both one activation and a batch. `RotatedCodebookMatrix` executes grouped Hadamard-rotated CQ2,
 CQ3, CQ4, and ternary rows and can reuse one prepared activation across row slices. Both validate
 the complete storage geometry when the view is created and retain scalar fallbacks behind the
-same public API.
+same public API. Large rotated-codebook projections parallelize independent rows through the same
+bounded GGUF executor, while small routing matrices stay serial to avoid coordination overhead.
 
 These are matrix execution primitives, not `VectorCollection` storage formats. Application code
 normally reaches them through a model runtime such as Integrallis Models.
