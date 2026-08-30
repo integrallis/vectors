@@ -2,6 +2,14 @@
 
 All notable changes to java-vectors are documented here.
 
+## [0.1.15] - 2026-08-30
+
+### Changed
+
+- Q5_K batched matrix multiplication now reuses each unpacked weight row across a two-query
+  remainder. The controlled batch-2 kernel gate improved by 40.6% with exact outputs; full groups
+  of four and unsupported platform envelopes retain their established paths.
+
 ## [0.1.14] - 2026-08-29
 
 ### Changed

@@ -90,6 +90,8 @@ CQ3, CQ4, and ternary rows and can reuse one prepared activation across row slic
 the complete storage geometry when the view is created and retain scalar fallbacks behind the
 same public API. Large rotated-codebook projections parallelize independent rows through the same
 bounded GGUF executor, while small routing matrices stay serial to avoid coordination overhead.
+The internal mapped Q5_K batch kernel also reuses unpacked rows for both four-query groups and
+two-query remainders; callers receive this optimization through the existing GGUF matrix API.
 
 These are matrix execution primitives, not `VectorCollection` storage formats. Application code
 normally reaches them through a model runtime such as Integrallis Models.
