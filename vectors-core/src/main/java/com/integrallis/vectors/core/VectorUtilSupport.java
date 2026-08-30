@@ -115,6 +115,41 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Applies the fused SwiGLU activation over the requested sub-vector range. */
+  void swiGlu(
+      float[] out,
+      int outOffset,
+      float[] gate,
+      int gateOffset,
+      float[] up,
+      int upOffset,
+      int length);
+
+  /** Applies sigmoid in place and writes {@code scale * softplus(value + bias)}. */
+  void sigmoidAndScaledSoftplus(
+      float[] sigmoidValues,
+      int sigmoidOffset,
+      float[] softplusValues,
+      int softplusOffset,
+      float[] bias,
+      int biasOffset,
+      float[] scale,
+      int scaleOffset,
+      float[] scaledSoftplus,
+      int scaledSoftplusOffset,
+      int length);
+
+  /** Applies a tap-major causal depthwise convolution and SiLU, updating history in place. */
+  void causalDepthwiseConv1dSilu(
+      float[] values,
+      int valuesOffset,
+      float[] history,
+      int historyOffset,
+      float[] weights,
+      int weightsOffset,
+      int channels,
+      int kernelSize);
+
   /**
    * Adds a weighted sum of flat, strided matrix rows to {@code out} in ascending row order.
    * Implementations must preserve that row order for each output element.

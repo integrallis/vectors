@@ -6231,6 +6231,137 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void swiGlu(
+      float[] out,
+      int outOffset,
+      float[] gate,
+      int gateOffset,
+      float[] up,
+      int upOffset,
+      int length) {
+    int index = 0;
+    int limit = FLOAT_SPECIES.loopBound(length);
+    FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
+    for (; index < limit; index += FLOAT_SPECIES.length()) {
+      FloatVector value = FloatVector.fromArray(FLOAT_SPECIES, gate, gateOffset + index);
+      FloatVector multiplier = FloatVector.fromArray(FLOAT_SPECIES, up, upOffset + index);
+      value
+          .div(one.add(value.neg().lanewise(VectorOperators.EXP)))
+          .mul(multiplier)
+          .intoArray(out, outOffset + index);
+    }
+    for (; index < length; index++) {
+      float value = gate[gateOffset + index];
+      out[outOffset + index] = value / (1.0f + (float) Math.exp(-value)) * up[upOffset + index];
+    }
+  }
+
+  @Override
+  public void sigmoidAndScaledSoftplus(
+      float[] sigmoidValues,
+      int sigmoidOffset,
+      float[] softplusValues,
+      int softplusOffset,
+      float[] bias,
+      int biasOffset,
+      float[] scale,
+      int scaleOffset,
+      float[] scaledSoftplus,
+      int scaledSoftplusOffset,
+      int length) {
+    int index = 0;
+    int limit = FLOAT_SPECIES.loopBound(length);
+    FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
+    FloatVector threshold = FloatVector.broadcast(FLOAT_SPECIES, 20.0f);
+    for (; index < limit; index += FLOAT_SPECIES.length()) {
+      FloatVector sigmoid =
+          FloatVector.fromArray(FLOAT_SPECIES, sigmoidValues, sigmoidOffset + index);
+      one.div(one.add(sigmoid.neg().lanewise(VectorOperators.EXP)))
+          .intoArray(sigmoidValues, sigmoidOffset + index);
+      FloatVector value =
+          FloatVector.fromArray(FLOAT_SPECIES, softplusValues, softplusOffset + index)
+              .add(FloatVector.fromArray(FLOAT_SPECIES, bias, biasOffset + index));
+      FloatVector softplus =
+          one.add(value.lanewise(VectorOperators.EXP)).lanewise(VectorOperators.LOG);
+      softplus = softplus.blend(value, value.compare(VectorOperators.GT, threshold));
+      softplus
+          .mul(FloatVector.fromArray(FLOAT_SPECIES, scale, scaleOffset + index))
+          .intoArray(scaledSoftplus, scaledSoftplusOffset + index);
+    }
+    for (; index < length; index++) {
+      int sigmoidIndex = sigmoidOffset + index;
+      float sigmoidValue = sigmoidValues[sigmoidIndex];
+      sigmoidValues[sigmoidIndex] = 1.0f / (1.0f + (float) Math.exp(-sigmoidValue));
+      float softplusValue = softplusValues[softplusOffset + index] + bias[biasOffset + index];
+      float softplus =
+          softplusValue > 20.0f
+              ? softplusValue
+              : softplusValue < -20.0f
+                  ? (float) Math.exp(softplusValue)
+                  : (float) Math.log1p(Math.exp(softplusValue));
+      scaledSoftplus[scaledSoftplusOffset + index] = scale[scaleOffset + index] * softplus;
+    }
+  }
+
+  @Override
+  public void causalDepthwiseConv1dSilu(
+      float[] values,
+      int valuesOffset,
+      float[] history,
+      int historyOffset,
+      float[] weights,
+      int weightsOffset,
+      int channels,
+      int kernelSize) {
+    int historyLength = kernelSize - 1;
+    int channel = 0;
+    int limit = FLOAT_SPECIES.loopBound(channels);
+    FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
+    for (; channel < limit; channel += FLOAT_SPECIES.length()) {
+      FloatVector input = FloatVector.fromArray(FLOAT_SPECIES, values, valuesOffset + channel);
+      FloatVector convolved =
+          input.mul(
+              FloatVector.fromArray(
+                  FLOAT_SPECIES, weights, weightsOffset + historyLength * channels + channel));
+      FloatVector previous = FloatVector.fromArray(FLOAT_SPECIES, history, historyOffset + channel);
+      convolved =
+          fma(
+              previous,
+              FloatVector.fromArray(FLOAT_SPECIES, weights, weightsOffset + channel),
+              convolved);
+      for (int tap = 1; tap < historyLength; tap++) {
+        int historyIndex = historyOffset + tap * channels + channel;
+        FloatVector current = FloatVector.fromArray(FLOAT_SPECIES, history, historyIndex);
+        convolved =
+            fma(
+                current,
+                FloatVector.fromArray(
+                    FLOAT_SPECIES, weights, weightsOffset + tap * channels + channel),
+                convolved);
+        current.intoArray(history, historyIndex - channels);
+      }
+      input.intoArray(history, historyOffset + (historyLength - 1) * channels + channel);
+      convolved
+          .div(one.add(convolved.neg().lanewise(VectorOperators.EXP)))
+          .intoArray(values, valuesOffset + channel);
+    }
+    for (; channel < channels; channel++) {
+      float input = values[valuesOffset + channel];
+      float convolved = input * weights[weightsOffset + historyLength * channels + channel];
+      float previous = history[historyOffset + channel];
+      convolved += previous * weights[weightsOffset + channel];
+      for (int tap = 1; tap < historyLength; tap++) {
+        int historyIndex = historyOffset + tap * channels + channel;
+        float current = history[historyIndex];
+        convolved += current * weights[weightsOffset + tap * channels + channel];
+        history[historyIndex - channels] = current;
+      }
+      history[historyOffset + (historyLength - 1) * channels + channel] = input;
+      values[valuesOffset + channel] = convolved / (1.0f + (float) Math.exp(-convolved));
+    }
+  }
+
+  @Override
   public void addWeightedRowsInPlace(
       float[] out,
       int outOffset,

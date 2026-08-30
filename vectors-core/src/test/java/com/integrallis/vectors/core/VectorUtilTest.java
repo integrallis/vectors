@@ -119,6 +119,96 @@ class VectorUtilTest {
   }
 
   @Test
+  void swiGlu_withOffsets() {
+    float[] out = {99.0f, Float.NaN, Float.NaN, Float.NaN, 98.0f};
+    float[] gate = {97.0f, 0.0f, 1.0f, -1.0f, 96.0f};
+    float[] up = {95.0f, 5.0f, 2.0f, 3.0f, 94.0f};
+
+    VectorUtil.swiGlu(out, 1, gate, 1, up, 1, 3);
+
+    assertThat(out[0]).isEqualTo(99.0f);
+    assertThat(out[1]).isZero();
+    assertThat(out[2]).isCloseTo(1.4621172f, within(1.0e-6f));
+    assertThat(out[3]).isCloseTo(-0.8068243f, within(1.0e-6f));
+    assertThat(out[4]).isEqualTo(98.0f);
+  }
+
+  @Test
+  void swiGlu_supportsOutputAliasingUpInput() {
+    float[] gate = {97.0f, 0.0f, 1.0f, -1.0f, 96.0f};
+    float[] upAndOutput = {95.0f, 5.0f, 2.0f, 3.0f, 94.0f};
+
+    VectorUtil.swiGlu(upAndOutput, 1, gate, 1, upAndOutput, 1, 3);
+
+    assertThat(upAndOutput[0]).isEqualTo(95.0f);
+    assertThat(upAndOutput[1]).isZero();
+    assertThat(upAndOutput[2]).isCloseTo(1.4621172f, within(1.0e-6f));
+    assertThat(upAndOutput[3]).isCloseTo(-0.8068243f, within(1.0e-6f));
+    assertThat(upAndOutput[4]).isEqualTo(94.0f);
+  }
+
+  @Test
+  void sigmoidAndScaledSoftplus_withOffsets() {
+    float[] sigmoidValues = {99.0f, -1.0f, 0.0f, 2.0f, 98.0f};
+    float[] softplusValues = {97.0f, -2.0f, 0.5f, 3.0f, 96.0f};
+    float[] bias = {95.0f, 0.25f, -0.5f, 1.0f, 94.0f};
+    float[] scale = {93.0f, -0.5f, -1.0f, -2.0f, 92.0f};
+    float[] scaledSoftplus = {91.0f, Float.NaN, Float.NaN, Float.NaN, 90.0f};
+
+    VectorUtil.sigmoidAndScaledSoftplus(
+        sigmoidValues, 1, softplusValues, 1, bias, 1, scale, 1, scaledSoftplus, 1, 3);
+
+    assertThat(sigmoidValues[0]).isEqualTo(99.0f);
+    assertThat(sigmoidValues[1]).isCloseTo(0.26894143f, within(1.0e-6f));
+    assertThat(sigmoidValues[2]).isCloseTo(0.5f, within(1.0e-6f));
+    assertThat(sigmoidValues[3]).isCloseTo(0.8807971f, within(1.0e-6f));
+    assertThat(sigmoidValues[4]).isEqualTo(98.0f);
+    assertThat(scaledSoftplus[0]).isEqualTo(91.0f);
+    assertThat(scaledSoftplus[1]).isCloseTo(-0.08011287f, within(1.0e-6f));
+    assertThat(scaledSoftplus[2]).isCloseTo(-0.6931472f, within(1.0e-6f));
+    assertThat(scaledSoftplus[3]).isCloseTo(-8.0363f, within(1.0e-4f));
+    assertThat(scaledSoftplus[4]).isEqualTo(90.0f);
+  }
+
+  @Test
+  void sigmoidAndScaledSoftplus_remainsFiniteForLargePositiveInputs() {
+    float[] sigmoidValues = {0.0f};
+    float[] softplusValues = {100.0f};
+    float[] bias = {25.0f};
+    float[] scale = {-2.0f};
+    float[] scaledSoftplus = {Float.NaN};
+
+    VectorUtil.sigmoidAndScaledSoftplus(
+        sigmoidValues, 0, softplusValues, 0, bias, 0, scale, 0, scaledSoftplus, 0, 1);
+
+    assertThat(scaledSoftplus[0]).isEqualTo(-250.0f);
+  }
+
+  @Test
+  void causalDepthwiseConv1dSilu_updatesTapMajorHistoryAndSupportsInPlaceValues() {
+    float[] values = {99.0f, 0.5f, -1.0f, 2.0f, 98.0f};
+    float[] history = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+    float[] weights = {0.1f, 0.2f, 0.3f, -0.4f, 0.5f, -0.6f, 0.7f, -0.8f, 0.9f};
+    float[] expected = new float[3];
+    for (int channel = 0; channel < 3; channel++) {
+      float convolved =
+          history[channel] * weights[channel]
+              + history[3 + channel] * weights[3 + channel]
+              + values[1 + channel] * weights[6 + channel];
+      expected[channel] = convolved / (1.0f + (float) Math.exp(-convolved));
+    }
+
+    VectorUtil.causalDepthwiseConv1dSilu(values, 1, history, 0, weights, 0, 3, 3);
+
+    assertThat(values[0]).isEqualTo(99.0f);
+    for (int channel = 0; channel < 3; channel++) {
+      assertThat(values[1 + channel]).isCloseTo(expected[channel], within(1.0e-6f));
+    }
+    assertThat(values[4]).isEqualTo(98.0f);
+    assertThat(history).containsExactly(4.0f, 5.0f, 6.0f, 0.5f, -1.0f, 2.0f);
+  }
+
+  @Test
   void addWeightedRowsInPlace_withOffsetsAndStride() {
     float[] out = {99.0f, 1.0f, 2.0f, 98.0f};
     float[] matrix = {
