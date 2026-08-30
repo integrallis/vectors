@@ -353,7 +353,7 @@ class GgufQuantizedDotTest {
 
   @Test
   void q5_KMappedBatchedMatmulMatchesDirectKernelExactly() throws IOException {
-    int batchSize = 5;
+    int batchSize = 6;
     int rows = 2;
     int cols = 512;
     int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
@@ -2901,6 +2901,52 @@ class GgufQuantizedDotTest {
             (float) Math.sin((batch + 0.5) * (col + 0.75)) * (batch + 0.625f);
       }
     }
+    int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
+    int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
+    byte[] firstBlock = q5KBlock(0.125f, 0.0625f, i -> (i * 7 + 3) % 32, scales, mins);
+    byte[] secondBlock = q5KBlock(-0.25f, 0.03125f, i -> 31 - i % 32, scales, mins);
+    MemorySegment weights =
+        MemorySegment.ofArray(
+            concat(concat(firstBlock, secondBlock), concat(secondBlock, firstBlock)));
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    float[] query = new float[cols];
+    float[] result = new float[rows];
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      System.arraycopy(queries, batch * cols, query, 0, cols);
+      VectorUtil.ggufQ5_KQ8_KBatchDotProduct(
+          query,
+          weights,
+          rows,
+          cols,
+          result,
+          new byte[cols],
+          new float[cols / 256],
+          new short[cols / 16]);
+      System.arraycopy(result, 0, expected, batch * rows, rows);
+    }
+
+    VectorUtil.ggufQ5_KQ8_KBatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        rows,
+        cols,
+        actual,
+        new byte[batchSize * cols],
+        new float[batchSize * (cols / 256)],
+        new short[batchSize * (cols / 16)]);
+
+    assertThat(actual).containsExactly(expected);
+  }
+
+  @Test
+  void q5_KQ8_KTwoQueryBatchedMatmulMatchesIndependentQueriesExactly() {
+    int batchSize = 2;
+    int rows = 2;
+    int cols = 512;
+    float[] queries = patternedQueries(batchSize, cols);
     int[] scales = {5, 12, 30, 60, 7, 15, 31, 63};
     int[] mins = {3, 8, 20, 45, 1, 10, 25, 50};
     byte[] firstBlock = q5KBlock(0.125f, 0.0625f, i -> (i * 7 + 3) % 32, scales, mins);
