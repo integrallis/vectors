@@ -16,8 +16,9 @@
 package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
-import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.random.RandomGenerator;
+import java.util.random.RandomGeneratorFactory;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -58,7 +59,8 @@ public class Mxfp4MatVecBenchmark {
 
   @Setup(Level.Trial)
   public void setUp() {
-    Random random = new Random(0x4d58465034L);
+    RandomGenerator random =
+        RandomGeneratorFactory.<RandomGenerator>of("Random").create(0x4d58465034L);
     input = new float[columns];
     for (int index = 0; index < columns; index++) {
       input[index] = random.nextFloat() * 2.0f - 1.0f;
