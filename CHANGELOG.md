@@ -2,6 +2,14 @@
 
 All notable changes to java-vectors are documented here.
 
+## [0.1.17] - 2026-08-30
+
+### Changed
+
+- Reduced MXFP4 hot-loop scale access overhead without expanding mapped weights. Three-fork EPYC
+  measurements improved the official GPT-OSS gate/up and down projection shapes by 5.66% and
+  5.59%, while exact scalar/SIMD parity and the official-checkpoint oracle gate remained green.
+
 ## [0.1.16] - 2026-08-30
 
 ### Added
