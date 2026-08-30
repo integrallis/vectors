@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-30",
+  "technique": "q5_k_q8_k_two_query_tail_tile",
+  "revisions": {
+    "baseline": "4241670",
+    "candidate": "38a1ceb"
+  },
+  "environment": {
+    "hostname": "vectors-bench",
+    "os": "Ubuntu Linux 6.8",
+    "cpu": "AMD EPYC-Milan Processor",
+    "logicalProcessors": 8,
+    "jvm": "Eclipse Temurin 25.0.3+9-LTS",
+    "vectorBits": 256,
+    "workers": 8
+  },
+  "jmh": {
+    "benchmark": "com.integrallis.vectors.bench.GgufQ5KBatchedMatmulBenchmark.batched",
+    "batchSize": 2,
+    "rows": 1024,
+    "cols": 2048,
+    "forks": 3,
+    "warmupIterations": 3,
+    "measurementIterations": 5,
+    "iterationSeconds": 1,
+    "unit": "ms/op",
+    "baseline": {
+      "score": 0.556,
+      "ci99_9": [0.548, 0.564]
+    },
+    "candidate": {
+      "score": 0.330,
+      "ci99_9": [0.327, 0.333]
+    },
+    "improvementPercent": 40.6
+  },
+  "correctness": {
+    "independentQueryTest": "GgufQuantizedDotTest.q5_KQ8_KTwoQueryBatchedMatmulMatchesIndependentQueriesExactly",
+    "mappedWeightTest": "GgufQuantizedDotTest.q5_KMappedBatchedMatmulMatchesDirectKernelExactly",
+    "exact": true
+  }
+}

@@ -88,6 +88,20 @@ Automatic dispatch has the same x86, 256-bit, and batch-four envelope as Q4_K. P
 between runs and was not lifecycle-aligned, so it supports no memory-capacity claim. The
 machine-readable aggregate is in `jmh-results/q5k-register-tile-20260731.json`.
 
+## Q5_K two-query tail gate
+
+Prefill batches are not always divisible by four. The established Q5_K register tile handled a
+two-query remainder by unpacking the same weight row twice through the scalar-query path. The
+retained tail tile unpacks each weight vector once and consumes both remaining queries while it is
+live.
+
+On the same eight-vCPU AMD EPYC-Milan host and Temurin 25.0.3, a three-fork 1024x2048 batch-2 JMH
+gate reduced average time from `0.556 ± 0.008 ms/op` to `0.330 ± 0.003 ms/op` (-40.6%). The 99.9%
+confidence intervals do not overlap. Exact independent-query and mapped-weight tests cover the
+two-query path. Dispatch retains the existing x86 and 256-bit-vector envelope; other platforms
+continue through the established scalar tail. Machine-readable evidence is in
+`jmh-results/q5k-two-query-tail-20260830.json`.
+
 ## Q6_K profiled register-tile gate
 
 Q6_K reconstructs signed six-bit weights from separate low- and high-bit planes. The retained x86
