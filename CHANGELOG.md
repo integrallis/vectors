@@ -2,6 +2,14 @@
 
 All notable changes to java-vectors are documented here.
 
+## [0.1.18] - 2026-08-30
+
+### Added
+
+- Added scalar and Panama Vector API kernels for SwiGLU, Qwen 3.5 gate transforms, and fused
+  causal depthwise convolution with SiLU. The fused convolution preserves exact recurrent history
+  semantics while removing the scalar channel loop from Qwen 3.5 inference.
+
 ## [0.1.17] - 2026-08-30
 
 ### Changed
