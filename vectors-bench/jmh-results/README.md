@@ -28,6 +28,10 @@ features, generated-code evidence, and the limitation of its conclusion. See
 `vector-api-pairwise-jvm-baseline.md` for the first such comparison and
 `mapped-kquant-jdk25-jdk26.md` for the controlled mapped GGUF K-quant gate.
 
+`mxfp4-scale-access-epyc-20260830.json` records a three-fork A/B comparison at both
+GPT-OSS 20B expert projection shapes, plus the official-checkpoint prefill screen and a rejected
+heap-copy variant.
+
 Audit T4.11 (2026-06-06) noted this nuance. The `System.gc()` calls in
 the hand-rolled benchmarks have been audited; the only ones that remain
 are in `BuildScalabilityBenchmark`, where they're justified for heap-size

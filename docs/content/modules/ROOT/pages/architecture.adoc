@@ -256,6 +256,10 @@ Q8_0, decodes pairs of E2M1 nibbles through a Vector API lookup table, and accum
 integer products with the combined E8M0 and activation scales. A prepared-activation overload lets
 model runtimes reuse that conversion across projections with the same input. An exact
 F32-activation path remains available when activation quantization is not acceptable.
+For addressable scale tensors, the hot W4A8 loop reads E8M0 codes through a read-only
+`ByteBuffer` view while packed weights remain zero-copy `MemorySegment` views. This avoids
+per-code foreign-memory bounds overhead; tensors larger than the buffer addressing limit retain
+the checked `MemorySegment` path.
 
 Set `-Dvectors.gguf.parallel=false` to force serial GGUF execution, or raise the global crossover
 with `-Dvectors.gguf.parallelThreshold=<elements>`. The active values are included in the

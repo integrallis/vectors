@@ -17,6 +17,7 @@ package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
 import jdk.incubator.vector.ByteVector;
@@ -42,9 +43,9 @@ public final class Mxfp4Matrix {
     0.0f, 0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 6.0f,
     -0.0f, -0.5f, -1.0f, -1.5f, -2.0f, -3.0f, -4.0f, -6.0f
   };
-
   private final MemorySegment blocks;
   private final MemorySegment scales;
+  private final ByteBuffer scaleBuffer;
   private final int rows;
   private final int columns;
   private final int blocksPerRow;
@@ -59,6 +60,7 @@ public final class Mxfp4Matrix {
       int packedBytesPerRow) {
     this.blocks = blocks.asReadOnly();
     this.scales = scales.asReadOnly();
+    scaleBuffer = byteBufferWhenAddressable(this.scales);
     this.rows = rows;
     this.columns = columns;
     this.blocksPerRow = blocksPerRow;
@@ -156,8 +158,12 @@ public final class Mxfp4Matrix {
     float sum = 0.0f;
     long rowOffset = (long) row * packedBytesPerRow;
     for (int block = 0; block < blocksPerRow; block++) {
+      long scaleOffset = (long) row * blocksPerRow + block;
       int scaleCode =
-          Byte.toUnsignedInt(scales.get(ValueLayout.JAVA_BYTE, (long) row * blocksPerRow + block));
+          Byte.toUnsignedInt(
+              scaleBuffer == null
+                  ? scales.get(ValueLayout.JAVA_BYTE, scaleOffset)
+                  : scaleBuffer.get((int) scaleOffset));
       float combinedScale = 0.5f * decodeScale(scaleCode) * activationScales[block];
       int integerSum =
           integerDot(
@@ -243,6 +249,13 @@ public final class Mxfp4Matrix {
 
   private static float decodeScale(int code) {
     return Math.scalb(1.0f, Math.min(code, 254) - 127);
+  }
+
+  private static ByteBuffer byteBufferWhenAddressable(MemorySegment segment) {
+    if (segment.byteSize() > Integer.MAX_VALUE) {
+      return null;
+    }
+    return segment.asByteBuffer().asReadOnlyBuffer();
   }
 
   private void checkMultiplyArguments(float[] input, float[] output) {

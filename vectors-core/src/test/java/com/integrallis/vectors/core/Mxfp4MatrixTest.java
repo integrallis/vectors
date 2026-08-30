@@ -18,7 +18,9 @@ package com.integrallis.vectors.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import org.junit.jupiter.api.Test;
 
 class Mxfp4MatrixTest {
@@ -160,6 +162,37 @@ class Mxfp4MatrixTest {
 
     assertThat(firstActual).containsExactly(firstExpected);
     assertThat(secondActual).containsExactly(secondExpected);
+  }
+
+  @Test
+  void nativeStorageMatchesHeapStorageForPreparedQ8Execution() {
+    int rows = 7;
+    int columns = 96;
+    byte[] blocks = new byte[rows * columns / 2];
+    byte[] scales = new byte[rows * columns / 32];
+    java.util.Random random = new java.util.Random(0x4d584650344e4154L);
+    random.nextBytes(blocks);
+    random.nextBytes(scales);
+    float[] input = new float[columns];
+    for (int index = 0; index < input.length; index++) {
+      input[index] = random.nextFloat() * 2.0f - 1.0f;
+    }
+    GgufQ8_0Batch activation = GgufQ8_0Batch.allocate(1, columns);
+    activation.quantize(input, 1);
+    float[] expected = new float[rows];
+    float[] actual = new float[rows];
+    Mxfp4Matrix.of(MemorySegment.ofArray(blocks), MemorySegment.ofArray(scales), rows, columns)
+        .multiplyQ8(activation, expected);
+
+    try (Arena arena = Arena.ofConfined()) {
+      MemorySegment nativeBlocks = arena.allocate(blocks.length);
+      MemorySegment nativeScales = arena.allocate(scales.length);
+      MemorySegment.copy(blocks, 0, nativeBlocks, ValueLayout.JAVA_BYTE, 0, blocks.length);
+      MemorySegment.copy(scales, 0, nativeScales, ValueLayout.JAVA_BYTE, 0, scales.length);
+      Mxfp4Matrix.of(nativeBlocks, nativeScales, rows, columns).multiplyQ8(activation, actual);
+    }
+
+    assertThat(actual).containsExactly(expected);
   }
 
   @Test

@@ -15,7 +15,9 @@
  */
 package com.integrallis.vectors.core;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.util.concurrent.TimeUnit;
 import java.util.random.RandomGenerator;
 import java.util.random.RandomGeneratorFactory;
@@ -50,6 +52,9 @@ public class Mxfp4MatVecBenchmark {
   @Param("2048")
   int columns;
 
+  @Param({"heap", "native"})
+  String storage;
+
   private float[] input;
   private float[] materializedWeights;
   private float[] materializedOutput;
@@ -72,8 +77,16 @@ public class Mxfp4MatVecBenchmark {
     for (int index = 0; index < scales.length; index++) {
       scales[index] = (byte) (124 + random.nextInt(7));
     }
-    packedMatrix =
-        Mxfp4Matrix.of(MemorySegment.ofArray(blocks), MemorySegment.ofArray(scales), rows, columns);
+    MemorySegment blockStorage = MemorySegment.ofArray(blocks);
+    MemorySegment scaleStorage = MemorySegment.ofArray(scales);
+    if ("native".equals(storage)) {
+      Arena arena = Arena.ofAuto();
+      blockStorage = arena.allocate(blocks.length);
+      scaleStorage = arena.allocate(scales.length);
+      MemorySegment.copy(blocks, 0, blockStorage, ValueLayout.JAVA_BYTE, 0, blocks.length);
+      MemorySegment.copy(scales, 0, scaleStorage, ValueLayout.JAVA_BYTE, 0, scales.length);
+    }
+    packedMatrix = Mxfp4Matrix.of(blockStorage, scaleStorage, rows, columns);
     q8Activation = GgufQ8_0Batch.allocate(1, columns);
 
     materializedWeights = new float[Math.multiplyExact(rows, columns)];

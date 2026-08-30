@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-30",
+  "baselineRevision": "103ad04c836aa27fb2647abc8dca7425e5adcb5b",
+  "candidate": "read-only ByteBuffer scale access with MemorySegment fallback above 2 GiB",
+  "environment": {
+    "host": "vectors-bench",
+    "cpu": "8-vCPU AMD EPYC Milan",
+    "memoryGiB": 30,
+    "java": "Eclipse Temurin 25.0.3",
+    "jmh": "1.37",
+    "vectorBits": 256
+  },
+  "configuration": {
+    "benchmark": "Mxfp4MatVecBenchmark.preparedQ8ActivationMxfp4Candidate",
+    "storage": "native",
+    "forks": 3,
+    "warmupIterations": 3,
+    "measurementIterations": 5,
+    "iterationSeconds": 1
+  },
+  "measurements": [
+    {
+      "shape": "5760x2880",
+      "role": "GPT-OSS 20B gate/up projection",
+      "baselineMillis": 0.9375210672735169,
+      "baselineError99_9": 0.004207729809656336,
+      "candidateMillis": 0.8844418066984389,
+      "candidateError99_9": 0.006231211623563597,
+      "improvementPercent": 5.6617
+    },
+    {
+      "shape": "2880x2880",
+      "role": "GPT-OSS 20B down projection",
+      "baselineMillis": 0.46896034628599864,
+      "baselineError99_9": 0.0014239444002984015,
+      "candidateMillis": 0.44275828155047037,
+      "candidateError99_9": 0.002873954204129619,
+      "improvementPercent": 5.5873
+    }
+  ],
+  "officialCheckpointScreen": {
+    "checkpoint": "openai/gpt-oss-20b@6cee5e81ee83917806bbde320786a8fb61efebee",
+    "promptTokens": 61,
+    "baselinePrefillSeconds": 80.918,
+    "candidatePrefillSeconds": 77.155,
+    "candidateOracleArgmax": "pass",
+    "candidateOracleTop10Overlap": 10,
+    "candidateOracleCosine": 0.998451159
+  },
+  "rejectedVariant": {
+    "description": "copy each packed row to thread-local heap scratch before the vector dot product",
+    "shape": "5760x2880",
+    "singleForkMillis": 0.891,
+    "reason": "slower than the retained scale-only ByteBuffer candidate at 0.881 ms/op"
+  },
+  "verdict": "Retain the standard-Java scale access path. It improves both official expert projection shapes in three-fork JMH and preserves the official-checkpoint oracle gate."
+}
