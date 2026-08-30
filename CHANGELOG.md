@@ -2,6 +2,15 @@
 
 All notable changes to java-vectors are documented here.
 
+## [0.1.16] - 2026-08-30
+
+### Added
+
+- `Mxfp4Matrix` provides zero-copy standard E2M1/E8M0 matrix views, exact F32-activation
+  multiplication, and a Java Vector API W4A8 kernel with reusable prepared Q8_0 activations.
+- Added deterministic encoding, approximation, activation-reuse, SIMD, and scalar coverage plus a
+  reproducible JMH gate derived from the pinned FreeToken implementation.
+
 ## [0.1.15] - 2026-08-30
 
 ### Changed
