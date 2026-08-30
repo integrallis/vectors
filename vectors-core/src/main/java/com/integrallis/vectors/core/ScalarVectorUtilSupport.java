@@ -263,6 +263,76 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void swiGlu(
+      float[] out,
+      int outOffset,
+      float[] gate,
+      int gateOffset,
+      float[] up,
+      int upOffset,
+      int length) {
+    for (int index = 0; index < length; index++) {
+      float value = gate[gateOffset + index];
+      out[outOffset + index] = value / (1.0f + (float) Math.exp(-value)) * up[upOffset + index];
+    }
+  }
+
+  @Override
+  public void sigmoidAndScaledSoftplus(
+      float[] sigmoidValues,
+      int sigmoidOffset,
+      float[] softplusValues,
+      int softplusOffset,
+      float[] bias,
+      int biasOffset,
+      float[] scale,
+      int scaleOffset,
+      float[] scaledSoftplus,
+      int scaledSoftplusOffset,
+      int length) {
+    for (int index = 0; index < length; index++) {
+      int sigmoidIndex = sigmoidOffset + index;
+      float sigmoidValue = sigmoidValues[sigmoidIndex];
+      sigmoidValues[sigmoidIndex] = 1.0f / (1.0f + (float) Math.exp(-sigmoidValue));
+      float softplusValue = softplusValues[softplusOffset + index] + bias[biasOffset + index];
+      float softplus =
+          softplusValue > 20.0f
+              ? softplusValue
+              : softplusValue < -20.0f
+                  ? (float) Math.exp(softplusValue)
+                  : (float) Math.log1p(Math.exp(softplusValue));
+      scaledSoftplus[scaledSoftplusOffset + index] = scale[scaleOffset + index] * softplus;
+    }
+  }
+
+  @Override
+  public void causalDepthwiseConv1dSilu(
+      float[] values,
+      int valuesOffset,
+      float[] history,
+      int historyOffset,
+      float[] weights,
+      int weightsOffset,
+      int channels,
+      int kernelSize) {
+    int historyLength = kernelSize - 1;
+    for (int channel = 0; channel < channels; channel++) {
+      float input = values[valuesOffset + channel];
+      float convolved = input * weights[weightsOffset + historyLength * channels + channel];
+      float previous = history[historyOffset + channel];
+      convolved += previous * weights[weightsOffset + channel];
+      for (int tap = 1; tap < historyLength; tap++) {
+        int historyIndex = historyOffset + tap * channels + channel;
+        float current = history[historyIndex];
+        convolved += current * weights[weightsOffset + tap * channels + channel];
+        history[historyIndex - channels] = current;
+      }
+      history[historyOffset + (historyLength - 1) * channels + channel] = input;
+      values[valuesOffset + channel] = convolved / (1.0f + (float) Math.exp(-convolved));
+    }
+  }
+
+  @Override
   public void addWeightedRowsInPlace(
       float[] out,
       int outOffset,

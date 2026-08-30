@@ -147,6 +147,83 @@ public final class VectorUtil {
     IMPL.addScaledInPlace(out, outOffset, vector, vectorOffset, length, scale);
   }
 
+  /** Applies {@code silu(gate) * up} over the requested sub-vector range. */
+  public static void swiGlu(
+      float[] out,
+      int outOffset,
+      float[] gate,
+      int gateOffset,
+      float[] up,
+      int upOffset,
+      int length) {
+    checkSubVectorArguments(out, outOffset, gate, gateOffset, length);
+    checkSubVectorArguments(out, outOffset, up, upOffset, length);
+    IMPL.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
+  }
+
+  /** Applies sigmoid in place and writes {@code scale * softplus(value + bias)}. */
+  public static void sigmoidAndScaledSoftplus(
+      float[] sigmoidValues,
+      int sigmoidOffset,
+      float[] softplusValues,
+      int softplusOffset,
+      float[] bias,
+      int biasOffset,
+      float[] scale,
+      int scaleOffset,
+      float[] scaledSoftplus,
+      int scaledSoftplusOffset,
+      int length) {
+    checkSubVectorArguments(sigmoidValues, sigmoidOffset, softplusValues, softplusOffset, length);
+    checkSubVectorArguments(sigmoidValues, sigmoidOffset, bias, biasOffset, length);
+    checkSubVectorArguments(sigmoidValues, sigmoidOffset, scale, scaleOffset, length);
+    checkSubVectorArguments(
+        sigmoidValues, sigmoidOffset, scaledSoftplus, scaledSoftplusOffset, length);
+    IMPL.sigmoidAndScaledSoftplus(
+        sigmoidValues,
+        sigmoidOffset,
+        softplusValues,
+        softplusOffset,
+        bias,
+        biasOffset,
+        scale,
+        scaleOffset,
+        scaledSoftplus,
+        scaledSoftplusOffset,
+        length);
+  }
+
+  /** Applies a tap-major causal depthwise convolution and SiLU, updating history in place. */
+  public static void causalDepthwiseConv1dSilu(
+      float[] values,
+      int valuesOffset,
+      float[] history,
+      int historyOffset,
+      float[] weights,
+      int weightsOffset,
+      int channels,
+      int kernelSize) {
+    Objects.requireNonNull(values, "values");
+    Objects.requireNonNull(history, "history");
+    Objects.requireNonNull(weights, "weights");
+    if (channels < 1
+        || kernelSize < 2
+        || valuesOffset < 0
+        || historyOffset < 0
+        || weightsOffset < 0) {
+      throw new IllegalArgumentException("invalid causal depthwise convolution shape or offset");
+    }
+    long historyElements = (long) (kernelSize - 1) * channels;
+    long weightElements = (long) kernelSize * channels;
+    if ((long) valuesOffset + channels > values.length
+        || (long) historyOffset + historyElements > history.length
+        || (long) weightsOffset + weightElements > weights.length) {
+      throw new IllegalArgumentException("causal depthwise convolution buffer is too small");
+    }
+    IMPL.causalDepthwiseConv1dSilu(
+        values, valuesOffset, history, historyOffset, weights, weightsOffset, channels, kernelSize);
+  }
+
   /**
    * Adds a weighted sum of flat, strided matrix rows to {@code out} in ascending row order. Inputs
    * must not alias {@code out}.

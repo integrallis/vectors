@@ -633,6 +633,104 @@ class VectorUtilSupportTest {
 
     @ParameterizedTest(name = "dim={0}")
     @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
+    void swiGluPanamaMatchesScalar(int dim) {
+      Random rng = new Random(SEED);
+      float[] gate = randomFloats(dim + 4, rng);
+      float[] up = randomFloats(dim + 4, rng);
+      float[] expected = randomFloats(dim + 2, rng);
+      float[] actual = expected.clone();
+      for (int index = 0; index < gate.length; index++) {
+        gate[index] *= 10.0f;
+      }
+
+      scalar.swiGlu(expected, 1, gate, 2, up, 2, dim);
+      panama.swiGlu(actual, 1, gate, 2, up, 2, dim);
+
+      for (int index = 0; index < expected.length; index++) {
+        assertThat(actual[index])
+            .as("element %d", index)
+            .isCloseTo(expected[index], within(2.0e-6f));
+      }
+    }
+
+    @ParameterizedTest(name = "dim={0}")
+    @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
+    void swiGluPanamaMatchesScalarWhenOutputAliasesUpInput(int dim) {
+      Random rng = new Random(SEED);
+      float[] gate = randomFloats(dim + 4, rng);
+      float[] expected = randomFloats(dim + 4, rng);
+      float[] actual = expected.clone();
+      for (int index = 0; index < gate.length; index++) {
+        gate[index] *= 10.0f;
+      }
+
+      scalar.swiGlu(expected, 2, gate, 2, expected, 2, dim);
+      panama.swiGlu(actual, 2, gate, 2, actual, 2, dim);
+
+      for (int index = 0; index < expected.length; index++) {
+        assertThat(actual[index])
+            .as("element %d", index)
+            .isCloseTo(expected[index], within(2.0e-6f));
+      }
+    }
+
+    @ParameterizedTest(name = "dim={0}")
+    @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
+    void sigmoidAndScaledSoftplusPanamaMatchesScalar(int dim) {
+      Random rng = new Random(SEED);
+      float[] expectedSigmoid = randomFloats(dim + 4, rng);
+      float[] actualSigmoid = expectedSigmoid.clone();
+      float[] softplus = randomFloats(dim + 4, rng);
+      float[] bias = randomFloats(dim + 4, rng);
+      float[] scale = randomFloats(dim + 4, rng);
+      float[] expectedSoftplus = randomFloats(dim + 4, rng);
+      float[] actualSoftplus = expectedSoftplus.clone();
+      for (int index = 0; index < dim; index++) {
+        expectedSigmoid[2 + index] *= 10.0f;
+        actualSigmoid[2 + index] *= 10.0f;
+        softplus[2 + index] *= 10.0f;
+      }
+
+      scalar.sigmoidAndScaledSoftplus(
+          expectedSigmoid, 2, softplus, 2, bias, 2, scale, 2, expectedSoftplus, 2, dim);
+      panama.sigmoidAndScaledSoftplus(
+          actualSigmoid, 2, softplus, 2, bias, 2, scale, 2, actualSoftplus, 2, dim);
+
+      for (int index = 0; index < expectedSigmoid.length; index++) {
+        assertThat(actualSigmoid[index])
+            .as("sigmoid element %d", index)
+            .isCloseTo(expectedSigmoid[index], within(2.0e-6f));
+        assertThat(actualSoftplus[index])
+            .as("softplus element %d", index)
+            .isCloseTo(expectedSoftplus[index], within(2.0e-5f));
+      }
+    }
+
+    @ParameterizedTest(name = "dim={0}")
+    @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
+    void causalDepthwiseConv1dSiluPanamaMatchesScalar(int dim) {
+      Random rng = new Random(SEED);
+      int kernelSize = 4;
+      float[] expected = randomFloats(dim + 2, rng);
+      float[] actual = expected.clone();
+      float[] expectedHistory = randomFloats((kernelSize - 1) * dim, rng);
+      float[] actualHistory = expectedHistory.clone();
+      float[] weights = randomFloats(kernelSize * dim, rng);
+
+      scalar.causalDepthwiseConv1dSilu(
+          expected, 1, expectedHistory, 0, weights, 0, dim, kernelSize);
+      panama.causalDepthwiseConv1dSilu(actual, 1, actualHistory, 0, weights, 0, dim, kernelSize);
+
+      for (int index = 0; index < expected.length; index++) {
+        assertThat(actual[index])
+            .as("value element %d", index)
+            .isCloseTo(expected[index], within(2.0e-6f));
+      }
+      assertThat(actualHistory).containsExactly(expectedHistory);
+    }
+
+    @ParameterizedTest(name = "dim={0}")
+    @MethodSource("com.integrallis.vectors.core.VectorUtilSupportTest#dimensionProvider")
     void addWeightedRowsInPlacePanamaMatchesScalarExactly(int dim) {
       Random rng = new Random(SEED);
       int rows = 7;
