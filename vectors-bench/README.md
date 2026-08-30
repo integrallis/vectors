@@ -16,6 +16,22 @@ Benchmarks for the Vectors library.
 ./gradlew :vectors-bench:jmh
 ```
 
+## MXFP4 W4A8 gate
+
+`Mxfp4MatVecBenchmark` measures the Java-native MXFP4 matrix primitive derived from the encoding
+and activation strategy used by FreeToken: standard row-major E2M1 weights, one unsigned E8M0
+scale per 32 values, and an optional Q8_0 activation. The benchmark includes F32-materialized,
+exact packed-decode, quantize-and-multiply W4A8, and prepared-activation W4A8 paths.
+
+On an Intel Core i7-9750H with Temurin 25.0.3, one 1024x2048 matrix occupied 1,114,112 bytes in
+MXFP4 form versus 8,388,608 bytes as F32 (7.53x smaller). With row parallelism disabled, W4A8 took
+1.076 ms/op versus 2.651 ms/op for exact packed decoding. With the production 12-worker scheduler,
+W4A8 measured 0.224 ms/op in the full comparison; a separate repeat measured 0.297 ms/op, so the
+result supports approximate parity with the 0.278 ms/op materialized-F32 control rather than an
+F32 throughput advantage. The deterministic correctness fixture requires cosine similarity above
+0.9999. These are matrix-kernel results, not full-model qualification. Machine-readable evidence
+and exact commands are in `jmh-results/mxfp4-w4a8-intel-mac-20260830.json`.
+
 ## Grouped GGUF projection gates
 
 Grouped batched GGUF APIs are retained by quantization format only after an exact real-model gate

@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-30",
+  "technique": "mxfp4_e2m1_e8m0_w4a8",
+  "revisions": {
+    "vectors": "686d1cc",
+    "freetokenReference": "bd372b630a028e3faa51f4ab0ef6a98c2f2de501"
+  },
+  "environment": {
+    "os": "macOS 26.6.1 (25G76)",
+    "machine": "MacBookPro16,1",
+    "cpu": "Intel Core i7-9750H 2.60GHz",
+    "physicalCores": 6,
+    "logicalProcessors": 12,
+    "jvm": "Eclipse Temurin 25.0.3+9-LTS",
+    "vectorBits": 256,
+    "productionWorkers": 12
+  },
+  "matrix": {
+    "rows": 1024,
+    "columns": 2048,
+    "f32WeightBytes": 8388608,
+    "mxfp4WeightAndScaleBytes": 1114112,
+    "compressionRatio": 7.529
+  },
+  "jmh": {
+    "benchmark": "com.integrallis.vectors.core.Mxfp4MatVecBenchmark",
+    "forks": 1,
+    "warmupIterations": 5,
+    "measurementIterations": 7,
+    "iterationSeconds": 1,
+    "unit": "ms/op",
+    "serialCommand": "./gradlew :vectors-bench:jmh -Pjmh.includes=Mxfp4MatVecBenchmark -Pvectors.gguf.parallel=false -Pjmh.resultFormat=JSON",
+    "serial": {
+      "materializedF32": {
+        "score": 0.299,
+        "ci99_9": [0.263, 0.336]
+      },
+      "exactPackedMxfp4": {
+        "score": 2.651,
+        "ci99_9": [2.282, 3.020]
+      },
+      "quantizeAndMultiplyW4A8": {
+        "score": 1.076,
+        "ci99_9": [0.912, 1.240]
+      }
+    },
+    "preparedSerialRepeat": {
+      "command": "./gradlew :vectors-bench:jmh '-Pjmh.includes=Mxfp4MatVecBenchmark.*ActivationMxfp4Candidate' -Pvectors.gguf.parallel=false -Pjmh.resultFormat=JSON",
+      "preparedW4A8": {
+        "score": 0.884,
+        "ci99_9": [0.799, 0.969]
+      },
+      "quantizeAndMultiplyW4A8": {
+        "score": 0.926,
+        "ci99_9": [0.773, 1.078]
+      }
+    },
+    "productionParallel": {
+      "command": "./gradlew :vectors-bench:jmh -Pjmh.includes=Mxfp4MatVecBenchmark -Pjmh.resultFormat=JSON",
+      "materializedF32SingleThreadControl": {
+        "score": 0.278,
+        "ci99_9": [0.255, 0.301]
+      },
+      "exactPackedMxfp4SingleThread": {
+        "score": 2.534,
+        "ci99_9": [2.123, 2.944]
+      },
+      "quantizeAndMultiplyW4A8WithRowScheduler": {
+        "score": 0.224,
+        "ci99_9": [0.209, 0.239]
+      }
+    },
+    "productionParallelRepeat": {
+      "command": "./gradlew :vectors-bench:jmh '-Pjmh.includes=Mxfp4MatVecBenchmark.*ActivationMxfp4Candidate' -Pjmh.resultFormat=JSON",
+      "preparedW4A8WithRowScheduler": {
+        "score": 0.285,
+        "ci99_9": [0.245, 0.325]
+      },
+      "quantizeAndMultiplyW4A8WithRowScheduler": {
+        "score": 0.297,
+        "ci99_9": [0.271, 0.323]
+      }
+    }
+  },
+  "correctness": {
+    "encodingTest": "Mxfp4MatrixTest.decodesTheFreeTokenE2m1TableInLowThenHighNibbleOrder",
+    "referenceTest": "Mxfp4MatrixTest.q8ActivationKernelStaysCloseToF32ActivationReference",
+    "minimumCosine": 0.9999,
+    "preparedReuseTest": "Mxfp4MatrixTest.reusesOnePreparedQ8ActivationAcrossMatrices",
+    "forcedScalarTestPassed": true,
+    "fullCoreCheckPassed": true
+  },
+  "conclusion": {
+    "retained": true,
+    "claims": [
+      "W4A8 improves serial packed MXFP4 execution over exact on-the-fly decode",
+      "production row scheduling brings W4A8 to approximately materialized-F32 throughput while retaining 7.53x smaller weight storage",
+      "prepared Q8_0 activations can be reused across projections"
+    ],
+    "limitations": [
+      "single local Intel Mac, one JMH fork",
+      "W4A8 introduces activation quantization error",
+      "no full-model accuracy or qualification claim",
+      "parallel measurements showed cross-run variance"
+    ]
+  }
+}

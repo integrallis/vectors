@@ -251,6 +251,12 @@ accessible from worker threads; confined segments stay on their owner thread. Th
 crossover is 1,048,576 matrix elements, with a 4,194,304-element floor for Q8_0 because smaller
 Q8_0 matrices are memory-bandwidth and scheduling limited.
 
+MXFP4 model weights use the same bounded row scheduler. Its W4A8 kernel converts one activation to
+Q8_0, decodes pairs of E2M1 nibbles through a Vector API lookup table, and accumulates signed
+integer products with the combined E8M0 and activation scales. A prepared-activation overload lets
+model runtimes reuse that conversion across projections with the same input. An exact
+F32-activation path remains available when activation quantization is not acceptable.
+
 Set `-Dvectors.gguf.parallel=false` to force serial GGUF execution, or raise the global crossover
 with `-Dvectors.gguf.parallelThreshold=<elements>`. The active values are included in the
 `vectors-core` startup diagnostic line.

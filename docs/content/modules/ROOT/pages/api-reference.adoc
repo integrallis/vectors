@@ -90,6 +90,10 @@ CQ3, CQ4, and ternary rows and can reuse one prepared activation across row slic
 the complete storage geometry when the view is created and retain scalar fallbacks behind the
 same public API. Large rotated-codebook projections parallelize independent rows through the same
 bounded GGUF executor, while small routing matrices stay serial to avoid coordination overhead.
+`Mxfp4Matrix` reads the standard row-major E2M1 weights and E8M0 block scales without expanding
+them to F32. It provides an exact F32-activation path and a faster W4A8 path. The latter accepts
+caller-owned `GgufQ8_0Batch` storage, including an already-quantized activation that can be reused
+across several projections, and introduces the corresponding activation-quantization error.
 The internal mapped Q5_K batch kernel also reuses unpacked rows for both four-query groups and
 two-query remainders; callers receive this optimization through the existing GGUF matrix API.
 
