@@ -68,8 +68,8 @@ cosine floors.
 The full-model progression was 22.58 s TTFT for the first direct implementation, about 9.0 s after
 batched prefill and safe INT8 projections, 4.38 s after preparing routed experts, and 2.49 s after
 preparing all projections at batch 64. A measured 256-token prefill default cleared the controlled
-gate. The final 27-attempt Models report records 27/27 correct answers, 956.2 ms p95 TTFT,
-21.79 tokens/second median decode, 2,315.6 ms p95 end-to-end latency, and a
+gate. The final 27-attempt Models report records 27/27 correct answers, 958.0 ms p95 TTFT,
+21.83 tokens/second median decode, 2,315.6 ms p95 end-to-end latency, and a
 `PRODUCTION_READY` tier on the same host.
 
 This result does not establish that Q8 preparation is best for every QAT format or machine. It is
