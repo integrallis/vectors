@@ -18,6 +18,7 @@ package com.integrallis.vectors.core;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteOrder;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -300,6 +301,222 @@ public interface VectorUtilSupport {
       bfloat16MatVecDot(
           query, queryOffset + batch * cols, weight, rows, cols, out, outOffset + batch * rows);
     }
+  }
+
+  /**
+   * Matrix-vector multiplication for a row-major symmetric signed-INT4 matrix whose binary16 scales
+   * are stored separately per quantization group.
+   *
+   * <p>Each byte stores the lower-indexed value in its low nibble. Nibbles use two's-complement
+   * values in {@code [-8, 7]}; no zero point is applied.
+   */
+  default void packedInt4GroupMatVec(
+      float[] input,
+      MemorySegment packed,
+      MemorySegment scales,
+      int rows,
+      int columns,
+      int groupSize,
+      float[] output) {
+    int groupsPerRow = columns / groupSize;
+    for (int row = 0; row < rows; row++) {
+      float sum = 0.0f;
+      for (int group = 0; group < groupsPerRow; group++) {
+        long scaleIndex = (long) row * groupsPerRow + group;
+        float scale = Float.float16ToFloat(scales.get(GGUF_LE_SHORT, scaleIndex * Short.BYTES));
+        int start = group * groupSize;
+        int end = start + groupSize;
+        for (int column = start; column < end; column += 2) {
+          long packedIndex = ((long) row * columns + column) / 2L;
+          int bits = Byte.toUnsignedInt(packed.get(ValueLayout.JAVA_BYTE, packedIndex));
+          int even = signedInt4(bits & 15);
+          int odd = signedInt4(bits >>> 4);
+          sum += scale * (even * input[column] + odd * input[column + 1]);
+        }
+      }
+      output[row] = sum;
+    }
+  }
+
+  /**
+   * Matrix-vector multiplication for a symmetric signed-INT4 tensor stored as {@code [input,
+   * packed-output]}, with one binary16 scale per output group for each input row.
+   */
+  default void packedInt4GroupRightMatVec(
+      float[] input,
+      MemorySegment packed,
+      MemorySegment scales,
+      int inputs,
+      int outputs,
+      int groupSize,
+      float[] output) {
+    Arrays.fill(output, 0.0f);
+    int groupsPerInput = outputs / groupSize;
+    for (int inputIndex = 0; inputIndex < inputs; inputIndex++) {
+      float activation = input[inputIndex];
+      for (int group = 0; group < groupsPerInput; group++) {
+        long scaleIndex = (long) inputIndex * groupsPerInput + group;
+        float multiplier =
+            activation * Float.float16ToFloat(scales.get(GGUF_LE_SHORT, scaleIndex * Short.BYTES));
+        int start = group * groupSize;
+        int end = start + groupSize;
+        for (int outputIndex = start; outputIndex < end; outputIndex += 2) {
+          long packedIndex = ((long) inputIndex * outputs + outputIndex) / 2L;
+          int bits = Byte.toUnsignedInt(packed.get(ValueLayout.JAVA_BYTE, packedIndex));
+          output[outputIndex] += multiplier * signedInt4(bits & 15);
+          output[outputIndex + 1] += multiplier * signedInt4(bits >>> 4);
+        }
+      }
+    }
+  }
+
+  /** Batched form of {@link #packedInt4GroupMatVec} with batch-major inputs and outputs. */
+  default void packedInt4GroupMatVecBatch(
+      float[] input,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment scales,
+      int rows,
+      int columns,
+      int groupSize,
+      float[] output) {
+    Arrays.fill(output, 0, Math.multiplyExact(batchSize, rows), 0.0f);
+    int groupsPerRow = columns / groupSize;
+    for (int row = 0; row < rows; row++) {
+      for (int group = 0; group < groupsPerRow; group++) {
+        long scaleIndex = (long) row * groupsPerRow + group;
+        float scale = Float.float16ToFloat(scales.get(GGUF_LE_SHORT, scaleIndex * Short.BYTES));
+        int start = group * groupSize;
+        int end = start + groupSize;
+        for (int column = start; column < end; column += 2) {
+          long packedIndex = ((long) row * columns + column) / 2L;
+          int bits = Byte.toUnsignedInt(packed.get(ValueLayout.JAVA_BYTE, packedIndex));
+          int even = signedInt4(bits & 15);
+          int odd = signedInt4(bits >>> 4);
+          for (int batch = 0; batch < batchSize; batch++) {
+            int inputOffset = batch * columns + column;
+            int outputIndex = batch * rows + row;
+            output[outputIndex] +=
+                scale * (even * input[inputOffset] + odd * input[inputOffset + 1]);
+          }
+        }
+      }
+    }
+  }
+
+  /** Batched form of {@link #packedInt4GroupRightMatVec} with batch-major inputs and outputs. */
+  default void packedInt4GroupRightMatVecBatch(
+      float[] input,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment scales,
+      int inputs,
+      int outputs,
+      int groupSize,
+      float[] output) {
+    Arrays.fill(output, 0, Math.multiplyExact(batchSize, outputs), 0.0f);
+    int groupsPerInput = outputs / groupSize;
+    for (int inputIndex = 0; inputIndex < inputs; inputIndex++) {
+      for (int group = 0; group < groupsPerInput; group++) {
+        long scaleIndex = (long) inputIndex * groupsPerInput + group;
+        float scale = Float.float16ToFloat(scales.get(GGUF_LE_SHORT, scaleIndex * Short.BYTES));
+        int start = group * groupSize;
+        int end = start + groupSize;
+        for (int outputIndex = start; outputIndex < end; outputIndex += 2) {
+          long packedIndex = ((long) inputIndex * outputs + outputIndex) / 2L;
+          int bits = Byte.toUnsignedInt(packed.get(ValueLayout.JAVA_BYTE, packedIndex));
+          int even = signedInt4(bits & 15);
+          int odd = signedInt4(bits >>> 4);
+          for (int batch = 0; batch < batchSize; batch++) {
+            float multiplier = input[batch * inputs + inputIndex] * scale;
+            int batchOutput = batch * outputs + outputIndex;
+            output[batchOutput] += multiplier * even;
+            output[batchOutput + 1] += multiplier * odd;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Quantizes batch-major activation rows per group for adjacent-nibble packed-INT4 products.
+   * Within each group the first half contains even logical columns and the second half odd columns.
+   */
+  default void quantizeSignedInt8GroupsForPackedInt4(
+      float[] input,
+      int batchSize,
+      int columns,
+      int groupSize,
+      byte[] quantized,
+      float[] inputScales) {
+    int groupsPerRow = columns / groupSize;
+    int halfGroup = groupSize / 2;
+    for (int batch = 0; batch < batchSize; batch++) {
+      int rowOffset = batch * columns;
+      for (int group = 0; group < groupsPerRow; group++) {
+        int groupOffset = rowOffset + group * groupSize;
+        float maximum = 0.0f;
+        for (int index = 0; index < groupSize; index++) {
+          maximum = Math.max(maximum, Math.abs(input[groupOffset + index]));
+        }
+        float scale = maximum == 0.0f ? 0.0f : maximum / 127.0f;
+        inputScales[batch * groupsPerRow + group] = scale;
+        float inverse = scale == 0.0f ? 0.0f : 1.0f / scale;
+        for (int pair = 0; pair < halfGroup; pair++) {
+          quantized[groupOffset + pair] = signedInt8(input[groupOffset + pair * 2] * inverse);
+          quantized[groupOffset + halfGroup + pair] =
+              signedInt8(input[groupOffset + pair * 2 + 1] * inverse);
+        }
+      }
+    }
+  }
+
+  /**
+   * Batched packed-INT4 matrix product using groupwise signed-INT8 activations prepared by {@link
+   * #quantizeSignedInt8GroupsForPackedInt4}.
+   */
+  default void packedInt4GroupMatVecBatchPreparedInt8(
+      byte[] quantizedInput,
+      float[] inputScales,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment weightScales,
+      int rows,
+      int columns,
+      int groupSize,
+      float[] output) {
+    Arrays.fill(output, 0, Math.multiplyExact(batchSize, rows), 0.0f);
+    int groupsPerRow = columns / groupSize;
+    int halfGroup = groupSize / 2;
+    for (int row = 0; row < rows; row++) {
+      for (int group = 0; group < groupsPerRow; group++) {
+        long scaleIndex = (long) row * groupsPerRow + group;
+        float weightScale =
+            Float.float16ToFloat(weightScales.get(GGUF_LE_SHORT, scaleIndex * Short.BYTES));
+        long packedOffset = ((long) row * columns + (long) group * groupSize) / 2L;
+        for (int batch = 0; batch < batchSize; batch++) {
+          int quantizedOffset = batch * columns + group * groupSize;
+          int integerSum = 0;
+          for (int pair = 0; pair < halfGroup; pair++) {
+            int bits = Byte.toUnsignedInt(packed.get(ValueLayout.JAVA_BYTE, packedOffset + pair));
+            integerSum += signedInt4(bits & 15) * quantizedInput[quantizedOffset + pair];
+            integerSum +=
+                signedInt4(bits >>> 4) * quantizedInput[quantizedOffset + halfGroup + pair];
+          }
+          int outputIndex = batch * rows + row;
+          float scale = weightScale * inputScales[batch * groupsPerRow + group];
+          output[outputIndex] = Math.fma(scale, integerSum, output[outputIndex]);
+        }
+      }
+    }
+  }
+
+  private static byte signedInt8(float value) {
+    return (byte) Math.max(-127, Math.min(127, Math.round(value)));
+  }
+
+  private static int signedInt4(int nibble) {
+    return nibble > 7 ? nibble - 16 : nibble;
   }
 
   /**

@@ -333,6 +333,149 @@ public final class VectorUtil {
   }
 
   /**
+   * Multiplies a row-major symmetric signed-INT4 matrix with separately stored binary16 group
+   * scales by a full-precision vector.
+   */
+  public static void packedInt4GroupMatVec(
+      float[] input,
+      MemorySegment packed,
+      MemorySegment scales,
+      int rows,
+      int columns,
+      int groupSize,
+      float[] output) {
+    checkPackedInt4GroupArguments(input, packed, scales, rows, columns, groupSize, output, false);
+    IMPL.packedInt4GroupMatVec(input, packed, scales, rows, columns, groupSize, output);
+  }
+
+  /**
+   * Multiplies a symmetric signed-INT4 tensor stored as {@code [input, packed-output]} by a
+   * full-precision vector.
+   */
+  public static void packedInt4GroupRightMatVec(
+      float[] input,
+      MemorySegment packed,
+      MemorySegment scales,
+      int inputs,
+      int outputs,
+      int groupSize,
+      float[] output) {
+    checkPackedInt4GroupArguments(input, packed, scales, inputs, outputs, groupSize, output, true);
+    IMPL.packedInt4GroupRightMatVec(input, packed, scales, inputs, outputs, groupSize, output);
+  }
+
+  /**
+   * Batched form of {@link #packedInt4GroupMatVec}; inputs and outputs are contiguous batch-major
+   * rows.
+   */
+  public static void packedInt4GroupMatVecBatch(
+      float[] input,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment scales,
+      int rows,
+      int columns,
+      int groupSize,
+      float[] output) {
+    checkPackedInt4GroupBatchArguments(
+        input, batchSize, packed, scales, rows, columns, groupSize, output, false);
+    IMPL.packedInt4GroupMatVecBatch(
+        input, batchSize, packed, scales, rows, columns, groupSize, output);
+  }
+
+  /**
+   * Batched form of {@link #packedInt4GroupRightMatVec}; inputs and outputs are contiguous
+   * batch-major rows.
+   */
+  public static void packedInt4GroupRightMatVecBatch(
+      float[] input,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment scales,
+      int inputs,
+      int outputs,
+      int groupSize,
+      float[] output) {
+    checkPackedInt4GroupBatchArguments(
+        input, batchSize, packed, scales, inputs, outputs, groupSize, output, true);
+    IMPL.packedInt4GroupRightMatVecBatch(
+        input, batchSize, packed, scales, inputs, outputs, groupSize, output);
+  }
+
+  /** Prepares groupwise signed-INT8 activations for adjacent-nibble packed-INT4 products. */
+  public static void quantizeSignedInt8GroupsForPackedInt4(
+      float[] input,
+      int batchSize,
+      int columns,
+      int groupSize,
+      byte[] quantized,
+      float[] inputScales) {
+    Objects.requireNonNull(input, "input");
+    Objects.requireNonNull(quantized, "quantized");
+    Objects.requireNonNull(inputScales, "inputScales");
+    checkPackedInt4ActivationGeometry(batchSize, columns, groupSize);
+    int inputEntries = checkedProduct(batchSize, columns, "batched activation length");
+    int scaleEntries =
+        checkedProduct(batchSize, columns / groupSize, "batched activation scale length");
+    if (input.length < inputEntries
+        || quantized.length < inputEntries
+        || inputScales.length < scaleEntries) {
+      throw new IllegalArgumentException(
+          "activation, quantized, and scale buffers must cover "
+              + inputEntries
+              + "/"
+              + inputEntries
+              + "/"
+              + scaleEntries);
+    }
+    IMPL.quantizeSignedInt8GroupsForPackedInt4(
+        input, batchSize, columns, groupSize, quantized, inputScales);
+  }
+
+  /** Executes a packed-INT4 batch product from prequantized signed-INT8 activation groups. */
+  public static void packedInt4GroupMatVecBatchPreparedInt8(
+      byte[] quantizedInput,
+      float[] inputScales,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment weightScales,
+      int rows,
+      int columns,
+      int groupSize,
+      float[] output) {
+    Objects.requireNonNull(quantizedInput, "quantizedInput");
+    Objects.requireNonNull(inputScales, "inputScales");
+    Objects.requireNonNull(output, "output");
+    checkPackedInt4ActivationGeometry(batchSize, columns, groupSize);
+    checkPackedInt4GroupGeometryAndStorage(packed, weightScales, rows, columns, groupSize, false);
+    int inputEntries = checkedProduct(batchSize, columns, "quantized activation length");
+    int scaleEntries =
+        checkedProduct(batchSize, columns / groupSize, "quantized activation scale length");
+    int outputEntries = checkedProduct(batchSize, rows, "batched output length");
+    if (quantizedInput.length < inputEntries
+        || inputScales.length < scaleEntries
+        || output.length < outputEntries) {
+      throw new IllegalArgumentException(
+          "quantized activation, scale, and output buffers must cover "
+              + inputEntries
+              + "/"
+              + scaleEntries
+              + "/"
+              + outputEntries);
+    }
+    IMPL.packedInt4GroupMatVecBatchPreparedInt8(
+        quantizedInput,
+        inputScales,
+        batchSize,
+        packed,
+        weightScales,
+        rows,
+        columns,
+        groupSize,
+        output);
+  }
+
+  /**
    * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
    *
    * <p>The operation fuses Q4_0 dequantization and dot-product accumulation without allocating a
@@ -3000,6 +3143,107 @@ public final class VectorUtil {
               + q8Scales.length
               + " < "
               + blocks);
+    }
+  }
+
+  private static void checkPackedInt4GroupArguments(
+      float[] input,
+      MemorySegment packed,
+      MemorySegment scales,
+      int firstDimension,
+      int secondDimension,
+      int groupSize,
+      float[] output,
+      boolean rightHand) {
+    Objects.requireNonNull(input, "input");
+    Objects.requireNonNull(output, "output");
+    checkPackedInt4GroupGeometryAndStorage(
+        packed, scales, firstDimension, secondDimension, groupSize, rightHand);
+    int requiredInput = rightHand ? firstDimension : secondDimension;
+    int requiredOutput = rightHand ? secondDimension : firstDimension;
+    checkDimensions(input.length, requiredInput);
+    checkDimensions(output.length, requiredOutput);
+  }
+
+  private static void checkPackedInt4ActivationGeometry(int batchSize, int columns, int groupSize) {
+    if (batchSize <= 0) {
+      throw new IllegalArgumentException("batchSize must be positive: " + batchSize);
+    }
+    if (groupSize <= 0 || (groupSize & 1) != 0) {
+      throw new IllegalArgumentException("groupSize must be positive and even: " + groupSize);
+    }
+    if (columns <= 0 || columns % groupSize != 0) {
+      throw new IllegalArgumentException(
+          "columns must be positive and divisible by groupSize: " + columns);
+    }
+  }
+
+  private static void checkPackedInt4GroupGeometryAndStorage(
+      MemorySegment packed,
+      MemorySegment scales,
+      int firstDimension,
+      int secondDimension,
+      int groupSize,
+      boolean rightHand) {
+    Objects.requireNonNull(packed, "packed");
+    Objects.requireNonNull(scales, "scales");
+    String firstName = rightHand ? "inputs" : "rows";
+    String secondName = rightHand ? "outputs" : "columns";
+    if (firstDimension <= 0) {
+      throw new IllegalArgumentException(firstName + " must be positive: " + firstDimension);
+    }
+    if (groupSize <= 0 || (groupSize & 1) != 0) {
+      throw new IllegalArgumentException("groupSize must be positive and even: " + groupSize);
+    }
+    if (secondDimension <= 0 || (secondDimension & 1) != 0 || secondDimension % groupSize != 0) {
+      throw new IllegalArgumentException(
+          secondName + " must be positive, even, and divisible by groupSize: " + secondDimension);
+    }
+    long packedBytes = Math.multiplyExact((long) firstDimension, secondDimension / 2L);
+    long scaleBytes =
+        Math.multiplyExact(
+            Math.multiplyExact((long) firstDimension, secondDimension / groupSize), Short.BYTES);
+    if (packed.byteSize() < packedBytes) {
+      throw new IllegalArgumentException(
+          "packed byteSize must be at least " + packedBytes + ": " + packed.byteSize());
+    }
+    if (scales.byteSize() < scaleBytes) {
+      throw new IllegalArgumentException(
+          "scales byteSize must be at least " + scaleBytes + ": " + scales.byteSize());
+    }
+  }
+
+  private static void checkPackedInt4GroupBatchArguments(
+      float[] input,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment scales,
+      int firstDimension,
+      int secondDimension,
+      int groupSize,
+      float[] output,
+      boolean rightHand) {
+    if (batchSize <= 0) {
+      throw new IllegalArgumentException("batchSize must be positive: " + batchSize);
+    }
+    Objects.requireNonNull(input, "input");
+    Objects.requireNonNull(output, "output");
+    checkPackedInt4GroupGeometryAndStorage(
+        packed, scales, firstDimension, secondDimension, groupSize, rightHand);
+    int inputWidth = rightHand ? firstDimension : secondDimension;
+    int outputWidth = rightHand ? secondDimension : firstDimension;
+    int requiredInput = checkedProduct(batchSize, inputWidth, "batched input length");
+    int requiredOutput = checkedProduct(batchSize, outputWidth, "batched output length");
+    if (input.length < requiredInput || output.length < requiredOutput) {
+      throw new IllegalArgumentException(
+          "batched input/output lengths must be at least "
+              + requiredInput
+              + "/"
+              + requiredOutput
+              + "; got "
+              + input.length
+              + "/"
+              + output.length);
     }
   }
 
