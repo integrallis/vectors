@@ -365,6 +365,44 @@ public final class VectorUtil {
   }
 
   /**
+   * Batched form of {@link #packedInt4GroupMatVec}; inputs and outputs are contiguous batch-major
+   * rows.
+   */
+  public static void packedInt4GroupMatVecBatch(
+      float[] input,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment scales,
+      int rows,
+      int columns,
+      int groupSize,
+      float[] output) {
+    checkPackedInt4GroupBatchArguments(
+        input, batchSize, packed, scales, rows, columns, groupSize, output, false);
+    IMPL.packedInt4GroupMatVecBatch(
+        input, batchSize, packed, scales, rows, columns, groupSize, output);
+  }
+
+  /**
+   * Batched form of {@link #packedInt4GroupRightMatVec}; inputs and outputs are contiguous
+   * batch-major rows.
+   */
+  public static void packedInt4GroupRightMatVecBatch(
+      float[] input,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment scales,
+      int inputs,
+      int outputs,
+      int groupSize,
+      float[] output) {
+    checkPackedInt4GroupBatchArguments(
+        input, batchSize, packed, scales, inputs, outputs, groupSize, output, true);
+    IMPL.packedInt4GroupRightMatVecBatch(
+        input, batchSize, packed, scales, inputs, outputs, groupSize, output);
+  }
+
+  /**
    * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
    *
    * <p>The operation fuses Q4_0 dequantization and dot-product accumulation without allocating a
@@ -3045,9 +3083,24 @@ public final class VectorUtil {
       float[] output,
       boolean rightHand) {
     Objects.requireNonNull(input, "input");
+    Objects.requireNonNull(output, "output");
+    checkPackedInt4GroupGeometryAndStorage(
+        packed, scales, firstDimension, secondDimension, groupSize, rightHand);
+    int requiredInput = rightHand ? firstDimension : secondDimension;
+    int requiredOutput = rightHand ? secondDimension : firstDimension;
+    checkDimensions(input.length, requiredInput);
+    checkDimensions(output.length, requiredOutput);
+  }
+
+  private static void checkPackedInt4GroupGeometryAndStorage(
+      MemorySegment packed,
+      MemorySegment scales,
+      int firstDimension,
+      int secondDimension,
+      int groupSize,
+      boolean rightHand) {
     Objects.requireNonNull(packed, "packed");
     Objects.requireNonNull(scales, "scales");
-    Objects.requireNonNull(output, "output");
     String firstName = rightHand ? "inputs" : "rows";
     String secondName = rightHand ? "outputs" : "columns";
     if (firstDimension <= 0) {
@@ -3060,10 +3113,6 @@ public final class VectorUtil {
       throw new IllegalArgumentException(
           secondName + " must be positive, even, and divisible by groupSize: " + secondDimension);
     }
-    int requiredInput = rightHand ? firstDimension : secondDimension;
-    int requiredOutput = rightHand ? secondDimension : firstDimension;
-    checkDimensions(input.length, requiredInput);
-    checkDimensions(output.length, requiredOutput);
     long packedBytes = Math.multiplyExact((long) firstDimension, secondDimension / 2L);
     long scaleBytes =
         Math.multiplyExact(
@@ -3075,6 +3124,40 @@ public final class VectorUtil {
     if (scales.byteSize() < scaleBytes) {
       throw new IllegalArgumentException(
           "scales byteSize must be at least " + scaleBytes + ": " + scales.byteSize());
+    }
+  }
+
+  private static void checkPackedInt4GroupBatchArguments(
+      float[] input,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment scales,
+      int firstDimension,
+      int secondDimension,
+      int groupSize,
+      float[] output,
+      boolean rightHand) {
+    if (batchSize <= 0) {
+      throw new IllegalArgumentException("batchSize must be positive: " + batchSize);
+    }
+    Objects.requireNonNull(input, "input");
+    Objects.requireNonNull(output, "output");
+    checkPackedInt4GroupGeometryAndStorage(
+        packed, scales, firstDimension, secondDimension, groupSize, rightHand);
+    int inputWidth = rightHand ? firstDimension : secondDimension;
+    int outputWidth = rightHand ? secondDimension : firstDimension;
+    int requiredInput = checkedProduct(batchSize, inputWidth, "batched input length");
+    int requiredOutput = checkedProduct(batchSize, outputWidth, "batched output length");
+    if (input.length < requiredInput || output.length < requiredOutput) {
+      throw new IllegalArgumentException(
+          "batched input/output lengths must be at least "
+              + requiredInput
+              + "/"
+              + requiredOutput
+              + "; got "
+              + input.length
+              + "/"
+              + output.length);
     }
   }
 

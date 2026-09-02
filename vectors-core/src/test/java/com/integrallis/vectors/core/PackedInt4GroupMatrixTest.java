@@ -109,6 +109,91 @@ class PackedInt4GroupMatrixTest {
   }
 
   @Test
+  void rowMajorBatchReusesWeightsAcrossIndependentInputRows() {
+    int batchSize = 3;
+    int rows = 3;
+    int columns = 64;
+    int groupSize = 32;
+    byte[] packed = new byte[rows * columns / 2];
+    byte[] scaleBytes = new byte[rows * (columns / groupSize) * Short.BYTES];
+    float[] input = new float[batchSize * columns];
+    float[] expected = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int column = 0; column < columns; column++) {
+        input[batch * columns + column] = (batch + 1) * (column - 27) * 0.03125f;
+      }
+    }
+    for (int row = 0; row < rows; row++) {
+      for (int group = 0; group < columns / groupSize; group++) {
+        float scale = (row + 1) * (group + 1) * 0.125f;
+        putScale(scaleBytes, row * 2 + group, scale);
+        for (int offset = 0; offset < groupSize; offset++) {
+          int column = group * groupSize + offset;
+          int quant = ((row * 5 + column * 3) & 15) - 8;
+          putNibble(packed, row * columns + column, quant);
+          for (int batch = 0; batch < batchSize; batch++) {
+            expected[batch * rows + row] += scale * quant * input[batch * columns + column];
+          }
+        }
+      }
+    }
+
+    MemorySegment weights = MemorySegment.ofArray(packed);
+    MemorySegment scales = MemorySegment.ofArray(scaleBytes);
+    new PanamaVectorUtilSupport()
+        .packedInt4GroupMatVecBatch(
+            input, batchSize, weights, scales, rows, columns, groupSize, actual);
+    for (int index = 0; index < actual.length; index++) {
+      assertThat(actual[index]).isCloseTo(expected[index], within(2.0e-5f));
+    }
+  }
+
+  @Test
+  void rightHandBatchReusesWeightsAcrossIndependentInputRows() {
+    int batchSize = 3;
+    int inputs = 5;
+    int outputs = 64;
+    int groupSize = 32;
+    byte[] packed = new byte[inputs * outputs / 2];
+    byte[] scaleBytes = new byte[inputs * (outputs / groupSize) * Short.BYTES];
+    float[] input = new float[batchSize * inputs];
+    float[] expected = new float[batchSize * outputs];
+    float[] actual = new float[batchSize * outputs];
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int inputIndex = 0; inputIndex < inputs; inputIndex++) {
+        input[batch * inputs + inputIndex] = (batch + 1) * (inputIndex - 2) * 0.125f;
+      }
+    }
+    for (int inputIndex = 0; inputIndex < inputs; inputIndex++) {
+      for (int group = 0; group < outputs / groupSize; group++) {
+        float scale = (inputIndex + 1) * (group + 2) * 0.0625f;
+        putScale(scaleBytes, inputIndex * 2 + group, scale);
+        for (int offset = 0; offset < groupSize; offset++) {
+          int output = group * groupSize + offset;
+          int quant = ((inputIndex * 7 + output * 5) & 15) - 8;
+          putNibble(packed, inputIndex * outputs + output, quant);
+          for (int batch = 0; batch < batchSize; batch++) {
+            expected[batch * outputs + output] +=
+                input[batch * inputs + inputIndex] * scale * quant;
+          }
+        }
+      }
+    }
+
+    MemorySegment weights = MemorySegment.ofArray(packed);
+    MemorySegment scales = MemorySegment.ofArray(scaleBytes);
+    new PanamaVectorUtilSupport()
+        .packedInt4GroupRightMatVecBatch(
+            input, batchSize, weights, scales, inputs, outputs, groupSize, actual);
+    for (int index = 0; index < actual.length; index++) {
+      assertThat(actual[index]).isCloseTo(expected[index], within(2.0e-5f));
+    }
+  }
+
+  @Test
   void publicFacadeRejectsMalformedGeometryBeforeDispatch() {
     assertThatIllegalArgumentException()
         .isThrownBy(
