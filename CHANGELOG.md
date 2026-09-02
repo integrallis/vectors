@@ -2,7 +2,7 @@
 
 All notable changes to java-vectors are documented here.
 
-## Unreleased
+## [0.1.19] - 2026-09-02
 
 ### Added
 
