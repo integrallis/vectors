@@ -529,6 +529,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         groupsPerInput,
         Math.multiplyExact(Math.multiplyExact(inputs, groupSize), batchSize),
         group -> {
+          if (FLOAT_SPECIES.length() == 8) {
+            packedInt4GroupRightMatVecBatch256(
+                input, batchSize, packed, scales, inputs, outputs, groupsPerInput, group, output);
+            return;
+          }
           int outputOffset = group * groupSize;
           FloatVector[] evenSums = new FloatVector[Math.multiplyExact(batchTile, vectorParts)];
           FloatVector[] oddSums = new FloatVector[Math.multiplyExact(batchTile, vectorParts)];
@@ -580,6 +585,187 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
             }
           }
         });
+  }
+
+  private static void packedInt4GroupRightMatVecBatch256(
+      float[] input,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment scales,
+      int inputs,
+      int outputs,
+      int groupsPerInput,
+      int group,
+      float[] output) {
+    var species = FloatVector.SPECIES_256;
+    int outputOffset = group * 32;
+    for (int batch = 0; batch < batchSize; batch += 2) {
+      FloatVector even00 = FloatVector.zero(species);
+      FloatVector even01 = FloatVector.zero(species);
+      FloatVector odd00 = FloatVector.zero(species);
+      FloatVector odd01 = FloatVector.zero(species);
+      FloatVector even10 = FloatVector.zero(species);
+      FloatVector even11 = FloatVector.zero(species);
+      FloatVector odd10 = FloatVector.zero(species);
+      FloatVector odd11 = FloatVector.zero(species);
+      boolean second = batch + 1 < batchSize;
+      for (int inputIndex = 0; inputIndex < inputs; inputIndex++) {
+        long packedOffset = ((long) inputIndex * outputs + outputOffset) / 2L;
+        ByteVector packedValues =
+            ByteVector.fromMemorySegment(
+                ByteVector.SPECIES_128, packed, packedOffset, ByteOrder.LITTLE_ENDIAN);
+        ByteVector low = signedLowInt4(packedValues);
+        ByteVector high = signedHighInt4(packedValues);
+        FloatVector low0 =
+            (FloatVector)
+                ((IntVector) low.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                    .convertShape(VectorOperators.I2F, species, 0);
+        FloatVector low1 =
+            (FloatVector)
+                ((IntVector) low.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 1))
+                    .convertShape(VectorOperators.I2F, species, 0);
+        FloatVector high0 =
+            (FloatVector)
+                ((IntVector) high.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 0))
+                    .convertShape(VectorOperators.I2F, species, 0);
+        FloatVector high1 =
+            (FloatVector)
+                ((IntVector) high.convertShape(VectorOperators.B2I, IntVector.SPECIES_256, 1))
+                    .convertShape(VectorOperators.I2F, species, 0);
+        long scaleIndex = (long) inputIndex * groupsPerInput + group;
+        float scale = Float.float16ToFloat(scales.get(GGUF_LE_SHORT, scaleIndex * Short.BYTES));
+        FloatVector factor0 =
+            FloatVector.broadcast(species, input[batch * inputs + inputIndex] * scale);
+        even00 = fma(low0, factor0, even00);
+        even01 = fma(low1, factor0, even01);
+        odd00 = fma(high0, factor0, odd00);
+        odd01 = fma(high1, factor0, odd01);
+        if (second) {
+          FloatVector factor1 =
+              FloatVector.broadcast(species, input[(batch + 1) * inputs + inputIndex] * scale);
+          even10 = fma(low0, factor1, even10);
+          even11 = fma(low1, factor1, even11);
+          odd10 = fma(high0, factor1, odd10);
+          odd11 = fma(high1, factor1, odd11);
+        }
+      }
+      int firstOutput = batch * outputs + outputOffset;
+      even00.intoArray(output, firstOutput, INT4_EVEN_INDEXES, 0);
+      even01.intoArray(output, firstOutput, INT4_EVEN_INDEXES, 8);
+      odd00.intoArray(output, firstOutput, INT4_ODD_INDEXES, 0);
+      odd01.intoArray(output, firstOutput, INT4_ODD_INDEXES, 8);
+      if (second) {
+        int secondOutput = (batch + 1) * outputs + outputOffset;
+        even10.intoArray(output, secondOutput, INT4_EVEN_INDEXES, 0);
+        even11.intoArray(output, secondOutput, INT4_EVEN_INDEXES, 8);
+        odd10.intoArray(output, secondOutput, INT4_ODD_INDEXES, 0);
+        odd11.intoArray(output, secondOutput, INT4_ODD_INDEXES, 8);
+      }
+    }
+  }
+
+  @Override
+  public void packedInt4GroupMatVecBatchPreparedInt8(
+      byte[] quantizedInput,
+      float[] inputScales,
+      int batchSize,
+      MemorySegment packed,
+      MemorySegment weightScales,
+      int rows,
+      int columns,
+      int groupSize,
+      float[] output) {
+    if (groupSize != 32) {
+      VectorUtilSupport.super.packedInt4GroupMatVecBatchPreparedInt8(
+          quantizedInput,
+          inputScales,
+          batchSize,
+          packed,
+          weightScales,
+          rows,
+          columns,
+          groupSize,
+          output);
+      return;
+    }
+    java.util.Arrays.fill(output, 0, Math.multiplyExact(batchSize, rows), 0.0f);
+    int groupsPerRow = columns / groupSize;
+    GgufParallelSupport.forEachPackedInt4Unit(
+        packed,
+        weightScales,
+        rows,
+        Math.multiplyExact(columns, batchSize),
+        row -> {
+          for (int group = 0; group < groupsPerRow; group++) {
+            long packedOffset = ((long) row * columns + (long) group * groupSize) / 2L;
+            long weightScaleIndex = (long) row * groupsPerRow + group;
+            float weightScale =
+                Float.float16ToFloat(
+                    weightScales.get(GGUF_LE_SHORT, weightScaleIndex * Short.BYTES));
+            for (int batch = 0; batch < batchSize; batch++) {
+              int quantizedOffset = batch * columns + group * groupSize;
+              int integerSum =
+                  packedSignedInt4Q8GroupDot(packed, packedOffset, quantizedInput, quantizedOffset);
+              float scale = weightScale * inputScales[batch * groupsPerRow + group];
+              int outputIndex = batch * rows + row;
+              output[outputIndex] = MathUtil.fma(scale, integerSum, output[outputIndex]);
+            }
+          }
+        });
+  }
+
+  private static int packedSignedInt4Q8GroupDot(
+      MemorySegment packed, long packedOffset, byte[] quantizedInput, int quantizedOffset) {
+    if (VECTOR_BITSIZE >= 256) {
+      ByteVector packedValues =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_128, packed, packedOffset, ByteOrder.LITTLE_ENDIAN);
+      ShortVector low =
+          (ShortVector)
+              signedLowInt4(packedValues)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+      ShortVector high =
+          (ShortVector)
+              signedHighInt4(packedValues)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+      ShortVector evenInput =
+          (ShortVector)
+              ByteVector.fromArray(ByteVector.SPECIES_128, quantizedInput, quantizedOffset)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+      ShortVector oddInput =
+          (ShortVector)
+              ByteVector.fromArray(ByteVector.SPECIES_128, quantizedInput, quantizedOffset + 16)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_256, 0);
+      return low.mul(evenInput).reduceLanes(VectorOperators.ADD)
+          + high.mul(oddInput).reduceLanes(VectorOperators.ADD);
+    }
+
+    int sum = 0;
+    for (int half = 0; half < 16; half += 8) {
+      ByteVector packedValues =
+          ByteVector.fromMemorySegment(
+              ByteVector.SPECIES_64, packed, packedOffset + half, ByteOrder.LITTLE_ENDIAN);
+      ShortVector low =
+          (ShortVector)
+              signedLowInt4(packedValues)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      ShortVector high =
+          (ShortVector)
+              signedHighInt4(packedValues)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      ShortVector evenInput =
+          (ShortVector)
+              ByteVector.fromArray(ByteVector.SPECIES_64, quantizedInput, quantizedOffset + half)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      ShortVector oddInput =
+          (ShortVector)
+              ByteVector.fromArray(
+                      ByteVector.SPECIES_64, quantizedInput, quantizedOffset + 16 + half)
+                  .convertShape(VectorOperators.B2S, ShortVector.SPECIES_128, 0);
+      sum += low.mul(evenInput).reduceLanes(VectorOperators.ADD);
+      sum += high.mul(oddInput).reduceLanes(VectorOperators.ADD);
+    }
+    return sum;
   }
 
   private static ByteVector signedLowInt4(ByteVector packed) {

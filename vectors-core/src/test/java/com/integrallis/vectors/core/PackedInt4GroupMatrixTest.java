@@ -194,6 +194,51 @@ class PackedInt4GroupMatrixTest {
   }
 
   @Test
+  void preparedInt8BatchStaysCloseToTheFullPrecisionActivationPath() {
+    int batchSize = 3;
+    int rows = 3;
+    int columns = 64;
+    int groupSize = 32;
+    byte[] packed = new byte[rows * columns / 2];
+    byte[] scaleBytes = new byte[rows * (columns / groupSize) * Short.BYTES];
+    float[] input = new float[batchSize * columns];
+    float[] reference = new float[batchSize * rows];
+    float[] actual = new float[batchSize * rows];
+    byte[] quantized = new byte[input.length];
+    float[] inputScales = new float[batchSize * columns / groupSize];
+
+    for (int batch = 0; batch < batchSize; batch++) {
+      for (int column = 0; column < columns; column++) {
+        input[batch * columns + column] =
+            (float) (Math.sin(batch * 0.7 + column * 0.13) * (1.0 + column * 0.01));
+      }
+    }
+    for (int row = 0; row < rows; row++) {
+      for (int group = 0; group < columns / groupSize; group++) {
+        putScale(scaleBytes, row * 2 + group, (row + 1) * (group + 1) * 0.0625f);
+        for (int offset = 0; offset < groupSize; offset++) {
+          int column = group * groupSize + offset;
+          putNibble(packed, row * columns + column, ((row * 5 + column * 3) & 15) - 8);
+        }
+      }
+    }
+
+    MemorySegment weights = MemorySegment.ofArray(packed);
+    MemorySegment scales = MemorySegment.ofArray(scaleBytes);
+    new PanamaVectorUtilSupport()
+        .packedInt4GroupMatVecBatch(
+            input, batchSize, weights, scales, rows, columns, groupSize, reference);
+    VectorUtil.quantizeSignedInt8GroupsForPackedInt4(
+        input, batchSize, columns, groupSize, quantized, inputScales);
+    VectorUtil.packedInt4GroupMatVecBatchPreparedInt8(
+        quantized, inputScales, batchSize, weights, scales, rows, columns, groupSize, actual);
+
+    for (int index = 0; index < actual.length; index++) {
+      assertThat(actual[index]).isCloseTo(reference[index], within(0.05f));
+    }
+  }
+
+  @Test
   void publicFacadeRejectsMalformedGeometryBeforeDispatch() {
     assertThatIllegalArgumentException()
         .isThrownBy(
