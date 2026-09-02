@@ -261,6 +261,13 @@ For addressable scale tensors, the hot W4A8 loop reads E8M0 codes through a read
 per-code foreign-memory bounds overhead; tensors larger than the buffer addressing limit retain
 the checked `MemorySegment` path.
 
+Signed packed-INT4 kernels cover row-major and input-major matrices whose FP16 scale applies to a
+group of output values. Single and batched entry points operate directly on mapped
+`MemorySegment` storage. A prepared-activation form quantizes each F32 input group once to signed
+INT8 and reuses it across the matrix. The retained MobileMoE experiment also compares that compact
+path with BF16 expansion and a prepared Q8 runtime layout; see
+`vectors-bench/jmh-results/mobilemoe-packed-int4-runtime-layout-20260902.md` in the source tree.
+
 Set `-Dvectors.gguf.parallel=false` to force serial GGUF execution, or raise the global crossover
 with `-Dvectors.gguf.parallelThreshold=<elements>`. The active values are included in the
 `vectors-core` startup diagnostic line.

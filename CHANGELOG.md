@@ -2,6 +2,16 @@
 
 All notable changes to java-vectors are documented here.
 
+## Unreleased
+
+### Added
+
+- Added scalar and Panama Vector API matrix-vector kernels for signed packed INT4 weights with
+  FP16 group scales, including row-major and input-major layouts, batched execution, and reusable
+  signed-INT8 activations.
+- Added deterministic correctness tests and a retained MobileMoE-shaped JMH experiment comparing
+  direct packed INT4 with rejected BF16 expansion and the selected prepared-Q8 runtime layout.
+
 ## [0.1.18] - 2026-08-30
 
 ### Added
