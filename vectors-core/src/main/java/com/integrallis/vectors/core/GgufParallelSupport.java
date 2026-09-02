@@ -25,6 +25,7 @@ final class GgufParallelSupport {
 
   static final long DEFAULT_MIN_ELEMENTS = 1_048_576L;
   static final long Q8_MIN_ELEMENTS = 4_194_304L;
+  static final long PACKED_INT4_MIN_ELEMENTS = 65_536L;
 
   private static final boolean ENABLED =
       Boolean.parseBoolean(System.getProperty("vectors.gguf.parallel", "true"));
@@ -49,6 +50,25 @@ final class GgufParallelSupport {
       MemorySegment weights, int rows, int cols, long formatMinElements, IntConsumer rowOperation) {
     boolean shareable = weights.isAccessibleBy(ACCESS_PROBE);
     forEachRow(shareable, rows, cols, formatMinElements, rowOperation);
+  }
+
+  static void forEachPackedInt4Unit(
+      MemorySegment packed,
+      MemorySegment scales,
+      int units,
+      int workPerUnit,
+      IntConsumer operation) {
+    boolean shareable = packed.isAccessibleBy(ACCESS_PROBE) && scales.isAccessibleBy(ACCESS_PROBE);
+    long minimum =
+        Math.max(
+            1L, Long.getLong("vectors.gguf.packedInt4ParallelThreshold", PACKED_INT4_MIN_ELEMENTS));
+    if (shareable && shouldParallelize(units, workPerUnit, PARALLELISM, ENABLED, minimum)) {
+      ExecutorHolder.INSTANCE.forEach(units, operation);
+      return;
+    }
+    for (int unit = 0; unit < units; unit++) {
+      operation.accept(unit);
+    }
   }
 
   static void forEachRow(

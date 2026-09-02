@@ -333,6 +333,38 @@ public final class VectorUtil {
   }
 
   /**
+   * Multiplies a row-major symmetric signed-INT4 matrix with separately stored binary16 group
+   * scales by a full-precision vector.
+   */
+  public static void packedInt4GroupMatVec(
+      float[] input,
+      MemorySegment packed,
+      MemorySegment scales,
+      int rows,
+      int columns,
+      int groupSize,
+      float[] output) {
+    checkPackedInt4GroupArguments(input, packed, scales, rows, columns, groupSize, output, false);
+    IMPL.packedInt4GroupMatVec(input, packed, scales, rows, columns, groupSize, output);
+  }
+
+  /**
+   * Multiplies a symmetric signed-INT4 tensor stored as {@code [input, packed-output]} by a
+   * full-precision vector.
+   */
+  public static void packedInt4GroupRightMatVec(
+      float[] input,
+      MemorySegment packed,
+      MemorySegment scales,
+      int inputs,
+      int outputs,
+      int groupSize,
+      float[] output) {
+    checkPackedInt4GroupArguments(input, packed, scales, inputs, outputs, groupSize, output, true);
+    IMPL.packedInt4GroupRightMatVec(input, packed, scales, inputs, outputs, groupSize, output);
+  }
+
+  /**
    * Dot product of a full-precision query with one GGUF Q4_0 quantized row.
    *
    * <p>The operation fuses Q4_0 dequantization and dot-product accumulation without allocating a
@@ -3000,6 +3032,49 @@ public final class VectorUtil {
               + q8Scales.length
               + " < "
               + blocks);
+    }
+  }
+
+  private static void checkPackedInt4GroupArguments(
+      float[] input,
+      MemorySegment packed,
+      MemorySegment scales,
+      int firstDimension,
+      int secondDimension,
+      int groupSize,
+      float[] output,
+      boolean rightHand) {
+    Objects.requireNonNull(input, "input");
+    Objects.requireNonNull(packed, "packed");
+    Objects.requireNonNull(scales, "scales");
+    Objects.requireNonNull(output, "output");
+    String firstName = rightHand ? "inputs" : "rows";
+    String secondName = rightHand ? "outputs" : "columns";
+    if (firstDimension <= 0) {
+      throw new IllegalArgumentException(firstName + " must be positive: " + firstDimension);
+    }
+    if (groupSize <= 0 || (groupSize & 1) != 0) {
+      throw new IllegalArgumentException("groupSize must be positive and even: " + groupSize);
+    }
+    if (secondDimension <= 0 || (secondDimension & 1) != 0 || secondDimension % groupSize != 0) {
+      throw new IllegalArgumentException(
+          secondName + " must be positive, even, and divisible by groupSize: " + secondDimension);
+    }
+    int requiredInput = rightHand ? firstDimension : secondDimension;
+    int requiredOutput = rightHand ? secondDimension : firstDimension;
+    checkDimensions(input.length, requiredInput);
+    checkDimensions(output.length, requiredOutput);
+    long packedBytes = Math.multiplyExact((long) firstDimension, secondDimension / 2L);
+    long scaleBytes =
+        Math.multiplyExact(
+            Math.multiplyExact((long) firstDimension, secondDimension / groupSize), Short.BYTES);
+    if (packed.byteSize() < packedBytes) {
+      throw new IllegalArgumentException(
+          "packed byteSize must be at least " + packedBytes + ": " + packed.byteSize());
+    }
+    if (scales.byteSize() < scaleBytes) {
+      throw new IllegalArgumentException(
+          "scales byteSize must be at least " + scaleBytes + ": " + scales.byteSize());
     }
   }
 
