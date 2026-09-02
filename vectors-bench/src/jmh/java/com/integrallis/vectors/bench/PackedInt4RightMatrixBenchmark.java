@@ -20,7 +20,7 @@ import com.integrallis.vectors.core.VectorUtil;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Random;
+import java.util.SplittableRandom;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -68,14 +68,14 @@ public class PackedInt4RightMatrixBenchmark {
       outputs = 768;
       int groupSize = 32;
       int groupsPerInput = outputs / groupSize;
-      Random random = new Random(0x4d4f42494c454d4fL);
+      SplittableRandom random = new SplittableRandom(0x4d4f42494c454d4fL);
       byte[] packedBytes = new byte[inputs * outputs / 2];
       ByteBuffer scaleBytes =
           ByteBuffer.allocate(inputs * groupsPerInput * Short.BYTES).order(ByteOrder.LITTLE_ENDIAN);
       float[] scaleValues = new float[inputs * groupsPerInput];
       for (int index = 0; index < scaleValues.length; index++) {
         float scale =
-            Float.float16ToFloat(Float.floatToFloat16(0.01f + random.nextFloat() * 0.09f));
+            Float.float16ToFloat(Float.floatToFloat16(0.01f + (float) random.nextDouble() * 0.09f));
         scaleValues[index] = scale;
         scaleBytes.putShort(Float.floatToFloat16(scale));
       }
@@ -101,7 +101,7 @@ public class PackedInt4RightMatrixBenchmark {
       q8Weights = MemorySegment.ofArray(quantizeQ8Weights(denseValues, outputs, inputs));
       activations = new float[batchSize * inputs];
       for (int index = 0; index < activations.length; index++) {
-        activations[index] = random.nextFloat(-1.0f, 1.0f);
+        activations[index] = (float) random.nextDouble(-1.0, 1.0);
       }
       result = new float[batchSize * outputs];
       q8Activations = new byte[batchSize * inputs];
