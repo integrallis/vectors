@@ -2,6 +2,20 @@
 
 All notable changes to java-vectors are documented here.
 
+## [0.1.20] - 2026-09-05
+
+### Added
+
+- Added owned F32 execution matrices for inference runtimes that deliberately widen compact
+  serialized weights once to avoid decoding them on every projection.
+- Added a GGUF Q8_0-to-F32 prepared matrix with batched multiplication and explicit serialized
+  versus execution-memory accounting.
+
+### Fixed
+
+- Added a regression gate proving Q8_0 batched matrix multiplication cannot overflow a signed
+  16-bit lane reduction at the maximum block dot product.
+
 ## [0.1.19] - 2026-09-02
 
 ### Added

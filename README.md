@@ -138,7 +138,7 @@ larger than 2 MiB or any external runtime module other than SLF4J.
 | Area | Implementation |
 |---|---|
 | Distance kernels | float, int8, and binary kernels on the JDK Vector API, with scalar fallback |
-| Model kernels | zero-copy mapped BF16, MXFP4, signed packed-INT4, GGUF quantized, and CQ2/CQ3/CQ4/ternary codebook matrix execution |
+| Model kernels | zero-copy mapped BF16, MXFP4, signed packed-INT4, GGUF quantized, prepared F32 execution matrices, and CQ2/CQ3/CQ4/ternary codebook matrix execution |
 | Indexes | FLAT, HNSW, Vamana, IVF_FLAT, IVF_PQ |
 | Quantization | SQ8, SQ4, FP16, PQ, BQ/BBQ, RaBitQ, NVQ, TurboQuant |
 | Persistence | mmap files, atomic generation commits, recovery walk-back, tombstones, compaction |

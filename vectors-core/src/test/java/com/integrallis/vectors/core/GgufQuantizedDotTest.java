@@ -1504,6 +1504,28 @@ class GgufQuantizedDotTest {
   }
 
   @Test
+  void q8_0Q8_0BatchedMatmulDoesNotOverflowA16BitLaneReduction() {
+    int batchSize = 2;
+    int cols = 32;
+    float[] queries = new float[batchSize * cols];
+    Arrays.fill(queries, 127.0f);
+    MemorySegment weights = MemorySegment.ofArray(q8Block(1.0f, ignored -> 127));
+    float[] actual = new float[batchSize];
+
+    VectorUtil.ggufQ8_0Q8_0BatchedMatmul(
+        queries,
+        weights,
+        batchSize,
+        1,
+        cols,
+        actual,
+        new byte[batchSize * cols],
+        new float[batchSize]);
+
+    assertThat(actual).containsExactly(516_128.0f, 516_128.0f);
+  }
+
+  @Test
   void q8_0PrequantizedRowRangesComposeToTheExactBatchedResult() {
     int batchSize = 3;
     int rows = 5;
