@@ -2,6 +2,20 @@
 
 All notable changes to java-vectors are documented here.
 
+## [0.1.21] - 2026-09-14
+
+### Added
+
+- Added a little-endian `MemorySegment` factory for owned F32 execution matrices, allowing
+  in-process runtimes to copy validated serialized weights into a stable Java execution layout.
+
+### Fixed
+
+- Made owned F32 execution matrices bit-identical before and after JIT compilation by using a
+  fixed SIMD reduction tree.
+- Optimized single-input F32 projections with four-row execution, improving the combined low-rank
+  adapter projection shapes by 25.49% in the controlled benchmark while retaining determinism.
+
 ## [0.1.20] - 2026-09-05
 
 ### Added
