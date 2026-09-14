@@ -16,6 +16,7 @@
 package com.integrallis.vectors.bench;
 
 import com.integrallis.vectors.core.BFloat16Matrix;
+import com.integrallis.vectors.core.F32ExecutionMatrix;
 import com.integrallis.vectors.core.VectorUtil;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -49,11 +50,12 @@ import org.openjdk.jmh.infra.Blackhole;
 @Measurement(iterations = 5, time = 1)
 public class BFloat16MatrixBenchmark {
 
-  /** Attention, MLP up, MLP down, and tied vocabulary projection shapes. */
-  @Param({"896x896", "4864x896", "896x4864", "151936x896"})
+  /** LoRA up/down, attention, MLP up/down, and tied vocabulary projection shapes. */
+  @Param({"32x2048", "2048x32", "896x896", "4864x896", "896x4864", "151936x896"})
   String shape;
 
   private BFloat16Matrix matrix;
+  private F32ExecutionMatrix ownedF32;
   private Arena arena;
   private MemorySegment mappedExpanded;
   private float[] input;
@@ -104,6 +106,8 @@ public class BFloat16MatrixBenchmark {
     mappedExpanded = arena.allocate(expandedBytes.length, Long.BYTES);
     mappedExpanded.copyFrom(MemorySegment.ofArray(expandedBytes));
     matrix = BFloat16Matrix.of(mappedPacked, rows, columns);
+    ownedF32 =
+        F32ExecutionMatrix.copyOf(expanded, rows, columns, (long) expanded.length * Float.BYTES);
 
     float[] compactOutput = new float[rows];
     float[] expandedOutput = new float[rows];
@@ -149,6 +153,13 @@ public class BFloat16MatrixBenchmark {
   @Benchmark
   public void mappedF32MatVec(Blackhole blackhole) {
     VectorUtil.ggufF32BatchDotProduct(input, mappedExpanded, rows, columns, output);
+    blackhole.consume(output);
+  }
+
+  /** Measures deterministic owned F32 execution used by low-rank adapter projections. */
+  @Benchmark
+  public void ownedF32MatVec(Blackhole blackhole) {
+    ownedF32.multiplyBatch(input, 1, output);
     blackhole.consume(output);
   }
 }

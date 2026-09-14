@@ -16,9 +16,10 @@
 package com.integrallis.vectors.core;
 
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.nio.ByteOrder;
 import java.util.Objects;
 import jdk.incubator.vector.FloatVector;
-import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
 
 /**
@@ -32,6 +33,8 @@ import jdk.incubator.vector.VectorSpecies;
 public final class F32ExecutionMatrix {
 
   private static final VectorSpecies<Float> SPECIES = PanamaVectorUtilSupport.FLOAT_SPECIES;
+  private static final ValueLayout.OfFloat LITTLE_ENDIAN_FLOAT =
+      ValueLayout.JAVA_FLOAT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
   private final int rows;
   private final int columns;
@@ -61,6 +64,24 @@ public final class F32ExecutionMatrix {
           "rowMajorWeights length must be " + expected + "; got " + rowMajorWeights.length);
     }
     return new F32ExecutionMatrix(rows, columns, serializedByteCount, rowMajorWeights.clone());
+  }
+
+  /** Creates an owned execution copy of an exactly sized little-endian F32 memory segment. */
+  public static F32ExecutionMatrix copyOf(
+      MemorySegment rowMajorLittleEndianWeights, int rows, int columns) {
+    Objects.requireNonNull(rowMajorLittleEndianWeights, "rowMajorLittleEndianWeights");
+    requirePositive(rows, "rows");
+    requirePositive(columns, "columns");
+    long expectedBytes = Math.multiplyExact(Math.multiplyExact((long) rows, columns), Float.BYTES);
+    if (rowMajorLittleEndianWeights.byteSize() != expectedBytes) {
+      throw new IllegalArgumentException(
+          "rowMajorLittleEndianWeights byte size must be "
+              + expectedBytes
+              + "; got "
+              + rowMajorLittleEndianWeights.byteSize());
+    }
+    return new F32ExecutionMatrix(
+        rows, columns, expectedBytes, rowMajorLittleEndianWeights.toArray(LITTLE_ENDIAN_FLOAT));
   }
 
   /** Returns the number of output rows. */
@@ -104,11 +125,80 @@ public final class F32ExecutionMatrix {
     requireArrayRange(input.length, inputOffset, inputElements, "input");
     requireArrayRange(output.length, outputOffset, outputElements, "output");
 
+    if (batchSize == 1) {
+      multiplySingle(input, inputOffset, output, outputOffset);
+      return;
+    }
+
     GgufParallelSupport.forEachRow(
         executionStorage,
         rows,
         inputElements,
         row -> multiplyRow(input, inputOffset, batchSize, output, outputOffset, row));
+  }
+
+  private void multiplySingle(float[] input, int inputOffset, float[] output, int outputOffset) {
+    int rowGroup = rows & ~3;
+    int vectorBound = SPECIES.loopBound(columns);
+    for (int row = 0; row < rowGroup; row += 4) {
+      int weight0 = row * columns;
+      int weight1 = weight0 + columns;
+      int weight2 = weight1 + columns;
+      int weight3 = weight2 + columns;
+      FloatVector sum0 = FloatVector.zero(SPECIES);
+      FloatVector sum1 = FloatVector.zero(SPECIES);
+      FloatVector sum2 = FloatVector.zero(SPECIES);
+      FloatVector sum3 = FloatVector.zero(SPECIES);
+      int column = 0;
+      for (; column < vectorBound; column += SPECIES.length()) {
+        FloatVector activation = FloatVector.fromArray(SPECIES, input, inputOffset + column);
+        sum0 =
+            PanamaVectorUtilSupport.fma(
+                FloatVector.fromArray(SPECIES, weights, weight0 + column), activation, sum0);
+        sum1 =
+            PanamaVectorUtilSupport.fma(
+                FloatVector.fromArray(SPECIES, weights, weight1 + column), activation, sum1);
+        sum2 =
+            PanamaVectorUtilSupport.fma(
+                FloatVector.fromArray(SPECIES, weights, weight2 + column), activation, sum2);
+        sum3 =
+            PanamaVectorUtilSupport.fma(
+                FloatVector.fromArray(SPECIES, weights, weight3 + column), activation, sum3);
+      }
+      float scalar0 = PanamaVectorUtilSupport.reduceLanesFixedTree(sum0);
+      float scalar1 = PanamaVectorUtilSupport.reduceLanesFixedTree(sum1);
+      float scalar2 = PanamaVectorUtilSupport.reduceLanesFixedTree(sum2);
+      float scalar3 = PanamaVectorUtilSupport.reduceLanesFixedTree(sum3);
+      for (; column < columns; column++) {
+        float activation = input[inputOffset + column];
+        scalar0 = MathUtil.fma(weights[weight0 + column], activation, scalar0);
+        scalar1 = MathUtil.fma(weights[weight1 + column], activation, scalar1);
+        scalar2 = MathUtil.fma(weights[weight2 + column], activation, scalar2);
+        scalar3 = MathUtil.fma(weights[weight3 + column], activation, scalar3);
+      }
+      output[outputOffset + row] = scalar0;
+      output[outputOffset + row + 1] = scalar1;
+      output[outputOffset + row + 2] = scalar2;
+      output[outputOffset + row + 3] = scalar3;
+    }
+
+    for (int row = rowGroup; row < rows; row++) {
+      int weightOffset = row * columns;
+      FloatVector sum = FloatVector.zero(SPECIES);
+      int column = 0;
+      for (; column < vectorBound; column += SPECIES.length()) {
+        sum =
+            PanamaVectorUtilSupport.fma(
+                FloatVector.fromArray(SPECIES, weights, weightOffset + column),
+                FloatVector.fromArray(SPECIES, input, inputOffset + column),
+                sum);
+      }
+      float scalar = PanamaVectorUtilSupport.reduceLanesFixedTree(sum);
+      for (; column < columns; column++) {
+        scalar = MathUtil.fma(weights[weightOffset + column], input[inputOffset + column], scalar);
+      }
+      output[outputOffset + row] = scalar;
+    }
   }
 
   private void multiplyRow(
@@ -141,10 +231,10 @@ public final class F32ExecutionMatrix {
             PanamaVectorUtilSupport.fma(
                 weight, FloatVector.fromArray(SPECIES, input, input3 + column), sum3);
       }
-      float scalar0 = sum0.reduceLanes(VectorOperators.ADD);
-      float scalar1 = sum1.reduceLanes(VectorOperators.ADD);
-      float scalar2 = sum2.reduceLanes(VectorOperators.ADD);
-      float scalar3 = sum3.reduceLanes(VectorOperators.ADD);
+      float scalar0 = PanamaVectorUtilSupport.reduceLanesFixedTree(sum0);
+      float scalar1 = PanamaVectorUtilSupport.reduceLanesFixedTree(sum1);
+      float scalar2 = PanamaVectorUtilSupport.reduceLanesFixedTree(sum2);
+      float scalar3 = PanamaVectorUtilSupport.reduceLanesFixedTree(sum3);
       for (; column < columns; column++) {
         float weight = weights[weightOffset + column];
         scalar0 = MathUtil.fma(weight, input[input0 + column], scalar0);
@@ -170,7 +260,7 @@ public final class F32ExecutionMatrix {
             PanamaVectorUtilSupport.fma(
                 weight, FloatVector.fromArray(SPECIES, input, activationOffset + column), sum);
       }
-      float scalar = sum.reduceLanes(VectorOperators.ADD);
+      float scalar = PanamaVectorUtilSupport.reduceLanesFixedTree(sum);
       for (; column < columns; column++) {
         scalar =
             MathUtil.fma(weights[weightOffset + column], input[activationOffset + column], scalar);
