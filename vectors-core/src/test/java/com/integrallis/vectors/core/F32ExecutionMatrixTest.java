@@ -18,11 +18,33 @@ package com.integrallis.vectors.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 @Tag("unit")
 class F32ExecutionMatrixTest {
+
+  @Test
+  void ownsLittleEndianF32WeightsCopiedFromForeignMemory() {
+    byte[] encoded = new byte[4 * Float.BYTES];
+    ByteBuffer.wrap(encoded)
+        .order(ByteOrder.LITTLE_ENDIAN)
+        .putFloat(1.0f)
+        .putFloat(2.0f)
+        .putFloat(3.0f)
+        .putFloat(4.0f);
+    F32ExecutionMatrix matrix = F32ExecutionMatrix.copyOf(MemorySegment.ofArray(encoded), 2, 2);
+    encoded[3] = 0;
+    float[] output = new float[2];
+
+    matrix.multiplyBatch(new float[] {2.0f, 3.0f}, 1, output);
+
+    assertThat(output).containsExactly(8.0f, 18.0f);
+    assertThat(matrix.serializedByteCount()).isEqualTo(4L * Float.BYTES);
+  }
 
   @Test
   void ownsAndMultipliesARowMajorExecutionCopyForBatchAndRowTails() {
@@ -58,5 +80,8 @@ class F32ExecutionMatrixTest {
     assertThatThrownBy(() -> F32ExecutionMatrix.copyOf(new float[1], 1, 1, 0L))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("serializedByteCount");
+    assertThatThrownBy(() -> F32ExecutionMatrix.copyOf(MemorySegment.ofArray(new byte[3]), 1, 1))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("byte size");
   }
 }

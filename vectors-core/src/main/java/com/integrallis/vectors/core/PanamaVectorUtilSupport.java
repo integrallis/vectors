@@ -64,6 +64,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       PanamaConstants.preferredSpecies(IntVector.SPECIES_PREFERRED);
   static final VectorSpecies<Long> LONG_SPECIES =
       PanamaConstants.preferredSpecies(LongVector.SPECIES_PREFERRED);
+  private static final VectorShuffle<Float> REDUCE_ROTATE_1 = reductionRotation(1);
+  private static final VectorShuffle<Float> REDUCE_ROTATE_2 = reductionRotation(2);
+  private static final VectorShuffle<Float> REDUCE_ROTATE_4 = reductionRotation(4);
+  private static final VectorShuffle<Float> REDUCE_ROTATE_8 = reductionRotation(8);
   static final int VECTOR_BITSIZE = FLOAT_SPECIES.vectorBitSize();
   private static final boolean Q4_K_FOUR_QUERY_TILE_SUPPORTED =
       useQ4KFourQueryTile(System.getProperty("os.arch", ""), VECTOR_BITSIZE, 4);
@@ -141,6 +145,28 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     } else {
       return a.mul(b).add(c);
     }
+  }
+
+  static float reduceLanesFixedTree(FloatVector vector) {
+    int lanes = vector.length();
+    if (lanes == 16) {
+      vector = vector.add(vector.rearrange(REDUCE_ROTATE_8));
+    }
+    if (lanes >= 8) {
+      vector = vector.add(vector.rearrange(REDUCE_ROTATE_4));
+    }
+    if (lanes >= 4) {
+      vector = vector.add(vector.rearrange(REDUCE_ROTATE_2));
+    }
+    if (lanes >= 2) {
+      vector = vector.add(vector.rearrange(REDUCE_ROTATE_1));
+    }
+    return vector.lane(0);
+  }
+
+  private static VectorShuffle<Float> reductionRotation(int distance) {
+    int mask = FLOAT_SPECIES.length() - 1;
+    return VectorShuffle.fromOp(FLOAT_SPECIES, lane -> (lane + distance) & mask);
   }
 
   static boolean useQ4ShortPairwise(GgufQ4Kernel kernel, int vectorBits, int blocks) {
