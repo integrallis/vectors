@@ -31,7 +31,12 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   /** Property naming the milliseconds a worker polls at a barrier before it parks (default 5). */
   static final String POLL_MILLIS_PROPERTY = "vectors.gguf.pollMillis";
 
-  private static final long POLL_NANOS = configuredPollNanos();
+  /**
+   * Nanoseconds a worker polls at a barrier before parking. Read at every barrier so a caller that
+   * owns another compute pool can park this executor's workers at run time (see {@link
+   * VectorUtil#setGgufPollMillis(long)}); the property sets the initial value.
+   */
+  private static volatile long pollNanos = configuredPollNanos();
 
   private final int chunksPerWorker;
   private final Phaser phase;
@@ -220,11 +225,12 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
    */
   private void awaitAdvancePolling() {
     int arrived = phase.arrive();
-    if (POLL_NANOS == 0) {
+    long budget = pollNanos;
+    if (budget == 0) {
       phase.awaitAdvance(arrived);
       return;
     }
-    long deadline = System.nanoTime() + POLL_NANOS;
+    long deadline = System.nanoTime() + budget;
     int round = 0;
     while (phase.getPhase() == arrived) {
       if ((++round & 63) == 0) {
@@ -240,6 +246,23 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
       }
       Thread.onSpinWait();
     }
+  }
+
+  /** Current barrier poll budget in milliseconds (0 parks immediately). */
+  static long pollMillis() {
+    return pollNanos / 1_000_000L;
+  }
+
+  /**
+   * Sets the barrier poll budget for every persistent executor in this JVM. 0 parks a worker as
+   * soon as it arrives; the upper bound is 60 s. Takes effect at the next barrier.
+   */
+  static void setPollMillis(long millis) {
+    if (millis < 0 || millis > 60_000) {
+      throw new IllegalArgumentException(
+          "poll budget must be between 0 and 60000 milliseconds: " + millis);
+    }
+    pollNanos = millis * 1_000_000L;
   }
 
   static long configuredPollNanos() {

@@ -46,6 +46,23 @@ public final class VectorUtil {
     return VectorizationProvider.runtimeCapabilities();
   }
 
+  /**
+   * Milliseconds the persistent GGUF executor's workers poll at each stage barrier before they park
+   * (default 5, or the {@code vectors.gguf.pollMillis} property). A polling worker keeps its core
+   * for the next stage — measured on the Models pure-Java backend as +45 % decode against parking —
+   * but it also keeps that core from anyone else: a caller that runs its own compute pool beside
+   * this executor (the Models native kernel pool) should set 0 so the two do not contend. Takes
+   * effect at the next barrier; 0 parks immediately, upper bound 60 s.
+   */
+  public static long ggufPollMillis() {
+    return GgufPersistentRowExecutor.pollMillis();
+  }
+
+  /** Sets {@link #ggufPollMillis()} for every persistent GGUF executor in this JVM. */
+  public static void setGgufPollMillis(long millis) {
+    GgufPersistentRowExecutor.setPollMillis(millis);
+  }
+
   // --- Float distance operations ---
 
   /** Computes the dot product of two float vectors of equal length. */
