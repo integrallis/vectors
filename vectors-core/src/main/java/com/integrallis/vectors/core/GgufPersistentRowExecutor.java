@@ -227,9 +227,16 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     long deadline = System.nanoTime() + POLL_NANOS;
     int round = 0;
     while (phase.getPhase() == arrived) {
-      if ((++round & 63) == 0 && System.nanoTime() - deadline >= 0) {
-        phase.awaitAdvance(arrived);
-        return;
+      if ((++round & 63) == 0) {
+        if (System.nanoTime() - deadline >= 0) {
+          phase.awaitAdvance(arrived);
+          return;
+        }
+        // On a host with fewer processors than parties, a spinning worker can hold the core the
+        // last arriving party needs; yielding at the clock check keeps the barrier from convoying
+        // behind its own pollers (the 12-worker close test on a 4-vCPU CI runner timed out
+        // without it) and costs one syscall per 64 rounds on an uncontended host.
+        Thread.yield();
       }
       Thread.onSpinWait();
     }
