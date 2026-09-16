@@ -2,6 +2,22 @@
 
 All notable changes to java-vectors are documented here.
 
+## [0.1.22] - 2026-09-16
+
+### Changed
+
+- The persistent GGUF row executor polls at every stage barrier before it parks
+  (`vectors.gguf.pollMillis`, default 5 ms). The Models pure-Java backend, which issues ~200
+  barriers per decode token, measured +45% decode on dedicated cores (6.4 to 9.4 tok/s) and up to
+  +80% on shared vCPUs; prefill is unchanged.
+
+### Added
+
+- `VectorUtil.ggufPollMillis()` / `setGgufPollMillis(long)` set the barrier budget at run time for
+  every persistent executor in the JVM. A caller that runs its own compute pool beside the
+  executor should set 0: with both polling, prefill on the Models native backend fell from 126 to
+  40 tok/s.
+
 ## [0.1.21] - 2026-09-14
 
 ### Added
