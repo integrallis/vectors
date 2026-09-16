@@ -27,6 +27,17 @@ import java.util.function.IntConsumer;
 final class GgufPersistentRowExecutor implements GgufRowExecutor {
 
   private final int parallelism;
+
+  /** Property naming the milliseconds a worker polls at a barrier before it parks (default 5). */
+  static final String POLL_MILLIS_PROPERTY = "vectors.gguf.pollMillis";
+
+  /**
+   * Nanoseconds a worker polls at a barrier before parking. Read at every barrier so a caller that
+   * owns another compute pool can park this executor's workers at run time (see {@link
+   * VectorUtil#setGgufPollMillis(long)}); the property sets the initial value.
+   */
+  private static volatile long pollNanos = configuredPollNanos();
+
   private final int chunksPerWorker;
   private final Phaser phase;
   private final ReentrantLock publicationLock = new ReentrantLock();
@@ -85,9 +96,9 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
       nextChunk.set(0);
       failure.set(null);
 
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
       executePublishedOperation();
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
 
       Throwable thrown = failure.get();
       operation = null;
@@ -115,7 +126,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
       prepareStageChunks(plan.stageCount());
       failure.set(null);
 
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
       executePublishedPlan(plan);
 
       Throwable thrown = failure.get();
@@ -130,9 +141,9 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
 
   private void workerLoop() {
     while (true) {
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
       if (closed) {
-        phase.arriveAndAwaitAdvance();
+        awaitAdvancePolling();
         return;
       }
       GgufStagePlan publishedPlan = stagePlan;
@@ -140,7 +151,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
         executePublishedPlan(publishedPlan);
       } else {
         executePublishedOperation();
-        phase.arriveAndAwaitAdvance();
+        awaitAdvancePolling();
       }
     }
   }
@@ -148,7 +159,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   private void executePublishedPlan(GgufStagePlan plan) {
     for (int stageIndex = 0; stageIndex < plan.stageCount(); stageIndex++) {
       executeStage(plan.stage(stageIndex), stageIndex);
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
     }
   }
 
@@ -201,6 +212,75 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     } catch (Throwable thrown) {
       failure.compareAndSet(null, thrown);
     }
+  }
+
+  /**
+   * Arrives at the barrier and waits for the phase to advance, polling for the configured budget
+   * before parking. The dispatches of one token are separated by short stretches of single-threaded
+   * work; parking the workers across each of them costs a futex wake per worker per dispatch, which
+   * measured on a 16-vCPU host as a third of the decode rate. ggml's CPU backend polls 1024 * 128 *
+   * 50 relax rounds before a worker sleeps, so its threads never park inside a token; this is the
+   * same regime, bounded so an idle executor still parks a few milliseconds after the last
+   * dispatch.
+   */
+  private void awaitAdvancePolling() {
+    int arrived = phase.arrive();
+    long budget = pollNanos;
+    if (budget == 0) {
+      phase.awaitAdvance(arrived);
+      return;
+    }
+    long deadline = System.nanoTime() + budget;
+    int round = 0;
+    while (phase.getPhase() == arrived) {
+      if ((++round & 63) == 0) {
+        if (System.nanoTime() - deadline >= 0) {
+          phase.awaitAdvance(arrived);
+          return;
+        }
+        // On a host with fewer processors than parties, a spinning worker can hold the core the
+        // last arriving party needs; yielding at the clock check keeps the barrier from convoying
+        // behind its own pollers (the 12-worker close test on a 4-vCPU CI runner timed out
+        // without it) and costs one syscall per 64 rounds on an uncontended host.
+        Thread.yield();
+      }
+      Thread.onSpinWait();
+    }
+  }
+
+  /** Current barrier poll budget in milliseconds (0 parks immediately). */
+  static long pollMillis() {
+    return pollNanos / 1_000_000L;
+  }
+
+  /**
+   * Sets the barrier poll budget for every persistent executor in this JVM. 0 parks a worker as
+   * soon as it arrives; the upper bound is 60 s. Takes effect at the next barrier.
+   */
+  static void setPollMillis(long millis) {
+    if (millis < 0 || millis > 60_000) {
+      throw new IllegalArgumentException(
+          "poll budget must be between 0 and 60000 milliseconds: " + millis);
+    }
+    pollNanos = millis * 1_000_000L;
+  }
+
+  static long configuredPollNanos() {
+    String configured = System.getProperty(POLL_MILLIS_PROPERTY);
+    long millis = 5;
+    if (configured != null && !configured.isBlank()) {
+      try {
+        millis = Long.parseLong(configured.trim());
+      } catch (NumberFormatException failure) {
+        throw new IllegalArgumentException(
+            POLL_MILLIS_PROPERTY + " must be an integer: " + configured, failure);
+      }
+      if (millis < 0 || millis > 60_000) {
+        throw new IllegalArgumentException(
+            POLL_MILLIS_PROPERTY + " must be between 0 and 60000 milliseconds: " + configured);
+      }
+    }
+    return millis * 1_000_000L;
   }
 
   private void ensureOpen() {

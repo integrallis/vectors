@@ -335,4 +335,31 @@ class GgufParallelSupportTest {
           }
         });
   }
+
+  @Test
+  void pollBudgetIsSettableAtRunTimeAndParksWhenZero() {
+    long before = VectorUtil.ggufPollMillis();
+    try {
+      VectorUtil.setGgufPollMillis(0);
+      assertThat(VectorUtil.ggufPollMillis()).isZero();
+      assertTimeoutPreemptively(
+          Duration.ofSeconds(5),
+          () -> {
+            try (GgufPersistentRowExecutor executor =
+                new GgufPersistentRowExecutor(12, 4, "vectors-test")) {
+              AtomicInteger rowsVisited = new AtomicInteger();
+              executor.forEach(257, ignored -> rowsVisited.incrementAndGet());
+              assertThat(rowsVisited).hasValue(257);
+            }
+          });
+      VectorUtil.setGgufPollMillis(7);
+      assertThat(VectorUtil.ggufPollMillis()).isEqualTo(7);
+      assertThatThrownBy(() -> VectorUtil.setGgufPollMillis(-1))
+          .isInstanceOf(IllegalArgumentException.class);
+      assertThatThrownBy(() -> VectorUtil.setGgufPollMillis(60_001))
+          .isInstanceOf(IllegalArgumentException.class);
+    } finally {
+      VectorUtil.setGgufPollMillis(before);
+    }
+  }
 }
