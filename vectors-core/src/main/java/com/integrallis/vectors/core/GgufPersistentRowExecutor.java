@@ -27,6 +27,12 @@ import java.util.function.IntConsumer;
 final class GgufPersistentRowExecutor implements GgufRowExecutor {
 
   private final int parallelism;
+
+  /** Property naming the milliseconds a worker polls at a barrier before it parks (default 25). */
+  static final String POLL_MILLIS_PROPERTY = "vectors.gguf.pollMillis";
+
+  private static final long POLL_NANOS = configuredPollNanos();
+
   private final int chunksPerWorker;
   private final Phaser phase;
   private final ReentrantLock publicationLock = new ReentrantLock();
@@ -85,9 +91,9 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
       nextChunk.set(0);
       failure.set(null);
 
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
       executePublishedOperation();
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
 
       Throwable thrown = failure.get();
       operation = null;
@@ -115,7 +121,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
       prepareStageChunks(plan.stageCount());
       failure.set(null);
 
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
       executePublishedPlan(plan);
 
       Throwable thrown = failure.get();
@@ -130,9 +136,9 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
 
   private void workerLoop() {
     while (true) {
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
       if (closed) {
-        phase.arriveAndAwaitAdvance();
+        awaitAdvancePolling();
         return;
       }
       GgufStagePlan publishedPlan = stagePlan;
@@ -140,7 +146,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
         executePublishedPlan(publishedPlan);
       } else {
         executePublishedOperation();
-        phase.arriveAndAwaitAdvance();
+        awaitAdvancePolling();
       }
     }
   }
@@ -148,7 +154,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   private void executePublishedPlan(GgufStagePlan plan) {
     for (int stageIndex = 0; stageIndex < plan.stageCount(); stageIndex++) {
       executeStage(plan.stage(stageIndex), stageIndex);
-      phase.arriveAndAwaitAdvance();
+      awaitAdvancePolling();
     }
   }
 
@@ -201,6 +207,50 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     } catch (Throwable thrown) {
       failure.compareAndSet(null, thrown);
     }
+  }
+
+  /**
+   * Arrives at the barrier and waits for the phase to advance, polling for the configured budget
+   * before parking. The dispatches of one token are separated by short stretches of single-threaded
+   * work; parking the workers across each of them costs a futex wake per worker per dispatch, which
+   * measured on a 16-vCPU host as a third of the decode rate. ggml's CPU backend polls 1024 * 128 *
+   * 50 relax rounds before a worker sleeps, so its threads never park inside a token; this is the
+   * same regime, bounded so an idle executor still parks a few tens of milliseconds after the last
+   * dispatch.
+   */
+  private void awaitAdvancePolling() {
+    int arrived = phase.arrive();
+    if (POLL_NANOS == 0) {
+      phase.awaitAdvance(arrived);
+      return;
+    }
+    long deadline = System.nanoTime() + POLL_NANOS;
+    int round = 0;
+    while (phase.getPhase() == arrived) {
+      if ((++round & 63) == 0 && System.nanoTime() - deadline >= 0) {
+        phase.awaitAdvance(arrived);
+        return;
+      }
+      Thread.onSpinWait();
+    }
+  }
+
+  static long configuredPollNanos() {
+    String configured = System.getProperty(POLL_MILLIS_PROPERTY);
+    long millis = 25;
+    if (configured != null && !configured.isBlank()) {
+      try {
+        millis = Long.parseLong(configured.trim());
+      } catch (NumberFormatException failure) {
+        throw new IllegalArgumentException(
+            POLL_MILLIS_PROPERTY + " must be an integer: " + configured, failure);
+      }
+      if (millis < 0 || millis > 60_000) {
+        throw new IllegalArgumentException(
+            POLL_MILLIS_PROPERTY + " must be between 0 and 60000 milliseconds: " + configured);
+      }
+    }
+    return millis * 1_000_000L;
   }
 
   private void ensureOpen() {
