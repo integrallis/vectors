@@ -1440,6 +1440,38 @@ public final class VectorUtil {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    ggufQ4_KQ8_KBatchedMatmul(
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        q8Sums,
+        GgufBatchedMatmulKernel.active());
+  }
+
+  /**
+   * Multiplies one Q4_K matrix by batch-major activations using an explicit arithmetic {@code
+   * kernel}. Arguments are validated identically for every kernel.
+   *
+   * @throws IllegalStateException if {@code kernel} is {@link GgufBatchedMatmulKernel#BAND_F32} and
+   *     the Vector API provider is not active
+   */
+  public static void ggufQ4_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums,
+      GgufBatchedMatmulKernel kernel) {
+    Objects.requireNonNull(kernel, "kernel");
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
     }
@@ -1487,6 +1519,10 @@ public final class VectorUtil {
     if (q8Sums.length < sumEntries) {
       throw new IllegalArgumentException(
           "q8Sums.length must be >= batch Q8_K sums: " + q8Sums.length + " < " + sumEntries);
+    }
+    if (requireBand(kernel)) {
+      GgufBandGemm.ggufQ4_K(queries, qWeight, batchSize, rows, cols, out);
+      return;
     }
     IMPL.ggufQ4_KQ8_KBatchedMatmul(
         queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, q8Sums);
@@ -2183,6 +2219,36 @@ public final class VectorUtil {
       float[] out,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ8_0Q8_0BatchedMatmul(
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        GgufBatchedMatmulKernel.active());
+  }
+
+  /**
+   * Multiplies one Q8_0 matrix by batch-major activations using an explicit arithmetic {@code
+   * kernel}. Arguments are validated identically for every kernel.
+   *
+   * @throws IllegalStateException if {@code kernel} is {@link GgufBatchedMatmulKernel#BAND_F32} and
+   *     the Vector API provider is not active
+   */
+  public static void ggufQ8_0Q8_0BatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufBatchedMatmulKernel kernel) {
+    Objects.requireNonNull(kernel, "kernel");
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
     }
@@ -2221,6 +2287,10 @@ public final class VectorUtil {
               + q8Scales.length
               + " < "
               + scaleEntries);
+    }
+    if (requireBand(kernel)) {
+      GgufBandGemm.ggufQ8_0(queries, qWeight, batchSize, rows, cols, out);
+      return;
     }
     IMPL.ggufQ8_0Q8_0BatchedMatmul(
         queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
@@ -2629,7 +2699,39 @@ public final class VectorUtil {
         out,
         q8Quants,
         q8Scales,
-        GgufQ6BatchedKernel.ONE_QUERY_BLOCK);
+        GgufQ6BatchedKernel.ONE_QUERY_BLOCK,
+        GgufBatchedMatmulKernel.active());
+  }
+
+  /**
+   * Multiplies one Q6_K matrix by batch-major activations using an explicit arithmetic {@code
+   * kernel}; the integer kernel uses {@link GgufQ6BatchedKernel#ONE_QUERY_BLOCK}. Arguments are
+   * validated identically for every kernel.
+   *
+   * @throws IllegalStateException if {@code kernel} is {@link GgufBatchedMatmulKernel#BAND_F32} and
+   *     the Vector API provider is not active
+   */
+  public static void ggufQ6_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufBatchedMatmulKernel kernel) {
+    ggufQ6_KQ8_KBatchedMatmul(
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        GgufQ6BatchedKernel.ONE_QUERY_BLOCK,
+        kernel);
   }
 
   /**
@@ -2648,6 +2750,31 @@ public final class VectorUtil {
       byte[] q8Quants,
       float[] q8Scales,
       GgufQ6BatchedKernel kernel) {
+    ggufQ6_KQ8_KBatchedMatmul(
+        queries,
+        qWeight,
+        batchSize,
+        rows,
+        cols,
+        out,
+        q8Quants,
+        q8Scales,
+        kernel,
+        GgufBatchedMatmulKernel.INTEGER);
+  }
+
+  private static void ggufQ6_KQ8_KBatchedMatmul(
+      float[] queries,
+      MemorySegment qWeight,
+      int batchSize,
+      int rows,
+      int cols,
+      float[] out,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufQ6BatchedKernel kernel,
+      GgufBatchedMatmulKernel arithmetic) {
+    Objects.requireNonNull(arithmetic, "kernel");
     if (batchSize < 1) {
       throw new IllegalArgumentException("batchSize must be >= 1: " + batchSize);
     }
@@ -2688,6 +2815,10 @@ public final class VectorUtil {
               + q8Scales.length
               + " < "
               + scaleEntries);
+    }
+    if (requireBand(arithmetic)) {
+      GgufBandGemm.ggufQ6_K(queries, qWeight, batchSize, rows, cols, out);
+      return;
     }
     IMPL.ggufQ6_KQ8_KBatchedMatmul(
         queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, kernel);
@@ -3307,6 +3438,18 @@ public final class VectorUtil {
 
   private static long ggufQuantizedRowBytes(int dimensions, int blockSize, int blockBytes) {
     return (long) (dimensions / blockSize) * blockBytes;
+  }
+
+  private static boolean requireBand(GgufBatchedMatmulKernel kernel) {
+    if (kernel != GgufBatchedMatmulKernel.BAND_F32) {
+      return false;
+    }
+    if (!(IMPL instanceof PanamaVectorUtilSupport)) {
+      throw new IllegalStateException(
+          "GGUF band F32 kernel requires the Vector API provider; active provider is "
+              + IMPL.getClass().getSimpleName());
+    }
+    return true;
   }
 
   private static int checkedProduct(int left, int right, String label) {

@@ -90,7 +90,9 @@ class VectorSpeciesConstantStructureTest {
     // Observability: the scan must actually reach the Panama kernels, or a green run is vacuous.
     assertThat(scanned)
         .as("classes referencing jdk.incubator.vector under %s", classesRoot)
-        .contains("com/integrallis/vectors/core/PanamaVectorUtilSupport");
+        .contains(
+            "com/integrallis/vectors/core/PanamaVectorUtilSupport",
+            "com/integrallis/vectors/core/GgufBandGemm");
 
     Set<String> unexpected = new TreeSet<>(violations);
     unexpected.removeAll(ALLOW_LIST);
