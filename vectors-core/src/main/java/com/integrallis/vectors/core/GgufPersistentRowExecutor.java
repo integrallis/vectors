@@ -28,7 +28,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
 
   private final int parallelism;
 
-  /** Property naming the milliseconds a worker polls at a barrier before it parks (default 25). */
+  /** Property naming the milliseconds a worker polls at a barrier before it parks (default 5). */
   static final String POLL_MILLIS_PROPERTY = "vectors.gguf.pollMillis";
 
   private static final long POLL_NANOS = configuredPollNanos();
@@ -215,7 +215,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
    * work; parking the workers across each of them costs a futex wake per worker per dispatch, which
    * measured on a 16-vCPU host as a third of the decode rate. ggml's CPU backend polls 1024 * 128 *
    * 50 relax rounds before a worker sleeps, so its threads never park inside a token; this is the
-   * same regime, bounded so an idle executor still parks a few tens of milliseconds after the last
+   * same regime, bounded so an idle executor still parks a few milliseconds after the last
    * dispatch.
    */
   private void awaitAdvancePolling() {
@@ -244,7 +244,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
 
   static long configuredPollNanos() {
     String configured = System.getProperty(POLL_MILLIS_PROPERTY);
-    long millis = 25;
+    long millis = 5;
     if (configured != null && !configured.isBlank()) {
       try {
         millis = Long.parseLong(configured.trim());
