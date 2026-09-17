@@ -619,3 +619,33 @@ Deviations and limits, stated before the run:
   through prefill logits and KV state.
 - **Prefill tool:** `models-rag-bench` was not used. The pre-registered quantities are a prefill
   rate and continuation identity; `profile-prefill` is Models' existing tool for the former.
+
+## Model-level check, pre-registration 2 (Genoa 16 vCPU, default 256-bit species, 2026-09-17T02:28Z–03:40Z)
+
+Measured on the reference host (`model-check/results-genoa-512/`, `summary.md`; JFR dumps kept on the
+host only). Models 167a8abd composite with this branch at a475c3b; Granite 4.1 3B Q4_K_M
+(sha256 662b0626…); frozen window v2 file sha256 dfb8cd72…. The routing counters confirm the
+dispatch arm really took the band path (Q4_K band 39,600 / integer 240 calls; Q6_K band 5,880 /
+integer 760) and the integer arm never did.
+
+| gate (pre-registered) | integer | dispatch | result |
+|---|---|---|---|
+| prefill tok/s, 2,040 tokens, 5 interleaved fresh-JVM reps, median ≥ +10 % | 13.79 (12.77–14.53) | 38.86 (31.46–43.63) | **+181.8 % — pass** |
+| greedy continuations, first 20 squad-v2-dev base-arm cases, identical ≥ 19/20 | — | — | **17/20 — FAIL** |
+| supplementary "open" prompt (not gating) | mean 36.4 tokens | | 10/20 identical |
+
+**Verdict: the dispatch fails its model-level gate and stays opt-in; the default does not change.**
+
+The three base-arm divergences flip the first answer token (`Newton` → `unanswerable`,
+`unanswerable` → `taxes`, `answerable` → `wave speeds`); the open variant diverges in half the
+cases once continuations run long. What this does NOT establish is which arm is closer to the
+model: band computes the exact float product, the integer path adds per-block activation rounding.
+Two further observations: the prefill-logit checksum (sum over all ~100k vocabulary logits) moves
+from 98.1 to −8,357.7, which amplifies small hidden-state differences through the summed LM-head
+rows and is not by itself a correctness signal; and the dispatch runs show up to 787 ms of GC
+pauses per run (the integer runs ~100–150 ms), so the band path allocates on the hot path.
+
+Next, as a separate pre-registration written before running: both arms' greedy tokens and top-1
+logit margins against an independent float reference on the same prompts (llama.cpp's F16/BF16
+path or the Transformers reference already used for the Granite adapter work), to decide whether
+the divergence is band error or integer error; and removing the band path's per-call allocation.
