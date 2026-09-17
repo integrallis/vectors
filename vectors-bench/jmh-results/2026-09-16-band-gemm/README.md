@@ -865,3 +865,44 @@ Facts about the pass that shape the probe (read in Models 167a8abd source):
 - **Embedding.** The observer does not expose the embedding. It is recomputed from
   `LlamaWeights.embedToken × embeddingScale`, which is the same code the pass runs, but it is not an
   observation of the pass.
+
+## Pre-registration 4 result: alignment gate FAILED, so no verdict (run 2026-09-17T06:56Z–07:05Z)
+
+Host: the reference host (Hetzner CCX, `results-20260917T065647Z/host.txt`). Both conditions ran to
+completion. Every Java run reproduced its recorded first fragment. Routing was confirmed in both
+arms, the observer was bit-identical, and the Hugging Face token ids equalled the Java ids.
+
+**Gate outcome.** `compare_layers.py` exited 2 in both conditions, and on all three prompts it
+failed the same check: the **integer** arm's `e[layer.0]` exceeds the pre-registered absolute bound
+of 0.05 (0.0585, 0.0644, 0.0591). The band arm passes that bound (0.041–0.047). Every other gate
+check passed:
+
+- `e[embedding]` is 0 in both arms.
+- `layer.0` is about 10× closer to reference `layer.0` than to reference `layer.1` (0.66–0.69), and about 20× closer than to the embedding (1.12–1.14). There is no off-by-one.
+
+The 0.05 bound was a guess written before any data. Under the rules stated above, **no faithful or
+unfaithful verdict is issued**, and the bound is not relaxed after the fact. A rerun with a revised
+gate must be pre-registered first. Local transfer did not run, because it sits after the gate.
+
+**Exploratory observation (not a verdict).** `layer_observation.py` computed the same `errors()`
+rows without the gate (`results-20260917T065647Z/layer-observation.json`). Measured here:
+
+| condition | prompt | stages where e_band > e_int | e_int / e_band at layer.0 | at layer.20 | at logits |
+|---|---|---|---|---|---|
+| pipeline-cache | 5737432b | 0 of 43 | 0.0585 / 0.0457 | 0.0555 / 0.0239 | 0.0872 / 0.0260 |
+| pipeline-cache | 5705f09e | 0 of 43 | 0.0644 / 0.0437 | 0.0588 / 0.0226 | 0.1206 / 0.0293 |
+| pipeline-cache | 57266193 | 0 of 43 | 0.0591 / 0.0415 | 0.0607 / 0.0248 | 0.1132 / 0.0277 |
+| fresh | 5737432b | 0 of 43 | 0.0585 / 0.0472 | 0.0555 / 0.0254 | 0.0872 / 0.0263 |
+| fresh | 5705f09e | 0 of 43 | 0.0644 / 0.0447 | 0.0588 / 0.0224 | 0.1206 / 0.0519 |
+| fresh | 57266193 | 0 of 43 | 0.0591 / 0.0415 | 0.0607 / 0.0251 | 0.1132 / 0.0285 |
+
+What this suggests, labelled as belief until a pre-registered rerun confirms it:
+
+- The integer path's int8 activation quantisation, not the band path, is the larger departure from the float reference. At the logits, band sits 3–4× closer on every prompt.
+- On these three near-tie prompts, the smaller hidden-state error did not buy top-1 agreement. The reference, integer and band top-1 tokens were Newton/Newton/un, un/un/tax and wave/answer/wave. Prompts whose top-2 margin is 0.13–2.0 logits flip on errors of this size, whichever arm is closer.
+- Band sitting farther from integer (`e_ib`) than from the reference at late layers is consistent with that reading.
+
+**Next, if pursued:** pre-register a gate whose layer.0 bound is relative (for example, the arm's
+`layer.0` error well below its distance to the neighbouring reference stages). Then rerun the
+unchanged decision rule and local transfer. Also pre-register a population measure: logit error
+against the reference over all 20 prompts, rather than top-1 on three near-ties. No default changes.
