@@ -1,0 +1,4 @@
+== tile-3x3 load-before: 17:53  up 16 days, 11:35, 6 users, load averages: 27.68 30.50 35.84
+== tile-3x3 load-after:  17:56  up 16 days, 11:38, 6 users, load averages: 27.25 29.12 34.28
+== tile-4x4 load-before: 17:56  up 16 days, 11:38, 6 users, load averages: 27.25 29.12 34.28
+== tile-4x4 load-after:  17:59  up 16 days, 11:41, 6 users, load averages: 217.16 108.21 64.89
