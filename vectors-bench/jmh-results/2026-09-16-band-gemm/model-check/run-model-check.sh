@@ -45,7 +45,8 @@ mkdir -p "$EV" "$WORK/store"
 [ -n "${JAVA_HOME:-}" ] && export PATH="$JAVA_HOME/bin:$PATH"
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -a "$EV/run.log"; }
 
-java -version 2>&1 | grep -q 'version "25' || { echo "JDK 25 required on PATH" >&2; exit 2; }
+JAVA_VERSION_OUTPUT="$(java -version 2>&1)"
+grep -q 'version "25' <<<"$JAVA_VERSION_OUTPUT" || { echo "JDK 25 required on PATH" >&2; exit 2; }
 for tool in git curl python3 unzip sha256sum javac; do command -v $tool >/dev/null || { echo "missing $tool" >&2; exit 2; }; done
 test -z "$(git -C "$VECTORS_DIR" status --porcelain)" || { echo "vectors checkout is dirty: $VECTORS_DIR" >&2; exit 2; }
 
@@ -67,7 +68,10 @@ log "build models $MODELS_COMMIT --include-build $VECTORS_DIR"
   > "$EV/build.log" 2>&1
 INSTALL="$MODELS/models-bench/build/install/models-bench"
 LIB="$INSTALL/lib"
-unzip -l "$LIB"/vectors-core-*.jar | grep -q 'GgufBandGemm.class' \
+# Capture the listing first: with pipefail, `grep -q` exiting on the first match SIGPIPEs unzip
+# and fails the pipeline even when the class is present.
+JAR_LISTING="$(unzip -l "$LIB"/vectors-core-*.jar)"
+grep -q 'GgufBandGemm.class' <<<"$JAR_LISTING" \
   || { log "FATAL: vectors-core on the Models classpath is not this branch (no GgufBandGemm)"; exit 3; }
 log "composite ok: $(ls "$LIB" | grep vectors-core)"
 
