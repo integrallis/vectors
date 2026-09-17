@@ -226,3 +226,26 @@ python3 $R/summarize.py $R/raw/"$(hostname)-avx512-512bit" --candidate <that arm
   - `THREADS=<physical cores>` stops the executor from oversubscribing SMT siblings.
 - **Guard:** each band fork fails unless it runs the labelled arm, and prints `bandDequant=…` in
   `raw/<label>/ab-band-<arm>.txt`.
+
+## Genoa verdict (2026-09-17, host facts in the summaries; 16 vCPU AMD EPYC Genoa, idle)
+
+Measured on two runs of the same host, `summary-genoa-256-on-avx512.md` and
+`summary-genoa-avx512-512bit.md` (2 forks, multi-threaded A/B, raw JMH under `raw/genoa-*`).
+
+- **Candidate** (best geometric-mean dequantisation speedup on the 256-bit run, fixed before
+  looking at (c)): `simd-int` (256-bit 5.74×; `simd-split` 5.25×, `simd-byte` 4.05×).
+- **(a) bit-identical:** pass (test suite).
+- **(b) dequantisation ≥ 2× scalar in all cells:** pass on both runs (256-bit 4.6–7.1×,
+  512-bit 4.1–8.2×).
+- **(c) band batch 1 and 4 faster than with scalar dequant in every cell, batch 512 at most 1.03×
+  slower:** 512-bit pass (8/8, worst batch-512 cell 1.002×); **256-bit fail**: 8/8 at batch 1/4,
+  but Q4_K 8192x2560 at batch 512 was 30.22 ± 0.98 ms against 28.25 ± 0.89 ms, 1.07×.
+
+**Verdict: `simd-int` does not meet the pre-registered rule** (condition (c) must hold on both runs),
+by one batch-512 cell whose error bars overlap. The default stays `scalar`; no re-run is made to
+seek a pass. Observations recorded without a decision attached: `simd-split` met every (c) cell on
+the 256-bit run; and with any SIMD arm the band kernel is now **faster than the integer kernels at
+every measured batch**, 1.27–1.51× at batch 1 and 7–9× at batch 512 on both runs, where with scalar
+dequantisation it was 0.30–0.43× at batch 1. A follow-up pre-registration can take up either
+observation; the band path's model-level fidelity question (reference agreement, `exp/band-gemm`)
+is open and comes first.

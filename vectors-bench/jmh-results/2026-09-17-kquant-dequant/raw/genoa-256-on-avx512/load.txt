@@ -1,0 +1,12 @@
+== dequant load-before:  04:17:47 up 1 day,  1:01,  2 users,  load average: 1.76, 0.42, 0.14
+== dequant load-after:   04:27:05 up 1 day,  1:10,  2 users,  load average: 1.58, 1.15, 0.66
+== ab-integer load-before:  04:27:05 up 1 day,  1:10,  2 users,  load average: 1.58, 1.15, 0.66
+== ab-integer load-after:   04:38:51 up 1 day,  1:22,  2 users,  load average: 13.03, 13.41, 8.33
+== ab-band-scalar load-before:  04:38:51 up 1 day,  1:22,  2 users,  load average: 13.03, 13.41, 8.33
+== ab-band-scalar load-after:   04:50:30 up 1 day,  1:34,  2 users,  load average: 15.22, 15.05, 11.89
+== ab-band-simd-byte load-before:  04:50:30 up 1 day,  1:34,  2 users,  load average: 15.22, 15.05, 11.89
+== ab-band-simd-byte load-after:   05:02:09 up 1 day,  1:46,  2 users,  load average: 14.14, 14.33, 13.29
+== ab-band-simd-int load-before:  05:02:09 up 1 day,  1:46,  2 users,  load average: 14.14, 14.33, 13.29
+== ab-band-simd-int load-after:   05:13:50 up 1 day,  1:57,  2 users,  load average: 15.25, 14.92, 14.24
+== ab-band-simd-split load-before:  05:13:50 up 1 day,  1:57,  2 users,  load average: 15.25, 14.92, 14.24
+== ab-band-simd-split load-after:   05:25:30 up 1 day,  2:09,  2 users,  load average: 12.98, 14.17, 14.37
