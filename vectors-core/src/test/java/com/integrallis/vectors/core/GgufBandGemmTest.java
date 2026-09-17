@@ -190,6 +190,7 @@ class GgufBandGemmTest {
     assumeTrue(VectorizationProvider.isPanamaEnabled(), "band arm requires the Vector API");
     assertThat(System.getProperty(GgufBatchedMatmulKernel.PROPERTY)).isNull();
     assertThat(VectorUtil.runtimeCapabilities().ggufBatchedMatmulKernel()).isEqualTo("integer");
+    assertThat(GgufBatchedMatmulKernel.bandConfiguration()).startsWith("band-f32(tile=");
     Random random = new Random(5L);
     int batch = 3;
     int rows = 9;

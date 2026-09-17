@@ -138,7 +138,7 @@ public class GgufBandGemmAbBenchmark {
     }
     System.out.printf(
         "band-gemm-ab format=%s kernel=%s rows=%d cols=%d batch=%d storage=%s weightBytes=%d"
-            + " capabilities=%s%n",
+            + " band=%s capabilities=%s%n",
         format,
         kernel,
         rows,
@@ -146,6 +146,7 @@ public class GgufBandGemmAbBenchmark {
         batchSize,
         storage,
         blocks.length,
+        GgufBatchedMatmulKernel.bandConfiguration(),
         VectorUtil.runtimeCapabilities());
   }
 

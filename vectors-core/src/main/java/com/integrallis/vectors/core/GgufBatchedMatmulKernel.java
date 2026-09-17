@@ -77,6 +77,15 @@ public enum GgufBatchedMatmulKernel {
     };
   }
 
+  /**
+   * Resolved configuration of the {@link #BAND_F32} arm (tile, column block, panel size, lanes)
+   * whether or not it is the process default, so a caller selecting it explicitly can record what
+   * ran; {@code "unavailable"} without the Vector API provider.
+   */
+  public static String bandConfiguration() {
+    return VectorizationProvider.isPanamaEnabled() ? GgufBandGemm.describe() : "unavailable";
+  }
+
   /** Human-readable description including the band arm's resolved tile, block and panel sizes. */
   static String describeActive() {
     if (active() == INTEGER) {
