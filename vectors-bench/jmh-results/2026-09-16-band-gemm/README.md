@@ -807,3 +807,61 @@ these fails:
   nothing about decode (batch 1, integer in both arms) or about accuracy. Three prompts are a
   localisation instrument, not a population estimate.
 - **No default changes on this experiment alone.**
+
+## Pre-registration 4 — probe tools (prepared here, not run here)
+
+One command on the reference host, after `git pull` in its vectors checkout:
+
+```bash
+bash vectors-bench/jmh-results/2026-09-16-band-gemm/model-check/layer-probe/run-layer-probe.sh
+# resume after a failure: OUT=/opt/layerprobe/<timestamp> bash .../run-layer-probe.sh   (FORCE=1 recomputes)
+```
+
+It uses the model-check install and harness under `/root/band-dispatch-model-check`, the evidence
+directory `20260917T022838Z`, `/opt/ref/venv`, `/opt/ref/reference_alora_case.py` and the GGUF.
+Window and GGUF hashes are verified. It runs four JVMs ({pipeline-cache, fresh} × {integer,
+dispatch}), then the reference (with local transfer from the `fresh` dumps), then
+`compare_layers.py` for each condition. Outputs go to `/opt/layerprobe/<timestamp>/`.
+
+What was checked on this laptop (measured here; the 3B model was not run):
+
+- **Compilation.** `LayerProbe.java` compiles against a Models 167a8abd composite built with
+  `--include-build` of this branch; `vectors-core` contains `GgufBandGemm`.
+- **Reflective pieces**, on Models' synthetic nano Llama GGUF (`PureJavaBackendTest.buildNanoModelFile`):
+  - the forward-pass lookup, the `layerObserver` proxy install on the `private final` field, and
+    the `config`, `weights`, `prefillBatchCapacity` and `xNorm` reads;
+  - the all-positions dump size.
+  - **Paths covered:** F32 projections (token-at-a-time path), and Q4_0 at prefill batch 32 and 5
+    (batched and chunked path). Under the `integer` and `dispatch` properties, these pass:
+    - the observer reports every layer;
+    - `xNorm` equals `rmsNorm` of the observed last layer, bit-for-bit;
+    - a suffix prefill after `rewind` reports only suffix positions, and its logits match a
+      fresh prefill.
+- **Analysis scripts, end to end**, on a tiny random `GraniteForCausalLM`, with fake "Java" files
+  made from its own hidden states plus noise:
+  - `reference_layers.py` and `compare_layers.py`, under transformers 4.46.3 / torch 2.2.2 (the
+    newest torch for this Intel Mac). The host has transformers 5.17 / torch 2.14, which was not
+    exercised here.
+  - Hook stages chain exactly, and the `output_hidden_states` tuple matches the hooks. Its last
+    entry is post-norm (`hs_last_is=final_norm`).
+  - The local-transfer self-replay reproduces the reference layer output exactly (max|diff| 0.0).
+- **Rule and alignment tests.** `test_compare_layers.py` has 15 synthetic tests:
+  - the off-by-one, embedding, stage-list, length, token-id and kernel-label misalignments, each
+    exiting 2;
+  - the inclusive 1.25 boundary, L* location, the logits clause, and a zero-integer-error stage.
+
+Facts about the pass that shape the probe (read in Models 167a8abd source):
+
+- **Prefill chunking.** The default prefill batch capacity is 32 (`PureJavaPlanConfiguration`).
+  A ~300-token prompt is prefilled in chunks of 32, and the last position sits in the remainder
+  chunk; a remainder of 1 runs the single-token path. So band routing at the last position
+  (Q4_K band at ≥ 4, Q6_K at ≥ 32) depends on the prefill length. The prefill length differs
+  between `fresh` and the model-check's prompt-cache reuse, which is why `pipeline-cache` is
+  primary. Each output records `lastPositionChunkSize`.
+- **Observer side effects.** Installing an observer disables only the final-layer
+  pruning/KV-only shortcuts. Those are rejected for Granite anyway (`usesStandardLlamaLayerSemantics`
+  is false), so for Granite the observer should not change the executed path. The `fresh` control
+  (bit-identical logits) measures this on the host.
+- **Embedding.** The observer does not expose the embedding. It is recomputed from
+  `LlamaWeights.embedToken × embeddingScale`, which is the same code the pass runs, but it is not an
+  observation of the pass.
