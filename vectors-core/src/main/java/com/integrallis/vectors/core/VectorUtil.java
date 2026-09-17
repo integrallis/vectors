@@ -1520,7 +1520,7 @@ public final class VectorUtil {
       throw new IllegalArgumentException(
           "q8Sums.length must be >= batch Q8_K sums: " + q8Sums.length + " < " + sumEntries);
     }
-    if (requireBand(kernel)) {
+    if (routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize)) {
       GgufBandGemm.ggufQ4_K(queries, qWeight, batchSize, rows, cols, out);
       return;
     }
@@ -1545,6 +1545,37 @@ public final class VectorUtil {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    ggufQ4_KQ8_KDualBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums,
+        GgufBatchedMatmulKernel.active());
+  }
+
+  /** {@link #ggufQ4_KQ8_KDualBatchedMatmul} with an explicit arithmetic {@code kernel}. */
+  public static void ggufQ4_KQ8_KDualBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums,
+      GgufBatchedMatmulKernel kernel) {
     checkGgufQuantizedBatchedArguments(
         queries,
         firstWeight,
@@ -1567,6 +1598,13 @@ public final class VectorUtil {
     checkGgufActivationScratch(
         q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE);
     checkGgufQ8KSums(q8Sums, activationEntries);
+    boolean firstBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
+    boolean secondBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
+    if (firstBand && secondBand) {
+      GgufBandGemm.ggufQ4_K(queries, firstWeight, batchSize, firstRows, cols, firstOut);
+      GgufBandGemm.ggufQ4_K(queries, secondWeight, batchSize, secondRows, cols, secondOut);
+      return;
+    }
     IMPL.ggufQ4_KQ8_KDualBatchedMatmul(
         queries,
         firstWeight,
@@ -1808,6 +1846,49 @@ public final class VectorUtil {
       float[] q8Scales,
       short[] q8Sums,
       GgufQ6BatchedKernel q6Kernel) {
+    ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        q8Sums,
+        q6Kernel,
+        GgufBatchedMatmulKernel.active());
+  }
+
+  /**
+   * {@link #ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul} with an explicit arithmetic {@code kernel}.
+   * Each matrix is routed by its own format; when only the Q4_K matrices take the band arm, the
+   * Q6_K matrix runs the single-matrix integer kernel (one extra activation quantization pass).
+   */
+  public static void ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      short[] q8Sums,
+      GgufQ6BatchedKernel q6Kernel,
+      GgufBatchedMatmulKernel kernel) {
     Objects.requireNonNull(q6Kernel, "q6Kernel");
     checkGgufQuantizedBatchedArguments(
         queries,
@@ -1840,6 +1921,44 @@ public final class VectorUtil {
     checkGgufActivationScratch(
         q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q4_K_BLOCK_SIZE);
     checkGgufQ8KSums(q8Sums, activationEntries);
+    boolean firstBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
+    boolean secondBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
+    boolean thirdBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q6_K, batchSize);
+    if (firstBand || thirdBand) {
+      if (firstBand && secondBand) {
+        GgufBandGemm.ggufQ4_K(queries, firstWeight, batchSize, firstRows, cols, firstOut);
+        GgufBandGemm.ggufQ4_K(queries, secondWeight, batchSize, secondRows, cols, secondOut);
+      } else {
+        IMPL.ggufQ4_KQ8_KDualBatchedMatmul(
+            queries,
+            firstWeight,
+            firstRows,
+            firstOut,
+            secondWeight,
+            secondRows,
+            secondOut,
+            batchSize,
+            cols,
+            q8Quants,
+            q8Scales,
+            q8Sums);
+      }
+      if (thirdBand) {
+        GgufBandGemm.ggufQ6_K(queries, thirdWeight, batchSize, thirdRows, cols, thirdOut);
+      } else {
+        IMPL.ggufQ6_KQ8_KBatchedMatmul(
+            queries,
+            thirdWeight,
+            batchSize,
+            thirdRows,
+            cols,
+            thirdOut,
+            q8Quants,
+            q8Scales,
+            q6Kernel);
+      }
+      return;
+    }
     IMPL.ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul(
         queries,
         firstWeight,
@@ -2288,7 +2407,7 @@ public final class VectorUtil {
               + " < "
               + scaleEntries);
     }
-    if (requireBand(kernel)) {
+    if (routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize)) {
       GgufBandGemm.ggufQ8_0(queries, qWeight, batchSize, rows, cols, out);
       return;
     }
@@ -2455,6 +2574,35 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ8_0Q8_0DualBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        GgufBatchedMatmulKernel.active());
+  }
+
+  /** {@link #ggufQ8_0Q8_0DualBatchedMatmul} with an explicit arithmetic {@code kernel}. */
+  public static void ggufQ8_0Q8_0DualBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufBatchedMatmulKernel kernel) {
     checkGgufQuantizedBatchedArguments(
         queries,
         firstWeight,
@@ -2476,6 +2624,13 @@ public final class VectorUtil {
     int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
     checkGgufActivationScratch(
         q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    boolean firstBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
+    boolean secondBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
+    if (firstBand && secondBand) {
+      GgufBandGemm.ggufQ8_0(queries, firstWeight, batchSize, firstRows, cols, firstOut);
+      GgufBandGemm.ggufQ8_0(queries, secondWeight, batchSize, secondRows, cols, secondOut);
+      return;
+    }
     IMPL.ggufQ8_0Q8_0DualBatchedMatmul(
         queries,
         firstWeight,
@@ -2506,6 +2661,41 @@ public final class VectorUtil {
       int cols,
       byte[] q8Quants,
       float[] q8Scales) {
+    ggufQ8_0Q8_0TripleBatchedMatmul(
+        queries,
+        firstWeight,
+        firstRows,
+        firstOut,
+        secondWeight,
+        secondRows,
+        secondOut,
+        thirdWeight,
+        thirdRows,
+        thirdOut,
+        batchSize,
+        cols,
+        q8Quants,
+        q8Scales,
+        GgufBatchedMatmulKernel.active());
+  }
+
+  /** {@link #ggufQ8_0Q8_0TripleBatchedMatmul} with an explicit arithmetic {@code kernel}. */
+  public static void ggufQ8_0Q8_0TripleBatchedMatmul(
+      float[] queries,
+      MemorySegment firstWeight,
+      int firstRows,
+      float[] firstOut,
+      MemorySegment secondWeight,
+      int secondRows,
+      float[] secondOut,
+      MemorySegment thirdWeight,
+      int thirdRows,
+      float[] thirdOut,
+      int batchSize,
+      int cols,
+      byte[] q8Quants,
+      float[] q8Scales,
+      GgufBatchedMatmulKernel kernel) {
     checkGgufQuantizedBatchedArguments(
         queries,
         firstWeight,
@@ -2536,6 +2726,15 @@ public final class VectorUtil {
     int activationEntries = checkedProduct(batchSize, cols, "batchSize * cols");
     checkGgufActivationScratch(
         q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
+    boolean band = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
+    routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
+    routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
+    if (band) {
+      GgufBandGemm.ggufQ8_0(queries, firstWeight, batchSize, firstRows, cols, firstOut);
+      GgufBandGemm.ggufQ8_0(queries, secondWeight, batchSize, secondRows, cols, secondOut);
+      GgufBandGemm.ggufQ8_0(queries, thirdWeight, batchSize, thirdRows, cols, thirdOut);
+      return;
+    }
     IMPL.ggufQ8_0Q8_0TripleBatchedMatmul(
         queries,
         firstWeight,
@@ -2760,7 +2959,7 @@ public final class VectorUtil {
         q8Quants,
         q8Scales,
         kernel,
-        GgufBatchedMatmulKernel.INTEGER);
+        GgufBatchedMatmulKernel.active());
   }
 
   private static void ggufQ6_KQ8_KBatchedMatmul(
@@ -2816,7 +3015,7 @@ public final class VectorUtil {
               + " < "
               + scaleEntries);
     }
-    if (requireBand(arithmetic)) {
+    if (routeBand(arithmetic, GgufBatchedMatmulKernel.FORMAT_Q6_K, batchSize)) {
       GgufBandGemm.ggufQ6_K(queries, qWeight, batchSize, rows, cols, out);
       return;
     }
@@ -3440,16 +3639,21 @@ public final class VectorUtil {
     return (long) (dimensions / blockSize) * blockBytes;
   }
 
-  private static boolean requireBand(GgufBatchedMatmulKernel kernel) {
-    if (kernel != GgufBatchedMatmulKernel.BAND_F32) {
-      return false;
-    }
-    if (!(IMPL instanceof PanamaVectorUtilSupport)) {
+  /**
+   * Decides and counts the arm for one matrix of {@code format} over {@code batch} activation rows.
+   */
+  private static boolean routeBand(GgufBatchedMatmulKernel kernel, int format, int batch) {
+    Objects.requireNonNull(kernel, "kernel");
+    if (kernel != GgufBatchedMatmulKernel.INTEGER && !(IMPL instanceof PanamaVectorUtilSupport)) {
       throw new IllegalStateException(
-          "GGUF band F32 kernel requires the Vector API provider; active provider is "
+          "GGUF "
+              + kernel
+              + " kernel requires the Vector API provider; active provider is "
               + IMPL.getClass().getSimpleName());
     }
-    return true;
+    boolean band = kernel.usesBand(format, batch);
+    GgufBatchedMatmulKernel.record(format, band, batch);
+    return band;
   }
 
   private static int checkedProduct(int left, int right, String label) {
