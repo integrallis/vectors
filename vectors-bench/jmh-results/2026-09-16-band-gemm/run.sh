@@ -2,7 +2,7 @@
 # Band GEMM A/B runner. Usage (from the vectors repo root):
 #   ./gradlew :vectors-bench:jmhJar
 #   vectors-bench/jmh-results/2026-09-16-band-gemm/run.sh <label> [phases...]
-# phases: bandwidth dequant ab-mt ab-st tile mapped   (default: all)
+# phases: bandwidth dequant ab-mt ab-st tile mapped crossover   (default: all but crossover)
 # Env: THREADS (default: all logical CPUs), MAXBITS (default: unset = library default 256;
 #      set 512 on AVX-512 hosts to test the wide species), EXTRA_JVM (extra JVM flags).
 set -euo pipefail
@@ -51,6 +51,8 @@ for phase in $PHASES; do
         run "tile-$tile" GgufBandGemmAbBenchmark -p kernel=BAND_F32 -p format=Q4_K,Q8_0 -p shape=8192x2560,2560x8192 -p batchSize=1,512 -f 1 -wi 3 -i 5 -w 2 -r 2
         JVM=$JVM0
       done ;;
+    crossover)
+      run crossover GgufBandGemmAbBenchmark -p shape=8192x2560,2560x8192 -p batchSize=1,2,4,8,16,32,64,128,512 -f 2 -wi 3 -i 5 -w 2 -r 2 ;;
     mapped)
       run ab-mt-mapped GgufBandGemmAbBenchmark -p storage=mapped -p format=Q4_K -p shape=8192x2560,2560x8192 -p batchSize=1,512 -f 1 -wi 3 -i 5 -w 2 -r 2 ;;
     *) echo "unknown phase $phase" >&2; exit 2 ;;

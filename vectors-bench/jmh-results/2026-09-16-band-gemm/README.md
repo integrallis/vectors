@@ -343,3 +343,26 @@ python3 $R/summarize.py $R/raw/"$(hostname)-avx2"
 - `summary-intel-i7-9750h-avx2-rep2.md`: MT replicate at lower load.
 - `summary-intel-i7-9750h-avx2-tile.md`: tile rerun with self-reported configuration.
 - `raw/<label>/*.json|*.txt`: JMH output, per-fork capability lines, `host.txt`, `load.txt`.
+
+## Pre-registration 2: batch-dispatched hybrid (written 2026-09-17T01:05Z, before any run below)
+
+The first rule (one kernel for every shape) failed on AVX2: band won prefill by 5.5x–8.9x and lost
+decode by 22–57 %. The candidate the data suggests is a **dispatch**: integer kernels below a batch
+threshold, band at or above it. Decided by this rule, fixed before the runs:
+
+- **Hosts:** Hetzner cpx62-class AMD EPYC Genoa (16 shared vCPU, AVX-512 + VNNI), idle; one run with
+  512-bit species (`MAXBITS=512`) and one with the library default 256-bit species on the same
+  silicon (labelled `256-on-avx512`, not AVX2 hardware). Two forks per cell (`crossover` phase).
+- **Crossover:** for each format (Q4_K, Q6_K, Q8_0) and Granite FFN shape (8192x2560, 2560x8192), the
+  threshold T is the smallest batch in {1,2,4,8,16,32,64,128,512} at which band's mean beats integer's
+  mean by more than both error bars, and stays ahead at every larger batch.
+- **Accept the dispatch** if, on both hosts' runs: (a) at batch 512 band beats integer by ≥ 10 % for
+  all six format × shape cells; (b) a single T per format works for both shapes (dispatch below T is
+  integer, so no configuration can lose more than measurement noise); (c) T ≤ 64, so real prefill
+  chunks take the band path.
+- **Model-level check before any default change:** pure-Java Granite 4.1 3B prefill tok/s at context
+  2048 improves ≥ 10 % with the dispatch on, and greedy continuations (64 tokens) of the frozen
+  answerability window's first 20 SQuAD cases are identical to the integer path in ≥ 19 of 20
+  (band is the exact float result; integer differs by activation-rounding error, so small
+  divergences are expected and must be reported, not hidden).
+- **Otherwise** the band kernel stays an explicit opt-in experiment.
