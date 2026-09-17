@@ -124,11 +124,27 @@ final class GgufBandGemm {
 
   static void gemm(
       int format, float[] queries, MemorySegment weights, int n, int m, int k, float[] out) {
+    gemm(format, GgufKQuantDequant.ACTIVE, queries, weights, n, m, k, out);
+  }
+
+  /**
+   * As {@link #gemm(int, float[], MemorySegment, int, int, int, float[])} with an explicit dequant
+   * arm.
+   */
+  static void gemm(
+      int format,
+      GgufKQuantDequant.Arm dequant,
+      float[] queries,
+      MemorySegment weights,
+      int n,
+      int m,
+      int k,
+      float[] out) {
     Arrays.fill(out, 0, n * m, 0.0f);
     if (k == 0 || m == 0 || n == 0) {
       return;
     }
-    Plan plan = new Plan(format, weights, n, m, k);
+    Plan plan = new Plan(format, dequant, weights, n, m, k);
     GgufParallelSupport.forEachTask(
         plan.parallel, plan.tasks, task -> runTask(plan, queries, weights, out, task));
   }
@@ -136,6 +152,7 @@ final class GgufBandGemm {
   /** The blocking of one call: column blocks, panels, token splits and task numbering. */
   static final class Plan {
     final int format;
+    final GgufKQuantDequant.Arm dequant;
     final int n;
     final int m;
     final int k;
@@ -151,8 +168,9 @@ final class GgufBandGemm {
     final int tasks;
     final boolean parallel;
 
-    Plan(int format, MemorySegment weights, int n, int m, int k) {
+    Plan(int format, GgufKQuantDequant.Arm dequant, MemorySegment weights, int n, int m, int k) {
       this.format = format;
+      this.dequant = dequant;
       this.n = n;
       this.m = m;
       this.k = k;
@@ -207,7 +225,8 @@ final class GgufBandGemm {
         int row = r0 + i;
         if (row < m) {
           long offset = row * plan.rowBytes + (long) firstBlock * plan.blockBytes;
-          dequantize(plan.format, weights, offset, blocks, rawBlocks, rowsF32, i * kcb);
+          dequantize(
+              plan.dequant, plan.format, weights, offset, blocks, rawBlocks, rowsF32, i * kcb);
         } else {
           Arrays.fill(rowsF32, i * kcb, (i + 1) * kcb, 0.0f);
         }
@@ -410,14 +429,28 @@ final class GgufBandGemm {
     c3.intoArray(acc, 3 * LANES);
   }
 
-  // ---- dequantization: one bulk copy of the row's block run, then scalar loops C2 may vectorize
-  // --
+  // ---- dequantization: one bulk copy of the row's block run, then the configured K-quant arm
+  // (GgufKQuantDequant; scalar reference loops below) or the scalar Q8_0 loop ----
 
   /**
    * Dequantizes {@code blocks} whole blocks starting at byte {@code offset} of {@code weights} into
-   * {@code dst[dst0 ..]}. Public to the package so the benchmark can time dequantization alone.
+   * {@code dst[dst0 ..]} with the configured K-quant dequant arm. Public to the package so the
+   * benchmark can time dequantization alone.
    */
   static void dequantize(
+      int format,
+      MemorySegment weights,
+      long offset,
+      int blocks,
+      byte[] raw,
+      float[] dst,
+      int dst0) {
+    dequantize(GgufKQuantDequant.ACTIVE, format, weights, offset, blocks, raw, dst, dst0);
+  }
+
+  /** As above with an explicit K-quant dequant arm (ignored for Q8_0). */
+  static void dequantize(
+      GgufKQuantDequant.Arm arm,
       int format,
       MemorySegment weights,
       long offset,
@@ -429,14 +462,16 @@ final class GgufBandGemm {
     MemorySegment.copy(weights, ValueLayout.JAVA_BYTE, offset, raw, 0, blocks * blockBytes);
     switch (format) {
       case Q4_K -> {
-        for (int block = 0; block < blocks; block++) {
-          dequantizeQ4_KBlock(raw, block * blockBytes, dst, dst0 + block * 256);
+        if (GgufKQuantDequant.COUNTING) {
+          GgufKQuantDequant.count(GgufKQuantDequant.effective(arm));
         }
+        GgufKQuantDequant.q4_KBlocks(arm, raw, blocks, dst, dst0);
       }
       case Q6_K -> {
-        for (int block = 0; block < blocks; block++) {
-          dequantizeQ6_KBlock(raw, block * blockBytes, dst, dst0 + block * 256);
+        if (GgufKQuantDequant.COUNTING) {
+          GgufKQuantDequant.count(GgufKQuantDequant.effective(arm));
         }
+        GgufKQuantDequant.q6_KBlocks(arm, raw, blocks, dst, dst0);
       }
       case Q8_0 -> {
         for (int block = 0; block < blocks; block++) {
