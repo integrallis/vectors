@@ -13,7 +13,7 @@
 | Q8_0 | 8192x2560 | 1 | 6.266 | 10.154 | 0.62x |
 | Q8_0 | 8192x2560 | 512 | 236.806 | 303.504 | 0.78x |
 
-### Pre-registered decision rule on this host
+### Pre-registration 1 (single kernel replaces integer) on this run's data
 
 - LLM-shape configurations with band >= 1.10x: 0 of 0
 - configurations anywhere with band slower by > 5% (speedup < 0.952x): 0 of 0

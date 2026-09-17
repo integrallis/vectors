@@ -338,6 +338,11 @@ python3 $R/summarize.py $R/raw/"$(hostname)-avx2"
 
 ## Files
 
+- `summary-genoa-avx512-512bit.md`, `summary-genoa-256-on-avx512.md`: Genoa bandwidth, dequant, ST
+  and crossover tables. `crossover.py`: T derivation.
+- `model-check/`: pre-registration 2 model-level check (`run-model-check.sh`, `ModelCheck.java`,
+  `compare.py`).
+
 - `run.sh`: phase runner. `summarize.py`: tables and the decision rule.
 - `summary-intel-i7-9750h-avx2.md`: bandwidth, dequant, MT and ST at both shapes, mapped.
 - `summary-intel-i7-9750h-avx2-rep2.md`: MT replicate at lower load.
@@ -366,3 +371,251 @@ threshold, band at or above it. Decided by this rule, fixed before the runs:
   (band is the exact float result; integer differs by activation-rounding error, so small
   divergences are expected and must be reported, not hidden).
 - **Otherwise** the band kernel stays an explicit opt-in experiment.
+
+---
+
+## Pre-registration 2 — kernel-level results (EPYC Genoa, measured on two hosts, run by the coordinator)
+
+Everything in this section was **measured** on two Hetzner cpx62-class VMs. The runs used this
+branch at `228003ac`, with the pre-registered `crossover` phase plus the bandwidth, dequant and
+single-thread phases. Raw directories, copied in whole:
+
+- `raw/genoa-avx512-512bit/` (`MAXBITS=512`)
+- `raw/genoa-256-on-avx512/` (library default 256-bit species on the same AVX-512 silicon; this is
+  **not** AVX2 hardware)
+
+Generated tables are in `summary-genoa-*.md`, produced by `summarize.py` and `crossover.py`.
+`crossover.py` is the coordinator's `cross.py` parameterised by path. It reproduces exactly the T
+values in the coordinator's message; re-run here from the raw JSON.
+
+### Hosts
+
+| | genoa-avx512-512bit | genoa-256-on-avx512 |
+|---|---|---|
+| CPU (as reported by the guest) | AMD EPYC-Genoa, 16 vCPU (1 thread/core), KVM | same class, separate VM |
+| ISA flags | avx2, fma, avx512f/dq/cd/bw/vl, avx512_vnni, avx512_bf16, vbmi2, bitalg, vpopcntdq | same |
+| Caches (guest-reported, virtualised) | L1d 512 KiB total, L2 16 MiB total, L3 32 MiB | same |
+| JDK | Temurin 25.0.4.1+1 | same |
+| JVM | `-Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC -Dvectors.maxBits=512` | same without maxBits |
+| Band config | tile 4x4 (512-bit default), kc 512, panel 256 KiB, 16 lanes | tile 3x3, 8 lanes |
+
+- **Load:** 1-minute load average about 1–3 at the start. It was about 14 during the crossover
+  sweep, which is the benchmark's own 16 GGUF executor threads. See `raw/*/load.txt`.
+- **Crossover:** multi-threaded (16 executor threads), 2 forks, 3 × 2 s warmup, 5 × 2 s measurement.
+- **Single-thread phases:** 1 fork, 2 × 1 s warmup, 3 × 1 s measurement.
+
+### Crossover (speedup = integer ms / band ms; `*` = band ahead beyond both error bars)
+
+512-bit species:
+
+| format | shape | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 512 | T |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q4_K | 2560x8192 | 0.38 | 0.87 | 1.18* | 2.20* | 3.57* | 4.86* | 6.41* | 8.63* | 9.92* | 4 |
+| Q4_K | 8192x2560 | 0.38 | 0.80 | 1.12* | 2.15* | 3.31* | 4.38* | 5.71* | 6.46* | 6.88* | 4 |
+| Q6_K | 2560x8192 | 0.30 | 0.57 | 0.60 | 1.22* | 2.06* | 3.48* | 5.10* | 7.60* | 9.20* | 8 |
+| Q6_K | 8192x2560 | 0.30 | 0.52 | 0.63 | 1.17 | 1.86* | 3.12* | 4.92* | 6.10* | 10.18* | 16 |
+| Q8_0 | 2560x8192 | 0.62 | 1.29* | 1.67* | 2.45* | 3.39* | 4.09* | 4.84* | 5.91* | 6.37* | 2 |
+| Q8_0 | 8192x2560 | 0.45 | 0.75 | 1.47* | 2.30* | 3.78* | 5.15* | 4.25* | 4.73* | 7.02* | 4 |
+
+256-bit species on the same silicon:
+
+| format | shape | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 512 | T |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q4_K | 2560x8192 | 0.43 | 0.86 | 1.17* | 1.16* | 2.06* | 3.97* | 5.23* | 6.25* | 7.44* | 4 |
+| Q4_K | 8192x2560 | 0.43 | 0.85 | 1.20* | 2.02* | 3.18* | 5.10* | 6.05* | 6.46* | 7.21* | 4 |
+| Q6_K | 2560x8192 | 0.30 | 0.54 | 0.61 | 0.60 | 1.11 | 2.18* | 3.31* | 5.01* | 7.24* | 32 |
+| Q6_K | 8192x2560 | 0.28 | 0.57 | 0.60 | 1.16* | 2.00* | 3.44* | 4.50* | 5.75* | 7.24* | 8 |
+| Q8_0 | 2560x8192 | 0.58 | 1.43* | 1.85* | 1.54* | 2.23* | 3.00* | 3.87* | 5.06* | 6.60* | 2 |
+| Q8_0 | 8192x2560 | 0.73 | 1.16* | 1.67* | 2.06* | 3.15* | 3.62* | 3.76* | 4.15* | 6.10* | 2 |
+
+**Verdict against pre-registration 2 (kernel half):**
+
+- **(a) Passes.** Batch 512 is at least 1.10x in all 12 cells (6.10x–10.18x).
+- **(b) Passes.** Taking the strictest cell across both runs and both shapes gives one threshold
+  per format:
+  - **Q4_K T = 4**;
+  - **Q6_K T = 32** (256-bit, `2560x8192`; the other cells were 8 and 16);
+  - **Q8_0 T = 4** (512-bit, `8192x2560`).
+- **(c) Passes.** Every T is at most 64.
+
+**Caveats:**
+
+- **Cells between the per-shape crossovers:** below its own crossover a cell may not be clearly
+  ahead, but the strictest-cell T keeps every such cell on the integer arm. Every configuration at
+  or above T is band-ahead beyond error bars in all four runs (2 hosts × 2 shapes). So none of the
+  measured Granite FFN-shape configurations loses to its arm choice by more than noise.
+- **Other shapes:** attention projections (2560x2560, 2560x512 KV) and other models were **not**
+  measured. The model-level check covers them only in aggregate.
+
+### Genoa: sequential read bandwidth (`MemoryBandwidthBenchmark`)
+
+| probe | 512-bit host | 256-bit host |
+|---|---:|---:|
+| `sequentialLongSum`, 1 thread | 33.4 GB/s | 31.6 GB/s |
+| `sequentialByteXor`, 1 thread | 33.8 GB/s | 31.0 GB/s |
+| `sequentialLongSum`, 16 threads (total) | 344 GB/s | 267 GB/s |
+| `sequentialByteXor`, 16 threads (total) | 373 GB/s | 309 GB/s |
+
+The 16-thread totals are **as measured, not believed**. They are larger than a 16-vCPU slice of a
+shared host plausibly owns, and the probe's multi-thread mode (every thread scanning the same 2 GiB
+segment) may be partly measuring the cache and prefetcher rather than DRAM. Use the 1-thread rows as
+the roofline.
+
+### Genoa: band dequantization alone (single thread)
+
+| format | shape | 512-bit: M F32 elem/s (quantized GB/s, % 1T bandwidth) | 256-bit: same |
+|---|---|---:|---:|
+| Q4_K | 8192x2560 | 1323 (0.744, 2.2 %) | 1357 (0.763, 2.4 %) |
+| Q4_K | 2560x8192 | 1359 (0.764, 2.3 %) | 1336 (0.751, 2.4 %) |
+| Q6_K | 8192x2560 | 607 (0.498, 1.5 %) | 613 (0.503, 1.6 %) |
+| Q6_K | 2560x8192 | 619 (0.508, 1.5 %) | 613 (0.503, 1.6 %) |
+| Q8_0 | 8192x2560 | 3779 (4.015, 12.0 %) | 3705 (3.936, 12.5 %) |
+| Q8_0 | 2560x8192 | 3764 (3.999, 12.0 %) | 3687 (3.918, 12.4 %) |
+
+Dequantization does not depend on the species width, because the dequant loops are scalar and
+width-independent. Q6_K dequant is about half the speed of Q4_K dequant, which fits Q6_K's higher
+threshold.
+
+The same Q4_K dequant measured 87–125 M elem/s on the loaded AVX2 laptop above. That number was
+dominated by host load and is superseded by these.
+
+### Genoa: single-threaded A/B (`-Dvectors.gguf.parallel=false`), Granite FFN shapes
+
+| format | shape | batch | 512-bit int / band ms | speedup | 256-bit int / band ms | speedup |
+|---|---|---:|---:|---:|---:|---:|
+| Q4_K | 8192x2560 | 1 | 6.56 / 18.56 | 0.35x | 6.72 / 18.58 | 0.36x |
+| Q4_K | 8192x2560 | 512 | 2743 / 296 | 9.27x | 2784 / 290 | 9.59x |
+| Q4_K | 2560x8192 | 1 | 6.76 / 18.52 | 0.37x | 6.79 / 17.33 | 0.39x |
+| Q4_K | 2560x8192 | 512 | 2738 / 303 | 9.03x | 2842 / 334 | 8.51x |
+| Q6_K | 8192x2560 | 1 | 10.09 / 37.62 | 0.27x | 10.45 / 38.09 | 0.27x |
+| Q6_K | 8192x2560 | 512 | 2869 / 310 | 9.25x | 2869 / 332 | 8.63x |
+| Q6_K | 2560x8192 | 1 | 10.41 / 38.32 | 0.27x | 10.13 / 37.53 | 0.27x |
+| Q6_K | 2560x8192 | 512 | 2827 / 323 | 8.76x | 2861 / 353 | 8.10x |
+| Q8_0 | 8192x2560 | 1 | 4.68 / 9.43 | 0.50x | 5.12 / 10.11 | 0.51x |
+| Q8_0 | 8192x2560 | 512 | 2001 / 284 | 7.05x | 2370 / 310 | 7.66x |
+| Q8_0 | 2560x8192 | 1 | 4.73 / 9.82 | 0.48x | 5.09 / 8.85 | 0.57x |
+| Q8_0 | 2560x8192 | 512 | 1940 / 287 | 6.75x | 2098 / 314 | 6.69x |
+
+- **Existing shape (`1024x2048`, single thread):** band was 0.28x–0.67x at batch 1, 1.13x–2.19x at
+  batch 8, and 3.30x–6.15x at batch 32. See `summary-genoa-*.md`.
+- **Single-thread gain:** band sweeps reached 30–38 G mul-adds/s on one core at batch 512, against
+  3.7–5.5 G for the integer kernels.
+
+## Batch dispatch implementation (`GgufBatchedMatmulKernel.BATCH_DISPATCH`)
+
+- **Selection:** `-Dvectors.gguf.batchedMatmulKernel=dispatch`, or pass `BATCH_DISPATCH` to the
+  explicit overloads.
+- **Default:** stays `integer` until the model-level check passes.
+- **Thresholds:** fixed to the pre-registered values and deliberately **not** configurable:
+  Q4_K 4, Q6_K 32, Q8_0 4. "Batch" means the activation rows of the call.
+- **Capabilities string:**
+  `dispatch(band-at-batch>=Q4_K:4,Q6_K:32,Q8_0:4;band=band-f32(tile=…,kc=512,panelKb=256,lanes=…))`.
+
+### Coverage: which calls the switch reaches
+
+Models' pure-Java backend (origin/main `167a8abd`, `TensorOps`) calls more than the three
+single-matrix entry points. The call sites read there are:
+
+- `ggufQ4_KQ8_KDualBatchedMatmul`;
+- the mixed `ggufQ4_KQ4_KQ6_KQ8_KTripleBatchedMatmul`;
+- `ggufQ8_0Q8_0Dual/TripleBatchedMatmul`;
+- the Q6_K overload that takes a `GgufQ6BatchedKernel`.
+
+A switch on the single-matrix calls alone would have left most Granite projections on the integer
+arm, and the model-level check would have measured a toggle that barely ran. So the mode now
+applies to all of these calls:
+
+- **Grouped calls:** each matrix is routed by its own format.
+- **Mixed Q4_K/Q4_K/Q6_K triple:** for batch 4 to 31, the Q4_K pair runs band and the Q6_K matrix
+  runs the single-matrix integer kernel. That costs one extra Q8_K quantization pass, and the Q6_K
+  output is bit-identical to the grouped integer path (tested).
+- **Q6_K tile overload:** it now follows the process mode, and the tile choice applies only when the
+  integer arm runs. Before this change, that overload always ran integer in `band` mode.
+- **Not covered:** the prequantized `…Rows` entry points (`BatchedMatmulRows`,
+  `BlockMajorBatchedMatmulRows`). They receive already-quantized activations and cannot take the
+  band path.
+
+### Observability
+
+- Every routed matrix is counted per format and arm, as calls and activation rows.
+- `GgufBatchedMatmulKernel.routingReport()` returns the counts, and
+  `-Dvectors.gguf.batchedMatmulKernel.report=true` prints them at JVM exit:
+  `vectors-gguf-batched-matmul-routing mode=dispatch Q4_K integer=c/r band=c/r Q6_K … Q8_0 …`.
+- The model-check script refuses a run in which the dispatch arm reports zero band rows, or the
+  integer arm reports any.
+
+### Tests (`GgufBatchDispatchTest`, `GgufBatchDispatchProbe`)
+
+All were written before the implementation; they failed to compile (66 errors) before it existed.
+
+- **Thresholds:** equal to the pre-registered values, and the capabilities string carries them.
+- **Predicate:** integer at T−1, band at T.
+- **Single-matrix calls:** at T−1 and T for each format, output is bit-identical to the explicitly
+  selected arm, and the routing counts are exact.
+  - The result is within that arm's documented tolerance of the exact double reference.
+  - Band tolerance: 1e-4 · Σ|w·x|. Integer tolerance: the analytic Q8 activation-rounding bound.
+- **Grouped calls:**
+  - The Q4_K dual and mixed triple are checked at batches 3, 4, 31 and 32, each matrix matching its
+    arm.
+  - The Q8_0 dual and triple are checked at batches 3 and 4.
+- **Fresh-JVM probe:** runs with the property set to `dispatch` through the property-default entry
+  points, including the Q6_K tile overload that Models calls. It checks the exit report's exact
+  counts.
+
+## Pre-registration 2 — model-level check (prepared here, not run here)
+
+This laptop is the loaded AVX2 i7 and was not used for the check, as instructed. The check is
+scripted to run on a Genoa host with one command:
+
+```bash
+git clone git@github.com:integrallis/vectors.git && cd vectors && git checkout exp/band-gemm
+bash vectors-bench/jmh-results/2026-09-16-band-gemm/model-check/run-model-check.sh
+# optional: EXTRA_JVM="-Dvectors.maxBits=512"   PREFILL_REPS=7   ADAPTER_DIR=<answerability aLoRA dir>
+```
+
+What it does (`model-check/run-model-check.sh`, `ModelCheck.java`, `compare.py`):
+
+1. **Build.** Clones Models at `167a8abdd662af8d89a821a1bf2d23980e1092c5` (origin/main, 0.3.41,
+   `vectorsVersion=0.1.22`) and builds `:models-bench:installDist` with
+   `--include-build <this vectors checkout>`.
+   - It fails unless `vectors-core` on the Models classpath contains `GgufBandGemm`.
+   - The composite build and the harness compile were verified on this laptop; the model itself
+     was not run.
+2. **Inputs.** Downloads or verifies the Granite 4.1 3B Q4_K_M GGUF, using the same pinned URL and
+   SHA-256 `662b0626…` as the granite-alora base host run.
+   - It takes the frozen window v2 from Models commit `cb2f4262` and verifies SHA-256 `dfb8cd72…`.
+3. **Prefill.**
+   - **Prompt:** built from the window's SQuAD document texts, then cut to the longest prefix that
+     encodes to ≤ 2040 tokens (`TARGET_TOKENS`) at context 2048.
+   - **Runs:** Models' own `models-bench profile-prefill` (2 warmups, then one measured prefill),
+     5 fresh-JVM runs per arm, interleaved ABAB/BABA.
+   - **Arms:** `-Dvectors.gguf.batchedMatmulKernel=integer` vs `=dispatch`, both with the routing
+     report.
+   - **Gate:** median dispatch ≥ 1.10 × median integer.
+4. **Continuations.** Greedy decoding (temperature 0, max 64 tokens) of the first 20
+   `squad-v2-dev` cases.
+   - **Prompt:** the base-arm prompt of `models-bench activated-answerability --arm base`, rendered
+     through the same public `GraniteDocumentsPrompt` calls. No adapter is loaded; base Q4_K_M only.
+   - **Per case:** the token-fragment sequence, stop reason and completion token count, for each
+     arm.
+   - **Gate:** identical in ≥ 19/20.
+   - If `ADAPTER_DIR` is set, the Models runner dumps its own base-arm prompts and the script reports
+     their byte parity with the harness prompts.
+5. **Report.** `compare.py` prints both results, the per-run routing proof and any observability
+   problems. Everything is kept under `$WORK/evidence/<timestamp>/`.
+
+Deviations and limits, stated before the run:
+
+- **Continuations tool:** `activated-answerability` itself caps output at 6 tokens (hard-coded) and
+  always loads an adapter. The pre-registered 64-token base-arm continuation is therefore produced by
+  `ModelCheck.java` on the same Models classpath, with the same prompt renderer, not by that runner.
+- **Short outputs:** the base-arm instruction asks for one word, so continuations will likely stop
+  at EOS after a few tokens. The identity gate then covers the prefill-dependent first tokens, not
+  64 tokens of text.
+  - To cover longer text, the script also reports an `open` variant: the same cases without the
+    instruction, so the model answers the question. It is reported as **supplementary and not
+    gating**, because it was not pre-registered.
+- **Decode arm:** decode runs at batch 1, so it is integer in both arms. Any divergence enters
+  through prefill logits and KV state.
+- **Prefill tool:** `models-rag-bench` was not used. The pre-registered quantities are a prefill
+  rate and continuation identity; `profile-prefill` is Models' existing tool for the former.

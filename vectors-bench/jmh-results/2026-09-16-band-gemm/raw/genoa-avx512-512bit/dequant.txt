@@ -1,0 +1,243 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/opt/band/vectors/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# JMH version: 1.37
+# VM version: JDK 25.0.4.1, OpenJDK 64-Bit Server VM, 25.0.4.1+1-LTS
+# VM invoker: /usr/lib/jvm/jdk-25.0.4.1+1/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC -Dvectors.maxBits=512
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix
+# Parameters: (format = Q4_K, shape = 8192x2560)
+
+# Run progress: 0.00% complete, ETA 00:01:36
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/opt/band/vectors/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: 15.925 ms/op
+# Warmup Iteration   2: 15.867 ms/op
+# Warmup Iteration   3: 15.511 ms/op
+Iteration   1: 16.154 ms/op
+Iteration   2: 15.622 ms/op
+Iteration   3: 15.812 ms/op
+Iteration   4: 15.862 ms/op
+Iteration   5: 15.784 ms/op
+
+
+Result "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix":
+  15.847 ±(99.9%) 0.746 ms/op [Average]
+  (min, avg, max) = (15.622, 15.847, 16.154), stdev = 0.194
+  CI (99.9%): [15.100, 16.593] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.4.1, OpenJDK 64-Bit Server VM, 25.0.4.1+1-LTS
+# VM invoker: /usr/lib/jvm/jdk-25.0.4.1+1/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC -Dvectors.maxBits=512
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix
+# Parameters: (format = Q4_K, shape = 2560x8192)
+
+# Run progress: 16.67% complete, ETA 00:01:27
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/opt/band/vectors/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: 15.801 ms/op
+# Warmup Iteration   2: 15.692 ms/op
+# Warmup Iteration   3: 15.380 ms/op
+Iteration   1: 15.570 ms/op
+Iteration   2: 15.253 ms/op
+Iteration   3: 15.808 ms/op
+Iteration   4: 15.230 ms/op
+Iteration   5: 15.303 ms/op
+
+
+Result "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix":
+  15.433 ±(99.9%) 0.962 ms/op [Average]
+  (min, avg, max) = (15.230, 15.433, 15.808), stdev = 0.250
+  CI (99.9%): [14.470, 16.395] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.4.1, OpenJDK 64-Bit Server VM, 25.0.4.1+1-LTS
+# VM invoker: /usr/lib/jvm/jdk-25.0.4.1+1/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC -Dvectors.maxBits=512
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix
+# Parameters: (format = Q6_K, shape = 8192x2560)
+
+# Run progress: 33.33% complete, ETA 00:01:09
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/opt/band/vectors/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: 34.242 ms/op
+# Warmup Iteration   2: 33.768 ms/op
+# Warmup Iteration   3: 33.613 ms/op
+Iteration   1: 34.275 ms/op
+Iteration   2: 34.161 ms/op
+Iteration   3: 34.228 ms/op
+Iteration   4: 35.379 ms/op
+Iteration   5: 34.717 ms/op
+
+
+Result "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix":
+  34.552 ±(99.9%) 1.969 ms/op [Average]
+  (min, avg, max) = (34.161, 34.552, 35.379), stdev = 0.511
+  CI (99.9%): [32.583, 36.522] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.4.1, OpenJDK 64-Bit Server VM, 25.0.4.1+1-LTS
+# VM invoker: /usr/lib/jvm/jdk-25.0.4.1+1/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC -Dvectors.maxBits=512
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix
+# Parameters: (format = Q6_K, shape = 2560x8192)
+
+# Run progress: 50.00% complete, ETA 00:00:52
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/opt/band/vectors/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: 34.204 ms/op
+# Warmup Iteration   2: 33.609 ms/op
+# Warmup Iteration   3: 33.787 ms/op
+Iteration   1: 34.039 ms/op
+Iteration   2: 33.644 ms/op
+Iteration   3: 33.742 ms/op
+Iteration   4: 33.617 ms/op
+Iteration   5: 34.307 ms/op
+
+
+Result "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix":
+  33.870 ±(99.9%) 1.140 ms/op [Average]
+  (min, avg, max) = (33.617, 33.870, 34.307), stdev = 0.296
+  CI (99.9%): [32.730, 35.011] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.4.1, OpenJDK 64-Bit Server VM, 25.0.4.1+1-LTS
+# VM invoker: /usr/lib/jvm/jdk-25.0.4.1+1/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC -Dvectors.maxBits=512
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix
+# Parameters: (format = Q8_0, shape = 8192x2560)
+
+# Run progress: 66.67% complete, ETA 00:00:34
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/opt/band/vectors/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: 5.601 ms/op
+# Warmup Iteration   2: 5.540 ms/op
+# Warmup Iteration   3: 5.496 ms/op
+Iteration   1: 5.514 ms/op
+Iteration   2: 5.512 ms/op
+Iteration   3: 5.486 ms/op
+Iteration   4: 5.702 ms/op
+Iteration   5: 5.534 ms/op
+
+
+Result "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix":
+  5.550 ±(99.9%) 0.335 ms/op [Average]
+  (min, avg, max) = (5.486, 5.550, 5.702), stdev = 0.087
+  CI (99.9%): [5.215, 5.885] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.4.1, OpenJDK 64-Bit Server VM, 25.0.4.1+1-LTS
+# VM invoker: /usr/lib/jvm/jdk-25.0.4.1+1/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC -Dvectors.maxBits=512
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix
+# Parameters: (format = Q8_0, shape = 2560x8192)
+
+# Run progress: 83.33% complete, ETA 00:00:17
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/opt/band/vectors/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: 5.653 ms/op
+# Warmup Iteration   2: 5.482 ms/op
+# Warmup Iteration   3: 5.443 ms/op
+Iteration   1: 5.733 ms/op
+Iteration   2: 5.532 ms/op
+Iteration   3: 5.601 ms/op
+Iteration   4: 5.540 ms/op
+Iteration   5: 5.452 ms/op
+
+
+Result "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix":
+  5.572 ±(99.9%) 0.404 ms/op [Average]
+  (min, avg, max) = (5.452, 5.572, 5.733), stdev = 0.105
+  CI (99.9%): [5.167, 5.976] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:01:44
+
+REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
+why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
+experiments, perform baseline and negative tests that provide experimental control, make sure
+the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
+Do not assume the numbers tell you what you want them to tell.
+
+NOTE: Current JVM experimentally supports Compiler Blackholes, and they are in use. Please exercise
+extra caution when trusting the results, look into the generated code to check the benchmark still
+works, and factor in a small probability of new VM bugs. Additionally, while comparisons between
+different JVMs are already problematic, the performance difference caused by different Blackhole
+modes can be very significant. Please make sure you use the consistent Blackhole mode for comparisons.
+
+Benchmark                                  (format)    (shape)  Mode  Cnt   Score   Error  Units
+GgufBandDequantBenchmark.dequantizeMatrix      Q4_K  8192x2560  avgt    5  15.847 ± 0.746  ms/op
+GgufBandDequantBenchmark.dequantizeMatrix      Q4_K  2560x8192  avgt    5  15.433 ± 0.962  ms/op
+GgufBandDequantBenchmark.dequantizeMatrix      Q6_K  8192x2560  avgt    5  34.552 ± 1.969  ms/op
+GgufBandDequantBenchmark.dequantizeMatrix      Q6_K  2560x8192  avgt    5  33.870 ± 1.140  ms/op
+GgufBandDequantBenchmark.dequantizeMatrix      Q8_0  8192x2560  avgt    5   5.550 ± 0.335  ms/op
+GgufBandDequantBenchmark.dequantizeMatrix      Q8_0  2560x8192  avgt    5   5.572 ± 0.404  ms/op
+
+Benchmark result is saved to /opt/band/vectors/vectors-bench/jmh-results/2026-09-16-band-gemm/raw/genoa-avx512-512bit/dequant.json

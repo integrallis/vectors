@@ -37,7 +37,7 @@
 | Q8_0 | 8192x2560 | 1 | heap | 4.054 ± 0.623 | 7.344 ± 1.437 | **0.55x** | 5.50 / 3.03 | n/a | 5.17 / 2.86 |
 | Q8_0 | 8192x2560 | 512 | heap | 1501.112 ± 117.749 | 211.282 ± 23.927 | **7.10x** | 0.01 / 0.11 | n/a | 7.15 / 50.82 |
 
-### Pre-registered decision rule on this host
+### Pre-registration 1 (single kernel replaces integer) on this run's data
 
 - LLM-shape configurations with band >= 1.10x: 6 of 12
 - configurations anywhere with band slower by > 5% (speedup < 0.952x): 17 of 27

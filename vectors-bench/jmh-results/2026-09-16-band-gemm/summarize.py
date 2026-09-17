@@ -120,7 +120,7 @@ def main():
     llm = [x for x in all_sp if x[1][1] in ("8192x2560", "2560x8192") and x[1][3] == "heap"]
     wins = [x for x in llm if x[2] >= 1.10]
     losses = [x for x in all_sp if x[2] < 1 / 1.05]
-    print("\n### Pre-registered decision rule on this host\n")
+    print("\n### Pre-registration 1 (single kernel replaces integer) on this run's data\n")
     print(f"- LLM-shape configurations with band >= 1.10x: {len(wins)} of {len(llm)}")
     print(f"- configurations anywhere with band slower by > 5% (speedup < 0.952x): {len(losses)} of {len(all_sp)}")
     for name, key, sp in losses:

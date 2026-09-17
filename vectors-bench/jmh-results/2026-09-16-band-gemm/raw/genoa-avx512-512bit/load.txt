@@ -1,0 +1,12 @@
+== bandwidth-t1 load-before:  01:04:04 up 13:42,  3 users,  load average: 1.91, 0.46, 0.85
+== bandwidth-t1 load-after:   01:04:39 up 13:42,  3 users,  load average: 1.57, 0.54, 0.86
+== bandwidth-tall load-before:  01:04:39 up 13:42,  3 users,  load average: 1.57, 0.54, 0.86
+== bandwidth-tall load-after:   01:05:19 up 13:43,  3 users,  load average: 6.99, 2.02, 1.34
+== dequant load-before:  01:05:19 up 13:43,  3 users,  load average: 6.99, 2.02, 1.34
+== dequant load-after:   01:07:04 up 13:45,  3 users,  load average: 2.91, 1.96, 1.39
+== crossover load-before:  01:07:04 up 13:45,  3 users,  load average: 2.91, 1.96, 1.39
+== crossover load-after:   02:10:08 up 14:48,  3 users,  load average: 13.94, 13.83, 14.19
+== ab-st-existing load-before:  02:10:08 up 14:48,  3 users,  load average: 13.94, 13.83, 14.19
+== ab-st-existing load-after:   02:15:22 up 14:53,  3 users,  load average: 2.16, 6.02, 10.61
+== ab-st-llm load-before:  02:15:22 up 14:53,  3 users,  load average: 2.16, 6.02, 10.61
+== ab-st-llm load-after:   02:18:50 up 14:57,  3 users,  load average: 1.23, 3.70, 8.76
