@@ -1,0 +1,8 @@
+label=intel-i7-9750h-avx2-rep2 date=2026-09-17T00:33:14Z commit=370095f
+Darwin Brians-MacBook-Pro.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:11:49 PDT 2026; root:xnu-12377.161.14~5/RELEASE_X86_64 x86_64
+Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz 12 32768 262144 34359738368 
+FMA AVX1.0 AVX2 
+openjdk version "25.0.3" 2026-04-21 LTS
+OpenJDK Runtime Environment Temurin-25.0.3+9 (build 25.0.3+9-LTS)
+OpenJDK 64-Bit Server VM Temurin-25.0.3+9 (build 25.0.3+9-LTS, mixed mode)
+jvm=--add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC   

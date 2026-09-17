@@ -2148,7 +2148,7 @@ class GgufQuantizedDotTest {
                     new float[1],
                     new byte[cols],
                     new float[1],
-                    null))
+                    (GgufQ6BatchedKernel) null))
         .isInstanceOf(NullPointerException.class)
         .hasMessage("kernel");
   }
