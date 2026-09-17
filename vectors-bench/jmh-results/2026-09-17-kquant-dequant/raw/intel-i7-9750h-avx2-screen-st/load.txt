@@ -1,0 +1,8 @@
+== ab-st-integer load-before: 21:10  up 16 days, 14:52, 6 users, load averages: 71.80 114.07 146.93
+== ab-st-integer load-after:  21:11  up 16 days, 14:53, 6 users, load averages: 59.33 100.00 138.45
+== ab-st-band-scalar load-before: 21:11  up 16 days, 14:53, 6 users, load averages: 59.33 100.00 138.45
+== ab-st-band-scalar load-after:  21:12  up 16 days, 14:54, 6 users, load averages: 54.79 88.51 130.77
+== ab-st-band-simd-split load-before: 21:12  up 16 days, 14:54, 6 users, load averages: 54.79 88.51 130.77
+== ab-st-band-simd-split load-after:  21:14  up 16 days, 14:56, 6 users, load averages: 41.74 77.91 123.44
+== ab-st-band-simd-int load-before: 21:14  up 16 days, 14:56, 6 users, load averages: 41.74 77.91 123.44
+== ab-st-band-simd-int load-after:  21:15  up 16 days, 14:57, 6 users, load averages: 37.47 68.74 116.13

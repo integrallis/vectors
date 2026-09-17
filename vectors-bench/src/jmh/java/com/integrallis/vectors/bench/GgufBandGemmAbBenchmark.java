@@ -86,6 +86,15 @@ public class GgufBandGemmAbBenchmark {
   @Param({"heap"})
   String storage;
 
+  /**
+   * Label of the band arm's K-quant dequant arm this fork must be running ({@code
+   * -Dvectors.gguf.band.dequant}, a JVM-wide constant). {@code any} skips the check; any other
+   * value fails the trial unless the fork reports that requested arm, so a result can never carry
+   * the wrong label.
+   */
+  @Param({"any"})
+  String dequant;
+
   private int rows;
   private int cols;
   private GgufBatchedMatmulKernel arithmetic;
@@ -104,6 +113,11 @@ public class GgufBandGemmAbBenchmark {
     rows = Integer.parseInt(dims[0]);
     cols = Integer.parseInt(dims[1]);
     arithmetic = GgufBatchedMatmulKernel.valueOf(kernel);
+    String dequantConfiguration = GgufBatchedMatmulKernel.bandDequantConfiguration();
+    if (!dequant.equals("any") && !dequantConfiguration.contains("requested=" + dequant + ",")) {
+      throw new IllegalStateException(
+          "dequant param " + dequant + " but this fork runs " + dequantConfiguration);
+    }
     int blockSize = format.equals("Q8_0") ? 32 : 256;
     int blockBytes =
         switch (format) {
@@ -138,7 +152,7 @@ public class GgufBandGemmAbBenchmark {
     }
     System.out.printf(
         "band-gemm-ab format=%s kernel=%s rows=%d cols=%d batch=%d storage=%s weightBytes=%d"
-            + " band=%s capabilities=%s%n",
+            + " band=%s bandDequant=%s capabilities=%s%n",
         format,
         kernel,
         rows,
@@ -147,6 +161,7 @@ public class GgufBandGemmAbBenchmark {
         storage,
         blocks.length,
         GgufBatchedMatmulKernel.bandConfiguration(),
+        dequantConfiguration,
         VectorUtil.runtimeCapabilities());
   }
 
