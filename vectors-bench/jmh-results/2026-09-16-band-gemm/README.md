@@ -868,7 +868,7 @@ Facts about the pass that shape the probe (read in Models 167a8abd source):
 
 ## Pre-registration 4 result: alignment gate FAILED, so no verdict (run 2026-09-17T06:56Z–07:05Z)
 
-Host: the reference host (Hetzner CCX, `results-20260917T065647Z/host.txt`). Both conditions ran to
+Host: the reference host (16 vCPU, 30 GiB, x86_64; `results-20260917T065647Z/host.txt`). Both conditions ran to
 completion. Every Java run reproduced its recorded first fragment. Routing was confirmed in both
 arms, the observer was bit-identical, and the Hugging Face token ids equalled the Java ids.
 
