@@ -706,3 +706,104 @@ which argues against a gross kernel error. The investigation that can decide it:
 hidden-state comparison of both arms against the reference on these three prompts (Models already
 has a per-layer observer probe), to find whether band's deviation from the reference grows at a
 specific operation or stays at float-rounding level throughout.
+
+## Pre-registration 4: where does band leave the float reference? (written 2026-09-17T06:45Z, before any code that runs)
+
+Pre-registration 3 left the band path "not established as faithful" on three prompts whose
+reference first-token margins are 0.13, 0.38 and 2.0 logits. Three token-level outcomes cannot
+separate an implementation error from near-tie noise. This experiment compares hidden states layer
+by layer instead. Tools: `model-check/layer-probe/` (`LayerProbe.java`, `reference_layers.py`,
+`compare_layers.py`, `run-layer-probe.sh`).
+
+**Prompts.** The three divergent base-arm prompts: `5737432bc3c5551400e51e9b`,
+`5705f09e75f01819005e77a4` and `57266193dd62a815002e832e`.
+- Each is re-rendered with `ModelCheck.prompt(item, ModelCheck.BASE_INSTRUCTION)` on the
+  model-check Models build.
+- Each must reproduce the `promptTextSha256` and `promptTokens` recorded in
+  `cont-base-arm-integer.json`, or the run stops.
+
+**Arms.** Two fresh JVMs, `-Dvectors.gguf.batchedMatmulKernel=integer` and `=dispatch`. The
+routing report is recorded in each output.
+
+**Prefill conditions.**
+- **Primary: `pipeline-cache`.** Replays the model-check prefill sequence exactly. The first 20
+  window cases are run in order. Each prompt rewinds to its longest shared token prefix with the
+  previous prompt (as `GenerationLoop` does) and prefills only the suffix. So the batch sizes, and
+  therefore the band/integer routing, are the ones the continuations saw. Decode steps are not
+  replayed: they write KV only at positions past the prompt, and the next rewind discards them.
+- **Supplementary: `fresh`.** A reset and one full-prompt prefill from position 0, plus an
+  identical prefill with no observer installed. The logits of the two must be bit-identical, which
+  shows the observer does not perturb the pass. Only `fresh` can capture every position, which the
+  local-transfer analysis below needs.
+
+**Captured stages** (last prompt position, float32), in this order:
+- `embedding`: the token row times `embeddingScale`. Java recomputes this through
+  `LlamaWeights.embedToken`, because the observer does not expose it. It contains no matmul, so it
+  is identical in both arms; it serves as the alignment anchor.
+- `layer.0` … `layer.39`: the residual stream after each decoder layer, from `LlamaForwardPass`'s
+  `layerObserver`.
+- `final_norm`: the forward pass's `xNorm` field, read after prefill. This is the vector the LM
+  head consumed. A recomputation from the observed last layer is recorded beside it as a
+  consistency check.
+- `logits`: the prefill's return value, after the Granite logit scaling.
+
+The reference side:
+- **Model and weights:** Transformers `ibm-granite/granite-4.1-3b` at c0650403…, weights patched
+  with `patch_with_gguf` from the same Q4_K_M GGUF, float32, `use_cache=False`, run on the Java
+  arm's token ids.
+- **Tokenizer check:** the prompt text tokenised with `add_special_tokens=False` must have the
+  same token count; id equality is recorded.
+- **Stage capture:** by module hooks — the input of layer 0, the output of each layer,
+  `model.norm`, and the model's logits.
+- **Index check:** `output_hidden_states=True` is also captured and cross-checked against the
+  hooks, and the observed index convention is recorded. In current Transformers the last tuple
+  entry is post-norm.
+
+**Metric.** For each stage L, all relative to the reference vector's norm:
+
+- `e_int[L] = ‖int − ref‖ / ‖ref‖`
+- `e_band[L] = ‖band − ref‖ / ‖ref‖`
+- `e_ib[L] = ‖int − band‖ / ‖ref‖`
+
+**Alignment gate.** Evaluated before any verdict. `compare_layers.py` exits non-zero if any of
+these fails:
+- the stage lists, vector lengths, token ids or prompt SHA differ between files;
+- `e[embedding] > 1e-4` in either arm;
+- `e[layer.0] > 0.05`;
+- `layer.0` is not closer to reference `layer.0` than to reference `embedding` and `layer.1`
+  (an off-by-one check).
+
+**Decision rule (per prompt, primary condition).**
+- **Faithful:** band is judged faithful on a prompt if
+  - `e_band[L] ≤ 1.25 × e_int[L]` at every stage L, and
+  - `e_band[logits] ≤ e_int[logits]`.
+- **Overall:** band is faithful if it is faithful on all three prompts.
+- **Locating a suspect:** the first stage L* where `e_band[L*] > 1.25 × e_int[L*]` is the located
+  suspect for that prompt.
+- **Attention vs MLP:** the Java observer fires only after a whole decoder layer, so the two cannot
+  be separated inside a Java layer's accumulated error. A supplementary `fresh` analysis narrows the
+  suspect to one layer:
+  - **Local transfer:** each Java arm's full-sequence output of layer L−1 is run through the
+    reference layer L, with the reference's own mask and rotary inputs.
+  - **Local error:** the result is compared with that arm's layer L output, giving
+    `local_int[L]` and `local_band[L]`.
+  - **Split:** the same transfer is also run through the reference attention half alone, which
+    reports how much of the reference layer's own update is attention and how much is MLP. It
+    does not split the Java arm's error.
+  - Local transfer is supplementary and does not change the verdict.
+
+**Stated in advance.**
+- **Both errors are nonzero.** Both Java arms differ from Torch in attention, RMSNorm and RoPE
+  implementations and in reduction order. So `e_int` and `e_band` are both nonzero, and the rule
+  compares band's distance from the reference with integer's, not with zero.
+- **Early-layer noise.** At early layers both errors may sit at float32 rounding level (~1e-6).
+  There, a 1.25× ratio can be crossed by rounding alone. The rule is applied as written anyway. If
+  L* falls where both errors are below 1e-5, the result is reported as a rule failure *with* that
+  context and the next stage's ratio beside it; the rule is not relaxed after the fact.
+- **Reproduction check.** If the probe's top-1 token in the primary condition does not reproduce
+  that arm's recorded first fragment, the prompt is flagged as not reproducing the model-check
+  condition. Its layer table is still reported.
+- **What it cannot test.** The probe tests fidelity of the prefill's last position only. It says
+  nothing about decode (batch 1, integer in both arms) or about accuracy. Three prompts are a
+  localisation instrument, not a population estimate.
+- **No default changes on this experiment alone.**
