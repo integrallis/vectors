@@ -88,9 +88,10 @@ def ab_table(title, arms_rows, candidate):
         return None
     print(f"\n### {title}\n")
     print("ms/op ± 99.9% half-width. `new/old` = scalar band ms / arm band ms (>1 = faster than scalar dequant). `vs int` = integer ms / band ms.\n")
-    head = "| format | shape | batch | integer | " + " | ".join(f"band {a}" for a in arms) + " | " + " | ".join(f"{a} new/old" for a in arms if a != "scalar") + " | " + " | ".join(f"{a} vs int" for a in arms) + " |"
-    print(head)
-    print("|---|---|---:|" + "---:|" * (1 + len(arms) + (len(arms) - 1) + len(arms)))
+    cols = ["format", "shape", "batch", "integer"] + [f"band {a}" for a in arms]
+    cols += [f"{a} new/old" for a in arms if a != "scalar"] + [f"{a} vs int" for a in arms]
+    print("| " + " | ".join(cols) + " |")
+    print("|---|---|" + "---:|" * (len(cols) - 2))
     keys = sorted(arms_rows["scalar"], key=lambda k: (k[0], k[1], k[2]))
     verdict = {"b1b4": [], "b512": []}
     for key in keys:
@@ -144,7 +145,9 @@ def main():
     for suffix, label in (("", "multi-threaded (executor default)"), ("-st", "single-threaded")):
         for tag, arms_rows in sorted(ab_runs(d, suffix).items()):
             verdict = ab_table(f"Band A/B, {label}{' round ' + tag[2:] if tag else ''}", arms_rows, candidate)
-            if verdict and suffix == "" and candidate:
+            if verdict and suffix == "" and candidate and not verdict["b1b4"]:
+                print(f"\n(c) {candidate}: no data in this round yet")
+            elif verdict and suffix == "" and candidate:
                 ok1 = bool(verdict["b1b4"]) and all(x[1] for x in verdict["b1b4"])
                 ok2 = bool(verdict["b512"]) and all(x[1] for x in verdict["b512"])
                 print(f"\n**(c) {candidate}{' round ' + tag[2:] if tag else ''}: batch 1/4 faster than scalar in every cell: "
