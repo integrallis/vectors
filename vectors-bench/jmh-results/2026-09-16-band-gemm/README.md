@@ -674,3 +674,35 @@ a faithful implementation), not a re-reading of pre-registration 2.
 - **Known limitation stated in advance:** the reference uses float activations, as band does, so a
   correct band implementation should agree more by construction; the experiment tests
   implementation fidelity, not which quantisation of activations is better for accuracy.
+
+## Pre-registration 3 result: reference agreement (2026-09-17T06:40Z)
+
+Measured on the reference host (`model-check/reference-agreement/`): all 20 prompts re-rendered with
+`ModelCheck.prompt` reproduce the recorded SHA-256; reference prompt token counts equal the runtime's
+on all 20; float32 Transformers with the dequantised Q4_K_M weights.
+
+| | integer | dispatch (band) |
+|---|---:|---:|
+| agrees with the float reference (20 cases) | **19** | 18 |
+| agrees on the 3 cases where the arms diverge | 2 | 1 |
+
+| divergent case | reference | integer | band | reference top-2 margin |
+|---|---|---|---|---:|
+| 5737432b… | `Newton` | `Newton` | `unanswerable` | 0.127 |
+| 5705f09e… | `unanswerable` | `unanswerable` | `taxes` | 0.381 |
+| 57266193… | `wave speeds` | `answerable` | `wave speeds` | 2.000 |
+
+**Verdict under the pre-registered rule: not established as faithful** — (a) band agreement (18)
+is below integer's (19), and (b) band agrees on 1 of 3 divergent cases, below 2. Per the rule the
+band path is suspected of an implementation error and is investigated before any further default
+decision.
+
+What the measurement can and cannot say: the two cases band loses are near-ties in the reference
+itself (margins 0.13 and 0.38 logits); the one it wins has a margin of 2.0. Three divergent cases
+cannot separate a systematic error from near-tie noise between two different float
+implementations (the Java attention and norms differ from Torch's in both arms). The kernel-level
+test bounds band against an exact double-precision reference at ≤ 5e-8 of the term magnitudes,
+which argues against a gross kernel error. The investigation that can decide it: layer-by-layer
+hidden-state comparison of both arms against the reference on these three prompts (Models already
+has a per-layer observer probe), to find whether band's deviation from the reference grows at a
+specific operation or stays at float-rounding level throughout.
