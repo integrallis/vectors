@@ -649,3 +649,28 @@ Next, as a separate pre-registration written before running: both arms' greedy t
 logit margins against an independent float reference on the same prompts (llama.cpp's F16/BF16
 path or the Transformers reference already used for the Granite adapter work), to decide whether
 the divergence is band error or integer error; and removing the band path's per-call allocation.
+
+## Pre-registration 3: which arm matches the model? (written 2026-09-17T06:25Z, before any run below)
+
+The model-level identity gate (17/20) cannot say which arm is wrong: band computes the exact float
+product of the dequantised weights; the integer path adds per-block int8 activation rounding. This
+experiment asks which one tracks a float reference, and is a new decision (whether the band path is
+a faithful implementation), not a re-reading of pre-registration 2.
+
+- **Prompts:** the same 20 base-arm prompts, re-rendered with `ModelCheck.prompt` on the same Models
+  build; each must reproduce the recorded `promptTextSha256` in `cont-base-arm-*.json`, or the run
+  stops.
+- **Reference:** Transformers `ibm-granite/granite-4.1-3b` at c0650403…, weights replaced by the
+  dequantised tensors of the same Q4_K_M GGUF (sha256 662b0626…; `reference_alora_case.py
+  --gguf-weights` patching, q/k un-permuted), float32, no adapter, prompt tokenised without added
+  special tokens, greedy, max 8 new tokens, output cut at the first end-of-text.
+- **Measured per case:** reference output text, the reference's first-token top-2 logit margin, and
+  exact agreement of each arm's output (from the model-check JSON) with the reference output.
+- **Decision:** the band path is judged a faithful float implementation if (a) band agrees with the
+  reference on at least as many of the 20 cases as integer does, and (b) on the 3 cases where the
+  arms diverge, band agrees with the reference on at least 2. Otherwise the band path is suspected of
+  an implementation error and is investigated before any further default decision. Either way the
+  outcome is recorded; no default changes on this experiment alone.
+- **Known limitation stated in advance:** the reference uses float activations, as band does, so a
+  correct band implementation should agree more by construction; the experiment tests
+  implementation fidelity, not which quantisation of activations is better for accuracy.
