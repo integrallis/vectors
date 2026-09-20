@@ -2071,13 +2071,10 @@ public interface VectorUtilSupport {
       int quantBatchOffset,
       float[] q8Scales,
       int scaleBatchOffset) {
-    GgufQuantizationSupport.Q6Scratch scratch = GgufQuantizationSupport.q6Scratch();
-    int[] integerSums = scratch.integerSums;
-    float[] laneSums = scratch.laneSums;
-    java.util.Arrays.fill(laneSums, 0.0f);
+    float sum = 0.0f;
 
     for (int block = 0; block < blocks; block++) {
-      java.util.Arrays.fill(integerSums, 0);
+      int blockSum = 0;
       long blockOffset = rowOffset + (long) block * GGUF_Q6_K_BLOCK_BYTES;
       float d =
           Float.float16ToFloat(
@@ -2109,24 +2106,16 @@ public interface VectorUtilSupport {
           int s2 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 2L);
           int s3 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 4L);
           int s4 = qWeight.get(ValueLayout.JAVA_BYTE, scaleBase + scaleIndex + 6L);
-          int lane = index & 7;
-
-          integerSums[lane] += s1 * q1 * q8Quants[quantBase + index];
-          integerSums[lane] += s2 * q2 * q8Quants[quantBase + index + 32];
-          integerSums[lane] += s3 * q3 * q8Quants[quantBase + index + 64];
-          integerSums[lane] += s4 * q4 * q8Quants[quantBase + index + 96];
+          blockSum += s1 * q1 * q8Quants[quantBase + index];
+          blockSum += s2 * q2 * q8Quants[quantBase + index + 32];
+          blockSum += s3 * q3 * q8Quants[quantBase + index + 64];
+          blockSum += s4 * q4 * q8Quants[quantBase + index + 96];
         }
       }
 
-      for (int lane = 0; lane < laneSums.length; lane++) {
-        laneSums[lane] = MathUtil.fma(d, integerSums[lane], laneSums[lane]);
-      }
+      sum = MathUtil.fma(d, blockSum, sum);
     }
 
-    float sum = 0.0f;
-    for (float laneSum : laneSums) {
-      sum += laneSum;
-    }
     return sum;
   }
 

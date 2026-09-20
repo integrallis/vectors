@@ -26,19 +26,22 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Q6_K's scalar path keeps eight float lane accumulators for one stated reason: so its reduction
- * order matches the eight-lane order of the Vector API path, making the two bit-identical. That is
- * documented as a determinism contract rather than an optimisation.
+ * The scalar and Vector API paths for Q6_K must produce bit-identical results, and until now they
+ * did not.
  *
- * <p>No test has ever enforced it. The existing scalar-versus-Panama comparison for Q6_K comes with
- * a tolerance of 1e-3, which a one-unit-in-last-place disagreement passes without trace.
+ * <p>The scalar path kept eight float lane accumulators, documented as existing so its reduction
+ * order would match the eight-lane order of the Vector API path. That was true of an older SIMD
+ * implementation. The current one reduces each super-block to a single integer and applies one
+ * fused multiply per block, so the two were folding in genuinely different orders: eight roundings
+ * per block against one. They disagreed by one to two units in the last place at every width.
  *
- * <p>These tests assert bit-equality instead, at one super-block and at several, because a
- * cross-block accumulation-order defect is invisible at one block by construction and only appears
- * from the second onward.
+ * <p>Nothing caught it because the existing scalar-versus-Panama comparison for Q6_K carries a
+ * tolerance of 1e-3, which such a disagreement passes without trace. These tests assert bit
+ * equality instead, and include Q4_K as a control so a failure here cannot be blamed on the harness
+ * or on the Vector API in general.
  */
 @Tag("unit")
-class Q6KEightLaneContractTest {
+class Q6KReductionOrderContractTest {
 
   private static final int BLOCK = 256;
   private static final int BLOCK_BYTES = 210;
