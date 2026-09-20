@@ -2,6 +2,26 @@
 
 All notable changes to java-vectors are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- Q6_K's scalar and Vector API routes now produce bit-identical results. The scalar route kept
+  eight float lane accumulators, documented as existing so its reduction order would match the
+  eight-lane order of the Vector API route. That was true of an older SIMD implementation; the
+  current one reduces each super-block to a single integer and applies one fused multiply per
+  block. The two therefore folded in different orders and disagreed by one to two units in the last
+  place at every width, including a single super-block.
+
+  **The Vector API route is unchanged, so nothing computed on a host with 256-bit vectors or wider
+  moves.** The scalar route, which serves narrower hosts and the explicit scalar provider, now
+  agrees with it instead of differing in the low bits. Results that previously depended on which
+  route ran are now the same either way.
+
+  The existing scalar-versus-Vector-API comparison for Q6_K asserted `offset(1e-3f)`, wide enough
+  to hide the defect for as long as it existed; it now asserts bit-equality, and a Q4_K control
+  runs beside it so a future failure cannot be blamed on the harness.
+
 ## [0.1.22] - 2026-09-16
 
 ### Changed
