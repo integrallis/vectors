@@ -1189,8 +1189,14 @@ class PanamaGgufQuantizedDotTest {
     assertThat(actualQuants).containsExactly(expectedQuants);
     assertThat(actualScales).containsExactly(expectedScales);
     assertThat(actual).hasSameSizeAs(expected);
+    // Bit-equality, not a tolerance. This assertion carried offset(1e-3f) for a long time, and the
+    // scalar and Vector API routes disagreed by one to two units in the last place underneath it
+    // the whole while. A tolerance wide enough to hide a reduction-order defect is not a test of a
+    // reduction order.
     for (int row = 0; row < rows; row++) {
-      assertThat(actual[row]).isCloseTo(expected[row], offset(1e-3f));
+      assertThat(Float.floatToRawIntBits(actual[row]))
+          .describedAs("row %d: scalar %s vs panama %s", row, expected[row], actual[row])
+          .isEqualTo(Float.floatToRawIntBits(expected[row]));
     }
   }
 
