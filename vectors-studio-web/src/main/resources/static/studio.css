@@ -551,3 +551,6 @@ form.search-form > button[type="submit"] { flex: 0 0 auto; }
 .trial-table th.sorted-asc::after { content: " ▲"; }
 .trial-table th.sorted-desc::after { content: " ▼"; }
 .trial-table .num-strong { font-weight: 600; color: var(--color-fg); }
+
+/* Author layout rules must not override the semantic hidden attribute. */
+[hidden] { display: none !important; }

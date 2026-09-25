@@ -44,12 +44,13 @@ jobs:
           cache-dependency-path: docs/package-lock.json
 
       - name: Install native BLAS (Vectors Studio)
-        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev
+        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev libarpack2-dev
 
       - name: Build, test, and stage artifacts
         run: >
           ./gradlew clean spotlessCheck build :docs:build
-          :vectors-bench:recallGate complianceCheck publish
+          :vectors-bench:recallGate :vectors-storage:integrationTest
+          :vectors-studio-web:integrationTest complianceCheck publish
           --no-daemon --stacktrace
 
       - name: Resolve project version

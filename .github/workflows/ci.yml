@@ -27,10 +27,14 @@ jobs:
       # FFM API (smile.linalg), which dlopens libopenblas.so at runtime. The runner has no BLAS by
       # default, so those tests fail with NoClassDefFoundError without this.
       - name: Install native BLAS (Smile LAPACK backend)
-        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev
+        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev libarpack2-dev
 
       - name: Build + Test
         run: ./gradlew spotlessCheck build -x :docs:build
+
+      # S3 compare-and-swap and Studio SSE/HTTP workflows are outside the default test tags.
+      - name: Storage and Studio integration tests
+        run: ./gradlew :vectors-storage:integrationTest :vectors-studio-web:integrationTest
 
       - uses: actions/setup-node@v6
         with:

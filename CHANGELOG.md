@@ -8,6 +8,12 @@ All notable changes to java-vectors are documented here.
 
 ### Fixed
 
+- Qualify Studio with the native ARPACK dependency needed by connected-graph UMAP projections,
+  and preserve hidden UI controls when layout styles apply.
+- Update Jackson and Netty in the published optional runtime dependencies to patched versions.
+- Run S3 and Studio integration tests in CI and release validation. Pin the S3 test emulator
+  to LocalStack 4.1.0, which implements the `If-Match` conditional-write contract under test;
+  the former 3.8 image silently accepted stale ETags.
 - Corrected the security policy to describe the published release line and the optional S3
   runtime inside the CPU publication scope.
 

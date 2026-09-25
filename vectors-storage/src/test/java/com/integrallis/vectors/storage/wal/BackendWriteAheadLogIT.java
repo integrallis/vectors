@@ -43,7 +43,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 
 /**
- * Integration test for {@link BackendWriteAheadLog} against a real S3 endpoint (LocalStack 3.8).
+ * Integration test for {@link BackendWriteAheadLog} against a real S3 endpoint (LocalStack 4.1.0).
  * Validates the §6.2 / §16.2 contract end-to-end across S3 PUT/GET so the durability invariants
  * proven by the in-process contract test also hold over the network path.
  *
@@ -57,7 +57,7 @@ class BackendWriteAheadLogIT {
 
   @Container
   static final LocalStackContainer LOCALSTACK =
-      new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8"))
+      new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.1.0"))
           .withServices(Service.S3);
 
   private static S3Client s3Client;

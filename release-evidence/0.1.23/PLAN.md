@@ -28,7 +28,10 @@ Baseline: `27344d4957a027de6057ff9c16d209369e3100c3` (main, 2026-09-25).
 3. ARM: core tests on real AArch64 Java 25, including the Q6_K contracts. A forced 128-bit x86 run
    alone is not evidence of ARM execution.
 4. Validate notebooks against the staged 0.1.23 artifacts, plus documentation build and SBOM.
-5. A release is ready only after these gates pass on the exact candidate source. Publication and
+5. Exercise Studio browser workflows (collections, document data, pagination, PCA/t-SNE/UMAP,
+   inspector), its integration tests and the UI demos against the candidate libraries. The
+   application integration gate is required even though Studio is outside Maven publication.
+6. A release is ready only after these gates pass on the exact candidate source. Publication and
    downstream dependency updates must identify the immutable released version.
 
 No performance improvement is claimed by this patch. The correctness correction changes scalar
