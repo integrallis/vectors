@@ -10,6 +10,48 @@ permissions:
   contents: read
 
 jobs:
+  core-portability:
+    name: Core portability (${{ matrix.mode }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: arm64
+            runner: ubuntu-24.04-arm
+            java_options: ''
+          - mode: x86-128
+            runner: ubuntu-latest
+            java_options: '-Dvectors.maxBits=128'
+          - mode: x86-scalar
+            runner: ubuntu-latest
+            java_options: '-Dvectors.forceScalar=true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Record hardware and source
+        run: |
+          mkdir -p build/core-portability
+          { git rev-parse HEAD; uname -a; lscpu; java -version; } > build/core-portability/host.txt 2>&1
+      - name: Execute core contracts
+        env:
+          JAVA_TOOL_OPTIONS: ${{ matrix.java_options }}
+        run: ./gradlew :vectors-core:test --rerun-tasks --max-workers=4 --no-daemon
+      - name: Retain portability evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: core-portability-${{ matrix.mode }}
+          path: |
+            build/core-portability/
+            vectors-core/build/test-results/test/
+          retention-days: 30
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -27,10 +69,14 @@ jobs:
       # FFM API (smile.linalg), which dlopens libopenblas.so at runtime. The runner has no BLAS by
       # default, so those tests fail with NoClassDefFoundError without this.
       - name: Install native BLAS (Smile LAPACK backend)
-        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev
+        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev libarpack2-dev
 
       - name: Build + Test
         run: ./gradlew spotlessCheck build -x :docs:build
+
+      # S3 compare-and-swap and Studio SSE/HTTP workflows are outside the default test tags.
+      - name: Storage and Studio integration tests
+        run: ./gradlew :vectors-storage:integrationTest :vectors-studio-web:integrationTest
 
       - uses: actions/setup-node@v6
         with:
@@ -52,6 +98,19 @@ jobs:
 
       - name: Compliance Check
         run: ./gradlew complianceCheck verifyLockfiles verifyGithubWorkflows
+
+      - name: Verify staged Maven runtime dependencies
+        run: |
+          ./gradlew publish
+          python3 scripts/verify-maven-runtime.py --repository build/staging-deploy
+
+      - name: Retain Maven consumer evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maven-runtime-consumers
+          path: build/maven-runtime-smoke/
+          retention-days: 30
 
       - name: Upload SBOM
         uses: actions/upload-artifact@v7
@@ -109,3 +168,48 @@ jobs:
           name: executed-notebooks
           path: build/notebooks/executed/
           retention-days: 14
+
+  studio-browser:
+    name: Studio browser workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install projection and browser runtimes
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev libarpack2-dev
+          python -m pip install playwright==1.63.0
+          python -m playwright install --with-deps chromium
+      - name: Build Studio distribution
+        run: ./gradlew :vectors-studio-web:installDist
+      - name: Exercise collection and projection workflows
+        run: |
+          mkdir -p build/studio-browser
+          java --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED \
+            --class-path 'vectors-studio-web/build/install/vectors-studio-web/lib/*' \
+            vectors-studio-web/smoke/StudioFixture.java > build/studio-browser/server.log 2>&1 &
+          fixture_pid=$!
+          trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8288/health; then break; fi
+            kill -0 "$fixture_pid"
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8288/health
+          python vectors-studio-web/smoke/browser.py --output build/studio-browser
+      - name: Retain browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: studio-browser
+          path: build/studio-browser/
+          retention-days: 30

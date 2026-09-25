@@ -44,7 +44,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 
 /**
- * Integration test for {@link S3StorageBackend} against LocalStack 3.8.
+ * Integration test for {@link S3StorageBackend} against LocalStack 4.1.0.
  *
  * <p>Exercises the same surface that {@link StorageBackendContractTest} covers for the in-JVM
  * backends (put/get/getRange/list/delete/conditionalPut) and additionally verifies that {@link
@@ -63,7 +63,7 @@ class S3StorageBackendIT implements StorageBackendContract {
 
   @Container
   static final LocalStackContainer LOCALSTACK =
-      new LocalStackContainer(DockerImageName.parse("localstack/localstack:3.8"))
+      new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.1.0"))
           .withServices(Service.S3);
 
   private static S3Client s3Client;

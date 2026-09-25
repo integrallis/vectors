@@ -37,10 +37,12 @@ class MaxBitsSelectionTest {
   }
 
   @Test
-  void resolvedCapDefaultsTo256WhenPropertyUnset() {
-    // The test JVM does not set -Dvectors.maxBits, so the resolved cap is the default.
-    assertThat(System.getProperty("vectors.maxBits")).isNull();
-    assertThat(PanamaConstants.MAX_BITS).isEqualTo(PanamaConstants.DEFAULT_MAX_BITS);
+  void resolvedCapMatchesTheTestJvmConfiguration() {
+    // The same suite runs with the default cap and explicit width overrides.
+    String configured = System.getProperty("vectors.maxBits");
+    int expected =
+        configured == null || configured.isBlank() ? 256 : Integer.parseInt(configured.trim());
+    assertThat(PanamaConstants.MAX_BITS).isEqualTo(expected);
   }
 
   @Test

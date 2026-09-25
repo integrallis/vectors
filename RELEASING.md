@@ -13,8 +13,10 @@ Maven Central until they have independent release contracts.
 
 ## Cut a release
 
-1. Set a non-snapshot version in `gradle.properties`.
-2. Update `CHANGELOG.md`, commit, and push to `main`.
+1. Set a non-snapshot version in `gradle.properties`. Update the version pill and dependency
+   coordinates in `docs/landing/index.html` and `docs/landing/assets/js/landing.js` to match.
+2. Update `CHANGELOG.md` and run `./gradlew verifyDocumentation` before committing the release
+   candidate. Complete the required checks before merging to `main`.
 3. Run **Actions → Release** with `dry_run` enabled.
 4. Inspect the JReleaser validation output and staged POMs.
 5. Run **Release** again with `dry_run` disabled.

@@ -11,7 +11,7 @@ projections.
 == Native BLAS Requirement
 
 The 30 published Vectors {vectors-version} artifacts are Java-only JARs. Studio is different: its Smile-backed
-projection algorithms load native BLAS/LAPACK through FFM. Install OpenBLAS before building or
+projection algorithms load native BLAS/LAPACK through FFM; UMAP spectral initialization also requires ARPACK. Install both before building or
 running Studio:
 
 [tabs]
@@ -20,33 +20,34 @@ Debian / Ubuntu::
 +
 [source,bash]
 ----
-sudo apt-get install -y libopenblas-dev
+sudo apt-get install -y libopenblas-dev libarpack2-dev
 ----
 
 Fedora / RHEL::
 +
 [source,bash]
 ----
-sudo dnf install -y openblas-devel
+sudo dnf install -y openblas-devel arpack-devel
 ----
 
 macOS::
 +
 [source,bash]
 ----
-brew install openblas
+brew install openblas arpack
 ----
 
 Arch Linux::
 +
 [source,bash]
 ----
-sudo pacman -S openblas
+sudo pacman -S openblas arpack
 ----
 ====
 
 The development package is preferred on Linux because it provides the unversioned
-`libopenblas.so` loader name.
+`libopenblas.so` and `libarpack.so` loader names. UMAP can require ARPACK even when sphereizing
+is disabled; a small or disconnected fixture can otherwise hide this missing runtime dependency.
 
 == Run with an Embedded Collection
 

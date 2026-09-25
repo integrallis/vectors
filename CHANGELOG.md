@@ -4,7 +4,22 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-09-25
+
 ### Fixed
+
+- Make the desktop multimodal RAG distribution launch with its bundled JavaFX dependencies
+  and restrict macOS Dock JVM options to macOS.
+- Qualify Studio with the native ARPACK dependency needed by connected-graph UMAP projections,
+  and preserve hidden UI controls when layout styles apply.
+- Update Jackson and Netty in the published optional runtime dependencies to patched versions.
+- Ensure Maven consumers resolve those patched runtime versions as well as Gradle consumers;
+  validate each optional runtime's staged POM independently in CI and release validation.
+- Run S3 and Studio integration tests in CI and release validation. Pin the S3 test emulator
+  to LocalStack 4.1.0, which implements the `If-Match` conditional-write contract under test;
+  the former 3.8 image silently accepted stale ETags.
+- Corrected the security policy to describe the published release line and the optional S3
+  runtime inside the CPU publication scope.
 
 - Q6_K's scalar and Vector API routes now produce bit-identical results. The scalar route kept
   eight float lane accumulators, documented as existing so its reduction order would match the
