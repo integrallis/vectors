@@ -4,7 +4,7 @@
 
 | Version            | Status                         |
 |--------------------|--------------------------------|
-| 0.1.x (unreleased) | Pre-release security fixes only |
+| Latest 0.1.x patch | Security fixes on the current release line |
 
 ## Reporting a Vulnerability
 
@@ -59,9 +59,11 @@ Security-relevant boundaries:
 
 - **CPU release artifacts are Java bytecode** — They require no JNI library. The storage module
   uses the FFM API for mmap access and an optional `posix_madvise` call.
-- **Native and network modules exist but are excluded from 0.1.x** — `vectors-gpu` binds to cuVS;
-  distributed, server, replication, and S3-capable modules perform network I/O. They must not be
-  described as part of the CPU release boundary.
+- **GPU and distributed services are excluded from 0.1.x** — `vectors-gpu` binds to cuVS;
+  distributed, cluster, and server modules are outside the Maven Central publication allowlist.
+  The published CPU libraries do include optional S3 storage: `vectors-storage` exposes
+  `S3StorageBackend`, and `vectors-storage-s3` supplies its AWS SDK runtime. Selecting that backend
+  performs network I/O and requires the application to configure credentials and access controls.
 - **Arena-based memory management** — Off-heap segments use `java.lang.foreign.Arena`; callers must
   still respect the documented lifetime and ownership contracts.
 - **Artifact signing is external** — JReleaser signs staged Maven artifacts with the maintainer's
@@ -77,8 +79,8 @@ Security-relevant boundaries:
 - **Vulnerability scanning** — OWASP Dependency-Check is available as an explicit release audit;
   findings with CVSS >= 7.0 fail that task
 - **Artifact signing** — The release workflow is configured to sign Maven
-  Central artifacts with GPG through JReleaser; no 0.1.0 release has been
-  signed yet.
+  Central artifacts with GPG through JReleaser. Verify the detached signature and artifact
+  digest for the exact version consumed.
 - **Deterministic JAR settings** — JAR tasks disable file timestamps and use
   reproducible file order. A byte-for-byte clean-room rebuild has not yet been
   independently verified.

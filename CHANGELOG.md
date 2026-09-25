@@ -8,6 +8,9 @@ All notable changes to java-vectors are documented here.
 
 ### Fixed
 
+- Corrected the security policy to describe the published release line and the optional S3
+  runtime inside the CPU publication scope.
+
 - Q6_K's scalar and Vector API routes now produce bit-identical results. The scalar route kept
   eight float lane accumulators, documented as existing so its reduction order would match the
   eight-lane order of the Vector API route. That was true of an older SIMD implementation; the
