@@ -8,6 +8,8 @@ All notable changes to java-vectors are documented here.
 
 ### Fixed
 
+- Make the desktop multimodal RAG distribution launch with its bundled JavaFX dependencies
+  and restrict macOS Dock JVM options to macOS.
 - Qualify Studio with the native ARPACK dependency needed by connected-graph UMAP projections,
   and preserve hidden UI controls when layout styles apply.
 - Update Jackson and Netty in the published optional runtime dependencies to patched versions.
