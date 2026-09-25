@@ -35,8 +35,8 @@ import org.junit.jupiter.api.Test;
  * fused multiply per block, so the two were folding in genuinely different orders: eight roundings
  * per block against one. They disagreed by one to two units in the last place at every width.
  *
- * <p>Nothing caught it because the existing scalar-versus-Panama comparison for Q6_K carries a
- * tolerance of 1e-3, which such a disagreement passes without trace. These tests assert bit
+ * <p>Nothing caught it because the existing scalar-versus-Panama comparison for Q6_K carried a
+ * tolerance of 1e-3, which such a disagreement passed without trace. These tests assert bit
  * equality instead, and include Q4_K as a control so a failure here cannot be blamed on the harness
  * or on the Vector API in general.
  */

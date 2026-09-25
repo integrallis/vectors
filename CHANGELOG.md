@@ -4,6 +4,8 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-09-25
+
 ### Fixed
 
 - Q6_K's scalar and Vector API routes now produce bit-identical results. The scalar route kept
