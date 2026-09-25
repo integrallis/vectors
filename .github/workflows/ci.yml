@@ -113,3 +113,48 @@ jobs:
           name: executed-notebooks
           path: build/notebooks/executed/
           retention-days: 14
+
+  studio-browser:
+    name: Studio browser workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install projection and browser runtimes
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-dev libarpack2-dev
+          python -m pip install playwright==1.63.0
+          python -m playwright install --with-deps chromium
+      - name: Build Studio distribution
+        run: ./gradlew :vectors-studio-web:installDist
+      - name: Exercise collection and projection workflows
+        run: |
+          mkdir -p build/studio-browser
+          java --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED \
+            --class-path 'vectors-studio-web/build/install/vectors-studio-web/lib/*' \
+            vectors-studio-web/smoke/StudioFixture.java > build/studio-browser/server.log 2>&1 &
+          fixture_pid=$!
+          trap 'kill "$fixture_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8288/health; then break; fi
+            kill -0 "$fixture_pid"
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8288/health
+          python vectors-studio-web/smoke/browser.py --output build/studio-browser
+      - name: Retain browser evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: studio-browser
+          path: build/studio-browser/
+          retention-days: 30
