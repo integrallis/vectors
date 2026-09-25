@@ -53,6 +53,9 @@ jobs:
           :vectors-studio-web:integrationTest complianceCheck publish
           --no-daemon --stacktrace
 
+      - name: Verify staged Maven runtime dependencies
+        run: python3 scripts/verify-maven-runtime.py --repository build/staging-deploy
+
       - name: Resolve project version
         id: version
         run: echo "version=$(grep -E '^version' gradle.properties | sed -E 's/.*=[[:space:]]*//')" >> "$GITHUB_OUTPUT"

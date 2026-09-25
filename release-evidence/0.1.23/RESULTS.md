@@ -83,3 +83,27 @@ checks here do not establish an enforced repository merge policy.
 
 The rejected band-GEMM and dequantization experiments (#74/#75) stay out of this release.
 Their branches, worktrees and negative evidence are preserved.
+
+## Merge-audit correction: Maven dependency propagation
+
+The merge audit found a publication blocker in the candidate above: a real Maven consumer of the
+staged POMs still resolved Netty 4.1.115.Final through AWS SDK and Jackson 2.21.0 through Arrow.
+The imported BOMs aligned Gradle consumers, but did not propagate overrides into Maven's
+transitive dependency graph. The earlier OSV result describes the Gradle-resolved runtime closure;
+it did not establish the corresponding Maven consumer graph.
+
+The correction directly declares the existing Netty runtime closure and Jackson dependencies,
+retaining the BOMs as their version source. It adds no new library to the Gradle runtime closure.
+`scripts/verify-maven-runtime.py` consumes each of `vectors-storage-s3`, `vectors-db-arrow` and
+`vectors-vcr-serde-jackson` separately from staging in a fresh Maven cache and verifies patched
+versions. Separate consumers prevent one optional runtime from masking another's version issue.
+CI and the release workflow run this check against newly staged publications. The original
+failing Maven graph and corrected graphs are retained in the parent workspace under
+`projects/benchmark-results/pr-merge-audit-20260925/`.
+
+Local consumer verification fails on the original POMs, then passes with the regenerated POMs:
+10 Netty components for S3, four Jackson components for Arrow and three for Jackson cassette
+serialization. Across the three independent consumers, all 56 external resolved coordinates
+are present in the previously scanned Gradle closure; no unscanned coordinate was introduced.
+This checks dependency resolution, not a new advisory database snapshot. CI rebuilds and stages
+the complete corrected publications before repeating these same consumer checks.

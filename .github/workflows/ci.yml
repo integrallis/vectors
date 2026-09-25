@@ -99,6 +99,19 @@ jobs:
       - name: Compliance Check
         run: ./gradlew complianceCheck verifyLockfiles verifyGithubWorkflows
 
+      - name: Verify staged Maven runtime dependencies
+        run: |
+          ./gradlew publish
+          python3 scripts/verify-maven-runtime.py --repository build/staging-deploy
+
+      - name: Retain Maven consumer evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maven-runtime-consumers
+          path: build/maven-runtime-smoke/
+          retention-days: 30
+
       - name: Upload SBOM
         uses: actions/upload-artifact@v7
         with:

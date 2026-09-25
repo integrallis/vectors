@@ -13,6 +13,8 @@ All notable changes to java-vectors are documented here.
 - Qualify Studio with the native ARPACK dependency needed by connected-graph UMAP projections,
   and preserve hidden UI controls when layout styles apply.
 - Update Jackson and Netty in the published optional runtime dependencies to patched versions.
+- Ensure Maven consumers resolve those patched runtime versions as well as Gradle consumers;
+  validate each optional runtime's staged POM independently in CI and release validation.
 - Run S3 and Studio integration tests in CI and release validation. Pin the S3 test emulator
   to LocalStack 4.1.0, which implements the `If-Match` conditional-write contract under test;
   the former 3.8 image silently accepted stale ETags.
