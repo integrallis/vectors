@@ -10,6 +10,48 @@ permissions:
   contents: read
 
 jobs:
+  core-portability:
+    name: Core portability (${{ matrix.mode }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: arm64
+            runner: ubuntu-24.04-arm
+            java_options: ''
+          - mode: x86-128
+            runner: ubuntu-latest
+            java_options: '-Dvectors.maxBits=128'
+          - mode: x86-scalar
+            runner: ubuntu-latest
+            java_options: '-Dvectors.forceScalar=true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Record hardware and source
+        run: |
+          mkdir -p build/core-portability
+          { git rev-parse HEAD; uname -a; lscpu; java -version; } > build/core-portability/host.txt 2>&1
+      - name: Execute core contracts
+        env:
+          JAVA_TOOL_OPTIONS: ${{ matrix.java_options }}
+        run: ./gradlew :vectors-core:test --rerun-tasks --max-workers=4 --no-daemon
+      - name: Retain portability evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: core-portability-${{ matrix.mode }}
+          path: |
+            build/core-portability/
+            vectors-core/build/test-results/test/
+          retention-days: 30
+
   build:
     runs-on: ubuntu-latest
     steps:

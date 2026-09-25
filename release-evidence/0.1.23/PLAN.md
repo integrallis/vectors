@@ -19,6 +19,13 @@ Baseline: `27344d4957a027de6057ff9c16d209369e3100c3` (main, 2026-09-25).
   deleting the exact owned instance, then check its associated firewall and primary IPs.
 - Local raw evidence: `projects/benchmark-results/vectors-0.1.23-20260925/`.
 
+Infrastructure amendment, 20:19 UTC: Hetzner rejected CAX31 allocation in nbg1 and hel1 with
+`unsupported location for server type`. No ARM server was created; both temporary firewalls were
+removed. Use GitHub's standard `ubuntu-24.04-arm` runner for the real AArch64 correctness gate.
+The x86 VPS evidence was copied and SHA-256 verified before deleting its server and firewall;
+the closing inventory has no servers, primary IPs, volumes or floating IPs. The pre-existing
+Granite firewall was preserved. Add ARM, x86-128 and forced-scalar core execution to ongoing CI.
+
 ## Gates
 
 1. x86: clean Java 25 build, formatting, recall regression, compliance, dependency locks and workflow
