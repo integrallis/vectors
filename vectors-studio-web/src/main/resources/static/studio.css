@@ -171,6 +171,27 @@ h2 { font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.01em; margin:
 /* Categorical pills — enum tokens; uppercase via the base .pill rule. */
 .pill-metric { color: var(--kind-json);   border-color: rgba(31, 111, 235, .25); background: rgba(31, 111, 235, .06); }
 .pill-index  { color: var(--kind-image);  border-color: rgba(111, 79, 203, .25); background: rgba(111, 79, 203, .06); }
+/* Provenance — three states kept visually distinct, because collapsing them into one grey pill
+   would hide the distinction the pill exists to show. Attested reads as confirmed, declared as
+   merely stated, unknown as neutral-but-absent. Unknown is deliberately NOT styled as an error:
+   a collection used as plain vector storage is a legitimate choice, not a mistake. */
+.pill-provenance { text-transform: none; letter-spacing: 0; max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill-provenance-attested { color: var(--color-brand);    border-color: rgba(18, 110, 34, .35);  background: var(--color-brand-soft); }
+.pill-provenance-declared { color: var(--kind-audio);     border-color: rgba(181, 101, 29, .30); background: rgba(181, 101, 29, .06); }
+.pill-provenance-unknown  { color: var(--color-fg-muted); border-color: var(--color-border);     background: transparent; border-style: dashed; }
+
+/* The spelled-out consequence for a collection with no recipe. A tooltip is not enough here: the
+   point is that a user should not have to hover to discover that a ranking cannot be audited. */
+.provenance-note {
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 2px dashed var(--color-border);
+  color: var(--color-fg-muted);
+  font-size: .85rem;
+  line-height: 1.45;
+  max-width: 72ch;
+}
+
 /* "sample" tag on catalog-backed collections + the loaded state on the datasets tab. */
 .pill-sample { margin-left: var(--sp-2); color: var(--color-brand); border-color: rgba(18, 110, 34, .25); background: var(--color-brand-soft); }
 /* "missing key" provider status — same shape as .pill-sample, red. */

@@ -35,4 +35,33 @@ public record CollectionSummary(
     String indexType,
     String quantizer,
     long size,
-    Instant createdAt) {}
+    Instant createdAt,
+    CollectionProvenance provenance) {
+
+  public CollectionSummary {
+    // Never null: a summary that omitted provenance would let the UI quietly render nothing, which
+    // is
+    // the opposite of the point. A collection with no recipe is UNKNOWN and says so.
+    provenance = provenance == null ? CollectionProvenance.unknown() : provenance;
+  }
+
+  /** Backwards-compatible form for backends that cannot yet report provenance. */
+  public CollectionSummary(
+      String name,
+      int dimension,
+      String metric,
+      String indexType,
+      String quantizer,
+      long size,
+      Instant createdAt) {
+    this(
+        name,
+        dimension,
+        metric,
+        indexType,
+        quantizer,
+        size,
+        createdAt,
+        CollectionProvenance.unknown());
+  }
+}

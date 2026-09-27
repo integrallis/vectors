@@ -15,6 +15,8 @@
  */
 package com.integrallis.vectors.db.storage;
 
+import com.integrallis.vectors.core.ContentHash;
+import com.integrallis.vectors.core.EmbeddingRecipe;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.IndexType;
 import com.integrallis.vectors.db.QuantizerKind;
@@ -26,14 +28,23 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.HexFormat;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Self-describing header for a persistent generation directory. Every field is stored at a fixed
  * offset so a reader can decide whether the generation is intact by reading exactly {@link
  * #HEADER_SIZE} bytes and validating the self-CRC — no heap allocation, no schema parsing.
  *
- * <p>Layout (little-endian throughout, version 4 — added tombstone fields in Step 6):
+ * <p>Layout (little-endian throughout, version 5 — added the embedding-recipe anchor):
+ *
+ * <p><b>Why the recipe's hash is in here rather than only in its own file.</b> The self-CRC covers
+ * everything before it, so a value inside this header cannot be altered without detection, while a
+ * sidecar file on its own could be swapped or deleted with nothing disagreeing. The recipe body has
+ * to live outside — it is variable length and this header is fixed — so the body goes in {@code
+ * recipe.json} and its hash is anchored here. Verifying one against the other is what makes the
+ * word "attested" mean anything.
  *
  * <pre>
  * Offset  Size  Field                       Notes
@@ -63,9 +74,11 @@ import java.util.Objects;
  * 136      8    tombstone count             int64 (0 if no tombstones)
  * 144      8    tombstones.bin length       int64 (0 if no tombstones file written)
  * 152      8    tombstones.bin CRC32        uint32 zero-extended, 0 if no tombstones file
- * 160      4    self CRC32                  CRC32 over bytes [0, 160)
+ * 160      4    recipe present flag         0 = no embedding recipe, 1 = recipe.json present
+ * 164     32    recipe hash                 SHA-256 of the canonical recipe form, or 32 zero bytes
+ * 196      4    self CRC32                  CRC32 over bytes [0, 196)
  * ------  ----  --------------------------
- * 164      -    (future extension area — version bump required to grow)
+ * 200      -    (future extension area — version bump required to grow)
  * </pre>
  *
  * <p><b>CRC width asymmetry.</b> The per-file CRCs each occupy 8 bytes on disk even though the
@@ -100,13 +113,23 @@ public record Manifest(
     long tombstoneCount,
     long tombstonesBinLength,
     long tombstonesBinCrc32,
-    boolean vectorsNormalized) {
+    boolean vectorsNormalized,
+    Optional<String> recipeHash) {
 
   /** Total fixed header size on disk, including the self CRC. */
-  public static final int HEADER_SIZE = 164;
+  public static final int HEADER_SIZE = 200;
 
   /** Offset in bytes at which the self-CRC32 word lives. */
-  public static final int SELF_CRC_OFFSET = 160;
+  public static final int SELF_CRC_OFFSET = 196;
+
+  /** Offset of the recipe-present flag. */
+  public static final int RECIPE_FLAG_OFFSET = 160;
+
+  /** Offset of the 32-byte recipe hash. */
+  public static final int RECIPE_HASH_OFFSET = 164;
+
+  /** Length of the recipe hash on disk: SHA-256, raw bytes. */
+  public static final int RECIPE_HASH_BYTES = 32;
 
   /** {@code flags} bit set when {@code vectors.bin} holds L2-unit-normalized vectors (#A). */
   public static final int FLAG_VECTORS_NORMALIZED = 0x1;
@@ -158,10 +181,18 @@ public record Manifest(
         tombstoneCount,
         tombstonesBinLength,
         tombstonesBinCrc32,
-        false);
+        false,
+        Optional.empty());
   }
 
   public Manifest {
+    // Normalised so every construction path agrees on what "no recipe" looks like, rather than some
+    // passing null and some Optional.empty(). Validated because a malformed hash here would be
+    // written into the CRC'd header and then trusted on every subsequent open.
+    recipeHash = recipeHash == null ? Optional.empty() : recipeHash;
+    if (recipeHash.isPresent()) {
+      ContentHash.validated(recipeHash.get());
+    }
     if (dimension <= 0) {
       throw new IllegalArgumentException("dimension must be positive: " + dimension);
     }
@@ -332,7 +363,8 @@ public record Manifest(
         tombstonesBinCrc32,
         // #A: record whether vectors.bin holds unit-normalized vectors so a reopened collection
         // restores the same normalize/DOT-scoring decision. config.metric() stays the TRUE metric.
-        config.normalizeForCosine());
+        config.normalizeForCosine(),
+        config.recipe().map(EmbeddingRecipe::recipeHash));
   }
 
   /**
@@ -407,6 +439,11 @@ public record Manifest(
     buf.putLong(tombstoneCount);
     buf.putLong(tombstonesBinLength);
     buf.putLong(tombstonesBinCrc32);
+    // Recipe anchor. The flag and the hash both sit inside the CRC'd region, so neither the
+    // presence
+    // of a recipe nor its identity can be altered without the self-CRC disagreeing.
+    buf.putInt(recipeHash.isPresent() ? 1 : 0);
+    buf.put(recipeHash.map(HexFormat.of()::parseHex).orElseGet(() -> new byte[RECIPE_HASH_BYTES]));
     // Self-CRC over bytes [0, SELF_CRC_OFFSET).
     long selfCrc = Checksums.ofBytes(out, 0, SELF_CRC_OFFSET);
     buf.putInt((int) selfCrc);
@@ -473,7 +510,25 @@ public record Manifest(
     long tombstoneCount = buf.getLong();
     long tombstonesBinLength = buf.getLong();
     long tombstonesBinCrc32 = buf.getLong();
+    // Recipe anchor, read before the self-CRC that protects it.
+    int recipeFlag = buf.getInt();
+    byte[] recipeHashBytes = new byte[RECIPE_HASH_BYTES];
+    buf.get(recipeHashBytes);
     int selfCrc = buf.getInt();
+
+    if (recipeFlag != 0 && recipeFlag != 1) {
+      throw new IOException("Manifest recipe flag must be 0 or 1, got " + recipeFlag);
+    }
+    Optional<String> recipeHash =
+        recipeFlag == 1 ? Optional.of(HexFormat.of().formatHex(recipeHashBytes)) : Optional.empty();
+    // A set flag with an all-zero hash is a corrupt write, not "a recipe with no identity". Catch
+    // it
+    // here rather than letting a collection claim provenance it cannot verify.
+    if (recipeFlag == 1 && recipeHash.get().chars().allMatch(c -> c == '0')) {
+      throw new IOException(
+          "Manifest declares an embedding recipe but its hash is all zeroes: the header was written"
+              + " incompletely");
+    }
 
     long expectedSelfCrc = Checksums.ofBytes(bytes, 0, SELF_CRC_OFFSET);
     if ((selfCrc & 0xFFFFFFFFL) != expectedSelfCrc) {
@@ -510,7 +565,8 @@ public record Manifest(
         tombstoneCount,
         tombstonesBinLength,
         tombstonesBinCrc32,
-        vectorsNormalized);
+        vectorsNormalized,
+        recipeHash);
   }
 
   /**
