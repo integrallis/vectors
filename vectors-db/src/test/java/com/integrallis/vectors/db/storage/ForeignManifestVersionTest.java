@@ -99,7 +99,7 @@ class ForeignManifestVersionTest {
   }
 
   @Test
-  @DisplayName("recovering an older collection names the version and says to rebuild")
+  @DisplayName("recovering an older collection names both versions and offers the migration")
   void recoveringAForeignVersionExplainsItself(@TempDir Path root) throws IOException {
     // The exact shape of the failure that started this: a version-4 generation directory present,
     // and
@@ -116,7 +116,14 @@ class ForeignManifestVersionTest {
     assertTrue(
         message.contains("version " + FileFormat.VERSION_MANIFEST),
         "the message must name the version this build reads: " + message);
-    assertTrue(message.contains("rebuild"), "it must say what to do: " + message);
+    // Used to say "rebuild", which was needlessly expensive advice: only the manifest header
+    // changed between 4 and 5, so the way out is an in-place migration and not re-embedding.
+    assertTrue(
+        message.contains("ManifestMigration") && message.contains("migrateOlderFormats"),
+        "it must point at the migration, not at a rebuild: " + message);
+    assertTrue(
+        !message.contains("no in-place migration"),
+        "there is an in-place migration, so the message must not deny it: " + message);
     assertTrue(
         !message.contains("already exists"),
         "it must NOT blame directory state, which is what it used to do: " + message);

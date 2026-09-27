@@ -635,8 +635,12 @@ public final class GenerationDirectory {
               + foreignVersion
               + "; this build reads version "
               + FileFormat.VERSION_MANIFEST
-              + ". There is no in-place migration: rebuild the collection, or open it with the"
-              + " version of vectors that wrote it to export the data first.");
+              + (foreignVersion > FileFormat.VERSION_MANIFEST
+                  ? ". It was written by a newer build; upgrade vectors to open it."
+                  : ". Migrate it in place with ManifestMigration.migrate(Path), or open it with"
+                      + " .migrateOlderFormats(true), which rewrites the manifest and keeps the"
+                      + " previous one as a .bak. No re-embedding is involved: no payload file"
+                      + " changed format."));
     }
 
     // Bootstrap an empty gen-0 if we have the helpers, otherwise bail out so the caller can decide.
