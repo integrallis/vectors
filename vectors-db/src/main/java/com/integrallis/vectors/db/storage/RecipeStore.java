@@ -15,6 +15,13 @@
  */
 package com.integrallis.vectors.db.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.util.DefaultIndenter;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.integrallis.vectors.core.EmbeddingRecipe;
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.io.IOException;
@@ -24,7 +31,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -121,7 +127,7 @@ public final class RecipeStore {
     }
 
     String json = Files.readString(target, StandardCharsets.UTF_8);
-    int schemaVersion = intField(json, "schemaVersion");
+    int schemaVersion = schemaVersionOf(json);
     if (schemaVersion > SCHEMA_VERSION) {
       // Readable for display, but not attestable: the canonical form this build would hash omits
       // fields the file contains, so a computed hash would differ for a reason that is not
@@ -147,144 +153,113 @@ public final class RecipeStore {
     Files.deleteIfExists(collectionRoot.resolve(FileFormat.RECIPE_TMP_FILE));
   }
 
-  // --- serialisation. Hand-rolled so vectors-db gains no JSON dependency for one small file. ---
+  // --- serialisation: Jackson, with byte-for-byte determinism as an explicit requirement ---
 
-  static String toJson(EmbeddingRecipe recipe) {
-    StringBuilder out = new StringBuilder(512);
-    out.append("{\n  \"schemaVersion\": ").append(SCHEMA_VERSION).append(",\n");
-    // The hash is written for an auditor's convenience. It is NOT trusted on read: read()
-    // recomputes
-    // it from the fields, so editing this line changes nothing and editing a field is detected.
-    out.append("  \"recipeHash\": \"").append(recipe.recipeHash()).append("\",\n");
-    out.append("  \"modelId\": ").append(quote(recipe.modelId())).append(",\n");
-    out.append("  \"modelVersion\": ").append(quote(recipe.modelVersion())).append(",\n");
-    out.append("  \"modelDigest\": ")
-        .append(recipe.modelDigest().map(RecipeStore::quote).orElse("null"))
-        .append(",\n");
-    out.append("  \"dimension\": ").append(recipe.dimension()).append(",\n");
-    out.append("  \"metric\": ").append(quote(recipe.metric().name())).append(",\n");
-    out.append("  \"normalized\": ").append(recipe.normalized()).append(",\n");
-    out.append("  \"pooling\": ").append(quote(recipe.pooling().name())).append(",\n");
-    out.append("  \"documentPrefix\": ")
-        .append(recipe.documentPrefix().map(RecipeStore::quote).orElse("null"))
-        .append(",\n");
-    out.append("  \"queryPrefix\": ")
-        .append(recipe.queryPrefix().map(RecipeStore::quote).orElse("null"))
-        .append(",\n");
-    out.append("  \"maxInputTokens\": ").append(recipe.maxInputTokens()).append(",\n");
-    out.append("  \"truncation\": ").append(quote(recipe.truncation().name())).append(",\n");
-    out.append("  \"extra\": {");
-    Map<String, String> sorted = new TreeMap<>(recipe.extra());
-    boolean first = true;
-    for (Map.Entry<String, String> entry : sorted.entrySet()) {
-      if (!first) {
-        out.append(',');
-      }
-      first = false;
-      out.append("\n    ")
-          .append(quote(entry.getKey()))
-          .append(": ")
-          .append(quote(entry.getValue()));
-    }
-    out.append(sorted.isEmpty() ? "}\n" : "\n  }\n").append("}\n");
-    return out.toString();
+  /**
+   * Shared mapper, configured so the same recipe always produces the same bytes.
+   *
+   * <p>Determinism is not automatic and each setting below buys a specific part of it:
+   *
+   * <ul>
+   *   <li>{@code ORDER_MAP_ENTRIES_BY_KEYS} — the {@code extra} map would otherwise serialise in
+   *       whatever order its implementation iterates;
+   *   <li>a {@link DefaultIndenter} pinned to {@code "\n"} — Jackson's default pretty printer uses
+   *       {@code SYSTEM_LINEFEED}, so the same recipe would produce CRLF on Windows and LF
+   *       elsewhere;
+   *   <li>{@code NON_NULL} never applies — every field is written, including nulls, so a field's
+   *       absence can never be confused with its being unset by an older writer;
+   *   <li>field order comes from the record's declaration order, which Jackson preserves.
+   * </ul>
+   */
+  private static final ObjectMapper MAPPER =
+      JsonMapper.builder()
+          .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+          .enable(SerializationFeature.INDENT_OUTPUT)
+          .build();
+
+  private static final DefaultPrettyPrinter PRINTER =
+      new DefaultPrettyPrinter()
+          .withObjectIndenter(new DefaultIndenter("  ", "\n"))
+          .withArrayIndenter(new DefaultIndenter("  ", "\n"));
+
+  /**
+   * The on-disk shape. A DTO rather than serialising {@link EmbeddingRecipe} directly, so the file
+   * format is decoupled from the domain record: a field can be added to one without silently
+   * changing the other, and {@code schemaVersion} has somewhere to live.
+   */
+  record RecipeDocument(
+      int schemaVersion,
+      String recipeHash,
+      String modelId,
+      String modelVersion,
+      String modelDigest,
+      int dimension,
+      String metric,
+      boolean normalized,
+      String pooling,
+      String documentPrefix,
+      String queryPrefix,
+      int maxInputTokens,
+      String truncation,
+      Map<String, String> extra) {}
+
+  static String toJson(EmbeddingRecipe recipe) throws IOException {
+    RecipeDocument document =
+        new RecipeDocument(
+            SCHEMA_VERSION,
+            // Written for an auditor's convenience. NOT trusted on read -- read() recomputes it
+            // from
+            // the fields, so editing this line changes nothing and editing a field is detected.
+            recipe.recipeHash(),
+            recipe.modelId(),
+            recipe.modelVersion(),
+            recipe.modelDigest().orElse(null),
+            recipe.dimension(),
+            recipe.metric().name(),
+            recipe.normalized(),
+            recipe.pooling().name(),
+            recipe.documentPrefix().orElse(null),
+            recipe.queryPrefix().orElse(null),
+            recipe.maxInputTokens(),
+            recipe.truncation().name(),
+            new TreeMap<>(recipe.extra()));
+    return MAPPER.writer(PRINTER).writeValueAsString(document) + "\n";
   }
 
   static EmbeddingRecipe parse(String json) throws IOException {
+    RecipeDocument document = readDocument(json);
+    return new EmbeddingRecipe(
+        document.modelId(),
+        document.modelVersion(),
+        Optional.ofNullable(document.modelDigest()),
+        document.dimension(),
+        SimilarityFunction.valueOf(document.metric()),
+        document.normalized(),
+        EmbeddingRecipe.Pooling.valueOf(document.pooling()),
+        Optional.ofNullable(document.documentPrefix()),
+        Optional.ofNullable(document.queryPrefix()),
+        document.maxInputTokens(),
+        EmbeddingRecipe.Truncation.valueOf(document.truncation()),
+        document.extra() == null ? Map.of() : document.extra());
+  }
+
+  private static RecipeDocument readDocument(String json) throws IOException {
     try {
-      Map<String, String> extra = new LinkedHashMap<>();
-      int extraStart = json.indexOf("\"extra\": {");
-      if (extraStart >= 0) {
-        String block = json.substring(extraStart + 10, json.indexOf('}', extraStart));
-        for (String pair : block.split(",")) {
-          int colon = pair.indexOf("\":");
-          if (colon > 0) {
-            extra.put(
-                unquote(pair.substring(0, colon + 1).trim()),
-                unquote(pair.substring(colon + 2).trim()));
-          }
-        }
-      }
-      return new EmbeddingRecipe(
-          stringField(json, "modelId"),
-          stringField(json, "modelVersion"),
-          optionalField(json, "modelDigest"),
-          intField(json, "dimension"),
-          SimilarityFunction.valueOf(stringField(json, "metric")),
-          Boolean.parseBoolean(rawField(json, "normalized")),
-          EmbeddingRecipe.Pooling.valueOf(stringField(json, "pooling")),
-          optionalField(json, "documentPrefix"),
-          optionalField(json, "queryPrefix"),
-          intField(json, "maxInputTokens"),
-          EmbeddingRecipe.Truncation.valueOf(stringField(json, "truncation")),
-          extra);
-    } catch (RuntimeException malformed) {
+      // Unknown properties are tolerated on purpose: a newer writer may have added fields, and
+      // read()
+      // withholds attestation in that case rather than failing. Failing here would turn a forward-
+      // compatible file into an unopenable collection.
+      return MAPPER
+          .readerFor(RecipeDocument.class)
+          .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+          .readValue(json);
+    } catch (RuntimeException | JsonProcessingException malformed) {
       throw new IOException(
           "Malformed " + FileFormat.RECIPE_FILE + ": " + malformed.getMessage(), malformed);
     }
   }
 
-  private static String quote(String value) {
-    StringBuilder out = new StringBuilder(value.length() + 2).append('"');
-    for (int index = 0; index < value.length(); index++) {
-      char c = value.charAt(index);
-      switch (c) {
-        case '"' -> out.append("\\\"");
-        case '\\' -> out.append("\\\\");
-        case '\n' -> out.append("\\n");
-        case '\r' -> out.append("\\r");
-        case '\t' -> out.append("\\t");
-        default -> {
-          if (c < 0x20) {
-            out.append(String.format("\\u%04x", (int) c));
-          } else {
-            out.append(c);
-          }
-        }
-      }
-    }
-    return out.append('"').toString();
-  }
-
-  private static String unquote(String quoted) {
-    String trimmed = quoted.trim();
-    if (trimmed.startsWith("\"")) {
-      trimmed = trimmed.substring(1);
-    }
-    if (trimmed.endsWith("\"")) {
-      trimmed = trimmed.substring(0, trimmed.length() - 1);
-    }
-    return trimmed
-        .replace("\\n", "\n")
-        .replace("\\r", "\r")
-        .replace("\\t", "\t")
-        .replace("\\\"", "\"")
-        .replace("\\\\", "\\");
-  }
-
-  private static String rawField(String json, String name) {
-    int at = json.indexOf('"' + name + "\": ");
-    if (at < 0) {
-      throw new IllegalArgumentException("missing field " + name);
-    }
-    int start = at + name.length() + 4;
-    int end = start;
-    while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '\n') {
-      end++;
-    }
-    return json.substring(start, end).trim();
-  }
-
-  private static String stringField(String json, String name) {
-    return unquote(rawField(json, name));
-  }
-
-  private static Optional<String> optionalField(String json, String name) {
-    String raw = rawField(json, name);
-    return "null".equals(raw) ? Optional.empty() : Optional.of(unquote(raw));
-  }
-
-  private static int intField(String json, String name) {
-    return Integer.parseInt(rawField(json, name));
+  static int schemaVersionOf(String json) throws IOException {
+    return readDocument(json).schemaVersion();
   }
 }

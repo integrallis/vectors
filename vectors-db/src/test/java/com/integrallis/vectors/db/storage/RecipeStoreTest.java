@@ -133,14 +133,21 @@ class RecipeStoreTest {
     EmbeddingRecipe original = recipe();
     RecipeStore.write(root, original);
     Path file = root.resolve(FileFormat.RECIPE_FILE);
-    Files.writeString(
-        file,
+    // Spacing-independent edits: Jackson writes `"field" : value` and the previous hand-rolled
+    // writer
+    // wrote `"field": value`. A test that hard-codes either silently stops editing anything, which
+    // is
+    // how this assertion passed against an unmodified file once already.
+    String bumped =
         Files.readString(file)
-            .replace("\"schemaVersion\": 1", "\"schemaVersion\": 2")
-            .replace(
-                "  \"modelId\":",
-                "  \"futureField\": \"something this build cannot hash\",\n  \"modelId\":"),
-        StandardCharsets.UTF_8);
+            .replaceAll("\"schemaVersion\"\\s*:\\s*1", "\"schemaVersion\" : 2")
+            .replaceAll(
+                "(\\n\\s*)\"modelId\"",
+                "$1\"futureField\" : \"something this build cannot hash\",$1\"modelId\"");
+    assertTrue(
+        bumped.contains("\"schemaVersion\" : 2"), "the schema bump must actually be written");
+    assertTrue(bumped.contains("futureField"), "the unknown field must actually be written");
+    Files.writeString(file, bumped, StandardCharsets.UTF_8);
 
     RecipeStore.Stored read =
         RecipeStore.read(root, Optional.of(original.recipeHash())).orElseThrow();
@@ -160,7 +167,7 @@ class RecipeStoreTest {
     Path file = root.resolve(FileFormat.RECIPE_FILE);
     Files.writeString(
         file,
-        Files.readString(file).replace("\"dimension\": 768", "\"dimension\": 384"),
+        Files.readString(file).replaceAll("\"dimension\"\\s*:\\s*768", "\"dimension\" : 384"),
         StandardCharsets.UTF_8);
     assertThrows(
         IOException.class, () -> RecipeStore.read(root, Optional.of(original.recipeHash())));
