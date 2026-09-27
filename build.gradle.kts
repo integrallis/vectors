@@ -64,6 +64,10 @@ val publishedModuleNames = setOf(
     "vectors-spring-ai",
     "vectors-langchain4j",
     "vectors-spring-boot-starter",
+    // Published because a migration adapter nobody can put on a classpath migrates nothing. Carries
+    // no Spring Batch dependency of its own: the framework is compileOnly and the application brings
+    // its own line.
+    "vectors-spring-batch",
     "vectors-cache",
     "vectors-cache-jcache",
     "vectors-cache-langchain4j",

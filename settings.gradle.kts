@@ -31,6 +31,7 @@ include("vectors-cluster")
 include("vectors-gpu")
 include("vectors-spring-ai")
 include("vectors-spring-boot-starter")
+include("vectors-spring-batch")
 include("vectors-langchain4j")
 include("vectors-bench")
 // --- VCR test harness modules ---
