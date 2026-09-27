@@ -14,6 +14,7 @@ proposal.** Nothing here is measured.
 | ULID / time-sortable id segment | **absent.** `Segment` exists only as write-ahead-log segments in `vectors-storage`, which is unrelated |
 | metadata types | `sealed MetadataValue`: `Str`, `Num(double)`, `Bool`, `Tags(List<String>)` |
 | filters | `sealed Filter`: `All`, `Eq`, `NumericRange`, `In`, `And`, `Or`, `Not` |
+| collection-level config | `VectorCollectionConfig(dimension, metric, …, normalizeCosineVectors, quantizedOnly)` — **the seam for a recipe already exists and is half-populated**: the geometry is recorded, the model is not |
 | multiple / named vectors per document | **not supported** — one `float[]` per document |
 | multi-signal retrieval | `vectors-hybrid` fuses *retrievers* (`RRFFusion`, `WeightedFusion`, `MaximalMarginalRelevance`) — not compound vectors |
 
@@ -138,8 +139,10 @@ express.
   time-range filters legible and let a storage layer index them as time.
 * `Filter` has no `Exists`, no prefix or glob match, and no field-to-field comparison. `Exists` in
   particular becomes necessary the moment documents have optional named vectors.
-* Nothing records `SimilarityFunction` per collection, which is part of the same identity hole as the
-  model.
+* ~~Nothing records `SimilarityFunction` per collection~~ — **corrected 2026-09-27**: it is recorded,
+  in `VectorCollectionConfig.metric`, along with `normalizeCosineVectors` and `quantizedOnly`. So the
+  geometry half of a recipe is already persisted per collection and only the model half is missing.
+  That makes this a smaller change than first written, and it names where the recipe belongs.
 
 ## What I would want before building any of it
 
