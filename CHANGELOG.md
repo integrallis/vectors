@@ -4,6 +4,65 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-09-27
+
+### Changed — BREAKING (on-disk format)
+
+- **`VERSION_MANIFEST` 4 → 5. Collections persisted by 0.1.23 or earlier will not open.** The manifest
+  header grows from 164 to 200 bytes to carry an embedding-recipe anchor, and the version check is
+  exact rather than a floor. The error names both versions and says to rebuild. Accepted because the
+  library is newly released with no known production deployments; there is no in-place migration.
+
+### Added
+
+- **Embedding provenance.** A collection can record *how* its vectors were produced and therefore tell
+  which of them are stale. Previously a collection's only tie to the model that filled it was the
+  dimension — and dimension is not identity: two unrelated 768-dimension models produce mutually
+  meaningless vectors, and the store mixed them silently, so a query embedded with one and searched
+  against the other returned confidently ranked nonsense with no error.
+  - `EmbeddingRecipe` records model id, version and optional content digest, **separate document and
+    query prefixes** (instruction-tuned embedders are asymmetric), pooling, normalisation, truncation
+    policy and `maxInputTokens`, with a stable `recipeHash()` over a canonical field rendering.
+  - `attestation()` distinguishes `ATTESTED` (a weights digest is recorded, so a vector can be
+    re-derived and compared) from `DECLARED` (a name only, so a model swapped behind it is
+    undetectable). The two are never conflated.
+  - `ContentHash` — SHA-256 of the input a vector was produced from, hashed **after** chunking, prefix
+    and truncation, so it answers "would re-embedding change this vector".
+  - `Document.contentHash` is derived from `text` when present. It is required only where a collection
+    declares a recipe: declaring *how* vectors are made creates the duty to record *what* each was made
+    from. Plain vector storage is unaffected, and `Document.of(id, vector)` still works.
+  - `VectorCollectionConfig.withRecipe(...)` refuses a recipe whose dimension or metric contradicts the
+    collection, because a recipe that could not have produced these vectors is worse than none.
+  - Recipes are **immutable once a collection holds vectors**: changing one invalidates every stored
+    vector, so it is a migration rather than an update. Reopening without restating the recipe keeps it.
+- **`RecipeCodec` SPI** with a dependency-free default, so the core library carries no JSON dependency.
+  Discovery order: explicit argument, then `-Dvectors.recipeCodec`, then a single `ServiceLoader`
+  provider, then the built-in. Two providers and no property set is an error rather than a coin toss.
+  Swapping codecs is safe: `recipeHash()` comes from the canonical rendering, not the serialised text,
+  so a collection written by one codec verifies under another.
+- **New published module `vectors-db-jackson`** — an opt-in Jackson `RecipeCodec`.
+- **Studio surfaces provenance** on the collection page and in the collections list: attested, declared
+  and unknown are visually distinct, tooltips state consequences rather than states, and a collection
+  with no recipe carries a written note that its rankings cannot be audited. `UNKNOWN` is deliberately
+  not styled as an error — plain vector storage is a legitimate choice.
+
+### Fixed
+
+- **Spring AI adapter applied no instruction prefixes.** Documents and queries were both embedded bare,
+  so for an instruction-tuned model such as Nomic (`search_document:` / `search_query:`) every ingest
+  and every search was subtly wrong — a silent retrieval-quality loss rather than an error. The adapter
+  now applies the collection recipe's document prefix at ingest and query prefix at search, hashes the
+  prefixed text, and stores the original text so re-embedding does not double-apply.
+- **LangChain4j adapter** now verifies an incoming embedding's dimension against the collection's
+  recipe, naming that recipe's model. It cannot apply prefixes — LangChain4j embeds before calling the
+  store, so no model is in scope — and that limitation is documented rather than left implied.
+
+### Notes
+
+- ARM **correctness** for the pinned reductions is evidenced by the aarch64 CI job. ARM **throughput**
+  is unmeasured.
+
+
 ## [0.1.23] - 2026-09-25
 
 ### Fixed
