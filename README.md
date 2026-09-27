@@ -129,6 +129,12 @@ dependencies {
 ```
 
 `vectors-storage-s3` supplies the AWS SDK used by `S3StorageBackend`.
+`vectors-db-jackson` supplies a Jackson-backed `RecipeCodec`, so an embedding recipe can be
+serialised with the JSON stack an application already standardises on. It is optional: the core
+library carries no JSON dependency and uses a built-in codec unless this module is on the classpath.
+Because `EmbeddingRecipe.recipeHash()` is computed from a canonical field rendering rather than the
+serialised text, adding or removing it never invalidates a stored collection.
+
 `vectors-db-arrow` supplies Apache Arrow, Jackson, and FlatBuffers for
 `ArrowIpcExporter` and `ArrowIpcIngester`. The build rejects a facade runtime
 larger than 2 MiB or any external runtime module other than SLF4J.
@@ -204,7 +210,7 @@ Published to Maven Central (Apache-2.0):
 
 - Entry point: `vectors` (umbrella dependency)
 - Core: `vectors-core`, `vectors-storage`, `vectors-quantization`
-- Optional runtimes: `vectors-storage-s3`, `vectors-db-arrow`
+- Optional runtimes: `vectors-storage-s3`, `vectors-db-arrow`, `vectors-db-jackson`
 - Indexes & database: `vectors-hnsw`, `vectors-vamana`, `vectors-ivf`, `vectors-db`,
   `vectors-hybrid`
 - Frameworks: `vectors-spring-ai`, `vectors-langchain4j`, `vectors-spring-boot-starter`
