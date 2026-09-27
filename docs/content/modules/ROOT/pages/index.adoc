@@ -103,6 +103,12 @@ NOTE: Requires JDK 25 with `--add-modules jdk.incubator.vector` at compile and r
 |`vectors-db-arrow`
 |Opt-in Apache Arrow runtime for IPC import and export.
 
+|`vectors-db-jackson`
+|Opt-in Jackson `RecipeCodec`, so an embedding recipe is serialised with the JSON stack an
+application already uses. The core library carries no JSON dependency and falls back to a built-in
+codec; swapping codecs never invalidates a stored collection, because the recipe hash is computed
+from a canonical field rendering rather than the serialised text.
+
 |`vectors-hybrid`
 |Framework-neutral dense/text retrieval SPIs and reciprocal-rank/weighted fusion.
 

@@ -442,7 +442,10 @@ public final class EmbeddedStudioBackend implements StudioBackend {
         cfg.indexType().name(),
         cfg.quantizerKind().name(),
         c.size(),
-        createdAt.getOrDefault(name, Instant.EPOCH));
+        createdAt.getOrDefault(name, Instant.EPOCH),
+        // Read from the collection's own config rather than inferred: a collection with no recipe
+        // reports UNKNOWN honestly instead of Studio guessing from the dimension.
+        CollectionProvenance.of(cfg.recipe()));
   }
 
   private static DocumentView toView(Document d) {

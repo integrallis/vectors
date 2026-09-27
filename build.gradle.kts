@@ -56,6 +56,9 @@ val publishedModuleNames = setOf(
     "vectors-ivf",
     "vectors-db",
     "vectors-db-arrow",
+    // Opt-in Jackson RecipeCodec. Published because a consumer has to be able to put it on the
+    // classpath; the core library deliberately carries no JSON dependency of its own.
+    "vectors-db-jackson",
     "vectors",
     "vectors-hybrid",
     "vectors-spring-ai",

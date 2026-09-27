@@ -16,7 +16,7 @@
         <table class="collection-table">
           <thead>
             <tr>
-              <th>Name</th><th>Dim</th><th>Size</th><th>Metric</th><th>Index</th><th class="actions-col">Actions</th>
+              <th>Name</th><th>Dim</th><th>Size</th><th>Metric</th><th>Index</th><th>Embedding</th><th class="actions-col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -66,6 +66,17 @@
                       <polyline points="2 12 12 17 22 12"/>
                     </svg>
                     ${c.indexType()}
+                  </span>
+                </td>
+                <td>
+                  <!-- In the list, not only on the detail page: a user comparing collections should
+                       be able to see at a glance which of them can be attributed to a model. -->
+                  <span class="pill pill-provenance ${c.provenance().cssClass()}"
+                        title="${c.provenance().explanation()}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    ${c.provenance().label()}
                   </span>
                 </td>
                 <td class="actions-col">

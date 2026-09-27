@@ -23,6 +23,7 @@ include("vectors-optimizer")
 include("vectors-text-h2")
 include("vectors-db")
 include("vectors-db-arrow")
+include("vectors-db-jackson")
 // Umbrella artifact: publishes as `com.integrallis:vectors`, re-exporting vectors-db.
 include("vectors")
 include("vectors-distributed")

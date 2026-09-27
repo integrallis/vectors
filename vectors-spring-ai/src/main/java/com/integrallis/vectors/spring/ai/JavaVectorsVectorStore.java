@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.spring.ai;
 
+import com.integrallis.vectors.core.ContentHash;
 import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.db.VectorCollection;
 import com.integrallis.vectors.hybrid.MaximalMarginalRelevance;
@@ -100,16 +101,42 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
     // sub-batches, so ingesting N documents costs a handful of provider round-trips instead of N,
     // composes with a CachingEmbeddingModel's batch de-duplication, and respects the model's token
     // limit. Embeddings are returned in request order.
+    // When the collection declares a document prefix, embed the prefixed text -- and only the
+    // prefixed text. Mixing prefixed documents with an unprefixed query, or vice versa, is the
+    // failure mode instruction-tuned models punish quietly.
+    var recipe = collection.config().recipe();
+    List<Document> toEmbed =
+        recipe.isEmpty()
+            ? documents
+            : documents.stream()
+                .map(
+                    doc ->
+                        Document.builder()
+                            .id(doc.getId())
+                            .text(recipe.get().documentInput(doc.getText()))
+                            .metadata(doc.getMetadata())
+                            .build())
+                .toList();
     List<float[]> embeddings =
-        this.embeddingModel.embed(documents, DEFAULT_EMBEDDING_OPTIONS, this.batchingStrategy);
+        this.embeddingModel.embed(toEmbed, DEFAULT_EMBEDDING_OPTIONS, this.batchingStrategy);
 
     List<com.integrallis.vectors.core.Document> jvDocs = new ArrayList<>(documents.size());
     for (int i = 0; i < documents.size(); i++) {
       Document doc = documents.get(i);
       Map<String, MetadataValue> jvMetadata = MetadataConverter.toJavaVectors(doc.getMetadata());
+      // The hash covers what was EMBEDDED, prefix included, so it answers "would re-embedding
+      // change
+      // the vector" rather than "did the source text change". The stored text stays the original,
+      // so
+      // the prefix is not duplicated on a re-embed.
+      String embeddedInput = recipe.map(r -> r.documentInput(doc.getText())).orElse(doc.getText());
       jvDocs.add(
           new com.integrallis.vectors.core.Document(
-              doc.getId(), embeddings.get(i), doc.getText(), jvMetadata));
+              doc.getId(),
+              embeddings.get(i),
+              doc.getText(),
+              jvMetadata,
+              embeddedInput == null ? null : ContentHash.of(embeddedInput)));
     }
     collection.addAll(jvDocs);
 
@@ -133,7 +160,19 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
 
   @Override
   public List<Document> doSimilaritySearch(SearchRequest request) {
-    float[] queryEmbedding = this.embeddingModel.embed(request.getQuery());
+    // Apply the collection's query prefix. Instruction-tuned embedders are asymmetric -- Nomic
+    // wants
+    // "search_query: " here and "search_document: " at ingest -- so embedding a query bare against
+    // documents embedded with a prefix is a silent quality loss, not an error anyone sees. The
+    // recipe
+    // is what makes this fixable here rather than depending on every caller remembering.
+    String queryText =
+        collection
+            .config()
+            .recipe()
+            .map(recipe -> recipe.queryInput(request.getQuery()))
+            .orElse(request.getQuery());
+    float[] queryEmbedding = this.embeddingModel.embed(queryText);
     int topK = request.getTopK();
     boolean useMmr = mmrLambda != null;
     // With MMR on, over-fetch a larger candidate pool, then diversify down to topK.
