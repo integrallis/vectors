@@ -10,12 +10,6 @@ tasks.withType<Test> {
 
 dependencies {
     api(project(":vectors-core"))
-    // recipe.json only. The version is whatever dependency locking already enforces for this
-    // configuration (2.21.0) -- not a freshly chosen one. A Maven consumer resolving a different
-    // Jackson across the published modules was a release blocker before (PR #77), and that is not
-    // worth re-earning for one small file. Bump it by updating the lockfile, deliberately.
-    implementation(platform("com.fasterxml.jackson:jackson-bom:2.21.0"))
-    implementation("com.fasterxml.jackson.core:jackson-databind")
     api(project(":vectors-storage"))
     api(project(":vectors-quantization"))
     implementation(project(":vectors-hnsw"))

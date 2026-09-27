@@ -140,12 +140,13 @@ class RecipeStoreTest {
     // how this assertion passed against an unmodified file once already.
     String bumped =
         Files.readString(file)
-            .replaceAll("\"schemaVersion\"\\s*:\\s*1", "\"schemaVersion\" : 2")
+            .replaceAll("(?<sep>\"schemaVersion\"\\s*:\\s*)1", "${sep}2")
             .replaceAll(
-                "(\\n\\s*)\"modelId\"",
-                "$1\"futureField\" : \"something this build cannot hash\",$1\"modelId\"");
+                "(?<indent>\\n\\s*)\"modelId\"",
+                "${indent}\"futureField\": 42,${indent}\"modelId\"");
     assertTrue(
-        bumped.contains("\"schemaVersion\" : 2"), "the schema bump must actually be written");
+        bumped.matches("(?s).*\"schemaVersion\"\\s*:\\s*2.*"),
+        "the schema bump must actually be written");
     assertTrue(bumped.contains("futureField"), "the unknown field must actually be written");
     Files.writeString(file, bumped, StandardCharsets.UTF_8);
 

@@ -15,15 +15,9 @@
  */
 package com.integrallis.vectors.db.storage;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.util.DefaultIndenter;
-import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.integrallis.vectors.core.EmbeddingRecipe;
-import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.RecipeCodec;
+import com.integrallis.vectors.core.RecipeCodecs;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -31,10 +25,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.TreeMap;
 
 /**
  * Reads and writes {@code recipe.json}, the body whose hash the manifest anchors.
@@ -57,8 +49,18 @@ import java.util.TreeMap;
  */
 public final class RecipeStore {
 
-  /** Version of the {@code recipe.json} layout. Bump when a field is added. */
-  public static final int SCHEMA_VERSION = 1;
+  /**
+   * The codec in use, resolved once.
+   *
+   * <p>Pluggable so an application can use the JSON stack it already standardises on; the default
+   * carries no dependency. Safe to swap because {@link EmbeddingRecipe#recipeHash()} is computed
+   * from a canonical field rendering rather than the serialised text, so a collection written by
+   * one codec verifies under another.
+   */
+  private static final RecipeCodec CODEC = RecipeCodecs.discover();
+
+  /** Schema version this build writes. */
+  public static final int SCHEMA_VERSION = CODEC.schemaVersion();
 
   private RecipeStore() {}
 
@@ -75,7 +77,7 @@ public final class RecipeStore {
     Objects.requireNonNull(recipe, "recipe");
     Path tmp = collectionRoot.resolve(FileFormat.RECIPE_TMP_FILE);
     Path target = collectionRoot.resolve(FileFormat.RECIPE_FILE);
-    byte[] body = toJson(recipe).getBytes(StandardCharsets.UTF_8);
+    byte[] body = CODEC.encode(recipe).getBytes(StandardCharsets.UTF_8);
 
     Files.write(
         tmp,
@@ -127,14 +129,14 @@ public final class RecipeStore {
     }
 
     String json = Files.readString(target, StandardCharsets.UTF_8);
-    int schemaVersion = schemaVersionOf(json);
+    int schemaVersion = CODEC.schemaVersionOf(json);
     if (schemaVersion > SCHEMA_VERSION) {
       // Readable for display, but not attestable: the canonical form this build would hash omits
       // fields the file contains, so a computed hash would differ for a reason that is not
       // tampering.
-      return Optional.of(new Stored(parse(json), schemaVersion, false));
+      return Optional.of(new Stored(CODEC.decode(json), schemaVersion, false));
     }
-    EmbeddingRecipe recipe = parse(json);
+    EmbeddingRecipe recipe = CODEC.decode(json);
     String computed = recipe.recipeHash();
     if (!computed.equals(anchoredHash.get())) {
       throw new IOException(
@@ -153,113 +155,10 @@ public final class RecipeStore {
     Files.deleteIfExists(collectionRoot.resolve(FileFormat.RECIPE_TMP_FILE));
   }
 
-  // --- serialisation: Jackson, with byte-for-byte determinism as an explicit requirement ---
+  // --- serialisation lives behind RecipeCodec; see BuiltinRecipeCodec and vectors-db-jackson ---
 
-  /**
-   * Shared mapper, configured so the same recipe always produces the same bytes.
-   *
-   * <p>Determinism is not automatic and each setting below buys a specific part of it:
-   *
-   * <ul>
-   *   <li>{@code ORDER_MAP_ENTRIES_BY_KEYS} — the {@code extra} map would otherwise serialise in
-   *       whatever order its implementation iterates;
-   *   <li>a {@link DefaultIndenter} pinned to {@code "\n"} — Jackson's default pretty printer uses
-   *       {@code SYSTEM_LINEFEED}, so the same recipe would produce CRLF on Windows and LF
-   *       elsewhere;
-   *   <li>{@code NON_NULL} never applies — every field is written, including nulls, so a field's
-   *       absence can never be confused with its being unset by an older writer;
-   *   <li>field order comes from the record's declaration order, which Jackson preserves.
-   * </ul>
-   */
-  private static final ObjectMapper MAPPER =
-      JsonMapper.builder()
-          .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
-          .enable(SerializationFeature.INDENT_OUTPUT)
-          .build();
-
-  private static final DefaultPrettyPrinter PRINTER =
-      new DefaultPrettyPrinter()
-          .withObjectIndenter(new DefaultIndenter("  ", "\n"))
-          .withArrayIndenter(new DefaultIndenter("  ", "\n"));
-
-  /**
-   * The on-disk shape. A DTO rather than serialising {@link EmbeddingRecipe} directly, so the file
-   * format is decoupled from the domain record: a field can be added to one without silently
-   * changing the other, and {@code schemaVersion} has somewhere to live.
-   */
-  record RecipeDocument(
-      int schemaVersion,
-      String recipeHash,
-      String modelId,
-      String modelVersion,
-      String modelDigest,
-      int dimension,
-      String metric,
-      boolean normalized,
-      String pooling,
-      String documentPrefix,
-      String queryPrefix,
-      int maxInputTokens,
-      String truncation,
-      Map<String, String> extra) {}
-
-  static String toJson(EmbeddingRecipe recipe) throws IOException {
-    RecipeDocument document =
-        new RecipeDocument(
-            SCHEMA_VERSION,
-            // Written for an auditor's convenience. NOT trusted on read -- read() recomputes it
-            // from
-            // the fields, so editing this line changes nothing and editing a field is detected.
-            recipe.recipeHash(),
-            recipe.modelId(),
-            recipe.modelVersion(),
-            recipe.modelDigest().orElse(null),
-            recipe.dimension(),
-            recipe.metric().name(),
-            recipe.normalized(),
-            recipe.pooling().name(),
-            recipe.documentPrefix().orElse(null),
-            recipe.queryPrefix().orElse(null),
-            recipe.maxInputTokens(),
-            recipe.truncation().name(),
-            new TreeMap<>(recipe.extra()));
-    return MAPPER.writer(PRINTER).writeValueAsString(document) + "\n";
-  }
-
-  static EmbeddingRecipe parse(String json) throws IOException {
-    RecipeDocument document = readDocument(json);
-    return new EmbeddingRecipe(
-        document.modelId(),
-        document.modelVersion(),
-        Optional.ofNullable(document.modelDigest()),
-        document.dimension(),
-        SimilarityFunction.valueOf(document.metric()),
-        document.normalized(),
-        EmbeddingRecipe.Pooling.valueOf(document.pooling()),
-        Optional.ofNullable(document.documentPrefix()),
-        Optional.ofNullable(document.queryPrefix()),
-        document.maxInputTokens(),
-        EmbeddingRecipe.Truncation.valueOf(document.truncation()),
-        document.extra() == null ? Map.of() : document.extra());
-  }
-
-  private static RecipeDocument readDocument(String json) throws IOException {
-    try {
-      // Unknown properties are tolerated on purpose: a newer writer may have added fields, and
-      // read()
-      // withholds attestation in that case rather than failing. Failing here would turn a forward-
-      // compatible file into an unopenable collection.
-      return MAPPER
-          .readerFor(RecipeDocument.class)
-          .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-          .readValue(json);
-    } catch (RuntimeException | JsonProcessingException malformed) {
-      throw new IOException(
-          "Malformed " + FileFormat.RECIPE_FILE + ": " + malformed.getMessage(), malformed);
-    }
-  }
-
-  static int schemaVersionOf(String json) throws IOException {
-    return readDocument(json).schemaVersion();
+  /** The codec this build resolved, for diagnostics and tests. */
+  public static RecipeCodec codec() {
+    return CODEC;
   }
 }
