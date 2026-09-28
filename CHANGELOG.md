@@ -4,6 +4,78 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-09-27
+
+Fixes the upgrade path 0.1.24 shipped without. 0.1.24 made the manifest version an exact match, so a
+0.1.23 collection stops the build — that part was intended. What went out with it was an error message
+blaming the filesystem and the advice to rebuild the collection, meaning re-run an embedding model
+over the whole corpus. **That advice was wrong**, and this release replaces it.
+
+### Added
+
+- `ManifestMigration` upgrades a collection's manifests in place, without re-embedding anything.
+  Version 5 added a recipe flag at offset 160 and a 32-byte hash after it, moving the self CRC to 196
+  and the header from 164 to 200 bytes. Every field version 4 carried keeps its offset, **no payload
+  file changed format** — `VERSION_METADATA`, `_IDMAP`, `_QUANTIZED`, `_GRAPH` and `_TOMBSTONES` are
+  all still 1 — and the content hash version 5 introduced is derived from stored text on read rather
+  than persisted. So the upgrade is a few hundred bytes per generation.
+
+  Measured on the bundled 1,929-prompt router index, a real version 4 collection: after a
+  manifest-only rewrite its held-out evaluation returned **per-item results identical to a full
+  rebuild** across all 481 prompts, 0.9044 either way.
+
+  `inspect` reports, `migrate` writes, `migrationAvailable` answers the one question a caller usually
+  has. The batch `main` reports by default and needs `--apply` to write, and exits 1 when a dry run
+  finds work so a deployment can gate on it.
+
+- `VectorCollectionBuilder.migrateOlderFormats(boolean)`, **off by default**. Rewriting a file inside
+  somebody's collection because they happened to open it is not a default. The previous manifest is
+  kept as `manifest.bin.v<n>.bak`, the rewrite is tmp/fsync/`ATOMIC_MOVE`/dir-fsync, and re-running is
+  a no-op.
+
+- `java-vectors.migrate-on-startup` in the Spring Boot starter, **off by default** — the idiom Flyway
+  established, for the common case of one application owning one collection. Only applied alongside
+  `storage-path`: an in-memory collection has no manifest.
+
+- `vectors-spring-batch` (**new published module**) — `CollectionRootItemReader`,
+  `ManifestMigrationItemProcessor`, `MigrationReport` and `ManifestMigrationTasklet`. Chunk-oriented
+  so a bad collection can be skipped and the rest carry on; `IOException` propagates rather than being
+  swallowed, because Spring Batch already owns that decision and a caught one would report a clean job
+  over a collection that never migrated.
+
+- `vectors-jakarta-batch` (**new published module**) — a JSR-352 batchlet for containers that are not
+  Spring: JBeret under WildFly or Quarkus, and Open Liberty. Exit status is `MIGRATED`, `PENDING`,
+  `CLEAN` or `ATTENTION`, kept apart so a JSL can branch on them; an unrecognised `apply` property is
+  refused rather than read as false, since silently dry-running an operator who typed `apply="yes"`
+  leaves them believing the collections were upgraded.
+
+- Studio shows each collection's on-disk manifest format and how it relates to what this build reads,
+  as `CollectionFormat` with `CURRENT`, `OLDER`, `NEWER` or `UNKNOWN`. `OLDER` is styled as a warning
+  rather than an error: the collection is intact and one migration away, but every action on it fails
+  until then, so it must not look ordinary.
+
+### Fixed
+
+- **An older collection did not appear in Studio at all.** The scan called `Manifest.readFrom`, which
+  validates the version before returning, so a version 4 collection threw, was caught, and left one
+  line in a log. From the UI it was indistinguishable from a collection that did not exist — the worst
+  available reading, since the data is intact.
+
+- A collection from an older format now says so instead of blaming the filesystem. Recovery used to
+  bootstrap over the unreadable generation and fail with `generation directory already exists`, which
+  points at directory state rather than at the format. Merged before this release but **after the
+  0.1.24 tag**, so 0.1.24 shipped without it.
+
+- The manifest header specification in `Manifest`'s javadoc still said version 4 and a 164-byte
+  header. Its rows were correct; the two summary values were a version behind, in the one document
+  someone reads to write a reader or migrate a collection.
+
+### Changed
+
+- The error for an older collection now names the migration instead of telling the reader to rebuild.
+  The 0.1.24 notes below say "there is no in-place migration" and that the error "names both
+  versions"; neither was true of what shipped, and both are corrected here.
+
 ## [0.1.24] - 2026-09-27
 
 ### Changed — BREAKING (on-disk format)
