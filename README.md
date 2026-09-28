@@ -214,7 +214,7 @@ Published to Maven Central (Apache-2.0):
 - Indexes & database: `vectors-hnsw`, `vectors-vamana`, `vectors-ivf`, `vectors-db`,
   `vectors-hybrid`
 - Frameworks: `vectors-spring-ai`, `vectors-langchain4j`, `vectors-spring-boot-starter`,
-  `vectors-spring-batch`
+  `vectors-spring-batch`, `vectors-jakarta-batch`
 - Semantic routing: `vectors-router`
 - Exact-key caching: `vectors-cache`, `vectors-cache-jcache`, `vectors-cache-langchain4j`,
   `vectors-cache-spring-ai`

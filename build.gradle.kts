@@ -68,6 +68,9 @@ val publishedModuleNames = setOf(
     // no Spring Batch dependency of its own: the framework is compileOnly and the application brings
     // its own line.
     "vectors-spring-batch",
+    // The portable batch spec, for runtimes that are not Spring: JBeret on WildFly or Quarkus, and
+    // Open Liberty. Same reason to publish as the Spring Batch adapter.
+    "vectors-jakarta-batch",
     "vectors-cache",
     "vectors-cache-jcache",
     "vectors-cache-langchain4j",

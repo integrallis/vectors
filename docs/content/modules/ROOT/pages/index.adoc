@@ -125,6 +125,9 @@ from a canonical field rendering rather than the serialised text.
 |Spring Batch reader, processor and tasklet for migrating collections to the current on-disk
 manifest format. No re-embedding: only the manifest header changed.
 
+|`vectors-jakarta-batch`
+|Jakarta Batch (JSR-352) batchlet for the same migration, for containers that are not Spring.
+
 |`vectors-cache`
 |Framework-neutral exact and semantic cache SPIs with a Caffeine implementation.
 
