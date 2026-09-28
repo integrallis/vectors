@@ -69,8 +69,16 @@ public final class ManifestMigration {
 
   /** What happened to one generation. */
   public enum Outcome {
-    /** Rewritten from an older version to the current one. */
+    /** Rewritten from an older version to the current one. Only {@link #migrate} returns this. */
     MIGRATED,
+    /**
+     * Older than this build and readable, but nothing was written.
+     *
+     * <p>What {@link #inspect} returns where {@link #migrate} would return {@link #MIGRATED}. Kept
+     * separate because one value for both would let a caller treat a report as a completed upgrade,
+     * which is exactly the mistake that is easy to make and impossible to see afterwards.
+     */
+    NEEDS_MIGRATION,
     /** Already at the current version; untouched. */
     ALREADY_CURRENT,
     /** Written by a newer build; untouched, because downgrading could drop fields. */
@@ -127,7 +135,7 @@ public final class ManifestMigration {
    * @throws IOException if the collection root cannot be listed
    */
   public static boolean migrationAvailable(Path collectionRoot) throws IOException {
-    return inspect(collectionRoot).stream().anyMatch(r -> r.outcome() == Outcome.MIGRATED);
+    return inspect(collectionRoot).stream().anyMatch(r -> r.outcome() == Outcome.NEEDS_MIGRATION);
   }
 
   private static List<Result> run(Path collectionRoot, boolean apply) throws IOException {
@@ -158,7 +166,8 @@ public final class ManifestMigration {
         if (apply) {
           upgradeV4ToV5(generation, version);
         }
-        results.add(new Result(generation, version, Outcome.MIGRATED));
+        results.add(
+            new Result(generation, version, apply ? Outcome.MIGRATED : Outcome.NEEDS_MIGRATION));
       }
     }
     return results;
@@ -279,16 +288,14 @@ public final class ManifestMigration {
             continue;
           }
           System.out.printf(
-              "%-9s v%-3s %s%n",
+              "%-16s v%-3s %s%n",
               result.outcome(),
               result.fromVersion() < 0 ? "?" : Integer.toString(result.fromVersion()),
               result.generation());
           if (result.outcome() == Outcome.MIGRATED) {
-            if (apply) {
-              migrated++;
-            } else {
-              pending++;
-            }
+            migrated++;
+          } else if (result.outcome() == Outcome.NEEDS_MIGRATION) {
+            pending++;
           }
         }
       }

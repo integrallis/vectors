@@ -117,8 +117,13 @@ class ManifestMigrationTest {
     List<ManifestMigration.Result> results = ManifestMigration.inspect(root);
 
     assertThat(results).isNotEmpty();
+    // inspect() writes nothing, so it must not claim MIGRATED. Reporting the same value for "would
+    // migrate" and "did migrate" is how a caller ends up believing a dry run upgraded something.
     assertThat(results)
-        .anySatisfy(r -> assertThat(r.outcome()).isEqualTo(ManifestMigration.Outcome.MIGRATED));
+        .anySatisfy(
+            r -> assertThat(r.outcome()).isEqualTo(ManifestMigration.Outcome.NEEDS_MIGRATION));
+    assertThat(results)
+        .noneSatisfy(r -> assertThat(r.outcome()).isEqualTo(ManifestMigration.Outcome.MIGRATED));
     assertThat(ManifestMigration.migrationAvailable(root)).isTrue();
     assertThat(
             Files.readAllBytes(
@@ -136,6 +141,10 @@ class ManifestMigrationTest {
         .filteredOn(r -> r.outcome() == ManifestMigration.Outcome.MIGRATED)
         .isNotEmpty()
         .allSatisfy(r -> assertThat(r.fromVersion()).isEqualTo(4));
+    // And migrate() must not report NEEDS_MIGRATION for something it just rewrote.
+    assertThat(results)
+        .noneSatisfy(
+            r -> assertThat(r.outcome()).isEqualTo(ManifestMigration.Outcome.NEEDS_MIGRATION));
 
     try (VectorCollection collection = open(root, false)) {
       assertThat(collection.size()).isEqualTo(CORPUS.size());

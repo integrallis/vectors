@@ -59,7 +59,8 @@ public record MigrationReport(
     int unsupported = 0;
     for (ManifestMigration.Result result : results) {
       switch (result.outcome()) {
-        case MIGRATED -> migrated++;
+        // Both mean "this generation is work": `applied` already says whether it was done.
+        case MIGRATED, NEEDS_MIGRATION -> migrated++;
         case ALREADY_CURRENT -> current++;
         case NEWER_THAN_THIS_BUILD -> newer++;
         case UNSUPPORTED -> unsupported++;
