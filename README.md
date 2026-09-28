@@ -213,7 +213,8 @@ Published to Maven Central (Apache-2.0):
 - Optional runtimes: `vectors-storage-s3`, `vectors-db-arrow`, `vectors-db-jackson`
 - Indexes & database: `vectors-hnsw`, `vectors-vamana`, `vectors-ivf`, `vectors-db`,
   `vectors-hybrid`
-- Frameworks: `vectors-spring-ai`, `vectors-langchain4j`, `vectors-spring-boot-starter`
+- Frameworks: `vectors-spring-ai`, `vectors-langchain4j`, `vectors-spring-boot-starter`,
+  `vectors-spring-batch`, `vectors-jakarta-batch`
 - Semantic routing: `vectors-router`
 - Exact-key caching: `vectors-cache`, `vectors-cache-jcache`, `vectors-cache-langchain4j`,
   `vectors-cache-spring-ai`

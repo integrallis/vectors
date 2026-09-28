@@ -180,6 +180,14 @@ h2 { font-size: var(--fs-xl); font-weight: 600; letter-spacing: -0.01em; margin:
 .pill-provenance-declared { color: var(--kind-audio);     border-color: rgba(181, 101, 29, .30); background: rgba(181, 101, 29, .06); }
 .pill-provenance-unknown  { color: var(--color-fg-muted); border-color: var(--color-border);     background: transparent; border-style: dashed; }
 
+/* On-disk manifest format. "older" is deliberately a warning and not an error: the collection is
+   intact and one migration away, but every action on it fails until then, so it must not look
+   ordinary. "newer" is the one the user cannot fix from here. */
+.pill-format-current { color: var(--color-fg-muted); border-color: var(--color-border);     background: transparent; }
+.pill-format-older   { color: var(--kind-audio);     border-color: rgba(181, 101, 29, .40); background: rgba(181, 101, 29, .08); }
+.pill-format-newer   { color: var(--color-danger);   border-color: rgba(176, 42, 42, .40);  background: rgba(176, 42, 42, .07); }
+.pill-format-unknown { color: var(--color-fg-muted); border-color: var(--color-border);     background: transparent; border-style: dashed; }
+
 /* The spelled-out consequence for a collection with no recipe. A tooltip is not enough here: the
    point is that a user should not have to hover to discover that a ranking cannot be audited. */
 .provenance-note {

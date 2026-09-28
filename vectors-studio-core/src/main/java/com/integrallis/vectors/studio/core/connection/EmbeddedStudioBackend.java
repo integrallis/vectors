@@ -69,6 +69,17 @@ public final class EmbeddedStudioBackend implements StudioBackend {
   // image has diverged from the live state.
   private final java.util.Set<String> persistentNames = ConcurrentHashMap.newKeySet();
 
+  /** Manifest format per collection name, including ones this build could not open. */
+  private final ConcurrentHashMap<String, CollectionFormat> formats = new ConcurrentHashMap<>();
+
+  /**
+   * Dimension recorded for a collection that could not be opened, so it can still be listed.
+   *
+   * <p>An unopenable collection used to vanish from Studio with only a log line, which reads as "it
+   * is gone" when the truth is "this build cannot read its manifest yet".
+   */
+  private final ConcurrentHashMap<String, Integer> unopenedDimension = new ConcurrentHashMap<>();
+
   private EmbeddedStudioBackend(
       ConcurrentHashMap<String, VectorCollection> open,
       ConcurrentHashMap<String, Instant> createdAt) {
@@ -83,6 +94,8 @@ public final class EmbeddedStudioBackend implements StudioBackend {
     ConcurrentHashMap<String, VectorCollection> open = new ConcurrentHashMap<>();
     ConcurrentHashMap<String, Instant> ts = new ConcurrentHashMap<>();
     java.util.Set<String> persistentNamesAtBoot = new java.util.HashSet<>();
+    java.util.Map<String, CollectionFormat> scannedFormats = new java.util.HashMap<>();
+    java.util.Map<String, Integer> scannedUnopened = new java.util.HashMap<>();
     if (dataDir == null || !Files.isDirectory(dataDir)) {
       return new EmbeddedStudioBackend(open, ts);
     }
@@ -101,6 +114,20 @@ public final class EmbeddedStudioBackend implements StudioBackend {
                   .resolve(FileFormat.generationDirName(gen))
                   .resolve(FileFormat.MANIFEST_FILE);
           if (!Files.exists(manifest)) continue;
+          CollectionFormat format =
+              CollectionFormat.of(peekVersion(manifest), FileFormat.VERSION_MANIFEST);
+          scannedFormats.put(name, format);
+          if (format.status() != CollectionFormat.Status.CURRENT) {
+            // Readable manifests only. Listing it anyway, with its format, is the whole point: the
+            // user can then be offered a migration instead of wondering where the collection went.
+            scannedUnopened.put(name, 0);
+            LOG.info(
+                "studio: {} is manifest format {} and this build reads {}; listed but not opened",
+                name,
+                format.version(),
+                FileFormat.VERSION_MANIFEST);
+            continue;
+          }
           Manifest m = Manifest.readFrom(manifest);
           VectorCollection c =
               VectorCollection.builder()
@@ -124,6 +151,8 @@ public final class EmbeddedStudioBackend implements StudioBackend {
     }
     EmbeddedStudioBackend backend = new EmbeddedStudioBackend(open, ts);
     backend.persistentNames.addAll(persistentNamesAtBoot);
+    backend.formats.putAll(scannedFormats);
+    backend.unopenedDimension.putAll(scannedUnopened);
     return backend;
   }
 
@@ -166,6 +195,12 @@ public final class EmbeddedStudioBackend implements StudioBackend {
     List<CollectionSummary> out = new ArrayList<>(open.size());
     for (Map.Entry<String, VectorCollection> e : open.entrySet()) {
       out.add(toSummary(e.getKey(), e.getValue()));
+    }
+    for (Map.Entry<String, Integer> e : unopenedDimension.entrySet()) {
+      if (open.containsKey(e.getKey())) {
+        continue;
+      }
+      out.add(unopenedSummary(e.getKey()));
     }
     out.sort((a, b) -> a.name().compareTo(b.name()));
     return out;
@@ -433,6 +468,44 @@ public final class EmbeddedStudioBackend implements StudioBackend {
     return c;
   }
 
+  /**
+   * Reads just the manifest version, which {@link Manifest#readFrom} cannot do for a foreign format
+   * because it validates the version before returning.
+   */
+  private static int peekVersion(Path manifestFile) {
+    try (java.nio.channels.FileChannel channel =
+        java.nio.channels.FileChannel.open(manifestFile, java.nio.file.StandardOpenOption.READ)) {
+      java.nio.ByteBuffer head =
+          java.nio.ByteBuffer.allocate(8).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+      if (channel.read(head) < 8) {
+        return -1;
+      }
+      head.flip();
+      if (head.getInt() != FileFormat.MAGIC_MANIFEST) {
+        return -1;
+      }
+      return head.getInt();
+    } catch (IOException unreadable) {
+      return -1;
+    }
+  }
+
+  /** A collection present on disk that this build cannot open, listed with its format. */
+  private CollectionSummary unopenedSummary(String name) {
+    CollectionFormat format =
+        formats.getOrDefault(name, CollectionFormat.unknown(FileFormat.VERSION_MANIFEST));
+    return new CollectionSummary(
+        name,
+        0,
+        "UNKNOWN",
+        "UNKNOWN",
+        "UNKNOWN",
+        0L,
+        createdAt.getOrDefault(name, Instant.EPOCH),
+        CollectionProvenance.unknown(),
+        format);
+  }
+
   private CollectionSummary toSummary(String name, VectorCollection c) {
     var cfg = c.config();
     return new CollectionSummary(
@@ -445,7 +518,11 @@ public final class EmbeddedStudioBackend implements StudioBackend {
         createdAt.getOrDefault(name, Instant.EPOCH),
         // Read from the collection's own config rather than inferred: a collection with no recipe
         // reports UNKNOWN honestly instead of Studio guessing from the dimension.
-        CollectionProvenance.of(cfg.recipe()));
+        CollectionProvenance.of(cfg.recipe()),
+        // A collection opened in this process is at the current format by definition; one recovered
+        // from disk carries whatever the scan recorded.
+        formats.getOrDefault(
+            name, CollectionFormat.of(FileFormat.VERSION_MANIFEST, FileFormat.VERSION_MANIFEST)));
   }
 
   private static DocumentView toView(Document d) {

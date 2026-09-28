@@ -50,8 +50,8 @@ import java.util.Optional;
  * Offset  Size  Field                       Notes
  * ------  ----  --------------------------  --------------------------------
  *   0      4    magic                       FileFormat.MAGIC_MANIFEST
- *   4      4    format version              FileFormat.VERSION_MANIFEST (= 4)
- *   8      4    header length               bytes from offset 0 to end of header (= 164)
+ *   4      4    format version              FileFormat.VERSION_MANIFEST (= 5); exact match, not a floor
+ *   8      4    header length               bytes from offset 0 to end of header (= 200)
  *  12      4    flags                        bit 0 = vectorsNormalized (#A cosine unit-norm);
  *                                            all other bits reserved, must be 0
  *  16      4    dimension                   vector dimension

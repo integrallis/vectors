@@ -780,6 +780,27 @@ public final class VectorCollectionBuilder {
   }
 
   /**
+   * Upgrades an older on-disk manifest in place before opening, instead of refusing it.
+   *
+   * <p>Off by default. A collection written by an older build is otherwise refused, because
+   * rewriting a file inside someone's collection is not something to do because they happened to
+   * open it. With this on, {@link
+   * com.integrallis.vectors.db.storage.ManifestMigration#migrate(java.nio.file.Path)} runs first
+   * and keeps the previous manifest as a {@code .bak} beside the new one.
+   *
+   * <p>No vector is re-embedded and no payload file is rewritten: the manifest is the only thing
+   * whose format changed. A collection already at the current version is untouched, so leaving this
+   * on costs one directory listing per open.
+   *
+   * @param migrate whether to migrate an older manifest rather than refuse it
+   * @return this builder
+   */
+  public VectorCollectionBuilder migrateOlderFormats(boolean migrate) {
+    this.migrateOlderFormats = migrate;
+    return this;
+  }
+
+  /**
    * Enables the {@link QvCache} query-result cache with the given LRU capacity.
    *
    * <p>Cached results are keyed by a scalar int8 quantization of the query vector combined with
@@ -863,6 +884,9 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
+  /** Transient: an action taken on open, not part of the collection's persisted config. */
+  private boolean migrateOlderFormats;
+
   /** Builds the collection. */
   public VectorCollection build() {
     if (dimension == null) {
@@ -876,6 +900,15 @@ public final class VectorCollectionBuilder {
           "storagePath must be absolute when non-null (the collection must not depend on the JVM"
               + " working directory): "
               + storageRoot);
+    }
+    if (migrateOlderFormats && storageRoot != null) {
+      try {
+        com.integrallis.vectors.db.storage.ManifestMigration.migrate(storageRoot);
+      } catch (java.io.IOException e) {
+        throw new java.io.UncheckedIOException(
+            "cannot migrate the collection at " + storageRoot + " to the current manifest format",
+            e);
+      }
     }
     VectorCollectionConfig.HnswParams hnswParams =
         (indexType == IndexType.HNSW)
