@@ -126,6 +126,55 @@ class JavaVectorsAutoConfigurationTest {
     }
   }
 
+  /** Writes a persistent collection with this build, then downgrades its manifests to version 4. */
+  private static void writeOlderFormatCollection(Path root) throws IOException {
+    Files.createDirectories(root);
+    try (VectorCollection collection =
+        VectorCollection.builder()
+            .dimension(3)
+            .metric(com.integrallis.vectors.core.SimilarityFunction.COSINE)
+            .indexType(com.integrallis.vectors.db.IndexType.FLAT)
+            .storagePath(root.toAbsolutePath())
+            .build()) {
+      collection.add(
+          com.integrallis.vectors.core.Document.of("a", new float[] {1.0f, 0.0f, 0.0f}, "first"));
+      collection.commit();
+    }
+    try (var stream = Files.list(root)) {
+      for (Path generation : stream.filter(Files::isDirectory).toList()) {
+        Path manifest = generation.resolve("manifest.bin");
+        if (!Files.isRegularFile(manifest)) {
+          continue;
+        }
+        byte[] current = Files.readAllBytes(manifest);
+        byte[] old = new byte[164];
+        System.arraycopy(current, 0, old, 0, 160);
+        java.nio.ByteBuffer buffer =
+            java.nio.ByteBuffer.wrap(old).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        buffer.putInt(4, 4);
+        buffer.putInt(8, 164);
+        java.util.zip.CRC32 self = new java.util.zip.CRC32();
+        self.update(old, 0, 160);
+        buffer.putInt(160, (int) self.getValue());
+        Files.write(manifest, old);
+      }
+    }
+  }
+
+  /** Size of the newest generation's manifest, which is how the format version shows on disk. */
+  private static long manifestSize(Path root) throws IOException {
+    try (var stream = Files.list(root)) {
+      return Files.size(
+          stream
+              .filter(Files::isDirectory)
+              .filter(p -> p.getFileName().toString().startsWith("gen-"))
+              .sorted()
+              .reduce((a, b) -> b)
+              .orElseThrow(() -> new IOException("no generation under " + root))
+              .resolve("manifest.bin"));
+    }
+  }
+
   private final ApplicationContextRunner runner =
       new ApplicationContextRunner()
           .withConfiguration(AutoConfigurations.of(JavaVectorsAutoConfiguration.class));
@@ -201,6 +250,50 @@ class JavaVectorsAutoConfigurationTest {
                 VectorCollection col = ctx.getBean(VectorCollection.class);
                 assertThat(col.config().storageRoot()).isEqualTo(colDir);
               });
+    }
+
+    @Test
+    void migrateOnStartup_isOffByDefault_soAnOlderCollectionFailsLoudly(@TempDir Path tmp)
+        throws IOException {
+      Path colDir = tmp.resolve("older-collection");
+      writeOlderFormatCollection(colDir);
+
+      runner
+          .withPropertyValues(
+              "java-vectors.dimension=3",
+              "java-vectors.metric=COSINE",
+              "java-vectors.storage-path=" + colDir.toAbsolutePath())
+          .run(
+              ctx -> {
+                // Writing to somebody's data directory because an application booted has to be
+                // asked for. Without the property the context must fail, not silently upgrade.
+                assertThat(ctx).hasFailed();
+                assertThat(ctx.getStartupFailure()).hasRootCauseInstanceOf(IOException.class);
+              });
+      assertThat(manifestSize(colDir)).isEqualTo(164);
+    }
+
+    @Test
+    void migrateOnStartup_upgradesAnOlderCollectionWhenEnabled(@TempDir Path tmp)
+        throws IOException {
+      Path colDir = tmp.resolve("older-collection");
+      writeOlderFormatCollection(colDir);
+
+      runner
+          .withPropertyValues(
+              "java-vectors.dimension=3",
+              "java-vectors.metric=COSINE",
+              "java-vectors.migrate-on-startup=true",
+              "java-vectors.storage-path=" + colDir.toAbsolutePath())
+          .run(
+              ctx -> {
+                assertThat(ctx).hasNotFailed();
+                assertThat(ctx).hasSingleBean(VectorCollection.class);
+                assertThat(ctx.getBean(VectorCollection.class).size()).isEqualTo(1);
+              });
+      assertThat(manifestSize(colDir))
+          .describedAs("the manifest must have been rewritten to the current header size")
+          .isEqualTo(200);
     }
 
     @Test
