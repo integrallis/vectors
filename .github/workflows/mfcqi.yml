@@ -32,17 +32,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # Derived from publishedModuleNames rather than listed here. The hand-written list this
+      # replaces had drifted to 15 of 33 published modules, so more than half the published surface
+      # was missing from the score this workflow badges.
       - name: Stage published-library production sources (aggregate score)
         run: |
           STAGE="${RUNNER_TEMP}/mfcqi-src"
-          mkdir -p "$STAGE"
-          for m in vectors-core vectors-storage vectors-quantization vectors-hnsw vectors-vamana \
-                   vectors-ivf vectors-db vectors-spring-ai vectors-langchain4j \
-                   vectors-spring-boot-starter vectors-cache vectors-cache-jcache \
-                   vectors-cache-langchain4j vectors-cache-semantic-db vectors-cache-spring-ai; do
-            cp -r "$m/src/main/java/." "$STAGE/"
-          done
+          ./gradlew stageAggregateMfcqiSources -Pmfcqi.stageDir="$STAGE" --no-daemon
           echo "MFCQI_STAGE=$STAGE" >> "$GITHUB_ENV"
+          echo "staged $(find "$STAGE" -name '*.java' | wc -l) source files"
 
       - name: Enforce MFCQI gates and generate badges (aggregate + per-module)
         run: ./gradlew mfcqiGate mfcqiBadge -Pmfcqi.sourceDir="$MFCQI_STAGE" --no-daemon

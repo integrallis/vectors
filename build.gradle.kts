@@ -1148,10 +1148,40 @@ dependencies {
     aggregateJavadocClasspath("org.springframework.ai:spring-ai-vector-store:1.1.4")
     aggregateJavadocClasspath("org.springframework.ai:spring-ai-model:1.1.4")
     aggregateJavadocClasspath("org.springframework.boot:spring-boot-autoconfigure:3.4.5")
+    // The batch adapters keep their frameworks compile-only, so Javadoc needs them here for the
+    // same reason as the GPU adapter above: it still parses those sources.
+    aggregateJavadocClasspath("org.springframework.batch:spring-batch-core:5.2.2")
+    aggregateJavadocClasspath("org.springframework.batch:spring-batch-infrastructure:5.2.2")
+    aggregateJavadocClasspath("jakarta.batch:jakarta.batch-api:2.1.1")
+    aggregateJavadocClasspath("jakarta.inject:jakarta.inject-api:2.0.1")
     aggregateJavadocClasspath("io.projectreactor:reactor-core:3.7.9")
     aggregateJavadocClasspath("org.junit.jupiter:junit-jupiter-api:5.11.4")
     aggregateJavadocClasspath("org.apiguardian:apiguardian-api:1.1.2")
     aggregateJavadocClasspath("org.testng:testng:7.10.2")
+}
+
+// The aggregate MFCQI score is measured over the published library's production sources. That list
+// used to be typed out again in .github/workflows/mfcqi.yml, and it had drifted: 15 of the 33
+// published modules were staged, so more than half the published surface — vectors-db-jackson, the
+// whole vectors-vcr family, vectors-router, vectors-hybrid — was silently absent from the score the
+// README badge reports. Deriving it from publishedModuleNames means a new published module is
+// measured because it is published, not because somebody remembered to add it here.
+val mfcqiStageDir = providers.gradleProperty("mfcqi.stageDir")
+    .orElse(provider { "${System.getProperty("java.io.tmpdir")}/vectors-mfcqi-src" })
+
+val stageAggregateMfcqiSources by tasks.registering(Sync::class) {
+    description = "Stage published modules' production sources for the aggregate MFCQI score"
+    group = "verification"
+    // Deliberately outside the project tree: the analyser ignores build output directories, so
+    // staging into build/ produces an empty corpus and every metric reads 0.000 — a gate that looks
+    // catastrophically failed rather than misconfigured.
+    into(mfcqiStageDir)
+    publishedProjects.forEach { module ->
+        val main = module.file("src/main/java")
+        if (main.isDirectory) {
+            from(main)
+        }
+    }
 }
 
 val cleanCollectedJavadocs by tasks.registering(Delete::class) {

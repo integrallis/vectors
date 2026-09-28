@@ -312,10 +312,21 @@ public final class ManifestMigration {
   }
 
   /**
-   * Treats {@code path} as a collection root if it holds generation directories, and otherwise as a
-   * directory of collection roots.
+   * Finds the collections under a path.
+   *
+   * <p>A directory is a collection root when it holds generation directories; otherwise its
+   * subdirectories are searched for them. That covers both "migrate this collection" and "migrate
+   * everything in this data directory" without the caller having to say which it meant.
+   *
+   * <p>Public because every migration entry point needs it — the CLI here, the Spring Batch reader,
+   * the Jakarta Batch batchlet — and three copies of a directory-scanning rule is three chances for
+   * them to disagree about what counts as a collection.
+   *
+   * @param path a collection root, or a directory containing collection roots
+   * @return the collection roots found, in name order; empty if {@code path} is not a directory
+   * @throws IOException if the directory cannot be listed
    */
-  private static List<Path> collectionRoots(Path path) throws IOException {
+  public static List<Path> collectionRoots(Path path) throws IOException {
     List<Path> roots = new ArrayList<>();
     if (!Files.isDirectory(path)) {
       return roots;

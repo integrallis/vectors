@@ -172,6 +172,97 @@ class ManifestMigrationBatchTest {
     assertThat(restored).isNotEmpty();
   }
 
+  @Test
+  void theReportReadsAsSomethingAnOperatorCanAct(@TempDir Path base) throws Exception {
+    writeOldCollection(base, "a");
+
+    // toString is what lands in a job log, so it has to distinguish a report from a completed run.
+    MigrationReport dryRun = new ManifestMigrationItemProcessor().process(base);
+    assertThat(dryRun).asString().contains("would migrate").doesNotContain("migrated 0");
+    assertThat(dryRun).asString().contains(base.toString());
+
+    MigrationReport applied = new ManifestMigrationItemProcessor(true).process(base);
+    assertThat(applied).asString().startsWith("migrated ").doesNotContain("would migrate");
+  }
+
+  @Test
+  void theReportNamesWhatAFurtherRunCannotFix(@TempDir Path base) throws Exception {
+    writeOldCollection(base, "a");
+    new ManifestMigrationItemProcessor(true).process(base);
+    Path manifest = manifestOf(base);
+    byte[] future = Files.readAllBytes(manifest);
+    ByteBuffer.wrap(future)
+        .order(ByteOrder.LITTLE_ENDIAN)
+        .putInt(4, FileFormat.VERSION_MANIFEST + 1);
+    Files.write(manifest, future);
+
+    MigrationReport report = new ManifestMigrationItemProcessor().process(base);
+
+    assertThat(report.needsAttention()).isTrue();
+    assertThat(report.clean()).isFalse();
+    assertThat(report).asString().contains("NEWER than this build");
+  }
+
+  @Test
+  void aCleanCollectionSaysSoAndNeedsNoAttention(@TempDir Path base) throws Exception {
+    writeOldCollection(base, "a");
+    new ManifestMigrationItemProcessor(true).process(base);
+
+    MigrationReport report = new ManifestMigrationItemProcessor().process(base);
+
+    assertThat(report.clean()).isTrue();
+    assertThat(report.needsAttention()).isFalse();
+    assertThat(report.migrated()).isZero();
+    assertThat(report.alreadyCurrent()).isPositive();
+    assertThat(report).asString().contains("already current");
+  }
+
+  @Test
+  void theReaderReportsWhatItFound(@TempDir Path base) throws Exception {
+    writeOldCollection(base.resolve("alpha"), "a");
+    writeOldCollection(base.resolve("beta"), "b");
+    CollectionRootItemReader reader = new CollectionRootItemReader(base);
+
+    // Empty before the first read: the scan is deferred, and saying otherwise would be a lie a
+    // listener could act on.
+    assertThat(reader.discoveredRoots()).isEmpty();
+    reader.read();
+
+    assertThat(reader.discoveredRoots())
+        .extracting(p -> p.getFileName().toString())
+        .containsExactly("alpha", "beta");
+  }
+
+  @Test
+  void theReaderFailsLoudlyOnAnUnreadableBase(@TempDir Path tmp) throws Exception {
+    Path missing = tmp.resolve("no-such-directory");
+    CollectionRootItemReader reader = new CollectionRootItemReader(missing);
+
+    // Not a directory is not an error: it holds no collections, so the step has nothing to do.
+    assertThat(reader.read()).isNull();
+    assertThat(reader.discoveredRoots()).isEmpty();
+  }
+
+  @Test
+  void theProcessorSaysWhetherItWrites() {
+    assertThat(new ManifestMigrationItemProcessor().applies()).isFalse();
+    assertThat(new ManifestMigrationItemProcessor(false).applies()).isFalse();
+    assertThat(new ManifestMigrationItemProcessor(true).applies()).isTrue();
+  }
+
+  @Test
+  void theTaskletDefaultsToReportingWithoutWriting(@TempDir Path base) throws Exception {
+    writeOldCollection(base, "a");
+    byte[] before = Files.readAllBytes(manifestOf(base));
+
+    // The single-argument constructor: a job that did not say "apply" must not write.
+    new ManifestMigrationTasklet(base).execute(contribution(), chunkContext());
+
+    assertThat(Files.readAllBytes(manifestOf(base)))
+        .describedAs("the reporting tasklet must not rewrite anything")
+        .isEqualTo(before);
+  }
+
   private static Path manifestOf(Path root) throws IOException {
     try (var stream = Files.list(root)) {
       return stream
@@ -182,6 +273,13 @@ class ManifestMigrationBatchTest {
           .orElseThrow(() -> new IOException("no generation under " + root))
           .resolve(FileFormat.MANIFEST_FILE);
     }
+  }
+
+  private static org.springframework.batch.core.StepContribution contribution() throws Exception {
+    return new org.springframework.batch.core.StepContribution(
+        org.springframework.batch.core.StepExecution.class
+            .getDeclaredConstructor(String.class, org.springframework.batch.core.JobExecution.class)
+            .newInstance("migrate", new org.springframework.batch.core.JobExecution(1L)));
   }
 
   private static org.springframework.batch.core.scope.context.ChunkContext chunkContext()

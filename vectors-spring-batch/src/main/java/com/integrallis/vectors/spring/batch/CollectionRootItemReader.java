@@ -15,10 +15,9 @@
  */
 package com.integrallis.vectors.spring.batch;
 
-import com.integrallis.vectors.db.storage.FileFormat;
+import com.integrallis.vectors.db.storage.ManifestMigration;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -73,30 +72,11 @@ public class CollectionRootItemReader implements ItemReader<Path> {
 
   private void scan() {
     try {
-      if (!Files.isDirectory(base)) {
-        return;
-      }
-      if (hasGenerations(base)) {
-        roots.add(base);
-        return;
-      }
-      try (var stream = Files.list(base)) {
-        for (Path child : stream.filter(Files::isDirectory).sorted().toList()) {
-          if (hasGenerations(child)) {
-            roots.add(child);
-          }
-        }
-      }
+      // The rule for what counts as a collection lives with the migration, not here: a reader with
+      // its own copy could disagree with the migrator about which directories are collections.
+      roots.addAll(ManifestMigration.collectionRoots(base));
     } catch (IOException e) {
       throw new UncheckedIOException("cannot scan " + base + " for collections", e);
-    }
-  }
-
-  private static boolean hasGenerations(Path path) throws IOException {
-    try (var stream = Files.list(path)) {
-      return stream
-          .filter(Files::isDirectory)
-          .anyMatch(p -> p.getFileName().toString().startsWith(FileFormat.GENERATION_DIR_PREFIX));
     }
   }
 }

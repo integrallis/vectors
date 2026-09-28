@@ -15,15 +15,12 @@
  */
 package com.integrallis.vectors.jakarta.batch;
 
-import com.integrallis.vectors.db.storage.FileFormat;
 import com.integrallis.vectors.db.storage.ManifestMigration;
 import jakarta.batch.api.AbstractBatchlet;
 import jakarta.batch.api.BatchProperty;
 import jakarta.inject.Inject;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -104,6 +101,15 @@ public class ManifestMigrationBatchlet extends AbstractBatchlet {
     this.apply = Boolean.toString(apply);
   }
 
+  /**
+   * Migrates or reports, and returns the exit status the job branches on.
+   *
+   * @return {@link #STATUS_MIGRATED}, {@link #STATUS_PENDING}, {@link #STATUS_CLEAN} or {@link
+   *     #STATUS_ATTENTION}
+   * @throws IllegalStateException if {@code basePath} was not supplied
+   * @throws IllegalArgumentException if {@code apply} is neither a boolean spelling nor blank
+   * @throws java.io.IOException if a collection cannot be read or rewritten
+   */
   @Override
   public String process() throws Exception {
     if (basePath == null || basePath.isBlank()) {
@@ -115,7 +121,7 @@ public class ManifestMigrationBatchlet extends AbstractBatchlet {
 
     int migrated = 0;
     int attention = 0;
-    for (Path root : collectionRoots(Path.of(basePath))) {
+    for (Path root : ManifestMigration.collectionRoots(Path.of(basePath))) {
       List<ManifestMigration.Result> results =
           write ? ManifestMigration.migrate(root) : ManifestMigration.inspect(root);
       for (ManifestMigration.Result result : results) {
@@ -169,45 +175,5 @@ public class ManifestMigrationBatchlet extends AbstractBatchlet {
             + value
             + "\"; it is refused rather than read as false so a typo cannot become a dry run that"
             + " looks like a migration");
-  }
-
-  /**
-   * The manifest version this build reads, for a job that wants to log it.
-   *
-   * @return the current manifest format version
-   */
-  public static int currentManifestVersion() {
-    return FileFormat.VERSION_MANIFEST;
-  }
-
-  /**
-   * Treats {@code path} as a collection root when it holds generation directories, and otherwise as
-   * a directory of collection roots.
-   */
-  private static List<Path> collectionRoots(Path path) throws IOException {
-    List<Path> roots = new ArrayList<>();
-    if (!Files.isDirectory(path)) {
-      return roots;
-    }
-    if (hasGenerations(path)) {
-      roots.add(path);
-      return roots;
-    }
-    try (var stream = Files.list(path)) {
-      for (Path child : stream.filter(Files::isDirectory).sorted().toList()) {
-        if (hasGenerations(child)) {
-          roots.add(child);
-        }
-      }
-    }
-    return roots;
-  }
-
-  private static boolean hasGenerations(Path path) throws IOException {
-    try (var stream = Files.list(path)) {
-      return stream
-          .filter(Files::isDirectory)
-          .anyMatch(p -> p.getFileName().toString().startsWith(FileFormat.GENERATION_DIR_PREFIX));
-    }
   }
 }
