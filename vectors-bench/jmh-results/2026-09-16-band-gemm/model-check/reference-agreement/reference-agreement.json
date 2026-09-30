@@ -1,0 +1,458 @@
+{
+  "verdict": {
+    "agreementInteger": 19,
+    "agreementDispatch": 18,
+    "divergentCases": 3,
+    "divergentBandAgrees": 1,
+    "divergentIntegerAgrees": 2,
+    "a_bandAtLeastInteger": false,
+    "b_bandAgreesOnAtLeast2Divergent": false,
+    "faithful": false,
+    "tokenCountMismatches": 0,
+    "ggufSha256": "662b0626cd58f443baea23559b469df6576a81d349649c59413b36a9fb32eb29",
+    "maxRelativeWeightError": 0.08084430568163921,
+    "dtype": "float32"
+  },
+  "cases": [
+    {
+      "id": "5ad247b0d7d075001a428b45",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 285,
+      "runtimePromptTokens": 285,
+      "firstTokenTop2": [
+        [
+          "un",
+          56.08909225463867
+        ],
+        [
+          "Un",
+          41.10171890258789
+        ]
+      ],
+      "firstTokenMargin": 14.987373352050781
+    },
+    {
+      "id": "57267640f1498d1400e8e074",
+      "referenceOutput": "layered basaltic lava flows",
+      "integerOutput": "layered basaltic lava flows",
+      "dispatchOutput": "layered basaltic lava flows",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 402,
+      "runtimePromptTokens": 402,
+      "firstTokenTop2": [
+        [
+          "layer",
+          30.510351181030273
+        ],
+        [
+          "bas",
+          30.176904678344727
+        ]
+      ],
+      "firstTokenMargin": 0.3334465026855469
+    },
+    {
+      "id": "5737432bc3c5551400e51e9b",
+      "referenceOutput": "Newton",
+      "integerOutput": "Newton",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": false,
+      "armsDiverge": true,
+      "referencePromptTokens": 373,
+      "runtimePromptTokens": 373,
+      "firstTokenTop2": [
+        [
+          "Newton",
+          39.68214797973633
+        ],
+        [
+          "un",
+          39.55537796020508
+        ]
+      ],
+      "firstTokenMargin": 0.12677001953125
+    },
+    {
+      "id": "5705f09e75f01819005e77a4",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "taxes",
+      "integerAgrees": true,
+      "dispatchAgrees": false,
+      "armsDiverge": true,
+      "referencePromptTokens": 346,
+      "runtimePromptTokens": 346,
+      "firstTokenTop2": [
+        [
+          "un",
+          37.98530578613281
+        ],
+        [
+          "tax",
+          37.60442352294922
+        ]
+      ],
+      "firstTokenMargin": 0.38088226318359375
+    },
+    {
+      "id": "57265746dd62a815002e821c",
+      "referenceOutput": "answerable",
+      "integerOutput": "answerable",
+      "dispatchOutput": "answerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 270,
+      "runtimePromptTokens": 270,
+      "firstTokenTop2": [
+        [
+          "answer",
+          40.71440505981445
+        ],
+        [
+          "un",
+          35.16202163696289
+        ]
+      ],
+      "firstTokenMargin": 5.5523834228515625
+    },
+    {
+      "id": "5a2c1397bfd06b001a5ae9c9",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 289,
+      "runtimePromptTokens": 289,
+      "firstTokenTop2": [
+        [
+          "un",
+          38.109806060791016
+        ],
+        [
+          "answer",
+          29.912607192993164
+        ]
+      ],
+      "firstTokenMargin": 8.197198867797852
+    },
+    {
+      "id": "5ad4d2105b96ef001a10a1c7",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 380,
+      "runtimePromptTokens": 380,
+      "firstTokenTop2": [
+        [
+          "un",
+          50.45771026611328
+        ],
+        [
+          "Un",
+          37.303428649902344
+        ]
+      ],
+      "firstTokenMargin": 13.154281616210938
+    },
+    {
+      "id": "572fd1c4947a6a140053cd02",
+      "referenceOutput": "answerable",
+      "integerOutput": "answerable",
+      "dispatchOutput": "answerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 261,
+      "runtimePromptTokens": 261,
+      "firstTokenTop2": [
+        [
+          "answer",
+          47.3573112487793
+        ],
+        [
+          "un",
+          39.76446533203125
+        ]
+      ],
+      "firstTokenMargin": 7.592845916748047
+    },
+    {
+      "id": "5a834caae60761001a2eb53d",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 388,
+      "runtimePromptTokens": 388,
+      "firstTokenTop2": [
+        [
+          "un",
+          47.52067947387695
+        ],
+        [
+          "answer",
+          38.759429931640625
+        ]
+      ],
+      "firstTokenMargin": 8.761249542236328
+    },
+    {
+      "id": "57266193dd62a815002e832e",
+      "referenceOutput": "wave speeds",
+      "integerOutput": "answerable",
+      "dispatchOutput": "wave speeds",
+      "integerAgrees": false,
+      "dispatchAgrees": true,
+      "armsDiverge": true,
+      "referencePromptTokens": 332,
+      "runtimePromptTokens": 332,
+      "firstTokenTop2": [
+        [
+          "wave",
+          33.84197998046875
+        ],
+        [
+          "answer",
+          31.841543197631836
+        ]
+      ],
+      "firstTokenMargin": 2.000436782836914
+    },
+    {
+      "id": "5a7b3dd921c2de001afe9dfa",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 435,
+      "runtimePromptTokens": 435,
+      "firstTokenTop2": [
+        [
+          "un",
+          55.1644172668457
+        ],
+        [
+          "Un",
+          36.646766662597656
+        ]
+      ],
+      "firstTokenMargin": 18.517650604248047
+    },
+    {
+      "id": "5a63835a68151a001a92232e",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 251,
+      "runtimePromptTokens": 251,
+      "firstTokenTop2": [
+        [
+          "un",
+          52.5383186340332
+        ],
+        [
+          "answer",
+          37.038211822509766
+        ]
+      ],
+      "firstTokenMargin": 15.500106811523438
+    },
+    {
+      "id": "5ad26aa8d7d075001a429323",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 271,
+      "runtimePromptTokens": 271,
+      "firstTokenTop2": [
+        [
+          "un",
+          44.43705368041992
+        ],
+        [
+          "Un",
+          32.889503479003906
+        ]
+      ],
+      "firstTokenMargin": 11.547550201416016
+    },
+    {
+      "id": "572681c1dd62a815002e8797",
+      "referenceOutput": "answerable",
+      "integerOutput": "answerable",
+      "dispatchOutput": "answerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 278,
+      "runtimePromptTokens": 278,
+      "firstTokenTop2": [
+        [
+          "answer",
+          39.91475296020508
+        ],
+        [
+          "un",
+          35.12895584106445
+        ]
+      ],
+      "firstTokenMargin": 4.785797119140625
+    },
+    {
+      "id": "5ad28253d7d075001a429833",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 339,
+      "runtimePromptTokens": 339,
+      "firstTokenTop2": [
+        [
+          "un",
+          56.2088623046875
+        ],
+        [
+          "Un",
+          40.053401947021484
+        ]
+      ],
+      "firstTokenMargin": 16.155460357666016
+    },
+    {
+      "id": "5726fa525951b619008f83f8",
+      "referenceOutput": "show globe",
+      "integerOutput": "show globe",
+      "dispatchOutput": "show globe",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 315,
+      "runtimePromptTokens": 315,
+      "firstTokenTop2": [
+        [
+          "show",
+          40.005767822265625
+        ],
+        [
+          "answer",
+          37.43023681640625
+        ]
+      ],
+      "firstTokenMargin": 2.575531005859375
+    },
+    {
+      "id": "5ad158c0645df0001a2d182a",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 276,
+      "runtimePromptTokens": 276,
+      "firstTokenTop2": [
+        [
+          "un",
+          55.884796142578125
+        ],
+        [
+          "Un",
+          39.87041473388672
+        ]
+      ],
+      "firstTokenMargin": 16.014381408691406
+    },
+    {
+      "id": "5726f48df1498d1400e8f0dd",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 266,
+      "runtimePromptTokens": 266,
+      "firstTokenTop2": [
+        [
+          "un",
+          38.57917404174805
+        ],
+        [
+          "answer",
+          32.44942855834961
+        ]
+      ],
+      "firstTokenMargin": 6.1297454833984375
+    },
+    {
+      "id": "5ad26aedd7d075001a429334",
+      "referenceOutput": "unanswerable",
+      "integerOutput": "unanswerable",
+      "dispatchOutput": "unanswerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 299,
+      "runtimePromptTokens": 299,
+      "firstTokenTop2": [
+        [
+          "un",
+          33.04849624633789
+        ],
+        [
+          "answer",
+          28.99460220336914
+        ]
+      ],
+      "firstTokenMargin": 4.05389404296875
+    },
+    {
+      "id": "572885c44b864d1900164a78",
+      "referenceOutput": "answerable",
+      "integerOutput": "answerable",
+      "dispatchOutput": "answerable",
+      "integerAgrees": true,
+      "dispatchAgrees": true,
+      "armsDiverge": false,
+      "referencePromptTokens": 264,
+      "runtimePromptTokens": 264,
+      "firstTokenTop2": [
+        [
+          "answer",
+          44.71322250366211
+        ],
+        [
+          "un",
+          39.45470428466797
+        ]
+      ],
+      "firstTokenMargin": 5.258518218994141
+    }
+  ]
+}

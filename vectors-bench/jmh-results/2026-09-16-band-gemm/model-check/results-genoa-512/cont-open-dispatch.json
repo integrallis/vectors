@@ -1,0 +1,212 @@
+{
+  "variant" : "open",
+  "suite" : "squad-v2-dev",
+  "limit" : 20,
+  "maxTokens" : 64,
+  "windowSha256" : "ea9e4a0c80ad4d9e19db7fe6a6274d0ef949d14f73300869111452c49ada268c",
+  "windowFileSha256" : "dfb8cd7203418c79bae27306ffc4857f0ab02be7f9f8ddcae793af556e9cab37",
+  "vectorsKernel" : "dispatch(band-at-batch>=Q4_K:4,Q6_K:32,Q8_0:4;band=band-f32(tile=3x3,kc=512,panelKb=256,lanes=8))",
+  "vectorsRouting" : "vectors-gguf-batched-matmul-routing mode=dispatch Q4_K integer=240/720 band=39600/1198080 Q6_K integer=760/11640 band=5880/188160 Q8_0 integer=0/0 band=0/0",
+  "capabilities" : "VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=512, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=16, ggufChunksPerThread=2, ggufBatchedMatmulKernel=dispatch(band-at-batch>=Q4_K:4,Q6_K:32,Q8_0:4;band=band-f32(tile=3x3,kc=512,panelKb=256,lanes=8))]",
+  "cases" : [ {
+    "id" : "5ad247b0d7d075001a428b45",
+    "label" : "unanswerable",
+    "promptTextSha256" : "7aaa491a77e0829b0e34624e86fb5842eaafc797cd548df4984a3eaf5cc7bb04",
+    "promptTokens" : 272,
+    "completionTokens" : 64,
+    "stopReason" : "MAX_TOKENS",
+    "output" : "The document does not provide information on a tax system that has no impact on income inequality. It discusses how progressive tax systems can either increase or decrease income inequality, depending on the level of the top tax rate and its application to social spending. Therefore, based on the given information, there is no mentioned system that has no",
+    "fragments" : [ "The", " document", " does", " not", " provide", " information", " on", " a", " tax", " system", " that", " has", " no", " impact", " on", " income", " inequality", ".", " It", " discusses", " how", " progressive", " tax", " systems", " can", " either", " increase", " or", " decrease", " income", " inequality", ",", " depending", " on", " the", " level", " of", " the", " top", " tax", " rate", " and", " its", " application", " to", " social", " spending", ".", " Therefore", ",", " based", " on", " the", " given", " information", ",", " there", " is", " no", " mentioned", " system", " that", " has", " no" ],
+    "millis" : 16181
+  }, {
+    "id" : "57267640f1498d1400e8e074",
+    "label" : "answerable",
+    "promptTextSha256" : "c65e890c5141a6b85d4f1c118168e13f4d7c82481e9618d13e2b5e14eb7d8094",
+    "promptTokens" : 389,
+    "completionTokens" : 16,
+    "stopReason" : "EOS",
+    "output" : "The Hawaiian Islands are made up almost entirely of layered basaltic lava flows.",
+    "fragments" : [ "The", " Hawaiian", " Islands", " are", " made", " up", " almost", " entirely", " of", " layered", " bas", "alt", "ic", " lava", " flows", "." ],
+    "millis" : 9257
+  }, {
+    "id" : "5737432bc3c5551400e51e9b",
+    "label" : "answerable",
+    "promptTextSha256" : "c7e008f5ad65a56181ec0402c0ab1c6fe162c02c3c6822e0492c8d80e500348e",
+    "promptTokens" : 360,
+    "completionTokens" : 12,
+    "stopReason" : "EOS",
+    "output" : "Newton proposed that innate inertia is the natural state of objects.",
+    "fragments" : [ "Newton", " proposed", " that", " innate", " inertia", " is", " the", " natural", " state", " of", " objects", "." ],
+    "millis" : 8203
+  }, {
+    "id" : "5705f09e75f01819005e77a4",
+    "label" : "answerable",
+    "promptTextSha256" : "da83876fac5168689d5bb0c1274c11afe95d6808c1ea0633a9957ad141230f84",
+    "promptTokens" : 333,
+    "completionTokens" : 17,
+    "stopReason" : "EOS",
+    "output" : "The Californios were dissatisfied with inequitable taxes in addition to land laws.",
+    "fragments" : [ "The", " Californ", "ios", " were", " diss", "atisfied", " with", " ine", "qu", "itable", " taxes", " in", " addition", " to", " land", " laws", "." ],
+    "millis" : 8547
+  }, {
+    "id" : "57265746dd62a815002e821c",
+    "label" : "answerable",
+    "promptTextSha256" : "93fe5f67951f9beb7b1bc0afb3ee12c4b17c9ce8851cb383863fbd0e0274510e",
+    "promptTokens" : 257,
+    "completionTokens" : 19,
+    "stopReason" : "EOS",
+    "output" : "The mouth on the Pleurobrachia is located at the narrow end of its body.",
+    "fragments" : [ "The", " mouth", " on", " the", " Ple", "uro", "br", "ach", "ia", " is", " located", " at", " the", " narrow", " end", " of", " its", " body", "." ],
+    "millis" : 7246
+  }, {
+    "id" : "5a2c1397bfd06b001a5ae9c9",
+    "label" : "unanswerable",
+    "promptTextSha256" : "4bc1039ea2da9ef211dbfe946edd26c240e105462ec997afbcccb3cfc11c4991",
+    "promptTokens" : 276,
+    "completionTokens" : 64,
+    "stopReason" : "MAX_TOKENS",
+    "output" : "The document does not specify that Alec Shelbrooke proposed payments of benefits should never be made on any specific type of card or method. It mentions his proposal for the payments of benefits and tax credits on a \"Welfare Cash Card,\" which could be used to buy only \"essentials.\" However, the document does not",
+    "fragments" : [ "The", " document", " does", " not", " specify", " that", " Alec", " Shel", "bro", "oke", " proposed", " payments", " of", " benefits", " should", " never", " be", " made", " on", " any", " specific", " type", " of", " card", " or", " method", ".", " It", " mentions", " his", " proposal", " for", " the", " payments", " of", " benefits", " and", " tax", " credits", " on", " a", " \"", "W", "elfare", " Cash", " Card", ",\"", " which", " could", " be", " used", " to", " buy", " only", " \"", "ess", "entials", ".\"", " However", ",", " the", " document", " does", " not" ],
+    "millis" : 12513
+  }, {
+    "id" : "5ad4d2105b96ef001a10a1c7",
+    "label" : "unanswerable",
+    "promptTextSha256" : "8c49b554141c14d4e49aafb392ccf70b0da84106a53f82e2d93c818fc63134be",
+    "promptTokens" : 367,
+    "completionTokens" : 53,
+    "stopReason" : "EOS",
+    "output" : "The document provided does not contain information about Killer B cells or what they kill. It focuses on Killer T cells and their function in killing infected or damaged cells. Therefore, based on the given document, there is no information to answer the question about Killer B cells.",
+    "fragments" : [ "The", " document", " provided", " does", " not", " contain", " information", " about", " Killer", " B", " cells", " or", " what", " they", " kill", ".", " It", " focuses", " on", " Killer", " T", " cells", " and", " their", " function", " in", " killing", " infected", " or", " damaged", " cells", ".", " Therefore", ",", " based", " on", " the", " given", " document", ",", " there", " is", " no", " information", " to", " answer", " the", " question", " about", " Killer", " B", " cells", "." ],
+    "millis" : 13507
+  }, {
+    "id" : "572fd1c4947a6a140053cd02",
+    "label" : "answerable",
+    "promptTextSha256" : "3d75c77cf23870b1448968ac9f8744b99bc35c2e280704ceacf077231b3c8560",
+    "promptTokens" : 248,
+    "completionTokens" : 64,
+    "stopReason" : "MAX_TOKENS",
+    "output" : "The final stage of a bill in the Scottish Parliament is Stage 3, which is considered at a meeting of the whole Parliament. This stage includes a consideration of amendments as a general debate and a final vote on the bill. Opposition members may also introduce \"wrecking amendments\" to hinder further progress and cause the bill",
+    "fragments" : [ "The", " final", " stage", " of", " a", " bill", " in", " the", " Scottish", " Parliament", " is", " Stage", " ", "3", ",", " which", " is", " considered", " at", " a", " meeting", " of", " the", " whole", " Parliament", ".", " This", " stage", " includes", " a", " consideration", " of", " amendments", " as", " a", " general", " debate", " and", " a", " final", " vote", " on", " the", " bill", ".", " Opposition", " members", " may", " also", " introduce", " \"", "w", "reck", "ing", " amendments", "\"", " to", " hinder", " further", " progress", " and", " cause", " the", " bill" ],
+    "millis" : 12007
+  }, {
+    "id" : "5a834caae60761001a2eb53d",
+    "label" : "unanswerable",
+    "promptTextSha256" : "6c811e182ee44ad817b323db736c8394d7f19ae7b8693d26efae9d7a2660834f",
+    "promptTokens" : 375,
+    "completionTokens" : 64,
+    "stopReason" : "MAX_TOKENS",
+    "output" : "The document suggests that the combination of hermaphroditism and early reproduction enables small populations to grow at an explosive rate. However, it does not provide specific quantitative data on how quickly plankton populations grow due to these factors. The information given is qualitative, indicating the potential for rapid population growth rather than precise growth",
+    "fragments" : [ "The", " document", " suggests", " that", " the", " combination", " of", " her", "m", "aph", "ro", "dit", "ism", " and", " early", " reproduction", " enables", " small", " populations", " to", " grow", " at", " an", " explosive", " rate", ".", " However", ",", " it", " does", " not", " provide", " specific", " quantitative", " data", " on", " how", " quickly", " plank", "ton", " populations", " grow", " due", " to", " these", " factors", ".", " The", " information", " given", " is", " qualitative", ",", " indicating", " the", " potential", " for", " rapid", " population", " growth", " rather", " than", " precise", " growth" ],
+    "millis" : 15214
+  }, {
+    "id" : "57266193dd62a815002e832e",
+    "label" : "answerable",
+    "promptTextSha256" : "7c3fa210cdc223610bc447592f5c738ab0dc320f960a1ed9c108b3fa5486cc78",
+    "promptTokens" : 319,
+    "completionTokens" : 36,
+    "stopReason" : "EOS",
+    "output" : "Seismologists were able to create the more detailed model of the Earth using images of wave speeds inside the Earth, similar to how a doctor images a body in a CT scan.",
+    "fragments" : [ "Se", "ism", "ologists", " were", " able", " to", " create", " the", " more", " detailed", " model", " of", " the", " Earth", " using", " images", " of", " wave", " speeds", " inside", " the", " Earth", ",", " similar", " to", " how", " a", " doctor", " images", " a", " body", " in", " a", " CT", " scan", "." ],
+    "millis" : 10175
+  }, {
+    "id" : "5a7b3dd921c2de001afe9dfa",
+    "label" : "unanswerable",
+    "promptTextSha256" : "7b4f1301bc037c7843cbc63a46d0e6214e9fbe0bd98e591998fed143b17eb64a",
+    "promptTokens" : 422,
+    "completionTokens" : 52,
+    "stopReason" : "EOS",
+    "output" : "The document does not provide information on the Filipino population percentage in Fresno in 1970. It only gives the racial breakdown for the year 2010. Therefore, the percentage of Filipino residents in Fresno in 1970 cannot be determined from the available data.",
+    "fragments" : [ "The", " document", " does", " not", " provide", " information", " on", " the", " Filipino", " population", " percentage", " in", " Fresno", " in", " ", "197", "0", ".", " It", " only", " gives", " the", " racial", " breakdown", " for", " the", " year", " ", "201", "0", ".", " Therefore", ",", " the", " percentage", " of", " Filipino", " residents", " in", " Fresno", " in", " ", "197", "0", " cannot", " be", " determined", " from", " the", " available", " data", "." ],
+    "millis" : 14330
+  }, {
+    "id" : "5a63835a68151a001a92232e",
+    "label" : "unanswerable",
+    "promptTextSha256" : "029f11c1dc0c7ad9f4210ee719872b751ec6977b18c5e4edea9da1e725c5e146",
+    "promptTokens" : 238,
+    "completionTokens" : 64,
+    "stopReason" : "MAX_TOKENS",
+    "output" : "The information provided does not contain details about any group that can amend the United Kingdom Parliament. It specifically discusses the amendment process for the Victorian Constitution within Australia, relating to the Parliament of Victoria and its relationship to the 1855 colonial constitution. Therefore, based on the given document, there is no indication of a group capable",
+    "fragments" : [ "The", " information", " provided", " does", " not", " contain", " details", " about", " any", " group", " that", " can", " amend", " the", " United", " Kingdom", " Parliament", ".", " It", " specifically", " discusses", " the", " amendment", " process", " for", " the", " Victorian", " Constitution", " within", " Australia", ",", " relating", " to", " the", " Parliament", " of", " Victoria", " and", " its", " relationship", " to", " the", " ", "185", "5", " colonial", " constitution", ".", " Therefore", ",", " based", " on", " the", " given", " document", ",", " there", " is", " no", " indication", " of", " a", " group", " capable" ],
+    "millis" : 10827
+  }, {
+    "id" : "5ad26aa8d7d075001a429323",
+    "label" : "unanswerable",
+    "promptTextSha256" : "ef3cacffcae9bf145ddb874ca2b4cddf4ad45358ca39de2413243cade4d4fcfb",
+    "promptTokens" : 258,
+    "completionTokens" : 64,
+    "stopReason" : "MAX_TOKENS",
+    "output" : "The document does not provide specific information on why Lake Tuggenersee was regulated. It only mentions that the continuous input of sediment into the lake will silt up the lake, similar to what happened to the former Lake Tuggenersee. Therefore, based on the given document, there is no clear indication of the",
+    "fragments" : [ "The", " document", " does", " not", " provide", " specific", " information", " on", " why", " Lake", " T", "ugg", "ener", "see", " was", " regulated", ".", " It", " only", " mentions", " that", " the", " continuous", " input", " of", " sediment", " into", " the", " lake", " will", " s", "ilt", " up", " the", " lake", ",", " similar", " to", " what", " happened", " to", " the", " former", " Lake", " T", "ugg", "ener", "see", ".", " Therefore", ",", " based", " on", " the", " given", " document", ",", " there", " is", " no", " clear", " indication", " of", " the" ],
+    "millis" : 12121
+  }, {
+    "id" : "572681c1dd62a815002e8797",
+    "label" : "answerable",
+    "promptTextSha256" : "83c9fe12b370ab9793ce2f2f319d1b9284e0d5ac6d4dc68b4f5e9ea8c3eb852d",
+    "promptTokens" : 265,
+    "completionTokens" : 29,
+    "stopReason" : "EOS",
+    "output" : "Platyctenida use their pharynx to evert and function as a muscular \"foot\" for clinging to and creeping on surfaces.",
+    "fragments" : [ "Pl", "aty", "ct", "en", "ida", " use", " their", " ph", "ary", "nx", " to", " ever", "t", " and", " function", " as", " a", " muscular", " \"", "foot", "\"", " for", " clinging", " to", " and", " creeping", " on", " surfaces", "." ],
+    "millis" : 8074
+  }, {
+    "id" : "5ad28253d7d075001a429833",
+    "label" : "unanswerable",
+    "promptTextSha256" : "a53e2e5bfc469039b4f2b5738f4089e8fdb9e7a6284a69e74de2c1ad60c91632",
+    "promptTokens" : 326,
+    "completionTokens" : 30,
+    "stopReason" : "EOS",
+    "output" : "The banks downstream of Duisburg, particularly in the region between Emmerich and Cleves, are usually sparsely populated and lack industrialization.",
+    "fragments" : [ "The", " banks", " downstream", " of", " Duis", "burg", ",", " particularly", " in", " the", " region", " between", " Em", "mer", "ich", " and", " Cle", "ves", ",", " are", " usually", " sp", "ars", "ely", " populated", " and", " lack", " industrial", "ization", "." ],
+    "millis" : 9506
+  }, {
+    "id" : "5726fa525951b619008f83f8",
+    "label" : "answerable",
+    "promptTextSha256" : "72da7e875da4a5c39394e971a60f5296529b7932475bd552b80a61c29b5ae4d3",
+    "promptTokens" : 302,
+    "completionTokens" : 14,
+    "stopReason" : "EOS",
+    "output" : "The show globe was employed until early in the 20th century.",
+    "fragments" : [ "The", " show", " globe", " was", " employed", " until", " early", " in", " the", " ", "20", "th", " century", "." ],
+    "millis" : 7272
+  }, {
+    "id" : "5ad158c0645df0001a2d182a",
+    "label" : "unanswerable",
+    "promptTextSha256" : "a4e4bc6b9d9a16879a4934c04cb97d28c7a3d33e9285a558940814700f9453da",
+    "promptTokens" : 263,
+    "completionTokens" : 64,
+    "stopReason" : "MAX_TOKENS",
+    "output" : "The document does not state that the Court allowed Austria to hold places in Austrian schools exclusively for Austrian students. In fact, it states the opposite: \"In Commission v Austria the Court held that Austria was not entitled to restrict places in Austrian universities to Austrian students to avoid 'structural, staffing and financial problems' if (main",
+    "fragments" : [ "The", " document", " does", " not", " state", " that", " the", " Court", " allowed", " Austria", " to", " hold", " places", " in", " Austrian", " schools", " exclusively", " for", " Austrian", " students", ".", " In", " fact", ",", " it", " states", " the", " opposite", ":", " \"", "In", " Commission", " v", " Austria", " the", " Court", " held", " that", " Austria", " was", " not", " entitled", " to", " restrict", " places", " in", " Austrian", " universities", " to", " Austrian", " students", " to", " avoid", " '", "structural", ",", " staffing", " and", " financial", " problems", "'", " if", " (", "main" ],
+    "millis" : 11549
+  }, {
+    "id" : "5726f48df1498d1400e8f0dd",
+    "label" : "answerable",
+    "promptTextSha256" : "77fe1c7c67196a500bfecb246a1478ecc0fa8e412d6a56766a2b4a2463ba29a7",
+    "promptTokens" : 253,
+    "completionTokens" : 17,
+    "stopReason" : "EOS",
+    "output" : "7 to 10 percent of American physicians practices reportedly dispense drugs on their own.",
+    "fragments" : [ "7", " to", " ", "10", " percent", " of", " American", " physicians", " practices", " reportedly", " disp", "ense", " drugs", " on", " their", " own", "." ],
+    "millis" : 6350
+  }, {
+    "id" : "5ad26aedd7d075001a429334",
+    "label" : "unanswerable",
+    "promptTextSha256" : "3e06f720ee9eedf831ae400d7cd354451c11457fc5a5a5e49b66b6e7abdee97f",
+    "promptTokens" : 286,
+    "completionTokens" : 18,
+    "stopReason" : "EOS",
+    "output" : "An object suspended on a horizontal spring scale experiences the force of gravity acting on the object.",
+    "fragments" : [ "An", " object", " suspended", " on", " a", " horizontal", " spring", " scale", " experiences", " the", " force", " of", " gravity", " acting", " on", " the", " object", "." ],
+    "millis" : 7328
+  }, {
+    "id" : "572885c44b864d1900164a78",
+    "label" : "answerable",
+    "promptTextSha256" : "e0a855409db4aff5d6f260b97e9f252e1b0260fb3efe403fcd49d6b764bdacbc",
+    "promptTokens" : 251,
+    "completionTokens" : 9,
+    "stopReason" : "EOS",
+    "output" : "Hebei is part of the Central Region.",
+    "fragments" : [ "He", "bei", " is", " part", " of", " the", " Central", " Region", "." ],
+    "millis" : 5759
+  } ]
+}

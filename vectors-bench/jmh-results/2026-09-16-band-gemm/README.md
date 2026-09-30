@@ -619,3 +619,290 @@ Deviations and limits, stated before the run:
   through prefill logits and KV state.
 - **Prefill tool:** `models-rag-bench` was not used. The pre-registered quantities are a prefill
   rate and continuation identity; `profile-prefill` is Models' existing tool for the former.
+
+## Model-level check, pre-registration 2 (Genoa 16 vCPU, default 256-bit species, 2026-09-17T02:28Z–03:40Z)
+
+Measured on the reference host (`model-check/results-genoa-512/`, `summary.md`; JFR dumps kept on the
+host only). Models 167a8abd composite with this branch at a475c3b; Granite 4.1 3B Q4_K_M
+(sha256 662b0626…); frozen window v2 file sha256 dfb8cd72…. The routing counters confirm the
+dispatch arm really took the band path (Q4_K band 39,600 / integer 240 calls; Q6_K band 5,880 /
+integer 760) and the integer arm never did.
+
+| gate (pre-registered) | integer | dispatch | result |
+|---|---|---|---|
+| prefill tok/s, 2,040 tokens, 5 interleaved fresh-JVM reps, median ≥ +10 % | 13.79 (12.77–14.53) | 38.86 (31.46–43.63) | **+181.8 % — pass** |
+| greedy continuations, first 20 squad-v2-dev base-arm cases, identical ≥ 19/20 | — | — | **17/20 — FAIL** |
+| supplementary "open" prompt (not gating) | mean 36.4 tokens | | 10/20 identical |
+
+**Verdict: the dispatch fails its model-level gate and stays opt-in; the default does not change.**
+
+The three base-arm divergences flip the first answer token (`Newton` → `unanswerable`,
+`unanswerable` → `taxes`, `answerable` → `wave speeds`); the open variant diverges in half the
+cases once continuations run long. What this does NOT establish is which arm is closer to the
+model: band computes the exact float product, the integer path adds per-block activation rounding.
+Two further observations: the prefill-logit checksum (sum over all ~100k vocabulary logits) moves
+from 98.1 to −8,357.7, which amplifies small hidden-state differences through the summed LM-head
+rows and is not by itself a correctness signal; and the dispatch runs show up to 787 ms of GC
+pauses per run (the integer runs ~100–150 ms), so the band path allocates on the hot path.
+
+Next, as a separate pre-registration written before running: both arms' greedy tokens and top-1
+logit margins against an independent float reference on the same prompts (llama.cpp's F16/BF16
+path or the Transformers reference already used for the Granite adapter work), to decide whether
+the divergence is band error or integer error; and removing the band path's per-call allocation.
+
+## Pre-registration 3: which arm matches the model? (written 2026-09-17T06:25Z, before any run below)
+
+The model-level identity gate (17/20) cannot say which arm is wrong: band computes the exact float
+product of the dequantised weights; the integer path adds per-block int8 activation rounding. This
+experiment asks which one tracks a float reference, and is a new decision (whether the band path is
+a faithful implementation), not a re-reading of pre-registration 2.
+
+- **Prompts:** the same 20 base-arm prompts, re-rendered with `ModelCheck.prompt` on the same Models
+  build; each must reproduce the recorded `promptTextSha256` in `cont-base-arm-*.json`, or the run
+  stops.
+- **Reference:** Transformers `ibm-granite/granite-4.1-3b` at c0650403…, weights replaced by the
+  dequantised tensors of the same Q4_K_M GGUF (sha256 662b0626…; `reference_alora_case.py
+  --gguf-weights` patching, q/k un-permuted), float32, no adapter, prompt tokenised without added
+  special tokens, greedy, max 8 new tokens, output cut at the first end-of-text.
+- **Measured per case:** reference output text, the reference's first-token top-2 logit margin, and
+  exact agreement of each arm's output (from the model-check JSON) with the reference output.
+- **Decision:** the band path is judged a faithful float implementation if (a) band agrees with the
+  reference on at least as many of the 20 cases as integer does, and (b) on the 3 cases where the
+  arms diverge, band agrees with the reference on at least 2. Otherwise the band path is suspected of
+  an implementation error and is investigated before any further default decision. Either way the
+  outcome is recorded; no default changes on this experiment alone.
+- **Known limitation stated in advance:** the reference uses float activations, as band does, so a
+  correct band implementation should agree more by construction; the experiment tests
+  implementation fidelity, not which quantisation of activations is better for accuracy.
+
+## Pre-registration 3 result: reference agreement (2026-09-17T06:40Z)
+
+Measured on the reference host (`model-check/reference-agreement/`): all 20 prompts re-rendered with
+`ModelCheck.prompt` reproduce the recorded SHA-256; reference prompt token counts equal the runtime's
+on all 20; float32 Transformers with the dequantised Q4_K_M weights.
+
+| | integer | dispatch (band) |
+|---|---:|---:|
+| agrees with the float reference (20 cases) | **19** | 18 |
+| agrees on the 3 cases where the arms diverge | 2 | 1 |
+
+| divergent case | reference | integer | band | reference top-2 margin |
+|---|---|---|---|---:|
+| 5737432b… | `Newton` | `Newton` | `unanswerable` | 0.127 |
+| 5705f09e… | `unanswerable` | `unanswerable` | `taxes` | 0.381 |
+| 57266193… | `wave speeds` | `answerable` | `wave speeds` | 2.000 |
+
+**Verdict under the pre-registered rule: not established as faithful** — (a) band agreement (18)
+is below integer's (19), and (b) band agrees on 1 of 3 divergent cases, below 2. Per the rule the
+band path is suspected of an implementation error and is investigated before any further default
+decision.
+
+What the measurement can and cannot say: the two cases band loses are near-ties in the reference
+itself (margins 0.13 and 0.38 logits); the one it wins has a margin of 2.0. Three divergent cases
+cannot separate a systematic error from near-tie noise between two different float
+implementations (the Java attention and norms differ from Torch's in both arms). The kernel-level
+test bounds band against an exact double-precision reference at ≤ 5e-8 of the term magnitudes,
+which argues against a gross kernel error. The investigation that can decide it: layer-by-layer
+hidden-state comparison of both arms against the reference on these three prompts (Models already
+has a per-layer observer probe), to find whether band's deviation from the reference grows at a
+specific operation or stays at float-rounding level throughout.
+
+## Pre-registration 4: where does band leave the float reference? (written 2026-09-17T06:45Z, before any code that runs)
+
+Pre-registration 3 left the band path "not established as faithful" on three prompts whose
+reference first-token margins are 0.13, 0.38 and 2.0 logits. Three token-level outcomes cannot
+separate an implementation error from near-tie noise. This experiment compares hidden states layer
+by layer instead. Tools: `model-check/layer-probe/` (`LayerProbe.java`, `reference_layers.py`,
+`compare_layers.py`, `run-layer-probe.sh`).
+
+**Prompts.** The three divergent base-arm prompts: `5737432bc3c5551400e51e9b`,
+`5705f09e75f01819005e77a4` and `57266193dd62a815002e832e`.
+- Each is re-rendered with `ModelCheck.prompt(item, ModelCheck.BASE_INSTRUCTION)` on the
+  model-check Models build.
+- Each must reproduce the `promptTextSha256` and `promptTokens` recorded in
+  `cont-base-arm-integer.json`, or the run stops.
+
+**Arms.** Two fresh JVMs, `-Dvectors.gguf.batchedMatmulKernel=integer` and `=dispatch`. The
+routing report is recorded in each output.
+
+**Prefill conditions.**
+- **Primary: `pipeline-cache`.** Replays the model-check prefill sequence exactly. The first 20
+  window cases are run in order. Each prompt rewinds to its longest shared token prefix with the
+  previous prompt (as `GenerationLoop` does) and prefills only the suffix. So the batch sizes, and
+  therefore the band/integer routing, are the ones the continuations saw. Decode steps are not
+  replayed: they write KV only at positions past the prompt, and the next rewind discards them.
+- **Supplementary: `fresh`.** A reset and one full-prompt prefill from position 0, plus an
+  identical prefill with no observer installed. The logits of the two must be bit-identical, which
+  shows the observer does not perturb the pass. Only `fresh` can capture every position, which the
+  local-transfer analysis below needs.
+
+**Captured stages** (last prompt position, float32), in this order:
+- `embedding`: the token row times `embeddingScale`. Java recomputes this through
+  `LlamaWeights.embedToken`, because the observer does not expose it. It contains no matmul, so it
+  is identical in both arms; it serves as the alignment anchor.
+- `layer.0` … `layer.39`: the residual stream after each decoder layer, from `LlamaForwardPass`'s
+  `layerObserver`.
+- `final_norm`: the forward pass's `xNorm` field, read after prefill. This is the vector the LM
+  head consumed. A recomputation from the observed last layer is recorded beside it as a
+  consistency check.
+- `logits`: the prefill's return value, after the Granite logit scaling.
+
+The reference side:
+- **Model and weights:** Transformers `ibm-granite/granite-4.1-3b` at c0650403…, weights patched
+  with `patch_with_gguf` from the same Q4_K_M GGUF, float32, `use_cache=False`, run on the Java
+  arm's token ids.
+- **Tokenizer check:** the prompt text tokenised with `add_special_tokens=False` must have the
+  same token count; id equality is recorded.
+- **Stage capture:** by module hooks — the input of layer 0, the output of each layer,
+  `model.norm`, and the model's logits.
+- **Index check:** `output_hidden_states=True` is also captured and cross-checked against the
+  hooks, and the observed index convention is recorded. In current Transformers the last tuple
+  entry is post-norm.
+
+**Metric.** For each stage L, all relative to the reference vector's norm:
+
+- `e_int[L] = ‖int − ref‖ / ‖ref‖`
+- `e_band[L] = ‖band − ref‖ / ‖ref‖`
+- `e_ib[L] = ‖int − band‖ / ‖ref‖`
+
+**Alignment gate.** Evaluated before any verdict. `compare_layers.py` exits non-zero if any of
+these fails:
+- the stage lists, vector lengths, token ids or prompt SHA differ between files;
+- `e[embedding] > 1e-4` in either arm;
+- `e[layer.0] > 0.05`;
+- `layer.0` is not closer to reference `layer.0` than to reference `embedding` and `layer.1`
+  (an off-by-one check).
+
+**Decision rule (per prompt, primary condition).**
+- **Faithful:** band is judged faithful on a prompt if
+  - `e_band[L] ≤ 1.25 × e_int[L]` at every stage L, and
+  - `e_band[logits] ≤ e_int[logits]`.
+- **Overall:** band is faithful if it is faithful on all three prompts.
+- **Locating a suspect:** the first stage L* where `e_band[L*] > 1.25 × e_int[L*]` is the located
+  suspect for that prompt.
+- **Attention vs MLP:** the Java observer fires only after a whole decoder layer, so the two cannot
+  be separated inside a Java layer's accumulated error. A supplementary `fresh` analysis narrows the
+  suspect to one layer:
+  - **Local transfer:** each Java arm's full-sequence output of layer L−1 is run through the
+    reference layer L, with the reference's own mask and rotary inputs.
+  - **Local error:** the result is compared with that arm's layer L output, giving
+    `local_int[L]` and `local_band[L]`.
+  - **Split:** the same transfer is also run through the reference attention half alone, which
+    reports how much of the reference layer's own update is attention and how much is MLP. It
+    does not split the Java arm's error.
+  - Local transfer is supplementary and does not change the verdict.
+
+**Stated in advance.**
+- **Both errors are nonzero.** Both Java arms differ from Torch in attention, RMSNorm and RoPE
+  implementations and in reduction order. So `e_int` and `e_band` are both nonzero, and the rule
+  compares band's distance from the reference with integer's, not with zero.
+- **Early-layer noise.** At early layers both errors may sit at float32 rounding level (~1e-6).
+  There, a 1.25× ratio can be crossed by rounding alone. The rule is applied as written anyway. If
+  L* falls where both errors are below 1e-5, the result is reported as a rule failure *with* that
+  context and the next stage's ratio beside it; the rule is not relaxed after the fact.
+- **Reproduction check.** If the probe's top-1 token in the primary condition does not reproduce
+  that arm's recorded first fragment, the prompt is flagged as not reproducing the model-check
+  condition. Its layer table is still reported.
+- **What it cannot test.** The probe tests fidelity of the prefill's last position only. It says
+  nothing about decode (batch 1, integer in both arms) or about accuracy. Three prompts are a
+  localisation instrument, not a population estimate.
+- **No default changes on this experiment alone.**
+
+## Pre-registration 4 — probe tools (prepared here, not run here)
+
+One command on the reference host, after `git pull` in its vectors checkout:
+
+```bash
+bash vectors-bench/jmh-results/2026-09-16-band-gemm/model-check/layer-probe/run-layer-probe.sh
+# resume after a failure: OUT=/opt/layerprobe/<timestamp> bash .../run-layer-probe.sh   (FORCE=1 recomputes)
+```
+
+It uses the model-check install and harness under `/root/band-dispatch-model-check`, the evidence
+directory `20260917T022838Z`, `/opt/ref/venv`, `/opt/ref/reference_alora_case.py` and the GGUF.
+Window and GGUF hashes are verified. It runs four JVMs ({pipeline-cache, fresh} × {integer,
+dispatch}), then the reference (with local transfer from the `fresh` dumps), then
+`compare_layers.py` for each condition. Outputs go to `/opt/layerprobe/<timestamp>/`.
+
+What was checked on this laptop (measured here; the 3B model was not run):
+
+- **Compilation.** `LayerProbe.java` compiles against a Models 167a8abd composite built with
+  `--include-build` of this branch; `vectors-core` contains `GgufBandGemm`.
+- **Reflective pieces**, on Models' synthetic nano Llama GGUF (`PureJavaBackendTest.buildNanoModelFile`):
+  - the forward-pass lookup, the `layerObserver` proxy install on the `private final` field, and
+    the `config`, `weights`, `prefillBatchCapacity` and `xNorm` reads;
+  - the all-positions dump size.
+  - **Paths covered:** F32 projections (token-at-a-time path), and Q4_0 at prefill batch 32 and 5
+    (batched and chunked path). Under the `integer` and `dispatch` properties, these pass:
+    - the observer reports every layer;
+    - `xNorm` equals `rmsNorm` of the observed last layer, bit-for-bit;
+    - a suffix prefill after `rewind` reports only suffix positions, and its logits match a
+      fresh prefill.
+- **Analysis scripts, end to end**, on a tiny random `GraniteForCausalLM`, with fake "Java" files
+  made from its own hidden states plus noise:
+  - `reference_layers.py` and `compare_layers.py`, under transformers 4.46.3 / torch 2.2.2 (the
+    newest torch for this Intel Mac). The host has transformers 5.17 / torch 2.14, which was not
+    exercised here.
+  - Hook stages chain exactly, and the `output_hidden_states` tuple matches the hooks. Its last
+    entry is post-norm (`hs_last_is=final_norm`).
+  - The local-transfer self-replay reproduces the reference layer output exactly (max|diff| 0.0).
+- **Rule and alignment tests.** `test_compare_layers.py` has 15 synthetic tests:
+  - the off-by-one, embedding, stage-list, length, token-id and kernel-label misalignments, each
+    exiting 2;
+  - the inclusive 1.25 boundary, L* location, the logits clause, and a zero-integer-error stage.
+
+Facts about the pass that shape the probe (read in Models 167a8abd source):
+
+- **Prefill chunking.** The default prefill batch capacity is 32 (`PureJavaPlanConfiguration`).
+  A ~300-token prompt is prefilled in chunks of 32, and the last position sits in the remainder
+  chunk; a remainder of 1 runs the single-token path. So band routing at the last position
+  (Q4_K band at ≥ 4, Q6_K at ≥ 32) depends on the prefill length. The prefill length differs
+  between `fresh` and the model-check's prompt-cache reuse, which is why `pipeline-cache` is
+  primary. Each output records `lastPositionChunkSize`.
+- **Observer side effects.** Installing an observer disables only the final-layer
+  pruning/KV-only shortcuts. Those are rejected for Granite anyway (`usesStandardLlamaLayerSemantics`
+  is false), so for Granite the observer should not change the executed path. The `fresh` control
+  (bit-identical logits) measures this on the host.
+- **Embedding.** The observer does not expose the embedding. It is recomputed from
+  `LlamaWeights.embedToken × embeddingScale`, which is the same code the pass runs, but it is not an
+  observation of the pass.
+
+## Pre-registration 4 result: alignment gate FAILED, so no verdict (run 2026-09-17T06:56Z–07:05Z)
+
+Host: the reference host (16 vCPU, 30 GiB, x86_64; `results-20260917T065647Z/host.txt`). Both conditions ran to
+completion. Every Java run reproduced its recorded first fragment. Routing was confirmed in both
+arms, the observer was bit-identical, and the Hugging Face token ids equalled the Java ids.
+
+**Gate outcome.** `compare_layers.py` exited 2 in both conditions, and on all three prompts it
+failed the same check: the **integer** arm's `e[layer.0]` exceeds the pre-registered absolute bound
+of 0.05 (0.0585, 0.0644, 0.0591). The band arm passes that bound (0.041–0.047). Every other gate
+check passed:
+
+- `e[embedding]` is 0 in both arms.
+- `layer.0` is about 10× closer to reference `layer.0` than to reference `layer.1` (0.66–0.69), and about 20× closer than to the embedding (1.12–1.14). There is no off-by-one.
+
+The 0.05 bound was a guess written before any data. Under the rules stated above, **no faithful or
+unfaithful verdict is issued**, and the bound is not relaxed after the fact. A rerun with a revised
+gate must be pre-registered first. Local transfer did not run, because it sits after the gate.
+
+**Exploratory observation (not a verdict).** `layer_observation.py` computed the same `errors()`
+rows without the gate (`results-20260917T065647Z/layer-observation.json`). Measured here:
+
+| condition | prompt | stages where e_band > e_int | e_int / e_band at layer.0 | at layer.20 | at logits |
+|---|---|---|---|---|---|
+| pipeline-cache | 5737432b | 0 of 43 | 0.0585 / 0.0457 | 0.0555 / 0.0239 | 0.0872 / 0.0260 |
+| pipeline-cache | 5705f09e | 0 of 43 | 0.0644 / 0.0437 | 0.0588 / 0.0226 | 0.1206 / 0.0293 |
+| pipeline-cache | 57266193 | 0 of 43 | 0.0591 / 0.0415 | 0.0607 / 0.0248 | 0.1132 / 0.0277 |
+| fresh | 5737432b | 0 of 43 | 0.0585 / 0.0472 | 0.0555 / 0.0254 | 0.0872 / 0.0263 |
+| fresh | 5705f09e | 0 of 43 | 0.0644 / 0.0447 | 0.0588 / 0.0224 | 0.1206 / 0.0519 |
+| fresh | 57266193 | 0 of 43 | 0.0591 / 0.0415 | 0.0607 / 0.0251 | 0.1132 / 0.0285 |
+
+What this suggests, labelled as belief until a pre-registered rerun confirms it:
+
+- The integer path's int8 activation quantisation, not the band path, is the larger departure from the float reference. At the logits, band sits 3–4× closer on every prompt.
+- On these three near-tie prompts, the smaller hidden-state error did not buy top-1 agreement. The reference, integer and band top-1 tokens were Newton/Newton/un, un/un/tax and wave/answer/wave. Prompts whose top-2 margin is 0.13–2.0 logits flip on errors of this size, whichever arm is closer.
+- Band sitting farther from integer (`e_ib`) than from the reference at late layers is consistent with that reading.
+
+**Next, if pursued:** pre-register a gate whose layer.0 bound is relative (for example, the arm's
+`layer.0` error well below its distance to the neighbouring reference stages). Then rerun the
+unchanged decision rule and local transfer. Also pre-register a population measure: logit error
+against the reference over all 20 prompts, rather than top-1 on three near-ties. No default changes.
