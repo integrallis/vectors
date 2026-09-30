@@ -249,7 +249,7 @@ class PanamaGgufQuantizedDotTest {
   }
 
   @Test
-  void q4_0Q8_0UnsignedPairwiseBatchedMatmulCombinesIntegerHalvesBeforeScaling() {
+  void q4_0Q8_0UnsignedPairwiseBatchedMatmulUsesIntegerHalvesOrTheSupportedFallback() {
     int blocks = 65;
     int cols = blocks * 32;
     int batchSize = 2;
@@ -286,6 +286,28 @@ class PanamaGgufQuantizedDotTest {
         zeroPointCorrections,
         new float[batchSize * 8],
         GgufQ4Kernel.UNSIGNED_PAIRWISE);
+
+    // Explicit selection cannot force this >=256-bit kernel onto a narrower/scalar provider.
+    // In that case pin the dispatch fallback, rather than asserting an unexecuted kernel's fold.
+    if (Boolean.getBoolean("vectors.forceScalar")
+        || !PanamaVectorUtilSupport.useQ4UnsignedPairwise(
+            GgufQ4Kernel.UNSIGNED_PAIRWISE, PanamaVectorUtilSupport.VECTOR_BITSIZE, blocks)) {
+      float[] fallback = new float[batchSize];
+      VectorUtil.ggufQ4_0Q8_0BatchedMatmul(
+          queries,
+          weights,
+          batchSize,
+          1,
+          cols,
+          fallback,
+          new byte[batchSize * cols],
+          new float[batchSize * blocks],
+          new int[batchSize * blocks * 8],
+          new float[batchSize * 8],
+          GgufQ4Kernel.WIDENED);
+      assertThat(actual).containsExactly(fallback);
+      return;
+    }
 
     for (int batch = 0; batch < batchSize; batch++) {
       FloatVector expectedLanes = FloatVector.zero(FloatVector.SPECIES_128);
@@ -1189,8 +1211,14 @@ class PanamaGgufQuantizedDotTest {
     assertThat(actualQuants).containsExactly(expectedQuants);
     assertThat(actualScales).containsExactly(expectedScales);
     assertThat(actual).hasSameSizeAs(expected);
+    // Bit-equality, not a tolerance. This assertion carried offset(1e-3f) for a long time, and the
+    // scalar and Vector API routes disagreed by one to two units in the last place underneath it
+    // the whole while. A tolerance wide enough to hide a reduction-order defect is not a test of a
+    // reduction order.
     for (int row = 0; row < rows; row++) {
-      assertThat(actual[row]).isCloseTo(expected[row], offset(1e-3f));
+      assertThat(Float.floatToRawIntBits(actual[row]))
+          .describedAs("row %d: scalar %s vs panama %s", row, expected[row], actual[row])
+          .isEqualTo(Float.floatToRawIntBits(expected[row]));
     }
   }
 

@@ -623,8 +623,27 @@ public final class GenerationDirectory {
       }
     }
 
-    // 5. No valid generation found. Bootstrap an empty gen-0 if we have the helpers, otherwise
-    //    bail out so the caller can decide what to do.
+    // 5. No valid generation found. Before bootstrapping, check whether the reason is a format
+    //    version this build cannot read: that is not recoverable by falling back, and bootstrapping
+    //    over it produces a misleading "generation directory already exists".
+    Integer foreignVersion = firstForeignManifestVersion(storageRoot);
+    if (foreignVersion != null) {
+      throw new IOException(
+          "collection at "
+              + storageRoot
+              + " was written with manifest format version "
+              + foreignVersion
+              + "; this build reads version "
+              + FileFormat.VERSION_MANIFEST
+              + (foreignVersion > FileFormat.VERSION_MANIFEST
+                  ? ". It was written by a newer build; upgrade vectors to open it."
+                  : ". Migrate it in place with ManifestMigration.migrate(Path), or open it with"
+                      + " .migrateOlderFormats(true), which rewrites the manifest and keeps the"
+                      + " previous one as a .bak. No re-embedding is involved: no payload file"
+                      + " changed format."));
+    }
+
+    // Bootstrap an empty gen-0 if we have the helpers, otherwise bail out so the caller can decide.
     if (bootstrapSource == null) {
       throw new IOException(
           "no valid generation found at " + storageRoot + " and no bootstrap source supplied");
@@ -681,6 +700,64 @@ public final class GenerationDirectory {
     try {
       return Manifest.readFrom(manifestFile);
     } catch (IOException e) {
+      return null;
+    }
+  }
+
+  /**
+   * The format version of the first generation whose manifest this build cannot read, or null.
+   *
+   * <p>Scans newest-first so the reported version is the one the collection most recently used.
+   */
+  private static Integer firstForeignManifestVersion(Path storageRoot) {
+    try (var generations = Files.list(storageRoot)) {
+      return generations
+          .filter(Files::isDirectory)
+          .filter(p -> p.getFileName().toString().startsWith(FileFormat.GENERATION_DIR_PREFIX))
+          .sorted(java.util.Comparator.comparing((Path p) -> p.getFileName().toString()).reversed())
+          .map(GenerationDirectory::peekManifestVersion)
+          .filter(java.util.Objects::nonNull)
+          .filter(version -> version != FileFormat.VERSION_MANIFEST)
+          .findFirst()
+          .orElse(null);
+    } catch (IOException unreadable) {
+      return null;
+    }
+  }
+
+  /**
+   * Reads only the format version out of a manifest, without validating anything else.
+   *
+   * <p>Needed to tell a <em>version mismatch</em> apart from <em>corruption</em>. {@link
+   * #tryReadManifest} deliberately collapses both to {@code null} because a corrupt manifest should
+   * fall back to the previous generation — but a version mismatch is not corruption. It affects
+   * every generation equally, so falling back is futile, and the caller then bootstraps a fresh
+   * {@code gen-0} and fails with "generation directory already exists", which points at the
+   * filesystem instead of at the format. That cost real debugging time on the 0.1.23 to 0.1.24
+   * upgrade.
+   *
+   * @return the version, or {@code null} if the file is absent, too short, or not a manifest at all
+   */
+  static Integer peekManifestVersion(Path genDir) {
+    Path manifestFile = genDir.resolve(FileFormat.MANIFEST_FILE);
+    if (!Files.isRegularFile(manifestFile)) {
+      return null;
+    }
+    try {
+      byte[] head = new byte[8];
+      try (var channel =
+          java.nio.channels.FileChannel.open(manifestFile, StandardOpenOption.READ)) {
+        var buffer = java.nio.ByteBuffer.wrap(head).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        if (channel.read(buffer) < head.length) {
+          return null;
+        }
+        buffer.flip();
+        if (buffer.getInt() != FileFormat.MAGIC_MANIFEST) {
+          return null;
+        }
+        return buffer.getInt();
+      }
+    } catch (IOException unreadable) {
       return null;
     }
   }

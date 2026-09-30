@@ -2,6 +2,172 @@
 
 All notable changes to java-vectors are documented here.
 
+## [Unreleased]
+
+## [0.1.25] - 2026-09-27
+
+Fixes the upgrade path 0.1.24 shipped without. 0.1.24 made the manifest version an exact match, so a
+0.1.23 collection stops the build — that part was intended. What went out with it was an error message
+blaming the filesystem and the advice to rebuild the collection, meaning re-run an embedding model
+over the whole corpus. **That advice was wrong**, and this release replaces it.
+
+### Added
+
+- `ManifestMigration` upgrades a collection's manifests in place, without re-embedding anything.
+  Version 5 added a recipe flag at offset 160 and a 32-byte hash after it, moving the self CRC to 196
+  and the header from 164 to 200 bytes. Every field version 4 carried keeps its offset, **no payload
+  file changed format** — `VERSION_METADATA`, `_IDMAP`, `_QUANTIZED`, `_GRAPH` and `_TOMBSTONES` are
+  all still 1 — and the content hash version 5 introduced is derived from stored text on read rather
+  than persisted. So the upgrade is a few hundred bytes per generation.
+
+  Measured on the bundled 1,929-prompt router index, a real version 4 collection: after a
+  manifest-only rewrite its held-out evaluation returned **per-item results identical to a full
+  rebuild** across all 481 prompts, 0.9044 either way.
+
+  `inspect` reports, `migrate` writes, `migrationAvailable` answers the one question a caller usually
+  has. The batch `main` reports by default and needs `--apply` to write, and exits 1 when a dry run
+  finds work so a deployment can gate on it.
+
+- `VectorCollectionBuilder.migrateOlderFormats(boolean)`, **off by default**. Rewriting a file inside
+  somebody's collection because they happened to open it is not a default. The previous manifest is
+  kept as `manifest.bin.v<n>.bak`, the rewrite is tmp/fsync/`ATOMIC_MOVE`/dir-fsync, and re-running is
+  a no-op.
+
+- `java-vectors.migrate-on-startup` in the Spring Boot starter, **off by default** — the idiom Flyway
+  established, for the common case of one application owning one collection. Only applied alongside
+  `storage-path`: an in-memory collection has no manifest.
+
+- `vectors-spring-batch` (**new published module**) — `CollectionRootItemReader`,
+  `ManifestMigrationItemProcessor`, `MigrationReport` and `ManifestMigrationTasklet`. Chunk-oriented
+  so a bad collection can be skipped and the rest carry on; `IOException` propagates rather than being
+  swallowed, because Spring Batch already owns that decision and a caught one would report a clean job
+  over a collection that never migrated.
+
+- `vectors-jakarta-batch` (**new published module**) — a JSR-352 batchlet for containers that are not
+  Spring: JBeret under WildFly or Quarkus, and Open Liberty. Exit status is `MIGRATED`, `PENDING`,
+  `CLEAN` or `ATTENTION`, kept apart so a JSL can branch on them; an unrecognised `apply` property is
+  refused rather than read as false, since silently dry-running an operator who typed `apply="yes"`
+  leaves them believing the collections were upgraded.
+
+- Studio shows each collection's on-disk manifest format and how it relates to what this build reads,
+  as `CollectionFormat` with `CURRENT`, `OLDER`, `NEWER` or `UNKNOWN`. `OLDER` is styled as a warning
+  rather than an error: the collection is intact and one migration away, but every action on it fails
+  until then, so it must not look ordinary.
+
+### Fixed
+
+- **An older collection did not appear in Studio at all.** The scan called `Manifest.readFrom`, which
+  validates the version before returning, so a version 4 collection threw, was caught, and left one
+  line in a log. From the UI it was indistinguishable from a collection that did not exist — the worst
+  available reading, since the data is intact.
+
+- A collection from an older format now says so instead of blaming the filesystem. Recovery used to
+  bootstrap over the unreadable generation and fail with `generation directory already exists`, which
+  points at directory state rather than at the format. Merged before this release but **after the
+  0.1.24 tag**, so 0.1.24 shipped without it.
+
+- The manifest header specification in `Manifest`'s javadoc still said version 4 and a 164-byte
+  header. Its rows were correct; the two summary values were a version behind, in the one document
+  someone reads to write a reader or migrate a collection.
+
+### Changed
+
+- The error for an older collection now names the migration instead of telling the reader to rebuild.
+  The 0.1.24 notes below say "there is no in-place migration" and that the error "names both
+  versions"; neither was true of what shipped, and both are corrected here.
+
+## [0.1.24] - 2026-09-27
+
+### Changed — BREAKING (on-disk format)
+
+- **`VERSION_MANIFEST` 4 → 5. Collections persisted by 0.1.23 or earlier will not open.** The manifest
+  header grows from 164 to 200 bytes to carry an embedding-recipe anchor, and the version check is
+  exact rather than a floor. The error names both versions and says to rebuild. Accepted because the
+  library is newly released with no known production deployments; there is no in-place migration.
+
+### Added
+
+- **Embedding provenance.** A collection can record *how* its vectors were produced and therefore tell
+  which of them are stale. Previously a collection's only tie to the model that filled it was the
+  dimension — and dimension is not identity: two unrelated 768-dimension models produce mutually
+  meaningless vectors, and the store mixed them silently, so a query embedded with one and searched
+  against the other returned confidently ranked nonsense with no error.
+  - `EmbeddingRecipe` records model id, version and optional content digest, **separate document and
+    query prefixes** (instruction-tuned embedders are asymmetric), pooling, normalisation, truncation
+    policy and `maxInputTokens`, with a stable `recipeHash()` over a canonical field rendering.
+  - `attestation()` distinguishes `ATTESTED` (a weights digest is recorded, so a vector can be
+    re-derived and compared) from `DECLARED` (a name only, so a model swapped behind it is
+    undetectable). The two are never conflated.
+  - `ContentHash` — SHA-256 of the input a vector was produced from, hashed **after** chunking, prefix
+    and truncation, so it answers "would re-embedding change this vector".
+  - `Document.contentHash` is derived from `text` when present. It is required only where a collection
+    declares a recipe: declaring *how* vectors are made creates the duty to record *what* each was made
+    from. Plain vector storage is unaffected, and `Document.of(id, vector)` still works.
+  - `VectorCollectionConfig.withRecipe(...)` refuses a recipe whose dimension or metric contradicts the
+    collection, because a recipe that could not have produced these vectors is worse than none.
+  - Recipes are **immutable once a collection holds vectors**: changing one invalidates every stored
+    vector, so it is a migration rather than an update. Reopening without restating the recipe keeps it.
+- **`RecipeCodec` SPI** with a dependency-free default, so the core library carries no JSON dependency.
+  Discovery order: explicit argument, then `-Dvectors.recipeCodec`, then a single `ServiceLoader`
+  provider, then the built-in. Two providers and no property set is an error rather than a coin toss.
+  Swapping codecs is safe: `recipeHash()` comes from the canonical rendering, not the serialised text,
+  so a collection written by one codec verifies under another.
+- **New published module `vectors-db-jackson`** — an opt-in Jackson `RecipeCodec`.
+- **Studio surfaces provenance** on the collection page and in the collections list: attested, declared
+  and unknown are visually distinct, tooltips state consequences rather than states, and a collection
+  with no recipe carries a written note that its rankings cannot be audited. `UNKNOWN` is deliberately
+  not styled as an error — plain vector storage is a legitimate choice.
+
+### Fixed
+
+- **Spring AI adapter applied no instruction prefixes.** Documents and queries were both embedded bare,
+  so for an instruction-tuned model such as Nomic (`search_document:` / `search_query:`) every ingest
+  and every search was subtly wrong — a silent retrieval-quality loss rather than an error. The adapter
+  now applies the collection recipe's document prefix at ingest and query prefix at search, hashes the
+  prefixed text, and stores the original text so re-embedding does not double-apply.
+- **LangChain4j adapter** now verifies an incoming embedding's dimension against the collection's
+  recipe, naming that recipe's model. It cannot apply prefixes — LangChain4j embeds before calling the
+  store, so no model is in scope — and that limitation is documented rather than left implied.
+
+### Notes
+
+- ARM **correctness** for the pinned reductions is evidenced by the aarch64 CI job. ARM **throughput**
+  is unmeasured.
+
+
+## [0.1.23] - 2026-09-25
+
+### Fixed
+
+- Make the desktop multimodal RAG distribution launch with its bundled JavaFX dependencies
+  and restrict macOS Dock JVM options to macOS.
+- Qualify Studio with the native ARPACK dependency needed by connected-graph UMAP projections,
+  and preserve hidden UI controls when layout styles apply.
+- Update Jackson and Netty in the published optional runtime dependencies to patched versions.
+- Ensure Maven consumers resolve those patched runtime versions as well as Gradle consumers;
+  validate each optional runtime's staged POM independently in CI and release validation.
+- Run S3 and Studio integration tests in CI and release validation. Pin the S3 test emulator
+  to LocalStack 4.1.0, which implements the `If-Match` conditional-write contract under test;
+  the former 3.8 image silently accepted stale ETags.
+- Corrected the security policy to describe the published release line and the optional S3
+  runtime inside the CPU publication scope.
+
+- Q6_K's scalar and Vector API routes now produce bit-identical results. The scalar route kept
+  eight float lane accumulators, documented as existing so its reduction order would match the
+  eight-lane order of the Vector API route. That was true of an older SIMD implementation; the
+  current one reduces each super-block to a single integer and applies one fused multiply per
+  block. The two therefore folded in different orders and disagreed by one to two units in the last
+  place at every width, including a single super-block.
+
+  **The Vector API route is unchanged, so nothing computed on a host with 256-bit vectors or wider
+  moves.** The scalar route, which serves narrower hosts and the explicit scalar provider, now
+  agrees with it instead of differing in the low bits. Results that previously depended on which
+  route ran are now the same either way.
+
+  The existing scalar-versus-Vector-API comparison for Q6_K asserted `offset(1e-3f)`, wide enough
+  to hide the defect for as long as it existed; it now asserts bit-equality, and a Q4_K control
+  runs beside it so a future failure cannot be blamed on the harness.
+
 ## [0.1.22] - 2026-09-16
 
 ### Changed

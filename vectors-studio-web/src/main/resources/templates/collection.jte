@@ -37,7 +37,33 @@
           </svg>
           ${summary.indexType()}
         </span>
+        <!-- Provenance sits beside the geometry, not buried in a details panel: whether these
+             vectors can be attributed to a model changes how much weight to put on any ranking
+             below, so it belongs where the dimension and metric are. -->
+        <span class="pill pill-provenance ${summary.provenance().cssClass()}"
+              title="${summary.provenance().explanation()}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            @if(summary.provenance().level() == com.integrallis.vectors.studio.core.connection.CollectionProvenance.Level.ATTESTED)
+              <polyline points="9 12 11 14 15 10"/>
+            @elseif(summary.provenance().level() == com.integrallis.vectors.studio.core.connection.CollectionProvenance.Level.UNKNOWN)
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="15" x2="12.01" y2="15"/>
+            @endif
+          </svg>
+          ${summary.provenance().label()}
+        </span>
       </div>
+      @if(summary.provenance().level() == com.integrallis.vectors.studio.core.connection.CollectionProvenance.Level.UNKNOWN)
+        <!-- Stated plainly rather than left as an absence. A collection with no recipe is a valid
+             choice, so this is not an error banner -- but a user reading a ranking deserves to know
+             it cannot be attributed or checked for staleness. -->
+        <p class="provenance-note">
+          No embedding recipe on this collection. Studio cannot say which model produced these
+          vectors, which of them are stale, or re-derive them to verify. Searches still work; they
+          just cannot be audited.
+        </p>
+      @endif
       <nav class="actions">
         <a class="btn btn-icon" href="/collections/${summary.name()}/projector" title="Visualize as a 3D point cloud">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

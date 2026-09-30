@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.db;
 
+import com.integrallis.vectors.core.EmbeddingRecipe;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.db.cache.QvCache;
 import com.integrallis.vectors.storage.backend.StorageBackend;
@@ -130,6 +131,10 @@ public final class VectorCollectionBuilder {
   private int vamanaMaxDegree = DEFAULT_VAMANA_R;
   private int vamanaSearchListSize = DEFAULT_VAMANA_L;
   private float vamanaAlpha = DEFAULT_VAMANA_ALPHA;
+
+  /** Embedding recipe, or null for a collection that makes no provenance claim. */
+  private EmbeddingRecipe recipe;
+
   private Long vamanaSeed; // lazily filled with DEFAULT_VAMANA_SEED at build() time if unset
   private int vamanaBuildThreads = DEFAULT_VAMANA_BUILD_THREADS;
 
@@ -676,6 +681,90 @@ public final class VectorCollectionBuilder {
   }
 
   /**
+   * Reconciles a requested recipe against whatever the collection on disk already holds.
+   *
+   * <p>Four cases, and three of them are refusals, because every one of those is a way a collection
+   * could start attesting to something untrue:
+   *
+   * <ul>
+   *   <li>nothing stored, none requested — no provenance, and that is fine;
+   *   <li>nothing stored, one requested — adopt it, but only if the collection is empty. Attaching
+   *       a recipe to vectors it did not produce would be a lie about every one of them;
+   *   <li>stored, none requested — keep the stored one. Opening a collection without repeating its
+   *       recipe must not silently strip its provenance;
+   *   <li>stored and requested differ — refuse. The change invalidates every stored vector, so it
+   *       is a migration.
+   * </ul>
+   */
+  private VectorCollectionConfig reconcileStoredRecipe(VectorCollectionConfig config, Path root) {
+    try {
+      java.util.Optional<String> anchored = StoredRecipeAnchor.read(root);
+      java.util.Optional<EmbeddingRecipe> stored =
+          com.integrallis.vectors.db.storage.RecipeStore.read(root, anchored)
+              .map(com.integrallis.vectors.db.storage.RecipeStore.Stored::recipe);
+
+      if (stored.isEmpty()) {
+        if (config.recipe().isPresent() && StoredRecipeAnchor.hasVectors(root)) {
+          throw new IllegalStateException(
+              "cannot attach an embedding recipe to a collection that already holds vectors at "
+                  + root
+                  + ": those vectors were not produced by it, so recording it would attest to"
+                  + " something untrue. Rebuild the collection with the recipe from the start.");
+        }
+        return config;
+      }
+      if (config.recipe().isEmpty()) {
+        // Reopening without repeating the recipe keeps it rather than dropping it.
+        return config.withRecipe(stored.get());
+      }
+      if (!stored.get().recipeHash().equals(config.recipe().get().recipeHash())) {
+        throw new IllegalStateException(
+            "embedding recipe at "
+                + root
+                + " differs from the one requested.\n  stored:    "
+                + stored.get().modelId()
+                + ' '
+                + stored.get().modelVersion()
+                + " ("
+                + stored.get().recipeHash()
+                + ")\n  requested: "
+                + config.recipe().get().modelId()
+                + ' '
+                + config.recipe().get().modelVersion()
+                + " ("
+                + config.recipe().get().recipeHash()
+                + ")\nChanging a recipe invalidates every vector already stored, so it is a migration"
+                + " and not an update. Create a new collection and re-embed.");
+      }
+      return config;
+    } catch (java.io.IOException e) {
+      throw new java.io.UncheckedIOException("failed to read the stored embedding recipe", e);
+    }
+  }
+
+  /**
+   * Records how this collection's vectors are produced.
+   *
+   * <p>A collection with a recipe can say which model filled it, tell which of its vectors are
+   * stale, and — where the recipe pins a weights digest — have a stored vector re-derived and
+   * compared. One without a recipe can do none of those; that is a legitimate way to use the store,
+   * and it is what you get by not calling this.
+   *
+   * <p>Attaching a recipe also makes provenance <b>mandatory on add</b>: a document with no content
+   * hash is refused, because a collection that records how its vectors are made must record what
+   * each was made from or it cannot answer the staleness question the recipe exists for.
+   *
+   * <p>On a persistent collection the recipe is written to {@code recipe.json} and its hash is
+   * anchored in the CRC-protected manifest. Reopening a collection whose stored recipe differs is
+   * refused: the change invalidates every vector already written, so it is a migration and not an
+   * update.
+   */
+  public VectorCollectionBuilder embeddingRecipe(EmbeddingRecipe embeddingRecipe) {
+    this.recipe = embeddingRecipe;
+    return this;
+  }
+
+  /**
    * Enables persistent mmap-backed mode rooted at {@code storageRoot}. The directory is created if
    * it does not already exist. On {@link #build()}, the collection runs the crash-recovery sweep
    * via {@link com.integrallis.vectors.db.storage.GenerationDirectory#recover} and opens the
@@ -687,6 +776,27 @@ public final class VectorCollectionBuilder {
    */
   public VectorCollectionBuilder storagePath(Path storageRoot) {
     this.storageRoot = storageRoot;
+    return this;
+  }
+
+  /**
+   * Upgrades an older on-disk manifest in place before opening, instead of refusing it.
+   *
+   * <p>Off by default. A collection written by an older build is otherwise refused, because
+   * rewriting a file inside someone's collection is not something to do because they happened to
+   * open it. With this on, {@link
+   * com.integrallis.vectors.db.storage.ManifestMigration#migrate(java.nio.file.Path)} runs first
+   * and keeps the previous manifest as a {@code .bak} beside the new one.
+   *
+   * <p>No vector is re-embedded and no payload file is rewritten: the manifest is the only thing
+   * whose format changed. A collection already at the current version is untouched, so leaving this
+   * on costs one directory listing per open.
+   *
+   * @param migrate whether to migrate an older manifest rather than refuse it
+   * @return this builder
+   */
+  public VectorCollectionBuilder migrateOlderFormats(boolean migrate) {
+    this.migrateOlderFormats = migrate;
     return this;
   }
 
@@ -774,6 +884,9 @@ public final class VectorCollectionBuilder {
     return this;
   }
 
+  /** Transient: an action taken on open, not part of the collection's persisted config. */
+  private boolean migrateOlderFormats;
+
   /** Builds the collection. */
   public VectorCollection build() {
     if (dimension == null) {
@@ -787,6 +900,15 @@ public final class VectorCollectionBuilder {
           "storagePath must be absolute when non-null (the collection must not depend on the JVM"
               + " working directory): "
               + storageRoot);
+    }
+    if (migrateOlderFormats && storageRoot != null) {
+      try {
+        com.integrallis.vectors.db.storage.ManifestMigration.migrate(storageRoot);
+      } catch (java.io.IOException e) {
+        throw new java.io.UncheckedIOException(
+            "cannot migrate the collection at " + storageRoot + " to the current manifest format",
+            e);
+      }
     }
     VectorCollectionConfig.HnswParams hnswParams =
         (indexType == IndexType.HNSW)
@@ -847,6 +969,14 @@ public final class VectorCollectionBuilder {
             ivfPqParams,
             normalizeCosineVectors,
             quantizedOnly);
+    if (recipe != null) {
+      // withRecipe cross-checks dimension and metric: a recipe that could not have produced these
+      // vectors is worse than none, because the UI would show it as attested.
+      config = config.withRecipe(recipe);
+    }
+    if (storageRoot != null) {
+      config = reconcileStoredRecipe(config, storageRoot);
+    }
     java.util.List<GenerationSubscriber> effectiveSubscribers = subscribers;
     if (objectStoreBackend != null) {
       if (storageRoot == null) {

@@ -22,8 +22,6 @@ import java.util.Arrays;
 /** Shared activation quantization used by scalar and Panama GGUF kernels. */
 final class GgufQuantizationSupport {
 
-  private static final ThreadLocal<Q6Scratch> Q6_SCRATCH = ThreadLocal.withInitial(Q6Scratch::new);
-
   private GgufQuantizationSupport() {}
 
   static void quantizeQ8_0(float[] query, int dimensions, byte[] quants, float[] scales) {
@@ -220,17 +218,8 @@ final class GgufQuantizationSupport {
     return low | (high << 4);
   }
 
-  static Q6Scratch q6Scratch() {
-    return Q6_SCRATCH.get();
-  }
-
   private static int ggmlNearestInt(float value) {
     int bits = Float.floatToRawIntBits(value + 12_582_912.0f);
     return (bits & 0x007F_FFFF) - 0x0040_0000;
-  }
-
-  static final class Q6Scratch {
-    final int[] integerSums = new int[8];
-    final float[] laneSums = new float[8];
   }
 }

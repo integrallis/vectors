@@ -27,6 +27,8 @@ import java.time.Instant;
  * @param quantizer quantizer kind (e.g. {@code NONE})
  * @param size number of live documents
  * @param createdAt UTC creation instant; may be null when unknown
+ * @param provenance what can honestly be said about where the vectors came from
+ * @param format the on-disk manifest version, relative to what this build writes
  */
 public record CollectionSummary(
     String name,
@@ -35,4 +37,64 @@ public record CollectionSummary(
     String indexType,
     String quantizer,
     long size,
-    Instant createdAt) {}
+    Instant createdAt,
+    CollectionProvenance provenance,
+    CollectionFormat format) {
+
+  public CollectionSummary {
+    // Never null: a summary that omitted provenance would let the UI quietly render nothing, which
+    // is
+    // the opposite of the point. A collection with no recipe is UNKNOWN and says so.
+    provenance = provenance == null ? CollectionProvenance.unknown() : provenance;
+    // Same reasoning as provenance: a null here would render as blank, which reads as "fine" when
+    // the collection may in fact be one this build cannot open.
+    format =
+        format == null
+            ? CollectionFormat.unknown(
+                com.integrallis.vectors.db.storage.FileFormat.VERSION_MANIFEST)
+            : format;
+  }
+
+  /** Backwards-compatible form for backends that cannot yet report provenance. */
+  public CollectionSummary(
+      String name,
+      int dimension,
+      String metric,
+      String indexType,
+      String quantizer,
+      long size,
+      Instant createdAt) {
+    this(
+        name,
+        dimension,
+        metric,
+        indexType,
+        quantizer,
+        size,
+        createdAt,
+        CollectionProvenance.unknown(),
+        CollectionFormat.unknown(com.integrallis.vectors.db.storage.FileFormat.VERSION_MANIFEST));
+  }
+
+  /** Form for backends that report provenance but not an on-disk format (remote, for instance). */
+  public CollectionSummary(
+      String name,
+      int dimension,
+      String metric,
+      String indexType,
+      String quantizer,
+      long size,
+      Instant createdAt,
+      CollectionProvenance provenance) {
+    this(
+        name,
+        dimension,
+        metric,
+        indexType,
+        quantizer,
+        size,
+        createdAt,
+        provenance,
+        CollectionFormat.unknown(com.integrallis.vectors.db.storage.FileFormat.VERSION_MANIFEST));
+  }
+}

@@ -110,6 +110,8 @@ public class JavaVectorsAutoConfiguration {
 
     if (props.getStoragePath() != null) {
       builder.storagePath(props.getStoragePath());
+      // Only meaningful with a storage path: an in-memory collection has no manifest to migrate.
+      builder.migrateOlderFormats(props.isMigrateOnStartup());
     }
 
     // HNSW parameters (only applied when indexType == HNSW, builder ignores them otherwise).

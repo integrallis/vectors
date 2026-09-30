@@ -825,6 +825,11 @@ final class VectorCollectionImpl implements VectorCollection {
 
   private void validateForInsert(Document doc) {
     Objects.requireNonNull(doc, "doc must not be null");
+    // A collection that records how its vectors are produced must record what each was produced
+    // from,
+    // or it cannot answer the staleness question its recipe exists for. Collections with no recipe
+    // impose no such duty -- using the store as plain vector storage stays possible.
+    config.recipe().ifPresent(recipe -> recipe.requireProvenance(doc));
     if (doc.vector() == null) {
       throw new IllegalArgumentException("Document vector must not be null on insertion");
     }
@@ -1116,6 +1121,21 @@ final class VectorCollectionImpl implements VectorCollection {
   // ---------------------------------------------------------------------------
 
   private void commitPersistent(Generation oldGen) {
+    // The recipe sidecar is written BEFORE the manifest that anchors its hash. A crash between the
+    // two leaves an orphan sidecar, which every reader ignores because no manifest references it --
+    // recoverable. The reverse order would leave a manifest anchoring a file that does not exist,
+    // which is a collection that refuses to open. Order the failure so the recoverable case
+    // happens.
+    // Idempotent: rewriting identical bytes each commit costs one small atomic rename.
+    if (config.recipe().isPresent() && config.storageRoot() != null) {
+      try {
+        com.integrallis.vectors.db.storage.RecipeStore.write(
+            config.storageRoot(), config.recipe().get());
+      } catch (java.io.IOException e) {
+        throw new java.io.UncheckedIOException(
+            "failed to write " + com.integrallis.vectors.db.storage.FileFormat.RECIPE_FILE, e);
+      }
+    }
     int oldPhysicalCount = oldGen.physicalCount;
     int stagedCount = staging.size();
     int newPhysicalCount = oldPhysicalCount + stagedCount;

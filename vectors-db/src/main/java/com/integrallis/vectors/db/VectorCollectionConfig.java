@@ -15,9 +15,11 @@
  */
 package com.integrallis.vectors.db;
 
+import com.integrallis.vectors.core.EmbeddingRecipe;
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Immutable collection configuration. Captured on {@code build()} and persisted in {@code
@@ -65,7 +67,91 @@ public record VectorCollectionConfig(
     CuVsParams cuvsParams,
     IvfPqParams ivfPqParams,
     boolean normalizeCosineVectors,
-    boolean quantizedOnly) {
+    boolean quantizedOnly,
+    Optional<EmbeddingRecipe> recipe) {
+
+  /**
+   * The 14-component form, without a recipe. Reports {@link Optional#empty()}, which a collection
+   * is entitled to: using the store as plain vector storage is a legitimate choice, and one that
+   * simply cannot be audited.
+   */
+  public VectorCollectionConfig(
+      int dimension,
+      SimilarityFunction metric,
+      IndexType indexType,
+      QuantizerKind quantizerKind,
+      int autoCommitThreshold,
+      Path storageRoot,
+      HnswParams hnswParams,
+      VamanaParams vamanaParams,
+      QuantizerParams quantizerParams,
+      IvfParams ivfParams,
+      CuVsParams cuvsParams,
+      IvfPqParams ivfPqParams,
+      boolean normalizeCosineVectors,
+      boolean quantizedOnly) {
+    this(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        autoCommitThreshold,
+        storageRoot,
+        hnswParams,
+        vamanaParams,
+        quantizerParams,
+        ivfParams,
+        cuvsParams,
+        ivfPqParams,
+        normalizeCosineVectors,
+        quantizedOnly,
+        Optional.empty());
+  }
+
+  /**
+   * Returns this configuration with an embedding recipe attached.
+   *
+   * <p>A recipe is <b>immutable once a collection holds vectors</b>: changing it invalidates every
+   * vector already stored, so it is a migration and not an update. That immutability is what allows
+   * a {@link com.integrallis.vectors.core.Document} to carry a single content hash — every vector
+   * in the collection came from this recipe, so a document is stale only if its own content moved.
+   */
+  public VectorCollectionConfig withRecipe(EmbeddingRecipe attached) {
+    Objects.requireNonNull(attached, "recipe");
+    if (attached.dimension() != dimension) {
+      throw new IllegalArgumentException(
+          "recipe dimension "
+              + attached.dimension()
+              + " does not match collection dimension "
+              + dimension
+              + ": a recipe that cannot have produced these vectors is worse than none, because it"
+              + " would attest to something untrue");
+    }
+    if (attached.metric() != metric) {
+      throw new IllegalArgumentException(
+          "recipe metric "
+              + attached.metric()
+              + " does not match collection metric "
+              + metric
+              + ": the same vectors scored under a different metric are a different search");
+    }
+    return new VectorCollectionConfig(
+        dimension,
+        metric,
+        indexType,
+        quantizerKind,
+        autoCommitThreshold,
+        storageRoot,
+        hnswParams,
+        vamanaParams,
+        quantizerParams,
+        ivfParams,
+        cuvsParams,
+        ivfPqParams,
+        normalizeCosineVectors,
+        quantizedOnly,
+        Optional.of(attached));
+  }
 
   /**
    * 13-arg convenience constructor that defaults {@link #quantizedOnly()} to {@code false} (the
