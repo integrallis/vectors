@@ -60,8 +60,10 @@ class GgufBatchDispatchTest {
     assertThat(GgufBatchedMatmulKernel.FORMAT_Q8_0).isEqualTo(GgufBandGemm.Q8_0);
     // The thresholds are host-independent and are what this test is named for, so they are asserted
     // exactly. The band arm's own description is not: the band GEMM needs the Vector API, so with
-    // -Dvectors.forceScalar=true it reports `band=unavailable`, which is correct behaviour rather than
-    // a regression. Asserting the whole string pinned this test to a host that has the Vector API and
+    // -Dvectors.forceScalar=true it reports `band=unavailable`, which is correct behaviour rather
+    // than
+    // a regression. Asserting the whole string pinned this test to a host that has the Vector API
+    // and
     // failed the x86-scalar portability arm -- the arm that exists to catch exactly this kind of
     // host assumption.
     assertThat(GgufBatchedMatmulKernel.describeDispatch())
