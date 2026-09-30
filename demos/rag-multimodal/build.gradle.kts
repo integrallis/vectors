@@ -52,7 +52,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("com.integrallis.vectors.demo.rag.MultimodalRAGApp")
+    mainClass.set("com.integrallis.vectors.demo.rag.MultimodalRAGLauncher")
     applicationDefaultJvmArgs = listOf(
         "--add-modules", "jdk.incubator.vector",
         "--add-exports", "javafx.graphics/com.sun.javafx.util=ALL-UNNAMED"
@@ -65,7 +65,9 @@ tasks.named<JavaExec>("run") {
     systemProperty("dotenv.directory", project.projectDir.absolutePath)
     systemProperty("apple.awt.application.name", "java-vectors RAG")
     val dockIcon = rootProject.file("media/icons/icon.icns").absolutePath
-    jvmArgs("-Xdock:name=java-vectors RAG", "-Xdock:icon=$dockIcon")
+    if (System.getProperty("os.name").startsWith("Mac")) {
+        jvmArgs("-Xdock:name=java-vectors RAG", "-Xdock:icon=$dockIcon")
+    }
 }
 
 // Task to run the standalone CLI demo (no JavaFX)

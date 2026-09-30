@@ -98,6 +98,41 @@ public class JavaVectorsProperties {
    */
   private boolean commitAfterAdd = true;
 
+  /**
+   * Upgrades an older on-disk manifest in place on startup instead of failing to open it.
+   *
+   * <p>Default: {@code false}. This is the same decision Flyway's {@code baseline-on-migrate}
+   * makes, and the same reasoning applies: writing to somebody's data directory because an
+   * application booted has to be asked for, not assumed. With it off, a collection written by an
+   * older build fails at startup with a message naming both versions.
+   *
+   * <p>No vector is re-embedded and no payload file is rewritten -- only the manifest header
+   * changed between formats -- so the upgrade is a few hundred bytes per generation and the
+   * previous manifest is kept as a {@code .bak}. A collection already at the current format is
+   * untouched, so leaving this on costs one directory listing per startup.
+   *
+   * <p>Only meaningful alongside {@link #storagePath}: an in-memory collection has no manifest.
+   */
+  private boolean migrateOnStartup;
+
+  /**
+   * Whether an older on-disk manifest is upgraded on startup.
+   *
+   * @return true to migrate rather than fail
+   */
+  public boolean isMigrateOnStartup() {
+    return migrateOnStartup;
+  }
+
+  /**
+   * Sets whether an older on-disk manifest is upgraded on startup.
+   *
+   * @param migrateOnStartup true to migrate rather than fail
+   */
+  public void setMigrateOnStartup(boolean migrateOnStartup) {
+    this.migrateOnStartup = migrateOnStartup;
+  }
+
   // -------------------------------------------------------------------------
   // HNSW parameters
   // -------------------------------------------------------------------------

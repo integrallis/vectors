@@ -88,7 +88,7 @@ public final class FileFormat {
    * tombstone-based deletion. Readers refuse v1/v2/v3 files; there is no on-disk compat shim
    * because {@code vectors-db} is unreleased.
    */
-  public static final int VERSION_MANIFEST = 4;
+  public static final int VERSION_MANIFEST = 5;
 
   /** Current idmap format version. */
   public static final int VERSION_IDMAP = 1;
@@ -191,6 +191,21 @@ public final class FileFormat {
    * Manifest reports {@code tombstonesBinLength == 0}.
    */
   public static final String TOMBSTONES_FILE = "tombstones.bin";
+
+  /**
+   * Embedding recipe, JSON, at the collection root rather than inside a generation.
+   *
+   * <p>At the root because a recipe is a property of the collection and not of a generation: every
+   * generation was produced by it, and copying it into each would invite them to disagree.
+   *
+   * <p>JSON rather than a binary record because it is variable length, must survive added fields
+   * without a format bump, and should be readable by an auditor without our tooling — which is a
+   * large part of why provenance is worth recording at all.
+   */
+  public static final String RECIPE_FILE = "recipe.json";
+
+  /** Temp name for an in-flight recipe write; see {@code RecipeStore} for the ordering rule. */
+  public static final String RECIPE_TMP_FILE = "recipe.json.tmp";
 
   /**
    * Fixed header size in bytes used by both {@link

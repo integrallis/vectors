@@ -60,6 +60,9 @@ import java.util.UUID;
  */
 public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, AutoCloseable {
 
+  /** Set once the first embedding has been checked against the collection's recipe. */
+  private volatile boolean recipeVerified;
+
   private final VectorCollection collection;
   private final boolean commitAfterAdd;
   private final Float mmrLambda; // null = MMR disabled
@@ -96,8 +99,48 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
     commitIfNeeded();
   }
 
+  /**
+   * Checks an incoming embedding against the collection's recipe, once.
+   *
+   * <p><b>What this adapter cannot do, and why.</b> LangChain4j embeds <em>before</em> calling the
+   * store — {@code add(Embedding, TextSegment)} never sees an {@code EmbeddingModel} — so unlike
+   * the Spring AI adapter this one cannot apply the recipe's asymmetric document/query prefixes,
+   * nor verify which model produced the vector. If the collection's recipe declares a prefix, the
+   * caller's {@code EmbeddingStoreIngestor} must apply it; nothing here can compensate.
+   *
+   * <p>What it can check is the dimension, which catches the common wiring error of pointing an
+   * application at a collection built for a different model. Checked once rather than per document,
+   * because it cannot change within a store instance.
+   */
+  private void verifyAgainstRecipe(Embedding embedding) {
+    if (recipeVerified || embedding == null) {
+      return;
+    }
+    recipeVerified = true;
+    collection
+        .config()
+        .recipe()
+        .ifPresent(
+            recipe -> {
+              if (recipe.dimension() != embedding.dimension()) {
+                throw new IllegalArgumentException(
+                    "embedding dimension "
+                        + embedding.dimension()
+                        + " does not match this collection's embedding recipe ("
+                        + recipe.modelId()
+                        + ' '
+                        + recipe.modelVersion()
+                        + ", dimension "
+                        + recipe.dimension()
+                        + "). The application is embedding with a different model than the collection"
+                        + " records.");
+              }
+            });
+  }
+
   @Override
   public String add(Embedding embedding, TextSegment textSegment) {
+    verifyAgainstRecipe(embedding);
     String id = generateId();
     Map<String, MetadataValue> metadata =
         textSegment != null ? MetadataConverter.toJavaVectors(textSegment.metadata()) : Map.of();
@@ -110,6 +153,9 @@ public class JavaVectorsEmbeddingStore implements EmbeddingStore<TextSegment>, A
 
   @Override
   public List<String> addAll(List<Embedding> embeddings) {
+    if (!embeddings.isEmpty()) {
+      verifyAgainstRecipe(embeddings.get(0));
+    }
     List<String> ids = newIds(embeddings.size());
     List<com.integrallis.vectors.core.Document> docs = new ArrayList<>(embeddings.size());
     for (int i = 0; i < embeddings.size(); i++) {

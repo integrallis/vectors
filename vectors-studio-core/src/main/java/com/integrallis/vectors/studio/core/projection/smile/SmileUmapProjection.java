@@ -66,7 +66,8 @@ public final class SmileUmapProjection implements Projection {
       // (surfacing as a class-init LinkageError). Fail with actionable guidance, not a raw stack.
       throw new IllegalStateException(
           "UMAP spectral initialisation is unavailable in this runtime (native ARPACK could not"
-              + " load). Try UMAP without 'sphereize', or switch to t-SNE or PCA.",
+              + " load). Install the native ARPACK runtime (libarpack2-dev on Debian/Ubuntu),"
+              + " restart Studio, or switch to t-SNE or PCA.",
           e);
     }
     SmilePcaProjection.checkInterrupted();
