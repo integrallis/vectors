@@ -55,8 +55,10 @@ import com.integrallis.vectors.db.storage.PagedVamanaTopology;
 import com.integrallis.vectors.db.storage.QuantizedVectorsCodec;
 import com.integrallis.vectors.db.storage.TombstoneCodec;
 import com.integrallis.vectors.db.storage.VamanaGraphCodec;
+import com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder;
 import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.hnsw.HnswGraphMerger;
+import com.integrallis.vectors.hnsw.InMemoryVectors;
 import com.integrallis.vectors.ivf.IvfBuildParams;
 import com.integrallis.vectors.ivf.IvfIndex;
 import com.integrallis.vectors.quantization.ArrayVectorDataset;
@@ -121,6 +123,17 @@ import java.util.logging.Logger;
  * rebuilds from scratch with dense ordinals.
  */
 final class VectorCollectionImpl implements VectorCollection {
+
+  /** Level-generation seed for append-on-commit, so repeating an ingest yields the same graph. */
+  private static final long HNSW_APPEND_SEED = 0x5DEECE66DL;
+
+  /**
+   * The HNSW graph this process built on its last commit, kept so the next commit appends onto real
+   * neighbour scores. {@link HnswGraphCodec} stores node ids without scores, so reading the
+   * committed generation back would force an O(N·M) rescore on every commit. Written and read under
+   * the writer lock, and cleared whenever the live generation stops being this graph's successor.
+   */
+  private HnswGraph lastBuiltGraph;
 
   private static final Logger LOGGER = Logger.getLogger(VectorCollectionImpl.class.getName());
 
@@ -553,6 +566,19 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   private Generation openGeneration(Path genDir, Manifest manifest) throws IOException {
+    return openGeneration(genDir, manifest, null);
+  }
+
+  /**
+   * Opens a generation, optionally reusing an HNSW graph this process already holds in memory.
+   *
+   * <p>Passing {@code prebuiltGraph} skips reading {@code graph.bin} back and decoding it — the
+   * commit that just wrote those bytes still holds the graph they were encoded from, and a decode
+   * is O(N·M) plus the file read. {@code null} means read from disk, which is what a reopen or a
+   * refresh does.
+   */
+  private Generation openGeneration(Path genDir, Manifest manifest, HnswGraph prebuiltGraph)
+      throws IOException {
     IOException injected = openGenerationFailureHook;
     if (injected != null) {
       throw injected;
@@ -599,7 +625,7 @@ final class VectorCollectionImpl implements VectorCollection {
                 case FLAT -> new MappedFlatScanAdapter(mapped, indexMetric());
                 case HNSW ->
                     manifest.graphBinLength() > 0L
-                        ? openHnswAdapter(genDir, manifest, mapped)
+                        ? openHnswAdapter(genDir, manifest, mapped, prebuiltGraph)
                         : new MappedFlatScanAdapter(mapped, indexMetric());
                 case VAMANA ->
                     manifest.graphBinLength() > 0L
@@ -677,15 +703,21 @@ final class VectorCollectionImpl implements VectorCollection {
     }
   }
 
-  private IndexSpi openHnswAdapter(Path genDir, Manifest manifest, MemorySegmentVectors mapped)
+  private IndexSpi openHnswAdapter(
+      Path genDir, Manifest manifest, MemorySegmentVectors mapped, HnswGraph prebuiltGraph)
       throws IOException {
     Path graphFile = genDir.resolve(FileFormat.GRAPH_FILE);
     if (manifest.graphBinLength() <= 0L) {
       throw new IOException(
           "HNSW generation " + manifest.generationNumber() + " has no graph.bin recorded");
     }
-    byte[] graphBytes = java.nio.file.Files.readAllBytes(graphFile);
-    HnswGraph graph = HnswGraphCodec.decode(graphBytes);
+    HnswGraph graph;
+    long physicalCount = manifest.vectorsBinLength() / ((long) manifest.dimension() * Float.BYTES);
+    if (prebuiltGraph != null && prebuiltGraph.size() == physicalCount) {
+      graph = prebuiltGraph; // already in memory, and with real neighbour scores
+    } else {
+      graph = HnswGraphCodec.decode(java.nio.file.Files.readAllBytes(graphFile));
+    }
     MemorySegmentRandomAccessVectors vectors = new MemorySegmentRandomAccessVectors(mapped);
     return new MappedHnswIndexAdapter(graph, vectors, indexMetric());
   }
@@ -1000,6 +1032,7 @@ final class VectorCollectionImpl implements VectorCollection {
       }
       Generation newGen = openGeneration(rr.generationDir(), rr.manifest());
       this.generation = newGen;
+      lastBuiltGraph = null; // this generation came from elsewhere; our graph is not its parent
       this.nextGenerationNumber = Math.max(this.nextGenerationNumber, rr.generationNumber() + 1L);
       retire(current);
       queryCache.invalidateAll();
@@ -1087,8 +1120,17 @@ final class VectorCollectionImpl implements VectorCollection {
       next[ordinal] = doc.vector();
     }
 
+    // Append into the predecessor's graph when the generation only adds ordinals, which is every
+    // commit: staged documents always take fresh ordinals (an upsert tombstones the old one), and
+    // tombstoned ordinals keep their vectors. Rebuilding instead made an ingest committed in K
+    // batches cost K full builds of growing size.
     IndexSpi newSpi = newInMemoryAdapter();
-    newSpi.build(next, indexMetric());
+    HnswGraph carryOver = hnswGraphToExtend(oldGen, newSpi, oldPhysicalCount);
+    if (carryOver != null) {
+      ((HnswIndexAdapter) newSpi).appendFrom(carryOver, next, oldPhysicalCount, indexMetric());
+    } else {
+      newSpi.build(next, indexMetric());
+    }
 
     // Train quantizer if configured.
     if (config.quantizerKind() != QuantizerKind.NONE
@@ -1201,7 +1243,7 @@ final class VectorCollectionImpl implements VectorCollection {
             || config.indexType() == IndexType.IVF_FLAT
             || config.indexType() == IndexType.IVF_PQ;
     if (needGraph) {
-      graphBin = encodeGraphBytes(materialized.matrix());
+      graphBin = encodeGraphBytesAppending(materialized.matrix(), oldGen);
       if (graphBin != null) {
         graphBinLength = (long) graphBin.length;
         graphBinCrc = Checksums.ofBytes(graphBin);
@@ -1283,7 +1325,7 @@ final class VectorCollectionImpl implements VectorCollection {
 
     Generation newGen;
     try {
-      newGen = openGeneration(wr.generationDir(), wr.manifest());
+      newGen = openGeneration(wr.generationDir(), wr.manifest(), lastBuiltGraph);
     } catch (IOException e) {
       throw new UncheckedIOException(
           "Generation "
@@ -1567,6 +1609,7 @@ final class VectorCollectionImpl implements VectorCollection {
             || config.indexType() == IndexType.IVF_PQ;
     if (needGraph && liveCount > 0) {
       // IGTM: for HNSW, merge the existing graph instead of rebuilding from scratch.
+      lastBuiltGraph = null; // compaction remaps ordinals, so the cached graph is not the parent
       if (config.indexType() == IndexType.HNSW
           && oldGen.spi instanceof MappedHnswIndexAdapter mapped) {
         HnswGraph oldGraph = mapped.graph();
@@ -1724,6 +1767,73 @@ final class VectorCollectionImpl implements VectorCollection {
     return new Materialized(out, matrix);
   }
 
+  /**
+   * The predecessor generation's HNSW graph when the successor can be built by appending to it, or
+   * {@code null} when a full rebuild is required.
+   *
+   * <p>Requires an HNSW collection whose new index is the in-memory adapter, a predecessor graph
+   * covering exactly the predecessor's ordinals, and at least one carried-over node. Quantization
+   * is trained after the graph is built either way, so it does not affect this decision.
+   */
+  private HnswGraph hnswGraphToExtend(Generation oldGen, IndexSpi newSpi, int oldPhysicalCount) {
+    if (config.indexType() != IndexType.HNSW
+        || oldPhysicalCount <= 0
+        || !(newSpi instanceof HnswIndexAdapter)) {
+      return null;
+    }
+    HnswGraph old = hnswGraphOf(oldGen.spi);
+    return old != null && old.size() == oldPhysicalCount ? old : null;
+  }
+
+  /** The HNSW graph behind an index, for either the in-memory or the mmap-backed adapter. */
+  private static HnswGraph hnswGraphOf(IndexSpi spi) {
+    if (spi instanceof HnswIndexAdapter inMemory) {
+      return inMemory.graph();
+    }
+    if (spi instanceof MappedHnswIndexAdapter mapped) {
+      return mapped.graph();
+    }
+    return null;
+  }
+
+  /**
+   * Graph bytes for a persistent commit, appending to the predecessor's graph where that is
+   * possible and falling back to {@link #encodeGraphBytes(float[][])} otherwise.
+   */
+  private byte[] encodeGraphBytesAppending(float[][] matrix, Generation oldGen) {
+    if (config.indexType() != IndexType.HNSW || matrix == null || oldGen == null) {
+      return encodeGraphBytes(matrix);
+    }
+    int carried = oldGen.physicalCount;
+    if (carried <= 0 || matrix.length <= carried) {
+      return encodeGraphBytes(matrix);
+    }
+    // Prefer the graph this process built last: its scores are real, so the append skips the
+    // rescore
+    // that reading the committed generation back would need.
+    boolean scoresAreReal = lastBuiltGraph != null && lastBuiltGraph.size() == carried;
+    HnswGraph old = scoresAreReal ? lastBuiltGraph : hnswGraphOf(oldGen.spi);
+    if (old == null || old.size() != carried) {
+      lastBuiltGraph = null;
+      return encodeGraphBytes(matrix);
+    }
+    VectorCollectionConfig.HnswParams hp = config.hnswParams();
+    int threads =
+        hp.threads() == 0
+            ? (matrix.length >= 10_000 ? Runtime.getRuntime().availableProcessors() : 1)
+            : hp.threads();
+    HnswGraph appended =
+        ConcurrentHnswGraphBuilder.create(
+                hp.m(),
+                hp.efConstruction(),
+                new InMemoryVectors(matrix),
+                indexMetric(),
+                HNSW_APPEND_SEED ^ carried)
+            .append(old, carried, threads, scoresAreReal);
+    lastBuiltGraph = appended;
+    return appended == null ? null : HnswGraphCodec.encode(appended);
+  }
+
   private byte[] encodeGraphBytes(float[][] matrix) {
     return switch (config.indexType()) {
       case HNSW -> {
@@ -1731,6 +1841,7 @@ final class VectorCollectionImpl implements VectorCollection {
         HnswIndexAdapter adapter = new HnswIndexAdapter(hp.m(), hp.efConstruction(), hp.threads());
         adapter.build(matrix, indexMetric());
         HnswGraph graph = adapter.graph();
+        lastBuiltGraph = graph; // seeds the append chain for the next commit
         yield graph == null ? null : HnswGraphCodec.encode(graph);
       }
       case VAMANA -> {
