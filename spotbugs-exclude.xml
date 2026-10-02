@@ -881,5 +881,23 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
 
+    <!-- vectors-bench JMH fixtures seed a Random deliberately so a benchmark's input is identical on
+         every run and between arms; reproducibility is the point. SpotBugs reads both as
+         DMI_RANDOM_USED_ONLY_ONCE, and in one case it is simply wrong:
+         GgufBandGemmAbBenchmark.setUp assigns the Random to a local and calls nextFloat() inside a
+         loop, so there is one call SITE and one call per element. GgufBandDequantBenchmark.setUp
+         does allocate and call nextBytes once, which is the shape the detector describes, but filling
+         a weight buffer once from a fixed seed is exactly what a benchmark fixture should do; the
+         alternative is a slower and less readable way to write the same bytes.
+         Scoped to the two setUp methods rather than to the pattern or the whole source set, so a
+         Random misused elsewhere in the benchmarks is still reported. -->
+    <Match>
+        <Or>
+            <Class name="com.integrallis.vectors.core.GgufBandDequantBenchmark"/>
+            <Class name="com.integrallis.vectors.bench.GgufBandGemmAbBenchmark"/>
+        </Or>
+        <Method name="setUp"/>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
 
 </FindBugsFilter>

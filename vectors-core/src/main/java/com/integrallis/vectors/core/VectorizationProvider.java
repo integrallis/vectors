@@ -77,7 +77,8 @@ public final class VectorizationProvider {
         GgufParallelSupport.enabled(),
         GgufParallelSupport.executionMode().name().toLowerCase(Locale.ROOT),
         GgufParallelSupport.parallelism(),
-        GgufParallelSupport.chunksPerThread());
+        GgufParallelSupport.chunksPerThread(),
+        GgufBatchedMatmulKernel.describeActive());
   }
 
   private static VectorUtilSupport selectProvider() {

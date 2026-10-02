@@ -1,0 +1,212 @@
+{
+  "variant" : "base-arm",
+  "suite" : "squad-v2-dev",
+  "limit" : 20,
+  "maxTokens" : 64,
+  "windowSha256" : "ea9e4a0c80ad4d9e19db7fe6a6274d0ef949d14f73300869111452c49ada268c",
+  "windowFileSha256" : "dfb8cd7203418c79bae27306ffc4857f0ab02be7f9f8ddcae793af556e9cab37",
+  "vectorsKernel" : "integer",
+  "vectorsRouting" : "vectors-gguf-batched-matmul-routing mode=integer Q4_K integer=39840/1201920 band=0/0 Q6_K integer=6640/200320 band=0/0 Q8_0 integer=0/0 band=0/0",
+  "capabilities" : "VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=512, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=16, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]",
+  "cases" : [ {
+    "id" : "5ad247b0d7d075001a428b45",
+    "label" : "unanswerable",
+    "promptTextSha256" : "f43cae723422ba5a4c8d188c96cf3aead60d907c8a93c808f0eecab7e296d309",
+    "promptTokens" : 285,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 25047
+  }, {
+    "id" : "57267640f1498d1400e8e074",
+    "label" : "answerable",
+    "promptTextSha256" : "99222fa15876a215633dc6afb5c36a262da7a78bde88b10a3c706559330d6341",
+    "promptTokens" : 402,
+    "completionTokens" : 7,
+    "stopReason" : "EOS",
+    "output" : "layered basaltic lava flows",
+    "fragments" : [ "layer", "ed", " bas", "alt", "ic", " lava", " flows" ],
+    "millis" : 25029
+  }, {
+    "id" : "5737432bc3c5551400e51e9b",
+    "label" : "answerable",
+    "promptTextSha256" : "5d51a7c81ff6d8e681780abdbe51ef0bab95d5ef68323f20dade797ceff91ea3",
+    "promptTokens" : 373,
+    "completionTokens" : 1,
+    "stopReason" : "EOS",
+    "output" : "Newton",
+    "fragments" : [ "Newton" ],
+    "millis" : 22022
+  }, {
+    "id" : "5705f09e75f01819005e77a4",
+    "label" : "answerable",
+    "promptTextSha256" : "82031305a933f655c9d08e71f288742ac315650aa1c2979c1e2b9b34397e9ed4",
+    "promptTokens" : 346,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 20745
+  }, {
+    "id" : "57265746dd62a815002e821c",
+    "label" : "answerable",
+    "promptTextSha256" : "b22bc68e1bdc1d4dccaacabd896308d0d71cd3f786120b5c4e499be8184ed751",
+    "promptTokens" : 270,
+    "completionTokens" : 2,
+    "stopReason" : "EOS",
+    "output" : "answerable",
+    "fragments" : [ "answer", "able" ],
+    "millis" : 13991
+  }, {
+    "id" : "5a2c1397bfd06b001a5ae9c9",
+    "label" : "unanswerable",
+    "promptTextSha256" : "19858969a7e2f107db26c29ff2ed70a081e223084c22461369e709f781f28cf8",
+    "promptTokens" : 289,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 16357
+  }, {
+    "id" : "5ad4d2105b96ef001a10a1c7",
+    "label" : "unanswerable",
+    "promptTextSha256" : "a06850e7de7a37ae98c05dc9388f315d9ce340bd57f329547f0ec90e6bb41c8a",
+    "promptTokens" : 380,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 24468
+  }, {
+    "id" : "572fd1c4947a6a140053cd02",
+    "label" : "answerable",
+    "promptTextSha256" : "db9e567d0f06de9441a4f46a68e196f43d81588f49f45e47b9c02d0c30eb577d",
+    "promptTokens" : 261,
+    "completionTokens" : 2,
+    "stopReason" : "EOS",
+    "output" : "answerable",
+    "fragments" : [ "answer", "able" ],
+    "millis" : 14677
+  }, {
+    "id" : "5a834caae60761001a2eb53d",
+    "label" : "unanswerable",
+    "promptTextSha256" : "49ba8fd3a1332cbcb887178c5f4c4568edcd5aee76faa9df780cdceb88432fd9",
+    "promptTokens" : 388,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 24420
+  }, {
+    "id" : "57266193dd62a815002e832e",
+    "label" : "answerable",
+    "promptTextSha256" : "7ebe3a666d54a7c423aad1ab043c7be4746e1a6886fa3ba61321c849160b3a4a",
+    "promptTokens" : 332,
+    "completionTokens" : 2,
+    "stopReason" : "EOS",
+    "output" : "answerable",
+    "fragments" : [ "answer", "able" ],
+    "millis" : 19506
+  }, {
+    "id" : "5a7b3dd921c2de001afe9dfa",
+    "label" : "unanswerable",
+    "promptTextSha256" : "285ff36af0c319741d289720a3fca949351683d666177797b5def840d1dc3c16",
+    "promptTokens" : 435,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 26462
+  }, {
+    "id" : "5a63835a68151a001a92232e",
+    "label" : "unanswerable",
+    "promptTextSha256" : "242d2057de1138fee915fbd082c23dc6ed8ed637fea9a184fb6ca4b90275315e",
+    "promptTokens" : 251,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 12663
+  }, {
+    "id" : "5ad26aa8d7d075001a429323",
+    "label" : "unanswerable",
+    "promptTextSha256" : "c639b8e8762a60827897498f75e9d5064138eb5791eab3b2f0f95d0f692342f3",
+    "promptTokens" : 271,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 14720
+  }, {
+    "id" : "572681c1dd62a815002e8797",
+    "label" : "answerable",
+    "promptTextSha256" : "3c38eab0dbaf06056eefee6abd4ad10ecb98b4dddab14125299c6b744907878d",
+    "promptTokens" : 278,
+    "completionTokens" : 2,
+    "stopReason" : "EOS",
+    "output" : "answerable",
+    "fragments" : [ "answer", "able" ],
+    "millis" : 15216
+  }, {
+    "id" : "5ad28253d7d075001a429833",
+    "label" : "unanswerable",
+    "promptTextSha256" : "12cb1a810c737c776e39cfec8a08450f8d77544e39a398bb508e0d1f97f48bcd",
+    "promptTokens" : 339,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 19845
+  }, {
+    "id" : "5726fa525951b619008f83f8",
+    "label" : "answerable",
+    "promptTextSha256" : "a8c2e1dfa86e9611fd30b9cedc405f827105048ebca247647573759115bd2a73",
+    "promptTokens" : 315,
+    "completionTokens" : 2,
+    "stopReason" : "EOS",
+    "output" : "show globe",
+    "fragments" : [ "show", " globe" ],
+    "millis" : 17876
+  }, {
+    "id" : "5ad158c0645df0001a2d182a",
+    "label" : "unanswerable",
+    "promptTextSha256" : "55de2db7e8e1ea31c520dd6c5a6f35bde1edd8c270ff0ef492123f47274fb38f",
+    "promptTokens" : 276,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 14967
+  }, {
+    "id" : "5726f48df1498d1400e8f0dd",
+    "label" : "answerable",
+    "promptTextSha256" : "3feceff7d37eaafbfe774cb7738548560bbd83fbd7b3507a6ba0a009ca0f142a",
+    "promptTokens" : 266,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 13200
+  }, {
+    "id" : "5ad26aedd7d075001a429334",
+    "label" : "unanswerable",
+    "promptTextSha256" : "4ca78aa324c940cbfcb49d02900e9bd7adf0222ae8fab357791ccae8f9e616e4",
+    "promptTokens" : 299,
+    "completionTokens" : 3,
+    "stopReason" : "EOS",
+    "output" : "unanswerable",
+    "fragments" : [ "un", "answer", "able" ],
+    "millis" : 15748
+  }, {
+    "id" : "572885c44b864d1900164a78",
+    "label" : "answerable",
+    "promptTextSha256" : "aaa426450eca9098cee0d59089b424de6738b0651a02c612f8596175cdd000a2",
+    "promptTokens" : 264,
+    "completionTokens" : 2,
+    "stopReason" : "EOS",
+    "output" : "answerable",
+    "fragments" : [ "answer", "able" ],
+    "millis" : 13076
+  } ]
+}

@@ -1,0 +1,1029 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q4_K, kernel = INTEGER, shape = 8192x2560, storage = heap)
+
+# Run progress: 0.00% complete, ETA 00:06:24
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 4:59:36 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 4:59:36 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q4_K kernel=INTEGER rows=8192 cols=2560 batch=1 storage=heap weightBytes=11796480 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+31.292 ms/op
+# Warmup Iteration   2: 12.816 ms/op
+# Warmup Iteration   3: 13.710 ms/op
+Iteration   1: 11.641 ms/op
+Iteration   2: 13.631 ms/op
+Iteration   3: 13.544 ms/op
+Iteration   4: 13.436 ms/op
+Iteration   5: 13.978 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  13.246 ±(99.9%) 3.542 ms/op [Average]
+  (min, avg, max) = (11.641, 13.246, 13.978), stdev = 0.920
+  CI (99.9%): [9.704, 16.788] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q4_K, kernel = INTEGER, shape = 2560x8192, storage = heap)
+
+# Run progress: 4.17% complete, ETA 00:08:47
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 4:59:58 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 4:59:58 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q4_K kernel=INTEGER rows=2560 cols=8192 batch=1 storage=heap weightBytes=11796480 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+64.696 ms/op
+# Warmup Iteration   2: 11.373 ms/op
+# Warmup Iteration   3: 6.390 ms/op
+Iteration   1: 9.301 ms/op
+Iteration   2: 7.808 ms/op
+Iteration   3: 6.097 ms/op
+Iteration   4: 5.763 ms/op
+Iteration   5: 7.137 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  7.221 ±(99.9%) 5.469 ms/op [Average]
+  (min, avg, max) = (5.763, 7.221, 9.301), stdev = 1.420
+  CI (99.9%): [1.752, 12.690] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q4_K, kernel = BAND_F32, shape = 8192x2560, storage = heap)
+
+# Run progress: 8.33% complete, ETA 00:08:19
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:00:24 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:00:24 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q4_K kernel=BAND_F32 rows=8192 cols=2560 batch=1 storage=heap weightBytes=11796480 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+22.662 ms/op
+# Warmup Iteration   2: 30.978 ms/op
+# Warmup Iteration   3: 25.243 ms/op
+Iteration   1: 18.161 ms/op
+Iteration   2: 15.242 ms/op
+Iteration   3: 12.127 ms/op
+Iteration   4: 12.712 ms/op
+Iteration   5: 11.557 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  13.960 ±(99.9%) 10.543 ms/op [Average]
+  (min, avg, max) = (11.557, 13.960, 18.161), stdev = 2.738
+  CI (99.9%): [3.417, 24.503] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q4_K, kernel = BAND_F32, shape = 2560x8192, storage = heap)
+
+# Run progress: 12.50% complete, ETA 00:08:23
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:00:44 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:00:44 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q4_K kernel=BAND_F32 rows=2560 cols=8192 batch=1 storage=heap weightBytes=11796480 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+15.615 ms/op
+# Warmup Iteration   2: 10.552 ms/op
+# Warmup Iteration   3: 10.196 ms/op
+Iteration   1: 11.642 ms/op
+Iteration   2: 13.032 ms/op
+Iteration   3: 11.754 ms/op
+Iteration   4: 8.709 ms/op
+Iteration   5: 8.729 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  10.773 ±(99.9%) 7.520 ms/op [Average]
+  (min, avg, max) = (8.709, 10.773, 13.032), stdev = 1.953
+  CI (99.9%): [3.253, 18.293] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q6_K, kernel = INTEGER, shape = 8192x2560, storage = heap)
+
+# Run progress: 16.67% complete, ETA 00:07:35
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:01:03 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:01:03 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q6_K kernel=INTEGER rows=8192 cols=2560 batch=1 storage=heap weightBytes=17203200 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+10.655 ms/op
+# Warmup Iteration   2: 7.576 ms/op
+# Warmup Iteration   3: 16.329 ms/op
+Iteration   1: 34.052 ms/op
+Iteration   2: 34.023 ms/op
+Iteration   3: 18.152 ms/op
+Iteration   4: 10.596 ms/op
+Iteration   5: 14.066 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  22.178 ±(99.9%) 42.941 ms/op [Average]
+  (min, avg, max) = (10.596, 22.178, 34.052), stdev = 11.152
+  CI (99.9%): [≈ 0, 65.119] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q6_K, kernel = INTEGER, shape = 2560x8192, storage = heap)
+
+# Run progress: 20.83% complete, ETA 00:06:59
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:01:25 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:01:25 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q6_K kernel=INTEGER rows=2560 cols=8192 batch=1 storage=heap weightBytes=17203200 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+2007.840 ms/op
+# Warmup Iteration   2: 14.433 ms/op
+# Warmup Iteration   3: 11.491 ms/op
+Iteration   1: 11.987 ms/op
+Iteration   2: 10.446 ms/op
+Iteration   3: 15.660 ms/op
+Iteration   4: 11.074 ms/op
+Iteration   5: 17.882 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  13.410 ±(99.9%) 12.376 ms/op [Average]
+  (min, avg, max) = (10.446, 13.410, 17.882), stdev = 3.214
+  CI (99.9%): [1.034, 25.786] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q6_K, kernel = BAND_F32, shape = 8192x2560, storage = heap)
+
+# Run progress: 25.00% complete, ETA 00:06:37
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:01:45 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:01:45 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q6_K kernel=BAND_F32 rows=8192 cols=2560 batch=1 storage=heap weightBytes=17203200 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+33.421 ms/op
+# Warmup Iteration   2: 34.707 ms/op
+# Warmup Iteration   3: 24.449 ms/op
+Iteration   1: 21.864 ms/op
+Iteration   2: 22.986 ms/op
+Iteration   3: 20.680 ms/op
+Iteration   4: 18.488 ms/op
+Iteration   5: 15.669 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  19.937 ±(99.9%) 11.206 ms/op [Average]
+  (min, avg, max) = (15.669, 19.937, 22.986), stdev = 2.910
+  CI (99.9%): [8.732, 31.143] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q6_K, kernel = BAND_F32, shape = 2560x8192, storage = heap)
+
+# Run progress: 29.17% complete, ETA 00:06:11
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:02:05 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:02:05 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q6_K kernel=BAND_F32 rows=2560 cols=8192 batch=1 storage=heap weightBytes=17203200 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+19.149 ms/op
+# Warmup Iteration   2: 18.006 ms/op
+# Warmup Iteration   3: 20.778 ms/op
+Iteration   1: 49.446 ms/op
+Iteration   2: 34.276 ms/op
+Iteration   3: 20.719 ms/op
+Iteration   4: 17.760 ms/op
+Iteration   5: 19.884 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  28.417 ±(99.9%) 51.740 ms/op [Average]
+  (min, avg, max) = (17.760, 28.417, 49.446), stdev = 13.437
+  CI (99.9%): [≈ 0, 80.157] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q8_0, kernel = INTEGER, shape = 8192x2560, storage = heap)
+
+# Run progress: 33.33% complete, ETA 00:05:45
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:02:25 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:02:25 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q8_0 kernel=INTEGER rows=8192 cols=2560 batch=1 storage=heap weightBytes=22282240 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+5.521 ms/op
+# Warmup Iteration   2: 4.178 ms/op
+# Warmup Iteration   3: 4.506 ms/op
+Iteration   1: 3.853 ms/op
+Iteration   2: 3.943 ms/op
+Iteration   3: 4.553 ms/op
+Iteration   4: 4.822 ms/op
+Iteration   5: 4.614 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  4.357 ±(99.9%) 1.664 ms/op [Average]
+  (min, avg, max) = (3.853, 4.357, 4.822), stdev = 0.432
+  CI (99.9%): [2.693, 6.020] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q8_0, kernel = INTEGER, shape = 2560x8192, storage = heap)
+
+# Run progress: 37.50% complete, ETA 00:05:21
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:02:46 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:02:46 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q8_0 kernel=INTEGER rows=2560 cols=8192 batch=1 storage=heap weightBytes=22282240 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+6.146 ms/op
+# Warmup Iteration   2: 4.877 ms/op
+# Warmup Iteration   3: 4.990 ms/op
+Iteration   1: 4.635 ms/op
+Iteration   2: 5.109 ms/op
+Iteration   3: 4.609 ms/op
+Iteration   4: 4.351 ms/op
+Iteration   5: 3.848 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  4.510 ±(99.9%) 1.773 ms/op [Average]
+  (min, avg, max) = (3.848, 4.510, 5.109), stdev = 0.460
+  CI (99.9%): [2.738, 6.283] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q8_0, kernel = BAND_F32, shape = 8192x2560, storage = heap)
+
+# Run progress: 41.67% complete, ETA 00:04:59
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:03:06 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:03:06 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q8_0 kernel=BAND_F32 rows=8192 cols=2560 batch=1 storage=heap weightBytes=22282240 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+15.067 ms/op
+# Warmup Iteration   2: 5.963 ms/op
+# Warmup Iteration   3: 5.011 ms/op
+Iteration   1: 14.240 ms/op
+Iteration   2: 7.260 ms/op
+Iteration   3: 6.471 ms/op
+Iteration   4: 5.839 ms/op
+Iteration   5: 5.537 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  7.869 ±(99.9%) 13.947 ms/op [Average]
+  (min, avg, max) = (5.537, 7.869, 14.240), stdev = 3.622
+  CI (99.9%): [≈ 0, 21.816] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 1, format = Q8_0, kernel = BAND_F32, shape = 2560x8192, storage = heap)
+
+# Run progress: 45.83% complete, ETA 00:04:35
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:03:26 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:03:26 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q8_0 kernel=BAND_F32 rows=2560 cols=8192 batch=1 storage=heap weightBytes=22282240 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+6.847 ms/op
+# Warmup Iteration   2: 5.065 ms/op
+# Warmup Iteration   3: 5.897 ms/op
+Iteration   1: 6.003 ms/op
+Iteration   2: 5.249 ms/op
+Iteration   3: 5.508 ms/op
+Iteration   4: 8.735 ms/op
+Iteration   5: 4.854 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  6.070 ±(99.9%) 5.958 ms/op [Average]
+  (min, avg, max) = (4.854, 6.070, 8.735), stdev = 1.547
+  CI (99.9%): [0.112, 12.027] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q4_K, kernel = INTEGER, shape = 8192x2560, storage = heap)
+
+# Run progress: 50.00% complete, ETA 00:04:13
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:03:45 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:03:45 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q4_K kernel=INTEGER rows=8192 cols=2560 batch=512 storage=heap weightBytes=11796480 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+3238.698 ms/op
+# Warmup Iteration   2: 1235.018 ms/op
+# Warmup Iteration   3: 1184.262 ms/op
+Iteration   1: 1366.736 ms/op
+Iteration   2: 1375.469 ms/op
+Iteration   3: 1472.041 ms/op
+Iteration   4: 1502.553 ms/op
+Iteration   5: 1651.921 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  1473.744 ±(99.9%) 446.113 ms/op [Average]
+  (min, avg, max) = (1366.736, 1473.744, 1651.921), stdev = 115.854
+  CI (99.9%): [1027.631, 1919.857] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q4_K, kernel = INTEGER, shape = 2560x8192, storage = heap)
+
+# Run progress: 54.17% complete, ETA 00:03:56
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:04:11 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:04:11 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q4_K kernel=INTEGER rows=2560 cols=8192 batch=512 storage=heap weightBytes=11796480 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+3186.999 ms/op
+# Warmup Iteration   2: 1570.775 ms/op
+# Warmup Iteration   3: 1629.985 ms/op
+Iteration   1: 1597.898 ms/op
+Iteration   2: 1565.322 ms/op
+Iteration   3: 1376.840 ms/op
+Iteration   4: 1402.176 ms/op
+Iteration   5: 1747.187 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  1537.885 ±(99.9%) 585.609 ms/op [Average]
+  (min, avg, max) = (1376.840, 1537.885, 1747.187), stdev = 152.081
+  CI (99.9%): [952.276, 2123.493] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q4_K, kernel = BAND_F32, shape = 8192x2560, storage = heap)
+
+# Run progress: 58.33% complete, ETA 00:03:40
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:04:40 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:04:40 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q4_K kernel=BAND_F32 rows=8192 cols=2560 batch=512 storage=heap weightBytes=11796480 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+366.730 ms/op
+# Warmup Iteration   2: 261.799 ms/op
+# Warmup Iteration   3: 298.823 ms/op
+Iteration   1: 281.243 ms/op
+Iteration   2: 286.419 ms/op
+Iteration   3: 278.454 ms/op
+Iteration   4: 290.717 ms/op
+Iteration   5: 265.881 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  280.543 ±(99.9%) 36.423 ms/op [Average]
+  (min, avg, max) = (265.881, 280.543, 290.717), stdev = 9.459
+  CI (99.9%): [244.120, 316.965] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q4_K, kernel = BAND_F32, shape = 2560x8192, storage = heap)
+
+# Run progress: 62.50% complete, ETA 00:03:17
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:05:02 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:05:03 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q4_K kernel=BAND_F32 rows=2560 cols=8192 batch=512 storage=heap weightBytes=11796480 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+378.298 ms/op
+# Warmup Iteration   2: 320.587 ms/op
+# Warmup Iteration   3: 288.206 ms/op
+Iteration   1: 303.099 ms/op
+Iteration   2: 304.913 ms/op
+Iteration   3: 305.366 ms/op
+Iteration   4: 293.635 ms/op
+Iteration   5: 276.983 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  296.799 ±(99.9%) 46.431 ms/op [Average]
+  (min, avg, max) = (276.983, 296.799, 305.366), stdev = 12.058
+  CI (99.9%): [250.368, 343.230] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q6_K, kernel = INTEGER, shape = 8192x2560, storage = heap)
+
+# Run progress: 66.67% complete, ETA 00:02:55
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:05:26 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:05:27 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q6_K kernel=INTEGER rows=8192 cols=2560 batch=512 storage=heap weightBytes=17203200 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+5530.504 ms/op
+# Warmup Iteration   2: 2988.568 ms/op
+# Warmup Iteration   3: 2608.981 ms/op
+Iteration   1: 2702.387 ms/op
+Iteration   2: 2621.871 ms/op
+Iteration   3: 2428.601 ms/op
+Iteration   4: 2469.685 ms/op
+Iteration   5: 2231.127 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  2490.734 ±(99.9%) 703.977 ms/op [Average]
+  (min, avg, max) = (2231.127, 2490.734, 2702.387), stdev = 182.821
+  CI (99.9%): [1786.757, 3194.711] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q6_K, kernel = INTEGER, shape = 2560x8192, storage = heap)
+
+# Run progress: 70.83% complete, ETA 00:02:37
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:05:54 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:05:54 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q6_K kernel=INTEGER rows=2560 cols=8192 batch=512 storage=heap weightBytes=17203200 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+3361.336 ms/op
+# Warmup Iteration   2: 2053.095 ms/op
+# Warmup Iteration   3: 2193.162 ms/op
+Iteration   1: 2398.329 ms/op
+Iteration   2: 2367.380 ms/op
+Iteration   3: 2139.601 ms/op
+Iteration   4: 2038.957 ms/op
+Iteration   5: 2094.037 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  2207.661 ±(99.9%) 632.339 ms/op [Average]
+  (min, avg, max) = (2038.957, 2207.661, 2398.329), stdev = 164.217
+  CI (99.9%): [1575.321, 2840.000] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q6_K, kernel = BAND_F32, shape = 8192x2560, storage = heap)
+
+# Run progress: 75.00% complete, ETA 00:02:15
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:06:18 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:06:18 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q6_K kernel=BAND_F32 rows=8192 cols=2560 batch=512 storage=heap weightBytes=17203200 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+342.571 ms/op
+# Warmup Iteration   2: 257.810 ms/op
+# Warmup Iteration   3: 278.583 ms/op
+Iteration   1: 259.862 ms/op
+Iteration   2: 236.471 ms/op
+Iteration   3: 223.411 ms/op
+Iteration   4: 244.111 ms/op
+Iteration   5: 229.979 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  238.767 ±(99.9%) 54.179 ms/op [Average]
+  (min, avg, max) = (223.411, 238.767, 259.862), stdev = 14.070
+  CI (99.9%): [184.588, 292.946] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q6_K, kernel = BAND_F32, shape = 2560x8192, storage = heap)
+
+# Run progress: 79.17% complete, ETA 00:01:52
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:06:39 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:06:39 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q6_K kernel=BAND_F32 rows=2560 cols=8192 batch=512 storage=heap weightBytes=17203200 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+289.397 ms/op
+# Warmup Iteration   2: 234.547 ms/op
+# Warmup Iteration   3: 272.445 ms/op
+Iteration   1: 265.329 ms/op
+Iteration   2: 270.251 ms/op
+Iteration   3: 291.610 ms/op
+Iteration   4: 357.138 ms/op
+Iteration   5: 301.590 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  297.184 ±(99.9%) 141.286 ms/op [Average]
+  (min, avg, max) = (265.329, 297.184, 357.138), stdev = 36.692
+  CI (99.9%): [155.898, 438.470] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q8_0, kernel = INTEGER, shape = 8192x2560, storage = heap)
+
+# Run progress: 83.33% complete, ETA 00:01:29
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:07:00 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:07:00 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q8_0 kernel=INTEGER rows=8192 cols=2560 batch=512 storage=heap weightBytes=22282240 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+2519.839 ms/op
+# Warmup Iteration   2: 1494.853 ms/op
+# Warmup Iteration   3: 1523.007 ms/op
+Iteration   1: 2016.761 ms/op
+Iteration   2: 1542.907 ms/op
+Iteration   3: 1196.403 ms/op
+Iteration   4: 1218.148 ms/op
+Iteration   5: 1496.420 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  1494.128 ±(99.9%) 1277.600 ms/op [Average]
+  (min, avg, max) = (1196.403, 1494.128, 2016.761), stdev = 331.789
+  CI (99.9%): [216.528, 2771.728] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q8_0, kernel = INTEGER, shape = 2560x8192, storage = heap)
+
+# Run progress: 87.50% complete, ETA 00:01:07
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:07:25 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:07:25 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q8_0 kernel=INTEGER rows=2560 cols=8192 batch=512 storage=heap weightBytes=22282240 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+2324.887 ms/op
+# Warmup Iteration   2: 1707.470 ms/op
+# Warmup Iteration   3: 1514.936 ms/op
+Iteration   1: 1662.402 ms/op
+Iteration   2: 1395.994 ms/op
+Iteration   3: 1511.567 ms/op
+Iteration   4: 1530.705 ms/op
+Iteration   5: 1494.228 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  1518.979 ±(99.9%) 367.835 ms/op [Average]
+  (min, avg, max) = (1395.994, 1518.979, 1662.402), stdev = 95.525
+  CI (99.9%): [1151.145, 1886.814] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q8_0, kernel = BAND_F32, shape = 8192x2560, storage = heap)
+
+# Run progress: 91.67% complete, ETA 00:00:45
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:07:53 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:07:53 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q8_0 kernel=BAND_F32 rows=8192 cols=2560 batch=512 storage=heap weightBytes=22282240 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+435.119 ms/op
+# Warmup Iteration   2: 203.234 ms/op
+# Warmup Iteration   3: 204.530 ms/op
+Iteration   1: 217.473 ms/op
+Iteration   2: 226.220 ms/op
+Iteration   3: 286.655 ms/op
+Iteration   4: 293.074 ms/op
+Iteration   5: 306.464 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  265.977 ±(99.9%) 157.997 ms/op [Average]
+  (min, avg, max) = (217.473, 265.977, 306.464), stdev = 41.031
+  CI (99.9%): [107.980, 423.974] (assumes normal distribution)
+
+
+# JMH version: 1.37
+# VM version: JDK 25.0.3, OpenJDK 64-Bit Server VM, 25.0.3+9-LTS
+# VM invoker: /Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java
+# VM options: --add-modules jdk.incubator.vector --add-modules jdk.incubator.vector -Xmx8g -Xms8g -XX:+AlwaysPreTouch -XX:+UseG1GC
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 3 iterations, 2 s each
+# Measurement: 5 iterations, 2 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul
+# Parameters: (batchSize = 512, format = Q8_0, kernel = BAND_F32, shape = 2560x8192, storage = heap)
+
+# Run progress: 95.83% complete, ETA 00:00:22
+# Fork: 1 of 1
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.openjdk.jmh.util.Utils (file:/Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/build/libs/vectors-bench-0.1.22-jmh.jar)
+WARNING: Please consider reporting this to the maintainers of class org.openjdk.jmh.util.Utils
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+# Warmup Iteration   1: Sep 16, 2026 5:08:13 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Sep 16, 2026 5:08:13 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+band-gemm-ab format=Q8_0 kernel=BAND_F32 rows=2560 cols=8192 batch=512 storage=heap weightBytes=22282240 capabilities=VectorRuntimeCapabilities[providerName=PanamaVectorUtilSupport, vectorApi=true, configuredMaxVectorBits=256, preferredVectorBits=256, activeVectorBits=256, fastVectorFma=true, fastScalarFma=true, sve=false, q4ShortPairwiseSupported=true, q4UnsignedPairwiseSupported=true, ggufParallel=true, ggufExecutor=persistent, ggufThreads=12, ggufChunksPerThread=2, ggufBatchedMatmulKernel=integer]
+438.257 ms/op
+# Warmup Iteration   2: 223.454 ms/op
+# Warmup Iteration   3: 223.358 ms/op
+Iteration   1: 229.780 ms/op
+Iteration   2: 255.000 ms/op
+Iteration   3: 252.280 ms/op
+Iteration   4: 226.881 ms/op
+Iteration   5: 227.646 ms/op
+
+
+Result "com.integrallis.vectors.bench.GgufBandGemmAbBenchmark.matmul":
+  238.318 ±(99.9%) 54.144 ms/op [Average]
+  (min, avg, max) = (226.881, 238.318, 255.000), stdev = 14.061
+  CI (99.9%): [184.174, 292.461] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:09:01
+
+REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
+why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
+experiments, perform baseline and negative tests that provide experimental control, make sure
+the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
+Do not assume the numbers tell you what you want them to tell.
+
+NOTE: Current JVM experimentally supports Compiler Blackholes, and they are in use. Please exercise
+extra caution when trusting the results, look into the generated code to check the benchmark still
+works, and factor in a small probability of new VM bugs. Additionally, while comparisons between
+different JVMs are already problematic, the performance difference caused by different Blackhole
+modes can be very significant. Please make sure you use the consistent Blackhole mode for comparisons.
+
+Benchmark                       (batchSize)  (format)  (kernel)    (shape)  (storage)  Mode  Cnt     Score      Error  Units
+GgufBandGemmAbBenchmark.matmul            1      Q4_K   INTEGER  8192x2560       heap  avgt    5    13.246 ±    3.542  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q4_K   INTEGER  2560x8192       heap  avgt    5     7.221 ±    5.469  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q4_K  BAND_F32  8192x2560       heap  avgt    5    13.960 ±   10.543  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q4_K  BAND_F32  2560x8192       heap  avgt    5    10.773 ±    7.520  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q6_K   INTEGER  8192x2560       heap  avgt    5    22.178 ±   42.941  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q6_K   INTEGER  2560x8192       heap  avgt    5    13.410 ±   12.376  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q6_K  BAND_F32  8192x2560       heap  avgt    5    19.937 ±   11.206  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q6_K  BAND_F32  2560x8192       heap  avgt    5    28.417 ±   51.740  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q8_0   INTEGER  8192x2560       heap  avgt    5     4.357 ±    1.664  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q8_0   INTEGER  2560x8192       heap  avgt    5     4.510 ±    1.773  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q8_0  BAND_F32  8192x2560       heap  avgt    5     7.869 ±   13.947  ms/op
+GgufBandGemmAbBenchmark.matmul            1      Q8_0  BAND_F32  2560x8192       heap  avgt    5     6.070 ±    5.958  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q4_K   INTEGER  8192x2560       heap  avgt    5  1473.744 ±  446.113  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q4_K   INTEGER  2560x8192       heap  avgt    5  1537.885 ±  585.609  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q4_K  BAND_F32  8192x2560       heap  avgt    5   280.543 ±   36.423  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q4_K  BAND_F32  2560x8192       heap  avgt    5   296.799 ±   46.431  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q6_K   INTEGER  8192x2560       heap  avgt    5  2490.734 ±  703.977  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q6_K   INTEGER  2560x8192       heap  avgt    5  2207.661 ±  632.339  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q6_K  BAND_F32  8192x2560       heap  avgt    5   238.767 ±   54.179  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q6_K  BAND_F32  2560x8192       heap  avgt    5   297.184 ±  141.286  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q8_0   INTEGER  8192x2560       heap  avgt    5  1494.128 ± 1277.600  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q8_0   INTEGER  2560x8192       heap  avgt    5  1518.979 ±  367.835  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q8_0  BAND_F32  8192x2560       heap  avgt    5   265.977 ±  157.997  ms/op
+GgufBandGemmAbBenchmark.matmul          512      Q8_0  BAND_F32  2560x8192       heap  avgt    5   238.318 ±   54.144  ms/op
+
+Benchmark result is saved to /Users/briansam-bodden/Code/java-ai/projects/vectors-band-gemm/vectors-bench/jmh-results/2026-09-16-band-gemm/raw/intel-i7-9750h-avx2/ab-mt-llm.json

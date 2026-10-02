@@ -130,6 +130,29 @@ final class GgufParallelSupport {
     }
   }
 
+  /**
+   * Whether a matrix operation over {@code elements} weight elements would be dispatched to the
+   * shared executor under the same policy as {@link #forEachRow}.
+   */
+  static boolean willParallelize(MemorySegment weights, long elements, long formatMinElements) {
+    long effectiveMinElements = Math.max(MIN_ELEMENTS, formatMinElements);
+    return weights.isAccessibleBy(ACCESS_PROBE)
+        && ENABLED
+        && PARALLELISM > 1
+        && elements >= effectiveMinElements;
+  }
+
+  /** Runs {@code tasks} on the shared executor when {@code parallel}, else inline in order. */
+  static void forEachTask(boolean parallel, int tasks, IntConsumer operation) {
+    if (parallel) {
+      ExecutorHolder.INSTANCE.forEach(tasks, operation);
+      return;
+    }
+    for (int task = 0; task < tasks; task++) {
+      operation.accept(task);
+    }
+  }
+
   static boolean shouldParallelize(
       int rows, int cols, int processors, boolean enabled, long minElements) {
     return enabled && processors > 1 && (long) rows * cols >= minElements;

@@ -79,7 +79,12 @@ jmh {
         "vectors.gguf.executor",
         "vectors.gguf.threads",
         "vectors.gguf.chunksPerThread",
-        "vectors.gguf.mappedKQuantLongOffsets"
+        "vectors.gguf.mappedKQuantLongOffsets",
+        "vectors.gguf.batchedMatmulKernel",
+        "vectors.gguf.band.tile",
+        "vectors.gguf.band.kc",
+        "vectors.gguf.band.panelKb",
+        "vectors.maxBits"
     ).forEach { key ->
         (project.findProperty(key) as String?)?.let { jvmArgs.add("-D$key=$it") }
     }
