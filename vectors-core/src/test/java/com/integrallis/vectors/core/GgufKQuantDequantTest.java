@@ -170,11 +170,19 @@ class GgufKQuantDequantTest {
     assertThat(GgufKQuantDequant.parse("simd-byte")).isEqualTo(GgufKQuantDequant.Arm.SIMD_BYTE);
     assertThat(GgufKQuantDequant.parse("simd-split")).isEqualTo(GgufKQuantDequant.Arm.SIMD_SPLIT);
     assertThatIllegalArgumentException().isThrownBy(() -> GgufKQuantDequant.parse("simd"));
-    assertThat(GgufBatchedMatmulKernel.bandDequantConfiguration())
-        .isEqualTo(
-            "kquant-dequant(requested=simd-split,effective=simd-split,lanes="
-                + GgufKQuantDequant.LANES
-                + ")");
+    // Without the Vector API provider the band arm does not exist, and the kernel reports that
+    // rather than an arm. The x86-scalar portability job runs with -Dvectors.forceScalar=true,
+    // where
+    // this assertion would otherwise compare against an arm string that cannot apply.
+    if (VectorizationProvider.isPanamaEnabled()) {
+      assertThat(GgufBatchedMatmulKernel.bandDequantConfiguration())
+          .isEqualTo(
+              "kquant-dequant(requested=simd-split,effective=simd-split,lanes="
+                  + GgufKQuantDequant.LANES
+                  + ")");
+    } else {
+      assertThat(GgufBatchedMatmulKernel.bandDequantConfiguration()).isEqualTo("unavailable");
+    }
   }
 
   static Stream<Arguments> freshJvmCases() {
