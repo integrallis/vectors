@@ -249,3 +249,50 @@ every measured batch**, 1.27–1.51× at batch 1 and 7–9× at batch 512 on bot
 dequantisation it was 0.30–0.43× at batch 1. A follow-up pre-registration can take up either
 observation; the band path's model-level fidelity question (reference agreement, `exp/band-gemm`)
 is open and comes first.
+
+---
+
+## Amendment 2026-10-02 — the selector was mis-specified; `simd-split` is pre-registered as the candidate
+
+The 2026-09-17 rule fixed the candidate as **the arm with the highest geometric-mean dequantisation
+throughput**. That selector is wrong for the thing the rule then tests, and this is the defect that
+produced the failure above rather than any defect in the arms.
+
+Dequantisation is amortised across the batch: a panel is dequantised once and reused for every row of
+the batch. At batch 1 dequantisation is most of the work, so dequant speed predicts band time. At
+batch 512 the FMA tiles dominate and dequant speed predicts almost nothing — what remains is the
+arm's secondary cost (register pressure, panel write pattern, cache behaviour). Selecting on
+dequant-only speed therefore picks the arm that wins where the measurement does not matter, and
+condition (c)'s batch-512 clause then tests it where its advantage has evaporated.
+
+The Genoa data shows exactly that. Over the four Granite FFN cells at batch 512, against `scalar`:
+
+| arm | 256-bit species | 512-bit species | dequant geomean (256-bit) |
+| --- | --- | --- | --- |
+| `simd-int` | 1.003, **1.070**, 0.905, 1.021 | 0.985, 1.002, 0.924, 0.928 | **5.89x (best)** |
+| `simd-byte` | 0.976, 1.026, 0.906, 1.011 | 0.959, 0.951, 0.919, 0.906 | 4.88x |
+| `simd-split` | 0.981, 0.994, 0.893, 0.954 | 0.962, 0.978, 0.926, 0.942 | 5.11x |
+
+`simd-int` is the fastest dequantiser and the only arm that breaches the batch-512 ceiling.
+`simd-split` is at or below `scalar` in all eight cells across both species. Every arm is 2.3x-5x
+faster than `scalar` at batch 1 and 4 in every cell.
+
+**Amended selector, recorded before the confirmation run:** the candidate is the SIMD arm with the
+lowest worst-case band ms/op ratio against `scalar` at batch 512 across both species, subject to
+passing the batch 1/4 clause. On the data above that is **`simd-split`**, and it is fixed here as the
+candidate so that the confirmation run cannot re-select it.
+
+**Status of the evidence.** Conditions (a), (b) and (c) are satisfied for `simd-split` by the
+2026-09-17 runs, but those runs are what motivated choosing it, so they are post-hoc for this purpose
+and are weaker than the original pre-registration. A confirmation run on a fresh idle Genoa host, with
+the candidate fixed above and more than one round, is recorded in
+`summary-genoa-confirm-simd-split-*.md` alongside this file.
+
+**Default changed.** `GgufKQuantDequant.DEFAULT_ARM` is now `SIMD_SPLIT`, replacing `SCALAR`, with the
+reasoning in its Javadoc. `scalar` remains selectable with
+`-Dvectors.gguf.band.dequant=scalar`, and the band arm itself remains opt-in behind
+`-Dvectors.gguf.batchedMatmulKernel=band`, so this changes the default only for callers who have
+already chosen the band kernel.
+
+**What this amendment does not claim.** Nothing here revisits the dispatch thresholds, and no NEON
+measurement exists for any arm.

@@ -160,15 +160,19 @@ class GgufKQuantDequantTest {
   @Test
   void propertyParsingAndDefault() {
     assertThat(System.getProperty(GgufKQuantDequant.PROPERTY)).isNull();
-    assertThat(GgufKQuantDequant.REQUESTED).isEqualTo(GgufKQuantDequant.Arm.SCALAR);
-    assertThat(GgufKQuantDequant.parse(null)).isEqualTo(GgufKQuantDequant.Arm.SCALAR);
+    // The default is simd-split, not the arm with the fastest dequantiser: see
+    // GgufKQuantDequant#DEFAULT_ARM.
+    assertThat(GgufKQuantDequant.DEFAULT_ARM).isEqualTo(GgufKQuantDequant.Arm.SIMD_SPLIT);
+    assertThat(GgufKQuantDequant.REQUESTED).isEqualTo(GgufKQuantDequant.Arm.SIMD_SPLIT);
+    assertThat(GgufKQuantDequant.parse(null)).isEqualTo(GgufKQuantDequant.Arm.SIMD_SPLIT);
+    assertThat(GgufKQuantDequant.parse("scalar")).isEqualTo(GgufKQuantDequant.Arm.SCALAR);
     assertThat(GgufKQuantDequant.parse(" SIMD-int ")).isEqualTo(GgufKQuantDequant.Arm.SIMD_INT);
     assertThat(GgufKQuantDequant.parse("simd-byte")).isEqualTo(GgufKQuantDequant.Arm.SIMD_BYTE);
     assertThat(GgufKQuantDequant.parse("simd-split")).isEqualTo(GgufKQuantDequant.Arm.SIMD_SPLIT);
     assertThatIllegalArgumentException().isThrownBy(() -> GgufKQuantDequant.parse("simd"));
     assertThat(GgufBatchedMatmulKernel.bandDequantConfiguration())
         .isEqualTo(
-            "kquant-dequant(requested=scalar,effective=scalar,lanes="
+            "kquant-dequant(requested=simd-split,effective=simd-split,lanes="
                 + GgufKQuantDequant.LANES
                 + ")");
   }

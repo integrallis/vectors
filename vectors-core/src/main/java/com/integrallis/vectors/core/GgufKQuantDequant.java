@@ -45,7 +45,8 @@ import jdk.incubator.vector.VectorSpecies;
  * <p>The fused arms need a byte species with exactly {@code L} lanes: 8 (64-bit) or 16 (128-bit).
  * With 128-bit float species ({@code L} = 4) they resolve to {@code simd-split}; {@link
  * #describe()} reports requested and effective arm. Select with {@code
- * -Dvectors.gguf.band.dequant=scalar|simd-byte|simd-int|simd-split}.
+ * -Dvectors.gguf.band.dequant=scalar|simd-byte|simd-int|simd-split}. The default is {@code
+ * simd-split}; see {@link #DEFAULT_ARM} for why it is not the arm with the fastest dequantiser.
  */
 final class GgufKQuantDequant {
 
@@ -85,6 +86,19 @@ final class GgufKQuantDequant {
 
   static final boolean LANE_MATCHED = hasLaneMatchedByteSpecies(LANES);
 
+  /**
+   * The arm used when {@code -D} {@value #PROPERTY} is absent.
+   *
+   * <p>{@code simd-split} rather than {@code simd-int}, even though {@code simd-int} dequantises
+   * faster in isolation (geometric mean 5.89x scalar against 5.11x on Genoa at 256-bit species).
+   * Dequantisation is amortised across the batch, so at batch 512 the band's end-to-end time is what
+   * matters, and there {@code simd-int} cost 7.0% against scalar in one Granite FFN cell (Q4_K
+   * 8192x2560, 30.22 ms against 28.25 ms) while {@code simd-split} was at or below scalar in every
+   * cell at both 256-bit and 512-bit species. Fastest dequantiser is not the same thing as fastest
+   * kernel. See {@code vectors-bench/jmh-results/2026-09-17-kquant-dequant/README.md}.
+   */
+  static final Arm DEFAULT_ARM = Arm.SIMD_SPLIT;
+
   static final Arm REQUESTED = parse(System.getProperty(PROPERTY));
   static final Arm ACTIVE = effective(REQUESTED);
 
@@ -109,7 +123,7 @@ final class GgufKQuantDequant {
 
   static Arm parse(String configured) {
     if (configured == null || configured.isBlank()) {
-      return Arm.SCALAR;
+      return DEFAULT_ARM;
     }
     String value = configured.trim().toLowerCase(Locale.ROOT);
     for (Arm arm : Arm.values()) {
