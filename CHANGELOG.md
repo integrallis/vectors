@@ -4,6 +4,31 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.26] - 2026-10-02
+
+Committing often no longer costs more than committing once. Every commit rebuilt the HNSW graph from
+every live vector, so an ingest split into K batches paid K full builds of growing size — quadratic in
+the number of commits. Measured on 8 dedicated cores, 50,000 vectors at 512 dimensions, build
+throughput fell from 2,060 vec/s at a single commit to 107 vec/s when committing every 1,250, halving
+each time the commit count doubled. A commit now extends the previous generation's graph and inserts
+only the new vectors, which holds throughput at 1,199 vec/s at that cadence — 11.2x — with recall
+unchanged.
+
+Two correctness defects were found while validating that, both of which degraded results silently
+rather than failing:
+
+- An appended node that drew a level above the existing entry became the graph's entry point without
+  being inserted, leaving it with no edges and stranding every search that started there. recall@10 on
+  a persistent collection committed in six batches was 0.170.
+- `graph.bin` stores neighbour ids without scores and synthesises them on decode, which is sound while
+  a committed graph is read-only. Extending a decoded graph ordered its neighbours by those synthetic
+  values: 568 of 1,000 vectors failed to retrieve themselves as their own nearest neighbour. Carried
+  edges are now rescored from the vectors. **`HnswGraphMerger` had the same defect**, so persistent
+  compaction degraded graphs in every release that shipped it.
+
+Collections written by earlier releases are unaffected on disk and need no migration; the format is
+unchanged.
+
 ## [0.1.25] - 2026-09-27
 
 Fixes the upgrade path 0.1.24 shipped without. 0.1.24 made the manifest version an exact match, so a
