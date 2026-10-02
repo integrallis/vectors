@@ -104,10 +104,13 @@ public final class HnswGraphMerger {
           continue;
         }
         NeighborArray newNbrs = merged.getNeighbors(j, l);
+        // Recomputed, not copied: a graph decoded from graph.bin carries synthetic scores (the
+        // codec
+        // stores node ids only), and the repair phase below orders neighbours by score.
         for (int i = 0; i < oldNbrs.size(); i++) {
           int remapped = oldToNew[oldNbrs.node(i)];
           if (remapped >= 0) {
-            newNbrs.insert(remapped, oldNbrs.score(i));
+            newNbrs.insert(remapped, sim.compare(newVectors[j], newVectors[remapped]));
           }
         }
         if (l == 0 && newNbrs.size() < repairThreshold) {

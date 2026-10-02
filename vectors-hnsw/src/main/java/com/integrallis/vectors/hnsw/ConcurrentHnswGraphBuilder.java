@@ -200,6 +200,172 @@ public final class ConcurrentHnswGraphBuilder {
     return graph;
   }
 
+  /**
+   * Extends an existing graph with the vectors appended after it, instead of rebuilding from
+   * scratch.
+   *
+   * <p>Nodes {@code [0, firstNewOrdinal)} keep their levels and edge lists from {@code old} — the
+   * ordinals are identical, so no remapping is needed. Nodes {@code [firstNewOrdinal, size)} are
+   * assigned levels from the same exponential distribution a full build uses and inserted
+   * concurrently through the ordinary Algorithm-1 path, including symmetric backlinks and diversity
+   * pruning on their neighbours.
+   *
+   * <p>Cost is O(A · log N · M · d) for {@code A} appended vectors against a graph of {@code N},
+   * where a full rebuild is O(N · log N · M · d). Committing an ingest in K batches therefore costs
+   * one build rather than K builds of growing size.
+   *
+   * <p>Unlike {@link HnswGraphMerger#merge}, this does not remap ordinals and cannot remove nodes;
+   * it is the append counterpart to that method's compaction.
+   *
+   * @param old the graph to extend; its {@code maxConnections} must match this builder's
+   * @param firstNewOrdinal number of nodes carried over, which must equal {@code old.size()}
+   * @param parallelism worker threads for inserting the appended nodes
+   * @return a new graph holding the carried-over nodes plus the appended ones
+   */
+  public HnswGraph append(HnswGraph old, int firstNewOrdinal, int parallelism) {
+    return append(old, firstNewOrdinal, parallelism, false);
+  }
+
+  /**
+   * As {@link #append(HnswGraph, int, int)}, but skips recomputing the carried-over edge scores
+   * when the caller knows {@code old} holds real similarities.
+   *
+   * <p>A graph decoded from {@code graph.bin} does not: {@code HnswGraphCodec} in {@code
+   * vectors-db} stores node ids only and synthesises monotonically-decreasing scores on decode,
+   * which is sound for search and wrong for insertion, since insertion and diversity pruning order
+   * neighbours by score. Pass {@code true} only for a graph this process built and kept in memory.
+   * Passing it wrongly degrades the graph silently.
+   *
+   * @param scoresAreReal whether {@code old}'s neighbour scores are real similarities
+   */
+  public HnswGraph append(
+      HnswGraph old, int firstNewOrdinal, int parallelism, boolean scoresAreReal) {
+    if (old == null) {
+      throw new NullPointerException("old must not be null");
+    }
+    int n = vectors.size();
+    if (firstNewOrdinal < 0 || firstNewOrdinal > n) {
+      throw new IllegalArgumentException(
+          "firstNewOrdinal must be in [0, " + n + "]: " + firstNewOrdinal);
+    }
+    if (old.size() != firstNewOrdinal) {
+      throw new IllegalArgumentException(
+          "old graph holds " + old.size() + " nodes but firstNewOrdinal is " + firstNewOrdinal);
+    }
+    if (old.maxConnections() != maxConnections) {
+      throw new IllegalArgumentException(
+          "old graph was built with M="
+              + old.maxConnections()
+              + " but this builder uses M="
+              + maxConnections);
+    }
+    if (n == 0) {
+      return null;
+    }
+    if (firstNewOrdinal == 0) {
+      return build(parallelism); // nothing to carry over
+    }
+
+    HnswGraph graph = new HnswGraph(n, maxConnections);
+
+    // --- Phase 1: carry the existing nodes over, ordinals unchanged ---
+    int entryNode = old.entryNode();
+    int maxLevel = old.maxLevel();
+    for (int j = 0; j < firstNewOrdinal; j++) {
+      graph.initNode(j, old.nodeLevel(j));
+    }
+    // Carried-over scores are recomputed unless the caller vouches for them. A graph decoded from
+    // graph.bin carries *synthetic* monotonically-decreasing scores — HnswGraphCodec stores node
+    // ids
+    // only, which is sound while a committed graph is read-only but not once it is extended:
+    // insertion and diversity pruning order neighbours by score, so carrying synthetic values
+    // forward silently degrades the graph. Recomputing is O(N·M) distance computations, which is
+    // why
+    // a caller that kept its own freshly built graph passes scoresAreReal and skips it.
+    for (int j = 0; j < firstNewOrdinal; j++) {
+      int level = graph.nodeLevel(j);
+      float[] self = scoresAreReal ? null : vectors.getVector(j);
+      for (int l = 0; l <= level; l++) {
+        NeighborArray from = old.getNeighbors(j, l);
+        if (from == null) {
+          continue;
+        }
+        NeighborArray to = graph.getNeighbors(j, l);
+        for (int i = 0; i < from.size(); i++) {
+          int neighbour = from.node(i);
+          to.insert(
+              neighbour,
+              scoresAreReal
+                  ? from.score(i)
+                  : similarityFunction.compare(self, vectors.getVector(neighbour)));
+        }
+      }
+    }
+
+    // --- Phase 2: levels for the appended nodes, drawn as a full build would ---
+    int appended = n - firstNewOrdinal;
+    int[] levels = new int[appended];
+    int tallestNew = -1;
+    int tallestNewLevel = -1;
+    for (int i = 0; i < appended; i++) {
+      levels[i] = levelGenerator.nextLevel();
+      if (levels[i] > tallestNewLevel) {
+        tallestNewLevel = levels[i];
+        tallestNew = firstNewOrdinal + i;
+      }
+      graph.initNode(firstNewOrdinal + i, levels[i]);
+    }
+    // Searches performed *during* insertion must descend from a node that already has edges, so the
+    // carried-over entry stays in place for the whole insertion pass. A taller appended node is
+    // promoted afterwards. Skipping the insertion of a node because it is the entry — which is what
+    // build() does, safely, on an empty graph — would leave the entry point with no edges at all
+    // and
+    // strand every search that starts there.
+    graph.setEntryNode(entryNode, maxLevel);
+
+    // --- Phase 3: insert the appended nodes through the ordinary path ---
+    ReentrantLock[] locks = new ReentrantLock[n];
+    for (int j = 0; j < n; j++) {
+      locks[j] = new ReentrantLock();
+    }
+    final int finalEntry = entryNode;
+    final int finalMaxLevel = maxLevel;
+    int maxNbrs = graph.maxConnections0() + 1;
+    var threadCtx =
+        ThreadLocal.withInitial(
+            () -> new WorkContext(n, efConstruction, maxNbrs, dimension, useSegments));
+
+    try (ExecutorService exec = Executors.newFixedThreadPool(Math.max(1, parallelism))) {
+      List<Future<?>> futures = new ArrayList<>(appended);
+      for (int i = 0; i < appended; i++) {
+        final int nodeId = firstNewOrdinal + i;
+        final int level = levels[i];
+        futures.add(
+            exec.submit(
+                () ->
+                    insertConcurrent(
+                        nodeId, level, finalEntry, finalMaxLevel, graph, locks, threadCtx.get())));
+      }
+      awaitAll(futures);
+    }
+
+    // Promote a taller appended node to entry now that it is connected.
+    if (tallestNewLevel > maxLevel) {
+      graph.setEntryNode(tallestNew, tallestNewLevel);
+    }
+
+    // Reclaim the temporary overflow slot on every layer-0 array before the graph is serialised or
+    // searched, so the M contract holds for carried-over nodes that gained backlinks above.
+    int maxConn0 = graph.maxConnections0();
+    for (int j = 0; j < n; j++) {
+      NeighborArray na = graph.getNeighbors(j, 0);
+      if (na != null) {
+        na.trim(maxConn0);
+      }
+    }
+    return graph;
+  }
+
   // ---------------------------------------------------------------------------
   // Per-thread scratch buffers
   // ---------------------------------------------------------------------------
