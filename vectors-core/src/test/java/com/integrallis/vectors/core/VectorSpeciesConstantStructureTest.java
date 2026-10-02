@@ -92,7 +92,8 @@ class VectorSpeciesConstantStructureTest {
         .as("classes referencing jdk.incubator.vector under %s", classesRoot)
         .contains(
             "com/integrallis/vectors/core/PanamaVectorUtilSupport",
-            "com/integrallis/vectors/core/GgufBandGemm");
+            "com/integrallis/vectors/core/GgufBandGemm",
+            "com/integrallis/vectors/core/GgufKQuantDequant");
 
     Set<String> unexpected = new TreeSet<>(violations);
     unexpected.removeAll(ALLOW_LIST);

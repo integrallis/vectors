@@ -36,6 +36,11 @@ import org.openjdk.jmh.annotations.Warmup;
  * of the matrix dequantized in {@code GgufBandGemm.KC} column blocks into a cache-resident buffer
  * (exactly the band arm's per-call dequant work, minus the sweeps). Band total minus this is the
  * sweep cost. Throughput in F32 elements/s = rows * cols / (s/op).
+ *
+ * <p>{@code dequant} selects the K-quant dequantisation arm explicitly ({@link
+ * GgufKQuantDequant.Arm}; ignored for Q8_0), so old and new dequant are compared in one JVM. The
+ * setup line prints the effective arm, which differs from the requested one only for the fused arms
+ * at 4 float lanes.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -52,6 +57,11 @@ public class GgufBandDequantBenchmark {
 
   @Param({"8192x2560", "2560x8192"})
   String shape;
+
+  @Param({"scalar", "simd-byte", "simd-int", "simd-split"})
+  String dequant;
+
+  private GgufKQuantDequant.Arm arm;
 
   private int formatCode;
   private int rows;
@@ -78,6 +88,15 @@ public class GgufBandDequantBenchmark {
     weights = MemorySegment.ofArray(blocks);
     panel = new float[GgufBandGemm.KC];
     raw = new byte[GgufBandGemm.KC / blockSize * blockBytes];
+    arm = GgufKQuantDequant.parse(dequant);
+    System.out.printf(
+        "band-dequant format=%s shape=%s dequant=%s effective=%s lanes=%d config=%s%n",
+        format,
+        shape,
+        dequant,
+        formatCode == GgufBandGemm.Q8_0 ? "n/a(Q8_0)" : GgufKQuantDequant.effective(arm).label,
+        GgufKQuantDequant.LANES,
+        GgufBatchedMatmulKernel.bandDequantConfiguration());
   }
 
   @Benchmark
@@ -90,6 +109,7 @@ public class GgufBandDequantBenchmark {
       for (int kOff = 0; kOff < cols; kOff += GgufBandGemm.KC) {
         int kcb = Math.min(GgufBandGemm.KC, cols - kOff);
         GgufBandGemm.dequantize(
+            arm,
             formatCode,
             weights,
             row * rowBytes + (long) (kOff / blockSize) * blockBytes,

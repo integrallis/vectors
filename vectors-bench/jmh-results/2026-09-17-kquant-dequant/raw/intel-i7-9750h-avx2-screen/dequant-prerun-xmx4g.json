@@ -1,0 +1,948 @@
+[
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "scalar",
+            "format" : "Q4_K",
+            "shape" : "8192x2560"
+        },
+        "primaryMetric" : {
+            "score" : 50.036323253306875,
+            "scoreError" : 125.16263039007383,
+            "scoreConfidence" : [
+                -75.12630713676695,
+                175.19895364338072
+            ],
+            "scorePercentiles" : {
+                "0.0" : 43.612158791666666,
+                "50.0" : 49.23402819047619,
+                "90.0" : 57.26278277777778,
+                "95.0" : 57.26278277777778,
+                "99.0" : 57.26278277777778,
+                "99.9" : 57.26278277777778,
+                "99.99" : 57.26278277777778,
+                "99.999" : 57.26278277777778,
+                "99.9999" : 57.26278277777778,
+                "100.0" : 57.26278277777778
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    49.23402819047619,
+                    43.612158791666666,
+                    57.26278277777778
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "scalar",
+            "format" : "Q4_K",
+            "shape" : "2560x8192"
+        },
+        "primaryMetric" : {
+            "score" : 48.27523447424242,
+            "scoreError" : 55.052672677111644,
+            "scoreConfidence" : [
+                -6.777438202869227,
+                103.32790715135405
+            ],
+            "scorePercentiles" : {
+                "0.0" : 45.869240636363635,
+                "50.0" : 47.29547113636364,
+                "90.0" : 51.66099165,
+                "95.0" : 51.66099165,
+                "99.0" : 51.66099165,
+                "99.9" : 51.66099165,
+                "99.99" : 51.66099165,
+                "99.999" : 51.66099165,
+                "99.9999" : 51.66099165,
+                "100.0" : 51.66099165
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    45.869240636363635,
+                    51.66099165,
+                    47.29547113636364
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "scalar",
+            "format" : "Q6_K",
+            "shape" : "8192x2560"
+        },
+        "primaryMetric" : {
+            "score" : 86.24965590079364,
+            "scoreError" : 152.41051704251603,
+            "scoreConfidence" : [
+                -66.16086114172239,
+                238.66017294330968
+            ],
+            "scorePercentiles" : {
+                "0.0" : 77.87464728571429,
+                "50.0" : 86.29156133333333,
+                "90.0" : 94.58275908333333,
+                "95.0" : 94.58275908333333,
+                "99.0" : 94.58275908333333,
+                "99.9" : 94.58275908333333,
+                "99.99" : 94.58275908333333,
+                "99.999" : 94.58275908333333,
+                "99.9999" : 94.58275908333333,
+                "100.0" : 94.58275908333333
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    77.87464728571429,
+                    86.29156133333333,
+                    94.58275908333333
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "scalar",
+            "format" : "Q6_K",
+            "shape" : "2560x8192"
+        },
+        "primaryMetric" : {
+            "score" : 126.20856415656567,
+            "scoreError" : 850.3004437452122,
+            "scoreConfidence" : [
+                -724.0918795886465,
+                976.5090079017779
+            ],
+            "scorePercentiles" : {
+                "0.0" : 98.44862545454545,
+                "50.0" : 100.15947418181818,
+                "90.0" : 180.01759283333334,
+                "95.0" : 180.01759283333334,
+                "99.0" : 180.01759283333334,
+                "99.9" : 180.01759283333334,
+                "99.99" : 180.01759283333334,
+                "99.999" : 180.01759283333334,
+                "99.9999" : 180.01759283333334,
+                "100.0" : 180.01759283333334
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    180.01759283333334,
+                    98.44862545454545,
+                    100.15947418181818
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-byte",
+            "format" : "Q4_K",
+            "shape" : "8192x2560"
+        },
+        "primaryMetric" : {
+            "score" : 15.32980180284671,
+            "scoreError" : 16.899921648757598,
+            "scoreConfidence" : [
+                -1.570119845910888,
+                32.22972345160431
+            ],
+            "scorePercentiles" : {
+                "0.0" : 14.313028957746479,
+                "50.0" : 15.5505448,
+                "90.0" : 16.12583165079365,
+                "95.0" : 16.12583165079365,
+                "99.0" : 16.12583165079365,
+                "99.9" : 16.12583165079365,
+                "99.99" : 16.12583165079365,
+                "99.999" : 16.12583165079365,
+                "99.9999" : 16.12583165079365,
+                "100.0" : 16.12583165079365
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    14.313028957746479,
+                    16.12583165079365,
+                    15.5505448
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-byte",
+            "format" : "Q4_K",
+            "shape" : "2560x8192"
+        },
+        "primaryMetric" : {
+            "score" : 15.73567428394118,
+            "scoreError" : 10.141561255531657,
+            "scoreConfidence" : [
+                5.594113028409522,
+                25.877235539472835
+            ],
+            "scorePercentiles" : {
+                "0.0" : 15.116636217391305,
+                "50.0" : 15.898186015384615,
+                "90.0" : 16.192200619047618,
+                "95.0" : 16.192200619047618,
+                "99.0" : 16.192200619047618,
+                "99.9" : 16.192200619047618,
+                "99.99" : 16.192200619047618,
+                "99.999" : 16.192200619047618,
+                "99.9999" : 16.192200619047618,
+                "100.0" : 16.192200619047618
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    15.116636217391305,
+                    15.898186015384615,
+                    16.192200619047618
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-byte",
+            "format" : "Q6_K",
+            "shape" : "8192x2560"
+        },
+        "primaryMetric" : {
+            "score" : 31.645161399999996,
+            "scoreError" : 34.59547152503769,
+            "scoreConfidence" : [
+                -2.950310125037692,
+                66.24063292503769
+            ],
+            "scorePercentiles" : {
+                "0.0" : 30.513822575757576,
+                "50.0" : 30.587258424242425,
+                "90.0" : 33.8344032,
+                "95.0" : 33.8344032,
+                "99.0" : 33.8344032,
+                "99.9" : 33.8344032,
+                "99.99" : 33.8344032,
+                "99.999" : 33.8344032,
+                "99.9999" : 33.8344032,
+                "100.0" : 33.8344032
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    30.587258424242425,
+                    30.513822575757576,
+                    33.8344032
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-byte",
+            "format" : "Q6_K",
+            "shape" : "2560x8192"
+        },
+        "primaryMetric" : {
+            "score" : 33.775787688028934,
+            "scoreError" : 151.21455971551114,
+            "scoreConfidence" : [
+                -117.4387720274822,
+                184.99034740354008
+            ],
+            "scorePercentiles" : {
+                "0.0" : 27.504082783783783,
+                "50.0" : 30.650661696969696,
+                "90.0" : 43.17261858333333,
+                "95.0" : 43.17261858333333,
+                "99.0" : 43.17261858333333,
+                "99.9" : 43.17261858333333,
+                "99.99" : 43.17261858333333,
+                "99.999" : 43.17261858333333,
+                "99.9999" : 43.17261858333333,
+                "100.0" : 43.17261858333333
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    43.17261858333333,
+                    30.650661696969696,
+                    27.504082783783783
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-int",
+            "format" : "Q4_K",
+            "shape" : "8192x2560"
+        },
+        "primaryMetric" : {
+            "score" : 12.218802497827307,
+            "scoreError" : 10.405798403937661,
+            "scoreConfidence" : [
+                1.8130040938896457,
+                22.624600901764968
+            ],
+            "scorePercentiles" : {
+                "0.0" : 11.607030206896551,
+                "50.0" : 12.313428536585366,
+                "90.0" : 12.73594875,
+                "95.0" : 12.73594875,
+                "99.0" : 12.73594875,
+                "99.9" : 12.73594875,
+                "99.99" : 12.73594875,
+                "99.999" : 12.73594875,
+                "99.9999" : 12.73594875,
+                "100.0" : 12.73594875
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    12.73594875,
+                    11.607030206896551,
+                    12.313428536585366
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-int",
+            "format" : "Q4_K",
+            "shape" : "2560x8192"
+        },
+        "primaryMetric" : {
+            "score" : 12.561752800857507,
+            "scoreError" : 23.729420517070718,
+            "scoreConfidence" : [
+                -11.167667716213211,
+                36.29117331792823
+            ],
+            "scorePercentiles" : {
+                "0.0" : 11.54561683908046,
+                "50.0" : 12.112013785714286,
+                "90.0" : 14.027627777777777,
+                "95.0" : 14.027627777777777,
+                "99.0" : 14.027627777777777,
+                "99.9" : 14.027627777777777,
+                "99.99" : 14.027627777777777,
+                "99.999" : 14.027627777777777,
+                "99.9999" : 14.027627777777777,
+                "100.0" : 14.027627777777777
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    14.027627777777777,
+                    12.112013785714286,
+                    11.54561683908046
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-int",
+            "format" : "Q6_K",
+            "shape" : "8192x2560"
+        },
+        "primaryMetric" : {
+            "score" : 19.133673682359536,
+            "scoreError" : 26.692027915637034,
+            "scoreConfidence" : [
+                -7.558354233277498,
+                45.82570159799657
+            ],
+            "scorePercentiles" : {
+                "0.0" : 17.687578789473683,
+                "50.0" : 19.100275094339622,
+                "90.0" : 20.613167163265306,
+                "95.0" : 20.613167163265306,
+                "99.0" : 20.613167163265306,
+                "99.9" : 20.613167163265306,
+                "99.99" : 20.613167163265306,
+                "99.999" : 20.613167163265306,
+                "99.9999" : 20.613167163265306,
+                "100.0" : 20.613167163265306
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    20.613167163265306,
+                    19.100275094339622,
+                    17.687578789473683
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-int",
+            "format" : "Q6_K",
+            "shape" : "2560x8192"
+        },
+        "primaryMetric" : {
+            "score" : 18.407792867231905,
+            "scoreError" : 19.403019086672092,
+            "scoreConfidence" : [
+                -0.9952262194401875,
+                37.81081195390399
+            ],
+            "scorePercentiles" : {
+                "0.0" : 17.631875844827587,
+                "50.0" : 17.971377410714286,
+                "90.0" : 19.620125346153845,
+                "95.0" : 19.620125346153845,
+                "99.0" : 19.620125346153845,
+                "99.9" : 19.620125346153845,
+                "99.99" : 19.620125346153845,
+                "99.999" : 19.620125346153845,
+                "99.9999" : 19.620125346153845,
+                "100.0" : 19.620125346153845
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    17.631875844827587,
+                    19.620125346153845,
+                    17.971377410714286
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-split",
+            "format" : "Q4_K",
+            "shape" : "8192x2560"
+        },
+        "primaryMetric" : {
+            "score" : 12.549198455199717,
+            "scoreError" : 7.083234854307836,
+            "scoreConfidence" : [
+                5.465963600891881,
+                19.632433309507554
+            ],
+            "scorePercentiles" : {
+                "0.0" : 12.181702385542168,
+                "50.0" : 12.510566851851852,
+                "90.0" : 12.955326128205128,
+                "95.0" : 12.955326128205128,
+                "99.0" : 12.955326128205128,
+                "99.9" : 12.955326128205128,
+                "99.99" : 12.955326128205128,
+                "99.999" : 12.955326128205128,
+                "99.9999" : 12.955326128205128,
+                "100.0" : 12.955326128205128
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    12.181702385542168,
+                    12.510566851851852,
+                    12.955326128205128
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-split",
+            "format" : "Q4_K",
+            "shape" : "2560x8192"
+        },
+        "primaryMetric" : {
+            "score" : 12.68615639737694,
+            "scoreError" : 21.165949712583853,
+            "scoreConfidence" : [
+                -8.479793315206912,
+                33.85210610996079
+            ],
+            "scorePercentiles" : {
+                "0.0" : 11.384603471910113,
+                "50.0" : 13.062194897435898,
+                "90.0" : 13.61167082278481,
+                "95.0" : 13.61167082278481,
+                "99.0" : 13.61167082278481,
+                "99.9" : 13.61167082278481,
+                "99.99" : 13.61167082278481,
+                "99.999" : 13.61167082278481,
+                "99.9999" : 13.61167082278481,
+                "100.0" : 13.61167082278481
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    11.384603471910113,
+                    13.062194897435898,
+                    13.61167082278481
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-split",
+            "format" : "Q6_K",
+            "shape" : "8192x2560"
+        },
+        "primaryMetric" : {
+            "score" : 21.93699992218689,
+            "scoreError" : 92.2416826683025,
+            "scoreConfidence" : [
+                -70.30468274611562,
+                114.17868259048939
+            ],
+            "scorePercentiles" : {
+                "0.0" : 18.3499295,
+                "50.0" : 19.741347509803923,
+                "90.0" : 27.719722756756756,
+                "95.0" : 27.719722756756756,
+                "99.0" : 27.719722756756756,
+                "99.9" : 27.719722756756756,
+                "99.99" : 27.719722756756756,
+                "99.999" : 27.719722756756756,
+                "99.9999" : 27.719722756756756,
+                "100.0" : 27.719722756756756
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    19.741347509803923,
+                    18.3499295,
+                    27.719722756756756
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "com.integrallis.vectors.core.GgufBandDequantBenchmark.dequantizeMatrix",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx4g"
+        ],
+        "jdkVersion" : "25.0.3",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.3+9-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "dequant" : "simd-split",
+            "format" : "Q6_K",
+            "shape" : "2560x8192"
+        },
+        "primaryMetric" : {
+            "score" : 22.928288933884176,
+            "scoreError" : 37.19651387417487,
+            "scoreConfidence" : [
+                -14.268224940290693,
+                60.124802808059044
+            ],
+            "scorePercentiles" : {
+                "0.0" : 21.256868208333334,
+                "50.0" : 22.32812293478261,
+                "90.0" : 25.199875658536584,
+                "95.0" : 25.199875658536584,
+                "99.0" : 25.199875658536584,
+                "99.9" : 25.199875658536584,
+                "99.99" : 25.199875658536584,
+                "99.999" : 25.199875658536584,
+                "99.9999" : 25.199875658536584,
+                "100.0" : 25.199875658536584
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    21.256868208333334,
+                    22.32812293478261,
+                    25.199875658536584
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    }
+]
+
+

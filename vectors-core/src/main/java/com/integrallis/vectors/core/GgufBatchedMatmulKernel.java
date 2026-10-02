@@ -201,6 +201,15 @@ public enum GgufBatchedMatmulKernel {
     return VectorizationProvider.isPanamaEnabled() ? GgufBandGemm.describe() : "unavailable";
   }
 
+  /**
+   * The band arm's K-quant dequantisation arm, requested and effective ({@code
+   * -Dvectors.gguf.band.dequant}); reported separately so the band configuration string is
+   * unchanged.
+   */
+  public static String bandDequantConfiguration() {
+    return VectorizationProvider.isPanamaEnabled() ? GgufKQuantDequant.describe() : "unavailable";
+  }
+
   /** Dispatch description with its thresholds and the band arm's resolved configuration. */
   static String describeDispatch() {
     StringBuilder description = new StringBuilder("dispatch(band-at-batch>=");
