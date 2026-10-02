@@ -296,3 +296,27 @@ already chosen the band kernel.
 
 **What this amendment does not claim.** Nothing here revisits the dispatch thresholds, and no NEON
 measurement exists for any arm.
+
+## Confirmation verdict (2026-10-02) — `simd-split` passes
+
+Run on a fresh idle Hetzner `ccx33`: 8 dedicated AMD EPYC-Milan vCPU, Ubuntu 24.04, Temurin
+25.0.4.1, 256-bit species, **three rounds** rather than the single round of 2026-09-17. The candidate
+was fixed as `simd-split` by the amendment above **before** this run, and only `scalar` and
+`simd-split` were measured, so the run could not re-select an arm. Raw JMH under
+`raw/milan-256bit-confirm/`, host facts and per-cell tables in `summary-milan-256bit-confirm.md`.
+
+- **(a) bit-identical:** pass (`GgufKQuantDequantTest`, 27/27, including adversarial blocks).
+- **(b) dequant ≥ 2× scalar in all four cells:** **PASS** — 4.87×, 4.68×, 5.75×, 5.95×
+  (geometric mean 5.29×).
+- **(c) band batch 1 and 4 faster than with scalar dequant in every cell, batch 512 at most 1.03×:**
+  **PASS in all three rounds** — 8/8 at batch 1/4 each round, and worst batch-512 cell 0.953×,
+  0.987×, 0.972×. Every batch-512 cell came in *below* 1.0, so the arm is never slower at prefill.
+
+**What this confirms and what it does not.** It re-tests the clause that `simd-int` failed, at the
+species the library defaults to, on a different microarchitecture from the September run, three times.
+It does **not** re-test the 512-bit clause: the Hetzner account's dedicated-core limit is 8, and
+`ccx33` is EPYC Milan in both Ashburn and Falkenstein, so no AVX-512 host was reachable. The 512-bit
+evidence remains the single-round Genoa run of 2026-09-17, where `simd-split` passed every cell
+(0.962×, 0.978×, 0.926×, 0.942×). No NEON measurement exists for any arm.
+
+`GgufKQuantDequant.DEFAULT_ARM` is `SIMD_SPLIT`.

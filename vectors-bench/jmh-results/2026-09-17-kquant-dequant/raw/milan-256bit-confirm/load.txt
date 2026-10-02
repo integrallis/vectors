@@ -1,0 +1,20 @@
+== dequant load-before:  18:19:24 up 6 min,  1 user,  load average: 0.06, 0.37, 0.22
+== dequant load-after:   18:24:07 up 11 min,  1 user,  load average: 1.04, 0.91, 0.51
+== ab-integer-r1 load-before:  18:24:07 up 11 min,  1 user,  load average: 1.04, 0.91, 0.51
+== ab-integer-r1 load-after:   18:36:21 up 23 min,  1 user,  load average: 7.32, 7.05, 4.42
+== ab-band-scalar-r1 load-before:  18:36:21 up 23 min,  1 user,  load average: 7.32, 7.05, 4.42
+== ab-band-scalar-r1 load-after:   18:48:10 up 35 min,  1 user,  load average: 6.68, 7.24, 6.03
+== ab-band-simd-split-r1 load-before:  18:48:10 up 35 min,  1 user,  load average: 6.68, 7.24, 6.03
+== ab-band-simd-split-r1 load-after:   18:59:59 up 47 min,  1 user,  load average: 6.83, 7.28, 6.78
+== ab-integer-r2 load-before:  18:59:59 up 47 min,  1 user,  load average: 6.83, 7.28, 6.78
+== ab-integer-r2 load-after:   19:12:12 up 59 min,  1 user,  load average: 7.29, 7.62, 7.30
+== ab-band-simd-split-r2 load-before:  19:12:12 up 59 min,  1 user,  load average: 7.29, 7.62, 7.30
+== ab-band-simd-split-r2 load-after:   19:23:59 up  1:11,  1 user,  load average: 6.56, 7.31, 7.41
+== ab-band-scalar-r2 load-before:  19:23:59 up  1:11,  1 user,  load average: 6.56, 7.31, 7.41
+== ab-band-scalar-r2 load-after:   19:35:49 up  1:22,  1 user,  load average: 6.19, 7.26, 7.45
+== ab-integer-r3 load-before:  19:35:49 up  1:22,  1 user,  load average: 6.19, 7.26, 7.45
+== ab-integer-r3 load-after:   19:48:03 up  1:35,  1 user,  load average: 7.45, 7.66, 7.63
+== ab-band-scalar-r3 load-before:  19:48:03 up  1:35,  1 user,  load average: 7.45, 7.66, 7.63
+== ab-band-scalar-r3 load-after:   19:59:52 up  1:47,  1 user,  load average: 6.20, 7.26, 7.52
+== ab-band-simd-split-r3 load-before:  19:59:52 up  1:47,  1 user,  load average: 6.20, 7.26, 7.52
+== ab-band-simd-split-r3 load-after:   20:11:40 up  1:58,  1 user,  load average: 5.67, 7.03, 7.43

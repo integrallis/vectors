@@ -91,8 +91,8 @@ final class GgufKQuantDequant {
    *
    * <p>{@code simd-split} rather than {@code simd-int}, even though {@code simd-int} dequantises
    * faster in isolation (geometric mean 5.89x scalar against 5.11x on Genoa at 256-bit species).
-   * Dequantisation is amortised across the batch, so at batch 512 the band's end-to-end time is what
-   * matters, and there {@code simd-int} cost 7.0% against scalar in one Granite FFN cell (Q4_K
+   * Dequantisation is amortised across the batch, so at batch 512 the band's end-to-end time is
+   * what matters, and there {@code simd-int} cost 7.0% against scalar in one Granite FFN cell (Q4_K
    * 8192x2560, 30.22 ms against 28.25 ms) while {@code simd-split} was at or below scalar in every
    * cell at both 256-bit and 512-bit species. Fastest dequantiser is not the same thing as fastest
    * kernel. See {@code vectors-bench/jmh-results/2026-09-17-kquant-dequant/README.md}.
