@@ -135,6 +135,8 @@ final class VectorCollectionImpl implements VectorCollection {
    * committed generation back would force an O(N·M) rescore on every commit. Written and read under
    * the writer lock, and cleared whenever the live generation stops being this graph's successor.
    */
+  public static final long[] PHASE = new long[8]; // TEMPORARY profiling
+
   private HnswGraph writerGraph;
 
   /**
@@ -1278,6 +1280,7 @@ final class VectorCollectionImpl implements VectorCollection {
     // and vectors.bin is streamed rather than built in memory. Every other path still wants a
     // matrix
     // (a full rebuild, Vamana, IVF, or quantizer training all consume float[][]).
+    long tP = System.nanoTime();
     SuccessorVectors successor =
         new SuccessorVectors(oldGen.mappedVectors, oldPhysicalCount, staging.documents(), dim);
     boolean appendOnly = canAppendHnswGraph(oldGen) && config.quantizerKind() == QuantizerKind.NONE;
@@ -1310,6 +1313,8 @@ final class VectorCollectionImpl implements VectorCollection {
             materialiseMatrix,
             !appendOnly);
     byte[] vectorsBin = materialized.vectorsBin();
+    PHASE[0] += System.nanoTime() - tP;
+    tP = System.nanoTime();
     byte[] idmapBin;
     byte[] metadataBin;
     MappedMetadataStore.Writer.Image metadataImage = null;
@@ -1326,6 +1331,8 @@ final class VectorCollectionImpl implements VectorCollection {
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to serialize commit payload", e);
     }
+    PHASE[1] += System.nanoTime() - tP;
+    tP = System.nanoTime();
 
     // 2a. Graph bytes.
     byte[] graphBin = null;
@@ -1346,6 +1353,9 @@ final class VectorCollectionImpl implements VectorCollection {
         graphBinCrc = Checksums.ofBytes(graphBin);
       }
     }
+
+    PHASE[2] += System.nanoTime() - tP;
+    tP = System.nanoTime();
 
     // 2b. Quantization.
     byte[] quantizedBin = null;
@@ -1368,6 +1378,7 @@ final class VectorCollectionImpl implements VectorCollection {
     }
 
     // 2c. Tombstones.
+    PHASE[3] += System.nanoTime() - tP;
     byte[] tombstonesBin = TombstoneCodec.encode(newTombstones, newPhysicalCount);
     long tombstonesBinLength = (long) tombstonesBin.length;
     long tombstonesBinCrc = tombstonesBin.length > 0 ? Checksums.ofBytes(tombstonesBin) : 0L;
@@ -1421,6 +1432,7 @@ final class VectorCollectionImpl implements VectorCollection {
             tombstonesBinCrc);
 
     GenerationDirectory.WriteResult wr;
+    long tW = System.nanoTime();
     try {
       wr =
           GenerationDirectory.writeGeneration(
@@ -1436,6 +1448,7 @@ final class VectorCollectionImpl implements VectorCollection {
                   vectorsBin == null ? successor : null,
                   metadataImage),
               manifest);
+      PHASE[4] += System.nanoTime() - tW;
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to write generation " + newGenNumber, e);
     }
@@ -2012,6 +2025,7 @@ final class VectorCollectionImpl implements VectorCollection {
             successor.asVectors(),
             indexMetric(),
             HNSW_APPEND_SEED ^ carried);
+    long tG = System.nanoTime();
     HnswGraph appended;
     if (old == writerGraph && old.capacity() >= successor.size()) {
       // Our own graph, with room: extend it. Nothing carried is touched.
@@ -2024,11 +2038,15 @@ final class VectorCollectionImpl implements VectorCollection {
           builder.append(
               old, carried, threads, scoresAreReal, Math.max(successor.size() * 2, 1_024));
     }
+    PHASE[5] += System.nanoTime() - tG;
     adoptWriterGraph(appended);
     if (appended == null) {
       return null;
     }
-    return HnswGraphCodec.encode(appended);
+    long tE = System.nanoTime();
+    byte[] encoded = HnswGraphCodec.encode(appended);
+    PHASE[6] += System.nanoTime() - tE;
+    return encoded;
   }
 
   /**
