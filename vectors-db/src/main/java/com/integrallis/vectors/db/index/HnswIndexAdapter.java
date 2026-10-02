@@ -16,6 +16,7 @@
 package com.integrallis.vectors.db.index;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.hnsw.ConcurrentHnswGraphBuilder;
 import com.integrallis.vectors.hnsw.HnswGraph;
 import com.integrallis.vectors.hnsw.HnswGraphMerger;
 import com.integrallis.vectors.hnsw.HnswIndex;
@@ -59,6 +60,12 @@ public final class HnswIndexAdapter implements IndexSpi {
    * near-linearly with cores, so large builds default to all available processors.
    */
   private static final int PARALLEL_BUILD_MIN_SIZE = 10_000;
+
+  /**
+   * Level-generation seed for {@link #appendFrom}. Fixed so that appending the same vectors to the
+   * same graph twice yields the same graph; a full build takes its seed from {@link HnswIndex}.
+   */
+  private static final long APPEND_SEED = 0x5DEECE66DL;
 
   private final int maxConnections;
   private final int efConstruction;
@@ -304,6 +311,53 @@ public final class HnswIndexAdapter implements IndexSpi {
       return;
     }
     this.index = HnswIndex.ofPrebuilt(merged, new InMemoryVectors(newVectors), metric);
+  }
+
+  /**
+   * Extends {@code old} with the vectors appended after it, rather than rebuilding the graph.
+   *
+   * <p>This is the append counterpart to {@link #mergeFrom}: ordinals {@code [0, firstNewOrdinal)}
+   * keep their edges from {@code old}, and the vectors beyond that are inserted through the
+   * ordinary HNSW insertion path. Used by the commit pipeline when a generation only adds
+   * documents, which turns an ingest committed in K batches from K full builds into one build plus
+   * K appends.
+   *
+   * @param old the previous generation's graph; {@code old.size()} must equal {@code
+   *     firstNewOrdinal}
+   * @param allVectors every vector, old ordinals first, appended ones after
+   * @param firstNewOrdinal the first appended ordinal
+   *     <p>{@code old} is always a graph this adapter built and kept in memory — an in-memory
+   *     collection never serialises its graph — so its neighbour scores are real and need no
+   *     recomputation.
+   * @param metric similarity function; must match the one {@code old} was built with
+   */
+  public void appendFrom(
+      HnswGraph old, float[][] allVectors, int firstNewOrdinal, SimilarityFunction metric) {
+    Objects.requireNonNull(old, "old must not be null");
+    Objects.requireNonNull(allVectors, "allVectors must not be null");
+    Objects.requireNonNull(metric, "metric must not be null");
+    this.size = allVectors.length;
+    this.dimension = allVectors.length == 0 ? 0 : allVectors[0].length;
+    if (allVectors.length == 0) {
+      this.index = null;
+      return;
+    }
+    int resolvedThreads =
+        buildThreads == 0
+            ? (allVectors.length >= PARALLEL_BUILD_MIN_SIZE
+                ? Runtime.getRuntime().availableProcessors()
+                : 1)
+            : buildThreads;
+    InMemoryVectors vectors = new InMemoryVectors(allVectors);
+    HnswGraph appended =
+        ConcurrentHnswGraphBuilder.create(
+                maxConnections, efConstruction, vectors, metric, APPEND_SEED ^ firstNewOrdinal)
+            .append(old, firstNewOrdinal, resolvedThreads, /* scoresAreReal= */ true);
+    if (appended == null) {
+      this.index = null;
+      return;
+    }
+    this.index = HnswIndex.ofPrebuilt(appended, vectors, metric);
   }
 
   /** Returns the HNSW {@code M} parameter this adapter was configured with. */
