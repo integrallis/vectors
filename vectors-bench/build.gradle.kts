@@ -264,6 +264,21 @@ tasks.register<JavaExec>("s3Bench") {
 // Captures per-run wall time, throughput, heap delta, and GC count/time.
 // Results land in ${DatasetRegistry.dataDir()}/results/build-scalability.{csv,json}.
 // ---------------------------------------------------------------------------
+tasks.register<JavaExec>("commitCadence") {
+    group = "benchmark"
+    description = "Ingest cost, recall and disk vs commit cadence (append-on-commit regression guard)"
+
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.integrallis.vectors.bench.CommitCadenceBenchmark")
+
+    jvmArgs(
+        "--add-modules", "jdk.incubator.vector",
+        "-Xmx8g", "-Xms2g"
+    )
+
+    // ./gradlew :vectors-bench:commitCadence --args="100000 512 100"
+}
+
 tasks.register<JavaExec>("buildScalability") {
     group = "benchmark"
     description = "Sweep HNSW/Vamana/FLAT build time vs corpus size (synthetic random)"
