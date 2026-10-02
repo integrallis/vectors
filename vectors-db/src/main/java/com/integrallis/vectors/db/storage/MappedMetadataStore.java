@@ -398,6 +398,166 @@ public final class MappedMetadataStore implements MetadataStore {
     private Writer() {}
 
     /**
+     * {@code metadata.bin} as something to size, checksum and stream, instead of a copy of every
+     * document's encoded form on the heap.
+     *
+     * <p>{@link #toBytes(List)} holds every encoded entry at once plus the finished file, so a
+     * commit allocated roughly the whole store — about 220 MB for 630,000 documents carrying their
+     * embedded text — and could not produce a file above 2 GiB whatever the host had.
+     *
+     * <p>Encoding happens twice at most, and once when the caller writes before asking for the
+     * checksum. The format puts an offset table between the header and the heap, so {@link
+     * #writeTo} writes the heap first at its final position, collecting the lengths and
+     * accumulating the heap's CRC as it goes, then writes the header and table at offset 0 and
+     * joins the two checksums with {@link Crc32Combine}. A caller that needs {@link #length()} or
+     * {@link #crc32()} first — the commit path does, because the manifest is built before the
+     * payload is written — pays one encoding pass for those and one for the write. The earlier
+     * shape cost three.
+     *
+     * <p>Output is byte-for-byte what {@code toBytes} produces.
+     */
+    public static final class Image {
+
+      private static final int CHUNK_BYTES = 1 << 20;
+
+      private final List<Document> documents;
+      private final int[] lengths;
+      private long heapSize = -1;
+      private long heapCrc;
+      private Path written;
+
+      public Image(List<Document> documents) {
+        this.documents = Objects.requireNonNull(documents, "documents must not be null");
+        this.lengths = new int[documents.size()];
+      }
+
+      /** Length of the file, known once the heap has been written. */
+      public long length() throws IOException {
+        ensureHeapSized();
+        return (long) HEADER_SIZE + (long) documents.size() * Long.BYTES + heapSize;
+      }
+
+      /** CRC of the whole file: the header and table joined to the heap's running CRC. */
+      public long crc32() throws IOException {
+        ensureHeapSized();
+        ByteBuffer head = header();
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        crc.update(head.array(), 0, head.limit());
+        return Crc32Combine.combine(crc.getValue(), heapCrc, heapSize);
+      }
+
+      /**
+       * Writes the file and fsyncs it.
+       *
+       * <p>Call this before {@link #length()} or {@link #crc32()} where possible: those have to
+       * know the heap's size, and when the file has not been written yet they obtain it by encoding
+       * the documents, which is the second pass this class exists to avoid. The commit path writes
+       * first.
+       */
+      public void writeTo(Path path) throws IOException {
+        long heapStart = (long) HEADER_SIZE + (long) documents.size() * Long.BYTES;
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        long heap = 0;
+        try (java.nio.channels.FileChannel channel =
+            java.nio.channels.FileChannel.open(
+                path,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.TRUNCATE_EXISTING)) {
+
+          channel.position(heapStart);
+          ByteBuffer out = ByteBuffer.allocate(CHUNK_BYTES).order(ByteOrder.LITTLE_ENDIAN);
+          for (int i = 0; i < documents.size(); i++) {
+            Document doc = documents.get(i);
+            if (doc == null) {
+              throw new IOException("metadata documents[" + i + "] is null");
+            }
+            byte[] entry = encodeDocument(doc);
+            lengths[i] = entry.length;
+            heap += entry.length;
+            crc.update(entry);
+            if (entry.length > out.capacity()) {
+              out.flip();
+              writeFully(channel, out);
+              out.clear();
+              writeFully(channel, ByteBuffer.wrap(entry));
+              continue;
+            }
+            if (out.remaining() < entry.length) {
+              out.flip();
+              writeFully(channel, out);
+              out.clear();
+            }
+            out.put(entry);
+          }
+          out.flip();
+          if (out.hasRemaining()) {
+            writeFully(channel, out);
+          }
+          if (heap > Integer.MAX_VALUE) {
+            throw new IOException("metadata heap size exceeds 2 GiB: " + heap);
+          }
+          this.heapSize = heap;
+          this.heapCrc = crc.getValue();
+
+          channel.position(0);
+          writeFully(channel, header());
+          channel.force(true);
+        }
+        this.written = path;
+      }
+
+      /** Encodes the documents only to learn the heap's size, when {@link #writeTo} has not run. */
+      private void ensureHeapSized() throws IOException {
+        if (heapSize >= 0) {
+          return;
+        }
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        long heap = 0;
+        for (int i = 0; i < documents.size(); i++) {
+          Document doc = documents.get(i);
+          if (doc == null) {
+            throw new IOException("metadata documents[" + i + "] is null");
+          }
+          byte[] entry = encodeDocument(doc);
+          lengths[i] = entry.length;
+          heap += entry.length;
+          crc.update(entry);
+        }
+        if (heap > Integer.MAX_VALUE) {
+          throw new IOException("metadata heap size exceeds 2 GiB: " + heap);
+        }
+        this.heapSize = heap;
+        this.heapCrc = crc.getValue();
+      }
+
+      /** Header plus the offset table: small, bounded by the document count. */
+      private ByteBuffer header() {
+        ByteBuffer buf =
+            ByteBuffer.allocate(HEADER_SIZE + lengths.length * Long.BYTES)
+                .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(FileFormat.MAGIC_METADATA);
+        buf.putInt(FileFormat.VERSION_METADATA);
+        buf.putInt(lengths.length);
+        buf.putInt((int) heapSize);
+        long offset = 0;
+        for (int len : lengths) {
+          buf.putLong(offset);
+          offset += len;
+        }
+        buf.flip();
+        return buf;
+      }
+
+      private static void writeFully(java.nio.channels.FileChannel channel, ByteBuffer buffer)
+          throws IOException {
+        while (buffer.hasRemaining()) {
+          channel.write(buffer);
+        }
+      }
+    }
+
+    /**
      * Builds the complete {@code metadata.bin} byte image without touching the file system. The
      * commit pipeline calls this to pre-compute the bytes so it can checksum the content before
      * deciding where to write it. {@link #writeTo(Path, List)} is a thin wrapper that calls this

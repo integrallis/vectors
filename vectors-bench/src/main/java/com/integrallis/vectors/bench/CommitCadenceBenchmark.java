@@ -131,13 +131,15 @@ public final class CommitCadenceBenchmark {
         generations = collection.generationNumber();
         recall = recall(collection, queries, truth);
 
+        long bytes = diskBytes(dir);
         System.out.printf(
-            "%-14d %10d %10.0f %8d %14d %8.4f%n",
+            "%-14d %10d %10.0f %8d %14d %10.0f %8.4f%n",
             commitEvery,
             millis,
             vectors.length * 1000.0 / millis,
             generations,
-            diskBytes(dir),
+            bytes,
+            bytes / (double) vectors.length,
             recall);
       }
     } finally {
@@ -178,19 +180,28 @@ public final class CommitCadenceBenchmark {
     return top;
   }
 
+  /**
+   * Bytes actually occupied, counting each inode once.
+   *
+   * <p>A commit that only appends hard-links the predecessor's {@code vectors.bin} instead of
+   * copying it, so the same inode appears in several generation directories. Summing file sizes per
+   * directory would report it once per link and make an append look more expensive than a full
+   * rewrite, which is the opposite of the truth. This is what {@code du} does.
+   */
   private static long diskBytes(Path dir) throws IOException {
+    Set<Object> seen = new java.util.HashSet<>();
+    long total = 0;
     try (Stream<Path> walk = Files.walk(dir)) {
-      return walk.filter(Files::isRegularFile)
-          .mapToLong(
-              p -> {
-                try {
-                  return Files.size(p);
-                } catch (IOException e) {
-                  return 0L;
-                }
-              })
-          .sum();
+      for (Path path : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
+        Object key =
+            Files.readAttributes(path, java.nio.file.attribute.BasicFileAttributes.class).fileKey();
+        if (key != null && !seen.add(key)) {
+          continue; // another link to a file already counted
+        }
+        total += Files.size(path);
+      }
     }
+    return total;
   }
 
   private static void deleteRecursively(Path root) throws IOException {

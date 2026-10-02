@@ -92,6 +92,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
@@ -133,7 +135,19 @@ final class VectorCollectionImpl implements VectorCollection {
    * committed generation back would force an O(N·M) rescore on every commit. Written and read under
    * the writer lock, and cleared whenever the live generation stops being this graph's successor.
    */
-  private HnswGraph lastBuiltGraph;
+  private HnswGraph writerGraph;
+
+  /**
+   * Per-node locks and workers for graph insertion, owned by the collection rather than the commit.
+   *
+   * <p>Insertion needs one lock per node and a pool of threads. Allocating them per commit made an
+   * ingest create a lock for every live node and a fresh pool on every commit — work proportional
+   * to the collection, repeated. They are grown with {@link #writerGraph} and closed with the
+   * collection.
+   */
+  private java.util.concurrent.locks.ReentrantLock[] writerLocks;
+
+  private ExecutorService writerGraphExecutor;
 
   private static final Logger LOGGER = Logger.getLogger(VectorCollectionImpl.class.getName());
 
@@ -252,6 +266,14 @@ final class VectorCollectionImpl implements VectorCollection {
     private final byte[] quantizedBytes;
     private final byte[] tombstonesBytes;
 
+    /** Set when vectors.bin is streamed instead of buffered; then {@code vectorsBytes} is null. */
+    private final SuccessorVectors streamingVectors;
+
+    /**
+     * Set when metadata.bin is streamed instead of buffered; then {@code metadataBytes} is null.
+     */
+    private final MappedMetadataStore.Writer.Image streamingMetadata;
+
     BufferedGenerationSource(
         byte[] vectorsBytes,
         byte[] idmapBytes,
@@ -259,6 +281,28 @@ final class VectorCollectionImpl implements VectorCollection {
         byte[] graphBytes,
         byte[] quantizedBytes,
         byte[] tombstonesBytes) {
+      this(
+          vectorsBytes,
+          idmapBytes,
+          metadataBytes,
+          graphBytes,
+          quantizedBytes,
+          tombstonesBytes,
+          null,
+          null);
+    }
+
+    BufferedGenerationSource(
+        byte[] vectorsBytes,
+        byte[] idmapBytes,
+        byte[] metadataBytes,
+        byte[] graphBytes,
+        byte[] quantizedBytes,
+        byte[] tombstonesBytes,
+        SuccessorVectors streamingVectors,
+        MappedMetadataStore.Writer.Image streamingMetadata) {
+      this.streamingVectors = streamingVectors;
+      this.streamingMetadata = streamingMetadata;
       this.vectorsBytes = vectorsBytes;
       this.idmapBytes = idmapBytes;
       this.metadataBytes = metadataBytes;
@@ -269,6 +313,10 @@ final class VectorCollectionImpl implements VectorCollection {
 
     @Override
     public void writeVectors(Path destination) throws IOException {
+      if (streamingVectors != null) {
+        streamingVectors.writeTo(destination);
+        return;
+      }
       MappedIdMapper.Writer.writeBytesAndFsync(destination, vectorsBytes);
     }
 
@@ -279,6 +327,10 @@ final class VectorCollectionImpl implements VectorCollection {
 
     @Override
     public void writeMetadata(Path destination) throws IOException {
+      if (streamingMetadata != null) {
+        streamingMetadata.writeTo(destination);
+        return;
+      }
       MappedMetadataStore.Writer.writeBytesAndFsync(destination, metadataBytes);
     }
 
@@ -1032,7 +1084,7 @@ final class VectorCollectionImpl implements VectorCollection {
       }
       Generation newGen = openGeneration(rr.generationDir(), rr.manifest());
       this.generation = newGen;
-      lastBuiltGraph = null; // this generation came from elsewhere; our graph is not its parent
+      writerGraph = null; // this generation came from elsewhere; our graph is not its parent
       this.nextGenerationNumber = Math.max(this.nextGenerationNumber, rr.generationNumber() + 1L);
       retire(current);
       queryCache.invalidateAll();
@@ -1220,15 +1272,57 @@ final class VectorCollectionImpl implements VectorCollection {
           "this collection stores only quantized codes and is sealed after its first commit;"
               + " rebuild it from the source vectors to change it");
     }
+    // An appending HNSW commit needs no heap copy of the collection: the graph builder reads the
+    // carried-over vectors straight from the predecessor's mapping through
+    // SuccessorVectors.asVectors,
+    // and vectors.bin is streamed rather than built in memory. Every other path still wants a
+    // matrix
+    // (a full rebuild, Vamana, IVF, or quantizer training all consume float[][]).
+    SuccessorVectors successor =
+        new SuccessorVectors(oldGen.mappedVectors, oldPhysicalCount, staging.documents(), dim);
+    boolean appendOnly = canAppendHnswGraph(oldGen) && config.quantizerKind() == QuantizerKind.NONE;
+    if (appendOnly && subscribers.isEmpty() && oldGen.directory != null) {
+      // Hand the predecessor's payload over so this commit writes the batch, not the collection.
+      // Withheld whenever anything subscribes to generations: a shipper uploads a generation's
+      // vectors.bin as one object, and a hard-linked file can carry a successor's tail beyond this
+      // generation's declared length.
+      try {
+        Manifest previous = Manifest.readFrom(oldGen.directory.resolve(FileFormat.MANIFEST_FILE));
+        successor.carriedFrom(
+            oldGen.directory.resolve(FileFormat.VECTORS_FILE), previous.vectorsBinCrc32());
+      } catch (IOException | RuntimeException e) {
+        // Without the predecessor's checksum the successor is written and checksummed in full,
+        // which
+        // is slower and still correct. Never fail a commit over an optimisation.
+        LOGGER.log(
+            java.util.logging.Level.FINE,
+            "could not read the predecessor manifest; writing vectors.bin in full",
+            e);
+      }
+    }
+    boolean materialiseMatrix = needMatrix && !appendOnly;
     Materialized materialized =
         materializeSuccessor(
-            oldGen.mappedVectors, oldPhysicalCount, staging.documents(), dim, needMatrix);
+            oldGen.mappedVectors,
+            oldPhysicalCount,
+            staging.documents(),
+            dim,
+            materialiseMatrix,
+            !appendOnly);
     byte[] vectorsBin = materialized.vectorsBin();
     byte[] idmapBin;
     byte[] metadataBin;
+    MappedMetadataStore.Writer.Image metadataImage = null;
     try {
+      // The id map stays buffered: ids are short, so it is a few megabytes even at a million
+      // documents. Metadata carries each document's stored text, so it is the one that grows.
       idmapBin = MappedIdMapper.Writer.toBytes(newIds);
-      metadataBin = MappedMetadataStore.Writer.toBytes(newDocs);
+      if (appendOnly) {
+        metadataImage = new MappedMetadataStore.Writer.Image(newDocs);
+        metadataBin = null;
+      } else {
+        metadataBin = MappedMetadataStore.Writer.toBytes(newDocs);
+      }
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to serialize commit payload", e);
     }
@@ -1243,7 +1337,10 @@ final class VectorCollectionImpl implements VectorCollection {
             || config.indexType() == IndexType.IVF_FLAT
             || config.indexType() == IndexType.IVF_PQ;
     if (needGraph) {
-      graphBin = encodeGraphBytesAppending(materialized.matrix(), oldGen);
+      graphBin =
+          materialized.matrix() != null
+              ? encodeGraphBytesAppending(materialized.matrix(), oldGen)
+              : encodeGraphBytesAppending(successor, oldGen);
       if (graphBin != null) {
         graphBinLength = (long) graphBin.length;
         graphBinCrc = Checksums.ofBytes(graphBin);
@@ -1287,6 +1384,21 @@ final class VectorCollectionImpl implements VectorCollection {
       vectorsBin = new byte[0];
     }
 
+    // Payload lengths and checksums for the manifest. Computed here, after the quantizedOnly
+    // block above may have replaced vectorsBin with an empty array: that mode writes its index to
+    // quantized.bin and a zero-length vectors.bin is how the open path recognises it, so a length
+    // measured before that substitution would describe bytes the generation never writes.
+    long vectorsBinLength = vectorsBin != null ? vectorsBin.length : successor.length();
+    long vectorsBinCrc = vectorsBin != null ? Checksums.ofBytes(vectorsBin) : successor.crc32();
+    long metadataBinLength;
+    long metadataBinCrc;
+    try {
+      metadataBinLength = metadataBin != null ? metadataBin.length : metadataImage.length();
+      metadataBinCrc = metadataBin != null ? Checksums.ofBytes(metadataBin) : metadataImage.crc32();
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to checksum metadata.bin", e);
+    }
+
     // 3. Build the manifest.
     long newGenNumber = nextGenerationNumber;
     Manifest manifest =
@@ -1294,10 +1406,10 @@ final class VectorCollectionImpl implements VectorCollection {
             config,
             newGenNumber,
             (long) liveCount,
-            (long) vectorsBin.length,
-            Checksums.ofBytes(vectorsBin),
-            (long) metadataBin.length,
-            Checksums.ofBytes(metadataBin),
+            vectorsBinLength,
+            vectorsBinCrc,
+            metadataBinLength,
+            metadataBinCrc,
             (long) idmapBin.length,
             Checksums.ofBytes(idmapBin),
             graphBinLength,
@@ -1315,7 +1427,14 @@ final class VectorCollectionImpl implements VectorCollection {
               config.storageRoot(),
               newGenNumber,
               new BufferedGenerationSource(
-                  vectorsBin, idmapBin, metadataBin, graphBin, quantizedBin, tombstonesBin),
+                  vectorsBin,
+                  idmapBin,
+                  metadataBin,
+                  graphBin,
+                  quantizedBin,
+                  tombstonesBin,
+                  vectorsBin == null ? successor : null,
+                  metadataImage),
               manifest);
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to write generation " + newGenNumber, e);
@@ -1325,7 +1444,7 @@ final class VectorCollectionImpl implements VectorCollection {
 
     Generation newGen;
     try {
-      newGen = openGeneration(wr.generationDir(), wr.manifest(), lastBuiltGraph);
+      newGen = openGeneration(wr.generationDir(), wr.manifest(), null);
     } catch (IOException e) {
       throw new UncheckedIOException(
           "Generation "
@@ -1609,7 +1728,7 @@ final class VectorCollectionImpl implements VectorCollection {
             || config.indexType() == IndexType.IVF_PQ;
     if (needGraph && liveCount > 0) {
       // IGTM: for HNSW, merge the existing graph instead of rebuilding from scratch.
-      lastBuiltGraph = null; // compaction remaps ordinals, so the cached graph is not the parent
+      writerGraph = null; // compaction remaps ordinals, so the cached graph is not the parent
       if (config.indexType() == IndexType.HNSW
           && oldGen.spi instanceof MappedHnswIndexAdapter mapped) {
         HnswGraph oldGraph = mapped.graph();
@@ -1724,7 +1843,11 @@ final class VectorCollectionImpl implements VectorCollection {
       int physicalCount,
       List<Document> staged,
       int dim,
-      boolean needMatrix) {
+      boolean needMatrix,
+      boolean needBytes) {
+    if (!needBytes && !needMatrix) {
+      return new Materialized(null, null); // streamed by SuccessorVectors; nothing to buffer
+    }
     long strideL = AlignmentUtil.alignUp((long) dim * Float.BYTES, AlignmentUtil.VECTOR_ALIGNMENT);
     if (strideL > Integer.MAX_VALUE) {
       throw new IllegalStateException("vector stride exceeds 2 GiB: " + strideL);
@@ -1732,16 +1855,21 @@ final class VectorCollectionImpl implements VectorCollection {
     int stride = (int) strideL;
     int newSize = physicalCount + staged.size();
     long totalL = strideL * (long) newSize;
-    if (totalL > Integer.MAX_VALUE) {
-      throw new IllegalStateException("vectors.bin exceeds 2 GiB: " + totalL);
+    if (needBytes && totalL > Integer.MAX_VALUE) {
+      // Only the buffered path is bounded by an array length. An appending HNSW commit without a
+      // quantizer streams vectors.bin through SuccessorVectors and has no such limit.
+      throw new IllegalStateException(
+          "vectors.bin exceeds 2 GiB (" + totalL + ") and this commit path buffers it");
     }
-    byte[] out = new byte[(int) totalL];
+    byte[] out = needBytes ? new byte[(int) totalL] : null;
     float[][] matrix = needMatrix ? new float[newSize][] : null;
 
     // Bulk-copy the old generation byte-for-byte.
     if (physicalCount > 0 && oldMapped != null) {
       long oldBytes = strideL * physicalCount;
-      MemorySegment.copy(oldMapped.segment(), ValueLayout.JAVA_BYTE, 0L, out, 0, (int) oldBytes);
+      if (needBytes) {
+        MemorySegment.copy(oldMapped.segment(), ValueLayout.JAVA_BYTE, 0L, out, 0, (int) oldBytes);
+      }
       if (needMatrix) {
         for (int i = 0; i < physicalCount; i++) {
           float[] v = new float[dim];
@@ -1752,17 +1880,21 @@ final class VectorCollectionImpl implements VectorCollection {
     }
 
     int rawVecBytes = dim * Float.BYTES;
-    ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
-    buf.position(stride * physicalCount);
+    ByteBuffer buf = needBytes ? ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN) : null;
+    if (needBytes) {
+      buf.position(stride * physicalCount);
+    }
     for (int s = 0; s < staged.size(); s++) {
       float[] v = staged.get(s).vector();
       if (needMatrix) {
         matrix[physicalCount + s] = v.clone();
       }
-      for (int j = 0; j < dim; j++) {
-        buf.putFloat(v[j]);
+      if (needBytes) {
+        for (int j = 0; j < dim; j++) {
+          buf.putFloat(v[j]);
+        }
+        buf.position(buf.position() + (stride - rawVecBytes));
       }
-      buf.position(buf.position() + (stride - rawVecBytes));
     }
     return new Materialized(out, matrix);
   }
@@ -1797,6 +1929,109 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   /**
+   * Workers for graph insertion, created once per collection.
+   *
+   * <p>Sized from the configuration or the machine, never from the batch in hand. A per-batch size
+   * is what a single append wants — a build below {@code PARALLEL_BUILD_MIN_SIZE} resolves to one
+   * thread for determinism — but this pool outlives the batch: sizing it from the first append of a
+   * fine-cadence ingest pinned every later append, over a graph of any size, to a single thread.
+   * That cost 4.8x on a 40-commit ingest of 100,000 vectors. A small append simply submits few
+   * tasks.
+   */
+  private ExecutorService graphExecutor() {
+    if (writerGraphExecutor == null) {
+      VectorCollectionConfig.HnswParams hp = config.hnswParams();
+      int size = hp.threads() != 0 ? hp.threads() : Runtime.getRuntime().availableProcessors();
+      writerGraphExecutor = Executors.newFixedThreadPool(Math.max(1, size));
+    }
+    return writerGraphExecutor;
+  }
+
+  /**
+   * Takes ownership of a freshly built or extended graph, sizing the lock table to its capacity.
+   *
+   * <p>The table is allocated once per graph, not once per commit, so a run of in-place appends
+   * allocates nothing here at all.
+   */
+  private void adoptWriterGraph(HnswGraph graph) {
+    writerGraph = graph;
+    if (graph == null) {
+      writerLocks = null;
+      return;
+    }
+    if (writerLocks == null || writerLocks.length < graph.capacity()) {
+      java.util.concurrent.locks.ReentrantLock[] grown =
+          new java.util.concurrent.locks.ReentrantLock[graph.capacity()];
+      int existing = writerLocks == null ? 0 : writerLocks.length;
+      if (existing > 0) {
+        System.arraycopy(writerLocks, 0, grown, 0, existing);
+      }
+      for (int i = existing; i < grown.length; i++) {
+        grown[i] = new java.util.concurrent.locks.ReentrantLock();
+      }
+      writerLocks = grown;
+    }
+  }
+
+  /** Whether this commit can extend the predecessor's HNSW graph rather than rebuild it. */
+  private boolean canAppendHnswGraph(Generation oldGen) {
+    if (config.indexType() != IndexType.HNSW || oldGen == null || oldGen.physicalCount <= 0) {
+      return false;
+    }
+    int carried = oldGen.physicalCount;
+    HnswGraph candidate =
+        writerGraph != null && writerGraph.size() == carried
+            ? writerGraph
+            : hnswGraphOf(oldGen.spi);
+    return candidate != null && candidate.size() == carried;
+  }
+
+  /**
+   * Graph bytes for an appending commit that never materialised a matrix: the builder reads the
+   * carried-over vectors through the predecessor's mapping and the staged ones from the staging
+   * buffer, so nothing proportional to the collection is allocated.
+   */
+  private byte[] encodeGraphBytesAppending(SuccessorVectors successor, Generation oldGen) {
+    int carried = oldGen.physicalCount;
+    boolean scoresAreReal = writerGraph != null && writerGraph.size() == carried;
+    HnswGraph old = scoresAreReal ? writerGraph : hnswGraphOf(oldGen.spi);
+    if (old == null || old.size() != carried) {
+      throw new IllegalStateException(
+          "append was chosen but the predecessor graph is unusable; canAppendHnswGraph and this"
+              + " method disagree");
+    }
+    VectorCollectionConfig.HnswParams hp = config.hnswParams();
+    int threads =
+        hp.threads() == 0
+            ? (successor.size() >= 10_000 ? Runtime.getRuntime().availableProcessors() : 1)
+            : hp.threads();
+    var builder =
+        ConcurrentHnswGraphBuilder.create(
+            hp.m(),
+            hp.efConstruction(),
+            successor.asVectors(),
+            indexMetric(),
+            HNSW_APPEND_SEED ^ carried);
+    HnswGraph appended;
+    if (old == writerGraph && old.capacity() >= successor.size()) {
+      // Our own graph, with room: extend it. Nothing carried is touched.
+      appended = builder.appendInPlace(old, carried, threads, writerLocks, graphExecutor());
+    } else {
+      // Either the graph came from disk, or it is full. Copy once, with headroom so the next few
+      // commits take the branch above: doubling makes the copying O(collection) across an ingest
+      // rather than O(collection) per commit.
+      appended =
+          builder.append(
+              old, carried, threads, scoresAreReal, Math.max(successor.size() * 2, 1_024));
+    }
+    adoptWriterGraph(appended);
+    if (appended == null) {
+      return null;
+    }
+    return HnswGraphCodec.encode(appended);
+  }
+
+  /**
    * Graph bytes for a persistent commit, appending to the predecessor's graph where that is
    * possible and falling back to {@link #encodeGraphBytes(float[][])} otherwise.
    */
@@ -1811,10 +2046,10 @@ final class VectorCollectionImpl implements VectorCollection {
     // Prefer the graph this process built last: its scores are real, so the append skips the
     // rescore
     // that reading the committed generation back would need.
-    boolean scoresAreReal = lastBuiltGraph != null && lastBuiltGraph.size() == carried;
-    HnswGraph old = scoresAreReal ? lastBuiltGraph : hnswGraphOf(oldGen.spi);
+    boolean scoresAreReal = writerGraph != null && writerGraph.size() == carried;
+    HnswGraph old = scoresAreReal ? writerGraph : hnswGraphOf(oldGen.spi);
     if (old == null || old.size() != carried) {
-      lastBuiltGraph = null;
+      adoptWriterGraph(null);
       return encodeGraphBytes(matrix);
     }
     VectorCollectionConfig.HnswParams hp = config.hnswParams();
@@ -1830,7 +2065,7 @@ final class VectorCollectionImpl implements VectorCollection {
                 indexMetric(),
                 HNSW_APPEND_SEED ^ carried)
             .append(old, carried, threads, scoresAreReal);
-    lastBuiltGraph = appended;
+    writerGraph = appended;
     return appended == null ? null : HnswGraphCodec.encode(appended);
   }
 
@@ -1841,7 +2076,7 @@ final class VectorCollectionImpl implements VectorCollection {
         HnswIndexAdapter adapter = new HnswIndexAdapter(hp.m(), hp.efConstruction(), hp.threads());
         adapter.build(matrix, indexMetric());
         HnswGraph graph = adapter.graph();
-        lastBuiltGraph = graph; // seeds the append chain for the next commit
+        adoptWriterGraph(graph); // seeds the append chain for the next commit
         yield graph == null ? null : HnswGraphCodec.encode(graph);
       }
       case VAMANA -> {
@@ -2257,6 +2492,12 @@ final class VectorCollectionImpl implements VectorCollection {
 
   @Override
   public void close() {
+    // Release the graph-insertion workers. They are per-collection rather than per-commit, so they
+    // must be shut down here or an application that opens many collections leaks threads.
+    if (writerGraphExecutor != null) {
+      writerGraphExecutor.shutdownNow();
+      writerGraphExecutor = null;
+    }
     // Stop the compaction daemon first so it cannot race the generation teardown below. Request an
     // orderly shutdown and wait briefly so an in-flight compaction (mid directory delete/rename)
     // can
