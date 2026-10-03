@@ -38,10 +38,10 @@ jobs:
         run: |
           mkdir -p build/core-portability
           { git rev-parse HEAD; uname -a; lscpu; java -version; } > build/core-portability/host.txt 2>&1
-      - name: Execute core contracts
+      - name: Execute core and index contracts
         env:
           JAVA_TOOL_OPTIONS: ${{ matrix.java_options }}
-        run: ./gradlew :vectors-core:test --rerun-tasks --max-workers=4 --no-daemon
+        run: ./gradlew :vectors-core:test :vectors-hnsw:test :vectors-quantization:test --rerun-tasks --max-workers=4 --no-daemon
       - name: Retain portability evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -50,6 +50,8 @@ jobs:
           path: |
             build/core-portability/
             vectors-core/build/test-results/test/
+            vectors-hnsw/build/test-results/test/
+            vectors-quantization/build/test-results/test/
           retention-days: 30
 
   build:
@@ -73,6 +75,11 @@ jobs:
 
       - name: Build + Test
         run: ./gradlew spotlessCheck build -x :docs:build
+
+      - name: Validate performance reproduction command
+        run: |
+          python3 scripts/default-construction/run.py --help
+          python3 -m unittest discover -s scripts/default-construction -p 'test_*.py'
 
       # S3 compare-and-swap and Studio SSE/HTTP workflows are outside the default test tags.
       - name: Storage and Studio integration tests
@@ -124,7 +131,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: test-reports
-          path: '*/build/reports/tests/'
+          path: |
+            */build/reports/tests/
+            */build/reports/spotbugs/
           retention-days: 30
 
   notebooks:

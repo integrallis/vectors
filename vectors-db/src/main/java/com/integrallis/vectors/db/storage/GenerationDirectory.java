@@ -844,15 +844,22 @@ public final class GenerationDirectory {
     if (expectedLength == 0L) {
       return;
     }
-    Checksums.FileChecksum actual = Checksums.ofFile(file);
+    // Verify exactly the manifest's prefix. A payload may legitimately be shorter than the file it
+    // lives in: vectors.bin is append-only and shared with later generations by hard link, so a
+    // tail
+    // belonging to a successor must not be read into this generation's checksum. For a file that is
+    // exactly its generation's length -- every generation written before this became possible, and
+    // every payload other than vectors.bin -- this is identical to checksumming the whole file.
+    Checksums.FileChecksum actual = Checksums.ofFilePrefix(file, expectedLength);
     if (actual.length() != expectedLength) {
       throw new IOException(
-          "payload length mismatch at "
+          "payload truncated at "
               + file
-              + ": manifest="
+              + ": manifest declares "
               + expectedLength
-              + ", actual="
-              + actual.length());
+              + " bytes, only "
+              + actual.length()
+              + " present");
     }
     if (actual.crc32() != expectedCrc) {
       throw new IOException(

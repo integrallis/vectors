@@ -79,6 +79,17 @@ public final class HnswGraph {
     return maxLevel;
   }
 
+  /**
+   * How many nodes this graph can hold, which may exceed {@link #size()}.
+   *
+   * <p>A graph allocated with headroom can be extended in place: {@link #initNode} writes at the
+   * next ordinal and {@link #size()} tracks how many are live. That is what lets an ingest grow one
+   * graph instead of rebuilding it per commit.
+   */
+  public int capacity() {
+    return layer0.length;
+  }
+
   /** Returns the number of nodes in the graph. */
   public int size() {
     return size;

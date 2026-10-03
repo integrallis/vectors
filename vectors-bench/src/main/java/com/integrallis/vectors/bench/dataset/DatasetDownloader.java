@@ -66,20 +66,33 @@ import java.util.Set;
 public final class DatasetDownloader {
 
   /**
-   * Primary URL for ANN-Benchmarks HDF5 datasets (HTTPS, HuggingFace CDN). Falls back to the
-   * original ann-benchmarks.com mirror if the primary fails.
+   * Primary URL for ANN-Benchmarks HDF5 datasets: the canonical ann-benchmarks.com mirror.
+   *
+   * <p>This used to be the HuggingFace CDN, with ann-benchmarks.com as the fallback. Measured
+   * 2026-10-02: the HuggingFace dataset repo now answers {@code HTTP 401} for every file, while
+   * ann-benchmarks.com serves them all. The order is reversed so the working mirror is tried first;
+   * leaving a dead host in front cost a failed request plus an alarming "Primary URL failed"
+   * message on every single download.
    */
-  private static final String ANN_BENCH_PRIMARY_URL =
-      "https://huggingface.co/datasets/erikbern/ann-benchmarks/resolve/main/data/";
-
-  /** Legacy mirror — kept as fallback. */
-  private static final String ANN_BENCH_FALLBACK_URL = "https://ann-benchmarks.com/";
+  private static final String ANN_BENCH_PRIMARY_URL = "https://ann-benchmarks.com/";
 
   /**
-   * Known dataset names. SHA-256 verification is skipped for all datasets because the
-   * HuggingFace-hosted HDF5 files are periodically rebuilt by the ANN-Benchmarks maintainers —
-   * pinning a specific hash would cause spurious failures after a rebuild. Integrity is guaranteed
-   * by HTTPS transport instead.
+   * Fallback mirror: the HuggingFace CDN. Kept because it requires only an access token to work
+   * again, and because a second independent host is worth having when the first one goes down.
+   */
+  private static final String ANN_BENCH_FALLBACK_URL =
+      "https://huggingface.co/datasets/erikbern/ann-benchmarks/resolve/main/data/";
+
+  /**
+   * Known dataset names. SHA-256 verification is skipped for all datasets because the published
+   * HDF5 files are periodically rebuilt by the ANN-Benchmarks maintainers — pinning a specific hash
+   * would cause spurious failures after a rebuild. Integrity is guaranteed by HTTPS transport
+   * instead.
+   *
+   * <p>ANN-Benchmarks itself defines more datasets than this list (kosarak and movielens Jaccard
+   * sets, the hamming sets, the {@code random-*} synthetics, nytimes-16, coco image/text pairs).
+   * They are absent here because nothing in this harness consumes a Jaccard, hamming, or
+   * cross-modal set yet, not because they are unavailable.
    */
   private static final Set<String> KNOWN_DATASETS =
       Set.of(
@@ -136,7 +149,7 @@ public final class DatasetDownloader {
       return target;
     }
 
-    // Try HuggingFace CDN first, fall back to legacy ann-benchmarks.com mirror.
+    // Try the canonical ann-benchmarks.com mirror first, then the HuggingFace CDN.
     String primaryUrl = ANN_BENCH_PRIMARY_URL + name + ".hdf5";
     try {
       download(primaryUrl, target, name);

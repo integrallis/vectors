@@ -1,0 +1,79 @@
+{
+  "baseline": "4bc505b3e8c0c217e9d66727d643921a0d8efd55",
+  "candidate_product_commit": "eb1897510faa61e3319c3c2e811d906393c26a3b",
+  "platform": "macOS-26.6.2-x86_64-i386-64bit-Mach-O",
+  "cpu": "Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz",
+  "physical_cpus": 6,
+  "logical_cpus": 12,
+  "memory_bytes": 34359738368,
+  "jdk": "Temurin 25.0.3",
+  "jvm_flags": [
+    "--add-modules=jdk.incubator.vector",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xmx6g"
+  ],
+  "collection_order": [
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ]
+  ],
+  "product_sha256": {
+    "vectors-core/src/main/java/com/integrallis/vectors/core/PanamaVectorUtilSupport.java": "0330bed75e94d4b8b615e52ce4fb3c457a8836ac04badc1f5a0b63fc817d25d6",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/ExactScoreCache.java": "2029c4b44943d6e8a36c0541ed6810cc32a63785f8db46b6d8270255cc5862fc",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/NeighborSelector.java": "057942e5a2c1a7c3cb22f35cf79c48eb06f373a701e03e823027109f631fafd1",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/HnswGraphDiagnostics.java": "ef682156bfb985946f0c68b676b81b762d768b538f17114047f7e9cda04660be",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/NeighborArray.java": "2dd4dc40d34b5108b1b8cbea70d48255749a31fb61811375aa421a53549c363f",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/HnswGraphBuilder.java": "2170e3cf9f0b36c4702d775517a8b2f357b9852936fa416220b6576f4648f24e",
+    "vectors-db/src/main/java/com/integrallis/vectors/db/SuccessorVectors.java": "cd75b04b7f8fe8602d71490d28c156c5c96f94688d391b7f6b498e1b811a4874",
+    "vectors-quantization/src/main/java/com/integrallis/vectors/quantization/ScalarQuantizer.java": "f00eb84544aab02a6afba24127d22ffc85a2afbc4f51655ec3b38d4862545894"
+  },
+  "harness_sha256": {
+    "ExactConstructionBenchmark.java": "eadac08cf2be556e1a1a55db94a14777014068b5b2628ac545f1ffbaa4abf417",
+    "DefaultCollectionReplayBenchmark.java": "8c5641eee044f9d1ad12d9653261e3f39a6a8e515509d867832f6049c463569a",
+    "CollectionRecallProbe.java": "75aeeef5779d23175bb86b43ecafa64581958aac65dc0be4fc77b97ae66f4f49"
+  },
+  "frozen_project_jars_sha256": {
+    "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+    "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8",
+    "vectors-core-0.1.26.jar": "e6bf650bd32c1b51c017e330b511b08131ac071f11a57541ed8183b575e46df2",
+    "vectors-storage-s3-0.1.26.jar": "570105c75a296a08a83abf4fc8733b27ef4e9d66aa9befe215d584d43e224722",
+    "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+    "vectors-distributed-0.1.26.jar": "567c1857fc0028c8b7a2696a3ee6872ee8042d004a0ba0a021874cb54a4bdcf8",
+    "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+    "vectors-db-0.1.26.jar": "6a067d6a623d029912227951ef4f19858f9b9786ab172c902b39d055b41ec8b6",
+    "vectors-hnsw-0.1.26.jar": "91f05158bfeb91e2231ca2d1fdc7ebeae9e95e5a551e5cc6919084900b916f8e"
+  },
+  "serial_order": [
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ]
+  ],
+  "post_measurement_runtime_cleanup": {
+    "file": "vectors-db/src/main/java/com/integrallis/vectors/db/storage/MappedMetadataStore.java",
+    "sha256": "4eae7b3410c9a46286e25621088c10bf9039f29f43c82b3d2049c867a39cca1b",
+    "change": "Remove unread Image.written field and its assignment; graph and kernel sources unchanged."
+  },
+  "post_measurement_short_vector_correction": {
+    "file": "vectors-core/src/main/java/com/integrallis/vectors/core/PanamaVectorUtilSupport.java",
+    "sha256": "5bfc0f8f05725d2932786a98992670473b8dfed24c3ec99da1018707cf820fee",
+    "change": "Restore original cosineBody1x and its caller scalar-tail placement. Measured 512/768-dimensional workloads execute the unchanged 4x body."
+  }
+}

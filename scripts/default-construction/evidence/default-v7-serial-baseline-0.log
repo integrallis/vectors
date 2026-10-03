@@ -1,0 +1,12 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 03, 2026 12:45:19 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 03, 2026 12:45:19 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+RESULT,30000,768,1,42,37.796096855,97fcc1f752c50ce9d3c78308030662003129d1973026d15be3fd828928d4dd94
+RECALL,10,1000,0.695700000
+RECALL,16,1000,0.783200000
+RECALL,32,1000,0.882900000
+RECALL,64,1000,0.948000000
+RECALL,128,1000,0.979600000
+RECALL,256,1000,0.993800000

@@ -240,6 +240,23 @@ public final class ConcurrentHnswGraphBuilder {
    */
   public HnswGraph append(
       HnswGraph old, int firstNewOrdinal, int parallelism, boolean scoresAreReal) {
+    return append(old, firstNewOrdinal, parallelism, scoresAreReal, 0);
+  }
+
+  /**
+   * As {@link #append(HnswGraph, int, int, boolean)}, allocating the successor with room to grow.
+   *
+   * <p>{@code capacityHint} is the number of nodes the result should be able to hold. Allocating
+   * headroom lets later appends extend the same graph through {@link #appendInPlace} instead of
+   * copying every carried node again, which is the difference between an ingest paying
+   * O(collection) per commit and paying it once, amortised.
+   */
+  public HnswGraph append(
+      HnswGraph old,
+      int firstNewOrdinal,
+      int parallelism,
+      boolean scoresAreReal,
+      int capacityHint) {
     if (old == null) {
       throw new NullPointerException("old must not be null");
     }
@@ -266,7 +283,7 @@ public final class ConcurrentHnswGraphBuilder {
       return build(parallelism); // nothing to carry over
     }
 
-    HnswGraph graph = new HnswGraph(n, maxConnections);
+    HnswGraph graph = new HnswGraph(Math.max(n, capacityHint), maxConnections);
 
     // --- Phase 1: carry the existing nodes over, ordinals unchanged ---
     int entryNode = old.entryNode();
@@ -291,18 +308,107 @@ public final class ConcurrentHnswGraphBuilder {
           continue;
         }
         NeighborArray to = graph.getNeighbors(j, l);
+        if (scoresAreReal) {
+          // The source is already in descending-score order, so this is two array copies rather
+          // than
+          // one sorted insertion per neighbour. On a 100,000-node graph at M=16 that is the
+          // difference between ~3.2 million insertions per commit and 100,000 copies.
+          to.copyFrom(from);
+          continue;
+        }
         for (int i = 0; i < from.size(); i++) {
           int neighbour = from.node(i);
-          to.insert(
-              neighbour,
-              scoresAreReal
-                  ? from.score(i)
-                  : similarityFunction.compare(self, vectors.getVector(neighbour)));
+          to.insert(neighbour, similarityFunction.compare(self, vectors.getVector(neighbour)));
         }
       }
     }
 
-    // --- Phase 2: levels for the appended nodes, drawn as a full build would ---
+    return insertAppended(graph, firstNewOrdinal, n, entryNode, maxLevel, parallelism, null, null);
+  }
+
+  /**
+   * Extends a graph this builder's caller owns exclusively, in place.
+   *
+   * <p>No node is copied: the carried nodes are already in {@code graph}. The caller must guarantee
+   * that nothing else can read the graph concurrently — a published generation's readers must have
+   * their own copy or their own decode — because inserting an appended node also rewrites the
+   * neighbour lists of existing nodes.
+   *
+   * @param graph a graph holding exactly {@code firstNewOrdinal} nodes with capacity for the
+   *     builder's full vector count
+   * @param firstNewOrdinal the first appended ordinal, which must equal {@code graph.size()}
+   */
+  public HnswGraph appendInPlace(HnswGraph graph, int firstNewOrdinal, int parallelism) {
+    return appendInPlace(graph, firstNewOrdinal, parallelism, null, null);
+  }
+
+  /**
+   * As {@link #appendInPlace(HnswGraph, int, int)}, reusing the caller's per-node lock table and
+   * executor.
+   *
+   * <p>Both are per-collection, not per-commit. Insertion needs one lock per node and a pool of
+   * workers; allocating them inside each append made a 40-commit ingest create two million locks
+   * and forty thread pools, which is work proportional to the collection on every commit — the
+   * shape this method exists to avoid.
+   *
+   * @param locks a table with at least {@code vectors.size()} entries, all non-null; null allocates
+   *     one
+   * @param executor workers for the insertion pass; null creates and closes a pool for this call
+   */
+  public HnswGraph appendInPlace(
+      HnswGraph graph,
+      int firstNewOrdinal,
+      int parallelism,
+      ReentrantLock[] locks,
+      ExecutorService executor) {
+    if (graph == null) {
+      throw new NullPointerException("graph must not be null");
+    }
+    int n = vectors.size();
+    if (graph.size() != firstNewOrdinal) {
+      throw new IllegalArgumentException(
+          "graph holds " + graph.size() + " nodes but firstNewOrdinal is " + firstNewOrdinal);
+    }
+    if (graph.capacity() < n) {
+      throw new IllegalArgumentException(
+          "graph capacity " + graph.capacity() + " cannot hold " + n + " nodes");
+    }
+    if (graph.maxConnections() != maxConnections) {
+      throw new IllegalArgumentException(
+          "graph was built with M="
+              + graph.maxConnections()
+              + " but this builder uses M="
+              + maxConnections);
+    }
+    if (n == firstNewOrdinal) {
+      return graph;
+    }
+    if (locks != null && locks.length < n) {
+      throw new IllegalArgumentException(
+          "lock table holds " + locks.length + " entries but " + n + " nodes are indexed");
+    }
+    return insertAppended(
+        graph,
+        firstNewOrdinal,
+        n,
+        graph.entryNode(),
+        graph.maxLevel(),
+        parallelism,
+        locks,
+        executor);
+  }
+
+  /** The insertion phase shared by {@link #append} and {@link #appendInPlace}. */
+  private HnswGraph insertAppended(
+      HnswGraph graph,
+      int firstNewOrdinal,
+      int n,
+      int entryNode,
+      int maxLevel,
+      int parallelism,
+      ReentrantLock[] providedLocks,
+      ExecutorService providedExecutor) {
+
     int appended = n - firstNewOrdinal;
     int[] levels = new int[appended];
     int tallestNew = -1;
@@ -324,9 +430,12 @@ public final class ConcurrentHnswGraphBuilder {
     graph.setEntryNode(entryNode, maxLevel);
 
     // --- Phase 3: insert the appended nodes through the ordinary path ---
-    ReentrantLock[] locks = new ReentrantLock[n];
-    for (int j = 0; j < n; j++) {
-      locks[j] = new ReentrantLock();
+    ReentrantLock[] locks = providedLocks;
+    if (locks == null) {
+      locks = new ReentrantLock[n];
+      for (int j = 0; j < n; j++) {
+        locks[j] = new ReentrantLock();
+      }
     }
     final int finalEntry = entryNode;
     final int finalMaxLevel = maxLevel;
@@ -335,8 +444,13 @@ public final class ConcurrentHnswGraphBuilder {
         ThreadLocal.withInitial(
             () -> new WorkContext(n, efConstruction, maxNbrs, dimension, useSegments));
 
-    try (ExecutorService exec = Executors.newFixedThreadPool(Math.max(1, parallelism))) {
+    ExecutorService exec =
+        providedExecutor != null
+            ? providedExecutor
+            : Executors.newFixedThreadPool(Math.max(1, parallelism));
+    try {
       List<Future<?>> futures = new ArrayList<>(appended);
+      final ReentrantLock[] lockTable = locks;
       for (int i = 0; i < appended; i++) {
         final int nodeId = firstNewOrdinal + i;
         final int level = levels[i];
@@ -344,9 +458,19 @@ public final class ConcurrentHnswGraphBuilder {
             exec.submit(
                 () ->
                     insertConcurrent(
-                        nodeId, level, finalEntry, finalMaxLevel, graph, locks, threadCtx.get())));
+                        nodeId,
+                        level,
+                        finalEntry,
+                        finalMaxLevel,
+                        graph,
+                        lockTable,
+                        threadCtx.get())));
       }
       awaitAll(futures);
+    } finally {
+      if (providedExecutor == null) {
+        exec.close();
+      }
     }
 
     // Promote a taller appended node to entry now that it is connected.

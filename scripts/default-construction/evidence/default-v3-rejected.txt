@@ -1,0 +1,1 @@
+Native staging removed the mixed-segment slowdown but the existing segment cosine/batch kernels still regressed the workload: first candidate 82.784 s vs prior baseline 64.906 s. Stop this variant; preserve full-precision array scoring and optimize its allocation directly.

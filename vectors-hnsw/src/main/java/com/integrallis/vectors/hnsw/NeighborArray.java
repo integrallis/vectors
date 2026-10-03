@@ -42,6 +42,36 @@ public final class NeighborArray {
     this.size = 0;
   }
 
+  /**
+   * Drains a search result min-heap whose node IDs are distinct (enforced by the visited set).
+   * Populating the arrays directly avoids quadratic duplicate scans and two temporary arrays.
+   * Equal-score runs are reversed to preserve the legacy insert-before-equals ordering exactly.
+   */
+  static NeighborArray drainResults(NodeQueue results) {
+    int count = results.size();
+    var array = new NeighborArray(Math.max(1, count));
+    array.size = count;
+    for (int i = count - 1; i >= 0; i--) {
+      long entry = results.poll();
+      array.nodes[i] = NodeQueue.nodeId(entry);
+      array.scores[i] = NodeQueue.score(entry);
+    }
+    for (int start = 0; start < count; ) {
+      int end = start + 1;
+      while (end < count && array.scores[end] == array.scores[start]) end++;
+      for (int lo = start, hi = end - 1; lo < hi; lo++, hi--) {
+        int node = array.nodes[lo];
+        array.nodes[lo] = array.nodes[hi];
+        array.nodes[hi] = node;
+        float score = array.scores[lo];
+        array.scores[lo] = array.scores[hi];
+        array.scores[hi] = score;
+      }
+      start = end;
+    }
+    return array;
+  }
+
   /** Returns the number of entries currently stored. */
   public int size() {
     return size;

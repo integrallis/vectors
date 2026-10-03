@@ -1,0 +1,50 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-core:compileJava FROM-CACHE
+> Task :vectors-core:processResources
+> Task :vectors-core:classes
+> Task :vectors-core:jar
+> Task :vectors-storage:compileJava FROM-CACHE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar
+> Task :vectors-quantization:compileJava FROM-CACHE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar
+> Task :vectors-hnsw:compileJava FROM-CACHE
+> Task :vectors-hnsw:classes UP-TO-DATE
+
+> Task :vectors-hnsw:compileTestJava FAILED
+/Users/briansam-bodden/Code/java-ai/projects/vectors-perf-pr-20261003/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/ResultDrainTest.java:43: error: cannot find symbol
+        NeighborArray actual = NeighborArray.drainResults(optimized);
+                                            ^
+  symbol:   method drainResults(NodeQueue)
+  location: class NeighborArray
+1 error
+
+[Incubating] Problems report is available at: file:///Users/briansam-bodden/Code/java-ai/projects/vectors-perf-pr-20261003/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':vectors-hnsw:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /Users/briansam-bodden/Code/java-ai/projects/vectors-perf-pr-20261003/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/ResultDrainTest.java:43: error: cannot find symbol
+          NeighborArray actual = NeighborArray.drainResults(optimized);
+                                              ^
+    symbol:   method drainResults(NodeQueue)
+    location: class NeighborArray
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 4s
+9 actionable tasks: 5 executed, 4 from cache

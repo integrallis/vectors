@@ -25,8 +25,9 @@ import java.nio.file.Path;
  *
  * <ol>
  *   <li>The directory named by the {@code VECTORS_BENCH_DATA} environment variable, if set.
- *   <li>The sibling {@code research/data/} directory relative to the Gradle project root (two
- *       levels above the {@code vectors-bench} subproject working directory).
+ *   <li>{@code <research>/data/}, where {@code <research>} is found by {@link #researchDir()}:
+ *       {@code VECTORS_RESEARCH_DIR} if set, else the nearest {@code research/} directory located
+ *       by walking up from the working directory.
  *   <li>Dataset-specific fallbacks for datasets already present in the repository (e.g., SIFT Small
  *       is bundled inside {@code research/repos/jvector/siftsmall/}).
  * </ol>
@@ -42,23 +43,65 @@ public final class DatasetRegistry {
   private static final String SIFT_SMALL_QUERY = "siftsmall_query.fvecs";
   private static final String SIFT_SMALL_GT = "siftsmall_groundtruth.ivecs";
 
-  /** Fallback: SIFT Small is bundled with the jvector sub-repo already cloned at this path. */
-  private static final Path SIFT_SMALL_BUILTIN = Path.of("../../research/repos/jvector/siftsmall");
+  /**
+   * Fallback: SIFT Small ships inside the cloned {@code jvector} sub-repo, under the research tree.
+   *
+   * <p>Resolved by walking up from the working directory rather than by a fixed relative path. A
+   * hard-coded {@code ../../research/...} is silently wrong whenever the research tree does not sit
+   * exactly two levels up, and this fallback does not fail loudly when it is wrong -- it makes
+   * {@link #isSiftSmallAvailable()} return {@code false}, which disables every {@code @EnabledIf}
+   * test gated on it. Those tests then report as not-run rather than as failing, so the breakage is
+   * invisible. {@link #researchDir()} is the single place that decision is made.
+   */
+  private static final Path SIFT_SMALL_BUILTIN = researchDir().resolve("repos/jvector/siftsmall");
 
   private DatasetRegistry() {}
+
+  // -------------------------------------------------------------------------
+  // Research tree discovery
+  // -------------------------------------------------------------------------
+
+  /** How far up the directory chain to look for the research tree before giving up. */
+  private static final int RESEARCH_SEARCH_DEPTH = 8;
+
+  /**
+   * Locates the {@code research/} tree holding downloaded datasets and cloned reference
+   * implementations.
+   *
+   * <p>Honors {@code VECTORS_RESEARCH_DIR} when set. Otherwise walks up from the working directory
+   * looking for a directory named {@code research} that contains {@code data} or {@code repos},
+   * which makes the harness resolve the same way whether it is launched from a subproject, the
+   * Gradle root, or a git worktree. Falls back to {@code ../../research} so the return is never
+   * null; callers probe for existence.
+   */
+  public static Path researchDir() {
+    String env = System.getenv("VECTORS_RESEARCH_DIR");
+    if (env != null && !env.isBlank()) {
+      return Path.of(env);
+    }
+    Path cursor = Path.of("").toAbsolutePath();
+    for (int i = 0; i < RESEARCH_SEARCH_DEPTH && cursor != null; i++) {
+      Path candidate = cursor.resolve("research");
+      if (Files.isDirectory(candidate.resolve("repos"))
+          || Files.isDirectory(candidate.resolve("data"))) {
+        return candidate;
+      }
+      cursor = cursor.getParent();
+    }
+    return Path.of("../../research");
+  }
 
   // -------------------------------------------------------------------------
   // Root data directory
   // -------------------------------------------------------------------------
 
   /**
-   * Returns the root data directory, honoring the {@code VECTORS_BENCH_DATA} environment variable
-   * if set, otherwise defaulting to {@code ../../research/data/} relative to the working directory
-   * of the {@code vectors-bench} subproject.
+   * Returns the root data directory: {@code VECTORS_BENCH_DATA} when set, otherwise {@code data/}
+   * inside the tree located by {@link #researchDir()}.
    */
   public static Path dataDir() {
     String env = System.getenv("VECTORS_BENCH_DATA");
-    return env != null ? Path.of(env) : Path.of("../../research/data");
+    return env != null ? Path.of(env) : researchDir().resolve("data");
   }
 
   // -------------------------------------------------------------------------
@@ -159,5 +202,57 @@ public final class DatasetRegistry {
   /** JUnit 5 {@code @EnabledIf} condition for the {@code nytimes-256-angular} dataset. */
   public static boolean nytimesAvailable() {
     return isAnnBenchAvailable("nytimes-256-angular");
+  }
+
+  // -------------------------------------------------------------------------
+  // Cohere Wikipedia (768 dims, big-ann competition format)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Directory holding the Cohere Wikipedia set from big-ann-benchmarks.
+   *
+   * <p>This is the only published million-scale corpus we have found whose dimensionality sits in
+   * the 512-768 band we actually ship against: SIFT is 128, GloVe is 100, GIST is 960, and the
+   * OpenAI-embedded sets are 1536. Measuring graph behaviour at 100 or 960 dimensions and assuming
+   * it carries to 768 is the kind of transfer this project does not grant.
+   */
+  public static Path wikipediaCohereDir() {
+    return dataDir().resolve("wikipedia-cohere-768");
+  }
+
+  /** The 1M crop of the Cohere Wikipedia base vectors. */
+  public static Path wikipediaCohereBase1M() {
+    return wikipediaCohereDir().resolve("wikipedia_base_1M.bin");
+  }
+
+  /** The 5,000 Cohere Wikipedia query vectors. */
+  public static Path wikipediaCohereQueries() {
+    return wikipediaCohereDir().resolve("wikipedia_query.bin");
+  }
+
+  /** Published ground truth for the 1M crop (5,000 queries x 100 neighbors). */
+  public static Path wikipediaCohereGroundTruth1M() {
+    return wikipediaCohereDir().resolve("wikipedia-1M.gt");
+  }
+
+  /** Returns {@code true} if all three Cohere Wikipedia 1M files are present. */
+  public static boolean isWikipediaCohere1MAvailable() {
+    return Files.exists(wikipediaCohereBase1M())
+        && Files.exists(wikipediaCohereQueries())
+        && Files.exists(wikipediaCohereGroundTruth1M());
+  }
+
+  /** JUnit 5 {@code @EnabledIf} condition for the Cohere Wikipedia 1M set. */
+  public static boolean wikipediaCohere1MAvailable() {
+    return isWikipediaCohere1MAvailable();
+  }
+
+  /**
+   * JUnit 5 {@code @EnabledIf} condition for just the query and ground-truth files, which are a few
+   * megabytes and land long before the multi-gigabyte base crop. Lets the format reader be verified
+   * against published bytes without waiting on the full download.
+   */
+  public static boolean wikipediaCohereQueriesAvailable() {
+    return Files.exists(wikipediaCohereQueries()) && Files.exists(wikipediaCohereGroundTruth1M());
   }
 }

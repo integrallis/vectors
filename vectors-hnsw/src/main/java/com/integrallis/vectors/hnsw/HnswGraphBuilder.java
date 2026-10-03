@@ -37,6 +37,8 @@ public final class HnswGraphBuilder {
 
   // Scratch buffers reused across insertions
   private final BitSet visited;
+  private final float[] queryScratch;
+  private final ExactScoreCache scoreCache = new ExactScoreCache();
   private final NodeQueue candidates;
   private final NodeQueue results;
 
@@ -55,6 +57,7 @@ public final class HnswGraphBuilder {
 
     // Pre-allocate scratch buffers
     this.visited = new BitSet(vectors.size());
+    this.queryScratch = vectors.sharesReturnBuffer() ? new float[vectors.dimension()] : null;
     this.candidates = new NodeQueue(efConstruction * 2, false); // max-heap
     this.results = new NodeQueue(efConstruction * 2, true); // min-heap
   }
@@ -102,6 +105,10 @@ public final class HnswGraphBuilder {
     }
 
     float[] queryVec = vectors.getVector(nodeId);
+    if (queryScratch != null) {
+      System.arraycopy(queryVec, 0, queryScratch, 0, queryScratch.length);
+      queryVec = queryScratch;
+    }
 
     int ep = graph.entryNode();
     int epLevel = graph.maxLevel();
@@ -124,7 +131,8 @@ public final class HnswGraphBuilder {
 
       // Diversity-based neighbor selection
       NeighborArray neighbors =
-          NeighborSelector.selectDiverse(searchResults, maxConn, vectors, similarityFunction);
+          NeighborSelector.selectDiverse(
+              searchResults, maxConn, vectors, similarityFunction, scoreCache);
 
       // Forward edges: nodeId → neighbors
       NeighborArray nodeNeighbors = graph.getNeighbors(nodeId, layer);
@@ -142,7 +150,8 @@ public final class HnswGraphBuilder {
         // Prune if over limit
         if (nList.size() > maxConn) {
           NeighborArray pruned =
-              NeighborSelector.selectDiverse(nList, maxConn, vectors, similarityFunction);
+              NeighborSelector.selectDiverse(
+                  nList, maxConn, vectors, similarityFunction, scoreCache);
           nList.copyFrom(pruned);
         }
       }
@@ -239,22 +248,7 @@ public final class HnswGraphBuilder {
       }
     }
 
-    // Convert results min-heap to sorted NeighborArray (descending)
-    int resultSize = results.size();
-    var resultArray = new NeighborArray(resultSize == 0 ? 1 : resultSize);
-    // Drain min-heap (worst first) then reverse
-    int[] tmpNodes = new int[resultSize];
-    float[] tmpScores = new float[resultSize];
-    for (int i = resultSize - 1; i >= 0; i--) {
-      long entry = results.poll();
-      tmpNodes[i] = NodeQueue.nodeId(entry);
-      tmpScores[i] = NodeQueue.score(entry);
-    }
-    for (int i = 0; i < resultSize; i++) {
-      resultArray.insert(tmpNodes[i], tmpScores[i]);
-    }
-
-    return resultArray;
+    return NeighborArray.drainResults(results);
   }
 
   /** Extracts the top-n node IDs from a NeighborArray (best-first). */

@@ -806,11 +806,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     if (a.length >= 4 * FLOAT_SPECIES.length()) {
       // 4x unrolled main body: 12 independent FMA accumulators hide FMA latency on NEON/AVX.
       int limit = FLOAT_SPECIES.loopBound(a.length);
-      float[] result = cosineBody4x(a, b, limit);
-      sum = result[0];
-      norm1 = result[1];
-      norm2 = result[2];
-      i = limit;
+      return cosineBody4x(a, b, limit);
     } else if (a.length >= FLOAT_SPECIES.length()) {
       // Short vectors: single-accumulator vector body (no unroll), avoids unroll-prologue cost.
       int limit = FLOAT_SPECIES.loopBound(a.length);
@@ -831,7 +827,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
   }
 
-  private float[] cosineBody4x(float[] a, float[] b, int limit) {
+  private float cosineBody4x(float[] a, float[] b, int limit) {
     FloatVector s0 = FloatVector.zero(FLOAT_SPECIES);
     FloatVector s1 = FloatVector.zero(FLOAT_SPECIES);
     FloatVector s2 = FloatVector.zero(FLOAT_SPECIES);
@@ -881,11 +877,13 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       n2_0 = fma(vb, vb, n2_0);
     }
 
-    return new float[] {
-      s0.add(s1).add(s2.add(s3)).reduceLanes(VectorOperators.ADD),
-      n1_0.add(n1_1).add(n1_2.add(n1_3)).reduceLanes(VectorOperators.ADD),
-      n2_0.add(n2_1).add(n2_2.add(n2_3)).reduceLanes(VectorOperators.ADD)
-    };
+    return finishCosine(
+        a,
+        b,
+        limit,
+        s0.add(s1).add(s2.add(s3)).reduceLanes(VectorOperators.ADD),
+        n1_0.add(n1_1).add(n1_2.add(n1_3)).reduceLanes(VectorOperators.ADD),
+        n2_0.add(n2_1).add(n2_2.add(n2_3)).reduceLanes(VectorOperators.ADD));
   }
 
   private float[] cosineBody1x(float[] a, float[] b, int limit) {
@@ -905,6 +903,16 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       n1.reduceLanes(VectorOperators.ADD),
       n2.reduceLanes(VectorOperators.ADD)
     };
+  }
+
+  private static float finishCosine(
+      float[] a, float[] b, int start, float sum, float norm1, float norm2) {
+    for (int i = start; i < a.length; i++) {
+      sum = MathUtil.fma(a[i], b[i], sum);
+      norm1 = MathUtil.fma(a[i], a[i], norm1);
+      norm2 = MathUtil.fma(b[i], b[i], norm2);
+    }
+    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
   }
 
   /** SIMD Q4_0 by Q8_0 GEMV with one activation quantization shared by all rows. */

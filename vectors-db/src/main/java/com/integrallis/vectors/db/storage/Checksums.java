@@ -71,6 +71,41 @@ public final class Checksums {
     return new FileChecksum(total, crc.getValue());
   }
 
+  /**
+   * Computes the CRC32 of the first {@code prefixLength} bytes of a file, and reports how many
+   * bytes were actually available.
+   *
+   * <p>A generation's payload may be a prefix of a longer file: {@code vectors.bin} is append-only
+   * and shared with later generations by hard link, so a generation that recorded 1 GiB can find 2
+   * GiB on disk, the tail belonging to a successor. The manifest's length is the authority for
+   * where that generation ends, so verification must read exactly that far and no further.
+   *
+   * <p>{@link FileChecksum#length} is the number of bytes consumed, which is less than {@code
+   * prefixLength} only when the file is short — that is, when the payload is genuinely truncated.
+   */
+  public static FileChecksum ofFilePrefix(Path file, long prefixLength) throws IOException {
+    if (prefixLength < 0) {
+      throw new IllegalArgumentException("prefixLength must not be negative: " + prefixLength);
+    }
+    CRC32 crc = new CRC32();
+    long total = 0L;
+    try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+      ByteBuffer buf = ByteBuffer.allocateDirect(64 * 1024);
+      while (total < prefixLength) {
+        buf.clear();
+        buf.limit((int) Math.min(buf.capacity(), prefixLength - total));
+        int read = ch.read(buf);
+        if (read == -1) {
+          break;
+        }
+        buf.flip();
+        crc.update(buf);
+        total += read;
+      }
+    }
+    return new FileChecksum(total, crc.getValue());
+  }
+
   /** Computes the CRC32 of a byte array slice. */
   public static long ofBytes(byte[] bytes, int offset, int length) {
     CRC32 crc = new CRC32();

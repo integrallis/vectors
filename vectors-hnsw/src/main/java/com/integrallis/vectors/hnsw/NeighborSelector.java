@@ -122,4 +122,93 @@ final class NeighborSelector {
 
     return result;
   }
+
+  static NeighborArray selectDiverse(
+      NeighborArray candidates,
+      int maxConnections,
+      RandomAccessVectors vectors,
+      SimilarityFunction similarityFunction,
+      ExactScoreCache cache) {
+    var result = new NeighborArray(maxConnections);
+    if (candidates.size() == 0) {
+      return result;
+    }
+
+    // If candidates fit, return them directly
+    if (candidates.size() <= maxConnections) {
+      result.copyFrom(candidates);
+      return result;
+    }
+
+    // Scratch buffer only needed for shared-buffer stores (e.g. mmap-backed) whose getVector()
+    // may overwrite the previous return. Stable-array stores (InMemoryVectors) can compare against
+    // getVector(id) directly, eliding the per-candidate copy.
+    // Zero-copy segment path for mmap-backed stores (MappedBuildVectors): score stored-vs-stored
+    // vectors directly off their slices, allocating no float[] per candidate — the same
+    // GC-avoidance
+    // that makes the mmap build viable. Otherwise use the heap path (with a scratch copy for
+    // shared-buffer stores whose getVector() aliases the previous return).
+    boolean useSegments = vectors.supportsSegments();
+    boolean sharedBuffer = vectors.sharesReturnBuffer();
+    int dim = vectors.dimension();
+    float[] scratch = (!useSegments && sharedBuffer) ? new float[dim] : null;
+
+    // Track which candidates are blocked (pruned)
+    boolean[] blocked = new boolean[candidates.size()];
+
+    // Process candidates best-first (index 0 = best score)
+    for (int i = 0; i < candidates.size() && result.size() < maxConnections; i++) {
+      int candidateId = candidates.node(i);
+      float scoreToQuery = candidates.score(i);
+
+      MemorySegment candidateSeg = null;
+      float[] candidateVec = null;
+      boolean loaded = false;
+
+      boolean isBlocked = false;
+      // Check against already-selected neighbors
+      for (int j = 0; j < result.size(); j++) {
+        int selectedId = result.node(j);
+        long pair = cache == null ? 0L : ExactScoreCache.key(candidateId, selectedId);
+        float scoreER = cache == null ? -1f : cache.get(pair);
+        if (scoreER < 0f) {
+          if (!loaded) {
+            if (useSegments) candidateSeg = vectors.vectorSegment(candidateId);
+            else {
+              candidateVec = vectors.getVector(candidateId);
+              if (sharedBuffer) {
+                System.arraycopy(candidateVec, 0, scratch, 0, dim);
+                candidateVec = scratch;
+              }
+            }
+            loaded = true;
+          }
+          scoreER =
+              useSegments
+                  ? similarityFunction.compare(candidateSeg, vectors.vectorSegment(selectedId), dim)
+                  : similarityFunction.compare(candidateVec, vectors.getVector(selectedId));
+          if (cache != null) cache.put(pair, scoreER);
+        }
+
+        if (scoreER >= scoreToQuery) {
+          isBlocked = true;
+          blocked[i] = true;
+          break;
+        }
+      }
+
+      if (!isBlocked) {
+        result.insert(candidateId, scoreToQuery);
+      }
+    }
+
+    // keepPruned=true: fill remaining slots with blocked candidates
+    for (int i = 0; i < candidates.size() && result.size() < maxConnections; i++) {
+      if (blocked[i]) {
+        result.insert(candidates.node(i), candidates.score(i));
+      }
+    }
+
+    return result;
+  }
 }
