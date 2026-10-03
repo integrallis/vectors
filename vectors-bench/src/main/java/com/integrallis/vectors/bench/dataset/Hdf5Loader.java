@@ -18,6 +18,7 @@ package com.integrallis.vectors.bench.dataset;
 import io.jhdf.HdfFile;
 import io.jhdf.api.Dataset;
 import java.nio.file.Path;
+import java.util.Arrays;
 
 /**
  * Reads ANN-Benchmarks datasets stored in HDF5 format (GloVe, NYTimes, Deep, etc.).
@@ -95,9 +96,26 @@ public final class Hdf5Loader {
   // Internal helpers
   // -------------------------------------------------------------------------
 
+  /**
+   * Largest single read issued against an HDF5 dataset, in bytes.
+   *
+   * <p>A whole-dataset read maps the dataset into one buffer, and a {@link java.nio.ByteBuffer}
+   * cannot exceed {@link Integer#MAX_VALUE} bytes. ANN-Benchmarks ships sets that are larger than
+   * that: GIST1M's {@code /train} is 1,000,000 x 960 floats, 3.84 GB, and deep-image-96 is the same
+   * order. Reading those used to fail with "Size exceeds Integer.MAX_VALUE" from inside the HDF5
+   * library, which made two published datasets simply unavailable to this harness.
+   *
+   * <p>Kept well below the hard limit so that a row block never straddles it: 1 GB of a 2-D float
+   * dataset is at least 260,000 rows even at 1,000 dimensions.
+   */
+  private static final long MAX_READ_BYTES = 1L << 30;
+
   private static float[][] readFloatMatrix(Path path, String datasetPath) {
     try (HdfFile hdf = new HdfFile(path.toFile())) {
       Dataset ds = hdf.getDatasetByPath(datasetPath);
+      if (ds.getSizeInBytes() > MAX_READ_BYTES) {
+        return readFloatMatrixInBlocks(ds, datasetPath);
+      }
       Object raw = ds.getData();
       if (raw instanceof float[][] matrix) {
         return matrix;
@@ -115,6 +133,42 @@ public final class Hdf5Loader {
       throw new IllegalStateException(
           "Unexpected data type for " + datasetPath + ": " + raw.getClass().getName());
     }
+  }
+
+  /**
+   * Reads a 2-D float dataset in row blocks, each under {@link #MAX_READ_BYTES}.
+   *
+   * <p>Uses the sliced form of the HDF5 read, so no single call maps more than one block. The
+   * result is assembled into the same {@code float[rows][cols]} shape a whole-dataset read would
+   * produce, which keeps every caller unchanged.
+   */
+  private static float[][] readFloatMatrixInBlocks(Dataset ds, String datasetPath) {
+    int[] dims = ds.getDimensions();
+    if (dims.length != 2) {
+      throw new IllegalStateException(
+          "Expected 2-D dataset at " + datasetPath + " but got " + dims.length + " dims");
+    }
+    int rows = dims[0];
+    int cols = dims[1];
+    long rowBytes = (long) cols * Float.BYTES;
+    int blockRows = (int) Math.max(1, Math.min(rows, MAX_READ_BYTES / Math.max(1, rowBytes)));
+
+    float[][] out = new float[rows][];
+    for (int start = 0; start < rows; start += blockRows) {
+      int count = Math.min(blockRows, rows - start);
+      Object raw = ds.getData(new long[] {start, 0}, new int[] {count, cols});
+      if (raw instanceof float[][] block) {
+        System.arraycopy(block, 0, out, start, count);
+      } else if (raw instanceof float[] flat) {
+        for (int r = 0; r < count; r++) {
+          out[start + r] = Arrays.copyOfRange(flat, r * cols, (r + 1) * cols);
+        }
+      } else {
+        throw new IllegalStateException(
+            "Unexpected data type for a block of " + datasetPath + ": " + raw.getClass().getName());
+      }
+    }
+    return out;
   }
 
   private static int[][] readIntMatrix(Path path, String datasetPath) {

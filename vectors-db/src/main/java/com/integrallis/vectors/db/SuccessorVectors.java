@@ -248,15 +248,10 @@ final class SuccessorVectors {
   /**
    * A read-through view over the carried-over mapping and the staged vectors, for an index build.
    *
-   * <p>The view reports {@link RandomAccessVectors#supportsSegments()}, which is what keeps the
-   * graph build on its fast path. A carried-over vector is a zero-copy slice of the predecessor's
-   * mapping; a staged one is its own {@code float[]} wrapped as a heap segment. Scoring reads both
-   * directly, with no intermediate copy and no per-candidate allocation.
-   *
-   * <p>The earlier shape of this view returned a scratch {@code float[]} and declared {@code
-   * sharesReturnBuffer()}, which quietly moved the builder off its fused scoring path and cost
-   * about 1.6x on the append — avoiding a copy of the collection is pointless if it slows every
-   * distance computation.
+   * <p>Carried rows are copied into a per-thread scratch array. Staged rows are read directly. The
+   * view declares shared return buffers so builders preserve the insertion query before reading
+   * another row. Segment scoring is not exposed: mixing heap-backed staged rows with mapped rows
+   * regressed the measured append workload.
    */
   RandomAccessVectors asVectors() {
     return new View();

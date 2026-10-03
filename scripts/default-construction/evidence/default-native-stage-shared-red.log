@@ -1,0 +1,114 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-gpu:processResources UP-TO-DATE
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-core:compileJava
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-gpu:compileJava UP-TO-DATE
+> Task :vectors-gpu:classes UP-TO-DATE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-gpu:jar UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-vamana:compileJava UP-TO-DATE
+> Task :vectors-ivf:compileJava UP-TO-DATE
+> Task :vectors-vamana:classes UP-TO-DATE
+> Task :vectors-ivf:classes UP-TO-DATE
+> Task :vectors-vamana:jar UP-TO-DATE
+> Task :vectors-ivf:jar UP-TO-DATE
+> Task :vectors-core:jar
+> Task :vectors-hnsw:compileJava
+> Task :vectors-hnsw:classes
+> Task :vectors-db:compileJava UP-TO-DATE
+> Task :vectors-db:classes UP-TO-DATE
+> Task :vectors-hnsw:jar
+> Task :vectors-hnsw:compileTestJava
+> Task :vectors-hnsw:testClasses
+> Task :vectors-db:compileTestJava
+> Task :vectors-db:testClasses
+
+> Task :vectors-hnsw:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+SharedVectorBuildTest > reusedReadBufferPreservesCarriedEdgeRescoring() FAILED
+    org.opentest4j.AssertionFailedError: expected: <35> but was: <63>
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+        at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:145)
+        at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:531)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.assertGraph(SharedVectorBuildTest.java:83)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.reusedReadBufferPreservesCarriedEdgeRescoring(SharedVectorBuildTest.java:43)
+
+SharedVectorBuildTest > reusedReadBufferPreservesSerialAndConcurrentGraphs() FAILED
+    org.opentest4j.AssertionFailedError: expected: <35> but was: <2>
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+        at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:145)
+        at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:531)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.assertGraph(SharedVectorBuildTest.java:83)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.reusedReadBufferPreservesSerialAndConcurrentGraphs(SharedVectorBuildTest.java:33)
+
+2 tests completed, 2 failed
+
+> Task :vectors-db:test FAILED
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+SuccessorSegmentViewTest > appendViewExposesIndependentReadOnlySegmentsForMappedAndStagedRows() FAILED
+    org.opentest4j.AssertionFailedError: staged rows must share the native scoring path with mapped rows ==> expected: <true> but was: <false>
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+        at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+        at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+        at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+        at app//com.integrallis.vectors.db.SuccessorSegmentViewTest.appendViewExposesIndependentReadOnlySegmentsForMappedAndStagedRows(SuccessorSegmentViewTest.java:52)
+
+1 test completed, 1 failed
+
+> Task :vectors-hnsw:test FAILED
+
+FAILURE: Build completed with 2 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':vectors-db:test'.
+> There were failing tests. See the report at: file:///Users/briansam-bodden/Code/java-ai/projects/vectors-perf-pr-20261003/vectors-db/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+2: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':vectors-hnsw:test'.
+> There were failing tests. See the report at: file:///Users/briansam-bodden/Code/java-ai/projects/vectors-perf-pr-20261003/vectors-hnsw/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+BUILD FAILED in 10s
+21 actionable tasks: 8 executed, 13 up-to-date

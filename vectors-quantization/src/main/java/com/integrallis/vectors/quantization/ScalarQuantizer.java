@@ -421,23 +421,20 @@ public final class ScalarQuantizer implements Quantizer<ScalarQuantizedVectors> 
       if (arr[mid] < arr[right]) swap(arr, mid, right);
       float pivot = arr[right];
 
-      // Lomuto partition
-      int storeIndex = left;
-      for (int i = left; i < right; i++) {
-        if (arr[i] <= pivot) {
-          swap(arr, storeIndex, i);
-          storeIndex++;
-        }
+      // Three-way partition: skip the entire equal run. Quantized/image datasets often contain
+      // millions of identical values; a two-way partition removes only one per iteration there.
+      int lower = left;
+      int cursor = left;
+      int upper = right;
+      while (cursor <= upper) {
+        int order = Float.compare(arr[cursor], pivot);
+        if (order < 0) swap(arr, lower++, cursor++);
+        else if (order > 0) swap(arr, cursor, upper--);
+        else cursor++;
       }
-      swap(arr, storeIndex, right);
-
-      if (storeIndex == k) {
-        return arr[k];
-      } else if (k < storeIndex) {
-        right = storeIndex - 1;
-      } else {
-        left = storeIndex + 1;
-      }
+      if (k < lower) right = lower - 1;
+      else if (k > upper) left = upper + 1;
+      else return arr[k];
     }
     return arr[left];
   }
