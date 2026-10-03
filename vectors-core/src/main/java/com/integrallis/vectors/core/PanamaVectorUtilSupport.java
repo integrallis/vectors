@@ -810,7 +810,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     } else if (a.length >= FLOAT_SPECIES.length()) {
       // Short vectors: single-accumulator vector body (no unroll), avoids unroll-prologue cost.
       int limit = FLOAT_SPECIES.loopBound(a.length);
-      return cosineBody1x(a, b, limit);
+      float[] result = cosineBody1x(a, b, limit);
+      sum = result[0];
+      norm1 = result[1];
+      norm2 = result[2];
+      i = limit;
     }
 
     // Scalar tail
@@ -882,7 +886,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         n2_0.add(n2_1).add(n2_2.add(n2_3)).reduceLanes(VectorOperators.ADD));
   }
 
-  private float cosineBody1x(float[] a, float[] b, int limit) {
+  private float[] cosineBody1x(float[] a, float[] b, int limit) {
     FloatVector s = FloatVector.zero(FLOAT_SPECIES);
     FloatVector n1 = FloatVector.zero(FLOAT_SPECIES);
     FloatVector n2 = FloatVector.zero(FLOAT_SPECIES);
@@ -894,13 +898,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       n1 = fma(va, va, n1);
       n2 = fma(vb, vb, n2);
     }
-    return finishCosine(
-        a,
-        b,
-        limit,
-        s.reduceLanes(VectorOperators.ADD),
-        n1.reduceLanes(VectorOperators.ADD),
-        n2.reduceLanes(VectorOperators.ADD));
+    return new float[] {
+      s.reduceLanes(VectorOperators.ADD),
+      n1.reduceLanes(VectorOperators.ADD),
+      n2.reduceLanes(VectorOperators.ADD)
+    };
   }
 
   private static float finishCosine(

@@ -10,8 +10,10 @@ rejected SQ8 or parallel-builder variants.
 
 All six paired timings improved. The baseline is `4bc505b3e8c0c217e9d66727d643921a0d8efd55`,
 which already includes the earlier batch-write fix in #85. Measured product source is commit
-`eb1897510faa61e3319c3c2e811d906393c26a3b`; later CI corrections remove only an unused metadata-writer field from runtime code. The graph
-and kernel sources remain identical to the measured commit. [Provenance](evidence/provenance.json) records source and frozen-jar hashes.
+`eb1897510faa61e3319c3c2e811d906393c26a3b`; later CI corrections remove only an unused metadata-writer field from runtime code. The long-vector cosine body and graph sources remain identical to the measured commit.
+The short-vector cosine path was subsequently restored to its original implementation after
+128-bit compiled exactness tests detected one-bit differences; that path is not used at dimension
+512 or 768 in these measurements. [Provenance](evidence/provenance.json) records source and frozen-jar hashes.
 
 ## Every timing sample
 

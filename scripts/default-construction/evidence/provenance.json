@@ -70,5 +70,10 @@
     "file": "vectors-db/src/main/java/com/integrallis/vectors/db/storage/MappedMetadataStore.java",
     "sha256": "4eae7b3410c9a46286e25621088c10bf9039f29f43c82b3d2049c867a39cca1b",
     "change": "Remove unread Image.written field and its assignment; graph and kernel sources unchanged."
+  },
+  "post_measurement_short_vector_correction": {
+    "file": "vectors-core/src/main/java/com/integrallis/vectors/core/PanamaVectorUtilSupport.java",
+    "sha256": "5bfc0f8f05725d2932786a98992670473b8dfed24c3ec99da1018707cf820fee",
+    "change": "Restore original cosineBody1x and its caller scalar-tail placement. Measured 512/768-dimensional workloads execute the unchanged 4x body."
   }
 }

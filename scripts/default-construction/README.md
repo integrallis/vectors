@@ -3,7 +3,8 @@
 These changes apply automatically. Graph parameters, float precision, insertion task dispatch,
 and on-disk formats are unchanged. There is no new setting.
 
-- Cosine scoring returns its scalar result without allocating a three-float temporary array.
+- Long-vector cosine scoring returns its scalar result without allocating a three-float temporary array.
+  The short-vector path retains the original arithmetic placement to preserve compiled rounding.
   A copy of the old arithmetic is checked bit-for-bit across vector widths and scalar tails,
   in interpreted and fully warmed compiled JVMs.
 - Serial search-result heaps drain directly into neighbor arrays, preserving equal-score ordering.
