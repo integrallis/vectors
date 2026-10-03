@@ -1,10 +1,12 @@
 # Default search performance
 
-The change prepares the COSINE query norm once per flat scan (heap, heap batch,
+The change prepares the COSINE query norm once per flat scan (heap batch
 and mapped storage) and drains HNSW result heaps directly into reusable sorted
 storage. HNSW retains the same traversal, scores, tie order, and search budget.
 Each searcher loses an `int[N]` and a `float[N]` (8N bytes plus array headers).
-The flat implementation preserves the existing four-accumulator arithmetic;
+Single-query heap scans retain their original kernel after the prepared-norm
+variant regressed on the saved 100,000-row corpus. The flat implementation
+preserves the existing four-accumulator arithmetic;
 short vectors and scalar providers retain their existing cosine path.
 
 ## Reproduce
@@ -60,6 +62,11 @@ SIMD, and scalar fallback.
   reduction mismatch at dimension 128. The run was stopped. The norm preparation
   now uses the existing explicit reduction tree rather than a JIT-tier-dependent
   `reduceLanes(ADD)` result.
+
+- The first numerically correct candidate (`1b80945`) improved batch/mapped scans
+  but slowed single-query heap scans by 3.88% on the 100,000-row collection.
+  That single-query change was removed before merge. Batch cosine dispatch was
+  moved outside the inner scan loop so other metrics retain the original loop.
 
 ## Persistent corpus and other metrics
 

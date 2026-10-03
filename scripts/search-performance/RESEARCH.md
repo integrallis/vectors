@@ -24,7 +24,8 @@ They do **not** implement Flash, FastHNSW, Slipstream, or graph reordering.
 [Faiss implementation notes](https://github.com/facebookresearch/faiss/wiki/Implementation-notes)
 describe separating reusable norms from pairwise work and exploiting matrix/batch
 computation. We applied the reusable-query-work principle specifically to COSINE:
-the query norm is prepared once per scan, while dot products and row norms keep
+the query norm is prepared once per mapped scan or per query in a heap batch,
+while dot products and row norms keep
 the existing accumulation structure. We did not replace direct squared distances
 with `norm(q)+norm(x)-2*dot(q,x)`, whose cancellation behavior would need different
 numerical tests. There is no claim that this implements Faiss's BLAS path.
