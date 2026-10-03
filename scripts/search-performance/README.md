@@ -106,3 +106,5 @@ jars, even if documentation or benchmark sources are subsequently updated.
 See [the source examination](RESEARCH.md) for what was checked against the supplied
 research and what these changes do and do not implement. Measured tables and raw
 fork medians are recorded in PR #87; the runner also writes them to `summary.json`.
+
+Final dedicated-VPS measurements and all raw timing logs: [2026-10-03 evidence](evidence/vps-20261003/README.md).

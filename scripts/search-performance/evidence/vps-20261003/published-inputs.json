@@ -1,0 +1,42 @@
+{
+  "glove-100-angular-train.fbin": {
+    "shape": [
+      100000,
+      100
+    ],
+    "sha256": "3f8ddba7070f08a5c333ccacf3098118037785927387a00f9fff42f9a064b4c9",
+    "selection": "first 100000 rows, original order"
+  },
+  "glove-100-angular-test.fbin": {
+    "shape": [
+      256,
+      100
+    ],
+    "sha256": "bdf73b26e2b63279e79e465af8a85c58d2690f38b88112531a9e237794c834c9",
+    "selection": "first 256 rows, original order"
+  },
+  "glove-100-angular": {
+    "source_sha256": "544af1d5e84e112cd4749571dcfd8ca109818a572f850af75a3a09e093a953c4",
+    "source_url": "https://ann-benchmarks.com/glove-100-angular.hdf5"
+  },
+  "fashion-mnist-784-euclidean-train.fbin": {
+    "shape": [
+      60000,
+      784
+    ],
+    "sha256": "90d9ed17a7241085cd2ac39fa7e097a5e1be987483c9eb878aa9f6e5dbd54d5c",
+    "selection": "first 60000 rows, original order"
+  },
+  "fashion-mnist-784-euclidean-test.fbin": {
+    "shape": [
+      256,
+      784
+    ],
+    "sha256": "5a88808a02aa219e3c064d368fcbddcff8675481ae586b4eaa8a086405df93bf",
+    "selection": "first 256 rows, original order"
+  },
+  "fashion-mnist-784-euclidean": {
+    "source_sha256": "7f24e5122b71346346686a6ea80e08d9145b9c020f9f2db4c4c799dfcfc96a07",
+    "source_url": "https://ann-benchmarks.com/fashion-mnist-784-euclidean.hdf5"
+  }
+}

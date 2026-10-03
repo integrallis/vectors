@@ -1,0 +1,162 @@
+{
+  "flat-real-heap": {
+    "baseline_ms": 588.381658,
+    "candidate_ms": 579.27138,
+    "less_time_percent": 1.5483619987351815,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      588945218,
+      588381658,
+      583922601
+    ],
+    "candidate_forks_ns": [
+      582714901,
+      577395804,
+      579271380
+    ]
+  },
+  "flat-real-heap-batch": {
+    "baseline_ms": 259.623127,
+    "candidate_ms": 212.312579,
+    "less_time_percent": 18.222778743436052,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      259237640,
+      259623127,
+      259909864
+    ],
+    "candidate_forks_ns": [
+      212312579,
+      211178827,
+      218970054
+    ]
+  },
+  "flat-real-mapped": {
+    "baseline_ms": 677.612174,
+    "candidate_ms": 609.329448,
+    "less_time_percent": 10.076962696363834,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      678570564,
+      663581490,
+      677612174
+    ],
+    "candidate_forks_ns": [
+      609329448,
+      605957837,
+      610565241
+    ]
+  },
+  "hnsw-real-32": {
+    "baseline_ms": 72.019027,
+    "candidate_ms": 70.193879,
+    "less_time_percent": 2.534258064886108,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      72019027,
+      74458192,
+      71833585
+    ],
+    "candidate_forks_ns": [
+      72370311,
+      69798286,
+      70193879
+    ]
+  },
+  "hnsw-real-128": {
+    "baseline_ms": 224.85739,
+    "candidate_ms": 225.38623,
+    "less_time_percent": -0.23518906805775064,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      228216203,
+      223888517,
+      224857390
+    ],
+    "candidate_forks_ns": [
+      229352944,
+      225014086,
+      225386230
+    ]
+  },
+  "hnsw-real-512": {
+    "baseline_ms": 707.399848,
+    "candidate_ms": 695.920067,
+    "less_time_percent": 1.6228136085208789,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      707399848,
+      691856225,
+      711433927
+    ],
+    "candidate_forks_ns": [
+      695920067,
+      674156794,
+      705898090
+    ]
+  },
+  "flat-control-EUCLIDEAN": {
+    "baseline_ms": 48.813484,
+    "candidate_ms": 44.989401,
+    "less_time_percent": 7.8340710120179065,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      46723486,
+      58694570,
+      48813484
+    ],
+    "candidate_forks_ns": [
+      44989401,
+      36444829,
+      50230538
+    ]
+  },
+  "flat-control-EUCLIDEAN-batch": {
+    "baseline_ms": 33.13056,
+    "candidate_ms": 32.389136,
+    "less_time_percent": 2.237885505104653,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      33454144,
+      33130560,
+      32911768
+    ],
+    "candidate_forks_ns": [
+      32389136,
+      32283368,
+      32544864
+    ]
+  },
+  "flat-control-DOT_PRODUCT": {
+    "baseline_ms": 47.961609,
+    "candidate_ms": 46.213249,
+    "less_time_percent": 3.645332248966038,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      47961609,
+      57756508,
+      45124072
+    ],
+    "candidate_forks_ns": [
+      46213249,
+      33907926,
+      51814884
+    ]
+  },
+  "flat-control-DOT_PRODUCT-batch": {
+    "baseline_ms": 30.959801,
+    "candidate_ms": 31.567674,
+    "less_time_percent": -1.9634267029041919,
+    "exact_result_parity": true,
+    "baseline_forks_ns": [
+      31090138,
+      30959801,
+      30689784
+    ],
+    "candidate_forks_ns": [
+      31472174,
+      31858960,
+      31567674
+    ]
+  }
+}

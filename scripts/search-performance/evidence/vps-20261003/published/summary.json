@@ -1,0 +1,214 @@
+{
+  "workloads": {
+    "flat-glove-100-angular-heap-d100": {
+      "baseline_ms": 120.746638,
+      "candidate_ms": 120.611683,
+      "less_time_percent": 0.11176708704717653,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        119913234,
+        120746638,
+        123743440
+      ],
+      "candidate_forks_ns": [
+        120611683,
+        124741470,
+        120250318
+      ]
+    },
+    "flat-glove-100-angular-batch-d100": {
+      "baseline_ms": 111.04348,
+      "candidate_ms": 85.005338,
+      "less_time_percent": 23.448600494148774,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        111523371,
+        111043480,
+        110960941
+      ],
+      "candidate_forks_ns": [
+        85005338,
+        86863669,
+        84362022
+      ]
+    },
+    "flat-glove-100-angular-mapped-d100": {
+      "baseline_ms": 291.178074,
+      "candidate_ms": 215.321047,
+      "less_time_percent": 26.051764804241408,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        291092142,
+        291178074,
+        293440263
+      ],
+      "candidate_forks_ns": [
+        215321047,
+        215191079,
+        233667770
+      ]
+    },
+    "hnsw-glove-100-angular-32-d100": {
+      "baseline_ms": 10.300514,
+      "candidate_ms": 10.230525,
+      "less_time_percent": 0.6794709467896509,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        10895090,
+        10198054,
+        10300514
+      ],
+      "candidate_forks_ns": [
+        10230525,
+        10354796,
+        10052199
+      ]
+    },
+    "hnsw-glove-100-angular-128-d100": {
+      "baseline_ms": 35.855104,
+      "candidate_ms": 35.330053,
+      "less_time_percent": 1.4643689222042178,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        50716527,
+        35855104,
+        34851063
+      ],
+      "candidate_forks_ns": [
+        34007883,
+        35330053,
+        35500971
+      ]
+    },
+    "hnsw-glove-100-angular-512-d100": {
+      "baseline_ms": 127.309502,
+      "candidate_ms": 120.752984,
+      "less_time_percent": 5.150061776221538,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        127309502,
+        130051007,
+        124913657
+      ],
+      "candidate_forks_ns": [
+        116532407,
+        121826102,
+        120752984
+      ]
+    },
+    "flat-fashion-mnist-784-euclidean-heap-d784": {
+      "baseline_ms": 312.492383,
+      "candidate_ms": 316.478401,
+      "less_time_percent": -1.2755568509329018,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        312492383,
+        313850916,
+        307280398
+      ],
+      "candidate_forks_ns": [
+        323796620,
+        316478401,
+        314517489
+      ]
+    },
+    "flat-fashion-mnist-784-euclidean-batch-d784": {
+      "baseline_ms": 136.527187,
+      "candidate_ms": 138.064147,
+      "less_time_percent": -1.12575380316009,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        130871866,
+        136925548,
+        136527187
+      ],
+      "candidate_forks_ns": [
+        137767180,
+        138064147,
+        139093595
+      ]
+    },
+    "flat-fashion-mnist-784-euclidean-mapped-d784": {
+      "baseline_ms": 521.364419,
+      "candidate_ms": 509.207706,
+      "less_time_percent": 2.3317112861896305,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        521364419,
+        504099948,
+        524271081
+      ],
+      "candidate_forks_ns": [
+        508561371,
+        524630884,
+        509207706
+      ]
+    },
+    "hnsw-fashion-mnist-784-euclidean-32-d784": {
+      "baseline_ms": 19.957059,
+      "candidate_ms": 20.392382,
+      "less_time_percent": -2.1812983566366073,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        19867992,
+        20343226,
+        19957059
+      ],
+      "candidate_forks_ns": [
+        21238195,
+        19758664,
+        20392382
+      ]
+    },
+    "hnsw-fashion-mnist-784-euclidean-128-d784": {
+      "baseline_ms": 51.766917,
+      "candidate_ms": 51.944211,
+      "less_time_percent": -0.34248514355219584,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        53556026,
+        51766917,
+        50914809
+      ],
+      "candidate_forks_ns": [
+        54519645,
+        51944211,
+        51449288
+      ]
+    },
+    "hnsw-fashion-mnist-784-euclidean-512-d784": {
+      "baseline_ms": 153.313081,
+      "candidate_ms": 145.108537,
+      "less_time_percent": 5.3514963931877375,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        153313081,
+        154469323,
+        148206586
+      ],
+      "candidate_forks_ns": [
+        150705317,
+        142078406,
+        145108537
+      ]
+    }
+  },
+  "recall": {
+    "baseline": [
+      "RECALL,fashion-mnist-784-euclidean,128,2560,2560,1.00000000",
+      "RECALL,fashion-mnist-784-euclidean,32,2557,2560,0.99882813",
+      "RECALL,fashion-mnist-784-euclidean,512,2560,2560,1.00000000",
+      "RECALL,glove-100-angular,128,2470,2560,0.96484375",
+      "RECALL,glove-100-angular,32,2128,2560,0.83125000",
+      "RECALL,glove-100-angular,512,2559,2560,0.99960938"
+    ],
+    "candidate": [
+      "RECALL,fashion-mnist-784-euclidean,128,2560,2560,1.00000000",
+      "RECALL,fashion-mnist-784-euclidean,32,2557,2560,0.99882813",
+      "RECALL,fashion-mnist-784-euclidean,512,2560,2560,1.00000000",
+      "RECALL,glove-100-angular,128,2470,2560,0.96484375",
+      "RECALL,glove-100-angular,32,2128,2560,0.83125000",
+      "RECALL,glove-100-angular,512,2559,2560,0.99960938"
+    ]
+  }
+}
