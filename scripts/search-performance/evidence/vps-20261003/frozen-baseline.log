@@ -1,0 +1,15 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 03, 2026 11:39:14 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 03, 2026 11:39:14 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=2 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+FAILED frozen initial generation expected=174 got=Hit[id=v125, score=0.68803155, document=Document[id=v125, vector=[F@22555ebf, text=null, metadata={}, contentHash=null]]
+nodes=200 unreachable=2 (1.0000%) dangling=0 selfLoops=0 isolated=0 outDegree[min=2 mean=31.7 max=32]
+UNREACHABLE=2 ENTRY=84
+node 0 level 0
+78,196,182,2,89,109,152,44,138,162,199,130,18,189,34,173,116,79,80,32,185,84,98,35,150,70,74,179,146,19,64,172,
+node 196 level 0
+0,37,79,153,138,35,146,34,36,78,94,143,48,12,184,162,89,171,95,81,40,120,119,147,82,170,104,58,86,1,168,117,
+Exception in thread "main" java.lang.AssertionError: Search failure at /opt/vectors-search/probe/recovery-1135918022724842170
+	at RecoveryProbe.check(RecoveryProbe.java:11)
+	at FrozenRecoveryProbe.main(FrozenRecoveryProbe.java:5)
