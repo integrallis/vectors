@@ -161,7 +161,7 @@ public final class ConcurrentHnswGraphBuilder {
     int maxNbrs = graph.maxConnections0() + 1;
     var threadCtx =
         ThreadLocal.withInitial(
-            () -> new WorkContext(n, efConstruction, maxNbrs, dimension, useSegments));
+            () -> new WorkContext(n, efConstruction, maxNbrs, dimension, useSegments, !useBulk));
 
     // Async prefetch: when vectors are mmap-backed, page-in each popped candidate's neighbors on an
     // I/O pool so the NVMe reads overlap the SIMD scoring instead of faulting synchronously. This
@@ -299,9 +299,15 @@ public final class ConcurrentHnswGraphBuilder {
     // forward silently degrades the graph. Recomputing is O(N·M) distance computations, which is
     // why
     // a caller that kept its own freshly built graph passes scoresAreReal and skips it.
+    float[] carriedScratch =
+        !scoresAreReal && vectors.sharesReturnBuffer() ? new float[dimension] : null;
     for (int j = 0; j < firstNewOrdinal; j++) {
       int level = graph.nodeLevel(j);
       float[] self = scoresAreReal ? null : vectors.getVector(j);
+      if (carriedScratch != null) {
+        System.arraycopy(self, 0, carriedScratch, 0, dimension);
+        self = carriedScratch;
+      }
       for (int l = 0; l <= level; l++) {
         NeighborArray from = old.getNeighbors(j, l);
         if (from == null) {
@@ -442,7 +448,7 @@ public final class ConcurrentHnswGraphBuilder {
     int maxNbrs = graph.maxConnections0() + 1;
     var threadCtx =
         ThreadLocal.withInitial(
-            () -> new WorkContext(n, efConstruction, maxNbrs, dimension, useSegments));
+            () -> new WorkContext(n, efConstruction, maxNbrs, dimension, useSegments, !useBulk));
 
     ExecutorService exec =
         providedExecutor != null
@@ -508,10 +514,18 @@ public final class ConcurrentHnswGraphBuilder {
     // is
     // an off-heap copy of the current insert's query (refilled once per insert, not per candidate);
     // rowSegs holds reusable zero-copy vectorSegment() slices for the fused segment GEMV.
+    final float[] queryScratch;
     final MemorySegment queryScratchSeg;
     final MemorySegment[] rowSegs;
 
-    WorkContext(int maxNodes, int ef, int maxNeighbors, int dimension, boolean useSegments) {
+    WorkContext(
+        int maxNodes,
+        int ef,
+        int maxNeighbors,
+        int dimension,
+        boolean useSegments,
+        boolean sharesReturnBuffer) {
+      queryScratch = !useSegments && sharesReturnBuffer ? new float[dimension] : null;
       visited = new BitSet(maxNodes);
       candidates = new NodeQueue(ef * 2, false);
       results = new NodeQueue(ef * 2, true);
@@ -545,6 +559,11 @@ public final class ConcurrentHnswGraphBuilder {
       WorkContext ctx) {
 
     float[] query = vectors.getVector(nodeId);
+    if (ctx.queryScratch != null) {
+      // One buffer per worker: candidate reads must not overwrite the insertion query.
+      System.arraycopy(query, 0, ctx.queryScratch, 0, dimension);
+      query = ctx.queryScratch;
+    }
     if (useSegments) {
       // Upload the query into the off-heap scratch ONCE per insert; every candidate score below
       // reads it against a zero-copy mmap slice, so no float[] is allocated per candidate.

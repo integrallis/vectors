@@ -1,0 +1,690 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-gpu:processResources UP-TO-DATE
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :demos:spotlessJava UP-TO-DATE
+> Task :vectors:spotlessJava UP-TO-DATE
+> Task :demos:spotlessJavaApply UP-TO-DATE
+> Task :demos:spotlessApply UP-TO-DATE
+> Task :vectors:spotlessJavaApply UP-TO-DATE
+> Task :vectors:spotlessApply UP-TO-DATE
+> Task :vectors-cache:spotlessJava UP-TO-DATE
+> Task :vectors-cache:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache:spotlessApply UP-TO-DATE
+> Task :vectors-cache-jcache:spotlessJava UP-TO-DATE
+> Task :vectors-cache-jcache:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-jcache:spotlessApply UP-TO-DATE
+> Task :vectors-cache-langchain4j:spotlessJava UP-TO-DATE
+> Task :vectors-cache-langchain4j:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-langchain4j:spotlessApply UP-TO-DATE
+> Task :vectors-cache-semantic-db:spotlessJava UP-TO-DATE
+> Task :vectors-cache-semantic-db:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-semantic-db:spotlessApply UP-TO-DATE
+> Task :vectors-cache-semantic-langchain4j:spotlessJava UP-TO-DATE
+> Task :vectors-cache-semantic-langchain4j:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-semantic-langchain4j:spotlessApply UP-TO-DATE
+> Task :vectors-cache-semantic-spring-ai:spotlessJava UP-TO-DATE
+> Task :vectors-cache-semantic-spring-ai:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-semantic-spring-ai:spotlessApply UP-TO-DATE
+> Task :vectors-bench:spotlessJava FROM-CACHE
+> Task :vectors-cache-spring-ai:spotlessJava UP-TO-DATE
+> Task :vectors-bench:spotlessJavaApply UP-TO-DATE
+> Task :vectors-bench:spotlessApply UP-TO-DATE
+> Task :vectors-cache-spring-ai:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-spring-ai:spotlessApply UP-TO-DATE
+> Task :vectors-db-arrow:spotlessJava UP-TO-DATE
+> Task :vectors-cluster:spotlessJava UP-TO-DATE
+> Task :vectors-db-arrow:spotlessJavaApply UP-TO-DATE
+> Task :vectors-db-arrow:spotlessApply UP-TO-DATE
+> Task :vectors-cluster:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cluster:spotlessApply UP-TO-DATE
+> Task :vectors-db-jackson:spotlessJava UP-TO-DATE
+> Task :vectors-db-jackson:spotlessJavaApply UP-TO-DATE
+> Task :vectors-db-jackson:spotlessApply UP-TO-DATE
+> Task :vectors-distributed:spotlessJava UP-TO-DATE
+> Task :vectors-distributed:spotlessJavaApply UP-TO-DATE
+> Task :vectors-distributed:spotlessApply UP-TO-DATE
+> Task :vectors-core:spotlessJava FROM-CACHE
+> Task :vectors-gpu:spotlessJava UP-TO-DATE
+> Task :vectors-core:spotlessJavaApply UP-TO-DATE
+> Task :vectors-core:spotlessApply UP-TO-DATE
+> Task :vectors-gpu:spotlessJavaApply UP-TO-DATE
+> Task :vectors-gpu:spotlessApply UP-TO-DATE
+> Task :vectors-hybrid:spotlessJava UP-TO-DATE
+> Task :vectors-hybrid:spotlessJavaApply UP-TO-DATE
+> Task :vectors-hybrid:spotlessApply UP-TO-DATE
+> Task :vectors-ingest:spotlessJava UP-TO-DATE
+> Task :vectors-ingest:spotlessJavaApply UP-TO-DATE
+> Task :vectors-ingest:spotlessApply UP-TO-DATE
+> Task :vectors-ivf:spotlessJava UP-TO-DATE
+> Task :vectors-ivf:spotlessJavaApply UP-TO-DATE
+> Task :vectors-ivf:spotlessApply UP-TO-DATE
+> Task :vectors-jakarta-batch:spotlessJava UP-TO-DATE
+> Task :vectors-jakarta-batch:spotlessJavaApply UP-TO-DATE
+> Task :vectors-jakarta-batch:spotlessApply UP-TO-DATE
+> Task :vectors-langchain4j:spotlessJava UP-TO-DATE
+> Task :vectors-langchain4j:spotlessJavaApply UP-TO-DATE
+> Task :vectors-langchain4j:spotlessApply UP-TO-DATE
+> Task :vectors-optimizer:spotlessJava UP-TO-DATE
+> Task :vectors-optimizer:spotlessJavaApply UP-TO-DATE
+> Task :vectors-optimizer:spotlessApply UP-TO-DATE
+> Task :vectors-quantization:spotlessJava FROM-CACHE
+> Task :vectors-quantization:spotlessJavaApply UP-TO-DATE
+> Task :vectors-quantization:spotlessApply UP-TO-DATE
+> Task :vectors-router:spotlessJava UP-TO-DATE
+> Task :vectors-router:spotlessJavaApply UP-TO-DATE
+> Task :vectors-router:spotlessApply UP-TO-DATE
+> Task :vectors-server:spotlessJava UP-TO-DATE
+> Task :vectors-server-client:spotlessJava UP-TO-DATE
+> Task :vectors-server:spotlessJavaApply UP-TO-DATE
+> Task :vectors-server-client:spotlessJavaApply UP-TO-DATE
+> Task :vectors-server:spotlessApply UP-TO-DATE
+> Task :vectors-server-client:spotlessApply UP-TO-DATE
+> Task :vectors-spring-ai:spotlessJava UP-TO-DATE
+> Task :vectors-spring-batch:spotlessJava UP-TO-DATE
+> Task :vectors-spring-batch:spotlessJavaApply UP-TO-DATE
+> Task :vectors-spring-ai:spotlessJavaApply UP-TO-DATE
+> Task :vectors-spring-ai:spotlessApply UP-TO-DATE
+> Task :vectors-spring-batch:spotlessApply UP-TO-DATE
+> Task :vectors-spring-boot-starter:spotlessJava UP-TO-DATE
+> Task :vectors-spring-boot-starter:spotlessJavaApply UP-TO-DATE
+> Task :vectors-spring-boot-starter:spotlessApply UP-TO-DATE
+> Task :vectors-storage-s3:spotlessJava UP-TO-DATE
+> Task :vectors-storage-s3:spotlessJavaApply UP-TO-DATE
+> Task :vectors-storage:spotlessJava UP-TO-DATE
+> Task :vectors-storage-s3:spotlessApply UP-TO-DATE
+> Task :vectors-storage:spotlessJavaApply UP-TO-DATE
+> Task :vectors-storage:spotlessApply UP-TO-DATE
+> Task :vectors-studio-distributed:spotlessJava UP-TO-DATE
+> Task :vectors-studio-distributed:spotlessJavaApply UP-TO-DATE
+> Task :vectors-studio-distributed:spotlessApply UP-TO-DATE
+> Task :vectors-studio-core:spotlessJava UP-TO-DATE
+> Task :vectors-studio-core:spotlessJavaApply UP-TO-DATE
+> Task :vectors-studio-core:spotlessApply UP-TO-DATE
+> Task :vectors-studio-sidecart:spotlessJava UP-TO-DATE
+> Task :vectors-studio-sidecart:spotlessJavaApply UP-TO-DATE
+> Task :vectors-studio-sidecart:spotlessApply UP-TO-DATE
+> Task :vectors-text-h2:spotlessJava UP-TO-DATE
+> Task :vectors-text-h2:spotlessJavaApply UP-TO-DATE
+> Task :vectors-text-h2:spotlessApply UP-TO-DATE
+> Task :vectors-studio-web:spotlessJava UP-TO-DATE
+> Task :vectors-studio-web:spotlessJavaApply UP-TO-DATE
+> Task :vectors-studio-web:spotlessApply UP-TO-DATE
+> Task :vectors-vamana:spotlessJava UP-TO-DATE
+> Task :vectors-vamana:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vamana:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-core:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-core:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-core:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-junit5:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-junit5:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-junit5:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-langchain4j:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-langchain4j:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-langchain4j:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-semantic-db:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-semantic-db:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-semantic-db:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-serde-avaje:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-serde-avaje:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-serde-avaje:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-serde-jackson:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-serde-jackson:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-serde-jackson:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-spring-ai:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-spring-ai:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-spring-ai:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-testng:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-testng:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-testng:spotlessApply UP-TO-DATE
+> Task :demos:embedding-cache:spotlessJava UP-TO-DATE
+> Task :demos:embedding-cache:spotlessJavaApply UP-TO-DATE
+> Task :demos:embedding-cache:spotlessApply UP-TO-DATE
+> Task :demos:langchain4j-rag:spotlessJava UP-TO-DATE
+> Task :demos:langchain4j-rag:spotlessJavaApply UP-TO-DATE
+> Task :demos:langchain4j-rag:spotlessApply UP-TO-DATE
+> Task :demos:optimizer-tutorial:spotlessJava UP-TO-DATE
+> Task :demos:optimizer-tutorial:spotlessJavaApply UP-TO-DATE
+> Task :demos:optimizer-tutorial:spotlessApply UP-TO-DATE
+> Task :demos:quickstart:spotlessJava UP-TO-DATE
+> Task :demos:quickstart:spotlessJavaApply UP-TO-DATE
+> Task :demos:quickstart:spotlessApply UP-TO-DATE
+> Task :demos:rerank-after-retrieval:spotlessJava UP-TO-DATE
+> Task :demos:rerank-after-retrieval:spotlessJavaApply UP-TO-DATE
+> Task :demos:rerank-after-retrieval:spotlessApply UP-TO-DATE
+> Task :demos:rag-multimodal:spotlessJava UP-TO-DATE
+> Task :demos:rag-multimodal:spotlessJavaApply UP-TO-DATE
+> Task :demos:rag-multimodal:spotlessApply UP-TO-DATE
+> Task :demos:semantic-cache:spotlessJava UP-TO-DATE
+> Task :demos:semantic-cache:spotlessJavaApply UP-TO-DATE
+> Task :demos:semantic-cache:spotlessApply UP-TO-DATE
+> Task :demos:server-client:spotlessJava UP-TO-DATE
+> Task :demos:server-client:spotlessJavaApply UP-TO-DATE
+> Task :demos:server-client:spotlessApply UP-TO-DATE
+> Task :demos:spring-ai-rag:spotlessJava UP-TO-DATE
+> Task :demos:spring-ai-rag:spotlessJavaApply UP-TO-DATE
+> Task :demos:spring-ai-rag:spotlessApply UP-TO-DATE
+> Task :demos:vcr-e2e:spotlessJava UP-TO-DATE
+> Task :demos:vcr-e2e:spotlessJavaApply UP-TO-DATE
+> Task :demos:studio-r2-sidecart:spotlessJava UP-TO-DATE
+> Task :demos:vcr-e2e:spotlessApply UP-TO-DATE
+> Task :demos:studio-r2-sidecart:spotlessJavaApply UP-TO-DATE
+> Task :demos:studio-r2-sidecart:spotlessApply UP-TO-DATE
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-core:jar UP-TO-DATE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :vectors-bench:processResources NO-SOURCE
+> Task :vectors-bench:processTestResources UP-TO-DATE
+> Task :vectors-distributed:processResources NO-SOURCE
+> Task :vectors-storage-s3:processResources NO-SOURCE
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-gpu:compileJava UP-TO-DATE
+> Task :vectors-ivf:compileJava UP-TO-DATE
+> Task :vectors-vamana:compileJava UP-TO-DATE
+> Task :vectors-gpu:classes UP-TO-DATE
+> Task :vectors-ivf:classes UP-TO-DATE
+> Task :vectors-ivf:jar UP-TO-DATE
+> Task :vectors-gpu:jar UP-TO-DATE
+> Task :vectors-vamana:classes UP-TO-DATE
+> Task :vectors-vamana:jar UP-TO-DATE
+> Task :vectors-storage-s3:compileJava NO-SOURCE
+> Task :vectors-storage-s3:classes UP-TO-DATE
+> Task :vectors-storage-s3:jar UP-TO-DATE
+> Task :vectors-hnsw:spotlessJava
+> Task :vectors-hnsw:spotlessJavaApply
+> Task :vectors-hnsw:spotlessApply
+> Task :vectors-hnsw:compileJava UP-TO-DATE
+> Task :vectors-hnsw:classes UP-TO-DATE
+> Task :vectors-hnsw:jar UP-TO-DATE
+> Task :vectors-hnsw:compileTestJava UP-TO-DATE
+> Task :vectors-hnsw:testClasses UP-TO-DATE
+
+> Task :vectors-hnsw:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+AsyncVectorPrefetcherTest > outOfRangeOrdinal_isNotSubmitted() PASSED
+
+AsyncVectorPrefetcherTest > failingSinkItselfDoesNotPropagateOrCorruptCounters() PASSED
+
+AsyncVectorPrefetcherTest > touchFailure_isObservableViaCounterAndSink() PASSED
+
+AsyncVectorPrefetcherTest > inRangeOrdinal_isSubmittedAndCounted() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > mismatchedInputsAreRejected() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > carriedOverEdgesSurvive() PASSED
+
+> Task :vectors-db:spotlessJava
+> Task :vectors-db:spotlessJavaApply
+> Task :vectors-db:spotlessApply
+> Task :vectors-db:compileJava
+> Task :vectors-db:classes
+> Task :vectors-db:jar
+> Task :vectors-distributed:compileJava
+> Task :vectors-distributed:classes
+> Task :vectors-distributed:jar UP-TO-DATE
+
+> Task :vectors-hnsw:test
+
+ConcurrentHnswGraphBuilderAppendTest > appendedNodesAreReachableFromTheGraph() PASSED
+
+> Task :vectors-db:compileTestJava
+> Task :vectors-db:testClasses
+
+> Task :vectors-hnsw:test
+
+ConcurrentHnswGraphBuilderSelfLoopTest > parallelBuildHasNoSelfLoopsOrOutOfRangeOrDuplicateNeighbors() PASSED
+
+DataStructuresTest > HnswGraphTests > setEntryNode_updatesEntryAndMaxLevel() PASSED
+
+DataStructuresTest > HnswGraphTests > maxConnections0_isTwiceM() PASSED
+
+DataStructuresTest > HnswGraphTests > getNeighbors_layer0_returnsNeighborArray() PASSED
+
+DataStructuresTest > HnswGraphTests > getNeighbors_layerAboveNodeLevel_returnsNull() PASSED
+
+DataStructuresTest > HnswGraphTests > initNode_allocatesNeighborArrays() PASSED
+
+DataStructuresTest > HnswGraphTests > upperLayers_expandDynamically() PASSED
+
+DataStructuresTest > HnswGraphTests > initNode_setsLevel() PASSED
+
+DataStructuresTest > NodeQueueTests > insertWithOverflow_maintainsBound() PASSED
+
+DataStructuresTest > NodeQueueTests > growsBeyondInitialCapacity() PASSED
+
+DataStructuresTest > NodeQueueTests > scoreOrdering_preservedForNonNegativeFloats() PASSED
+
+DataStructuresTest > NodeQueueTests > maxHeap_pollReturnsHighestScore() PASSED
+
+DataStructuresTest > NodeQueueTests > encodeDecode_roundTrip() PASSED
+
+DataStructuresTest > NodeQueueTests > insertWithOverflow_rejectsWorseScore() PASSED
+
+DataStructuresTest > NodeQueueTests > minHeap_pollReturnsLowestScore() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertSingleElement() PASSED
+
+DataStructuresTest > NeighborArrayTests > emptyArray_hasZeroSize() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertWhenFull_evictsWorstScore() PASSED
+
+DataStructuresTest > NeighborArrayTests > contains_returnsTrueForPresentNode() PASSED
+
+DataStructuresTest > NeighborArrayTests > clear_resetsSize() PASSED
+
+DataStructuresTest > NeighborArrayTests > copyFrom_copiesAllEntries() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertDuplicateNodeId_doesNotDuplicate() PASSED
+
+DataStructuresTest > NeighborArrayTests > contains_returnsFalseForAbsentNode() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertWhenFull_rejectsWorseScore() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertMaintainsDescendingScoreOrder() PASSED
+
+HnswAppendOwnershipTest > rejectsInvalidInPlaceInputsBeforeMutatingGraph() PASSED
+
+HnswAppendOwnershipTest > appendCompletesEveryNodeAndRetainsCallerExecutor() PASSED
+
+HnswGraphMergerTest > emptySuccessorHasNoGraph() PASSED
+
+HnswGraphMergerTest > mergeRemapsSurvivorsRepairsConnectivityAndPreservesLevels() PASSED
+
+HnswSearcherMultiStartTest > ExceptionPropagation > workerExceptionPropagatesWithOriginalCause() PASSED
+
+HnswSearcherMultiStartTest > Concurrency > parallelWorkersDoNotCorrupt() PASSED
+
+HnswSearcherMultiStartTest > EdgeCases > maxLevelZeroFallsBack() PASSED
+
+HnswSearcherMultiStartTest > EdgeCases > emptyGraphThrows() PASSED
+
+HnswSearcherMultiStartTest > EdgeCases > nStartsLargerThanGraph() PASSED
+
+HnswSegmentScoringRecallTest > segmentPath_topK_matchesFloatArrayPath(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+HnswSearcherMultiStartTest > Recall > nStartsFourRecallAtLeastAsGood() PASSED
+
+HnswSearcherMultiStartTest > Identity > nStartsOneIsIdenticalToSearch() PASSED
+
+ResultDrainTest > drainMatchesLegacyOrderAndRawScoresIncludingTies() PASSED
+
+HnswSegmentScoringRecallTest > segmentPath_topK_matchesFloatArrayPath(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+HnswSegmentScoringRecallTest > segmentPath_topK_matchesFloatArrayPath(SimilarityFunction) > [3] sim=COSINE PASSED
+
+HnswSegmentScoringRecallTest > segmentPath_topK_matchesFloatArrayPath(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > appendedGraphRetrievesAsWellAsARebuiltOne() PASSED
+
+SharedVectorBuildTest > reusedReadBufferPreservesConcurrentBuilderGraphWithOneWorker() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > appendingNothingIsTheSameGraph() PASSED
+
+SharedVectorBuildTest > reusedReadBufferPreservesSerialGraph() PASSED
+
+SharedVectorBuildTest > rescoringCarriedEdgesDoesNotAliasTheSourceRow() PASSED
+
+SharedVectorBuildTest > appendedRowsDoNotAliasTheInsertionQuery() PASSED
+
+VectorStoreVectorsTest > exposesStoreSizeDimensionAndVectors() PASSED
+
+VectorStoreVectorsTest > reusesASharedReturnBuffer() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > everyLayerZeroArrayRespectsTheConnectionLimit() PASSED
+
+ExactScoreCacheTest > collisionsNeverReturnAnotherPairsScore() PASSED
+
+ExactScoreCacheTest > repeatPruningReusesExactScoresWithoutChangingSelectedEdges() PASSED
+
+HnswGraphBuilderTest > SsdPrefetchTests > asyncVectorPrefetcher_outOfRangeOrdinal_isIgnoredSilently() PASSED
+
+HnswGraphBuilderTest > SsdPrefetchTests > searchWithPrefetch_producesIdenticalResultsToNormalSearch() PASSED
+
+HnswGraphBuilderTest > SsdPrefetchTests > searchWithPrefetch_recall_atLeast90Pct_vs_bruteForce() PASSED
+
+HnswGraphBuilderTest > SsdPrefetchTests > asyncVectorPrefetcher_submittedCount_incrementsPerPrefetchCall() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_stressDifferentThreadCounts() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_achievesGoodRecall() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_mainComponentAtLeast95pct() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_neighborCountsWithinLimits() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_noIsolatedNodes() PASSED
+
+HnswGraphBuilderTest > MediumGraphConstruction > hundredNodes_neighborDiversity() PASSED
+
+HnswGraphBuilderTest > MediumGraphConstruction > hundredNodes_deterministicWithSameSeed() PASSED
+
+HnswGraphBuilderTest > MediumGraphConstruction > hundredNodes_graphIsConnected() PASSED
+
+HnswGraphBuilderTest > SmallGraphConstruction > tenNodes_allReachableFromEntryPoint() PASSED
+
+HnswGraphBuilderTest > SmallGraphConstruction > tenNodes_mostEdgesAreBidirectional() PASSED
+
+HnswGraphBuilderTest > SmallGraphConstruction > tenNodes_neighborCountsWithinLimits() PASSED
+
+HnswGraphBuilderTest > SmallGraphConstruction > tenNodes_entryPointIsHighestLevelNode() PASSED
+
+HnswGraphBuilderTest > SingleNodeInsertion > firstNode_hasNoNeighbors() PASSED
+
+HnswGraphBuilderTest > SingleNodeInsertion > secondNode_firstHasEdgeToSecond() PASSED
+
+HnswGraphBuilderTest > SingleNodeInsertion > firstNode_becomesEntryPoint() PASSED
+
+HnswGraphBuilderTest > SingleNodeInsertion > secondNode_hasEdgeToFirst() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_prefersCloserNeighbors() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_prunesBlockedCandidates() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_singleCandidate_returnsIt() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_emptyCandidate_returnsEmpty() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_returnsAtMostMaxConnections() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_fillsWithPrunedWhenKeepPruned() PASSED
+
+HnswGraphBuilderTest > RandomLevelGeneratorTests > mostNodesAtLevel0() PASSED
+
+HnswGraphBuilderTest > RandomLevelGeneratorTests > deterministicWithSameSeed() PASSED
+
+HnswGraphBuilderTest > RandomLevelGeneratorTests > levelsFollowExponentialDistribution() PASSED
+
+HnswGraphBuilderTest > RandomLevelGeneratorTests > noNegativeLevels() PASSED
+
+HnswGraphDiagnostics > real builds > a parallel build loses some reachability, and this bounds how much PASSED
+
+HnswGraphDiagnostics > real builds > identical vectors, the degenerate case that broke Lucene's component repair PASSED
+
+HnswGraphDiagnostics > real builds > a normally built graph is fully reachable with no structural defects PASSED
+
+HnswGraphDiagnostics > hand-built graphs > reports degree statistics over layer 0 PASSED
+
+HnswGraphDiagnostics > hand-built graphs > an empty graph reports nothing and does not throw PASSED
+
+HnswGraphDiagnostics > hand-built graphs > follows directed edges only, so a one-way edge leaves the source unreachable PASSED
+
+HnswGraphDiagnostics > hand-built graphs > detects a node unreachable from the entry node PASSED
+
+HnswGraphDiagnostics > hand-built graphs > counts self loops PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcIndex_buildsWithoutError() PASSED
+
+HnswSearcherTest > FusedAdcSearch > defaultSubvectors_rejectsNonPositiveDim() PASSED
+
+HnswSearcherTest > FusedAdcSearch > adcTable_scoreOrdering_correlatesWithExactSimilarity() PASSED
+
+HnswSearcherTest > FusedAdcSearch > defaultSubvectors_clampsToDivisorsOfDim() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcSearch_neighborListSize_matches() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcIndex_buildsWithDefaultsOverload() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcSearch_returnsSelf() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcBatchScoring_matchesPerNodeScoring() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > builderCustomParameters() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > deterministicWithSameSeed() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > builderDefaults_M16_ef200() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > buildAndSearch_endToEnd() PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [3] sim=COSINE PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [3] sim=COSINE PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+HnswSearcherTest > MediumDatasetSearch > searchAllQueries_averageRecall_above90() PASSED
+
+HnswSearcherTest > MediumDatasetSearch > recall10_above90_euclidean() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > recall10_above80_euclidean() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > recall10_above80_cosine() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > selfQuery_returnsQueryAsTopResult() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > recallIncreasesWithEfSearch() PASSED
+
+HnswSearcherTest > BasicSearch > efSearchLessThanK_throws() PASSED
+
+HnswSearcherTest > BasicSearch > searchTwoVectors_returnsNearest() PASSED
+
+HnswSearcherTest > BasicSearch > searchSingleVector_returnsSelf() PASSED
+
+HnswSearcherTest > BasicSearch > searchReturnsRequestedK() PASSED
+
+HnswSearcherTest > BasicSearch > searchResultsSortedByScoreDescending() PASSED
+
+QuantizedSearchTest > TwoPassAllSimilarityFunctions > twoPassSearch_worksWithAllFunctions(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+QuantizedSearchTest > TwoPassAllSimilarityFunctions > twoPassSearch_worksWithAllFunctions(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+QuantizedSearchTest > TwoPassAllSimilarityFunctions > twoPassSearch_worksWithAllFunctions(SimilarityFunction) > [3] sim=COSINE PASSED
+
+QuantizedSearchTest > TwoPassAllSimilarityFunctions > twoPassSearch_worksWithAllFunctions(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+QuantizedSearchTest > TwoPassRecall > recall10_withPQ_improvedByRescore() PASSED
+
+QuantizedSearchTest > TwoPassRecall > twoPassRecall_improvesWithLargerCandidatePool() PASSED
+
+> Task :vectors-bench:compileJava
+
+> Task :vectors-db:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+WriterGraphLifecycleTest > successfulAppendReusesGraphLocksAndExecutor() PASSED
+
+WriterGraphLifecycleTest > persistentAppendReopenAndCompaction() PASSED
+WARNING: Using incubator modules: jdk.incubator.vector
+
+WriterGraphLifecycleTest > inMemoryAppendAfterCompaction() PASSED
+
+WriterGraphLifecycleTest > upsertAndDeleteBeforeAppendKeepVectorsAlignedWithPhysicalOrdinals() PASSED
+
+WriterGraphLifecycleTest > refreshReleasesGraphAndLocksBeforeTheNextAppend() PASSED
+
+WriterGraphLifecycleTest > compactingAnEmptyPersistentCollectionReleasesGraphAndLocksAndAllowsFreshIngest() PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 1 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 2 of 10 PASSED
+
+CommitAppendsHnswGraphTest > upsertsAcrossGenerationsReturnTheNewVector(Path) PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 3 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 4 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 5 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 6 of 10 PASSED
+
+CommitAppendsHnswGraphTest > inMemoryBatchedCommitsRetrieveWhatASingleCommitRetrieves() PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 7 of 10 PASSED
+
+CommitAppendsHnswGraphTest > deletesStillApplyAcrossAppendedGenerations(Path) PASSED
+
+> Task :vectors-bench:classes
+
+> Task :vectors-hnsw:test
+
+QuantizedSearchTest > TwoPassRecall > recall10_above93_withSQ8() PASSED
+
+QuantizedSearchTest > TwoPassSearch > searchTwoPass_rescoresWithFullPrecision() PASSED
+
+QuantizedSearchTest > TwoPassSearch > searchTwoPass_withSQ8_returnsCorrectResults() PASSED
+
+QuantizedSearchTest > TwoPassSearch > searchTwoPass_usesFullPrecisionScoring_whenNoQuantization() PASSED
+
+QuantizedSearchTest > QuantizationAttachment > isQuantizationEnabled_reflectsState() PASSED
+
+QuantizedSearchTest > QuantizationAttachment > enableQuantization_validatesSize() PASSED
+
+QuantizedSearchTest > QuantizationAttachment > enableQuantization_validatesDimension() PASSED
+
+QuantizedSearchTest > Rescore > rescore_reranksWithFullPrecision() PASSED
+
+QuantizedSearchTest > Rescore > rescore_returnsTopK_whenMoreCandidatesThanK() PASSED
+
+QuantizedSearchTest > RefactoredSearcher > searchWithFullPrecisionScorer_matchesOriginalSearch() PASSED
+
+QuantizedSearchTest > RefactoredSearcher > searchWithCustomScorer_respectsScoringFunction() PASSED
+
+QuantizedSearchTest > VectorDatasetBridge > randomAccessVectorDataset_canTrainQuantizer() PASSED
+
+QuantizedSearchTest > VectorDatasetBridge > randomAccessVectorDataset_wrapsCorrectly() PASSED
+
+QuantizedSearchTest > NodeScorerBasics > quantizedNodeScorer_returnsApproximateScores() PASSED
+
+QuantizedSearchTest > NodeScorerBasics > fullPrecisionNodeScorer_matchesSimilarityFunction() PASSED
+
+> Task :vectors-bench:compileTestJava
+> Task :vectors-bench:testClasses
+
+> Task :vectors-db:test
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 8 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 9 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 10 of 10 PASSED
+
+WriterGraphLifecycleTest > closeReleasesTheWriterGraphAndLocks() PASSED
+
+CommitAppendsVectorsFileTest > successiveGenerationsShareTheVectorsFileAndItsContentIsCorrect(Path) PASSED
+
+CommitAppendsHnswGraphTest > batchedCommitsRetrieveWhatASingleCommitRetrieves(Path) PASSED
+
+MappedMetadataStoreTest > Reopen > reopenedStoreSeesSameDocuments(Path) PASSED
+
+MappedMetadataStoreTest > ReadOnly > getOutOfRangeReturnsNull(Path) PASSED
+
+MappedMetadataStoreTest > ReadOnly > putThrowsUnsupported(Path) PASSED
+
+MappedMetadataStoreTest > ReadOnly > deleteThrowsUnsupported(Path) PASSED
+
+MappedMetadataStoreTest > Validation > missingFileThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > wrongVersionThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > negativeCountThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > wrongMagicThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > nullDocumentInWriterThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > declaredHeapLargerThanFileThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > truncatedHeaderThrows(Path) PASSED
+
+MappedMetadataStoreTest > BulkRead > bulkReadReturnsNullForOutOfRange(Path) PASSED
+
+MappedMetadataStoreTest > BulkRead > bulkReadReturnsParallelArray(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > manyDocuments(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > emptyTagList(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > emptyStore(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > singleDocumentWithText(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > allMetadataVariantsRoundTrip(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > numericEdgeValues(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > singleDocumentNoMetadataNoText(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > equalityIgnoringVector(Path) PASSED
+
+> Task :vectors-hnsw:spotbugsMain
+
+> Task :vectors-bench:recallGate
+WARNING: Using incubator modules: jdk.incubator.vector
+
+RecallGateTest STANDARD_ERROR
+    Oct 03, 2026 3:02:01 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+    INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+    Oct 03, 2026 3:02:01 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+    INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+
+> Task :vectors-db:test
+
+CommitAppendsVectorsFileTest > reopeningAfterLinkedCommitsReadsEveryDocument(Path) PASSED
+
+CommitAppendsVectorsFileTest > aStaleTailFromAFailedCommitIsHarmlessAndOverwritten(Path) PASSED
+
+> Task :vectors-db:spotbugsMain FAILED
+
+> Task :vectors-bench:recallGate
+
+RecallGateTest > recallMatchesBaselineOrRecord() PASSED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':vectors-db:spotbugsMain'.
+> Cannot access input property 'sourceDirs' of task ':vectors-db:spotbugsMain'. Accessing unreadable inputs or outputs is not supported. Declare the task as untracked by using Task.doNotTrackState(). For more information, please refer to https://docs.gradle.org/9.4.1/userguide/incremental_build.html#sec:disable-state-tracking in the Gradle documentation.
+   > java.nio.file.FileSystemException: /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/src/main/java/com/integrallis/vectors/db/SuccessorVectors.java
+     vectors-db/src/main/java/com/integrallis/vectors/db/VectorCollectionImpl.java
+     vectors-db/src/main/java/com/integrallis/vectors/db/storage/Crc32Combine.java
+     vectors-db/src/main/java/com/integrallis/vectors/db/storage/Checksums.java
+     vectors-db/src/main/java/com/integrallis/vectors/db/storage/GenerationDirectory.java
+     vectors-db/src/main/java/com/integrallis/vectors/db/storage/MappedMetadataStore.java
+     vectors-db/src/test/java/com/integrallis/vectors/db/CommitMemoryFootprintTest.java
+     vectors-db/src/test/java/com/integrallis/vectors/db/CommitAppendsVectorsFileTest.java
+     vectors-db/src/test/java/com/integrallis/vectors/db/storage/Crc32CombineTest.java
+     vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/ConcurrentHnswGraphBuilder.java
+     vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/HnswGraph.java
+     vectors-bench/src/main/java/com/integrallis/vectors/bench/CommitCadenceBenchmark.java
+     vectors-bench: File name too long
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 24s
+148 actionable tasks: 15 executed, 3 from cache, 130 up-to-date

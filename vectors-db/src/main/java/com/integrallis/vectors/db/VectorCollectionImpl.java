@@ -135,8 +135,6 @@ final class VectorCollectionImpl implements VectorCollection {
    * committed generation back would force an O(N·M) rescore on every commit. Written and read under
    * the writer lock, and cleared whenever the live generation stops being this graph's successor.
    */
-  public static final long[] PHASE = new long[8]; // TEMPORARY profiling
-
   private HnswGraph writerGraph;
 
   /**
@@ -1086,7 +1084,7 @@ final class VectorCollectionImpl implements VectorCollection {
       }
       Generation newGen = openGeneration(rr.generationDir(), rr.manifest());
       this.generation = newGen;
-      writerGraph = null; // this generation came from elsewhere; our graph is not its parent
+      adoptWriterGraph(null); // this generation came from elsewhere; discard its predecessor
       this.nextGenerationNumber = Math.max(this.nextGenerationNumber, rr.generationNumber() + 1L);
       retire(current);
       queryCache.invalidateAll();
@@ -1103,10 +1101,17 @@ final class VectorCollectionImpl implements VectorCollection {
       return;
     }
     Generation oldGen = this.generation;
-    if (config.storageRoot() == null) {
-      commitInMemory(oldGen);
-    } else {
-      commitPersistent(oldGen);
+    try {
+      if (config.storageRoot() == null) {
+        commitInMemory(oldGen);
+      } else {
+        commitPersistent(oldGen);
+      }
+    } catch (RuntimeException | Error failure) {
+      // An append may mutate our private graph before publication fails. Retry from the
+      // published generation, never from partially inserted nodes or their edge scores.
+      adoptWriterGraph(null);
+      throw failure;
     }
     // A new generation is now live. Drop cached query results here — not only in the public
     // commit() — so that an auto-commit (maybeAutoCommit) or compact()-triggered commit also
@@ -1280,7 +1285,7 @@ final class VectorCollectionImpl implements VectorCollection {
     // and vectors.bin is streamed rather than built in memory. Every other path still wants a
     // matrix
     // (a full rebuild, Vamana, IVF, or quantizer training all consume float[][]).
-    long tP = System.nanoTime();
+
     SuccessorVectors successor =
         new SuccessorVectors(oldGen.mappedVectors, oldPhysicalCount, staging.documents(), dim);
     boolean appendOnly = canAppendHnswGraph(oldGen) && config.quantizerKind() == QuantizerKind.NONE;
@@ -1313,8 +1318,7 @@ final class VectorCollectionImpl implements VectorCollection {
             materialiseMatrix,
             !appendOnly);
     byte[] vectorsBin = materialized.vectorsBin();
-    PHASE[0] += System.nanoTime() - tP;
-    tP = System.nanoTime();
+
     byte[] idmapBin;
     byte[] metadataBin;
     MappedMetadataStore.Writer.Image metadataImage = null;
@@ -1331,8 +1335,6 @@ final class VectorCollectionImpl implements VectorCollection {
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to serialize commit payload", e);
     }
-    PHASE[1] += System.nanoTime() - tP;
-    tP = System.nanoTime();
 
     // 2a. Graph bytes.
     byte[] graphBin = null;
@@ -1353,9 +1355,6 @@ final class VectorCollectionImpl implements VectorCollection {
         graphBinCrc = Checksums.ofBytes(graphBin);
       }
     }
-
-    PHASE[2] += System.nanoTime() - tP;
-    tP = System.nanoTime();
 
     // 2b. Quantization.
     byte[] quantizedBin = null;
@@ -1378,7 +1377,7 @@ final class VectorCollectionImpl implements VectorCollection {
     }
 
     // 2c. Tombstones.
-    PHASE[3] += System.nanoTime() - tP;
+
     byte[] tombstonesBin = TombstoneCodec.encode(newTombstones, newPhysicalCount);
     long tombstonesBinLength = (long) tombstonesBin.length;
     long tombstonesBinCrc = tombstonesBin.length > 0 ? Checksums.ofBytes(tombstonesBin) : 0L;
@@ -1432,7 +1431,7 @@ final class VectorCollectionImpl implements VectorCollection {
             tombstonesBinCrc);
 
     GenerationDirectory.WriteResult wr;
-    long tW = System.nanoTime();
+
     try {
       wr =
           GenerationDirectory.writeGeneration(
@@ -1448,7 +1447,6 @@ final class VectorCollectionImpl implements VectorCollection {
                   vectorsBin == null ? successor : null,
                   metadataImage),
               manifest);
-      PHASE[4] += System.nanoTime() - tW;
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to write generation " + newGenNumber, e);
     }
@@ -1739,9 +1737,10 @@ final class VectorCollectionImpl implements VectorCollection {
             || config.indexType() == IndexType.VAMANA
             || config.indexType() == IndexType.IVF_FLAT
             || config.indexType() == IndexType.IVF_PQ;
+    // Compaction remaps ordinals, including when all rows were deleted.
+    adoptWriterGraph(null);
     if (needGraph && liveCount > 0) {
       // IGTM: for HNSW, merge the existing graph instead of rebuilding from scratch.
-      writerGraph = null; // compaction remaps ordinals, so the cached graph is not the parent
       if (config.indexType() == IndexType.HNSW
           && oldGen.spi instanceof MappedHnswIndexAdapter mapped) {
         HnswGraph oldGraph = mapped.graph();
@@ -2025,7 +2024,7 @@ final class VectorCollectionImpl implements VectorCollection {
             successor.asVectors(),
             indexMetric(),
             HNSW_APPEND_SEED ^ carried);
-    long tG = System.nanoTime();
+
     HnswGraph appended;
     if (old == writerGraph && old.capacity() >= successor.size()) {
       // Our own graph, with room: extend it. Nothing carried is touched.
@@ -2038,15 +2037,13 @@ final class VectorCollectionImpl implements VectorCollection {
           builder.append(
               old, carried, threads, scoresAreReal, Math.max(successor.size() * 2, 1_024));
     }
-    PHASE[5] += System.nanoTime() - tG;
+
     adoptWriterGraph(appended);
     if (appended == null) {
       return null;
     }
-    long tE = System.nanoTime();
-    byte[] encoded = HnswGraphCodec.encode(appended);
-    PHASE[6] += System.nanoTime() - tE;
-    return encoded;
+
+    return HnswGraphCodec.encode(appended);
   }
 
   /**
@@ -2556,6 +2553,7 @@ final class VectorCollectionImpl implements VectorCollection {
         return;
       }
       this.generation = null;
+      if (haveLock) adoptWriterGraph(null);
       staging.clear();
       gen.release();
     } finally {

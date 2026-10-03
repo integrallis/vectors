@@ -1,0 +1,211 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-gpu:processResources UP-TO-DATE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-core:compileJava FROM-CACHE
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-core:jar
+> Task :vectors-storage:compileJava FROM-CACHE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-gpu:compileJava FROM-CACHE
+> Task :vectors-gpu:classes UP-TO-DATE
+> Task :vectors-gpu:jar UP-TO-DATE
+> Task :vectors-quantization:compileJava FROM-CACHE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-vamana:compileJava FROM-CACHE
+> Task :vectors-vamana:classes UP-TO-DATE
+> Task :vectors-vamana:jar UP-TO-DATE
+> Task :vectors-ivf:compileJava FROM-CACHE
+> Task :vectors-ivf:classes UP-TO-DATE
+> Task :vectors-ivf:jar UP-TO-DATE
+> Task :vectors-hnsw:compileJava FROM-CACHE
+> Task :vectors-hnsw:classes UP-TO-DATE
+> Task :vectors-hnsw:jar
+> Task :vectors-db:compileJava FROM-CACHE
+> Task :vectors-db:classes UP-TO-DATE
+> Task :vectors-hnsw:compileTestJava
+> Task :vectors-hnsw:testClasses
+
+> Task :vectors-hnsw:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+SharedVectorBuildTest > reusedReadBufferPreservesConcurrentBuilderGraphWithOneWorker() FAILED
+    org.opentest4j.AssertionFailedError: expected: <35> but was: <1>
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+        at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:145)
+        at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:531)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.assertGraph(SharedVectorBuildTest.java:112)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.reusedReadBufferPreservesConcurrentBuilderGraphWithOneWorker(SharedVectorBuildTest.java:41)
+
+SharedVectorBuildTest > reusedReadBufferPreservesSerialGraph() PASSED
+
+SharedVectorBuildTest > rescoringCarriedEdgesDoesNotAliasTheSourceRow() FAILED
+    org.opentest4j.AssertionFailedError: expected: <35> but was: <135>
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+        at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:145)
+        at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:531)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.assertGraph(SharedVectorBuildTest.java:112)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.rescoringCarriedEdgesDoesNotAliasTheSourceRow(SharedVectorBuildTest.java:51)
+
+> Task :vectors-db:compileTestJava
+> Task :vectors-db:testClasses
+
+> Task :vectors-hnsw:test FAILED
+
+SharedVectorBuildTest > appendedRowsDoNotAliasTheInsertionQuery() FAILED
+    org.opentest4j.AssertionFailedError: expected: <35> but was: <230>
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+        at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+        at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:145)
+        at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:531)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.assertGraph(SharedVectorBuildTest.java:112)
+        at app//com.integrallis.vectors.hnsw.SharedVectorBuildTest.appendedRowsDoNotAliasTheInsertionQuery(SharedVectorBuildTest.java:61)
+
+4 tests completed, 3 failed
+
+> Task :vectors-db:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+WriterGraphLifecycleTest > successfulAppendReusesGraphLocksAndExecutor() PASSED
+
+WriterGraphLifecycleTest > persistentAppendReopenAndCompaction() FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: "v505"
+     but was: "v201"
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.check(WriterGraphLifecycleTest.java:72)
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.persistentAppendReopenAndCompaction(WriterGraphLifecycleTest.java:177)
+
+WriterGraphLifecycleTest > inMemoryAppendAfterCompaction() PASSED
+
+WriterGraphLifecycleTest > upsertAndDeleteBeforeAppendKeepVectorsAlignedWithPhysicalOrdinals() PASSED
+
+WriterGraphLifecycleTest > refreshReleasesGraphAndLocksBeforeTheNextAppend() FAILED
+    org.opentest4j.AssertionFailedError: 
+    Expecting value to be true but was false
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.refreshReleasesGraphAndLocksBeforeTheNextAppend(WriterGraphLifecycleTest.java:242)
+
+WriterGraphLifecycleTest > compactingAnEmptyPersistentCollectionReleasesGraphAndLocksAndAllowsFreshIngest() FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@4c063cb9
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.compactingAnEmptyPersistentCollectionReleasesGraphAndLocksAndAllowsFreshIngest(WriterGraphLifecycleTest.java:88)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 1 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@12fccff0
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 2 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@4af12a63
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 3 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@2ba024cb
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 4 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@11d2714a
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 5 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@aca2fc3
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 6 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@8ac12e6
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 7 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@3a588b5f
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 8 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@5dc7841c
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 9 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@5ed31735
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 10 of 10 FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@8b670c0
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows(WriterGraphLifecycleTest.java:148)
+
+WriterGraphLifecycleTest > closeReleasesTheWriterGraphAndLocks() FAILED
+    org.opentest4j.AssertionFailedError: 
+    expected: null
+     but was: com.integrallis.vectors.hnsw.HnswGraph@7b7068d8
+        at app//com.integrallis.vectors.db.WriterGraphLifecycleTest.closeReleasesTheWriterGraphAndLocks(WriterGraphLifecycleTest.java:127)
+
+17 tests completed, 14 failed
+
+> Task :vectors-db:test FAILED
+
+FAILURE: Build completed with 2 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':vectors-hnsw:test'.
+> There were failing tests. See the report at: file:///Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-hnsw/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+2: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':vectors-db:test'.
+> There were failing tests. See the report at: file:///Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+BUILD FAILED in 34s
+21 actionable tasks: 6 executed, 8 from cache, 7 up-to-date
