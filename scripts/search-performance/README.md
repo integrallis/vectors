@@ -60,3 +60,24 @@ SIMD, and scalar fallback.
   reduction mismatch at dimension 128. The run was stopped. The norm preparation
   now uses the existing explicit reduction tree rather than a JIT-tier-dependent
   `reduceLanes(ADD)` result.
+
+## Persistent corpus and other metrics
+
+After the first campaign completes, the same frozen jars can run against an
+existing, tombstone-free FLOAT32 HNSW generation:
+
+```sh
+python3 scripts/search-performance/run-frozen-collection.py /absolute/first-results \
+  /absolute/generation-directory /absolute/new-collection-results --rounds 3
+```
+
+This records input-file SHA-256 hashes and uses 32 deterministically perturbed
+source vectors as queries. It compares heap and mapped flat COSINE, mapped HNSW
+at ef=32/128/512, and heap single/batch EUCLIDEAN and DOT_PRODUCT controls. This
+is a search replay, not held-out recall estimation. Result digests must match
+between revisions. Runtime provenance comes from the first campaign's frozen
+jars, even if documentation or benchmark sources are subsequently updated.
+
+See [the source examination](RESEARCH.md) for what was checked against the supplied
+research and what these changes do and do not implement. Measured tables and raw
+fork medians are recorded in PR #87; the runner also writes them to `summary.json`.
