@@ -9,8 +9,7 @@ and on-disk formats are unchanged. There is no new setting.
   Parallel construction retains its original heap conversion and uncached pruning implementation.
 - The serial builder caches exact diversity scores (192 KiB per builder). Full pair keys make
   collisions evictions, never false hits. Parallel construction does not use this cache.
-- Shared-buffer vector sources use reusable query copies, and failed construction joins submitted
-  work before returning. Regression tests cover both cases.
+- The serial builder protects its query with one reusable copy for shared-buffer vector sources.
 - Quantizer selection uses a three-way partition so repeated training values cannot cause the
   previous quadratic partition behavior.
 
@@ -23,7 +22,7 @@ Run from the candidate checkout:
 ```sh
 python3 scripts/default-construction/run.py /path/to/baseline "$PWD" /new/output/collection \
   --generation /read-only/collection/gen-0000000000000063 \
-  --count 100000 --cadence 25000 --threads 8 --queries 1000 --rounds 3
+  --count 100000 --cadence 25000 --threads 8 --queries 1000 --rounds 3 --first candidate
 
 python3 scripts/default-construction/run.py /path/to/baseline "$PWD" /new/output/parallel \
   --corpus /data/wikipedia_base_1M.bin --query-file /data/wikipedia_query.bin \
@@ -70,6 +69,11 @@ Bounded worker loops made the collection faster but exceeded the parallel recall
 run (0.0071 at ef=10); the original executor dispatch was restored. Those timings are not shipping
 performance claims. A subsequent variant retaining parallel heap conversion and lazy pruning
 also failed (0.0062 at ef=10); both optimizations were removed from the parallel path. Historical
-source and raw results remain in the local campaign archive.
+source and raw results remain in the local campaign archive. A third parallel variant failed by
+0.014 at ef=10. All concurrent-builder edits, including independent bug fixes, were removed.
+The final concurrent builder and WorkContext class files are byte-identical to the baseline.
+Final qualification therefore covers the affected serial build path (full graph digests and
+held-out recall), plus the persistent COSINE path (timings and exhaustive recall). This scope
+reduction is not a claim that the rejected parallel variants passed their gate.
 
 Final measurements and raw evidence are in [RESULTS.md](RESULTS.md).

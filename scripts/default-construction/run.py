@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--queries", type=int, default=1000)
     parser.add_argument("--cadence", type=int, default=25000)
     parser.add_argument("--rounds", type=int, default=3)
+    parser.add_argument("--first", choices=["baseline", "candidate"], default="baseline")
     parser.add_argument("--builder", choices=["serial", "concurrent"], default="concurrent")
     args = parser.parse_args()
     if min(args.count, args.threads, args.queries, args.cadence, args.rounds) < 1:
@@ -96,8 +97,9 @@ def main():
             print(label, flush=True)
             with (output / (label + ".log")).open("w") as log:
                 subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
+        first_order = [args.first, "candidate" if args.first == "baseline" else "baseline"]
         for round_number in range(args.rounds):
-            for arm in (["baseline", "candidate"] if round_number % 2 == 0 else ["candidate", "baseline"]):
+            for arm in (first_order if round_number % 2 == 0 else first_order[::-1]):
                 label = f"{arm}-{round_number}"
                 if args.corpus:
                     run(arm, label, names[0], [args.corpus.resolve(), args.count, args.threads, 42 + round_number, args.builder, args.query_file.resolve(), args.queries])

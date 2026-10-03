@@ -1,0 +1,77 @@
+{
+  "baseline": "4bc505b3e8c0c217e9d66727d643921a0d8efd55",
+  "candidate_product_commit": "142410f9fe388ff9ddfc7341e193bc6651f7a743",
+  "platform": "macOS-26.6.2-x86_64-i386-64bit-Mach-O",
+  "cpu": "Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz",
+  "physical_cpus": 6,
+  "logical_cpus": 12,
+  "memory_bytes": 34359738368,
+  "jdk": "Temurin 25.0.3",
+  "jvm_flags": [
+    "--add-modules=jdk.incubator.vector",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xmx6g"
+  ],
+  "collection_order": [
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ]
+  ],
+  "parallel_order": [
+    [
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "candidate"
+    ]
+  ],
+  "product_sha256": {
+    "vectors-bench/src/main/java/com/integrallis/vectors/bench/CollectionRecallProbe.java": "75aeeef5779d23175bb86b43ecafa64581958aac65dc0be4fc77b97ae66f4f49",
+    "vectors-bench/src/main/java/com/integrallis/vectors/bench/DefaultCollectionReplayBenchmark.java": "8c5641eee044f9d1ad12d9653261e3f39a6a8e515509d867832f6049c463569a",
+    "vectors-bench/src/main/java/com/integrallis/vectors/bench/ExactConstructionBenchmark.java": "eadac08cf2be556e1a1a55db94a14777014068b5b2628ac545f1ffbaa4abf417",
+    "vectors-bench/src/main/java/com/integrallis/vectors/bench/dataset/BigAnnLoader.java": "415773a135e46e959aec95158e359099aef317b09edddfbd052dce5ba8c7d440",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/ExactScoreCache.java": "2029c4b44943d6e8a36c0541ed6810cc32a63785f8db46b6d8270255cc5862fc",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/HnswGraphDiagnostics.java": "ef682156bfb985946f0c68b676b81b762d768b538f17114047f7e9cda04660be",
+    "vectors-bench/src/main/java/com/integrallis/vectors/bench/dataset/DatasetDownloader.java": "fffc21f2a332e8b9782fcbf1ec6595f386fa7eb2de2fc93f2f40a1b420a61f28",
+    "vectors-bench/src/main/java/com/integrallis/vectors/bench/dataset/DatasetRegistry.java": "d5c539de6007977dcbc679980ad3fd7bd047c52543b311d1a4895d15c2a7c3aa",
+    "vectors-bench/src/main/java/com/integrallis/vectors/bench/dataset/Hdf5Loader.java": "ccc231f2f922fe968a4ccb2d950f44ae0fee5786abf174b8daaa77bb63bc003c",
+    "vectors-core/src/main/java/com/integrallis/vectors/core/PanamaVectorUtilSupport.java": "0330bed75e94d4b8b615e52ce4fb3c457a8836ac04badc1f5a0b63fc817d25d6",
+    "vectors-db/src/main/java/com/integrallis/vectors/db/SuccessorVectors.java": "cd75b04b7f8fe8602d71490d28c156c5c96f94688d391b7f6b498e1b811a4874",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/ConcurrentHnswGraphBuilder.java": "3bb21a6a427d343d692f1ee24bdb7a68fef745cef78aae95c03fc61069bb874b",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/HnswGraphBuilder.java": "2170e3cf9f0b36c4702d775517a8b2f357b9852936fa416220b6576f4648f24e",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/NeighborArray.java": "2dd4dc40d34b5108b1b8cbea70d48255749a31fb61811375aa421a53549c363f",
+    "vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/NeighborSelector.java": "057942e5a2c1a7c3cb22f35cf79c48eb06f373a701e03e823027109f631fafd1",
+    "vectors-quantization/src/main/java/com/integrallis/vectors/quantization/ScalarQuantizer.java": "f00eb84544aab02a6afba24127d22ffc85a2afbc4f51655ec3b38d4862545894"
+  },
+  "harness_sha256": {
+    "ExactConstructionBenchmark.java": "eadac08cf2be556e1a1a55db94a14777014068b5b2628ac545f1ffbaa4abf417",
+    "DefaultCollectionReplayBenchmark.java": "8c5641eee044f9d1ad12d9653261e3f39a6a8e515509d867832f6049c463569a",
+    "CollectionRecallProbe.java": "75aeeef5779d23175bb86b43ecafa64581958aac65dc0be4fc77b97ae66f4f49"
+  },
+  "frozen_project_jars_sha256": {
+    "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+    "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8",
+    "vectors-core-0.1.26.jar": "e6bf650bd32c1b51c017e330b511b08131ac071f11a57541ed8183b575e46df2",
+    "vectors-storage-s3-0.1.26.jar": "570105c75a296a08a83abf4fc8733b27ef4e9d66aa9befe215d584d43e224722",
+    "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+    "vectors-distributed-0.1.26.jar": "567c1857fc0028c8b7a2696a3ee6872ee8042d004a0ba0a021874cb54a4bdcf8",
+    "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+    "vectors-db-0.1.26.jar": "6a067d6a623d029912227951ef4f19858f9b9786ab172c902b39d055b41ec8b6",
+    "vectors-hnsw-0.1.26.jar": "e6480aaa0b8648ea9b456b274db11ca9f624b6e8fc3ed58176dc0614d91aabdb"
+  }
+}

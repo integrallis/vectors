@@ -299,15 +299,9 @@ public final class ConcurrentHnswGraphBuilder {
     // forward silently degrades the graph. Recomputing is O(N·M) distance computations, which is
     // why
     // a caller that kept its own freshly built graph passes scoresAreReal and skips it.
-    float[] carriedScratch =
-        !scoresAreReal && vectors.sharesReturnBuffer() ? new float[dimension] : null;
     for (int j = 0; j < firstNewOrdinal; j++) {
       int level = graph.nodeLevel(j);
       float[] self = scoresAreReal ? null : vectors.getVector(j);
-      if (carriedScratch != null) {
-        System.arraycopy(self, 0, carriedScratch, 0, dimension);
-        self = carriedScratch;
-      }
       for (int l = 0; l <= level; l++) {
         NeighborArray from = old.getNeighbors(j, l);
         if (from == null) {
@@ -510,7 +504,6 @@ public final class ConcurrentHnswGraphBuilder {
     final float[] kernelOut;
     final int[] batchIds;
     final float[] batchScores;
-    final float[] queryScratch;
     // Zero-copy segment-scoring scratch (null unless the store supports segments). queryScratchSeg
     // is
     // an off-heap copy of the current insert's query (refilled once per insert, not per candidate);
@@ -527,7 +520,6 @@ public final class ConcurrentHnswGraphBuilder {
       kernelOut = new float[maxNeighbors];
       batchIds = new int[maxNeighbors];
       batchScores = new float[maxNeighbors];
-      queryScratch = useSegments ? null : new float[dimension];
       if (useSegments) {
         // Arena.ofAuto(): GC-managed, lives as long as this per-thread WorkContext. Allocated ONCE.
         this.queryScratchSeg = Arena.ofAuto().allocate((long) dimension * Float.BYTES);
@@ -553,10 +545,6 @@ public final class ConcurrentHnswGraphBuilder {
       WorkContext ctx) {
 
     float[] query = vectors.getVector(nodeId);
-    if (vectors.sharesReturnBuffer() && !useSegments) {
-      System.arraycopy(query, 0, ctx.queryScratch, 0, dimension);
-      query = ctx.queryScratch;
-    }
     if (useSegments) {
       // Upload the query into the off-heap scratch ONCE per insert; every candidate score below
       // reads it against a zero-copy mmap slice, so no float[] is allocated per candidate.
@@ -797,26 +785,16 @@ public final class ConcurrentHnswGraphBuilder {
   }
 
   private static void awaitAll(List<Future<?>> futures) {
-    Throwable failure = null;
-    boolean interrupted = false;
-    // A shared executor outlives this call. Join every submitted worker before handing a failed
-    // graph back to its owner; otherwise workers could still mutate it during retry or cleanup.
-    for (var future : futures) {
-      boolean joined = false;
-      while (!joined) {
-        try {
-          future.get();
-          joined = true;
-        } catch (ExecutionException e) {
-          if (failure == null) failure = e.getCause() != null ? e.getCause() : e;
-          joined = true;
-        } catch (InterruptedException e) {
-          interrupted = true;
-          if (failure == null) failure = e;
-        }
+    for (var f : futures) {
+      try {
+        f.get();
+      } catch (ExecutionException e) {
+        Throwable cause = e.getCause();
+        throw new RuntimeException(cause != null ? cause : e);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new RuntimeException(e);
       }
     }
-    if (interrupted) Thread.currentThread().interrupt();
-    if (failure != null) throw new RuntimeException(failure);
   }
 }

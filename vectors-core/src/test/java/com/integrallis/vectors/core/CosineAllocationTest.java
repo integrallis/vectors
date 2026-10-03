@@ -16,7 +16,6 @@
 package com.integrallis.vectors.core;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.*;
 
 import java.lang.management.ManagementFactory;
 import java.util.SplittableRandom;
@@ -28,35 +27,80 @@ import org.junit.jupiter.api.Test;
 
 @Tag("unit")
 class CosineAllocationTest {
-  private static volatile float sink;
-
   @Test
-  void warmedCosineDoesNotAllocateATemporaryArrayPerPair() {
-    var bean = (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
-    assumeTrue(bean.isThreadAllocatedMemorySupported());
-    bean.setThreadAllocatedMemoryEnabled(true);
-    var implementation = new PanamaVectorUtilSupport();
-    long thread = Thread.currentThread().threadId();
-    for (int dimension : new int[] {PanamaVectorUtilSupport.FLOAT_SPECIES.length(), 512}) {
-      float[] a = new float[dimension], b = new float[dimension];
-      java.util.Arrays.fill(a, .25f);
-      java.util.Arrays.fill(b, .5f);
-      for (int i = 0; i < 100000; i++) {
-        a[0] = (i % 97) * .001f;
-        sink = implementation.cosine(a, b);
-      }
-      long before = bean.getThreadAllocatedBytes(thread);
-      for (int i = 0; i < 20000; i++) {
-        a[0] = (i % 97) * .001f;
-        sink = implementation.cosine(a, b);
-      }
-      long allocated = bean.getThreadAllocatedBytes(thread) - before;
-      System.out.printf(
-          "COSINE_ALLOC dimension=%d iterations=20000 bytes=%d%n", dimension, allocated);
+  void warmedCosineDoesNotAllocateATemporaryArrayPerPair() throws Exception {
+    // Allocation measurements need an uninstrumented, fully compiled VM: coverage probes and
+    // background tiered compilation can materialize Vector API boxes unrelated to result arrays.
+    var log = java.nio.file.Files.createTempFile("cosine-allocation-", ".txt");
+    String separator = java.io.File.pathSeparator;
+    String classpath =
+        java.nio.file.Path.of(
+                PanamaVectorUtilSupport.class
+                    .getProtectionDomain()
+                    .getCodeSource()
+                    .getLocation()
+                    .toURI())
+            + separator
+            + java.nio.file.Path.of(
+                CosineAllocationTest.class
+                    .getProtectionDomain()
+                    .getCodeSource()
+                    .getLocation()
+                    .toURI());
+    var process =
+        new ProcessBuilder(
+                java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                "--add-modules=jdk.incubator.vector",
+                "-Xbatch",
+                "-XX:-TieredCompilation",
+                "-cp",
+                classpath,
+                AllocationProbe.class.getName())
+            .redirectErrorStream(true)
+            .redirectOutput(log.toFile())
+            .start();
+    try {
       assertTrue(
-          allocated < 20000L * 8,
-          "cosine allocated " + allocated + " bytes for dimension " + dimension);
-      assertTrue(Float.isFinite(sink));
+          process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS), "allocation probe timed out");
+      String output = java.nio.file.Files.readString(log);
+      System.out.print(output);
+      assertEquals(0, process.exitValue(), output);
+    } finally {
+      process.destroyForcibly();
+      java.nio.file.Files.deleteIfExists(log);
+    }
+  }
+
+  public static final class AllocationProbe {
+    private static volatile float sink;
+
+    public static void main(String[] args) {
+      var bean = (com.sun.management.ThreadMXBean) ManagementFactory.getThreadMXBean();
+      if (!bean.isThreadAllocatedMemorySupported())
+        throw new AssertionError("allocation accounting unavailable");
+      bean.setThreadAllocatedMemoryEnabled(true);
+      var implementation = new PanamaVectorUtilSupport();
+      long thread = Thread.currentThread().threadId();
+      for (int dimension : new int[] {PanamaVectorUtilSupport.FLOAT_SPECIES.length(), 512}) {
+        float[] a = new float[dimension], b = new float[dimension];
+        java.util.Arrays.fill(a, .25f);
+        java.util.Arrays.fill(b, .5f);
+        for (int i = 0; i < 100000; i++) {
+          a[0] = (i % 97) * .001f;
+          sink = implementation.cosine(a, b);
+        }
+        long before = bean.getThreadAllocatedBytes(thread);
+        for (int i = 0; i < 20000; i++) {
+          a[0] = (i % 97) * .001f;
+          sink = implementation.cosine(a, b);
+        }
+        long allocated = bean.getThreadAllocatedBytes(thread) - before;
+        System.out.printf(
+            "COSINE_ALLOC dimension=%d iterations=20000 bytes=%d%n", dimension, allocated);
+        if (allocated >= 20000L * 8 || !Float.isFinite(sink))
+          throw new AssertionError(
+              "cosine allocated " + allocated + " bytes for dimension " + dimension);
+      }
     }
   }
 

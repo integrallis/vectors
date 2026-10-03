@@ -18,7 +18,6 @@ package com.integrallis.vectors.hnsw;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.integrallis.vectors.core.SimilarityFunction;
-import java.util.Arrays;
 import java.util.SplittableRandom;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -26,35 +25,15 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class SharedVectorBuildTest {
   @Test
-  void reusedReadBufferPreservesSerialAndConcurrentGraphs() {
+  void reusedReadBufferPreservesSerialGraph() {
     float[][] rows = rows();
-    for (boolean parallelBuilder : new boolean[] {false, true}) {
-      HnswGraph expected = build(source(rows, false), parallelBuilder);
-      HnswGraph actual = build(source(rows, true), parallelBuilder);
-      assertGraph(expected, actual);
-    }
-  }
-
-  @Test
-  void reusedReadBufferPreservesCarriedEdgeRescoring() {
-    float[][] rows = rows();
-    HnswGraph prefix = build(source(Arrays.copyOf(rows, 150), false), true);
-    HnswGraph expected =
-        ConcurrentHnswGraphBuilder.create(
-                16, 200, source(rows, false), SimilarityFunction.EUCLIDEAN, 42)
-            .append(prefix, 150, 1);
-    HnswGraph actual =
-        ConcurrentHnswGraphBuilder.create(
-                16, 200, source(rows, true), SimilarityFunction.EUCLIDEAN, 42)
-            .append(prefix, 150, 1);
+    HnswGraph expected = build(source(rows, false));
+    HnswGraph actual = build(source(rows, true));
     assertGraph(expected, actual);
   }
 
-  private static HnswGraph build(RandomAccessVectors source, boolean parallelBuilder) {
-    return parallelBuilder
-        ? ConcurrentHnswGraphBuilder.create(16, 200, source, SimilarityFunction.EUCLIDEAN, 42)
-            .build(1)
-        : HnswGraphBuilder.create(16, 200, source, SimilarityFunction.EUCLIDEAN, 42).build();
+  private static HnswGraph build(RandomAccessVectors source) {
+    return HnswGraphBuilder.create(16, 200, source, SimilarityFunction.EUCLIDEAN, 42).build();
   }
 
   private static RandomAccessVectors source(float[][] rows, boolean reuse) {

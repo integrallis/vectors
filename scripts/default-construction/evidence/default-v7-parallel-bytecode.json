@@ -1,0 +1,10 @@
+{
+  "com/integrallis/vectors/hnsw/ConcurrentHnswGraphBuilder.class": {
+    "identical": true,
+    "sha256": "114574410ebf465134558d83ad2918e42eae4760b28fc8ffab3a54eac1ef6209"
+  },
+  "com/integrallis/vectors/hnsw/ConcurrentHnswGraphBuilder$WorkContext.class": {
+    "identical": true,
+    "sha256": "b0e3ff4be9f6efbe91c4930e4d743111fce7ff80a7904a98354b08049d297e6d"
+  }
+}

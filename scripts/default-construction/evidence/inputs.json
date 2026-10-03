@@ -1,0 +1,37 @@
+[
+  {
+    "path": "wikipedia_query.bin",
+    "bytes": 15360008,
+    "sha256": "b695b4e50b09a3eecdbb678f0548eabcc5b3bcd9e9a618a0153db218ee5ceffe"
+  },
+  {
+    "path": "wikipedia_base_1M.bin",
+    "bytes": 3072000008,
+    "sha256": "f8ea1f38b3c3691f17753e313ea4b4cfef71ccfa83aff1a4b0ada69cd9b59e67"
+  },
+  {
+    "path": "metadata.bin",
+    "bytes": 250561619,
+    "sha256": "77dd255a19f9634fc607954e41e76f61737bb706366328d396480f03dd973a82"
+  },
+  {
+    "path": "manifest.bin",
+    "bytes": 200,
+    "sha256": "c98f60f6f26b08705c09ff90b2223c54c14503528adab2eef652fe0945822bb5"
+  },
+  {
+    "path": "vectors.bin",
+    "bytes": 1290240000,
+    "sha256": "71dcb79857af75d5a35ce71f6e4e08a44386e3e04ee905874e3e22c4b0a3d25b"
+  },
+  {
+    "path": "graph.bin",
+    "bytes": 88675928,
+    "sha256": "4dad981f19ae57684f96d9dba60da7417a3404e1845532bc0d70d7b146e8276f"
+  },
+  {
+    "path": "idmap.bin",
+    "bytes": 14378906,
+    "sha256": "c9d239b22d2bebcba397a72e60453d037fbcd6ba32b178e108fe4d36b09aa974"
+  }
+]

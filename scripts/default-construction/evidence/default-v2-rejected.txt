@@ -1,0 +1,1 @@
+Stopped after second commit: mixing mapped native segments and staged float-array heap segments regressed append time (89.3 s for the second 25k rows). Incomplete run is not a speedup measurement.
