@@ -1,0 +1,3 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+COSINE_ALLOC dimension=8 iterations=20000 bytes=0
+COSINE_ALLOC dimension=512 iterations=20000 bytes=0

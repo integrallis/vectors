@@ -36,8 +36,10 @@ def main():
     if args.corpus and not args.query_file:
         parser.error("graph runs require --query-file (truth is recomputed for the selected prefix)")
     output = args.output.resolve()
-    output.mkdir(parents=True, exist_ok=False)
     roots = {"baseline": args.baseline.resolve(), "candidate": args.candidate.resolve()}
+    if any(output.is_relative_to(root) for root in roots.values()):
+        parser.error("output must be outside both source checkouts")
+    output.mkdir(parents=True, exist_ok=False)
     java = str(Path(os.environ["JAVA_HOME"]) / "bin/java") if "JAVA_HOME" in os.environ else shutil.which("java")
     javac = str(Path(java).parent / "javac")
     provenance = {"arguments": {key: str(value) for key, value in vars(args).items()}}

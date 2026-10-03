@@ -1,0 +1,5 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+COSINE_ALLOC dimension=8 iterations=20000 bytes=0
+COSINE_ALLOC dimension=512 iterations=20000 bytes=640000
+Exception in thread "main" java.lang.AssertionError: cosine allocated 640000 bytes for dimension 512
+	at com.integrallis.vectors.core.CosineAllocationTest$AllocationProbe.main(CosineAllocationTest.java:101)

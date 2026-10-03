@@ -35,7 +35,7 @@ python3 scripts/default-construction/run.py /path/to/baseline "$PWD" /new/output
 
 The fbin files have little-endian int32 row/dimension headers followed by float32 rows.
 The collection replay requires existing cached embeddings; it never calls an embedding API.
-Inputs are read-only. Every replay uses a new destination and preserves the source normalization
+Keep output directories outside both source checkouts. Inputs are read-only. Every replay uses a new destination and preserves the source normalization
 flag, IDs, text, metadata and hashes. The driver refuses an existing output directory.
 It records source revisions, dirty patches and untracked source archives, JDK/host details,
 commands and raw output. Project jars are frozen before timing; one fresh JVM runs at a time.
