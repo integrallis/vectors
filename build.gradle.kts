@@ -461,6 +461,10 @@ configure(libraryProjects) {
     // Configure SpotBugs
     tasks.withType<com.github.spotbugs.snom.SpotBugsTask> {
         excludeFilter.set(file("${rootProject.projectDir}/spotbugs-exclude.xml"))
+        reports.maybeCreate("xml").apply {
+            required.set(true)
+            outputLocation.set(layout.buildDirectory.file("reports/spotbugs/${this@withType.name}.xml"))
+        }
     }
 
     // Disable SpotBugs for test code

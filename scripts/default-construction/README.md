@@ -4,7 +4,8 @@ These changes apply automatically. Graph parameters, float precision, insertion 
 and on-disk formats are unchanged. There is no new setting.
 
 - Cosine scoring returns its scalar result without allocating a three-float temporary array.
-  A copy of the old arithmetic is checked bit-for-bit across vector widths and scalar tails.
+  A copy of the old arithmetic is checked bit-for-bit across vector widths and scalar tails,
+  in interpreted and fully warmed compiled JVMs.
 - Serial search-result heaps drain directly into neighbor arrays, preserving equal-score ordering.
   Parallel construction retains its original heap conversion and uncached pruning implementation.
 - The serial builder caches exact diversity scores (192 KiB per builder). Full pair keys make

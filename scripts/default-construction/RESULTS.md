@@ -10,8 +10,8 @@ rejected SQ8 or parallel-builder variants.
 
 All six paired timings improved. The baseline is `4bc505b3e8c0c217e9d66727d643921a0d8efd55`,
 which already includes the earlier batch-write fix in #85. Measured product source is commit
-`eb1897510faa61e3319c3c2e811d906393c26a3b`; subsequent report/test-runner changes do not alter
-those runtime sources. [Provenance](evidence/provenance.json) records source and frozen-jar hashes.
+`eb1897510faa61e3319c3c2e811d906393c26a3b`; later CI corrections remove only an unused metadata-writer field from runtime code. The graph
+and kernel sources remain identical to the measured commit. [Provenance](evidence/provenance.json) records source and frozen-jar hashes.
 
 ## Every timing sample
 
@@ -63,7 +63,9 @@ The same isolated allocation probe fails against the baseline and passes against
 At dimension 512, 20,000 cosine calls allocate **640,000 bytes before and zero after**. It uses an
 uninstrumented JVM with synchronous compilation to exclude coverage probes and partially compiled
 Vector API boxes. An independent copy of the original arithmetic checks result bits across vector
-boundaries and scalar tails under ordinary coverage instrumentation.
+boundaries and scalar tails in both interpreted and fully warmed compiled JVMs. Both kernels
+are warmed over every tested shape before compiled comparisons; this avoids comparing different
+Vector API reduction compilation states. The assertion remains exact bit equality, with no epsilon.
 
 Tests also cover exact cache collisions and pruning, equal-score heap ordering, shared buffers in
 the serial builder, duplicate-heavy quantizer training, replay source preservation and reopen.

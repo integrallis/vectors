@@ -65,5 +65,10 @@
       "baseline",
       "candidate"
     ]
-  ]
+  ],
+  "post_measurement_runtime_cleanup": {
+    "file": "vectors-db/src/main/java/com/integrallis/vectors/db/storage/MappedMetadataStore.java",
+    "sha256": "4eae7b3410c9a46286e25621088c10bf9039f29f43c82b3d2049c867a39cca1b",
+    "change": "Remove unread Image.written field and its assignment; graph and kernel sources unchanged."
+  }
 }

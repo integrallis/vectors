@@ -424,7 +424,6 @@ public final class MappedMetadataStore implements MetadataStore {
       private final int[] lengths;
       private long heapSize = -1;
       private long heapCrc;
-      private Path written;
 
       public Image(List<Document> documents) {
         this.documents = Objects.requireNonNull(documents, "documents must not be null");
@@ -504,7 +503,6 @@ public final class MappedMetadataStore implements MetadataStore {
           writeFully(channel, header());
           channel.force(true);
         }
-        this.written = path;
       }
 
       /** Encodes the documents only to learn the heap's size, when {@link #writeTo} has not run. */

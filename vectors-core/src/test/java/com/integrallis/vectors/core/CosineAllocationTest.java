@@ -29,8 +29,12 @@ import org.junit.jupiter.api.Test;
 class CosineAllocationTest {
   @Test
   void warmedCosineDoesNotAllocateATemporaryArrayPerPair() throws Exception {
-    // Allocation measurements need an uninstrumented, fully compiled VM: coverage probes and
-    // background tiered compilation can materialize Vector API boxes unrelated to result arrays.
+    runProbe(AllocationProbe.class, false);
+  }
+
+  private static void runProbe(Class<?> probe, boolean interpreted) throws Exception {
+    // Keep both numerical implementations in the same compilation mode. Coverage probes and
+    // mixed interpreter/C2 reductions can otherwise change Vector API allocation and rounding.
     var log = java.nio.file.Files.createTempFile("cosine-allocation-", ".txt");
     String separator = java.io.File.pathSeparator;
     String classpath =
@@ -51,17 +55,17 @@ class CosineAllocationTest {
         new ProcessBuilder(
                 java.nio.file.Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "--add-modules=jdk.incubator.vector",
-                "-Xbatch",
+                interpreted ? "-Xint" : "-Xbatch",
                 "-XX:-TieredCompilation",
                 "-cp",
                 classpath,
-                AllocationProbe.class.getName())
+                probe.getName())
             .redirectErrorStream(true)
             .redirectOutput(log.toFile())
             .start();
     try {
       assertTrue(
-          process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS), "allocation probe timed out");
+          process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS), "cosine probe timed out");
       String output = java.nio.file.Files.readString(log);
       System.out.print(output);
       assertEquals(0, process.exitValue(), output);
@@ -105,27 +109,69 @@ class CosineAllocationTest {
   }
 
   @Test
-  void cosinePreservesStartingRevisionBitsAtVectorBoundariesAndTails() {
-    var implementation = new PanamaVectorUtilSupport();
-    var reference = new LegacyCosine();
-    SplittableRandom random = new SplittableRandom(83421);
-    for (int dimension :
-        new int[] {
-          1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 100, 128, 255, 256, 257, 511, 512,
-          513, 768, 960, 961
-        }) {
-      for (int trial = 0; trial < 100; trial++) {
-        float[] a = new float[dimension], b = new float[dimension];
-        for (int d = 0; d < dimension; d++) {
-          a[d] = Math.scalb((float) random.nextDouble(-1, 1), random.nextInt(-10, 11));
-          b[d] = Math.scalb((float) random.nextDouble(-1, 1), random.nextInt(-10, 11));
+  void compiledCosinePreservesStartingRevisionBitsAtVectorBoundariesAndTails() throws Exception {
+    runProbe(ArithmeticProbe.class, false);
+  }
+
+  @Test
+  void interpretedCosinePreservesStartingRevisionBitsAtVectorBoundariesAndTails() throws Exception {
+    runProbe(ArithmeticProbe.class, true);
+  }
+
+  public static final class ArithmeticProbe {
+    private static volatile float sink;
+
+    public static void main(String[] args) {
+      var implementation = new PanamaVectorUtilSupport();
+      var reference = new LegacyCosine();
+      boolean interpreted =
+          ManagementFactory.getRuntimeMXBean().getInputArguments().contains("-Xint");
+      if (!interpreted) {
+        for (int dimension :
+            new int[] {
+              1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 100, 128, 255, 256, 257, 511,
+              512, 513, 768, 960, 961
+            }) {
+          float[] a = new float[dimension], b = new float[dimension];
+          java.util.Arrays.fill(a, .25f);
+          java.util.Arrays.fill(b, .5f);
+          for (int i = 0; i < 100000; i++) {
+            a[0] = (i % 97) * .001f;
+            sink = implementation.cosine(a, b);
+            sink = reference.cosine(a, b);
+          }
         }
-        if (trial == 0) java.util.Arrays.fill(a, 0f);
-        assertEquals(
-            Float.floatToIntBits(reference.cosine(a, b)),
-            Float.floatToIntBits(implementation.cosine(a, b)),
-            "dimension=" + dimension);
       }
+      SplittableRandom random = new SplittableRandom(83421);
+      int cases = 0;
+      for (int dimension :
+          new int[] {
+            1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 100, 128, 255, 256, 257, 511, 512,
+            513, 768, 960, 961
+          }) {
+        for (int trial = 0; trial < 100; trial++) {
+          float[] a = new float[dimension], b = new float[dimension];
+          for (int d = 0; d < dimension; d++) {
+            a[d] = Math.scalb((float) random.nextDouble(-1, 1), random.nextInt(-10, 11));
+            b[d] = Math.scalb((float) random.nextDouble(-1, 1), random.nextInt(-10, 11));
+          }
+          if (trial == 0) java.util.Arrays.fill(a, 0f);
+          int expected = Float.floatToIntBits(reference.cosine(a, b));
+          int actual = Float.floatToIntBits(implementation.cosine(a, b));
+          if (expected != actual)
+            throw new AssertionError(
+                "dimension="
+                    + dimension
+                    + " trial="
+                    + trial
+                    + " expected="
+                    + Integer.toHexString(expected)
+                    + " actual="
+                    + Integer.toHexString(actual));
+          cases++;
+        }
+      }
+      System.out.printf("COSINE_BITS interpreted=%s cases=%d%n", interpreted, cases);
     }
   }
 
