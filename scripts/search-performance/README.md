@@ -4,8 +4,7 @@ The change prepares the COSINE query norm once per flat scan (heap batch
 and mapped storage) and drains HNSW result heaps directly into reusable sorted
 storage. HNSW retains the same traversal, scores, tie order, and search budget.
 Each searcher loses an `int[N]` and a `float[N]` (8N bytes plus array headers).
-Single-query heap scans retain their original kernel after the prepared-norm
-variant regressed on the saved 100,000-row corpus. The flat implementation
+Single-query heap scans retain their original kernel. The flat implementation
 preserves the existing four-accumulator arithmetic;
 short vectors and scalar providers retain their existing cosine path.
 
@@ -35,7 +34,7 @@ Each workload warms first, then records seven passes per JVM. Summaries take the
 median within each fork and then across forks. Hashes cover every returned ID
 and score bit; mismatches fail the run. Searcher allocation is measured separately.
 
-These are local, warm-cache search workloads. They do not establish large-corpus,
+These are warm-cache search workloads. Run them on an idle dedicated benchmark host. They do not establish large-corpus,
 cold-storage, construction, embedding-model, or competitor/SOTA performance.
 
 ## Regression checks
@@ -63,10 +62,29 @@ SIMD, and scalar fallback.
   now uses the existing explicit reduction tree rather than a JIT-tier-dependent
   `reduceLanes(ADD)` result.
 
-- The first numerically correct candidate (`1b80945`) improved batch/mapped scans
-  but slowed single-query heap scans by 3.88% on the 100,000-row collection.
-  That single-query change was removed before merge. Batch cosine dispatch was
-  moved outside the inner scan loop so other metrics retain the original loop.
+- Laptop latency measurements are withdrawn: workstation contention made them
+  unsuitable for qualification. They are not evidence of a speedup or slowdown.
+  The single-query heap experiment was removed; that path retains the baseline
+  kernel. Batch cosine dispatch is outside the inner loop, preserving other metrics.
+
+## Published datasets
+
+`PublishedSearchPerformance.java` also accepts little-endian fbin files: two int32
+header fields (row count, dimension), followed by row-major float32 values.
+Use the first 100,000 GloVe-100 train rows and all 60,000 Fashion-MNIST train rows
+from ANN-Benchmarks, preserving source order, plus their first 256 official test
+queries. Name inputs `<dataset>-train.fbin` and `<dataset>-test.fbin`, with dataset
+names `glove-100-angular` and `fashion-mnist-784-euclidean`.
+
+Compile with both companion Java harnesses against the frozen baseline classpath.
+Run `PublishedSearchPerformance INPUT_DIRECTORY SHARED_FIXTURE_DIRECTORY` with
+baseline first, then alternate baseline/candidate JVMs. Both arms must share the
+fixture directory: the baseline saves the graph and exact top-10 oracle there.
+Flat timing uses the first 32 official queries over the full selected corpus. HNSW
+uses all 256 queries against the first 20,000 train rows, M=16, efConstruction=200,
+seed=421, efSearch=32/128/512. Report recall against the selected graph corpus,
+not the original full-dataset neighbor file. Check complete ID/score-bit hashes
+and recall counts across arms. Retain input hashes, commands and all raw samples.
 
 ## Persistent corpus and other metrics
 
