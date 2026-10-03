@@ -127,6 +127,7 @@ public final class MappedFlatScanAdapter implements IndexSpi, ExactOrdinalScorer
     }
 
     int actualK = Math.min(k, size);
+    float queryNorm = metric == SimilarityFunction.COSINE ? VectorUtil.cosineQueryNorm(query) : 0f;
 
     // Bounded min-heap (by score) over at most actualK entries. When full, the root is the
     // worst-so-far kept result; a new candidate with strictly higher score replaces the root.
@@ -149,7 +150,8 @@ public final class MappedFlatScanAdapter implements IndexSpi, ExactOrdinalScorer
             switch (metric) {
               case EUCLIDEAN -> 1f / (1f + VectorUtil.squareDistance(queryBuf, vec, dimension));
               case DOT_PRODUCT -> (1f + VectorUtil.dotProduct(queryBuf, vec, dimension)) / 2f;
-              case COSINE -> (1f + VectorUtil.cosine(queryBuf, vec, dimension)) / 2f;
+              case COSINE ->
+                  (1f + VectorUtil.cosineWithQueryNorm(queryBuf, vec, dimension, queryNorm)) / 2f;
               case MAXIMUM_INNER_PRODUCT ->
                   SimilarityFunction.scaleMaxInnerProductScore(
                       VectorUtil.dotProduct(queryBuf, vec, dimension));

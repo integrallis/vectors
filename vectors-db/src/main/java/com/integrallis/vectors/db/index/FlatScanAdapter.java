@@ -16,6 +16,7 @@
 package com.integrallis.vectors.db.index;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.VectorUtil;
 import java.util.Objects;
 
 /**
@@ -69,8 +70,13 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
     float[] heapScores = new float[actualK];
     int heapSize = 0;
 
+    boolean cosine = metric == SimilarityFunction.COSINE;
+    float queryNorm = cosine ? VectorUtil.cosineQueryNorm(query) : 0f;
     for (int i = 0; i < vectors.length; i++) {
-      float score = metric.compare(query, vectors[i]);
+      float score =
+          cosine
+              ? (1f + VectorUtil.cosineWithQueryNorm(query, vectors[i], queryNorm)) / 2f
+              : metric.compare(query, vectors[i]);
       if (heapSize < actualK) {
         heapIds[heapSize] = i;
         heapScores[heapSize] = score;
@@ -137,10 +143,18 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
     int[][] heapIds = new int[q][actualK];
     float[][] heapScores = new float[q][actualK];
     int[] heapSizes = new int[q];
+    boolean cosine = metric == SimilarityFunction.COSINE;
+    float[] queryNorms = cosine ? new float[q] : null;
+    if (cosine) {
+      for (int qi = 0; qi < q; qi++) queryNorms[qi] = VectorUtil.cosineQueryNorm(queries[qi]);
+    }
     for (int v = 0; v < vectors.length; v++) {
       float[] stored = vectors[v];
       for (int qi = 0; qi < q; qi++) {
-        float score = metric.compare(queries[qi], stored);
+        float score =
+            cosine
+                ? (1f + VectorUtil.cosineWithQueryNorm(queries[qi], stored, queryNorms[qi])) / 2f
+                : metric.compare(queries[qi], stored);
         int sz = heapSizes[qi];
         int[] ids = heapIds[qi];
         float[] scores = heapScores[qi];

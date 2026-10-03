@@ -72,6 +72,22 @@ public interface VectorUtilSupport {
   /** Computes the cosine similarity between two float vectors. Returns value in [-1, 1]. */
   float cosine(float[] a, float[] b);
 
+  /** Prepares a query norm for repeated cosine comparisons. */
+  default float cosineQueryNorm(float[] query) {
+    return dotProduct(query, query);
+  }
+
+  /** Cosine with a norm prepared by this provider; scalar providers retain their arithmetic. */
+  default float cosineWithQueryNorm(float[] a, float[] b, float queryNorm) {
+    return cosine(a, b);
+  }
+
+  /** Segment cosine with the norm of the first vector prepared by this provider. */
+  default float cosineWithQueryNorm(
+      MemorySegment a, MemorySegment b, int dimensions, float queryNorm) {
+    return cosine(a, b, dimensions);
+  }
+
   // --- Byte distance kernels ---
 
   /** Computes the dot product of two signed byte vectors. */

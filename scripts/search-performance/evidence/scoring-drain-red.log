@@ -1,0 +1,122 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-hnsw:compileJava UP-TO-DATE
+> Task :vectors-hnsw:classes UP-TO-DATE
+
+> Task :vectors-hnsw:compileTestJava FAILED
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/ResultDrainTest.java:50: error: cannot find symbol
+        destination.drainResultsFrom(reused);
+                   ^
+  symbol:   method drainResultsFrom(NodeQueue)
+  location: variable destination of type NeighborArray
+1 error
+
+> Task :vectors-core:compileTestJava
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:40: error: cannot find symbol
+        float norm = VectorUtil.cosineQueryNorm(query);
+                               ^
+  symbol:   method cosineQueryNorm(float[])
+  location: class VectorUtil
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:42: error: cannot find symbol
+        sink = VectorUtil.cosineWithQueryNorm(query, row, norm);
+                         ^
+  symbol:   method cosineWithQueryNorm(float[],float[],float)
+  location: class VectorUtil
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:44: error: cannot find symbol
+        sink = VectorUtil.cosineWithQueryNorm(q, r, dim, norm);
+                         ^
+  symbol:   method cosineWithQueryNorm(MemorySegment,MemorySegment,int,float)
+  location: class VectorUtil
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:48: error: cannot find symbol
+        float norm = VectorUtil.cosineQueryNorm(query);
+                               ^
+  symbol:   method cosineQueryNorm(float[])
+  location: class VectorUtil
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:50: error: cannot find symbol
+            Float.floatToIntBits(VectorUtil.cosineWithQueryNorm(query, row, norm)), "array dim=" + dim);
+                                           ^
+  symbol:   method cosineWithQueryNorm(float[],float[],float)
+  location: class VectorUtil
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:52: error: cannot find symbol
+            Float.floatToIntBits(VectorUtil.cosineWithQueryNorm(q, r, dim, norm)), "segment dim=" + dim);
+                                           ^
+  symbol:   method cosineWithQueryNorm(MemorySegment,MemorySegment,int,float)
+  location: class VectorUtil
+6 errors
+
+> Task :vectors-core:compileTestJava FAILED
+
+[Incubating] Problems report is available at: file:///Users/briansam-bodden/Code/java-ai/projects/vectors/build/reports/problems/problems-report.html
+
+FAILURE: Build completed with 2 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':vectors-hnsw:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/ResultDrainTest.java:50: error: cannot find symbol
+          destination.drainResultsFrom(reused);
+                     ^
+    symbol:   method drainResultsFrom(NodeQueue)
+    location: variable destination of type NeighborArray
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+2: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':vectors-core:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:40: error: cannot find symbol
+          float norm = VectorUtil.cosineQueryNorm(query);
+                                 ^
+    symbol:   method cosineQueryNorm(float[])
+    location: class VectorUtil
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:42: error: cannot find symbol
+          sink = VectorUtil.cosineWithQueryNorm(query, row, norm);
+                           ^
+    symbol:   method cosineWithQueryNorm(float[],float[],float)
+    location: class VectorUtil
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:44: error: cannot find symbol
+          sink = VectorUtil.cosineWithQueryNorm(q, r, dim, norm);
+                           ^
+    symbol:   method cosineWithQueryNorm(MemorySegment,MemorySegment,int,float)
+    location: class VectorUtil
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:48: error: cannot find symbol
+          float norm = VectorUtil.cosineQueryNorm(query);
+                                 ^
+    symbol:   method cosineQueryNorm(float[])
+    location: class VectorUtil
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:50: error: cannot find symbol
+              Float.floatToIntBits(VectorUtil.cosineWithQueryNorm(query, row, norm)), "array dim=" + dim);
+                                             ^
+    symbol:   method cosineWithQueryNorm(float[],float[],float)
+    location: class VectorUtil
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedCosineTest.java:52: error: cannot find symbol
+              Float.floatToIntBits(VectorUtil.cosineWithQueryNorm(q, r, dim, norm)), "segment dim=" + dim);
+                                             ^
+    symbol:   method cosineWithQueryNorm(MemorySegment,MemorySegment,int,float)
+    location: class VectorUtil
+  6 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+BUILD FAILED in 6s
+7 actionable tasks: 2 executed, 5 up-to-date

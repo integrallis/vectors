@@ -827,6 +827,110 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
   }
 
+  @Override
+  public float cosineQueryNorm(float[] a) {
+    if (a.length < 4 * FLOAT_SPECIES.length()) {
+      int i = 0;
+      float norm = 0f;
+      if (a.length >= FLOAT_SPECIES.length()) {
+        FloatVector acc = FloatVector.zero(FLOAT_SPECIES);
+        int limit = FLOAT_SPECIES.loopBound(a.length);
+        for (; i < limit; i += FLOAT_SPECIES.length()) {
+          FloatVector va = FloatVector.fromArray(FLOAT_SPECIES, a, i);
+          acc = fma(va, va, acc);
+        }
+        norm = acc.reduceLanes(VectorOperators.ADD);
+      }
+      for (; i < a.length; i++) norm = MathUtil.fma(a[i], a[i], norm);
+      return norm;
+    }
+    FloatVector n1_0 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n1_1 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n1_2 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n1_3 = FloatVector.zero(FLOAT_SPECIES);
+    int limit = FLOAT_SPECIES.loopBound(a.length);
+    int i = 0;
+    int lanes = FLOAT_SPECIES.length();
+    int unrolledLimit = limit - 3 * lanes;
+
+    for (; i < unrolledLimit; i += 4 * lanes) {
+      FloatVector va0 = FloatVector.fromArray(FLOAT_SPECIES, a, i);
+      FloatVector va1 = FloatVector.fromArray(FLOAT_SPECIES, a, i + lanes);
+      FloatVector va2 = FloatVector.fromArray(FLOAT_SPECIES, a, i + 2 * lanes);
+      FloatVector va3 = FloatVector.fromArray(FLOAT_SPECIES, a, i + 3 * lanes);
+
+      n1_0 = fma(va0, va0, n1_0);
+      n1_1 = fma(va1, va1, n1_1);
+      n1_2 = fma(va2, va2, n1_2);
+      n1_3 = fma(va3, va3, n1_3);
+    }
+
+    // Vector tail (1 lane-width at a time)
+    for (; i < limit; i += lanes) {
+      FloatVector va = FloatVector.fromArray(FLOAT_SPECIES, a, i);
+      n1_0 = fma(va, va, n1_0);
+    }
+
+    // Preparation runs once per query and may remain interpreted while the per-row cosine
+    // kernel is compiled. Pin the reduction tree so cached norms do not depend on JIT tier.
+    float norm = reduceAdd(n1_0.add(n1_1).add(n1_2.add(n1_3)));
+    for (; i < a.length; i++) norm = MathUtil.fma(a[i], a[i], norm);
+    return norm;
+  }
+
+  @Override
+  public float cosineWithQueryNorm(float[] a, float[] b, float norm1) {
+    if (a.length < 4 * FLOAT_SPECIES.length()) return cosine(a, b);
+    int limit = FLOAT_SPECIES.loopBound(a.length);
+    FloatVector s0 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector s1 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector s2 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector s3 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n2_0 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n2_1 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n2_2 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector n2_3 = FloatVector.zero(FLOAT_SPECIES);
+    int i = 0;
+    int lanes = FLOAT_SPECIES.length();
+    int unrolledLimit = limit - 3 * lanes;
+
+    for (; i < unrolledLimit; i += 4 * lanes) {
+      FloatVector va0 = FloatVector.fromArray(FLOAT_SPECIES, a, i);
+      FloatVector vb0 = FloatVector.fromArray(FLOAT_SPECIES, b, i);
+      FloatVector va1 = FloatVector.fromArray(FLOAT_SPECIES, a, i + lanes);
+      FloatVector vb1 = FloatVector.fromArray(FLOAT_SPECIES, b, i + lanes);
+      FloatVector va2 = FloatVector.fromArray(FLOAT_SPECIES, a, i + 2 * lanes);
+      FloatVector vb2 = FloatVector.fromArray(FLOAT_SPECIES, b, i + 2 * lanes);
+      FloatVector va3 = FloatVector.fromArray(FLOAT_SPECIES, a, i + 3 * lanes);
+      FloatVector vb3 = FloatVector.fromArray(FLOAT_SPECIES, b, i + 3 * lanes);
+
+      s0 = fma(va0, vb0, s0);
+      s1 = fma(va1, vb1, s1);
+      s2 = fma(va2, vb2, s2);
+      s3 = fma(va3, vb3, s3);
+      n2_0 = fma(vb0, vb0, n2_0);
+      n2_1 = fma(vb1, vb1, n2_1);
+      n2_2 = fma(vb2, vb2, n2_2);
+      n2_3 = fma(vb3, vb3, n2_3);
+    }
+
+    // Vector tail (1 lane-width at a time)
+    for (; i < limit; i += lanes) {
+      FloatVector va = FloatVector.fromArray(FLOAT_SPECIES, a, i);
+      FloatVector vb = FloatVector.fromArray(FLOAT_SPECIES, b, i);
+      s0 = fma(va, vb, s0);
+      n2_0 = fma(vb, vb, n2_0);
+    }
+
+    float sum = s0.add(s1).add(s2.add(s3)).reduceLanes(VectorOperators.ADD);
+    float norm2 = n2_0.add(n2_1).add(n2_2.add(n2_3)).reduceLanes(VectorOperators.ADD);
+    for (; i < a.length; i++) {
+      sum = MathUtil.fma(a[i], b[i], sum);
+      norm2 = MathUtil.fma(b[i], b[i], norm2);
+    }
+    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
+  }
+
   private float cosineBody4x(float[] a, float[] b, int limit) {
     FloatVector s0 = FloatVector.zero(FLOAT_SPECIES);
     FloatVector s1 = FloatVector.zero(FLOAT_SPECIES);
@@ -6603,6 +6707,83 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float bi = b.getAtIndex(ValueLayout.JAVA_FLOAT, i);
       sum = MathUtil.fma(ai, bi, sum);
       norm1 = MathUtil.fma(ai, ai, norm1);
+      norm2 = MathUtil.fma(bi, bi, norm2);
+    }
+
+    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
+  }
+
+  @Override
+  public float cosineWithQueryNorm(MemorySegment a, MemorySegment b, int dimensions, float norm1) {
+    if (dimensions < 4 * FLOAT_SPECIES.length()) return cosine(a, b, dimensions);
+    int i = 0;
+    float sum = 0f;
+    float norm2 = 0f;
+
+    int lanes = FLOAT_SPECIES.length();
+    if (dimensions >= 4 * lanes) {
+      int limit = FLOAT_SPECIES.loopBound(dimensions);
+      FloatVector s0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector s1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector s2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector s3 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2_0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2_1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2_2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2_3 = FloatVector.zero(FLOAT_SPECIES);
+      int unrolledLimit = limit - 3 * lanes;
+
+      for (; i < unrolledLimit; i += 4 * lanes) {
+        long o0 = (long) i * Float.BYTES;
+        long o1 = (long) (i + lanes) * Float.BYTES;
+        long o2 = (long) (i + 2 * lanes) * Float.BYTES;
+        long o3 = (long) (i + 3 * lanes) * Float.BYTES;
+        FloatVector va0 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, o0, ByteOrder.LITTLE_ENDIAN);
+        FloatVector vb0 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, o0, ByteOrder.LITTLE_ENDIAN);
+        FloatVector va1 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, o1, ByteOrder.LITTLE_ENDIAN);
+        FloatVector vb1 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, o1, ByteOrder.LITTLE_ENDIAN);
+        FloatVector va2 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, o2, ByteOrder.LITTLE_ENDIAN);
+        FloatVector vb2 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, o2, ByteOrder.LITTLE_ENDIAN);
+        FloatVector va3 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, o3, ByteOrder.LITTLE_ENDIAN);
+        FloatVector vb3 =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, o3, ByteOrder.LITTLE_ENDIAN);
+        s0 = fma(va0, vb0, s0);
+        s1 = fma(va1, vb1, s1);
+        s2 = fma(va2, vb2, s2);
+        s3 = fma(va3, vb3, s3);
+        n2_0 = fma(vb0, vb0, n2_0);
+        n2_1 = fma(vb1, vb1, n2_1);
+        n2_2 = fma(vb2, vb2, n2_2);
+        n2_3 = fma(vb3, vb3, n2_3);
+      }
+
+      // Vector tail (1 lane-width at a time)
+      for (; i < limit; i += lanes) {
+        long off = (long) i * Float.BYTES;
+        FloatVector va =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, a, off, ByteOrder.LITTLE_ENDIAN);
+        FloatVector vb =
+            FloatVector.fromMemorySegment(FLOAT_SPECIES, b, off, ByteOrder.LITTLE_ENDIAN);
+        s0 = fma(va, vb, s0);
+        n2_0 = fma(vb, vb, n2_0);
+      }
+
+      sum = s0.add(s1).add(s2.add(s3)).reduceLanes(VectorOperators.ADD);
+      norm2 = n2_0.add(n2_1).add(n2_2.add(n2_3)).reduceLanes(VectorOperators.ADD);
+    }
+
+    // Scalar tail
+    for (; i < dimensions; i++) {
+      float ai = a.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+      float bi = b.getAtIndex(ValueLayout.JAVA_FLOAT, i);
+      sum = MathUtil.fma(ai, bi, sum);
       norm2 = MathUtil.fma(bi, bi, norm2);
     }
 
