@@ -22,6 +22,8 @@ import com.integrallis.vectors.core.SimilarityFunction;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Tag;
@@ -62,15 +64,32 @@ class WriterGraphLifecycleTest {
       assertThat(collection.get("v" + i).vector()).containsExactly(rows[i]);
     }
     for (int i = from; i < to; i += 7) {
-      // This is a persistence/recovery assertion; use a full-size beam for the small fixture.
-      // Public-dataset benchmarks separately gate approximate recall at fixed search budgets.
+      // A concurrent HNSW graph can contain unreachable nodes even with a full-size beam.
+      // Check storage/result alignment here; fixed-budget benchmarks separately gate recall.
       var hits =
           collection
               .search(SearchRequest.builder(rows[i], 1).searchListSize(rows.length).build())
               .hits();
       assertThat(hits).isNotEmpty();
-      assertThat(hits.getFirst().id()).isEqualTo("v" + i);
+      var hit = hits.getFirst();
+      int returned = Integer.parseInt(hit.id().substring(1));
+      assertThat(hit.document().vector()).containsExactly(rows[returned]);
+      assertThat(hit.score())
+          .isCloseTo(SimilarityFunction.COSINE.compare(rows[i], rows[returned]), within(1e-6f));
     }
+  }
+
+  private static List<String> searchIds(VectorCollection collection, float[][] rows, int count) {
+    List<String> ids = new ArrayList<>();
+    for (int i = 0; i < count; i += 7) {
+      ids.add(
+          collection
+              .search(SearchRequest.builder(rows[i], 1).searchListSize(rows.length).build())
+              .hits()
+              .getFirst()
+              .id());
+    }
+    return ids;
   }
 
   @Test
@@ -132,6 +151,7 @@ class WriterGraphLifecycleTest {
   @RepeatedTest(10)
   void failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() throws Exception {
     float[][] rows = data();
+    List<String> committedResults;
     try (var c = open(directory, 2)) {
       add(c, rows, 0, 200);
       add(c, rows, 200, 350); // creates append headroom
@@ -152,10 +172,12 @@ class WriterGraphLifecycleTest {
       c.commit();
       assertThat(c.size()).isEqualTo(500);
       check(c, rows, 0, 500);
+      committedResults = searchIds(c, rows, 500);
     }
     try (var c = open(directory, 1)) {
       assertThat(c.size()).isEqualTo(500);
       check(c, rows, 0, 500);
+      assertThat(searchIds(c, rows, 500)).containsExactlyElementsOf(committedResults);
     }
   }
 
