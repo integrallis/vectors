@@ -1,0 +1,104 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+> Task :vectors-db:processResources NO-SOURCE
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-core:jar UP-TO-DATE
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-gpu:compileJava UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-ivf:compileJava UP-TO-DATE
+> Task :vectors-vamana:compileJava UP-TO-DATE
+> Task :vectors-gpu:processResources UP-TO-DATE
+> Task :vectors-gpu:classes UP-TO-DATE
+> Task :vectors-gpu:jar UP-TO-DATE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-ivf:classes UP-TO-DATE
+> Task :vectors-ivf:jar UP-TO-DATE
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :vectors-vamana:classes UP-TO-DATE
+> Task :vectors-vamana:jar UP-TO-DATE
+> Task :vectors-db:spotlessJava
+> Task :vectors-db:spotlessJavaApply
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :vectors-hnsw:spotlessJava
+> Task :vectors-hnsw:spotlessJavaApply
+> Task :vectors-hnsw:compileJava
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-hnsw:classes
+> Task :vectors-hnsw:jar
+> Task :vectors-db:compileJava
+> Task :vectors-db:classes
+> Task :vectors-hnsw:compileTestJava
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-hnsw:testClasses
+> Task :vectors-db:compileTestJava
+> Task :vectors-db:testClasses
+
+> Task :vectors-hnsw:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+SharedVectorBuildTest > reusedReadBufferPreservesConcurrentBuilderGraphWithOneWorker() PASSED
+
+SharedVectorBuildTest > reusedReadBufferPreservesSerialGraph() PASSED
+
+SharedVectorBuildTest > rescoringCarriedEdgesDoesNotAliasTheSourceRow() PASSED
+
+SharedVectorBuildTest > appendedRowsDoNotAliasTheInsertionQuery() PASSED
+
+> Task :vectors-db:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+SuccessorVectorOwnershipTest > stagedRowsAreStableWhileCarriedRowsReuseScratch(Path) PASSED
+
+WriterGraphLifecycleTest > successfulAppendReusesGraphLocksAndExecutor() PASSED
+
+WriterGraphLifecycleTest > persistentAppendReopenAndCompaction() PASSED
+
+WriterGraphLifecycleTest > inMemoryAppendAfterCompaction() PASSED
+
+WriterGraphLifecycleTest > upsertAndDeleteBeforeAppendKeepVectorsAlignedWithPhysicalOrdinals() PASSED
+
+WriterGraphLifecycleTest > refreshReleasesGraphAndLocksBeforeTheNextAppend() PASSED
+
+WriterGraphLifecycleTest > compactingAnEmptyPersistentCollectionReleasesGraphAndLocksAndAllowsFreshIngest() PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 1 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 2 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 3 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 4 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 5 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 6 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 7 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 8 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 9 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 10 of 10 PASSED
+
+WriterGraphLifecycleTest > closeReleasesTheWriterGraphAndLocks() PASSED
+
+BUILD SUCCESSFUL in 36s
+26 actionable tasks: 11 executed, 15 up-to-date

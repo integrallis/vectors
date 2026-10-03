@@ -20,8 +20,9 @@ accidentally committing generated collections, frozen jars or recursive source b
   lock table and executor.
 - Protect insertion queries and restored edge scores when a vector source reuses its
   return buffer. Allocate one scratch array per worker and one per rescore pass,
-  instead of the original experiment's per-row clones. Stable-array and segment
-  insertion paths keep their existing scoring behavior.
+  instead of the original experiment's per-row clones. A per-row ownership contract
+  also skips copying stable staged rows in mixed mapped/staged sources. Stable-array
+  and segment insertion paths keep their existing scoring behavior.
 - Adapt the original persistence/recovery tests to default full-precision construction.
   Add explicit graph/lock/executor reuse and refresh coverage.
 - Remove the temporary global phase counters and timing calls from runtime code.
@@ -54,6 +55,14 @@ attempt found a pre-existing malformed directory tree with newline-containing na
 in the original checkout; that tree was preserved outside the Java source root,
 and analysis then passed. [Red/green and regression logs](evidence/original-branch/)
 retain both the initial failure and successful checks.
+
+An additional staged-versus-mapped ownership test failed before that distinction
+was implemented; all 22 focused cases and static analysis then passed. The first
+buffer-copy implementation (`19fe1ed`) was rejected in a three-pair 100k × 512 replay:
+64.079 s baseline median versus 69.041 s candidate (7.74% slower), with worst recall
+delta -0.0001. [All initial measurements](evidence/original-branch/initial-replay-summary.json)
+are retained, including the faster third pair. The refined implementation avoids
+copying stable staged rows and is subject to a fresh paired comparison before merge.
 
 These are correctness and resource-lifecycle fixes; they do not establish a new
 throughput improvement. #86's benchmark results remain scoped to its measured source.

@@ -1,0 +1,84 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-gpu:compileJava UP-TO-DATE
+> Task :vectors-hnsw:compileJava UP-TO-DATE
+> Task :vectors-ivf:compileJava UP-TO-DATE
+> Task :vectors-vamana:compileJava UP-TO-DATE
+> Task :vectors-db:compileJava UP-TO-DATE
+> Task :vectors-db:classes UP-TO-DATE
+
+> Task :vectors-db:compileTestJava
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/src/test/java/com/integrallis/vectors/db/SuccessorVectorOwnershipTest.java:41: error: method sharesReturnBuffer in interface RandomAccessVectors cannot be applied to given types;
+      assertThat(mixed.sharesReturnBuffer(0)).isTrue();
+                      ^
+  required: no arguments
+  found:    int
+  reason: actual and formal argument lists differ in length
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/src/test/java/com/integrallis/vectors/db/SuccessorVectorOwnershipTest.java:42: error: method sharesReturnBuffer in interface RandomAccessVectors cannot be applied to given types;
+      assertThat(mixed.sharesReturnBuffer(1)).isTrue();
+                      ^
+  required: no arguments
+  found:    int
+  reason: actual and formal argument lists differ in length
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/src/test/java/com/integrallis/vectors/db/SuccessorVectorOwnershipTest.java:43: error: method sharesReturnBuffer in interface RandomAccessVectors cannot be applied to given types;
+      assertThat(mixed.sharesReturnBuffer(2)).isFalse();
+                      ^
+  required: no arguments
+  found:    int
+  reason: actual and formal argument lists differ in length
+/Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/src/test/java/com/integrallis/vectors/db/SuccessorVectorOwnershipTest.java:49: error: method sharesReturnBuffer in interface RandomAccessVectors cannot be applied to given types;
+    assertThat(staged.asVectors().sharesReturnBuffer(0)).isFalse();
+                                 ^
+  required: no arguments
+  found:    int
+  reason: actual and formal argument lists differ in length
+4 errors
+
+> Task :vectors-db:compileTestJava FAILED
+
+[Incubating] Problems report is available at: file:///Users/briansam-bodden/Code/java-ai/projects/vectors/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':vectors-db:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/src/test/java/com/integrallis/vectors/db/SuccessorVectorOwnershipTest.java:41: error: method sharesReturnBuffer in interface RandomAccessVectors cannot be applied to given types;
+        assertThat(mixed.sharesReturnBuffer(0)).isTrue();
+                        ^
+    required: no arguments
+    found:    int
+    reason: actual and formal argument lists differ in length
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/src/test/java/com/integrallis/vectors/db/SuccessorVectorOwnershipTest.java:42: error: method sharesReturnBuffer in interface RandomAccessVectors cannot be applied to given types;
+        assertThat(mixed.sharesReturnBuffer(1)).isTrue();
+                        ^
+    required: no arguments
+    found:    int
+    reason: actual and formal argument lists differ in length
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/src/test/java/com/integrallis/vectors/db/SuccessorVectorOwnershipTest.java:43: error: method sharesReturnBuffer in interface RandomAccessVectors cannot be applied to given types;
+        assertThat(mixed.sharesReturnBuffer(2)).isFalse();
+                        ^
+    required: no arguments
+    found:    int
+    reason: actual and formal argument lists differ in length
+  /Users/briansam-bodden/Code/java-ai/projects/vectors/vectors-db/src/test/java/com/integrallis/vectors/db/SuccessorVectorOwnershipTest.java:49: error: method sharesReturnBuffer in interface RandomAccessVectors cannot be applied to given types;
+      assertThat(staged.asVectors().sharesReturnBuffer(0)).isFalse();
+                                   ^
+    required: no arguments
+    found:    int
+    reason: actual and formal argument lists differ in length
+  4 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 5s
+9 actionable tasks: 1 executed, 8 up-to-date

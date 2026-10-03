@@ -549,6 +549,16 @@ public final class ConcurrentHnswGraphBuilder {
   // Concurrent node insertion
   // ---------------------------------------------------------------------------
 
+  private float[] insertionQuery(int nodeId, WorkContext ctx) {
+    float[] query = vectors.getVector(nodeId);
+    if (ctx.queryScratch != null && vectors.sharesReturnBuffer(nodeId)) {
+      // One buffer per worker. Stable staged rows need no copy; mapped scratch rows do.
+      System.arraycopy(query, 0, ctx.queryScratch, 0, dimension);
+      return ctx.queryScratch;
+    }
+    return query;
+  }
+
   private void insertConcurrent(
       int nodeId,
       int level,
@@ -558,12 +568,7 @@ public final class ConcurrentHnswGraphBuilder {
       ReentrantLock[] locks,
       WorkContext ctx) {
 
-    float[] query = vectors.getVector(nodeId);
-    if (ctx.queryScratch != null) {
-      // One buffer per worker: candidate reads must not overwrite the insertion query.
-      System.arraycopy(query, 0, ctx.queryScratch, 0, dimension);
-      query = ctx.queryScratch;
-    }
+    float[] query = insertionQuery(nodeId, ctx);
     if (useSegments) {
       // Upload the query into the off-heap scratch ONCE per insert; every candidate score below
       // reads it against a zero-copy mmap slice, so no float[] is allocated per candidate.
