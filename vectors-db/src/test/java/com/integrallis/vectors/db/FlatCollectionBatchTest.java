@@ -18,6 +18,7 @@ package com.integrallis.vectors.db;
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.MetadataValue;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
 import com.integrallis.vectors.core.filter.Filters;
@@ -136,7 +137,9 @@ class FlatCollectionBatchTest {
       for (int d = 0; d < DIM; d++) row[d] = (float) random.nextDouble(-1, 1);
       if (i == 0) first = row.clone();
       if (i == 100) row = first.clone();
-      collection.add(new Document("v" + i, row, "text-" + i, Map.of("group", i % 3)));
+      collection.add(
+          new Document(
+              "v" + i, row, "text-" + i, Map.of("group", MetadataValue.of((long) (i % 3)))));
     }
     collection.commit();
     return collection;
