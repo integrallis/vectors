@@ -1,0 +1,38 @@
+{
+  "glove-hnsw-heap-filtered-filtered128": {
+    "baseline_us": 649.518431640625,
+    "candidate_us": 646.0124150390625,
+    "less_time_percent": 0.5397870839025543,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        649518.431640625,
+        641160.779296875,
+        661059.6396484375
+      ],
+      "candidate": [
+        654034.654296875,
+        646012.4150390625,
+        639828.9794921875
+      ]
+    }
+  },
+  "glove-hnsw-heap-filtered-reused128": {
+    "baseline_us": 599.1503486328126,
+    "candidate_us": 599.7378486328125,
+    "less_time_percent": -0.09805552168009601,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        599150.3486328125,
+        597590.0048828125,
+        610068.7802734375
+      ],
+      "candidate": [
+        602774.8427734375,
+        570665.0615234375,
+        599737.8486328125
+      ]
+    }
+  }
+}

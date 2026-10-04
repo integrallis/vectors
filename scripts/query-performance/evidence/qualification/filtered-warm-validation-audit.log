@@ -1,0 +1,3 @@
+glove-hnsw-heap-filtered-filtered128: 0.540% less time; identical result digest
+glove-hnsw-heap-filtered-reused128: -0.098% less time; identical result digest
+Audited 2 cases across 3 pairs.

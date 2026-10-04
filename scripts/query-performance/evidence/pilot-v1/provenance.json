@@ -1,0 +1,33 @@
+{
+  "baseline_sha": "c43c316",
+  "candidate_sha": "v1",
+  "files": {
+    "/opt/archive/vectors-search/combined-results/fashion-mnist-784-euclidean-t1-s17-baseline.graph.bin": "5e17bbac933c3014e23905260eff5113dbb6e82c6b9221d1d6a5df41195c4946",
+    "/opt/archive/vectors-search/combined-results/glove-100-angular-t1-s17-baseline.graph.bin": "9cc3283087a3fcbc56526226fb7d9a6fb22d40bc2aa724c02d3982e97dcc684e",
+    "/opt/archive/vectors-search/final-replay/candidate-0-collection/gen-0000000000000004/graph.bin": "bd95c94a560ae379640aafbf54fe3722499c6b807b9dbd112bd4530742f81192",
+    "/opt/archive/vectors-search/final-replay/candidate-0-collection/gen-0000000000000004/manifest.bin": "04cd7df863035c3e147dff056b1c38a05323272d5d0f0cb2c7fcdacfc3cb0c05",
+    "/opt/archive/vectors-search/final-replay/candidate-0-collection/gen-0000000000000004/vectors.bin": "e2df67a3af29a301ca7e8353fd2af0290ff99682759fb625b4423e870db27b5a",
+    "/opt/archive/vectors-search/inputs/fashion-mnist-784-euclidean-test.fbin": "5a88808a02aa219e3c064d368fcbddcff8675481ae586b4eaa8a086405df93bf",
+    "/opt/archive/vectors-search/inputs/fashion-mnist-784-euclidean-train.fbin": "90d9ed17a7241085cd2ac39fa7e097a5e1be987483c9eb878aa9f6e5dbd54d5c",
+    "/opt/archive/vectors-search/inputs/glove-100-angular-test.fbin": "bdf73b26e2b63279e79e465af8a85c58d2690f38b88112531a9e237794c834c9",
+    "/opt/archive/vectors-search/inputs/glove-100-angular-train.fbin": "3f8ddba7070f08a5c333ccacf3098118037785927387a00f9fff42f9a064b4c9",
+    "/opt/archive/vectors-search/public-final-jars/slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+    "/opt/archive/vectors-search/public-final-jars/vectors-core-0.1.26.jar": "c213aee959116e45a5e43870f8b2ec7a728a685040b9e236d80f44e9cf66d2e5",
+    "/opt/archive/vectors-search/public-final-jars/vectors-db-0.1.26.jar": "b6e996e800693fa8e53baacc28f3656c703ab91b0eb741d87b0d0ff700a38ba5",
+    "/opt/archive/vectors-search/public-final-jars/vectors-hnsw-0.1.26.jar": "5b1df710a0bd41c8e144ade973523d6399943f789b52a019ffa041b1c8484ccb",
+    "/opt/archive/vectors-search/public-final-jars/vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8",
+    "/opt/archive/vectors-search/public-final-jars/vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+    "/opt/archive/vectors-search/public-final-jars/vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+    "/opt/archive/vectors-search/public-final-jars/vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+    "/opt/query/candidate-v1-jars/slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+    "/opt/query/candidate-v1-jars/vectors-core-0.1.26.jar": "9368d099aa8248201d1611949f42f20143907b35d0c01f9a653f8e41aec8843f",
+    "/opt/query/candidate-v1-jars/vectors-db-0.1.26.jar": "0a18aa3c366fd500ad1cd893de6cd466f54d413febf68e608f93798fd1c83a52",
+    "/opt/query/candidate-v1-jars/vectors-hnsw-0.1.26.jar": "baa00e981e190f68aaba303520c2ed74310cd94d0314b69e5a170e451ba4d9a0",
+    "/opt/query/candidate-v1-jars/vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8",
+    "/opt/query/candidate-v1-jars/vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+    "/opt/query/candidate-v1-jars/vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+    "/opt/query/candidate-v1-jars/vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+    "/opt/query/harness/QueryPerformance.java": "bb0c2aaaf289aa0daa7b7628d110208b89b01ca99f07da5547bd58eed06b98c6",
+    "/opt/query/jdk/bin/java": "ac3505f0c58282f00a6585591324a86b038c89cd171105fe42a1a0cf2f13b517"
+  }
+}

@@ -1,0 +1,37 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 12:12:29 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 12:12:29 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,glove-flat-public-single,78,3031985368
+RESULT,glove-flat-public-single,0,36646930,1177092119961519121,32
+RESULT,glove-flat-public-single,1,36971469,1177092119961519121,32
+RESULT,glove-flat-public-single,2,36662950,1177092119961519121,32
+RESULT,glove-flat-public-single,3,37212710,1177092119961519121,32
+RESULT,glove-flat-public-single,4,37425580,1177092119961519121,32
+RESULT,glove-flat-public-single,5,36648494,1177092119961519121,32
+RESULT,glove-flat-public-single,6,36675383,1177092119961519121,32
+WARMUP,glove-flat-public-batch4,781,3000897204
+RESULT,glove-flat-public-batch4,0,3650592,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,1,3582964,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,2,3840919,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,3,3619914,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,4,4216262,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,5,3902543,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,6,3588436,-5393426958338102730,4
+WARMUP,glove-flat-public-batch16,243,3009210992
+RESULT,glove-flat-public-batch16,0,13105962,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,1,12243867,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,2,12282418,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,3,13010263,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,4,12826559,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,5,12869419,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,6,12738843,-4616742646284636308,16
+WARMUP,glove-flat-public-batch32,168,3003581536
+RESULT,glove-flat-public-batch32,0,16760411,1177092119961519121,32
+RESULT,glove-flat-public-batch32,1,16784085,1177092119961519121,32
+RESULT,glove-flat-public-batch32,2,16679990,1177092119961519121,32
+RESULT,glove-flat-public-batch32,3,16856310,1177092119961519121,32
+RESULT,glove-flat-public-batch32,4,16889453,1177092119961519121,32
+RESULT,glove-flat-public-batch32,5,16748469,1177092119961519121,32
+RESULT,glove-flat-public-batch32,6,16755041,1177092119961519121,32

@@ -1,0 +1,41 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 1:16:49 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 1:16:49 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,dbpedia-flat-public-single,15,3009678823
+ALLOCATION,dbpedia-flat-public-single,12843752,32
+RESULT,dbpedia-flat-public-single,0,178138241,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,1,177423943,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,2,183576406,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,3,182308758,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,4,185184488,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,5,188271754,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,6,182316652,6760023043858905683,32
+WARMUP,dbpedia-flat-public-batch4,139,3015226231
+ALLOCATION,dbpedia-flat-public-batch4,2504,4
+RESULT,dbpedia-flat-public-batch4,0,22205768,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,1,21777475,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,2,21674153,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,3,21626884,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,4,21940943,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,5,21843580,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,6,21649807,-6968471258392160042,4
+WARMUP,dbpedia-flat-public-batch16,53,3050936211
+ALLOCATION,dbpedia-flat-public-batch16,8168,16
+RESULT,dbpedia-flat-public-batch16,0,58279989,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,1,57029656,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,2,57830427,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,3,56708634,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,4,57258003,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,5,56770740,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,6,74911240,145663199600368411,16
+WARMUP,dbpedia-flat-public-batch32,63,3019252618
+ALLOCATION,dbpedia-flat-public-batch32,5672,32
+RESULT,dbpedia-flat-public-batch32,0,44766521,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,1,45061405,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,2,44747907,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,3,45136696,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,4,44613926,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,5,44556437,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,6,45380113,6760023043858905683,32

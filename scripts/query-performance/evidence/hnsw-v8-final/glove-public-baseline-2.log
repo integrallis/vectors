@@ -1,0 +1,41 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 2:03:58 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 2:03:59 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,glove-hnsw-public-ef32,12,6316390642
+ALLOCATION,glove-hnsw-public-ef32,11149280,256
+RESULT,glove-hnsw-public-ef32,0,75622414,-7890854972030333060,1024
+RESULT,glove-hnsw-public-ef32,1,77249429,-7890854972030333060,1024
+RESULT,glove-hnsw-public-ef32,2,76555860,-7890854972030333060,1024
+RESULT,glove-hnsw-public-ef32,3,73716427,-7890854972030333060,1024
+RESULT,glove-hnsw-public-ef32,4,73444127,-7890854972030333060,1024
+RESULT,glove-hnsw-public-ef32,5,80001589,-7890854972030333060,1024
+RESULT,glove-hnsw-public-ef32,6,85724509,-7890854972030333060,1024
+WARMUP,glove-hnsw-public-ef100,55,3035322781
+ALLOCATION,glove-hnsw-public-ef100,24630552,256
+RESULT,glove-hnsw-public-ef100,0,184388004,-207749048675977002,1024
+RESULT,glove-hnsw-public-ef100,1,183773864,-207749048675977002,1024
+RESULT,glove-hnsw-public-ef100,2,184947722,-207749048675977002,1024
+RESULT,glove-hnsw-public-ef100,3,183199440,-207749048675977002,1024
+RESULT,glove-hnsw-public-ef100,4,183779596,-207749048675977002,1024
+RESULT,glove-hnsw-public-ef100,5,183785837,-207749048675977002,1024
+RESULT,glove-hnsw-public-ef100,6,183713945,-207749048675977002,1024
+WARMUP,glove-hnsw-public-ef128,51,3015423974
+ALLOCATION,glove-hnsw-public-ef128,29693992,256
+RESULT,glove-hnsw-public-ef128,0,224118910,-7641701206466200959,1024
+RESULT,glove-hnsw-public-ef128,1,228365397,-7641701206466200959,1024
+RESULT,glove-hnsw-public-ef128,2,237349770,-7641701206466200959,1024
+RESULT,glove-hnsw-public-ef128,3,237607334,-7641701206466200959,1024
+RESULT,glove-hnsw-public-ef128,4,240921544,-7641701206466200959,1024
+RESULT,glove-hnsw-public-ef128,5,226943467,-7641701206466200959,1024
+RESULT,glove-hnsw-public-ef128,6,230928224,-7641701206466200959,1024
+WARMUP,glove-hnsw-public-ef512,17,3116718560
+ALLOCATION,glove-hnsw-public-ef512,79984232,256
+RESULT,glove-hnsw-public-ef512,0,738388080,-8085175953013352498,1024
+RESULT,glove-hnsw-public-ef512,1,727715447,-8085175953013352498,1024
+RESULT,glove-hnsw-public-ef512,2,723740638,-8085175953013352498,1024
+RESULT,glove-hnsw-public-ef512,3,724861287,-8085175953013352498,1024
+RESULT,glove-hnsw-public-ef512,4,744443524,-8085175953013352498,1024
+RESULT,glove-hnsw-public-ef512,5,739729674,-8085175953013352498,1024
+RESULT,glove-hnsw-public-ef512,6,726502289,-8085175953013352498,1024

@@ -1,0 +1,59 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 1:19:17 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 1:19:17 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,glove-flat-public-single,12,3424415449
+ALLOCATION,glove-flat-public-single,34624,32
+RESULT,glove-flat-public-single,0,326584311,1177092119961519121,32
+RESULT,glove-flat-public-single,1,328344328,1177092119961519121,32
+RESULT,glove-flat-public-single,2,330543361,1177092119961519121,32
+RESULT,glove-flat-public-single,3,328222039,1177092119961519121,32
+RESULT,glove-flat-public-single,4,323773303,1177092119961519121,32
+RESULT,glove-flat-public-single,5,325191260,1177092119961519121,32
+RESULT,glove-flat-public-single,6,327904715,1177092119961519121,32
+WARMUP,glove-flat-public-batch4,553,3002828608
+ALLOCATION,glove-flat-public-batch4,2480,4
+RESULT,glove-flat-public-batch4,0,5334888,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,1,5353562,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,2,5559648,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,3,5574907,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,4,5601148,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,5,5578294,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,6,5367328,-5393426958338102730,4
+WARMUP,glove-flat-public-batch16,153,3008566426
+ALLOCATION,glove-flat-public-batch16,8080,16
+RESULT,glove-flat-public-batch16,0,19453336,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,1,19383743,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,2,20279393,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,3,19412808,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,4,20372107,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,5,18940634,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,6,19812518,-4616742646284636308,16
+WARMUP,glove-flat-public-batch32,164,3008358463
+ALLOCATION,glove-flat-public-batch32,4616,32
+RESULT,glove-flat-public-batch32,0,16801235,1177092119961519121,32
+RESULT,glove-flat-public-batch32,1,17055873,1177092119961519121,32
+RESULT,glove-flat-public-batch32,2,16836712,1177092119961519121,32
+RESULT,glove-flat-public-batch32,3,16817856,1177092119961519121,32
+RESULT,glove-flat-public-batch32,4,16821313,1177092119961519121,32
+RESULT,glove-flat-public-batch32,5,16805924,1177092119961519121,32
+RESULT,glove-flat-public-batch32,6,16812555,1177092119961519121,32
+WARMUP,glove-flat-independent4,569,3005206192
+ALLOCATION,glove-flat-independent4,728,4
+RESULT,glove-flat-independent4,0,5169858,-5393426958338102730,4
+RESULT,glove-flat-independent4,1,5237685,-5393426958338102730,4
+RESULT,glove-flat-independent4,2,5287518,-5393426958338102730,4
+RESULT,glove-flat-independent4,3,5275446,-5393426958338102730,4
+RESULT,glove-flat-independent4,4,5289072,-5393426958338102730,4
+RESULT,glove-flat-independent4,5,5270826,-5393426958338102730,4
+RESULT,glove-flat-independent4,6,5252152,-5393426958338102730,4
+WARMUP,glove-flat-independent16,196,3006359961
+ALLOCATION,glove-flat-independent16,1696,16
+RESULT,glove-flat-independent16,0,15267711,-4616742646284636308,16
+RESULT,glove-flat-independent16,1,14650295,-4616742646284636308,16
+RESULT,glove-flat-independent16,2,15206117,-4616742646284636308,16
+RESULT,glove-flat-independent16,3,20109515,-4616742646284636308,16
+RESULT,glove-flat-independent16,4,14977256,-4616742646284636308,16
+RESULT,glove-flat-independent16,5,15615994,-4616742646284636308,16
+RESULT,glove-flat-independent16,6,17084786,-4616742646284636308,16

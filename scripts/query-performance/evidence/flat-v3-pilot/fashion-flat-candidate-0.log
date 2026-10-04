@@ -1,0 +1,37 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 12:03:59 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 12:03:59 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,fashion-flat-public-single,19,3141713184
+RESULT,fashion-flat-public-single,0,145790938,-3449808930485460012,32
+RESULT,fashion-flat-public-single,1,148524495,-3449808930485460012,32
+RESULT,fashion-flat-public-single,2,146695131,-3449808930485460012,32
+RESULT,fashion-flat-public-single,3,147307307,-3449808930485460012,32
+RESULT,fashion-flat-public-single,4,145612305,-3449808930485460012,32
+RESULT,fashion-flat-public-single,5,145114193,-3449808930485460012,32
+RESULT,fashion-flat-public-single,6,146320991,-3449808930485460012,32
+WARMUP,fashion-flat-public-batch4,207,3010281672
+RESULT,fashion-flat-public-batch4,0,12533017,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,1,14611366,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,2,11703624,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,3,11923526,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,4,13332122,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,5,9194507,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,6,13623308,3519200865979862387,4
+WARMUP,fashion-flat-public-batch16,53,3039723739
+RESULT,fashion-flat-public-batch16,0,52730833,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,1,53011999,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,2,53953410,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,3,50844001,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,4,59166668,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,5,55416869,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,6,56286367,-5621565102746882368,16
+WARMUP,fashion-flat-public-batch32,26,3064384247
+RESULT,fashion-flat-public-batch32,0,119568831,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,1,118423207,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,2,113234868,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,3,116426351,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,4,121086523,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,5,121764752,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,6,118729149,-3449808930485460012,32

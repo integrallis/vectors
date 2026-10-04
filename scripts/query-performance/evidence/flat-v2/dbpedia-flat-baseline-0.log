@@ -1,0 +1,21 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 11:40:44 AM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 11:40:44 AM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,dbpedia-flat-public-single,12,7065812546
+RESULT,dbpedia-flat-public-single,0,574473908,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,1,574234950,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,2,575530411,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,3,580392513,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,4,572714723,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,5,576006072,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,6,579698846,6760023043858905683,32
+WARMUP,dbpedia-flat-public-batch32,59,3026830592
+RESULT,dbpedia-flat-public-batch32,0,46730944,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,1,46243579,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,2,46200077,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,3,50713067,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,4,51435555,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,5,50429947,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,6,57296418,6760023043858905683,32

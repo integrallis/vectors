@@ -1,0 +1,242 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/root/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :vectors-gpu:processResources UP-TO-DATE
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :vectors:spotlessJava UP-TO-DATE
+> Task :demos:spotlessJava UP-TO-DATE
+> Task :vectors:spotlessJavaApply UP-TO-DATE
+> Task :demos:spotlessJavaApply UP-TO-DATE
+> Task :vectors:spotlessApply UP-TO-DATE
+> Task :demos:spotlessApply UP-TO-DATE
+> Task :vectors-cache-jcache:spotlessJava UP-TO-DATE
+> Task :vectors-cache-jcache:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-jcache:spotlessApply UP-TO-DATE
+> Task :vectors-cache:spotlessJava UP-TO-DATE
+> Task :vectors-cache:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache:spotlessApply UP-TO-DATE
+> Task :vectors-cache-langchain4j:spotlessJava UP-TO-DATE
+> Task :vectors-cache-semantic-db:spotlessJava UP-TO-DATE
+> Task :vectors-cache-semantic-db:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-langchain4j:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-semantic-db:spotlessApply UP-TO-DATE
+> Task :vectors-cache-langchain4j:spotlessApply UP-TO-DATE
+> Task :vectors-cache-semantic-langchain4j:spotlessJava UP-TO-DATE
+> Task :vectors-cache-semantic-langchain4j:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-semantic-langchain4j:spotlessApply UP-TO-DATE
+> Task :vectors-cache-semantic-spring-ai:spotlessJava UP-TO-DATE
+> Task :vectors-cache-spring-ai:spotlessJava UP-TO-DATE
+> Task :vectors-cache-spring-ai:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-semantic-spring-ai:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cache-semantic-spring-ai:spotlessApply UP-TO-DATE
+> Task :vectors-cache-spring-ai:spotlessApply UP-TO-DATE
+> Task :vectors-cluster:spotlessJava UP-TO-DATE
+> Task :vectors-cluster:spotlessJavaApply UP-TO-DATE
+> Task :vectors-cluster:spotlessApply UP-TO-DATE
+> Task :vectors-bench:spotlessJava UP-TO-DATE
+> Task :vectors-bench:spotlessJavaApply UP-TO-DATE
+> Task :vectors-bench:spotlessApply UP-TO-DATE
+> Task :vectors-db-arrow:spotlessJava UP-TO-DATE
+> Task :vectors-db-arrow:spotlessJavaApply UP-TO-DATE
+> Task :vectors-db-arrow:spotlessApply UP-TO-DATE
+> Task :vectors-db-jackson:spotlessJava UP-TO-DATE
+> Task :vectors-db-jackson:spotlessJavaApply UP-TO-DATE
+> Task :vectors-db-jackson:spotlessApply UP-TO-DATE
+> Task :vectors-gpu:spotlessJava UP-TO-DATE
+> Task :vectors-gpu:spotlessJavaApply UP-TO-DATE
+> Task :vectors-gpu:spotlessApply UP-TO-DATE
+> Task :vectors-distributed:spotlessJava UP-TO-DATE
+> Task :vectors-distributed:spotlessJavaApply UP-TO-DATE
+> Task :vectors-distributed:spotlessApply UP-TO-DATE
+> Task :vectors-hybrid:spotlessJava UP-TO-DATE
+> Task :vectors-hybrid:spotlessJavaApply UP-TO-DATE
+> Task :vectors-hybrid:spotlessApply UP-TO-DATE
+> Task :vectors-ingest:spotlessJava UP-TO-DATE
+> Task :vectors-ingest:spotlessJavaApply UP-TO-DATE
+> Task :vectors-ingest:spotlessApply UP-TO-DATE
+> Task :vectors-ivf:spotlessJava UP-TO-DATE
+> Task :vectors-ivf:spotlessJavaApply UP-TO-DATE
+> Task :vectors-ivf:spotlessApply UP-TO-DATE
+> Task :vectors-jakarta-batch:spotlessJava UP-TO-DATE
+> Task :vectors-jakarta-batch:spotlessJavaApply UP-TO-DATE
+> Task :vectors-jakarta-batch:spotlessApply UP-TO-DATE
+> Task :vectors-langchain4j:spotlessJava UP-TO-DATE
+> Task :vectors-langchain4j:spotlessJavaApply UP-TO-DATE
+> Task :vectors-langchain4j:spotlessApply UP-TO-DATE
+> Task :vectors-optimizer:spotlessJava UP-TO-DATE
+> Task :vectors-optimizer:spotlessJavaApply UP-TO-DATE
+> Task :vectors-optimizer:spotlessApply UP-TO-DATE
+> Task :vectors-quantization:spotlessJava UP-TO-DATE
+> Task :vectors-quantization:spotlessJavaApply UP-TO-DATE
+> Task :vectors-quantization:spotlessApply UP-TO-DATE
+> Task :vectors-router:spotlessJava UP-TO-DATE
+> Task :vectors-router:spotlessJavaApply UP-TO-DATE
+> Task :vectors-router:spotlessApply UP-TO-DATE
+> Task :vectors-server:spotlessJava UP-TO-DATE
+> Task :vectors-server:spotlessJavaApply UP-TO-DATE
+> Task :vectors-server:spotlessApply UP-TO-DATE
+> Task :vectors-server-client:spotlessJava UP-TO-DATE
+> Task :vectors-server-client:spotlessJavaApply UP-TO-DATE
+> Task :vectors-server-client:spotlessApply UP-TO-DATE
+> Task :vectors-spring-ai:spotlessJava UP-TO-DATE
+> Task :vectors-spring-ai:spotlessJavaApply UP-TO-DATE
+> Task :vectors-spring-ai:spotlessApply UP-TO-DATE
+> Task :vectors-spring-batch:spotlessJava UP-TO-DATE
+> Task :vectors-spring-batch:spotlessJavaApply UP-TO-DATE
+> Task :vectors-spring-batch:spotlessApply UP-TO-DATE
+> Task :vectors-spring-boot-starter:spotlessJava UP-TO-DATE
+> Task :vectors-spring-boot-starter:spotlessJavaApply UP-TO-DATE
+> Task :vectors-spring-boot-starter:spotlessApply UP-TO-DATE
+> Task :vectors-storage:spotlessJava UP-TO-DATE
+> Task :vectors-storage:spotlessJavaApply UP-TO-DATE
+> Task :vectors-storage:spotlessApply UP-TO-DATE
+> Task :vectors-storage-s3:spotlessJava UP-TO-DATE
+> Task :vectors-storage-s3:spotlessJavaApply UP-TO-DATE
+> Task :vectors-storage-s3:spotlessApply UP-TO-DATE
+> Task :vectors-studio-core:spotlessJava UP-TO-DATE
+> Task :vectors-studio-core:spotlessJavaApply UP-TO-DATE
+> Task :vectors-studio-core:spotlessApply UP-TO-DATE
+> Task :vectors-studio-distributed:spotlessJava UP-TO-DATE
+> Task :vectors-studio-distributed:spotlessJavaApply UP-TO-DATE
+> Task :vectors-studio-distributed:spotlessApply UP-TO-DATE
+> Task :vectors-studio-sidecart:spotlessJava UP-TO-DATE
+> Task :vectors-studio-sidecart:spotlessJavaApply UP-TO-DATE
+> Task :vectors-studio-sidecart:spotlessApply UP-TO-DATE
+> Task :vectors-studio-web:spotlessJava UP-TO-DATE
+> Task :vectors-studio-web:spotlessJavaApply UP-TO-DATE
+> Task :vectors-studio-web:spotlessApply UP-TO-DATE
+> Task :vectors-text-h2:spotlessJava UP-TO-DATE
+> Task :vectors-text-h2:spotlessJavaApply UP-TO-DATE
+> Task :vectors-text-h2:spotlessApply UP-TO-DATE
+> Task :vectors-vamana:spotlessJava UP-TO-DATE
+> Task :vectors-vamana:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vamana:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-core:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-core:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-core:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-junit5:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-junit5:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-junit5:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-langchain4j:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-langchain4j:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-langchain4j:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-semantic-db:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-semantic-db:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-semantic-db:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-serde-avaje:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-serde-avaje:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-serde-avaje:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-serde-jackson:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-serde-jackson:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-serde-jackson:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-spring-ai:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-spring-ai:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-spring-ai:spotlessApply UP-TO-DATE
+> Task :vectors-vcr-testng:spotlessJava UP-TO-DATE
+> Task :vectors-vcr-testng:spotlessJavaApply UP-TO-DATE
+> Task :vectors-vcr-testng:spotlessApply UP-TO-DATE
+> Task :demos:embedding-cache:spotlessJava UP-TO-DATE
+> Task :demos:embedding-cache:spotlessJavaApply UP-TO-DATE
+> Task :demos:embedding-cache:spotlessApply UP-TO-DATE
+> Task :demos:langchain4j-rag:spotlessJava UP-TO-DATE
+> Task :demos:langchain4j-rag:spotlessJavaApply UP-TO-DATE
+> Task :demos:langchain4j-rag:spotlessApply UP-TO-DATE
+> Task :demos:optimizer-tutorial:spotlessJava UP-TO-DATE
+> Task :demos:optimizer-tutorial:spotlessJavaApply UP-TO-DATE
+> Task :demos:optimizer-tutorial:spotlessApply UP-TO-DATE
+> Task :demos:quickstart:spotlessJava UP-TO-DATE
+> Task :demos:quickstart:spotlessJavaApply UP-TO-DATE
+> Task :demos:quickstart:spotlessApply UP-TO-DATE
+> Task :demos:rag-multimodal:spotlessJava UP-TO-DATE
+> Task :demos:rag-multimodal:spotlessJavaApply UP-TO-DATE
+> Task :demos:rag-multimodal:spotlessApply UP-TO-DATE
+> Task :demos:rerank-after-retrieval:spotlessJava UP-TO-DATE
+> Task :demos:rerank-after-retrieval:spotlessJavaApply UP-TO-DATE
+> Task :demos:rerank-after-retrieval:spotlessApply UP-TO-DATE
+> Task :demos:semantic-cache:spotlessJava UP-TO-DATE
+> Task :demos:semantic-cache:spotlessJavaApply UP-TO-DATE
+> Task :demos:semantic-cache:spotlessApply UP-TO-DATE
+> Task :demos:server-client:spotlessJava UP-TO-DATE
+> Task :demos:server-client:spotlessJavaApply UP-TO-DATE
+> Task :demos:server-client:spotlessApply UP-TO-DATE
+> Task :demos:spring-ai-rag:spotlessJava UP-TO-DATE
+> Task :demos:spring-ai-rag:spotlessJavaApply UP-TO-DATE
+> Task :demos:spring-ai-rag:spotlessApply UP-TO-DATE
+> Task :demos:studio-r2-sidecart:spotlessJava UP-TO-DATE
+> Task :demos:studio-r2-sidecart:spotlessJavaApply UP-TO-DATE
+> Task :demos:studio-r2-sidecart:spotlessApply UP-TO-DATE
+> Task :demos:vcr-e2e:spotlessJava UP-TO-DATE
+> Task :demos:vcr-e2e:spotlessJavaApply UP-TO-DATE
+> Task :demos:vcr-e2e:spotlessApply UP-TO-DATE
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-gpu:compileJava UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-ivf:compileJava UP-TO-DATE
+> Task :vectors-vamana:compileJava UP-TO-DATE
+> Task :vectors-gpu:classes UP-TO-DATE
+> Task :vectors-gpu:jar UP-TO-DATE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-ivf:classes UP-TO-DATE
+> Task :vectors-ivf:jar UP-TO-DATE
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :vectors-vamana:classes UP-TO-DATE
+> Task :vectors-vamana:jar UP-TO-DATE
+> Task :vectors-hnsw:spotlessJava
+> Task :vectors-hnsw:spotlessJavaApply
+> Task :vectors-hnsw:spotlessApply
+> Task :vectors-hnsw:compileJava UP-TO-DATE
+> Task :vectors-hnsw:classes UP-TO-DATE
+> Task :vectors-hnsw:jar UP-TO-DATE
+> Task :vectors-db:spotlessJava
+> Task :vectors-db:spotlessJavaApply
+> Task :vectors-db:spotlessApply
+> Task :vectors-core:spotlessJava
+> Task :vectors-core:spotlessJavaApply
+> Task :vectors-core:spotlessApply
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-core:jar UP-TO-DATE
+> Task :vectors-db:compileJava
+> Task :vectors-db:classes
+> Task :vectors-db:jar
+> Task :vectors-db:compileTestJava
+> Task :vectors-db:testClasses
+
+> Task :vectors-db:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+ParallelFlatScanTest > largeSearchPreservesTieOrderAndConcurrentQueryIsolation() PASSED
+
+ParallelFlatScanTest > competingQueriesDoNotAllocateAnotherFullScoreBuffer() PASSED
+
+ParallelFlatScanTest > collectionBatchContextKeepsSerialScansAndRestoresBudgetAfterFailure() PASSED
+
+ParallelFlatScanTest > parallelScoresPreserveOrdinalOrderMetricsAndMutations() PASSED
+
+FlatCollectionBatchTest > eligiblePublicBatchUsesAtMostOneTaskPerProcessor() PASSED
+
+FlatCollectionBatchTest > closedCollectionKeepsTheBatchFailureCause() PASSED
+
+FlatCollectionBatchTest > filtersMixedKAndInvalidQueriesKeepIndividualSearchSemantics() PASSED
+
+FlatCollectionBatchTest > batchRetainsProjectionCutoffsTombstonesTiesAndRequestOrder() PASSED
+
+> Task :vectors-db:freezePerf
+
+BUILD SUCCESSFUL in 16s
+138 actionable tasks: 11 executed, 127 up-to-date

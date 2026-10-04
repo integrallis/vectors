@@ -1,0 +1,1 @@
+Interrupted duplicate VPS DB suite after core/HNSW completion; complete DB suite and coverage remain mandatory in PR89 CI. Dedicated-core quota denied second VPS. No test code or gate changed.

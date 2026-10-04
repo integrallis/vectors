@@ -1,0 +1,123 @@
+Downloading https://services.gradle.org/distributions/gradle-9.4.1-all.zip
+......................10%.......................20%.......................30%......................40%.......................50%.......................60%......................70%.......................80%.......................90%.......................100%
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/root/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+
+Welcome to Gradle 9.4.1!
+
+Here are the highlights of this release:
+ - Java 26 support
+ - Non-class-based JVM tests
+ - Enhanced console progress bar
+
+For more details see https://docs.gradle.org/9.4.1/release-notes.html
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :vectors-core:compileJava
+> Task :vectors-core:processResources
+> Task :vectors-core:classes
+
+> Task :vectors-core:compileTestJava
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:26: error: cannot find symbol
+        float norm = VectorUtil.batchCosineQueryNorm(query);
+                               ^
+  symbol:   method batchCosineQueryNorm(float[])
+  location: class VectorUtil
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:32: error: cannot find symbol
+          VectorUtil.batchCosineWithQueryNorm(query, rows, norm, actual, count);
+                    ^
+  symbol:   method batchCosineWithQueryNorm(float[],float[][],float,float[],int)
+  location: class VectorUtil
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:36: error: cannot find symbol
+          VectorUtil.batchCosineWithQueryNorm(query, segments, dim, norm, actual, count);
+                    ^
+  symbol:   method batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int)
+  location: class VectorUtil
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:49: error: cannot find symbol
+    VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, out, 1);
+              ^
+  symbol:   method batchCosineWithQueryNorm(float[],float[][],float,float[],int)
+  location: class VectorUtil
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:51: error: cannot find symbol
+    VectorUtil.batchCosineWithQueryNorm(q, new MemorySegment[] {MemorySegment.ofArray(q)}, 32, 0f, out, 1);
+              ^
+  symbol:   method batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int)
+  location: class VectorUtil
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:53: error: cannot find symbol
+    assertThrows(IllegalArgumentException.class, () -> VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, out, 2));
+                                                                 ^
+  symbol:   method batchCosineWithQueryNorm(float[],float[][],float,float[],int)
+  location: class VectorUtil
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:54: error: cannot find symbol
+    assertThrows(IllegalArgumentException.class, () -> VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, new float[0], 1));
+                                                                 ^
+  symbol:   method batchCosineWithQueryNorm(float[],float[][],float,float[],int)
+  location: class VectorUtil
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:55: error: cannot find symbol
+    assertThrows(IllegalArgumentException.class, () -> VectorUtil.batchCosineWithQueryNorm(q, new MemorySegment[1], 31, 0f, out, 1));
+                                                                 ^
+  symbol:   method batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int)
+  location: class VectorUtil
+8 errors
+
+> Task :vectors-core:compileTestJava FAILED
+
+[Incubating] Problems report is available at: file:///opt/query/source/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':vectors-core:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:26: error: cannot find symbol
+          float norm = VectorUtil.batchCosineQueryNorm(query);
+                                 ^
+    symbol:   method batchCosineQueryNorm(float[])
+    location: class VectorUtil
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:32: error: cannot find symbol
+            VectorUtil.batchCosineWithQueryNorm(query, rows, norm, actual, count);
+                      ^
+    symbol:   method batchCosineWithQueryNorm(float[],float[][],float,float[],int)
+    location: class VectorUtil
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:36: error: cannot find symbol
+            VectorUtil.batchCosineWithQueryNorm(query, segments, dim, norm, actual, count);
+                      ^
+    symbol:   method batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int)
+    location: class VectorUtil
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:49: error: cannot find symbol
+      VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, out, 1);
+                ^
+    symbol:   method batchCosineWithQueryNorm(float[],float[][],float,float[],int)
+    location: class VectorUtil
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:51: error: cannot find symbol
+      VectorUtil.batchCosineWithQueryNorm(q, new MemorySegment[] {MemorySegment.ofArray(q)}, 32, 0f, out, 1);
+                ^
+    symbol:   method batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int)
+    location: class VectorUtil
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:53: error: cannot find symbol
+      assertThrows(IllegalArgumentException.class, () -> VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, out, 2));
+                                                                   ^
+    symbol:   method batchCosineWithQueryNorm(float[],float[][],float,float[],int)
+    location: class VectorUtil
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:54: error: cannot find symbol
+      assertThrows(IllegalArgumentException.class, () -> VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, new float[0], 1));
+                                                                   ^
+    symbol:   method batchCosineWithQueryNorm(float[],float[][],float,float[],int)
+    location: class VectorUtil
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/PreparedBatchCosineTest.java:55: error: cannot find symbol
+      assertThrows(IllegalArgumentException.class, () -> VectorUtil.batchCosineWithQueryNorm(q, new MemorySegment[1], 31, 0f, out, 1));
+                                                                   ^
+    symbol:   method batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int)
+    location: class VectorUtil
+  8 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 1m 8s
+3 actionable tasks: 3 executed

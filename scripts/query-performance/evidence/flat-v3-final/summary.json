@@ -1,0 +1,178 @@
+{
+  "glove-flat-public-single": {
+    "baseline_us": 6186.65284375,
+    "candidate_us": 1152.996921875,
+    "less_time_percent": 81.36315466545366,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        5885449.3125,
+        6487856.375
+      ],
+      "candidate": [
+        1159888.125,
+        1146105.71875
+      ]
+    }
+  },
+  "glove-flat-public-batch4": {
+    "baseline_us": 1243.177125,
+    "candidate_us": 929.623375,
+    "less_time_percent": 25.221969073795503,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1191354.75,
+        1294999.5
+      ],
+      "candidate": [
+        946598.75,
+        912648.0
+      ]
+    }
+  },
+  "glove-flat-public-batch16": {
+    "baseline_us": 1183.4536875,
+    "candidate_us": 772.48453125,
+    "less_time_percent": 34.72625592287911,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1179000.4375,
+        1187906.9375
+      ],
+      "candidate": [
+        743309.125,
+        801659.9375
+      ]
+    }
+  },
+  "glove-flat-public-batch32": {
+    "baseline_us": 525.4658125,
+    "candidate_us": 524.59621875,
+    "less_time_percent": 0.1654900717256491,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        525933.9375,
+        524997.6875
+      ],
+      "candidate": [
+        525429.59375,
+        523762.84375
+      ]
+    }
+  },
+  "dbpedia-flat-public-single": {
+    "baseline_us": 18532.3735,
+    "candidate_us": 5797.7973125,
+    "less_time_percent": 68.71530075464969,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        18532373.5
+      ],
+      "candidate": [
+        5797797.3125
+      ]
+    }
+  },
+  "dbpedia-flat-public-batch4": {
+    "baseline_us": 5333.56225,
+    "candidate_us": 4957.0865,
+    "less_time_percent": 7.058617343408713,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        5333562.25
+      ],
+      "candidate": [
+        4957086.5
+      ]
+    }
+  },
+  "dbpedia-flat-public-batch16": {
+    "baseline_us": 3549.020625,
+    "candidate_us": 4617.4179375,
+    "less_time_percent": -30.104004044777845,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        3549020.625
+      ],
+      "candidate": [
+        4617417.9375
+      ]
+    }
+  },
+  "dbpedia-flat-public-batch32": {
+    "baseline_us": 1403.39828125,
+    "candidate_us": 1395.5455625,
+    "less_time_percent": 0.5595502613132464,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1403398.28125
+      ],
+      "candidate": [
+        1395545.5625
+      ]
+    }
+  },
+  "fashion-flat-public-single": {
+    "baseline_us": 10026.89178125,
+    "candidate_us": 4699.0049375,
+    "less_time_percent": 53.13597633229668,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        10026891.78125
+      ],
+      "candidate": [
+        4699004.9375
+      ]
+    }
+  },
+  "fashion-flat-public-batch4": {
+    "baseline_us": 2956.13725,
+    "candidate_us": 3656.02925,
+    "less_time_percent": -23.675896645191298,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2956137.25
+      ],
+      "candidate": [
+        3656029.25
+      ]
+    }
+  },
+  "fashion-flat-public-batch16": {
+    "baseline_us": 1797.9130625,
+    "candidate_us": 3708.0185625,
+    "less_time_percent": -106.24014808279973,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1797913.0625
+      ],
+      "candidate": [
+        3708018.5625
+      ]
+    }
+  },
+  "fashion-flat-public-batch32": {
+    "baseline_us": 1812.82071875,
+    "candidate_us": 3605.2659375,
+    "less_time_percent": -98.87603336671651,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1812820.71875
+      ],
+      "candidate": [
+        3605265.9375
+      ]
+    }
+  }
+}

@@ -1,0 +1,50 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 2:10:39 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 2:10:39 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,fashion-hnsw-heap-ef32,101,3016492297
+ALLOCATION,fashion-hnsw-heap-ef32,43040,256
+RESULT,fashion-hnsw-heap-ef32,0,77779675,1976967295611881960,1024
+RESULT,fashion-hnsw-heap-ef32,1,77470498,1976967295611881960,1024
+RESULT,fashion-hnsw-heap-ef32,2,77684137,1976967295611881960,1024
+RESULT,fashion-hnsw-heap-ef32,3,77666183,1976967295611881960,1024
+RESULT,fashion-hnsw-heap-ef32,4,77402890,1976967295611881960,1024
+RESULT,fashion-hnsw-heap-ef32,5,81557878,1976967295611881960,1024
+RESULT,fashion-hnsw-heap-ef32,6,80367459,1976967295611881960,1024
+WARMUP,fashion-hnsw-heap-ef100,67,3032540282
+ALLOCATION,fashion-hnsw-heap-ef100,43040,256
+RESULT,fashion-hnsw-heap-ef100,0,168850960,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef100,1,167381971,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef100,2,168285343,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef100,3,168652668,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef100,4,168698214,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef100,5,169453548,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef100,6,168819792,-3561637912514899968,1024
+WARMUP,fashion-hnsw-heap-ef128,59,3039618016
+ALLOCATION,fashion-hnsw-heap-ef128,43040,256
+RESULT,fashion-hnsw-heap-ef128,0,220987869,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef128,1,203940010,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef128,2,204344315,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef128,3,203197831,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef128,4,202705990,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef128,5,201692884,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef128,6,202747517,-3561637912514899968,1024
+WARMUP,fashion-hnsw-heap-ef512,21,3077003350
+ALLOCATION,fashion-hnsw-heap-ef512,36896,256
+RESULT,fashion-hnsw-heap-ef512,0,590727630,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef512,1,591940090,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef512,2,590901316,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef512,3,586843281,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef512,4,596463938,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef512,5,589379096,-3561637912514899968,1024
+RESULT,fashion-hnsw-heap-ef512,6,593699754,-3561637912514899968,1024
+WARMUP,fashion-hnsw-heap-filtered128,16,3153214471
+ALLOCATION,fashion-hnsw-heap-filtered128,31367632,256
+RESULT,fashion-hnsw-heap-filtered128,0,688682113,3422701894504445291,1024
+RESULT,fashion-hnsw-heap-filtered128,1,689795226,3422701894504445291,1024
+RESULT,fashion-hnsw-heap-filtered128,2,746558063,3422701894504445291,1024
+RESULT,fashion-hnsw-heap-filtered128,3,748586701,3422701894504445291,1024
+RESULT,fashion-hnsw-heap-filtered128,4,748241505,3422701894504445291,1024
+RESULT,fashion-hnsw-heap-filtered128,5,750605159,3422701894504445291,1024
+RESULT,fashion-hnsw-heap-filtered128,6,753088699,3422701894504445291,1024

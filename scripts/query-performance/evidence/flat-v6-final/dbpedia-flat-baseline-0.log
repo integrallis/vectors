@@ -1,0 +1,59 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 1:19:59 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 1:19:59 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,dbpedia-flat-public-single,12,7212916467
+ALLOCATION,dbpedia-flat-public-single,34624,32
+RESULT,dbpedia-flat-public-single,0,583056295,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,1,587251845,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,2,590390877,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,3,622109054,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,4,598636088,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,5,596568362,6760023043858905683,32
+RESULT,dbpedia-flat-public-single,6,583447454,6760023043858905683,32
+WARMUP,dbpedia-flat-public-batch4,139,3014565068
+ALLOCATION,dbpedia-flat-public-batch4,2480,4
+RESULT,dbpedia-flat-public-batch4,0,21131019,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,1,21235634,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,2,21093508,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,3,21597152,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,4,21367761,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,5,21204745,-6968471258392160042,4
+RESULT,dbpedia-flat-public-batch4,6,21196942,-6968471258392160042,4
+WARMUP,dbpedia-flat-public-batch16,53,3000706255
+ALLOCATION,dbpedia-flat-public-batch16,8056,16
+RESULT,dbpedia-flat-public-batch16,0,56395720,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,1,56291946,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,2,56502991,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,3,56745285,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,4,55954693,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,5,56205834,145663199600368411,16
+RESULT,dbpedia-flat-public-batch16,6,55957399,145663199600368411,16
+WARMUP,dbpedia-flat-public-batch32,63,3042247535
+ALLOCATION,dbpedia-flat-public-batch32,5648,32
+RESULT,dbpedia-flat-public-batch32,0,44632135,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,1,44890508,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,2,44549992,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,3,45048316,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,4,44597331,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,5,44653145,6760023043858905683,32
+RESULT,dbpedia-flat-public-batch32,6,45105162,6760023043858905683,32
+WARMUP,dbpedia-flat-independent4,139,3002723268
+ALLOCATION,dbpedia-flat-independent4,728,4
+RESULT,dbpedia-flat-independent4,0,21106361,-6968471258392160042,4
+RESULT,dbpedia-flat-independent4,1,21571091,-6968471258392160042,4
+RESULT,dbpedia-flat-independent4,2,21312867,-6968471258392160042,4
+RESULT,dbpedia-flat-independent4,3,21126559,-6968471258392160042,4
+RESULT,dbpedia-flat-independent4,4,21215806,-6968471258392160042,4
+RESULT,dbpedia-flat-independent4,5,21589677,-6968471258392160042,4
+RESULT,dbpedia-flat-independent4,6,21270007,-6968471258392160042,4
+WARMUP,dbpedia-flat-independent16,44,3042156387
+ALLOCATION,dbpedia-flat-independent16,2400,16
+RESULT,dbpedia-flat-independent16,0,64066312,145663199600368411,16
+RESULT,dbpedia-flat-independent16,1,64748241,145663199600368411,16
+RESULT,dbpedia-flat-independent16,2,69430945,145663199600368411,16
+RESULT,dbpedia-flat-independent16,3,66524299,145663199600368411,16
+RESULT,dbpedia-flat-independent16,4,69414647,145663199600368411,16
+RESULT,dbpedia-flat-independent16,5,65942658,145663199600368411,16
+RESULT,dbpedia-flat-independent16,6,66374989,145663199600368411,16

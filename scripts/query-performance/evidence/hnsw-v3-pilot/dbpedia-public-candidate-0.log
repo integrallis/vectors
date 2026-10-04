@@ -1,0 +1,37 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 12:10:05 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 12:10:05 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,dbpedia-hnsw-public-ef32,12,4172922820
+RESULT,dbpedia-hnsw-public-ef32,0,276933699,6909503931855174409,1024
+RESULT,dbpedia-hnsw-public-ef32,1,281896358,6909503931855174409,1024
+RESULT,dbpedia-hnsw-public-ef32,2,256239727,6909503931855174409,1024
+RESULT,dbpedia-hnsw-public-ef32,3,233853975,6909503931855174409,1024
+RESULT,dbpedia-hnsw-public-ef32,4,233026876,6909503931855174409,1024
+RESULT,dbpedia-hnsw-public-ef32,5,239454788,6909503931855174409,1024
+RESULT,dbpedia-hnsw-public-ef32,6,239386962,6909503931855174409,1024
+WARMUP,dbpedia-hnsw-public-ef100,21,3065198497
+RESULT,dbpedia-hnsw-public-ef100,0,581903989,-4496289235990415218,1024
+RESULT,dbpedia-hnsw-public-ef100,1,651159370,-4496289235990415218,1024
+RESULT,dbpedia-hnsw-public-ef100,2,637455876,-4496289235990415218,1024
+RESULT,dbpedia-hnsw-public-ef100,3,631471916,-4496289235990415218,1024
+RESULT,dbpedia-hnsw-public-ef100,4,643069027,-4496289235990415218,1024
+RESULT,dbpedia-hnsw-public-ef100,5,633350229,-4496289235990415218,1024
+RESULT,dbpedia-hnsw-public-ef100,6,639115541,-4496289235990415218,1024
+WARMUP,dbpedia-hnsw-public-ef128,17,3054007447
+RESULT,dbpedia-hnsw-public-ef128,0,703643616,-2135064989503782316,1024
+RESULT,dbpedia-hnsw-public-ef128,1,667850802,-2135064989503782316,1024
+RESULT,dbpedia-hnsw-public-ef128,2,702552464,-2135064989503782316,1024
+RESULT,dbpedia-hnsw-public-ef128,3,663093463,-2135064989503782316,1024
+RESULT,dbpedia-hnsw-public-ef128,4,672117021,-2135064989503782316,1024
+RESULT,dbpedia-hnsw-public-ef128,5,685032002,-2135064989503782316,1024
+RESULT,dbpedia-hnsw-public-ef128,6,663873259,-2135064989503782316,1024
+WARMUP,dbpedia-hnsw-public-ef512,12,6434024348
+RESULT,dbpedia-hnsw-public-ef512,0,2083560940,4684603246583438606,1024
+RESULT,dbpedia-hnsw-public-ef512,1,2147295156,4684603246583438606,1024
+RESULT,dbpedia-hnsw-public-ef512,2,2096055905,4684603246583438606,1024
+RESULT,dbpedia-hnsw-public-ef512,3,2122841118,4684603246583438606,1024
+RESULT,dbpedia-hnsw-public-ef512,4,2195993805,4684603246583438606,1024
+RESULT,dbpedia-hnsw-public-ef512,5,2163870332,4684603246583438606,1024
+RESULT,dbpedia-hnsw-public-ef512,6,2150556099,4684603246583438606,1024

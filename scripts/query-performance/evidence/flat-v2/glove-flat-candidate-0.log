@@ -1,0 +1,21 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 11:40:37 AM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 11:40:37 AM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,glove-flat-public-single,23,3047500131
+RESULT,glove-flat-public-single,0,123994075,1177092119961519121,32
+RESULT,glove-flat-public-single,1,124630028,1177092119961519121,32
+RESULT,glove-flat-public-single,2,123792466,1177092119961519121,32
+RESULT,glove-flat-public-single,3,125181412,1177092119961519121,32
+RESULT,glove-flat-public-single,4,124050091,1177092119961519121,32
+RESULT,glove-flat-public-single,5,124836485,1177092119961519121,32
+RESULT,glove-flat-public-single,6,124191627,1177092119961519121,32
+WARMUP,glove-flat-public-batch32,165,3009770303
+RESULT,glove-flat-public-batch32,0,18595797,1177092119961519121,32
+RESULT,glove-flat-public-batch32,1,17074302,1177092119961519121,32
+RESULT,glove-flat-public-batch32,2,17208343,1177092119961519121,32
+RESULT,glove-flat-public-batch32,3,17137711,1177092119961519121,32
+RESULT,glove-flat-public-batch32,4,17159862,1177092119961519121,32
+RESULT,glove-flat-public-batch32,5,17142960,1177092119961519121,32
+RESULT,glove-flat-public-batch32,6,17355739,1177092119961519121,32

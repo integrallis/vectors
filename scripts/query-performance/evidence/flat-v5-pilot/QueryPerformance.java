@@ -25,12 +25,9 @@ public class QueryPerformance {
     return h;
   }
   static void measure(String name, int queryCount, int passes, LongSupplier task) {
-    measure(name, queryCount, passes, 12, task);
-  }
-  static void measure(String name, int queryCount, int passes, int warmPasses, LongSupplier task) {
     long start = System.nanoTime();
     int warm = 0;
-    while (warm < warmPasses || System.nanoTime() - start < 3_000_000_000L) { sink = task.getAsLong(); warm++; }
+    while (warm < 12 || System.nanoTime() - start < 3_000_000_000L) { sink = task.getAsLong(); warm++; }
     System.out.printf("WARMUP,%s,%d,%d%n", name, warm, System.nanoTime()-start);
     var memory = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
     if (memory.isThreadAllocatedMemorySupported()) {
@@ -62,14 +59,10 @@ public class QueryPerformance {
         var s = MemorySegmentVectors.open(input.resolve("vectors.bin"), data.length, m.dimension(), arena);
         for (int i = 0; i < data.length; i++) MemorySegment.copy(s.vectorSlice(i), ValueLayout.JAVA_FLOAT, 0, data[i], 0, m.dimension());
       }
-      if (Files.isRegularFile(Path.of(args[2]))) {
-        queries = read(Path.of(args[2]));
-      } else {
-        queries = new float[256][];
-        for (int q = 0; q < queries.length; q++) {
-          queries[q] = data[(int)((long) q * data.length / queries.length)].clone();
-          queries[q][q % queries[q].length] += .001f;
-        }
+      queries = new float[256][];
+      for (int q = 0; q < queries.length; q++) {
+        queries[q] = data[(int)((long) q * data.length / queries.length)].clone();
+        queries[q][q % queries[q].length] += .001f;
       }
     } else {
       data = read(input); queries = read(Path.of(args[2]));
@@ -95,23 +88,6 @@ public class QueryPerformance {
             return h;
           });
         }
-        if (!mode.equals("flat-single")) for (int count : new int[]{4,16}) {
-          try (var executor = java.util.concurrent.Executors.newFixedThreadPool(count)) {
-            measure(name+"-flat-independent"+count, count, 1, () -> {
-              var start = new java.util.concurrent.CountDownLatch(1);
-              var jobs = new ArrayList<java.util.concurrent.Future<com.integrallis.vectors.db.SearchResult>>();
-              for (var request : requests.subList(0,count))
-                jobs.add(executor.submit(() -> { start.await(); return c.search(request); }));
-              start.countDown();
-              long h=1;
-              try {
-                for (var job : jobs) for (var hit : job.get().hits())
-                  h=31*(31*h+hit.id().hashCode())+Float.floatToRawIntBits(hit.score());
-              } catch (Exception e) { throw new RuntimeException(e); }
-              return h;
-            });
-          }
-        }
       }
       return;
     }
@@ -135,7 +111,7 @@ public class QueryPerformance {
     float[][] graphRows = Arrays.copyOf(data, graph.size());
     RandomAccessVectors source = new InMemoryVectors(graphRows);
     try (var arena = Arena.ofConfined()) {
-      if (mode.startsWith("mapped")) {
+      if (mode.equals("mapped")) {
         var segment = arena.allocate((long) graphRows.length * dim * 4);
         for (int i=0;i<graphRows.length;i++) MemorySegment.copy(graphRows[i],0,segment,ValueLayout.JAVA_FLOAT,(long)i*dim*4,dim);
         source = new RandomAccessVectors() {
@@ -151,29 +127,18 @@ public class QueryPerformance {
       }
       var index = HnswIndex.ofPrebuilt(graph, source, metric);
       System.gc();
-      if (!mode.endsWith("-filtered")) for (int ef : new int[]{32,100,128,512}) {
+      for (int ef : new int[]{32,100,128,512}) {
         measure(name+"-hnsw-"+mode+"-ef"+ef, queries.length, 4, () -> {
           long h=1;
           for (var q : queries) { var r=index.search(q,10,ef); h=hash(h,r.nodeIds(),r.scores()); }
           return h;
         });
       }
-      // The diagnostic mode warms at least 32k query/searcher constructions before timing.
-      // Retain the original fresh-searcher workload and measure reuse separately.
-      int filteredWarmPasses = mode.endsWith("-filtered") ? 128 : 12;
-      measure(name+"-hnsw-"+mode+"-filtered128", queries.length, 4, filteredWarmPasses, () -> {
+      measure(name+"-hnsw-"+mode+"-filtered128", queries.length, 4, () -> {
         long h=1;
         for (var q : queries) { var r=index.searcher().searchFiltered(q,10,128,id -> id%5==0); h=hash(h,r.nodeIds(),r.scores()); }
         return h;
       });
-      if (mode.endsWith("-filtered")) {
-        var searcher = index.searcher();
-        measure(name+"-hnsw-"+mode+"-reused128", queries.length, 4, 128, () -> {
-          long h=1;
-          for (var q : queries) { var r=searcher.searchFiltered(q,10,128,id -> id%5==0); h=hash(h,r.nodeIds(),r.scores()); }
-          return h;
-        });
-      }
     }
   }
 }

@@ -1,0 +1,305 @@
+build	Build + Test	﻿2026-10-04T13:57:57.6127335Z ##[group]Run ./gradlew spotlessCheck build -x :docs:build
+build	Build + Test	2026-10-04T13:57:57.6127870Z ^[[36;1m./gradlew spotlessCheck build -x :docs:build^[[0m
+build	Build + Test	2026-10-04T13:57:57.6188857Z shell: /usr/bin/bash -e {0}
+build	Build + Test	2026-10-04T13:57:57.6189332Z env:
+build	Build + Test	2026-10-04T13:57:57.6189838Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+build	Build + Test	2026-10-04T13:57:57.6190488Z   JAVA_HOME_25_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/25.0.4-1/x64
+build	Build + Test	2026-10-04T13:57:57.6190988Z   MAVEN_ARGS: -ntp
+build	Build + Test	2026-10-04T13:57:57.6191310Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+build	Build + Test	2026-10-04T13:57:57.6191708Z   GRADLE_USER_HOME: /home/runner/.gradle
+build	Build + Test	2026-10-04T13:57:57.6192076Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+build	Build + Test	2026-10-04T13:57:57.6192861Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+build	Build + Test	2026-10-04T13:57:57.6193459Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+build	Build + Test	2026-10-04T13:57:57.6193867Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+build	Build + Test	2026-10-04T13:57:57.6194208Z ##[endgroup]
+build	Build + Test	2026-10-04T13:57:58.8213562Z WARNING: A restricted method in java.lang.System has been called
+build	Build + Test	2026-10-04T13:57:58.8215646Z WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/home/runner/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+build	Build + Test	2026-10-04T13:57:58.8217206Z WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+build	Build + Test	2026-10-04T13:57:58.8218142Z WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+build	Build + Test	2026-10-04T13:57:58.8218890Z 
+build	Build + Test	2026-10-04T13:57:59.4333504Z Starting a Gradle Daemon (subsequent builds will be faster)
+build	Build + Test	2026-10-04T13:58:14.0363303Z > Task :demos:compileJava NO-SOURCE
+build	Build + Test	2026-10-04T13:58:14.0399395Z > Task :vectors:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:14.0400216Z > Task :demos:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:14.0400866Z > Task :demos:classes UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.1359903Z > Task :spotlessInternalRegisterDependencies
+build	Build + Test	2026-10-04T13:58:14.1389553Z > Task :vectors:sourcesJar
+build	Build + Test	2026-10-04T13:58:14.1390732Z > Task :demos:jar
+build	Build + Test	2026-10-04T13:58:14.2409349Z > Task :vectors:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.2460082Z > Task :demos:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.2475857Z > Task :vectors:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.2476958Z > Task :demos:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.2477822Z > Task :vectors:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.2478903Z > Task :demos:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.2479817Z > Task :vectors-cache-jcache:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.2495889Z > Task :vectors-cache-jcache:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.2496963Z > Task :vectors-cache-jcache:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.2497797Z > Task :vectors-cache:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.2499000Z > Task :vectors-cache:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.2499871Z > Task :vectors-cache:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3330957Z > Task :vectors-cache-semantic-db:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.3362141Z > Task :vectors-cache-semantic-db:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3394944Z > Task :vectors-cache-langchain4j:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.3396220Z > Task :vectors-cache-semantic-db:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3397365Z > Task :vectors-cache-langchain4j:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3398679Z > Task :vectors-cache-langchain4j:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3399758Z > Task :vectors-cache-semantic-langchain4j:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.3400845Z > Task :vectors-cache-semantic-langchain4j:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3401940Z > Task :vectors-bench:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.3403012Z > Task :vectors-cache-semantic-langchain4j:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3404213Z > Task :vectors-cache-semantic-spring-ai:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.3405818Z > Task :vectors-bench:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3406736Z > Task :vectors-bench:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3407777Z > Task :vectors-cache-semantic-spring-ai:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3409256Z > Task :vectors-cache-semantic-spring-ai:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3410410Z > Task :vectors-cache-spring-ai:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.3411384Z > Task :vectors-cluster:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.3412317Z > Task :vectors-cache-spring-ai:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3413405Z > Task :vectors-cluster:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3414798Z > Task :vectors-cache-spring-ai:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3415667Z > Task :vectors-cluster:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3416589Z > Task :vectors-db-jackson:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.3417547Z > Task :vectors-db-arrow:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.3419031Z > Task :vectors-db-jackson:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3420060Z > Task :vectors-db-jackson:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3421308Z > Task :vectors-db-arrow:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.3422285Z > Task :vectors-db-arrow:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.4371250Z > Task :vectors-gpu:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.4378430Z > Task :vectors-gpu:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.4409555Z > Task :vectors-gpu:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.4432206Z > Task :vectors-distributed:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.4459501Z > Task :vectors-distributed:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.4480503Z > Task :vectors-distributed:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.4489240Z > Task :vectors-hybrid:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.4490069Z > Task :vectors-hybrid:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.4490836Z > Task :vectors-hybrid:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.5368258Z > Task :vectors-ingest:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.5399474Z > Task :vectors-ingest:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.5400697Z > Task :vectors-ingest:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.5429406Z > Task :vectors-ivf:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.5459387Z > Task :vectors-ivf:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.5480639Z > Task :vectors-ivf:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.5489262Z > Task :vectors-jakarta-batch:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.5517896Z > Task :vectors-jakarta-batch:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.5549483Z > Task :vectors-jakarta-batch:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.5575551Z > Task :vectors-langchain4j:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.6361472Z > Task :vectors-langchain4j:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.6380401Z > Task :vectors-langchain4j:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.6429853Z > Task :vectors-optimizer:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.6431391Z > Task :vectors-optimizer:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.6433938Z > Task :vectors-optimizer:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.6435007Z > Task :vectors-quantization:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.6438925Z > Task :vectors-quantization:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.6440289Z > Task :vectors-quantization:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.7336929Z > Task :vectors-router:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.7363334Z > Task :vectors-router:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.7412310Z > Task :vectors-router:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.7413346Z > Task :vectors-server:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.7449881Z > Task :vectors-server:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.7460273Z > Task :vectors-server:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.7461318Z > Task :vectors-server-client:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.7463003Z > Task :vectors-server-client:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.7464084Z > Task :vectors-server-client:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8374868Z > Task :vectors-spring-ai:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.8410110Z > Task :vectors-spring-ai:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8411343Z > Task :vectors-spring-ai:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8412546Z > Task :vectors-spring-batch:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.8413592Z > Task :vectors-spring-batch:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8414611Z > Task :vectors-spring-batch:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8415599Z > Task :vectors-spring-boot-starter:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.8417814Z > Task :vectors-spring-boot-starter:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8419320Z > Task :vectors-spring-boot-starter:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8420369Z > Task :vectors-storage:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.8421380Z > Task :vectors-storage:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8422370Z > Task :vectors-storage:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8424733Z > Task :vectors-storage-s3:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.8436552Z > Task :vectors-storage-s3:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.8449854Z > Task :vectors-storage-s3:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9370045Z > Task :vectors-studio-core:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.9371590Z > Task :vectors-studio-core:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9372685Z > Task :vectors-studio-core:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9373775Z > Task :vectors-studio-distributed:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.9375024Z > Task :vectors-studio-distributed:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9376245Z > Task :vectors-studio-distributed:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9377372Z > Task :vectors-studio-sidecart:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.9378989Z > Task :vectors-studio-sidecart:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9380178Z > Task :vectors-studio-sidecart:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9381704Z > Task :vectors-studio-web:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.9439748Z > Task :vectors-studio-web:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9452983Z > Task :vectors-studio-web:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9462911Z > Task :vectors-text-h2:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:14.9499827Z > Task :vectors-text-h2:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:14.9526370Z > Task :vectors-text-h2:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0356187Z > Task :vectors-vamana:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.0384341Z > Task :vectors-vamana:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0401336Z > Task :vectors-vamana:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0426762Z > Task :vectors-vcr-core:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.0461358Z > Task :vectors-vcr-core:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0472112Z > Task :vectors-vcr-core:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0499342Z > Task :vectors-vcr-junit5:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.0517164Z > Task :vectors-vcr-junit5:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0543769Z > Task :vectors-vcr-junit5:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0578720Z > Task :vectors-vcr-langchain4j:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.0611256Z > Task :vectors-vcr-langchain4j:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0622955Z > Task :vectors-vcr-langchain4j:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0659668Z > Task :vectors-vcr-semantic-db:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.0669234Z > Task :vectors-vcr-semantic-db:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0689768Z > Task :vectors-vcr-semantic-db:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0733764Z > Task :vectors-vcr-serde-avaje:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.0752454Z > Task :vectors-vcr-serde-avaje:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0779518Z > Task :vectors-vcr-serde-avaje:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0799454Z > Task :vectors-vcr-serde-jackson:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.0825158Z > Task :vectors-vcr-serde-jackson:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.0852566Z > Task :vectors-vcr-serde-jackson:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1339757Z > Task :vectors-vcr-spring-ai:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.1390755Z > Task :vectors-vcr-spring-ai:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1439450Z > Task :vectors-vcr-spring-ai:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1499283Z > Task :vectors-vcr-testng:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.1500269Z > Task :vectors-vcr-testng:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1549387Z > Task :vectors-vcr-testng:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1619568Z > Task :demos:embedding-cache:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.1664700Z > Task :demos:embedding-cache:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1679585Z > Task :demos:embedding-cache:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1729655Z > Task :demos:langchain4j-rag:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.1769448Z > Task :demos:langchain4j-rag:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1775153Z > Task :demos:langchain4j-rag:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1799382Z > Task :demos:optimizer-tutorial:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.1839478Z > Task :demos:optimizer-tutorial:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1879980Z > Task :demos:optimizer-tutorial:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1927291Z > Task :demos:quickstart:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.1928196Z > Task :demos:quickstart:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.1929230Z > Task :demos:quickstart:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2383994Z > Task :demos:rag-multimodal:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.2439701Z > Task :demos:rag-multimodal:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2499462Z > Task :demos:rag-multimodal:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2559500Z > Task :demos:rerank-after-retrieval:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.2584205Z > Task :demos:rerank-after-retrieval:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2585588Z > Task :demos:rerank-after-retrieval:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2586545Z > Task :demos:semantic-cache:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.2587389Z > Task :demos:semantic-cache:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2588211Z > Task :demos:semantic-cache:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2589289Z > Task :demos:server-client:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.2590150Z > Task :demos:server-client:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2591045Z > Task :demos:server-client:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2591908Z > Task :demos:spring-ai-rag:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.2592770Z > Task :demos:spring-ai-rag:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2593730Z > Task :demos:spring-ai-rag:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2594583Z > Task :demos:studio-r2-sidecart:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.2595482Z > Task :demos:studio-r2-sidecart:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2596379Z > Task :demos:studio-r2-sidecart:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2597174Z > Task :demos:vcr-e2e:spotlessJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:15.2597964Z > Task :demos:vcr-e2e:spotlessJavaCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.2598958Z > Task :demos:vcr-e2e:spotlessCheck UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.3399663Z > Task :compileJava NO-SOURCE
+build	Build + Test	2026-10-04T13:58:15.3479690Z > Task :processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:15.3519418Z > Task :classes UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.3579526Z > Task :jar
+build	Build + Test	2026-10-04T13:58:15.3639397Z > Task :assemble
+build	Build + Test	2026-10-04T13:58:15.3714032Z > Task :compileTestJava NO-SOURCE
+build	Build + Test	2026-10-04T13:58:15.3739088Z > Task :processTestResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:15.3829651Z > Task :testClasses UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.3909496Z > Task :test NO-SOURCE
+build	Build + Test	2026-10-04T13:58:15.3910112Z > Task :check UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:15.3910609Z > Task :build
+build	Build + Test	2026-10-04T13:58:16.8380382Z > Task :demos:startScripts
+build	Build + Test	2026-10-04T13:58:16.9328095Z > Task :demos:distTar
+build	Build + Test	2026-10-04T13:58:17.0347120Z > Task :demos:distZip
+build	Build + Test	2026-10-04T13:58:17.0359403Z > Task :demos:assemble
+build	Build + Test	2026-10-04T13:58:17.0407995Z > Task :demos:compileTestJava NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.0478987Z > Task :demos:processTestResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.0508931Z > Task :demos:testClasses UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:17.0509749Z > Task :demos:test NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.0510303Z > Task :demos:check UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:17.0510829Z > Task :demos:build
+build	Build + Test	2026-10-04T13:58:17.1359745Z > Task :vectors:processTestResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.1409682Z > Task :vectors-ivf:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.1443737Z > Task :vectors-quantization:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.1499594Z > Task :vectors-storage:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.1530116Z > Task :vectors-vamana:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.1589827Z > Task :vectors-bench:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.2347557Z > Task :vectors-bench:sourcesJar
+build	Build + Test	2026-10-04T13:58:17.2369565Z > Task :vectors-bench:processTestResources
+build	Build + Test	2026-10-04T13:58:17.3329162Z > Task :vectors-cache:compileJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:17.4349788Z > Task :vectors-cache-jcache:compileJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:17.4359370Z > Task :vectors-bench:processJmhResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.4447520Z > Task :vectors-distributed:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.4474729Z > Task :vectors-storage-s3:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.4479700Z > Task :vectors-cache:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:17.4480647Z > Task :vectors-cache:classes UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:17.4481497Z > Task :vectors-cache:jar
+build	Build + Test	2026-10-04T13:58:17.7352794Z > Task :vectors-cache:javadoc FROM-CACHE
+build	Build + Test	2026-10-04T13:58:18.1379924Z > Task :vectors-cache:javadocJar
+build	Build + Test	2026-10-04T13:58:18.1381257Z > Task :vectors-cache:sourcesJar
+build	Build + Test	2026-10-04T13:58:18.1432108Z > Task :vectors-cache:assemble
+build	Build + Test	2026-10-04T13:58:18.1459543Z > Task :vectors-cache:compileTestJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:18.1489578Z > Task :vectors-cache:processTestResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:18.1503013Z > Task :vectors-cache:testClasses UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:18.2379879Z > Task :vectors-cache:test FROM-CACHE
+build	Build + Test	2026-10-04T13:58:18.3380052Z > Task :vectors-cache:jacocoTestCoverageVerification FROM-CACHE
+build	Build + Test	2026-10-04T13:58:18.6379773Z > Task :vectors-hnsw:spotlessJava
+build	Build + Test	2026-10-04T13:58:18.6412615Z > Task :vectors-hnsw:spotlessJavaCheck
+build	Build + Test	2026-10-04T13:58:18.6469375Z > Task :vectors-hnsw:spotlessCheck
+build	Build + Test	2026-10-04T13:58:18.6551907Z > Task :vectors-hnsw:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:18.6609494Z > Task :vectors-cache:spotbugsTest SKIPPED
+build	Build + Test	2026-10-04T13:58:18.6610449Z > Task :vectors-cache-jcache:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:18.6709634Z > Task :vectors-cache-jcache:classes UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:18.6739358Z > Task :vectors-cache-jcache:jar
+build	Build + Test	2026-10-04T13:58:18.8349746Z > Task :vectors-cache-jcache:javadoc FROM-CACHE
+build	Build + Test	2026-10-04T13:58:19.1377184Z > Task :vectors-cache-jcache:javadocJar
+build	Build + Test	2026-10-04T13:58:19.1410493Z > Task :vectors-cache-jcache:sourcesJar
+build	Build + Test	2026-10-04T13:58:19.1463348Z > Task :vectors-cache-jcache:assemble
+build	Build + Test	2026-10-04T13:58:19.2329708Z > Task :vectors-cache-jcache:compileTestJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:19.2392607Z > Task :vectors-cache-jcache:processTestResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:19.2433875Z > Task :vectors-cache-jcache:testClasses UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:19.3332812Z > Task :vectors-cache-jcache:test FROM-CACHE
+build	Build + Test	2026-10-04T13:58:19.3390886Z > Task :vectors-cache-jcache:jacocoTestCoverageVerification FROM-CACHE
+build	Build + Test	2026-10-04T13:58:25.8339632Z > Task :vectors-core:compileJava
+build	Build + Test	2026-10-04T13:58:29.2351772Z > Task :vectors-cache:spotbugsMain
+build	Build + Test	2026-10-04T13:58:29.3350031Z > Task :vectors-cache-jcache:spotbugsMain
+build	Build + Test	2026-10-04T13:58:29.3370433Z > Task :vectors-cache:check
+build	Build + Test	2026-10-04T13:58:29.3412140Z > Task :vectors-cache:build
+build	Build + Test	2026-10-04T13:58:29.3460644Z > Task :vectors-cache-jcache:spotbugsTest SKIPPED
+build	Build + Test	2026-10-04T13:58:29.3503407Z > Task :vectors-cache-jcache:check
+build	Build + Test	2026-10-04T13:58:29.3509655Z > Task :vectors-cache-jcache:build
+build	Build + Test	2026-10-04T13:58:29.4350721Z > Task :vectors-cache-langchain4j:compileJava FROM-CACHE
+build	Build + Test	2026-10-04T13:58:29.5350271Z > Task :vectors-cache-langchain4j:processResources NO-SOURCE
+build	Build + Test	2026-10-04T13:58:29.5391054Z > Task :vectors-cache-langchain4j:classes UP-TO-DATE
+build	Build + Test	2026-10-04T13:58:29.5409395Z > Task :vectors-cache-langchain4j:jar
+build	Build + Test	2026-10-04T13:58:29.7349791Z > Task :vectors-cache-langchain4j:javadoc FROM-CACHE
+build	Build + Test	2026-10-04T13:58:29.8339716Z > Task :vectors-db:spotlessJava
+build	Build + Test	2026-10-04T13:58:29.9349657Z > Task :vectors-db:spotlessJavaCheck FAILED
+build	Build + Test	2026-10-04T13:58:30.0328060Z > Task :vectors-cache-langchain4j:javadocJar
+build	Build + Test	2026-10-04T13:58:30.7327744Z > Task :vectors-storage:compileJava
+build	Build + Test	2026-10-04T13:58:30.9349742Z > Task :vectors-core:spotlessJava
+build	Build + Test	2026-10-04T13:58:30.9369956Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1791122283305.json
+build	Build + Test	2026-10-04T13:58:31.0334925Z 
+build	Build + Test	2026-10-04T13:58:31.0335943Z FAILURE: Build failed with an exception.
+build	Build + Test	2026-10-04T13:58:31.0336830Z 
+build	Build + Test	2026-10-04T13:58:31.0337380Z * What went wrong:
+build	Build + Test	2026-10-04T13:58:31.0338330Z Execution failed for task ':vectors-db:spotlessJavaCheck'.
+build	Build + Test	2026-10-04T13:58:31.0339738Z > The following files had format violations:
+build	Build + Test	2026-10-04T13:58:31.0340804Z       src/main/java/com/integrallis/vectors/db/index/FlatScanAdapter.java
+build	Build + Test	2026-10-04T13:58:31.0341896Z           @@ -35,9 +35,9 @@
+build	Build + Test	2026-10-04T13:58:31.0349593Z            ·*·to·affect·flat-scan·output·—·any·value·produces·the·same·result.·This·matches·the·parameter
+build	Build + Test	2026-10-04T13:58:31.0350962Z 148 actionable tasks: 26 executed, 67 from cache, 55 up-to-date
+build	Build + Test	2026-10-04T13:58:31.0354936Z            ·*·contract·documented·on·{@link·IndexSpi#search(float[],·int,·int,·float)}.
+build	Build + Test	2026-10-04T13:58:31.0399397Z            ·*
+build	Build + Test	2026-10-04T13:58:31.0410053Z           -·*·<p>Build·requires·exclusive·access.·Concurrent·searches·require·safe·publication·after·build
+build	Build + Test	2026-10-04T13:58:31.0411707Z           -·*·and·no·concurrent·rebuild.·The·collection·facade·publishes·complete·index·generations·through
+build	Build + Test	2026-10-04T13:58:31.0412817Z           -·*·a·volatile·reference.
+build	Build + Test	2026-10-04T13:58:31.0414041Z           +·*·<p>Build·requires·exclusive·access.·Concurrent·searches·require·safe·publication·after·build·and
+build	Build + Test	2026-10-04T13:58:31.0415787Z           +·*·no·concurrent·rebuild.·The·collection·facade·publishes·complete·index·generations·through·a
+build	Build + Test	2026-10-04T13:58:31.0416938Z           +·*·volatile·reference.
+build	Build + Test	2026-10-04T13:58:31.0417609Z            ·*/
+build	Build + Test	2026-10-04T13:58:31.0418756Z            public·final·class·FlatScanAdapter·implements·IndexSpi,·ExactOrdinalScorer·{
+build	Build + Test	2026-10-04T13:58:31.0443731Z            
+build	Build + Test	2026-10-04T13:58:31.0444446Z   Run './gradlew :vectors-db:spotlessApply' to fix these violations.
+build	Build + Test	2026-10-04T13:58:31.0445043Z 
+build	Build + Test	2026-10-04T13:58:31.0445221Z * Try:
+build	Build + Test	2026-10-04T13:58:31.0445751Z > Run with --stacktrace option to get the stack trace.
+build	Build + Test	2026-10-04T13:58:31.0446579Z > Run with --info or --debug option to get more log output.
+build	Build + Test	2026-10-04T13:58:31.0447576Z > Run with --scan to get full insights from a Build Scan (powered by Develocity).
+build	Build + Test	2026-10-04T13:58:31.0448434Z > Get more help at https://help.gradle.org.
+build	Build + Test	2026-10-04T13:58:31.0449240Z 
+build	Build + Test	2026-10-04T13:58:31.0449446Z BUILD FAILED in 33s
+build	Build + Test	2026-10-04T13:58:31.4275077Z ##[error]Process completed with exit code 1.

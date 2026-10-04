@@ -2,6 +2,8 @@
 
 Baseline: merged main `c43c3160232dd20cf4b2ebd67f44b68c83edf56c`.
 
+See [measured results and all controls](RESULTS.md) for the completed comparisons.
+
 Two automatic query optimizations, without changing graphs, search budgets or precision:
 
 - Large heap flat COSINE single-query scans score independent rows using at most eight
@@ -93,6 +95,20 @@ Latency summaries are the median of seven samples per JVM and then the median
 across JVMs, expressed per query. Timing includes result materialization and
 consumption. Steady-state measurements do not establish cold-start or cold-page
 performance, nor a ranking against competing libraries.
+
+The original fresh-searcher GLOVE filtered control showed a timing transition
+during measurement. An additional diagnostic keeps that workload, warms for at
+least 128 passes (32,768 queries), and separately measures reuse of one searcher:
+
+```sh
+JAVA_HOME=/path/to/jdk25 python3 scripts/query-performance/run.py \
+  BASELINE_JARS CANDIDATE_JARS EXTRACTED_ARCHIVE/vectors-search OUTPUT \
+  --rounds 3 --cases glove --modes heap-filtered --cpu 2 \
+  --baseline-sha c43c316 --candidate-sha CANDIDATE_SHA
+```
+
+Original measurements are retained. Each evidence directory includes the exact
+harness source used by that run, including the pre-diagnostic primary harness.
 
 ## Diagnostic revisions retained
 

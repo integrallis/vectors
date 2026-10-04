@@ -1,0 +1,59 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 1:25:34 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 1:25:34 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,fashion-flat-public-single,12,3999662803
+ALLOCATION,fashion-flat-public-single,34624,32
+RESULT,fashion-flat-public-single,0,318310000,-3449808930485460012,32
+RESULT,fashion-flat-public-single,1,319697800,-3449808930485460012,32
+RESULT,fashion-flat-public-single,2,322887696,-3449808930485460012,32
+RESULT,fashion-flat-public-single,3,316938690,-3449808930485460012,32
+RESULT,fashion-flat-public-single,4,318923118,-3449808930485460012,32
+RESULT,fashion-flat-public-single,5,322607351,-3449808930485460012,32
+RESULT,fashion-flat-public-single,6,318497920,-3449808930485460012,32
+WARMUP,fashion-flat-public-batch4,255,3010668263
+ALLOCATION,fashion-flat-public-batch4,2480,4
+RESULT,fashion-flat-public-batch4,0,11619471,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,1,11552374,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,2,11669715,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,3,11566501,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,4,11543097,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,5,11610976,3519200865979862387,4
+RESULT,fashion-flat-public-batch4,6,11620211,3519200865979862387,4
+WARMUP,fashion-flat-public-batch16,94,3001059975
+ALLOCATION,fashion-flat-public-batch16,8120,16
+RESULT,fashion-flat-public-batch16,0,29321988,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,1,29402518,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,2,29090393,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,3,29133764,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,4,29324031,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,5,29198717,-5621565102746882368,16
+RESULT,fashion-flat-public-batch16,6,29114187,-5621565102746882368,16
+WARMUP,fashion-flat-public-batch32,52,3042048804
+ALLOCATION,fashion-flat-public-batch32,15640,32
+RESULT,fashion-flat-public-batch32,0,58224499,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,1,58145450,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,2,58365854,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,3,57951266,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,4,57743287,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,5,58237663,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,6,58410897,-3449808930485460012,32
+WARMUP,fashion-flat-independent4,259,3002204196
+ALLOCATION,fashion-flat-independent4,728,4
+RESULT,fashion-flat-independent4,0,11457667,3519200865979862387,4
+RESULT,fashion-flat-independent4,1,11468386,3519200865979862387,4
+RESULT,fashion-flat-independent4,2,11461255,3519200865979862387,4
+RESULT,fashion-flat-independent4,3,11441036,3519200865979862387,4
+RESULT,fashion-flat-independent4,4,11459631,3519200865979862387,4
+RESULT,fashion-flat-independent4,5,11439473,3519200865979862387,4
+RESULT,fashion-flat-independent4,6,11449902,3519200865979862387,4
+WARMUP,fashion-flat-independent16,69,3010559004
+ALLOCATION,fashion-flat-independent16,2400,16
+RESULT,fashion-flat-independent16,0,46797618,-5621565102746882368,16
+RESULT,fashion-flat-independent16,1,36823782,-5621565102746882368,16
+RESULT,fashion-flat-independent16,2,36431908,-5621565102746882368,16
+RESULT,fashion-flat-independent16,3,34366588,-5621565102746882368,16
+RESULT,fashion-flat-independent16,4,57563970,-5621565102746882368,16
+RESULT,fashion-flat-independent16,5,54247757,-5621565102746882368,16
+RESULT,fashion-flat-independent16,6,55882219,-5621565102746882368,16

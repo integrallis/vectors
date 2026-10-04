@@ -1,0 +1,21 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 11:41:18 AM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 11:41:18 AM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,fashion-flat-public-single,12,4014350278
+RESULT,fashion-flat-public-single,0,323239293,-3449808930485460012,32
+RESULT,fashion-flat-public-single,1,326904639,-3449808930485460012,32
+RESULT,fashion-flat-public-single,2,327823123,-3449808930485460012,32
+RESULT,fashion-flat-public-single,3,328310508,-3449808930485460012,32
+RESULT,fashion-flat-public-single,4,328672789,-3449808930485460012,32
+RESULT,fashion-flat-public-single,5,317764200,-3449808930485460012,32
+RESULT,fashion-flat-public-single,6,323571902,-3449808930485460012,32
+WARMUP,fashion-flat-public-batch32,50,3027803430
+RESULT,fashion-flat-public-batch32,0,58320357,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,1,57973055,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,2,57912721,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,3,65225601,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,4,58787575,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,5,66799437,-3449808930485460012,32
+RESULT,fashion-flat-public-batch32,6,58043989,-3449808930485460012,32

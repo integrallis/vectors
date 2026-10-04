@@ -1,0 +1,19 @@
+dbpedia-flat-public-single: 68.702% less time; identical result digest
+dbpedia-flat-public-batch4: 0.767% less time; identical result digest
+dbpedia-flat-public-batch16: 1.583% less time; identical result digest
+dbpedia-flat-public-batch32: 0.529% less time; identical result digest
+dbpedia-flat-independent4: -0.037% less time; identical result digest
+dbpedia-flat-independent16: -0.377% less time; identical result digest
+fashion-flat-public-single: -1.709% less time; identical result digest
+fashion-flat-public-batch4: -1.414% less time; identical result digest
+fashion-flat-public-batch16: 0.083% less time; identical result digest
+fashion-flat-public-batch32: 0.500% less time; identical result digest
+fashion-flat-independent4: -1.765% less time; identical result digest
+fashion-flat-independent16: -4.387% less time; identical result digest
+glove-flat-public-single: 87.913% less time; identical result digest
+glove-flat-public-batch4: -0.090% less time; identical result digest
+glove-flat-public-batch16: 41.100% less time; identical result digest
+glove-flat-public-batch32: 1.799% less time; identical result digest
+glove-flat-independent4: -3.579% less time; identical result digest
+glove-flat-independent16: 2.317% less time; identical result digest
+Audited 18 cases across 3 pairs.
