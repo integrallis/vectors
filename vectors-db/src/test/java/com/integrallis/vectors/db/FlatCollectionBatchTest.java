@@ -96,10 +96,29 @@ class FlatCollectionBatchTest {
               .filter(Filters.eq("group", 1))
               .build());
       assertResults(collection, requests, collection.searchBatch(requests));
+      requests.set(
+          0,
+          SearchRequest.builder(requests.getFirst().query(), 10)
+              .filter(Filters.eq("group", 1))
+              .build());
+      assertResults(collection, requests, collection.searchBatch(requests));
       requests.set(0, SearchRequest.builder(new float[DIM + 1], 10).build());
       var failure = assertThrows(RuntimeException.class, () -> collection.searchBatch(requests));
       assertInstanceOf(IllegalArgumentException.class, failure.getCause());
     }
+  }
+
+  @Test
+  void closedCollectionKeepsTheBatchFailureCause() {
+    var collection = collection();
+    collection.close();
+    var failure =
+        assertThrows(
+            RuntimeException.class,
+            () ->
+                collection.searchBatch(
+                    requests(Runtime.getRuntime().availableProcessors() * 4, false)));
+    assertInstanceOf(IllegalStateException.class, failure.getCause());
   }
 
   private static VectorCollection collection() {
