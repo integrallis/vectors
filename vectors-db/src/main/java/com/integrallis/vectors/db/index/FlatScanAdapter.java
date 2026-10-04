@@ -35,9 +35,9 @@ import java.util.function.Supplier;
  * to affect flat-scan output — any value produces the same result. This matches the parameter
  * contract documented on {@link IndexSpi#search(float[], int, int, float)}.
  *
- * <p>Build requires exclusive access. Concurrent searches require safe publication after build
- * and no concurrent rebuild. The collection facade publishes complete index generations through
- * a volatile reference.
+ * <p>Build requires exclusive access. Concurrent searches require safe publication after build and
+ * no concurrent rebuild. The collection facade publishes complete index generations through a
+ * volatile reference.
  */
 public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
