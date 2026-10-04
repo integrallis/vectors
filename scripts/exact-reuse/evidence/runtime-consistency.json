@@ -1,0 +1,25 @@
+{
+  "production_source": "7df85192e27db800a7065808d6fe9d126cfde066",
+  "initial_and_longer_warmup_jars_identical": true,
+  "modules": {
+    "vectors-core-0.1.26.jar": {
+      "sha256": "c213aee959116e45a5e43870f8b2ec7a728a685040b9e236d80f44e9cf66d2e5",
+      "identical_to_qualified_combined_arm": true
+    },
+    "vectors-hnsw-0.1.26.jar": {
+      "sha256": "5b1df710a0bd41c8e144ade973523d6399943f789b52a019ffa041b1c8484ccb",
+      "identical_to_qualified_combined_arm": true
+    }
+  },
+  "public_api_runtime": {
+    "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+    "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+    "vectors-hnsw-0.1.26.jar": "5b1df710a0bd41c8e144ade973523d6399943f789b52a019ffa041b1c8484ccb",
+    "vectors-db-0.1.26.jar": "b6e996e800693fa8e53baacc28f3656c703ab91b0eb741d87b0d0ff700a38ba5",
+    "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+    "vectors-core-0.1.26.jar": "c213aee959116e45a5e43870f8b2ec7a728a685040b9e236d80f44e9cf66d2e5",
+    "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+    "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+  },
+  "settled_comparison_jars_identical": true
+}

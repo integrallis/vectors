@@ -53,14 +53,30 @@ public class CollectionBatchPerformance {
             .build()) {
       for (int i = 0; i < data.length; i++) collection.add(Document.of("row-" + i, data[i]));
       collection.commit();
+      // Settle the retained corpus before timing: a young-GC relocation otherwise changes
+      // float[][] locality partway through a fork, confounding baseline/candidate comparisons.
+      System.gc();
       for (String count : args[4].split(",")) {
         int nq = Integer.parseInt(count);
         if (nq > queries.length) throw new IllegalArgumentException("not enough queries");
         var requests = new ArrayList<SearchRequest>();
         for (int q = 0; q < nq; q++) requests.add(SearchRequest.builder(queries[q], 10).build());
         for (boolean batch : new boolean[] {false, true}) {
-          for (int warm = 0; warm < Integer.parseInt(args[5]); warm++)
+          long warmStart = System.nanoTime();
+          long warmNanos = args.length > 7 ? (long) (Double.parseDouble(args[7]) * 1e9) : 0;
+          int warmed = 0;
+          while (warmed < Integer.parseInt(args[5]) || System.nanoTime() - warmStart < warmNanos) {
             pass(collection, requests, batch);
+            warmed++;
+          }
+          System.out.printf(
+              Locale.ROOT,
+              "WARMUP,%s,%s,%d,%d,%d%n",
+              name,
+              batch ? "batch" : "single",
+              nq,
+              warmed,
+              System.nanoTime() - warmStart);
           long hash = pass(collection, requests, batch);
           for (int sample = 0; sample < Integer.parseInt(args[6]); sample++) {
             long start = System.nanoTime(),

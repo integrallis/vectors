@@ -1,0 +1,13 @@
+{
+  "source": "independent raw FLAT log parser",
+  "cases": 30,
+  "raw_measurements": 1260,
+  "forks_per_arm": 3,
+  "samples_per_fork": 7,
+  "all_raw_digest_sets_identical": true,
+  "reported_medians_recomputed": true,
+  "q64_gates": {
+    "glove-batch-n100000-d100-q64": 27.957790685113114,
+    "collection-batch-n100000-d512-q64": 54.92102912755401
+  }
+}

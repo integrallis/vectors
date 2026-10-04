@@ -1,0 +1,18 @@
+{
+  "baseline": "212ad282d719a985706b8024ad310c73e5e85430",
+  "hypothesis": "Concurrent construction can drain the distinct result heap directly, preserving ties, avoiding two arrays and quadratic duplicate scans.",
+  "scope": "Only concurrent result draining. No worker score cache, no changes to M, efConstruction, search budgets, pruning or lock order.",
+  "tests_first_commit": "3fd67d1",
+  "gates": [
+    "allocation test fails before implementation, passes after; all IDs and raw scores including ties match legacy",
+    "at least 5 percent median construction reduction on both GLOVE and Fashion-MNIST over three paired seeds",
+    "single-worker graph and search digests equal",
+    "every concurrent paired recall@10 delta at ef 32/128/512 >= -0.005",
+    "real persistent collection commit/reopen replay and recall; report all results",
+    "CI green; no opt-in or recall gate changes"
+  ],
+  "worker_cache_status": "rejected: GLOVE construction regressed despite fewer vector reads; complete raw results retained",
+  "vps": 168588957,
+  "existing_cost_ceiling_usd": 2,
+  "delete_by": "2026-10-04T04:32:43Z"
+}

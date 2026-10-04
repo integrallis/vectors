@@ -1,0 +1,17 @@
+{
+  "baseline": "212ad282d719a985706b8024ad310c73e5e85430",
+  "tests_first_commit": "69cc49c",
+  "finding": "VectorCollection.searchBatch delegates to independent searches, so adapter-only batch timings do not establish a public collection API improvement.",
+  "hypothesis": "Eligible default in-memory COSINE flat batches can share row scans in groups across CPU workers, keeping at least four queries per worker and retaining full CPU parallelism.",
+  "scope": "No query cache, no normalization substitution, equal k, no nontrivial metadata filters, heap FlatScanAdapter, and at least four queries per available processor. Other requests retain the existing default implementation. Projection, cutoffs, tombstones, ordering and failures remain covered.",
+  "gates": [
+    "public API JFR worker-count test fails on old routing and passes after implementation",
+    "ordinary searches and batches return the same hits/projections; exact warmed benchmark output digests match",
+    "at least 5 percent median time reduction at 64 queries on GLOVE and retained DBpedia through VectorCollection.searchBatch",
+    "three alternating fresh-JVM pairs on the dedicated VPS; single-query and other-metric controls reported",
+    "full CI and post-merge smoke tests; no runtime opt-in"
+  ],
+  "vps": 168588957,
+  "cost_ceiling_usd": 2,
+  "delete_by": "2026-10-04T04:32:43Z"
+}

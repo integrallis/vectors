@@ -1,0 +1,46 @@
+{
+  "host": "Linux-6.8.0-117-generic-x86_64-with-glibc2.39",
+  "runner_sha256": "f92a1d49a4d063c31d999c4bab5ed8389c327a9643d5070ae001726acdf9e7e3",
+  "java": "openjdk version \"25.0.3\" 2026-04-21 LTS\nOpenJDK Runtime Environment Temurin-25.0.3+9 (build 25.0.3+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.3+9 (build 25.0.3+9-LTS, mixed mode, sharing)\n",
+  "baseline_sha": "212ad282",
+  "candidate_sha": "25f47f8",
+  "sources": {
+    "FlatBatchPerformance.java": "fd94eba8ddae11c8440928260c0985942b793e0d76617f1d1621128b1f59635c",
+    "ConstructionReusePerformance.java": "5c63a1631109a1c7322c8396d66cd36286ee374f80245121dcce6c853442342c"
+  },
+  "jars": {
+    "baseline": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "3a3bab97f33af6bb391e536cf139dcf8ce29f58845f78ce5b45de5fadf029f65",
+      "vectors-db-0.1.26.jar": "f9f70792d4996e05df02ecfefbdedfd38788cf8852c46722d81b550e0520ae16",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "b1d3c92a269e71d7be1b26a30f3168afc376b99628f037bfb506a1afaeeb46eb",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    },
+    "candidate": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "d9442747de7d7d986186e9a319c1237f6f50e814c17c8a749c73bffca53ab287",
+      "vectors-db-0.1.26.jar": "f9f70792d4996e05df02ecfefbdedfd38788cf8852c46722d81b550e0520ae16",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "b1d3c92a269e71d7be1b26a30f3168afc376b99628f037bfb506a1afaeeb46eb",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    }
+  },
+  "inputs": {
+    "glove-100-angular-train.fbin": "3f8ddba7070f08a5c333ccacf3098118037785927387a00f9fff42f9a064b4c9",
+    "fashion-mnist-784-euclidean-test.fbin": "5a88808a02aa219e3c064d368fcbddcff8675481ae586b4eaa8a086405df93bf",
+    "fashion-mnist-784-euclidean-train.fbin": "90d9ed17a7241085cd2ac39fa7e097a5e1be987483c9eb878aa9f6e5dbd54d5c",
+    "glove-100-angular-test.fbin": "bdf73b26e2b63279e79e465af8a85c58d2690f38b88112531a9e237794c834c9"
+  },
+  "rows": 20000,
+  "M": 16,
+  "efConstruction": 200,
+  "k": 10,
+  "recall_gate": -0.005,
+  "seeds": "17,42,91",
+  "threads": "1,8"
+}

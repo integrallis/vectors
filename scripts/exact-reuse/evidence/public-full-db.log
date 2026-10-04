@@ -1,0 +1,1888 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/root/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :vectors-gpu:processResources UP-TO-DATE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-core:jar UP-TO-DATE
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-gpu:compileJava UP-TO-DATE
+> Task :vectors-gpu:classes UP-TO-DATE
+> Task :vectors-gpu:jar UP-TO-DATE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-hnsw:compileJava UP-TO-DATE
+> Task :vectors-hnsw:classes UP-TO-DATE
+> Task :vectors-vamana:compileJava UP-TO-DATE
+> Task :vectors-ivf:compileJava UP-TO-DATE
+> Task :vectors-vamana:classes UP-TO-DATE
+> Task :vectors-ivf:classes UP-TO-DATE
+> Task :vectors-hnsw:jar UP-TO-DATE
+> Task :vectors-ivf:jar UP-TO-DATE
+> Task :vectors-vamana:jar UP-TO-DATE
+> Task :vectors-db:compileJava UP-TO-DATE
+> Task :vectors-db:classes UP-TO-DATE
+> Task :vectors-db:jar
+> Task :vectors-db:compileTestJava UP-TO-DATE
+> Task :vectors-db:testClasses UP-TO-DATE
+
+> Task :vectors-db:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+AsyncBatchIngestorTest > directSubmitBatchesAndCommitsAll() PASSED
+
+AsyncBatchIngestorTest > failedAddCompletesExceptionally() PASSED
+
+AsyncBatchIngestorTest > persistentTokenCarriesGenerationNumber(Path) PASSED
+
+AsyncBatchIngestorTest > reactiveFlowPublisherPath() PASSED
+
+AppendToDecodedGraphTest > appendingToADecodedGraphIsAsGoodAsAppendingToTheOriginal() PASSED
+
+CommitAppendsHnswGraphTest > upsertsAcrossGenerationsReturnTheNewVector(Path) PASSED
+
+CommitAppendsHnswGraphTest > inMemoryBatchedCommitsRetrieveWhatASingleCommitRetrieves() PASSED
+
+CommitAppendsHnswGraphTest > deletesStillApplyAcrossAppendedGenerations(Path) PASSED
+
+CommitAppendsHnswGraphTest > batchedCommitsRetrieveWhatASingleCommitRetrieves(Path) PASSED
+
+CommitMemoryFootprintTest > streamedMetadataEqualsTheBufferedWriter() PASSED
+
+CommitAppendsVectorsFileTest > successiveGenerationsShareTheVectorsFileAndItsContentIsCorrect(Path) PASSED
+
+CommitAppendsVectorsFileTest > reopeningAfterLinkedCommitsReadsEveryDocument(Path) PASSED
+
+CommitAppendsVectorsFileTest > aStaleTailFromAFailedCommitIsHarmlessAndOverwritten(Path) PASSED
+
+EmbeddingRecipeLifecycleTest > a recipe makes provenance mandatory: a bare vector is refused PASSED
+
+EmbeddingRecipeLifecycleTest > a recipe survives a commit and a reopen, and the sidecar lands on disk PASSED
+
+EmbeddingRecipeLifecycleTest > attaching a recipe to a collection that already holds vectors is refused PASSED
+
+EmbeddingRecipeLifecycleTest > reopening with a DIFFERENT recipe is refused, naming both PASSED
+
+EmbeddingRecipeLifecycleTest > a collection with no recipe still accepts bare vectors PASSED
+
+EmbeddingRecipeLifecycleTest > a recipe whose dimension contradicts the collection is refused at construction PASSED
+
+EmbeddingRecipeLifecycleTest > the manifest anchors the recipe hash, so the sidecar cannot be swapped unnoticed PASSED
+
+GenerationCompactionTest > pruneReclaimsOldGenerationsKeepingRetentionWindow(Path) PASSED
+
+GenerationCompactionTest > daemonReclaimsAutomatically(Path) PASSED
+
+GenerationCompactionTest > disabledByDefaultLeavesGenerationsOnDisk(Path) PASSED
+
+GenerationShippingFailureVisibilityTest > putFailureBumpsCounterAndFiresCallback(Path) PASSED
+
+GenerationShippingFailureVisibilityTest > noFailureKeepsCounterAtZero(Path) PASSED
+
+GenerationShippingTest > localBackendIncrementalPullRefresh(Path) PASSED
+
+GenerationShippingTest > heapShipThenPullThenRefreshServesGeneration(Path) PASSED
+
+ObjectStoreCollectionTest > freshCacheHydratesFromObjectStoreWithFiltersAndText(Path) PASSED
+
+QuantizedOnlyCollectionTest > findsTheSameNeighbourAsAnExactSearchForWellSeparatedVectors(Path) PASSED
+
+QuantizedOnlyCollectionTest > isSealedAfterItsFirstCommit(Path) PASSED
+
+QuantizedOnlyCollectionTest > refusesConfigurationsItCannotHonour(Path) PASSED
+
+QuantizedOnlyCollectionTest > storesCodesInsteadOfVectorsAndIsSmallerForIt(Path) PASSED
+
+QuantizedOnlyCollectionTest > reopensWithoutBeingToldItIsQuantizedOnly(Path) PASSED
+
+StoredRecipeAnchorOrderingTest > the padding width is pinned, because the ordering depends on it PASSED
+
+StoredRecipeAnchorOrderingTest > a generation number that would break the sort is refused, not formatted PASSED
+
+StoredRecipeAnchorOrderingTest > generation names are fixed-width, so lexicographic order is numeric order PASSED
+
+StoredRecipeAnchorOrderingTest > the single-digit and double-digit boundary is the one that would break first PASSED
+
+TombstonePersistReopenTest > deletedDocsStayDeletedAcrossReopen(Path) PASSED
+
+VamanaPreFilterRecallTest > preFilterWithNoMatchesReturnsEmpty() PASSED
+
+VamanaPreFilterRecallTest > persistentVamanaPreFilterKeepsRecallUnderSelectiveFilter(Path) PASSED
+
+VamanaPreFilterRecallTest > inMemoryVamanaPreFilterKeepsRecallUnderSelectiveFilter() PASSED
+
+WARNING: A restricted method in java.lang.foreign.SymbolLookup has been called
+WARNING: java.lang.foreign.SymbolLookup::libraryLookup has been called by com.nvidia.cuvs.internal.common.NativeLibraryUtils in an unnamed module (file:/root/.gradle/caches/modules-2/files-2.1/com.nvidia.cuvs/cuvs-java/25.10.0/885ad074984741128c7cc723851e790711f91a6e/cuvs-java-25.10.0.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+
+> Task :vectors-db:test
+
+VectorDbCuVsTest > bruteForceBuilderThrowsOnNonGpuHost() PASSED
+
+VectorDbCuVsTest > bruteForceConfigUsesDefaultCuVsParams() PASSED
+
+VectorDbCuVsTest > cuvsRejectsPersistentStoragePath(Path) PASSED
+
+VectorDbCuVsTest > cuvsRejectsQuantizerKind() PASSED
+
+VectorDbCuVsTest > cagraConfigValidatesParamVariantMatchesIndexType() PASSED
+
+VectorDbCuVsTest > cagraBuilderThrowsOnNonGpuHost() PASSED
+
+VectorDbDeletionTest > IgtmMerge > hnswMerge_recallAfterMerge() PASSED
+
+VectorDbDeletionTest > IgtmMerge > hnswMerge_survivingDocsRemainSearchable() PASSED
+
+VectorDbDeletionTest > IgtmMerge > persistentHnswMerge_survivesCloseAndReopen(Path) PASSED
+
+VectorDbDeletionTest > CombinedOperations > multipleDeleteCommitCycles() PASSED
+
+VectorDbDeletionTest > CombinedOperations > deleteAndAddInSameCommit() PASSED
+
+VectorDbDeletionTest > CombinedOperations > addAfterDeleteWithSameIdViaAdd() PASSED
+
+VectorDbDeletionTest > CombinedOperations > addAfterDeleteReusesFreeId() PASSED
+
+VectorDbDeletionTest > CombinedOperations > deleteAllThenCompact() PASSED
+
+VectorDbDeletionTest > TombstoneOnlyCommit > tombstoneOnlyCommitProducesNewGeneration() PASSED
+
+VectorDbDeletionTest > TombstoneOnlyCommit > emptyCommitIsNoOp() PASSED
+
+VectorDbDeletionTest > Persistence > deleteWhereWithPersistence(Path) PASSED
+
+VectorDbDeletionTest > Persistence > tombstonesFileAbsentWhenNoTombstones(Path) PASSED
+
+VectorDbDeletionTest > Persistence > hnswDeleteAndReopenPreservesResults(Path) PASSED
+
+VectorDbDeletionTest > Persistence > upsertPersistsAcrossReopen(Path) PASSED
+
+VectorDbDeletionTest > Persistence > compactSurvivesCloseAndReopen(Path) PASSED
+
+VectorDbDeletionTest > Persistence > tombstonesFileAbsentAfterCompact(Path) PASSED
+
+VectorDbDeletionTest > Persistence > tombstonesFileWrittenAfterDelete(Path) PASSED
+
+VectorDbDeletionTest > Persistence > deleteSurvivesCloseAndReopen(Path) PASSED
+
+VectorDbDeletionTest > Compact > compactIsNoOpWithNoTombstones() PASSED
+
+VectorDbDeletionTest > Compact > compactPreservesSearchResults(IndexType) > [1] idx=FLAT PASSED
+
+VectorDbDeletionTest > Compact > compactPreservesSearchResults(IndexType) > [2] idx=HNSW PASSED
+
+VectorDbDeletionTest > Compact > compactPreservesSearchResults(IndexType) > [3] idx=VAMANA PASSED
+
+VectorDbDeletionTest > Compact > compactRemovesTombstones(IndexType) > [1] idx=FLAT PASSED
+
+VectorDbDeletionTest > Compact > compactRemovesTombstones(IndexType) > [2] idx=HNSW PASSED
+
+VectorDbDeletionTest > Compact > compactRemovesTombstones(IndexType) > [3] idx=VAMANA PASSED
+
+VectorDbDeletionTest > Compact > compactCommitsPendingWorkFirst() PASSED
+
+VectorDbDeletionTest > Upsert > upsertReplacesExistingCommittedDocument() PASSED
+
+VectorDbDeletionTest > Upsert > upsertReplacesStagedDocument() PASSED
+
+VectorDbDeletionTest > Upsert > upsertInsertsNewDocument() PASSED
+
+VectorDbDeletionTest > Upsert > upsertUpdatesSearchResults() PASSED
+
+VectorDbDeletionTest > DeleteWhere > deleteWhereMatchesAndReturnsCount() PASSED
+
+VectorDbDeletionTest > DeleteWhere > deleteWhereReturnsZeroWhenNoMatch() PASSED
+
+VectorDbDeletionTest > DeleteWhere > deleteWhereAlsoRemovesStagedDocuments() PASSED
+
+VectorDbDeletionTest > SizeVsPhysicalSize > sizeExcludesTombstonesPhysicalSizeDoesNot() PASSED
+
+VectorDbDeletionTest > SizeVsPhysicalSize > sizeAndPhysicalSizeEqualWithNoTombstones() PASSED
+
+VectorDbDeletionTest > DeleteById > getReturnsNullForDeletedDoc() PASSED
+
+VectorDbDeletionTest > DeleteById > deleteReturnsTrueForKnownId(IndexType) > [1] idx=FLAT PASSED
+
+VectorDbDeletionTest > DeleteById > deleteReturnsTrueForKnownId(IndexType) > [2] idx=HNSW PASSED
+
+VectorDbDeletionTest > DeleteById > deleteReturnsTrueForKnownId(IndexType) > [3] idx=VAMANA PASSED
+
+VectorDbDeletionTest > DeleteById > containsReturnsFalseForDeletedDoc() PASSED
+
+VectorDbDeletionTest > DeleteById > deleteOfStagedDocRemovesImmediately() PASSED
+
+VectorDbDeletionTest > DeleteById > deletedDocExcludedFromSearchAfterCommit(IndexType) > [1] idx=FLAT PASSED
+
+VectorDbDeletionTest > DeleteById > deletedDocExcludedFromSearchAfterCommit(IndexType) > [2] idx=HNSW PASSED
+
+VectorDbDeletionTest > DeleteById > deletedDocExcludedFromSearchAfterCommit(IndexType) > [3] idx=VAMANA PASSED
+
+VectorDbDeletionTest > DeleteById > deletedDocExcludedFromSearchWithCosineMetric(IndexType) > [1] idx=FLAT PASSED
+
+VectorDbDeletionTest > DeleteById > deletedDocExcludedFromSearchWithCosineMetric(IndexType) > [2] idx=HNSW PASSED
+
+VectorDbDeletionTest > DeleteById > deletedDocExcludedFromSearchWithCosineMetric(IndexType) > [3] idx=VAMANA PASSED
+
+VectorDbDeletionTest > DeleteById > deleteReturnsFalseForAlreadyDeletedId(IndexType) > [1] idx=FLAT PASSED
+
+VectorDbDeletionTest > DeleteById > deleteReturnsFalseForAlreadyDeletedId(IndexType) > [2] idx=HNSW PASSED
+
+VectorDbDeletionTest > DeleteById > deleteReturnsFalseForAlreadyDeletedId(IndexType) > [3] idx=VAMANA PASSED
+
+VectorDbDeletionTest > DeleteById > deleteReturnsFalseForUnknownId(IndexType) > [1] idx=FLAT PASSED
+
+VectorDbDeletionTest > DeleteById > deleteReturnsFalseForUnknownId(IndexType) > [2] idx=HNSW PASSED
+
+VectorDbDeletionTest > DeleteById > deleteReturnsFalseForUnknownId(IndexType) > [3] idx=VAMANA PASSED
+
+VectorDbFilteredSearchTest > AcornPreFilter > persistentHnsw_preFilterWorks(Path) PASSED
+
+VectorDbFilteredSearchTest > AcornPreFilter > preFilter_recallIsAdequate() PASSED
+
+VectorDbFilteredSearchTest > AcornPreFilter > preFilter_routingThroughNonMatchingNodes_highSelectivity() PASSED
+
+VectorDbFilteredSearchTest > AcornPreFilter > preFilter_returnsOnlyMatchingDocs() PASSED
+
+VectorDbFilteredSearchTest > PersistentFiltered > filteredSearchAfterReopenFlat(Path) PASSED
+
+VectorDbFilteredSearchTest > PersistentFiltered > filteredSearchAfterReopenHnsw(Path) PASSED
+
+VectorDbFilteredSearchTest > VamanaFiltered > noMatchReturnsEmpty() PASSED
+
+VectorDbFilteredSearchTest > VamanaFiltered > numericRangeFilter() PASSED
+
+VectorDbFilteredSearchTest > VamanaFiltered > eqStringFilter() PASSED
+
+VectorDbFilteredSearchTest > HnswFiltered > noMatchReturnsEmpty() PASSED
+
+VectorDbFilteredSearchTest > HnswFiltered > andFilter() PASSED
+
+VectorDbFilteredSearchTest > HnswFiltered > eqStringFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > filterPlusTopK() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > noDocumentsMatchFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > tagsEqFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > tagsInFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > eqBooleanFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > filterPlusMinScore() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > notInFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > andFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > lteFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > nestedCompoundFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > allFilterSameAsNull() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > filterOnDocumentsWithoutThatField_returnsOnlyMatching() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > orFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > inStringFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > metadataPreservedInFilteredResults() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > notFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > gtFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > numericRangeFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > eqStringFilter() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > highSelectivityFilter_returnsFewerThanK() PASSED
+
+VectorDbFilteredSearchTest > FlatFiltered > inNumericFilter() PASSED
+
+VectorDbHnswPersistenceTest > ConcurrencyHnsw > concurrentReadersNeverBlockedByHnswCommit(Path) PASSED
+
+VectorDbHnswPersistenceTest > CommitOpenFailureRecoveryHnsw > retryAfterOpenFailureAdvancesGenerationNumberHnsw(Path) PASSED
+
+VectorDbHnswPersistenceTest > SimulatedKill9Hnsw > corruptManifestFallsBackToPriorGeneration(Path) PASSED
+
+VectorDbHnswPersistenceTest > SimulatedKill9Hnsw > corruptGraphBinFallsBackToPriorGeneration(Path) PASSED
+
+VectorDbHnswPersistenceTest > PersistentHnsw > closeAndReopenReturnsIdenticalSearchResults(Path) PASSED
+
+VectorDbHnswPersistenceTest > PersistentHnsw > getHydratesVectorFromMmapAfterReopen(Path) PASSED
+
+VectorDbHnswPersistenceTest > PersistentHnsw > reopenedSearchMatchesBruteForceRecall(Path) PASSED
+
+VectorDbHnswPersistenceTest > PersistentHnsw > includeVectorHydratesFromMmapAfterReopen(Path) PASSED
+
+VectorDbHnswPersistenceTest > PersistentHnsw > emptyCollectionRoundTrips(Path) PASSED
+
+VectorDbHnswPersistenceTest > PersistentHnsw > fiveSequentialCommitsReopenCorrectly(Path) PASSED
+
+VectorDbHnswPersistenceTest > PersistentHnsw > metadataSurvivesRoundTrip(Path) PASSED
+
+VectorDbHnswPersistenceTest > PersistentHnsw > customBuildParametersSurviveReopen(Path) PASSED
+
+VectorDbHnswPersistenceTest > InMemoryHnsw > inMemoryHnswAutoCommitTriggersRebuild() PASSED
+
+VectorDbHnswPersistenceTest > InMemoryHnsw > inMemoryHnswRebuildsAcrossCommits() PASSED
+
+VectorDbHnswPersistenceTest > InMemoryHnsw > inMemoryHnswEmptyCollectionReportsZero() PASSED
+
+VectorDbHnswPersistenceTest > InMemoryHnsw > inMemoryHnswSearchReturnsAccurateNeighbors() PASSED
+
+VectorDbHnswPersistenceTest > InMemoryHnsw > inMemoryHnswDefaultBuildParametersWork() PASSED
+
+VectorDbHnswPersistenceTest > InMemoryHnsw > inMemoryHnswCustomBuildParametersFlowThrough() PASSED
+
+VectorDbIntegrationTest > BatchSearch > searchBatch_nullRequests_throws() PASSED
+
+VectorDbIntegrationTest > BatchSearch > searchBatch_emptyRequests_throws() PASSED
+
+VectorDbIntegrationTest > BatchSearch > searchBatch_concurrencyStressTest_noResultCorruption() PASSED
+
+VectorDbIntegrationTest > BatchSearch > searchBatch_multipleRequests_resultsInOrder() PASSED
+
+VectorDbIntegrationTest > BatchSearch > searchBatch_singleRequest_matchesSingleSearch() PASSED
+
+VectorDbIntegrationTest > BatchSearch > searchBatch_resultsListIsImmutable() PASSED
+
+VectorDbIntegrationTest > FilterExecution > nullFilter_succeeds() PASSED
+
+VectorDbIntegrationTest > FilterExecution > nonTrivialFilter_returnsMatchingDocumentsOnly() PASSED
+
+VectorDbIntegrationTest > FilterExecution > filterAll_succeeds_withIdenticalResultsToNull() PASSED
+
+VectorDbIntegrationTest > FilterExecution > filterOnMissingField_returnsEmpty() PASSED
+
+VectorDbIntegrationTest > AutoCommit > addAllBeyondThresholdAutoCommits() PASSED
+
+VectorDbIntegrationTest > AutoCommit > individualAddBeyondThresholdAutoCommits() PASSED
+
+VectorDbIntegrationTest > AutoCommit > defaultConfigNeverAutoCommits() PASSED
+
+VectorDbIntegrationTest > DeterministicResults > sameDataSameQuery_producesIdenticalResults() PASSED
+
+VectorDbIntegrationTest > SearchRequestDefaults > minScore_filtersResults() PASSED
+
+VectorDbIntegrationTest > SearchRequestDefaults > builderAppliesDocumentedDefaults() PASSED
+
+VectorDbIntegrationTest > SearchRequestDefaults > includeVectorFalse_returnsNullVectorOnHits() PASSED
+
+VectorDbIntegrationTest > FlatScanSearch > top10_matchesBruteForceGroundTruth_exactly(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+VectorDbIntegrationTest > FlatScanSearch > top10_matchesBruteForceGroundTruth_exactly(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+VectorDbIntegrationTest > FlatScanSearch > top10_matchesBruteForceGroundTruth_exactly(SimilarityFunction) > [3] sim=COSINE PASSED
+
+VectorDbIntegrationTest > FlatScanSearch > top10_matchesBruteForceGroundTruth_exactly(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+VectorDbIntegrationTest > DocumentRoundTrip > allMetadataValueTypes_preservedThroughSearch() PASSED
+
+VectorDbIntegrationTest > DocumentRoundTrip > mutatingOriginalFloatArrayAfterCommitDoesNotCorruptIndex() PASSED
+
+VectorDbIntegrationTest > Lifecycle > addAndCommit_searchSeesAllDocs() PASSED
+
+VectorDbIntegrationTest > Lifecycle > addBeforeCommit_searchSeesZeroResults() PASSED
+
+VectorDbIntegrationTest > Lifecycle > addAll_equivalentToRepeatedAdd() PASSED
+
+VectorDbIntegrationTest > Lifecycle > addDuplicateId_throws() PASSED
+
+VectorDbIntegrationTest > Lifecycle > close_releasesResources() PASSED
+
+VectorDbIntegrationTest > Lifecycle > addWrongDimension_throws() PASSED
+
+VectorDbIntegrationTest > BuilderValidation > build_throws_whenDimensionMissing() PASSED
+
+VectorDbIntegrationTest > BuilderValidation > flatWithQuantizer_buildsSuccessfully() PASSED
+
+VectorDbIntegrationTest > BuilderValidation > build_throws_whenMetricMissing() PASSED
+
+VectorDbIntegrationTest > BuilderValidation > indexTypeVamana_buildsSuccessfully_inStep4c() PASSED
+
+VectorDbIntegrationTest > BuilderValidation > build_succeeds_withDimensionAndMetric() PASSED
+
+VectorDbIntegrationTest > BuilderValidation > indexTypeHnsw_buildsSuccessfully() PASSED
+
+VectorDbIvfFlatTest > twoPassSearch_highFactor_returnsExactlyK() PASSED
+
+VectorDbIvfFlatTest > twoPassSearch_explicitFactor_matchesDefault() PASSED
+
+VectorDbIvfFlatTest > search_withDelete_excludesDeletedDoc() PASSED
+
+VectorDbIvfFlatTest > twoPassSearch_overQueryFactor_improvesRecall() PASSED
+
+VectorDbIvfFlatTest > sizeReflectsAdds() PASSED
+
+VectorDbIvfFlatTest > commit_thenReopen_preservesVectors(Path) PASSED
+
+VectorDbIvfFlatTest > buildAndSearch_recallExceedsThreshold() PASSED
+
+VectorDbIvfFlatTest > search_appliesMetadataFilter() PASSED
+
+VectorDbIvfPqTest > twoPassSearch_highFactor_returnsExactlyK() PASSED
+
+VectorDbIvfPqTest > builderRejectsInvalidIvfPqConfig() PASSED
+
+VectorDbIvfPqTest > commit_thenReopen_preservesVectorsAndPqState(Path) PASSED
+
+VectorDbIvfPqTest > sizeReflectsAdds() PASSED
+
+VectorDbIvfPqTest > overQueryFactor_doesNotDegradeRecall() PASSED
+
+VectorDbIvfPqTest > buildAndSearch_recallExceedsThreshold() PASSED
+
+VectorDbMultiStartTest > NonHnswBackends > preFilterIgnoresMultiStart() PASSED
+
+VectorDbMultiStartTest > NonHnswBackends > flatAdapterIgnoresMultiStart() PASSED
+
+VectorDbMultiStartTest > ConcurrencySmoke > concurrencySmokeSearchBatchPlusMultiStart() PASSED
+
+VectorDbMultiStartTest > MappedHnswMultiStart > mappedHnswMultiStartSmoke(Path) PASSED
+
+VectorDbMultiStartTest > InMemoryHnswMultiStart > inMemoryHnswMultiStartReturnsTopK() PASSED
+
+VectorDbMultiStartTest > InMemoryHnswMultiStart > inMemoryHnswMultiStartRecallParity() PASSED
+
+VectorDbMultiStartTest > RequestDefaults > searchMultiStartNegativeRejected() PASSED
+
+VectorDbMultiStartTest > RequestDefaults > searchRequestSearchMultiStartDefaultsToOne() PASSED
+
+VectorDbPersistenceTest > FusedSuccessorMaterialization > flatAndHnswIdenticalAcrossMultipleCommits(Path) PASSED
+
+VectorDbPersistenceTest > FusedSuccessorMaterialization > flatAndHnswProduceIdenticalVectorsBin(Path) PASSED
+
+VectorDbPersistenceTest > CommitOpenFailureRecovery > retryAfterOpenFailureWithPriorCommittedGeneration(Path) PASSED
+
+VectorDbPersistenceTest > CommitOpenFailureRecovery > retryAfterOpenFailureAdvancesGenerationNumber(Path) PASSED
+
+VectorDbPersistenceTest > StorageRootValidation > storageRootIsAFileThrows(Path) PASSED
+
+VectorDbPersistenceTest > StorageRootValidation > storageRootCreatedIfMissing(Path) PASSED
+
+VectorDbPersistenceTest > StorageRootValidation > relativeStoragePathRejected() PASSED
+
+VectorDbPersistenceTest > FlushSemantics > dataDurableImmediatelyAfterCommit(Path) PASSED
+
+VectorDbPersistenceTest > FlushSemantics > flushAfterCommitIsNoOp(Path) PASSED
+
+VectorDbPersistenceTest > FlushSemantics > flushBeforeCommitDoesNotPersistStaging(Path) PASSED
+
+VectorDbPersistenceTest > SimulatedKill9 > allManifestsCorruptThrowsOnReopen(Path) PASSED
+
+VectorDbPersistenceTest > SimulatedKill9 > corruptedLatestManifestFallsBackToPreviousGeneration(Path) PASSED
+
+VectorDbPersistenceTest > SimulatedKill9 > corruptedCurrentPointerRebuildsFromNewestValidGeneration(Path) PASSED
+
+VectorDbPersistenceTest > MultiGeneration > fiveSequentialCommitsAdvanceCurrentPointer(Path) PASSED
+
+VectorDbPersistenceTest > MultiGeneration > reopenAfterMultipleCommitsSeesAllDocs(Path) PASSED
+
+VectorDbPersistenceTest > RoundTrip > closeAndReopenReturnsIdenticalSearchResults(Path) PASSED
+
+VectorDbPersistenceTest > RoundTrip > includeVectorHydratesFromMmapAfterReopen(Path) PASSED
+
+VectorDbPersistenceTest > RoundTrip > emptyCollectionRoundTrips(Path) PASSED
+
+VectorDbPersistenceTest > RoundTrip > metadataSurvivesRoundTrip(Path) PASSED
+
+VectorDbQuantizationTest > SimulatedKill9Quantized > corruptQuantizedBinFallsBackToPriorGeneration(Path) PASSED
+
+VectorDbQuantizationTest > FlatQuantization > flatWithNoneIsAllowed() PASSED
+
+VectorDbQuantizationTest > FlatQuantization > flatWithSq8SearchesWithFullPrecisionRescore() PASSED
+
+VectorDbQuantizationTest > FlatQuantization > flatWithPqSearchesWithFullPrecisionRescore() PASSED
+
+VectorDbQuantizationTest > FlatQuantization > flatSq8RoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentVamanaQuantized > pqRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentVamanaQuantized > sq8RoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentVamanaQuantized > bqRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentVamanaQuantized > nvqRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentVamanaQuantized > sq4RoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentVamanaQuantized > turboQuantRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentVamanaQuantized > rabitqRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > pqRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > sq8RoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > fp16RoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > turboQuant4BitRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > bqRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > nvqRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > sq4RoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > turboQuantRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > rabitqRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > PersistentHnswQuantized > extendedRaBitQRoundTrips(Path) PASSED
+
+VectorDbQuantizationTest > InMemoryVamanaQuantized > sq8ProducesRecallAboveThreshold() PASSED
+
+VectorDbQuantizationTest > InMemoryVamanaQuantized > bqReturnsResults() PASSED
+
+VectorDbQuantizationTest > InMemoryVamanaQuantized > pqReturnsResults() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > turboQuantProducesRecallAboveThreshold() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > sq8ProducesRecallAboveThreshold() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > bqReturnsResults() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > sq4ReturnsResults() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > fp16ProducesHighRecall() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > overQueryFactorImprovesRecallOrMaintainsIt() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > rabitqReturnsResults() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > nvqReturnsResults() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > extendedRaBitQProducesHighRecall() PASSED
+
+VectorDbQuantizationTest > InMemoryHnswQuantized > pqReturnsResults() PASSED
+
+VectorDbQvCacheTest > QvCacheDotProductTests > dotProduct_cacheHit_returnsSameResultObject() PASSED
+
+VectorDbQvCacheTest > QvCacheDotProductTests > dotProduct_proportionalQueries_sameRanking() PASSED
+
+VectorDbQvCacheTest > QvCacheDotProductTests > dotProduct_cacheMiss_afterDifferentDirection() PASSED
+
+VectorDbQvCacheTest > QvCacheUnitTests > quantize_similarVectors_produceSameKey() PASSED
+
+VectorDbQvCacheTest > QvCacheUnitTests > quantize_oppositeVectors_produceDifferentKeys() PASSED
+
+VectorDbQvCacheTest > QvCacheUnitTests > quantize_proportionalVectors_produceSameKey() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > cacheInvalidation_onAutoCommit_causesSearchToReExecute() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > cacheMiss_afterDifferentQuery_executesSearch() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > cacheKey_distinguishesMetadataProjection() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > cacheInvalidation_onCommit_causesSearchToReExecute() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > includeVector_requestsAreNotCached() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > cacheStats_hitAndMissCounts() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > lruEviction_whenCapacityExceeded() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > disabledCache_isTransparent_noCaching() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > cacheHit_returnsSameResultObject() PASSED
+
+VectorDbQvCacheTest > QvCacheIntegrationTests > cacheKey_distinguishesMinScore() PASSED
+
+VectorDbVamanaPersistenceTest > ConcurrencyVamana > concurrentReadersNeverBlockedByVamanaCommit(Path) PASSED
+
+VectorDbVamanaPersistenceTest > CommitOpenFailureRecoveryVamana > retryAfterOpenFailureAdvancesGenerationNumberVamana(Path) PASSED
+
+VectorDbVamanaPersistenceTest > SimulatedKill9Vamana > corruptManifestFallsBackToPriorGeneration(Path) PASSED
+
+VectorDbVamanaPersistenceTest > SimulatedKill9Vamana > corruptGraphBinFallsBackToPriorGeneration(Path) PASSED
+
+VectorDbVamanaPersistenceTest > PersistentVamana > closeAndReopenReturnsIdenticalSearchResults(Path) PASSED
+
+VectorDbVamanaPersistenceTest > PersistentVamana > reopenedSearchMatchesBruteForceRecall(Path) PASSED
+
+VectorDbVamanaPersistenceTest > PersistentVamana > includeVectorHydratesFromMmapAfterReopen(Path) PASSED
+
+VectorDbVamanaPersistenceTest > PersistentVamana > emptyCollectionRoundTrips(Path) PASSED
+
+VectorDbVamanaPersistenceTest > PersistentVamana > fiveSequentialCommitsReopenCorrectly(Path) PASSED
+
+VectorDbVamanaPersistenceTest > PersistentVamana > metadataSurvivesRoundTrip(Path) PASSED
+
+VectorDbVamanaPersistenceTest > PersistentVamana > customBuildParametersSurviveReopen(Path) PASSED
+
+VectorDbVamanaPersistenceTest > InMemoryVamana > inMemoryVamanaSearchReturnsAccurateNeighbors() PASSED
+
+VectorDbVamanaPersistenceTest > InMemoryVamana > inMemoryVamanaAutoCommitTriggersRebuild() PASSED
+
+VectorDbVamanaPersistenceTest > InMemoryVamana > inMemoryVamanaEmptyCollectionReportsZero() PASSED
+
+VectorDbVamanaPersistenceTest > InMemoryVamana > inMemoryVamanaDefaultBuildParametersWork() PASSED
+
+VectorDbVamanaPersistenceTest > InMemoryVamana > inMemoryVamanaCustomBuildParametersFlowThrough() PASSED
+
+VectorDbVamanaPersistenceTest > InMemoryVamana > inMemoryVamanaRebuildsAcrossCommits() PASSED
+
+WriterLockTimeoutTest > writerLock_timesOut_whenAnotherWriterBlocksInCommitPath() PASSED
+
+FilterExecutorTest > EdgeCases > numericRangeOnIntegerStoredValue() PASSED
+
+FilterExecutorTest > EdgeCases > nullMetadataMatchesAllOnly() PASSED
+
+FilterExecutorTest > EdgeCases > eqWithDoubleMatchesLongStored() PASSED
+
+FilterExecutorTest > EdgeCases > boolInFilter() PASSED
+
+FilterExecutorTest > EdgeCases > emptyMetadataMatchesAllOnly() PASSED
+
+FilterExecutorTest > LogicalOperators > orOneTrue() PASSED
+
+FilterExecutorTest > LogicalOperators > deeplyNestedNot() PASSED
+
+FilterExecutorTest > LogicalOperators > andOneFalse() PASSED
+
+FilterExecutorTest > LogicalOperators > andBothTrue() PASSED
+
+FilterExecutorTest > LogicalOperators > notNegatesChild() PASSED
+
+FilterExecutorTest > LogicalOperators > notOnMissingFieldReturnsTrue() PASSED
+
+FilterExecutorTest > LogicalOperators > nestedCompound() PASSED
+
+FilterExecutorTest > LogicalOperators > orNoneTrue() PASSED
+
+FilterExecutorTest > InFilter > tagsIntersectsInSet() PASSED
+
+FilterExecutorTest > InFilter > missingFieldReturnsFalse() PASSED
+
+FilterExecutorTest > InFilter > numericIn() PASSED
+
+FilterExecutorTest > InFilter > stringIn() PASSED
+
+FilterExecutorTest > NumericRangeFilter > nonNumericFieldReturnsFalse() PASSED
+
+FilterExecutorTest > NumericRangeFilter > lessThanOrEqual() PASSED
+
+FilterExecutorTest > NumericRangeFilter > inclusiveRange() PASSED
+
+FilterExecutorTest > NumericRangeFilter > greaterThanOrEqual() PASSED
+
+FilterExecutorTest > NumericRangeFilter > strictLessThan() PASSED
+
+FilterExecutorTest > NumericRangeFilter > missingFieldReturnsFalse() PASSED
+
+FilterExecutorTest > NumericRangeFilter > strictGreaterThan() PASSED
+
+FilterExecutorTest > EqualityFilter > numericCrossTypeEquality() PASSED
+
+FilterExecutorTest > EqualityFilter > typeMismatchReturnsFalse() PASSED
+
+FilterExecutorTest > EqualityFilter > stringEquality() PASSED
+
+FilterExecutorTest > EqualityFilter > numericEqualityDouble() PASSED
+
+FilterExecutorTest > EqualityFilter > tagsEqMatchesSingleTag() PASSED
+
+FilterExecutorTest > EqualityFilter > booleanEquality() PASSED
+
+FilterExecutorTest > EqualityFilter > missingFieldReturnsFalse() PASSED
+
+FilterExecutorTest > EqualityFilter > numericEqualityLong() PASSED
+
+FilterExecutorTest > AllFilter > matchesEverything() PASSED
+
+CompositionWrappersTest > ReplicasWrapper > resultsMatchAnySingleReplica() PASSED
+
+CompositionWrappersTest > ReplicasWrapper > roundRobinDistributesAcrossReplicas() PASSED
+
+CompositionWrappersTest > ReplicasWrapper > rejectsEmptyReplicaList() PASSED
+
+CompositionWrappersTest > ReplicasWrapper > closePropagatesToAllReplicas() PASSED
+
+CompositionWrappersTest > ShardsWrapper > topKMatchesBruteForceOverFullCorpus() PASSED
+
+CompositionWrappersTest > ShardsWrapper > mapsShardLocalOrdinalsToGlobal() PASSED
+
+CompositionWrappersTest > ShardsWrapper > rejectsEmptyShardList() PASSED
+
+CompositionWrappersTest > ShardsWrapper > concurrentSearchIsSafe() PASSED
+
+CompositionWrappersTest > ShardsWrapper > predicateIsEvaluatedAgainstGlobalOrdinals() PASSED
+
+CompositionWrappersTest > RefineWrapper > closePropagatesToBase() PASSED
+
+CompositionWrappersTest > RefineWrapper > emptyBuildReturnsEmptyResults() PASSED
+
+CompositionWrappersTest > RefineWrapper > rejectsKFactorBelowOne() PASSED
+
+CompositionWrappersTest > RefineWrapper > rejectsNullBase() PASSED
+
+CompositionWrappersTest > RefineWrapper > rescoreReturnsSameTopKAsBaseWhenBaseIsBruteForce() PASSED
+
+CompositionWrappersTest > RefineWrapper > scoresAreRecomputedAgainstStoredVectors() PASSED
+
+IndexSpiSearchBatchTest > rejectsEmptyQueryArray() PASSED
+
+IndexSpiSearchBatchTest > singleQueryBatchMatchesScalarSearch() PASSED
+
+IndexSpiSearchBatchTest > rejectsDimensionMismatchInAnyQuery() PASSED
+
+IndexSpiSearchBatchTest > emptyIndexReturnsEmptyOutcomesForEachQuery() PASSED
+
+IndexSpiSearchBatchTest > flatScanBatchEqualsSequentialSearch() PASSED
+
+IndexSpiSearchBatchTest > flatScanBatchEqualsSequentialSearchAcrossMetrics() PASSED
+
+IndexSpiSearchBatchTest > defaultFanOutEqualsSequentialSearch() PASSED
+
+PreparedFlatScanTest > batchRecomputesNormsAfterStoredRowsAndQueriesChange() PASSED
+
+PreparedFlatScanTest > singleAndBatchPreserveScoresAndTiesAndRecomputeAfterQueryMutation() PASSED
+
+VamanaIndexAdapterTest > ThreadSafety > concurrentSearchesProduceConsistentResults() PASSED
+
+VamanaIndexAdapterTest > CloseSemantics > closeIsNoOp() PASSED
+
+VamanaIndexAdapterTest > Accessors > graphAccessorReturnsNullBeforeBuild() PASSED
+
+VamanaIndexAdapterTest > Accessors > buildParametersArePreserved() PASSED
+
+VamanaIndexAdapterTest > Accessors > graphAccessorReturnsCurrentGraphAfterBuild() PASSED
+
+VamanaIndexAdapterTest > InputValidation > buildNullMetricThrows() PASSED
+
+VamanaIndexAdapterTest > InputValidation > searchWrongDimensionQueryThrows() PASSED
+
+VamanaIndexAdapterTest > InputValidation > searchNullQueryThrows() PASSED
+
+VamanaIndexAdapterTest > InputValidation > buildNullVectorsThrows() PASSED
+
+VamanaIndexAdapterTest > InputValidation > searchNonPositiveKRejected() PASSED
+
+VamanaIndexAdapterTest > EmptyState > buildWithEmptyArraySizeIsZero() PASSED
+
+VamanaIndexAdapterTest > EmptyState > searchOnNeverBuiltAdapterReturnsEmptyOutcome() PASSED
+
+VamanaIndexAdapterTest > EmptyState > searchOnEmptyAdapterReturnsEmptyOutcome() PASSED
+
+VamanaIndexAdapterTest > EmptyState > freshAdapterHasZeroSize() PASSED
+
+VamanaIndexAdapterTest > BuildAndSearch > searchHonorsSearchListSizeAsLFloor() PASSED
+
+VamanaIndexAdapterTest > BuildAndSearch > searchWorksAcrossAllSimilarityFunctions() PASSED
+
+VamanaIndexAdapterTest > BuildAndSearch > buildAndSearchReturnsAccurateNeighbors() PASSED
+
+VamanaIndexAdapterTest > BuildAndSearch > rebuildOverwritesPreviousGraph() PASSED
+
+VamanaIndexAdapterTest > Construction > searchListSizeBelowMaxDegreeRejected() PASSED
+
+VamanaIndexAdapterTest > Construction > searchListSizeEqualToMaxDegreeAccepted() PASSED
+
+VamanaIndexAdapterTest > Construction > alphaBelowOneRejected() PASSED
+
+VamanaIndexAdapterTest > Construction > nonPositiveMaxDegreeRejected() PASSED
+
+StagingBufferTest > pendingTombstonesIsUnmodifiable() PASSED
+
+StagingBufferTest > removeDocumentNullThrows() PASSED
+
+StagingBufferTest > removeDocumentReturnsTrueAndRemoves() PASSED
+
+StagingBufferTest > stageDeleteDuplicateReturnsFalse() PASSED
+
+StagingBufferTest > clearWipesDocumentsAndIds() PASSED
+
+StagingBufferTest > hasWorkFalseWhenEmpty() PASSED
+
+StagingBufferTest > removeDocumentReturnsFalseForUnknownId() PASSED
+
+StagingBufferTest > appendDuplicateReturnsFalseAndDoesNotMutate() PASSED
+
+StagingBufferTest > hasWorkTrueWithPendingTombstones() PASSED
+
+StagingBufferTest > appendNullThrows() PASSED
+
+StagingBufferTest > clearWipesPendingTombstones() PASSED
+
+StagingBufferTest > appendTracksSizeAndOrder() PASSED
+
+StagingBufferTest > stageDeleteTracksIds() PASSED
+
+StagingBufferTest > stageDeleteNullThrows() PASSED
+
+StagingBufferTest > emptyBufferReportsZero() PASSED
+
+StagingBufferTest > hasWorkTrueWithStagedDocuments() PASSED
+
+ChecksumsTest > bytesMatchJdkCrc32() PASSED
+
+ChecksumsTest > bufferMatchesJdkCrc32() PASSED
+
+ChecksumsTest > emptyByteArrayHasKnownCrc32() PASSED
+
+ChecksumsTest > ofFileEmptyFileReportsZeroLengthAndZeroCrc(Path) PASSED
+
+ChecksumsTest > segmentSliceMatchesJdkCrc32() PASSED
+
+ChecksumsTest > segmentMatchesJdkCrc32() PASSED
+
+ChecksumsTest > sliceMatchesJdkCrc32() PASSED
+
+ChecksumsTest > ofFileReportsLengthExactlyMatchingBytesHashed(Path) PASSED
+
+ChecksumsTest > fileMatchesByteArray(Path) PASSED
+
+CoLocatedBlockCodecTest > rejectsBadMagic() PASSED
+
+CoLocatedBlockCodecTest > roundTripsAdjacencyAndCoLocatedCodes() PASSED
+
+CoLocatedBlockCodecTest > blockOffsetIsFixedStrideArithmetic() PASSED
+
+ForeignManifestVersionTest > a file that is not a manifest peeks as null rather than a bogus version PASSED
+
+ForeignManifestVersionTest > the current version peeks as itself, so the check cannot misfire on a good collection PASSED
+
+ForeignManifestVersionTest > peekManifestVersion reads the version without validating the rest PASSED
+
+ForeignManifestVersionTest > recovering an older collection names both versions and offers the migration PASSED
+
+ForeignManifestVersionTest > a truncated manifest peeks as null, not as a partially-read version PASSED
+
+ForeignManifestVersionTest > an absent manifest peeks as null PASSED
+
+GenerationDirectoryTest > ConcurrentWriteProtocol > failureInOneConcurrentWriterCleansTmpAndDoesNotAdvanceCurrent(Path) PASSED
+
+GenerationDirectoryTest > ConcurrentWriteProtocol > writesEveryPayloadFileConcurrentlyAndRecovers(Path) PASSED
+
+GenerationDirectoryTest > WriteGenerationValidation > cleansTmpDirOnRuntimeFailure(Path) PASSED
+
+GenerationDirectoryTest > WriteGenerationValidation > rejectsManifestGenMismatch(Path) PASSED
+
+GenerationDirectoryTest > WriteGenerationValidation > rejectsGenSlotOccupiedByFile(Path) PASSED
+
+GenerationDirectoryTest > WriteGenerationValidation > retryAfterCleanupSucceeds(Path) PASSED
+
+GenerationDirectoryTest > WriteGenerationValidation > rejectsRootThatIsARegularFile(Path) PASSED
+
+GenerationDirectoryTest > WriteGenerationValidation > rejectsNonExistentRoot(Path) PASSED
+
+GenerationDirectoryTest > WriteGenerationValidation > cleansTmpDirOnSourceFailure(Path) PASSED
+
+GenerationDirectoryTest > WriteGenerationValidation > rejectsExistingGenDir(Path) PASSED
+
+GenerationDirectoryTest > WriteGenerationValidation > rejectsExistingTmpDir(Path) PASSED
+
+GenerationDirectoryTest > ReadCurrent > returnsMinusOneOnMissing(Path) PASSED
+
+GenerationDirectoryTest > ReadCurrent > returnsValueOnValid(Path) PASSED
+
+GenerationDirectoryTest > ReadCurrent > returnsMinusOneOnNegativeValue(Path) PASSED
+
+GenerationDirectoryTest > ReadCurrent > returnsMinusOneOnTooShort(Path) PASSED
+
+GenerationDirectoryTest > ReadCurrent > readsExtraBytesIgnored(Path) PASSED
+
+GenerationDirectoryTest > WriteCurrentAtomic > rejectsNegativeGenerationNumber(Path) PASSED
+
+GenerationDirectoryTest > WriteCurrentAtomic > cleansLeftoverCurrentTmp(Path) PASSED
+
+GenerationDirectoryTest > WriteCurrentAtomic > writesEightBytesLittleEndian(Path) PASSED
+
+GenerationDirectoryTest > WriteCurrentAtomic > rejectsOverflowingGenerationNumber(Path) PASSED
+
+GenerationDirectoryTest > WriteCurrentAtomic > overwritesExistingCurrent(Path) PASSED
+
+GenerationDirectoryTest > EmptyDirectoryBootstrap > rejectsBootstrapManifestWithNonZeroGeneration(Path) PASSED
+
+GenerationDirectoryTest > EmptyDirectoryBootstrap > recoverCreatesMissingDirectory(Path) PASSED
+
+GenerationDirectoryTest > EmptyDirectoryBootstrap > freshOpenWithBootstrapCreatesGenZero(Path) PASSED
+
+GenerationDirectoryTest > EmptyDirectoryBootstrap > rejectsBootstrapMismatch(Path) PASSED
+
+GenerationDirectoryTest > EmptyDirectoryBootstrap > freshOpenWithoutBootstrapThrows(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > missingCurrentRecoversFromNewestValidGen(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > currentPointsAtCorruptedGenFallsBackToPrevious(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > currentPointsAtCorruptedPayloadFallsBackToPrevious(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > allCorruptManifestsThrowsWithoutBootstrap(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > payloadLengthMismatchFallsBackToPrevious(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > halfWrittenTmpDirCleanedOnOpen(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > corruptedNewestManifestFallsBackToPreviousGen(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > corruptedPayloadInNewestGenFallsBackToPrevious(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > currentDotTmpCleanedOnOpen(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > multipleStaleTmpDirsAllCleaned(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > allCorruptManifestsBootstrapWhenSourceProvided(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > currentPointsAtMissingGenFallsBack(Path) PASSED
+
+GenerationDirectoryTest > CrashRecovery > strictTmpDirMatchingPreservesUnrelatedDotFiles(Path) PASSED
+
+GenerationDirectoryTest > HappyPath > writeAndRecoverSameGeneration(Path) PASSED
+
+GenerationDirectoryTest > HappyPath > recoveryIsIdempotent(Path) PASSED
+
+GenerationDirectoryTest > HappyPath > writeMultipleGenerationsRecoversNewest(Path) PASSED
+
+ManifestMigrationTest > refusesToMigrateACorruptHeaderRatherThanLaunderIt(Path) PASSED
+
+ManifestMigrationTest > keepsThePreviousManifestSoTheCollectionCanGoBack(Path) PASSED
+
+ManifestMigrationTest > inspectReportsWhatItWouldDoWithoutTouchingAnything(Path) PASSED
+
+ManifestMigrationTest > migratesInPlaceAndReturnsEveryDocument(Path) PASSED
+
+ManifestMigrationTest > refusesAnOlderCollectionByDefaultAndSaysHowToMigrateIt(Path) PASSED
+
+ManifestMigrationTest > openingWithMigrationEnabledUpgradesAndOpens(Path) PASSED
+
+ManifestMigrationTest > leavesANewerManifestAloneInsteadOfDowngradingIt(Path) PASSED
+
+ManifestMigrationTest > migratingTwiceIsANoOp(Path) PASSED
+
+MappedBuildVectorsTest > mmapBuildMatchesInRamBuildAndTrainsCodes(Path) PASSED
+
+MappedHnswIndexAdapterTest > ThreadSafety > concurrentSearchesNeverCorruptResults(Path) PASSED
+
+MappedHnswIndexAdapterTest > CloseSemantics > closeIsNoOpArenaOwnsLifetime(Path) PASSED
+
+MappedHnswIndexAdapterTest > BuildPath > buildAlwaysThrowsUnsupportedOperation(Path) PASSED
+
+MappedHnswIndexAdapterTest > Search > searchMatchesIndependentlyBuiltSearcher(Path) PASSED
+
+MappedHnswIndexAdapterTest > Search > constructedFromPreBuiltGraphReturnsAccurateNeighbors(Path) PASSED
+
+MappedHnswIndexAdapterTest > Search > searchWrongDimensionQueryThrows(Path) PASSED
+
+MappedHnswIndexAdapterTest > Search > searchNullQueryThrows(Path) PASSED
+
+MappedHnswIndexAdapterTest > Search > searchNonPositiveKRejected(Path) PASSED
+
+MappedHnswIndexAdapterTest > Construction > nullVectorsThrows() PASSED
+
+MappedHnswIndexAdapterTest > Construction > nullMetricThrows(Path) PASSED
+
+MappedHnswIndexAdapterTest > Construction > nullGraphThrows(Path) PASSED
+
+MappedVamanaPagedIndexAdapterTest > bitIdenticalToInMemoryVamanaAcrossL(Path) PASSED
+
+MappedVamanaPagedIndexAdapterTest > buildThrowsUnsupported(Path) PASSED
+
+MappedVamanaPagedIndexAdapterTest > concurrentPagedSearchesMatchReference(Path) PASSED
+
+MappedVamanaPagedIndexAdapterTest > returnsAccurateNeighborsVsFlatScan(Path) PASSED
+
+MappedVamanaPagedIndexAdapterTest > constructorRejectsNulls(Path) PASSED
+
+MappedVamanaPagedIndexAdapterTest > searchValidatesArguments(Path) PASSED
+
+MappedVamanaPagedIndexAdapterTest > closeIsNoOpArenaOwnsLifetime(Path) PASSED
+
+MemorySegmentRandomAccessVectorsTest > Bounds > ordinalAtSizeThrows(Path) PASSED
+
+MemorySegmentRandomAccessVectorsTest > Bounds > negativeOrdinalThrows(Path) PASSED
+
+MemorySegmentRandomAccessVectorsTest > NullGuards > nullMappedThrows() PASSED
+
+MemorySegmentRandomAccessVectorsTest > ThreadIsolation > separateThreadsHaveIndependentScratch(Path) PASSED
+
+MemorySegmentRandomAccessVectorsTest > ThreadIsolation > twoThreadsHoldDistinctScratchReferences(Path) PASSED
+
+MemorySegmentRandomAccessVectorsTest > SharedBufferContract > secondCallOverwritesFirstCallContents(Path) PASSED
+
+MemorySegmentRandomAccessVectorsTest > SharedBufferContract > consecutiveCallsReturnSameArrayReference(Path) PASSED
+
+MemorySegmentRandomAccessVectorsTest > Basics > sizeAndDimensionDelegateToMapped(Path) PASSED
+
+MemorySegmentRandomAccessVectorsTest > Basics > getVectorReturnsExpectedValues(Path) PASSED
+
+MemorySegmentVectorsTest > CloseSemantics > closeIsNoOpArenaOwnsLifetime(Path) PASSED
+
+MemorySegmentVectorsTest > Bounds > ordinalAtSizeThrows(Path) PASSED
+
+MemorySegmentVectorsTest > Bounds > negativeOrdinalThrows(Path) PASSED
+
+MemorySegmentVectorsTest > ThreadSafety > concurrentSlicesReturnCorrectBytes(Path) PASSED
+
+MemorySegmentVectorsTest > ThreadSafety > concurrentSameOrdinalReturnsIndependentViews(Path) PASSED
+
+MemorySegmentVectorsTest > Validation > missingFileThrows(Path) PASSED
+
+MemorySegmentVectorsTest > Validation > negativeSizeRejected(Path) PASSED
+
+MemorySegmentVectorsTest > Validation > nullFileThrows(Path) PASSED
+
+MemorySegmentVectorsTest > Validation > truncatedFileThrows(Path) PASSED
+
+MemorySegmentVectorsTest > Validation > zeroDimensionRejected(Path) PASSED
+
+MemorySegmentVectorsTest > Validation > nullArenaThrows(Path) PASSED
+
+MemorySegmentVectorsTest > RoundTrip > manyVectorsWithPadding(Path) PASSED
+
+MemorySegmentVectorsTest > RoundTrip > singleVectorWithPadding(Path) PASSED
+
+MemorySegmentVectorsTest > RoundTrip > manyVectorsAligned(Path) PASSED
+
+MemorySegmentVectorsTest > RoundTrip > singleVectorNoPadding(Path) PASSED
+
+MemorySegmentVectorsTest > RoundTrip > emptyVectorSet(Path) PASSED
+
+MemorySegmentVectorsTest > RoundTrip > segmentAccessorMatchesSliceAccessor(Path) PASSED
+
+ObjectStoreQueryPathTest > objectStorePathMatchesInMemoryAndBoundsGetsPerQuery() PASSED
+
+ObjectStoreRandomAccessVectorsTest > perThreadScratchIsolatesConcurrentReaders() PASSED
+
+ObjectStoreRandomAccessVectorsTest > outOfRangeOrdinalThrows() PASSED
+
+ObjectStoreRandomAccessVectorsTest > rangedGetReturnsExactVectors_paddedAndUnpaddedDims() PASSED
+
+QuantizedVectorsCodecTest > Validation > wrongMagicRejected() PASSED
+
+QuantizedVectorsCodecTest > Validation > noneQuantizerKindRejected() PASSED
+
+QuantizedVectorsCodecTest > Validation > truncatedBytesRejected() PASSED
+
+QuantizedVectorsCodecTest > Validation > truncatedVectorDataRejected() PASSED
+
+QuantizedVectorsCodecTest > Validation > negativeDimensionRejected() PASSED
+
+QuantizedVectorsCodecTest > Validation > wrongVersionRejected() PASSED
+
+QuantizedVectorsCodecTest > Validation > invalidKindOrdinalRejected() PASSED
+
+QuantizedVectorsCodecTest > TurboQuantRoundTrip > roundTripProducesIdenticalScores() PASSED
+
+QuantizedVectorsCodecTest > TurboQuantRoundTrip > unbiasedProdRoundTripProducesIdenticalScores() PASSED
+
+QuantizedVectorsCodecTest > TurboQuantRoundTrip > fourBitRoundTripProducesIdenticalScores() PASSED
+
+QuantizedVectorsCodecTest > TurboQuantRoundTrip > encodeTwiceProducesSameBytes() PASSED
+
+QuantizedVectorsCodecTest > NVQRoundTrip > roundTripProducesIdenticalScores() PASSED
+
+QuantizedVectorsCodecTest > NVQRoundTrip > encodeTwiceProducesSameBytes() PASSED
+
+QuantizedVectorsCodecTest > ExtendedRaBitQRoundTrip > encodeTwiceProducesSameBytes() PASSED
+
+QuantizedVectorsCodecTest > ExtendedRaBitQRoundTrip > roundTripProducesIdenticalScoresEveryMetricAndBits() PASSED
+
+QuantizedVectorsCodecTest > RaBitQRoundTrip > roundTripProducesIdenticalScores() PASSED
+
+QuantizedVectorsCodecTest > RaBitQRoundTrip > encodeTwiceProducesSameBytes() PASSED
+
+QuantizedVectorsCodecTest > BQRoundTrip > signBitRoundTrip() PASSED
+
+QuantizedVectorsCodecTest > BQRoundTrip > bbqRoundTrip() PASSED
+
+QuantizedVectorsCodecTest > PQRoundTrip > roundTripProducesIdenticalScores() PASSED
+
+QuantizedVectorsCodecTest > PQRoundTrip > roundTripWithoutGlobalCentroid() PASSED
+
+QuantizedVectorsCodecTest > SQ4RoundTrip > roundTripProducesIdenticalScores() PASSED
+
+QuantizedVectorsCodecTest > Fp16RoundTrip > roundTripProducesIdenticalScores() PASSED
+
+QuantizedVectorsCodecTest > Fp16RoundTrip > encodeTwiceProducesSameBytes() PASSED
+
+QuantizedVectorsCodecTest > SQ8RoundTrip > roundTripProducesIdenticalScores() PASSED
+
+QuantizedVectorsCodecTest > SQ8RoundTrip > encodeTwiceProducesSameBytes() PASSED
+
+RecipeStoreTest > 1b. an empty extra map and absent prefixes round-trip too PASSED
+
+RecipeStoreTest > 8. a hand-edited dimension is caught by the hash, not silently accepted PASSED
+
+RecipeStoreTest > 6. a newer schema is readable for display but NOT attestable PASSED
+
+RecipeStoreTest > 1. every field round-trips and the hash survives a write/read cycle PASSED
+
+RecipeStoreTest > 5. a crash between the two writes leaves a collection that opens as UNKNOWN PASSED
+
+RecipeStoreTest > 2. a one-byte edit to the sidecar is detected, naming both hashes PASSED
+
+RecipeStoreTest > the stored hash line is a convenience and is never trusted on read PASSED
+
+RecipeStoreTest > 4. an orphan sidecar with no anchor is ignored, not honoured PASSED
+
+RecipeStoreTest > 3. a declared recipe with no sidecar refuses, rather than degrading quietly PASSED
+
+VamanaGraphCodecTest > NullGuard > encodeRejectsNullGraph() PASSED
+
+VamanaGraphCodecTest > NullGuard > decodeRejectsNullBytes() PASSED
+
+VamanaGraphCodecTest > EncodeValidation > encodeRejectsDegreeAboveMaxDegree() PASSED
+
+VamanaGraphCodecTest > EncodeValidation > encodeRejectsOutOfRangeNeighbor() PASSED
+
+VamanaGraphCodecTest > EncodeValidation > encodeRejectsSelfLoop() PASSED
+
+VamanaGraphCodecTest > BodyValidation > rejectsNeighborOutOfRange() PASSED
+
+VamanaGraphCodecTest > BodyValidation > rejectsTrailingBytes() PASSED
+
+VamanaGraphCodecTest > BodyValidation > rejectsEmptyGraphWithTrailingBytes() PASSED
+
+VamanaGraphCodecTest > BodyValidation > rejectsDegreeExceedingMaxDegree() PASSED
+
+VamanaGraphCodecTest > BodyValidation > rejectsSelfLoopNeighbor() PASSED
+
+VamanaGraphCodecTest > BodyValidation > rejectsTruncatedAdjacencyBody() PASSED
+
+VamanaGraphCodecTest > OffsetIndex > rejectsCorruptOffsetInTrailer() PASSED
+
+VamanaGraphCodecTest > OffsetIndex > encodedFileCarriesValidOffsetTrailer() PASSED
+
+VamanaGraphCodecTest > OffsetIndex > rejectsTruncatedOffsetTrailer() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsWrongHeaderLength() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsWrongVersion() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsTruncatedHeader() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsHnswMagicMistakenlyFedToVamanaDecoder() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsMedoidOutOfRange() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsNonZeroFlags() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsNegativeNumNodes() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsZeroMaxDegree() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsWrongMagic() PASSED
+
+VamanaGraphCodecTest > HeaderValidation > rejectsEmptyGraphWithMedoidNotMinusOne() PASSED
+
+VamanaGraphCodecTest > RoundTrip > decodedGraphPreservesNeighborOrder() PASSED
+
+VamanaGraphCodecTest > RoundTrip > smallGraphRoundTripsExact() PASSED
+
+VamanaGraphCodecTest > RoundTrip > singleNodeGraphRoundTrips() PASSED
+
+VamanaGraphCodecTest > RoundTrip > mediumGraphWithR32RoundTrips() PASSED
+
+VamanaGraphCodecTest > RoundTrip > emptyGraphRoundTrips() PASSED
+
+VamanaGraphCodecTest > RoundTrip > nonZeroMedoidRoundTrips() PASSED
+
+VamanaGraphCodecTest > RoundTrip > mediumGraphWithR16RoundTrips() PASSED
+
+VamanaGraphCodecTest > RoundTrip > reusedEncodeCallsProduceIdenticalBytes() PASSED
+
+VectorConfigVariationsTest > DynamicTestGeneration > searchReturnsResultsAcrossConfigs() > HNSW/NONE/EUCLIDEAN/dim=32 PASSED
+
+VectorConfigVariationsTest > DynamicTestGeneration > searchReturnsResultsAcrossConfigs() > VAMANA/NONE/EUCLIDEAN/dim=32 PASSED
+
+VectorConfigVariationsTest > BuilderDefaults > defaultConfigsAreReasonable() PASSED
+
+VectorConfigVariationsTest > BuilderDefaults > customConfigsProduceCartesianProduct() PASSED
+
+VectorConfigVariationsTest > BuilderDefaults > newBuilderCreatesValidCollection() PASSED
+
+VectorConfigVariationsTest > BuilderDefaults > configToStringIsDescriptive() PASSED
+
+SegmentTransferTest > importOverwritesExistingFiles() PASSED
+
+SegmentTransferTest > exportThenImport_restoresAllFiles() PASSED
+
+SegmentTransferTest > exportNonExistentDirectoryThrows() PASSED
+
+SegmentTransferTest > largeFileRoundTrip() PASSED
+
+SegmentTransferTest > exportCreatesTargetDirectory() PASSED
+
+SegmentTransferTest > importUnsafeZipEntryThrows() PASSED
+
+CommitMemoryFootprintTest > aCommitDoesNotAllocateACopyOfTheCollection(Path) PASSED
+
+CommitMemoryFootprintTest > streamedAndBufferedGenerationsAgreeByteForByte(Path) PASSED
+
+CosineNormalizationTest > getVectorIsVerbatimByDefaultAndUnitLengthWhenNormalized() PASSED
+
+CosineNormalizationTest > scoreAndRecallParityAgainstCosineReference() PASSED
+
+CosineNormalizationTest > nonCosineMetricIsNotNormalized() PASSED
+
+CosineNormalizationTest > qpsMicrobench() PASSED
+
+CosineNormalizationTest > persistenceRoundTripRestoresNormalizeDecision(Path) PASSED
+
+FlatCollectionBatchTest > eligiblePublicBatchUsesAtMostOneTaskPerProcessor() PASSED
+
+FlatCollectionBatchTest > closedCollectionKeepsTheBatchFailureCause() PASSED
+
+FlatCollectionBatchTest > filtersMixedKAndInvalidQueriesKeepIndividualSearchSemantics() PASSED
+
+FlatCollectionBatchTest > batchRetainsProjectionCutoffsTombstonesTiesAndRequestOrder() PASSED
+
+SearchDuringWriteTest > readersAndWriterRunConcurrentlyWithoutCorruption(IndexType) > [1] indexType=HNSW PASSED
+
+SearchDuringWriteTest > readersAndWriterRunConcurrentlyWithoutCorruption(IndexType) > [2] indexType=VAMANA PASSED
+
+SuccessorVectorOwnershipTest > stagedRowsAreStableWhileCarriedRowsReuseScratch(Path) PASSED
+
+VamanaDefaultSeedDeterminismTest > defaultSeedIsTheSameStableConstantAsTheOtherIndexSeeds() PASSED
+
+VamanaDefaultSeedDeterminismTest > twoCollectionsWithDefaultSeedReturnIdenticalTopK() PASSED
+
+VamanaDefaultSeedDeterminismTest > defaultSeedIsTheStableConstantNotSystemNanoTime() PASSED
+
+VectorCollectionFluentAddTest > fluentAddChainStagesEveryDocumentThenCommits() PASSED
+
+VectorCollectionFluentAddTest > fluentAddReturnsTheSameCollectionInstance() PASSED
+
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::arrayBaseOffset has been called by org.apache.arrow.memory.util.MemoryUtil (file:/root/.gradle/caches/modules-2/files-2.1/org.apache.arrow/arrow-memory-core/19.0.0/eaa0a61d89eda28d4c9154af65f31ea0493f9658/arrow-memory-core-19.0.0.jar)
+WARNING: Please consider reporting this to the maintainers of class org.apache.arrow.memory.util.MemoryUtil
+WARNING: sun.misc.Unsafe::arrayBaseOffset will be removed in a future release
+
+> Task :vectors-db:test
+
+VectorDbArrowIpcTest > ArrowIpcTests > roundTrip_preservesNewlinesTabsCarriageReturns() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > roundTrip_preservesControlCharacters() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > roundTrip_preservesQuotesAndBackslashes() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > roundTrip_preservesTagsWithSpecialCharacters() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > emptyCollection_exportAndRead_returnsEmptyList() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > roundTrip_preservesBackspaceAndFormFeed() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > ingest_addsDocumentsToCollection() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > roundTrip_preservesNullCharacter() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > largerBatch_moreThanDefaultBatchSize_roundTrips() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > export_then_read_roundTrip_preservesIdsAndVectors() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > export_then_read_preservesAllMetadataTypes() PASSED
+
+VectorDbArrowIpcTest > ArrowIpcTests > export_then_read_preservesTextColumn() PASSED
+
+VectorDbConcurrencyTest > CloseDuringWrite > closeRejectsFutureOperations() PASSED
+
+VectorDbConcurrencyTest > WriterSerialization > concurrentAddsSerializeCorrectly() PASSED
+
+VectorDbConcurrencyTest > AutoCommitOnThreshold > addAllBeyondThresholdAutoCommits() PASSED
+
+VectorDbConcurrencyTest > AutoCommitOnThreshold > individualAddBeyondThresholdAutoCommits() PASSED
+
+VectorDbConcurrencyTest > AutoCommitOnThreshold > defaultConfigNeverAutoCommits() PASSED
+
+VectorDbConcurrencyTest > MonotonicObservedSize > sizeNeverShrinksAcrossCommits() PASSED
+
+VectorDbConcurrencyTest > MonotonicObservedSize > readersNeverSeeSpuriousClosedDuringCommit() PASSED
+
+VectorDbConcurrencyTest > MonotonicObservedSize > persistentReadersNeverSeeSpuriousClosedDuringCommit(Path) PASSED
+
+VectorDbConcurrencyTest > ReadersNeverBlockedByCommit > searchesCompleteAgainstConsistentGeneration() PASSED
+
+VectorDbConcurrencyTest > ReadersNeverBlockedByCommit > searchDuringCommitDoesNotBlock() PASSED
+
+WriterGraphLifecycleTest > successfulAppendReusesGraphLocksAndExecutor() PASSED
+
+WriterGraphLifecycleTest > persistentAppendReopenAndCompaction() PASSED
+
+WriterGraphLifecycleTest > inMemoryAppendAfterCompaction() PASSED
+
+WriterGraphLifecycleTest > upsertAndDeleteBeforeAppendKeepVectorsAlignedWithPhysicalOrdinals() PASSED
+
+WriterGraphLifecycleTest > refreshReleasesGraphAndLocksBeforeTheNextAppend() PASSED
+
+WriterGraphLifecycleTest > compactingAnEmptyPersistentCollectionReleasesGraphAndLocksAndAllowsFreshIngest() PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 1 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 2 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 3 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 4 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 5 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 6 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 7 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 8 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 9 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 10 of 10 PASSED
+
+WriterGraphLifecycleTest > closeReleasesTheWriterGraphAndLocks() PASSED
+
+VectorEventCodecTest > encodeIsCompact_deleteEventIsSmallerThanAddEvent() PASSED
+
+VectorEventCodecTest > allMetadataVariants_roundTrip() PASSED
+
+VectorEventCodecTest > commitEvent_roundTrip() PASSED
+
+VectorEventCodecTest > addEvent_roundTrip() PASSED
+
+VectorEventCodecTest > upsertEvent_roundTrip() PASSED
+
+VectorEventCodecTest > deleteEvent_roundTrip() PASSED
+
+VectorEventCodecTest > highDimensionVector_roundTrip() PASSED
+
+VectorEventCodecTest > invalidTagThrows() PASSED
+
+InMemoryIdMapperTest > copyOfEmptyMapperIsEmpty() PASSED
+
+InMemoryIdMapperTest > copyOfProducesIndependentSuccessor() PASSED
+
+InMemoryIdMapperTest > putDuplicateThrows() PASSED
+
+InMemoryIdMapperTest > copyOfNullThrows() PASSED
+
+InMemoryIdMapperTest > putAssignsSequentialOrdinals() PASSED
+
+CuVsResultDecoderTest > EdgeCases > singleResultRow() PASSED
+
+CuVsResultDecoderTest > EdgeCases > tiesPreserveStableOutput() PASSED
+
+CuVsResultDecoderTest > EdgeCases > emptyResultsReturnEmptyOutcome() PASSED
+
+CuVsResultDecoderTest > DistanceNegation > maximumInnerProductIsPassedThroughAsScore() PASSED
+
+CuVsResultDecoderTest > DistanceNegation > euclideanDistancesAreNegated() PASSED
+
+CuVsResultDecoderTest > DistanceNegation > dotProductIsPassedThroughAsScore() PASSED
+
+CuVsResultDecoderTest > DistanceNegation > cosineDistancesAreNegated() PASSED
+
+HnswIndexAdapterTest > ThreadSafety > concurrentSearchesProduceConsistentResults() PASSED
+
+HnswIndexAdapterTest > CloseSemantics > closeIsNoOp() PASSED
+
+HnswIndexAdapterTest > Accessors > graphAccessorReturnsNullBeforeBuild() PASSED
+
+HnswIndexAdapterTest > Accessors > buildParametersArePreserved() PASSED
+
+HnswIndexAdapterTest > Accessors > graphAccessorReturnsCurrentGraphAfterBuild() PASSED
+
+HnswIndexAdapterTest > InputValidation > buildNullMetricThrows() PASSED
+
+HnswIndexAdapterTest > InputValidation > searchWrongDimensionQueryThrows() PASSED
+
+HnswIndexAdapterTest > InputValidation > searchNullQueryThrows() PASSED
+
+HnswIndexAdapterTest > InputValidation > buildNullVectorsThrows() PASSED
+
+HnswIndexAdapterTest > InputValidation > searchNonPositiveKRejected() PASSED
+
+HnswIndexAdapterTest > EmptyState > buildWithEmptyArraySizeIsZero() PASSED
+
+HnswIndexAdapterTest > EmptyState > searchOnNeverBuiltAdapterReturnsEmptyOutcome() PASSED
+
+HnswIndexAdapterTest > EmptyState > searchOnEmptyAdapterReturnsEmptyOutcome() PASSED
+
+HnswIndexAdapterTest > EmptyState > freshAdapterHasZeroSize() PASSED
+
+HnswIndexAdapterTest > BuildAndSearch > searchHonorsSearchListSizeAsEfSearchFloor() PASSED
+
+HnswIndexAdapterTest > BuildAndSearch > searchWorksAcrossAllSimilarityFunctions() PASSED
+
+HnswIndexAdapterTest > BuildAndSearch > buildAndSearchReturnsAccurateNeighbors() PASSED
+
+HnswIndexAdapterTest > BuildAndSearch > rebuildOverwritesPreviousGraph() PASSED
+
+HnswIndexAdapterTest > Construction > efConstructionEqualToMaxConnectionsAccepted() PASSED
+
+HnswIndexAdapterTest > Construction > nonPositiveMaxConnectionsRejected() PASSED
+
+HnswIndexAdapterTest > Construction > efConstructionBelowMaxConnectionsRejected() PASSED
+
+IvfPersistentOverQueryRecallTest > persistentPqOverQueryMeaningfullyImprovesRecall() PASSED
+
+IvfPersistentOverQueryRecallTest > persistentFlatOverQueryImprovesRecall() PASSED
+
+IvfPersistentOverQueryRecallTest > persistentFlatMatchesInMemoryAcrossOverQuery() PASSED
+
+IvfPersistentOverQueryRecallTest > persistentPqMatchesInMemoryAcrossOverQuery() PASSED
+
+MappedFlatScanAdapterTest > CloseSemantics > closeIsNoOpArenaOwnsLifetime(Path) PASSED
+
+MappedFlatScanAdapterTest > ThreadSafety > concurrentSearchesAgreeWithReference(Path) PASSED
+
+MappedFlatScanAdapterTest > InputValidation > nonPositiveKRejected(Path) PASSED
+
+MappedFlatScanAdapterTest > InputValidation > nullQueryThrows(Path) PASSED
+
+MappedFlatScanAdapterTest > InputValidation > wrongDimensionQueryThrows(Path) PASSED
+
+MappedFlatScanAdapterTest > TopKEdgeCases > kEqualsOne(Path) PASSED
+
+MappedFlatScanAdapterTest > TopKEdgeCases > kEqualsSize(Path) PASSED
+
+MappedFlatScanAdapterTest > TopKEdgeCases > emptyStoreReturnsEmptyOutcome(Path) PASSED
+
+MappedFlatScanAdapterTest > TopKEdgeCases > kLargerThanSizeClampsToSize(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsDim16(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsDim64(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsMaximumInnerProductDim128(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsVeryPaddedDim7(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > topOneAt1000Vectors(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsCosineDim128(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsDim128(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsPaddedDim100(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsDotProductDim128(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > cosineSmallDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > dotProductSmallDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > euclideanSmallDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > maximumInnerProductSmallDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > euclideanMediumDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > veryPaddedDimension(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > maximumInnerProductMediumDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > cosineMediumDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > paddedDimension(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > dotProductMediumDim(Path) PASSED
+
+MappedFlatScanAdapterTest > Construction > nullStoreThrows(Path) PASSED
+
+MappedFlatScanAdapterTest > Construction > buildMethodThrowsUnsupported(Path) PASSED
+
+MappedFlatScanAdapterTest > Construction > nullMetricThrows(Path) PASSED
+
+MappedFlatScanAdapterTest > Construction > sizeReportsStoreSize(Path) PASSED
+
+ChunkedListTest > chunkBoundaryAppendOnFullTail() PASSED
+
+ChunkedListTest > getOutOfBoundsThrows() PASSED
+
+ChunkedListTest > toBuilderProducesStructuralSharingAndBuilderDoesNotMutateSource() PASSED
+
+ChunkedListTest > appendDoesNotMutateSource() PASSED
+
+ChunkedListTest > setReplacesAtIndexWithoutMutatingSource() PASSED
+
+ChunkedListTest > singleAppendRoundTrip() PASSED
+
+ChunkedListTest > crossesChunkBoundaryCleanly() PASSED
+
+ChunkedListTest > nullValuesArePermitted() PASSED
+
+ChunkedListTest > crossesMultipleChunkBoundaries() PASSED
+
+ChunkedListTest > emptyIsEmpty() PASSED
+
+HamtTest > removeFromEmpty() PASSED
+
+HamtTest > removeUnknownKey() PASSED
+
+HamtTest > deepestTreeViaPowersOfTwo() PASSED
+
+HamtTest > putReturnsNewInstanceWhenValueChanges() PASSED
+
+HamtTest > lookupNullAmongManyKeys() PASSED
+
+HamtTest > randomized5000() PASSED
+
+HamtTest > randomized5000WithWeakHash() PASSED
+
+HamtTest > singleEntryRoundTrip() PASSED
+
+HamtTest > expandsToArrayAndPacksBack() PASSED
+
+HamtTest > samePutReturnsSelfWhenValueUnchanged() PASSED
+
+HamtTest > hashCollisionRemoveLeavesOtherEntries() PASSED
+
+HamtTest > putReplacesExistingKey() PASSED
+
+HamtTest > hashCollisionSpawnsLeafList() PASSED
+
+HamtTest > nullKeyAndValueArePermitted() PASSED
+
+HamtTest > emptyIsEmpty() PASSED
+
+InMemoryMetadataStoreTest > copyOfEmptyStoreIsEmpty() PASSED
+
+InMemoryMetadataStoreTest > copyOfProducesIndependentSuccessor() PASSED
+
+InMemoryMetadataStoreTest > putAndGetRoundTrip() PASSED
+
+InMemoryMetadataStoreTest > copyOfNullThrows() PASSED
+
+ChunkedGraphBlobTest > returnsNullWhenAbsent() PASSED
+
+ChunkedGraphBlobTest > readsLegacySingleObjectGraphBin() PASSED
+
+ChunkedGraphBlobTest > roundTripsThroughManyChunks() PASSED
+
+Crc32CombineTest > combineHandlesEdgeLengths() PASSED
+
+Crc32CombineTest > combineIsAssociativeAcrossManyAppends() PASSED
+
+Crc32CombineTest > combineMatchesTheReferenceOverRandomSplits() PASSED
+
+Crc32CombineTest > anEmptyTailReturnsTheFirstCrc() PASSED
+
+Crc32CombineTest > aNegativeLengthIsRejected() PASSED
+
+FileFormatTest > Varint > truncatedVarintInBufferThrows() PASSED
+
+FileFormatTest > Varint > memorySegmentReadRoundTrip() PASSED
+
+FileFormatTest > Varint > singleByteValues() PASSED
+
+FileFormatTest > Varint > twoByteValues() PASSED
+
+FileFormatTest > Varint > segmentVarintOutOfBoundsThrows() PASSED
+
+FileFormatTest > Varint > moreThanFiveContinuationBytesThrows() PASSED
+
+FileFormatTest > Varint > negativeValuesRejected() PASSED
+
+FileFormatTest > Varint > randomRoundTrip() PASSED
+
+FileFormatTest > Varint > multiByteValues() PASSED
+
+FileFormatTest > GenerationDirNames > formatsZeroPaddedTmpDir() PASSED
+
+FileFormatTest > GenerationDirNames > formatsZeroPaddedGenerationDir() PASSED
+
+FileFormatTest > GenerationDirNames > negativeGenerationNumberThrows() PASSED
+
+FileFormatTest > GenerationDirNames > parseRejectsInvalidNames() PASSED
+
+FileFormatTest > GenerationDirNames > lexicographicSortMatchesNumericSort() PASSED
+
+FileFormatTest > GenerationDirNames > generationNumberAboveSixteenDigitsThrows() PASSED
+
+FileFormatTest > GenerationDirNames > parseRoundTrip() PASSED
+
+FileFormatTest > Magic > manifestMagicSpellsVdbvOnDisk() PASSED
+
+FileFormatTest > Magic > metadataMagicSpellsVmdbOnDisk() PASSED
+
+FileFormatTest > Magic > idmapMagicSpellsVidpOnDisk() PASSED
+
+HnswGraphCodecStreamingTest > decodesFromAChunkedStream() PASSED
+
+HnswGraphCodecStreamingTest > streamingEncodeIsByteIdenticalToArrayEncode() PASSED
+
+HnswGraphCodecStreamingTest > streamingDecodeMatchesArrayDecode() PASSED
+
+HnswGraphCodecTest > NullGuard > encodeRejectsNullGraph() PASSED
+
+HnswGraphCodecTest > NullGuard > emptyGraphWithSetEntryNodeEncodedThenDecodedRejectedAsInconsistent() PASSED
+
+HnswGraphCodecTest > NullGuard > decodeRejectsNullBytes() PASSED
+
+HnswGraphCodecTest > EncodeValidation > encodeRejectsOutOfRangeNeighborAtLayerZero() PASSED
+
+HnswGraphCodecTest > EncodeValidation > encodeRejectsSelfLoopAtLayerZero() PASSED
+
+HnswGraphCodecTest > EncodeValidation > encodeRejectsOutOfRangeNeighborAtUpperLayer() PASSED
+
+HnswGraphCodecTest > EncodeValidation > encodeRejectsSelfLoopAtUpperLayer() PASSED
+
+HnswGraphCodecTest > BodyValidation > rejectsEntryNodeBelowMaxLevel() PASSED
+
+HnswGraphCodecTest > BodyValidation > rejectsLayer0NeighborOutOfRange() PASSED
+
+HnswGraphCodecTest > BodyValidation > rejectsTrailingBytes() PASSED
+
+HnswGraphCodecTest > BodyValidation > rejectsLayer0DegreeExceedingCapacity() PASSED
+
+HnswGraphCodecTest > BodyValidation > rejectsNodeLevelExceedingMaxLevel() PASSED
+
+HnswGraphCodecTest > BodyValidation > rejectsSelfLoopNeighbor() PASSED
+
+HnswGraphCodecTest > BodyValidation > rejectsTruncatedNodeLevels() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsWrongHeaderLength() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsWrongVersion() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsTruncatedHeader() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsEmptyGraphWithEntryNodeNotMinusOne() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsEntryNodeOutOfRange() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsNonZeroFlags() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsNegativeNumNodes() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsNonEmptyGraphWithMaxLevelMinusOne() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsZeroMaxConnections() PASSED
+
+HnswGraphCodecTest > HeaderValidation > rejectsWrongMagic() PASSED
+
+HnswGraphCodecTest > RoundTrip > mediumGraphWithM32RoundTrips() PASSED
+
+HnswGraphCodecTest > RoundTrip > mediumGraphWithM16RoundTrips() PASSED
+
+HnswGraphCodecTest > RoundTrip > smallGraphRoundTripsExact() PASSED
+
+HnswGraphCodecTest > RoundTrip > singleNodeGraphRoundTrips() PASSED
+
+HnswGraphCodecTest > RoundTrip > decodedGraphRejectsMisalignedLayerNodes() PASSED
+
+HnswGraphCodecTest > RoundTrip > decodedGraphPreservesLayer0NeighborOrder() PASSED
+
+HnswGraphCodecTest > RoundTrip > emptyGraphRoundTrips() PASSED
+
+HnswGraphCodecTest > RoundTrip > reusedEncodeCallsProduceIdenticalBytes() PASSED
+
+ManifestTest > ConstructorValidation > negativeTombstonesBinLengthRejected() PASSED
+
+ManifestTest > ConstructorValidation > negativeTombstoneCountRejected() PASSED
+
+ManifestTest > ConstructorValidation > positiveTombstoneCountWithZeroBytesRejected() PASSED
+
+ManifestTest > ConstructorValidation > negativeLiveCountRejected() PASSED
+
+ManifestTest > ConstructorValidation > negativeDimensionRejected() PASSED
+
+ManifestTest > ConstructorValidation > zeroTombstoneBytesWithNonZeroCrcRejected() PASSED
+
+ManifestTest > ConstructorValidation > negativeGenerationNumberRejected() PASSED
+
+ManifestTest > ConstructorValidation > negativeGraphBinLengthRejected() PASSED
+
+ManifestTest > ConstructorValidation > positiveTombstoneBytesWithZeroCountRejected() PASSED
+
+ManifestTest > ConstructorValidation > negativeQuantizedBinLengthRejected() PASSED
+
+ManifestTest > ConstructorValidation > negativeCreatedEpochMillisRejected() PASSED
+
+ManifestTest > Validation > wrongMagicRejected() PASSED
+
+ManifestTest > Validation > truncatedBytesRejected() PASSED
+
+ManifestTest > Validation > outOfRangeMetricOrdinalRejected() PASSED
+
+ManifestTest > Validation > wrongHeaderLengthRejected() PASSED
+
+ManifestTest > Validation > unknownFlagsRejected() PASSED
+
+ManifestTest > Validation > corruptPayloadTripsSelfCrc() PASSED
+
+ManifestTest > Validation > wrongVersionRejected() PASSED
+
+ManifestTest > Validation > corruptSelfCrcRejected() PASSED
+
+ManifestTest > RoundTrip > allMetricsRoundTrip() PASSED
+
+ManifestTest > RoundTrip > clockInjectableBuildPreservesExplicitTimestamp() PASSED
+
+ManifestTest > RoundTrip > fileRoundTrip(Path) PASSED
+
+ManifestTest > RoundTrip > allFieldsSurviveRoundTrip() PASSED
+
+ManifestTest > RoundTrip > tombstoneFieldsSurviveRoundTrip() PASSED
+
+ManifestTest > Encoding > headerStartsWithMagicAndVersion() PASSED
+
+ManifestTest > Encoding > toBytesProducesExactHeaderSize() PASSED
+
+MappedIdMapperTest > Reopen > reopenedMapperSeesSameIds(Path) PASSED
+
+MappedIdMapperTest > ReadOnly > idOfNegativeOrdinalThrows(Path) PASSED
+
+MappedIdMapperTest > ReadOnly > putThrowsUnsupported(Path) PASSED
+
+MappedIdMapperTest > Validation > missingFileThrows(Path) PASSED
+
+MappedIdMapperTest > Validation > wrongVersionThrows(Path) PASSED
+
+MappedIdMapperTest > Validation > declaredSizeLargerThanFileThrows(Path) PASSED
+
+MappedIdMapperTest > Validation > negativeCountThrows(Path) PASSED
+
+MappedIdMapperTest > Validation > wrongMagicThrows(Path) PASSED
+
+MappedIdMapperTest > Validation > nullIdInWriterThrows(Path) PASSED
+
+MappedIdMapperTest > Validation > truncatedHeaderThrows(Path) PASSED
+
+MappedIdMapperTest > RoundTrip > variableLengthUtf8Ids(Path) PASSED
+
+MappedIdMapperTest > RoundTrip > oneHundredIds(Path) PASSED
+
+MappedIdMapperTest > RoundTrip > tenThousandIds(Path) PASSED
+
+MappedIdMapperTest > RoundTrip > singleId(Path) PASSED
+
+MappedIdMapperTest > RoundTrip > emptyMap(Path) PASSED
+
+MappedMetadataStoreTest > Reopen > reopenedStoreSeesSameDocuments(Path) PASSED
+
+MappedMetadataStoreTest > ReadOnly > getOutOfRangeReturnsNull(Path) PASSED
+
+MappedMetadataStoreTest > ReadOnly > putThrowsUnsupported(Path) PASSED
+
+MappedMetadataStoreTest > ReadOnly > deleteThrowsUnsupported(Path) PASSED
+
+MappedMetadataStoreTest > Validation > missingFileThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > wrongVersionThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > negativeCountThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > wrongMagicThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > nullDocumentInWriterThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > declaredHeapLargerThanFileThrows(Path) PASSED
+
+MappedMetadataStoreTest > Validation > truncatedHeaderThrows(Path) PASSED
+
+MappedMetadataStoreTest > BulkRead > bulkReadReturnsNullForOutOfRange(Path) PASSED
+
+MappedMetadataStoreTest > BulkRead > bulkReadReturnsParallelArray(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > manyDocuments(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > emptyTagList(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > emptyStore(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > singleDocumentWithText(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > allMetadataVariantsRoundTrip(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > numericEdgeValues(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > singleDocumentNoMetadataNoText(Path) PASSED
+
+MappedMetadataStoreTest > RoundTrip > equalityIgnoringVector(Path) PASSED
+
+ObjectStoreQueryableIndexTest > queriesChunkedGraphShippedToObjectStorage() PASSED
+
+ObjectStoreQueryableIndexTest > queriesShippedGenerationDirectlyFromObjectStorage() PASSED
+
+ObservabilityJfrTest > queryAndRangedGetJfrEventsFireWithCorrectData(Path) PASSED
+
+ObservabilityJfrTest > eventsAreDisabledByDefaultWhenNoRecordingEnablesThem(Path) PASSED
+
+QuantizedVectorsCodecStreamingTest > chunkedRoundTripThroughStorage() PASSED
+
+QuantizedVectorsCodecStreamingTest > streamingEncodeIsByteIdenticalToArrayEncode() PASSED
+
+QuantizedVectorsCodecStreamingTest > streamingDecodeMatchesArrayDecode() PASSED
+
+RecipeCodecContractTest > round-trip fidelity, including the awkward values > [1] codec=com.integrallis.vectors.core.BuiltinRecipeCodec@47baf547 PASSED
+
+RecipeCodecContractTest > every field is written, so an absent key never means an unset one > [1] codec=com.integrallis.vectors.core.BuiltinRecipeCodec@738955e6 PASSED
+
+RecipeCodecContractTest > determinism: same recipe, same bytes > [1] codec=com.integrallis.vectors.core.BuiltinRecipeCodec@624baf71 PASSED
+
+RecipeCodecContractTest > an unknown future field does not break decoding > [1] codec=com.integrallis.vectors.core.BuiltinRecipeCodec@70799ca7 PASSED
+
+RecipeCodecContractTest > determinism: no platform line separator > [1] codec=com.integrallis.vectors.core.BuiltinRecipeCodec@690113f0 PASSED
+
+RecipeCodecContractTest > schemaVersionOf works without fully interpreting the document > [1] codec=com.integrallis.vectors.core.BuiltinRecipeCodec@324e62e2 PASSED
+
+RecipeCodecContractTest > determinism: map insertion order must not leak into the bytes > [1] codec=com.integrallis.vectors.core.BuiltinRecipeCodec@1018552d PASSED
+
+TombstoneCodecTest > Validation > wrongMagicRejected() PASSED
+
+TombstoneCodecTest > Validation > bodySizeNotMultipleOf8Rejected() PASSED
+
+TombstoneCodecTest > Validation > nonZeroReservedRejected() PASSED
+
+TombstoneCodecTest > Validation > wrongVersionRejected() PASSED
+
+TombstoneCodecTest > Validation > truncatedHeaderRejected() PASSED
+
+TombstoneCodecTest > RoundTrip > emptyBytesDecodeToEmptyBitSet() PASSED
+
+TombstoneCodecTest > RoundTrip > nullDecodeToEmptyBitSet() PASSED
+
+TombstoneCodecTest > RoundTrip > singleBitRoundTrips() PASSED
+
+TombstoneCodecTest > RoundTrip > sparseBitsRoundTrip() PASSED
+
+TombstoneCodecTest > RoundTrip > emptyBitSetEncodesToEmptyArray() PASSED
+
+TombstoneCodecTest > RoundTrip > denseBitsRoundTrip() PASSED
+
+TombstoneCodecTest > RoundTrip > headerContainsMagicAndVersionAndPhysicalCount() PASSED
+
+VectorSearchTestSupportTest > RandomizedConfig > randomBuilderCompleteProducesValidConfiguration() PASSED
+
+VectorSearchTestSupportTest > RandomizedConfig > differentSeedsProduceDifferentConfigs() PASSED
+
+VectorSearchTestSupportTest > RandomizedConfig > randomBuilderProducesValidConfiguration() PASSED
+
+VectorSearchTestSupportTest > RandomizedConfig > sameSeedProducesSameConfig() PASSED
+
+VectorSearchTestSupportTest > RecallComputation > bruteForceTopKIdsReturnsCorrectIds() PASSED
+
+VectorSearchTestSupportTest > RecallComputation > measureRecallAgainstSelfIsOne() PASSED
+
+VectorSearchTestSupportTest > DocumentGeneration > generateDocsWithMetadataIncludesAllFields() PASSED
+
+VectorSearchTestSupportTest > DocumentGeneration > randomUnitVectorIsNormalized() PASSED
+
+VectorSearchTestSupportTest > DocumentGeneration > generateDocsProducesDeterministicOutput() PASSED
+
+> Task :vectors-db:freezePerf
+> Task :vectors-db:jacocoTestCoverageVerification
+> Task :vectors-db:jacocoTestReport
+
+BUILD SUCCESSFUL in 15m 54s
+23 actionable tasks: 5 executed, 18 up-to-date

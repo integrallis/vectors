@@ -1,0 +1,23 @@
+{
+  "baseline": "212ad282d719a985706b8024ad310c73e5e85430",
+  "tests_first_commit": "7426579",
+  "hypothesis": "Diversity pruning filters a distinct candidate list into a new result. Accepted candidates and blocked fill candidates are disjoint, so repeatedly scanning the result for duplicate IDs does no useful work.",
+  "scope": "A package-private insertion path for known-distinct, non-full destinations; only uncached concurrent pruning uses it. Public duplicate protection and serial cached pruning remain unchanged.",
+  "ablations": [
+    "baseline",
+    "direct drain alone",
+    "known-distinct pruning insertion alone",
+    "direct drain plus known-distinct pruning insertion"
+  ],
+  "gates": [
+    "test fails before implementation, then exact order/raw-score/full-capacity tests pass",
+    "at least 5 percent median concurrent construction time reduction on both GLOVE and Fashion-MNIST over three paired seeds for the combined candidate",
+    "single-worker graph and query digests equal baseline",
+    "every paired held-out recall@10 delta >= -0.005 at ef 32/128/512",
+    "real collection replay/recall and all CI checks before merge",
+    "no new runtime flags, no reduced M, efConstruction, search budgets or recall gates"
+  ],
+  "vps": 168588957,
+  "cost_ceiling_usd": 2,
+  "delete_by": "2026-10-04T04:32:43Z"
+}

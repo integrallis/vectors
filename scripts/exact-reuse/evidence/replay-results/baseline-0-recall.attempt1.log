@@ -1,0 +1,5 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Exception in thread "main" java.lang.IllegalArgumentException: storagePath must be absolute when non-null (the collection must not depend on the JVM working directory): replay-results/baseline-0-collection
+	at com.integrallis.vectors.db.VectorCollectionBuilder.build(VectorCollectionBuilder.java:899)
+	at com.integrallis.vectors.bench.CollectionRecallProbe.measure(CollectionRecallProbe.java:70)
+	at com.integrallis.vectors.bench.CollectionRecallProbe.main(CollectionRecallProbe.java:41)

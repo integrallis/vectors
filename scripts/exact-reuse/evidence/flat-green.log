@@ -1,0 +1,65 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/root/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :vectors-gpu:processResources
+> Task :vectors-core:compileJava
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes
+> Task :vectors-core:jar
+> Task :vectors-storage:compileJava
+> Task :vectors-storage:classes
+> Task :vectors-storage:jar
+> Task :vectors-core:compileTestJava
+> Task :vectors-core:processTestResources
+> Task :vectors-core:testClasses
+> Task :vectors-gpu:compileJava
+> Task :vectors-gpu:classes
+> Task :vectors-gpu:jar
+> Task :vectors-quantization:compileJava
+> Task :vectors-vamana:compileJava
+> Task :vectors-quantization:classes
+> Task :vectors-hnsw:compileJava
+> Task :vectors-hnsw:classes
+> Task :vectors-quantization:jar
+> Task :vectors-vamana:classes
+> Task :vectors-hnsw:jar
+> Task :vectors-ivf:compileJava
+> Task :vectors-ivf:classes
+> Task :vectors-vamana:jar
+> Task :vectors-ivf:jar
+
+> Task :vectors-core:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+> Task :vectors-db:compileJava
+> Task :vectors-db:classes
+
+> Task :vectors-core:test
+
+PreparedCosineTest > preparedQueryPreservesArrayAndSegmentScoreBits() PASSED
+
+> Task :vectors-db:compileTestJava
+> Task :vectors-db:testClasses
+
+> Task :vectors-db:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+PreparedFlatScanTest > batchRecomputesNormsAfterStoredRowsAndQueriesChange() PASSED
+
+PreparedFlatScanTest > singleAndBatchPreserveScoresAndTiesAndRecomputeAfterQueryMutation() PASSED
+
+BUILD SUCCESSFUL in 22s
+22 actionable tasks: 21 executed, 1 up-to-date

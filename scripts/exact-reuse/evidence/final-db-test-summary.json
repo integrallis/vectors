@@ -1,0 +1,7 @@
+{
+  "tests": 910,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "public_batch_output": "public flat batch workers=8 queries=32\n"
+}

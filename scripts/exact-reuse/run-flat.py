@@ -13,9 +13,12 @@ p.add_argument("output", type=Path)
 p.add_argument("--rounds", type=int, default=3)
 p.add_argument("--query-counts", default="1,2,3,4,16,64")
 p.add_argument("--public-api", action="store_true")
+p.add_argument("--warmup-seconds", type=float, default=0)
 p.add_argument("--baseline-sha", required=True)
 p.add_argument("--candidate-sha", required=True)
 a = p.parse_args()
+if a.warmup_seconds < 0 or (a.warmup_seconds and not a.public_api):
+    p.error("--warmup-seconds requires --public-api and a nonnegative value")
 a.output.mkdir(parents=True, exist_ok=False)
 java = Path(os.environ["JAVA_HOME"]) / "bin/java"
 source = Path(__file__).with_name(
@@ -50,6 +53,8 @@ provenance = {
         f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in sources
     },
     "api": "VectorCollection" if a.public_api else "FlatScanAdapter",
+    "minimum_warmup_seconds_per_case": a.warmup_seconds,
+    "full_gc_after_public_collection_setup": a.public_api,
     "jars": {
         arm: {
             f.name: hashlib.sha256(f.read_bytes()).hexdigest()
@@ -104,6 +109,8 @@ for repeat in range(a.rounds):
                 "8",
                 "7",
             ]
+            if a.public_api:
+                cmd.append(str(a.warmup_seconds))
             commands.append(cmd)
             (a.output / "commands.json").write_text(json.dumps(commands, indent=2))
             log = a.output / (name + ".log")

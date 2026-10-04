@@ -41,3 +41,23 @@ The broader literature map also contains partitioned construction, alternative
 pruning rules, deletion frameworks, distributed/GPU methods, and scaling theory.
 Those are not claimed as investigated implementations or completed benchmarks by
 this PR. No state-of-the-art comparison has been established.
+
+## Follow-up: exact reuse and public API integration
+
+[PR #88's experiments](../exact-reuse/README.md) extend norm reuse to stored rows
+within a heap COSINE batch, extend exact heap draining to concurrent construction,
+and omit duplicate scans only inside diversity selection where IDs are already
+distinct. All three are implementation optimizations with unchanged scoring and
+search/build budgets; they do not implement the larger paper algorithms above.
+
+A worker-local exact symmetric pruning cache was also implemented and measured.
+It reduced vector reads but made both published construction workloads slower,
+so it was removed. This distinguishes reuse that reduces counted operations from
+reuse that actually reduces elapsed time.
+
+The public `VectorCollection.searchBatch` previously bypassed the flat adapter's
+batch method. The follow-up adds automatic grouping for compatible in-memory
+COSINE requests, tests the public path, and measures it separately. Adapter-only
+batch timings from PR #87 must not be presented as public collection API gains.
+See [the qualification report](../exact-reuse/RESULTS.md) for the measured scopes,
+recall deltas, controls, rejected candidates and remaining limitations.

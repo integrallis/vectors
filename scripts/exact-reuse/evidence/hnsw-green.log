@@ -1,0 +1,54 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/root/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-core:jar UP-TO-DATE
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-hnsw:compileJava
+> Task :vectors-hnsw:classes
+> Task :vectors-hnsw:compileTestJava UP-TO-DATE
+> Task :vectors-hnsw:testClasses UP-TO-DATE
+
+> Task :vectors-hnsw:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+ConcurrentHnswGraphBuilderAppendTest > mismatchedInputsAreRejected() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > carriedOverEdgesSurvive() PASSED
+
+ConcurrentExactScoreReuseTest > scoresNeverSurviveIntoAnotherVectorSource() PASSED
+
+ConcurrentExactScoreReuseTest > pruningAvoidsRepeatedVectorReadsDuringConstruction() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > appendedNodesAreReachableFromTheGraph() PASSED
+
+ConcurrentHnswGraphBuilderSelfLoopTest > parallelBuildHasNoSelfLoopsOrOutOfRangeOrDuplicateNeighbors() PASSED
+
+ExactScoreCacheTest > collisionsNeverReturnAnotherPairsScore() PASSED
+
+ExactScoreCacheTest > repeatPruningReusesExactScoresWithoutChangingSelectedEdges() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > appendedGraphRetrievesAsWellAsARebuiltOne() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > appendingNothingIsTheSameGraph() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > everyLayerZeroArrayRespectsTheConnectionLimit() PASSED
+
+BUILD SUCCESSFUL in 43s
+10 actionable tasks: 2 executed, 8 up-to-date

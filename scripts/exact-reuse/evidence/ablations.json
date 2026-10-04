@@ -1,0 +1,87 @@
+{
+  "baseline-jars": {
+    "jar_sha256": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "3a3bab97f33af6bb391e536cf139dcf8ce29f58845f78ce5b45de5fadf029f65",
+      "vectors-db-0.1.26.jar": "f9f70792d4996e05df02ecfefbdedfd38788cf8852c46722d81b550e0520ae16",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "b1d3c92a269e71d7be1b26a30f3168afc376b99628f037bfb506a1afaeeb46eb",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    },
+    "changed_classes": []
+  },
+  "flat-v3-jars": {
+    "jar_sha256": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "3a3bab97f33af6bb391e536cf139dcf8ce29f58845f78ce5b45de5fadf029f65",
+      "vectors-db-0.1.26.jar": "a584f72430508e4da4b304c5a7b6252309c337f7eaae8fbc3fd9c0786b610ad3",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "c213aee959116e45a5e43870f8b2ec7a728a685040b9e236d80f44e9cf66d2e5",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    },
+    "changed_classes": [
+      "com/integrallis/vectors/db/index/FlatScanAdapter.class",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.class",
+      "com/integrallis/vectors/core/VectorUtil.class",
+      "com/integrallis/vectors/core/VectorUtilSupport.class"
+    ]
+  },
+  "unique-only-jars": {
+    "jar_sha256": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "eb377daadc7962a6b61a03b22cbeb89e94f90aca5c7cfd9821a9c98f67457e13",
+      "vectors-db-0.1.26.jar": "f9f70792d4996e05df02ecfefbdedfd38788cf8852c46722d81b550e0520ae16",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "b1d3c92a269e71d7be1b26a30f3168afc376b99628f037bfb506a1afaeeb46eb",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    },
+    "changed_classes": [
+      "com/integrallis/vectors/hnsw/NeighborArray.class",
+      "com/integrallis/vectors/hnsw/NeighborSelector.class"
+    ]
+  },
+  "combined-hnsw-jars": {
+    "jar_sha256": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "5b1df710a0bd41c8e144ade973523d6399943f789b52a019ffa041b1c8484ccb",
+      "vectors-db-0.1.26.jar": "f9f70792d4996e05df02ecfefbdedfd38788cf8852c46722d81b550e0520ae16",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "b1d3c92a269e71d7be1b26a30f3168afc376b99628f037bfb506a1afaeeb46eb",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    },
+    "changed_classes": [
+      "com/integrallis/vectors/hnsw/ConcurrentHnswGraphBuilder.class",
+      "com/integrallis/vectors/hnsw/NeighborArray.class",
+      "com/integrallis/vectors/hnsw/NeighborSelector.class"
+    ]
+  },
+  "combined-distinct-jars": {
+    "jar_sha256": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "5b1df710a0bd41c8e144ade973523d6399943f789b52a019ffa041b1c8484ccb",
+      "vectors-db-0.1.26.jar": "a584f72430508e4da4b304c5a7b6252309c337f7eaae8fbc3fd9c0786b610ad3",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "c213aee959116e45a5e43870f8b2ec7a728a685040b9e236d80f44e9cf66d2e5",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    },
+    "changed_classes": [
+      "com/integrallis/vectors/hnsw/ConcurrentHnswGraphBuilder.class",
+      "com/integrallis/vectors/hnsw/NeighborArray.class",
+      "com/integrallis/vectors/hnsw/NeighborSelector.class",
+      "com/integrallis/vectors/db/index/FlatScanAdapter.class",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.class",
+      "com/integrallis/vectors/core/VectorUtil.class",
+      "com/integrallis/vectors/core/VectorUtilSupport.class"
+    ]
+  }
+}
