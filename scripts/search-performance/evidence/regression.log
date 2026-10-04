@@ -1,0 +1,492 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :vectors-hnsw:spotlessJava
+> Task :vectors-hnsw:spotlessJavaApply
+> Task :vectors-hnsw:spotlessApply
+> Task :vectors-db:spotlessJava
+> Task :vectors-db:spotlessJavaApply
+> Task :vectors-db:spotlessApply
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-hnsw:compileJava UP-TO-DATE
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-hnsw:classes UP-TO-DATE
+> Task :vectors-hnsw:jar UP-TO-DATE
+> Task :vectors-hnsw:compileTestJava
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-hnsw:testClasses
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-gpu:compileJava UP-TO-DATE
+> Task :vectors-ivf:compileJava UP-TO-DATE
+> Task :vectors-vamana:compileJava UP-TO-DATE
+> Task :vectors-core:spotlessJava
+> Task :vectors-core:spotlessJavaApply
+> Task :vectors-core:spotlessApply
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-core:jar UP-TO-DATE
+> Task :vectors-db:compileJava
+> Task :vectors-core:compileTestJava
+> Task :vectors-core:processTestResources UP-TO-DATE
+> Task :vectors-core:testClasses
+
+> Task :vectors-hnsw:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+AsyncVectorPrefetcherTest > outOfRangeOrdinal_isNotSubmitted() PASSED
+
+AsyncVectorPrefetcherTest > failingSinkItselfDoesNotPropagateOrCorruptCounters() PASSED
+
+AsyncVectorPrefetcherTest > touchFailure_isObservableViaCounterAndSink() PASSED
+
+AsyncVectorPrefetcherTest > inRangeOrdinal_isSubmittedAndCounted() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > mismatchedInputsAreRejected() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > carriedOverEdgesSurvive() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > appendedNodesAreReachableFromTheGraph() PASSED
+
+ConcurrentHnswGraphBuilderSelfLoopTest > parallelBuildHasNoSelfLoopsOrOutOfRangeOrDuplicateNeighbors() PASSED
+
+DataStructuresTest > HnswGraphTests > setEntryNode_updatesEntryAndMaxLevel() PASSED
+
+DataStructuresTest > HnswGraphTests > maxConnections0_isTwiceM() PASSED
+
+DataStructuresTest > HnswGraphTests > getNeighbors_layer0_returnsNeighborArray() PASSED
+
+DataStructuresTest > HnswGraphTests > getNeighbors_layerAboveNodeLevel_returnsNull() PASSED
+
+DataStructuresTest > HnswGraphTests > initNode_allocatesNeighborArrays() PASSED
+
+DataStructuresTest > HnswGraphTests > upperLayers_expandDynamically() PASSED
+
+DataStructuresTest > HnswGraphTests > initNode_setsLevel() PASSED
+
+DataStructuresTest > NodeQueueTests > insertWithOverflow_maintainsBound() PASSED
+
+DataStructuresTest > NodeQueueTests > growsBeyondInitialCapacity() PASSED
+
+DataStructuresTest > NodeQueueTests > scoreOrdering_preservedForNonNegativeFloats() PASSED
+
+DataStructuresTest > NodeQueueTests > maxHeap_pollReturnsHighestScore() PASSED
+
+DataStructuresTest > NodeQueueTests > encodeDecode_roundTrip() PASSED
+
+DataStructuresTest > NodeQueueTests > insertWithOverflow_rejectsWorseScore() PASSED
+
+DataStructuresTest > NodeQueueTests > minHeap_pollReturnsLowestScore() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertSingleElement() PASSED
+
+DataStructuresTest > NeighborArrayTests > emptyArray_hasZeroSize() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertWhenFull_evictsWorstScore() PASSED
+
+DataStructuresTest > NeighborArrayTests > contains_returnsTrueForPresentNode() PASSED
+
+DataStructuresTest > NeighborArrayTests > clear_resetsSize() PASSED
+
+DataStructuresTest > NeighborArrayTests > copyFrom_copiesAllEntries() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertDuplicateNodeId_doesNotDuplicate() PASSED
+
+DataStructuresTest > NeighborArrayTests > contains_returnsFalseForAbsentNode() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertWhenFull_rejectsWorseScore() PASSED
+
+DataStructuresTest > NeighborArrayTests > insertMaintainsDescendingScoreOrder() PASSED
+
+ExactScoreCacheTest > collisionsNeverReturnAnotherPairsScore() PASSED
+
+ExactScoreCacheTest > repeatPruningReusesExactScoresWithoutChangingSelectedEdges() PASSED
+
+HnswGraphDiagnostics > real builds > a parallel build loses some reachability, and this bounds how much PASSED
+
+HnswGraphDiagnostics > real builds > identical vectors, the degenerate case that broke Lucene's component repair PASSED
+
+HnswGraphDiagnostics > real builds > a normally built graph is fully reachable with no structural defects PASSED
+
+HnswGraphDiagnostics > hand-built graphs > reports degree statistics over layer 0 PASSED
+
+HnswGraphDiagnostics > hand-built graphs > an empty graph reports nothing and does not throw PASSED
+
+HnswGraphDiagnostics > hand-built graphs > follows directed edges only, so a one-way edge leaves the source unreachable PASSED
+
+HnswGraphDiagnostics > hand-built graphs > detects a node unreachable from the entry node PASSED
+
+HnswGraphDiagnostics > hand-built graphs > counts self loops PASSED
+
+ResultDrainTest > drainMatchesLegacyOrderAndRawScoresIncludingTies() PASSED
+
+ResultDrainTest > insufficientCapacityDoesNotConsumeTheQueueOrChangeTheDestination() PASSED
+
+SharedVectorBuildTest > reusedReadBufferPreservesConcurrentBuilderGraphWithOneWorker() PASSED
+
+SharedVectorBuildTest > reusedReadBufferPreservesSerialGraph() PASSED
+
+SharedVectorBuildTest > rescoringCarriedEdgesDoesNotAliasTheSourceRow() PASSED
+
+SharedVectorBuildTest > appendedRowsDoNotAliasTheInsertionQuery() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > appendedGraphRetrievesAsWellAsARebuiltOne() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > appendingNothingIsTheSameGraph() PASSED
+
+ConcurrentHnswGraphBuilderAppendTest > everyLayerZeroArrayRespectsTheConnectionLimit() PASSED
+
+HnswAppendOwnershipTest > rejectsInvalidInPlaceInputsBeforeMutatingGraph() PASSED
+
+HnswAppendOwnershipTest > appendCompletesEveryNodeAndRetainsCallerExecutor() PASSED
+
+HnswGraphBuilderTest > SsdPrefetchTests > asyncVectorPrefetcher_outOfRangeOrdinal_isIgnoredSilently() PASSED
+
+HnswGraphBuilderTest > SsdPrefetchTests > searchWithPrefetch_producesIdenticalResultsToNormalSearch() PASSED
+
+HnswGraphBuilderTest > SsdPrefetchTests > searchWithPrefetch_recall_atLeast90Pct_vs_bruteForce() PASSED
+
+HnswGraphBuilderTest > SsdPrefetchTests > asyncVectorPrefetcher_submittedCount_incrementsPerPrefetchCall() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_stressDifferentThreadCounts() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_achievesGoodRecall() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_mainComponentAtLeast95pct() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_neighborCountsWithinLimits() PASSED
+
+HnswGraphBuilderTest > ConcurrentBuild > concurrentBuild_noIsolatedNodes() PASSED
+
+HnswGraphBuilderTest > MediumGraphConstruction > hundredNodes_neighborDiversity() PASSED
+
+HnswGraphBuilderTest > MediumGraphConstruction > hundredNodes_deterministicWithSameSeed() PASSED
+
+HnswGraphBuilderTest > MediumGraphConstruction > hundredNodes_graphIsConnected() PASSED
+
+HnswGraphBuilderTest > SmallGraphConstruction > tenNodes_allReachableFromEntryPoint() PASSED
+
+HnswGraphBuilderTest > SmallGraphConstruction > tenNodes_mostEdgesAreBidirectional() PASSED
+
+HnswGraphBuilderTest > SmallGraphConstruction > tenNodes_neighborCountsWithinLimits() PASSED
+
+HnswGraphBuilderTest > SmallGraphConstruction > tenNodes_entryPointIsHighestLevelNode() PASSED
+
+HnswGraphBuilderTest > SingleNodeInsertion > firstNode_hasNoNeighbors() PASSED
+
+HnswGraphBuilderTest > SingleNodeInsertion > secondNode_firstHasEdgeToSecond() PASSED
+
+HnswGraphBuilderTest > SingleNodeInsertion > firstNode_becomesEntryPoint() PASSED
+
+HnswGraphBuilderTest > SingleNodeInsertion > secondNode_hasEdgeToFirst() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_prefersCloserNeighbors() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_prunesBlockedCandidates() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_singleCandidate_returnsIt() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_emptyCandidate_returnsEmpty() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_returnsAtMostMaxConnections() PASSED
+
+HnswGraphBuilderTest > NeighborSelectorTests > selectDiverse_fillsWithPrunedWhenKeepPruned() PASSED
+
+HnswGraphBuilderTest > RandomLevelGeneratorTests > mostNodesAtLevel0() PASSED
+
+HnswGraphBuilderTest > RandomLevelGeneratorTests > deterministicWithSameSeed() PASSED
+
+HnswGraphBuilderTest > RandomLevelGeneratorTests > levelsFollowExponentialDistribution() PASSED
+
+HnswGraphBuilderTest > RandomLevelGeneratorTests > noNegativeLevels() PASSED
+
+HnswGraphMergerTest > emptySuccessorHasNoGraph() PASSED
+
+HnswGraphMergerTest > mergeRemapsSurvivorsRepairsConnectivityAndPreservesLevels() PASSED
+
+> Task :vectors-core:test
+WARNING: Using incubator modules: jdk.incubator.vector
+
+PreparedCosineTest > preparedQueryPreservesArrayAndSegmentScoreBits() PASSED
+WARNING: Using incubator modules: jdk.incubator.vector
+
+CosineAllocationTest > compiledCosinePreservesStartingRevisionBitsAtVectorBoundariesAndTails() PASSED
+
+CosineAllocationTest > warmedCosineDoesNotAllocateATemporaryArrayPerPair() PASSED
+
+CosineAllocationTest > interpretedCosinePreservesStartingRevisionBitsAtVectorBoundariesAndTails() PASSED
+
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-db:classes
+> Task :vectors-db:compileTestJava
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :vectors-db:testClasses
+> Task :vectors-gpu:processResources UP-TO-DATE
+> Task :vectors-gpu:classes UP-TO-DATE
+> Task :vectors-gpu:jar UP-TO-DATE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-ivf:classes UP-TO-DATE
+> Task :vectors-ivf:jar UP-TO-DATE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :vectors-vamana:classes UP-TO-DATE
+> Task :vectors-vamana:jar UP-TO-DATE
+
+> Task :vectors-hnsw:test
+
+HnswSearcherMultiStartTest > ExceptionPropagation > workerExceptionPropagatesWithOriginalCause() PASSED
+
+HnswSearcherMultiStartTest > Concurrency > parallelWorkersDoNotCorrupt() PASSED
+
+HnswSearcherMultiStartTest > EdgeCases > maxLevelZeroFallsBack() PASSED
+
+HnswSearcherMultiStartTest > EdgeCases > emptyGraphThrows() PASSED
+
+HnswSearcherMultiStartTest > EdgeCases > nStartsLargerThanGraph() PASSED
+
+HnswSearcherMultiStartTest > Recall > nStartsFourRecallAtLeastAsGood() PASSED
+
+HnswSearcherMultiStartTest > Identity > nStartsOneIsIdenticalToSearch() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcIndex_buildsWithoutError() PASSED
+
+HnswSearcherTest > FusedAdcSearch > defaultSubvectors_rejectsNonPositiveDim() PASSED
+
+HnswSearcherTest > FusedAdcSearch > adcTable_scoreOrdering_correlatesWithExactSimilarity() PASSED
+
+HnswSearcherTest > FusedAdcSearch > defaultSubvectors_clampsToDivisorsOfDim() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcSearch_neighborListSize_matches() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcIndex_buildsWithDefaultsOverload() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcSearch_returnsSelf() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcBatchScoring_matchesPerNodeScoring() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > builderCustomParameters() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > deterministicWithSameSeed() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > builderDefaults_M16_ef200() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > buildAndSearch_endToEnd() PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [3] sim=COSINE PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [3] sim=COSINE PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+HnswSearcherTest > MediumDatasetSearch > searchAllQueries_averageRecall_above90() PASSED
+
+HnswSearcherTest > MediumDatasetSearch > recall10_above90_euclidean() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > recall10_above80_euclidean() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > recall10_above80_cosine() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > selfQuery_returnsQueryAsTopResult() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > recallIncreasesWithEfSearch() PASSED
+
+HnswSearcherTest > BasicSearch > efSearchLessThanK_throws() PASSED
+
+HnswSearcherTest > BasicSearch > searchTwoVectors_returnsNearest() PASSED
+
+HnswSearcherTest > BasicSearch > searchSingleVector_returnsSelf() PASSED
+
+HnswSearcherTest > BasicSearch > searchReturnsRequestedK() PASSED
+
+HnswSearcherTest > BasicSearch > searchResultsSortedByScoreDescending() PASSED
+
+HnswSegmentScoringRecallTest > segmentPath_topK_matchesFloatArrayPath(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+HnswSegmentScoringRecallTest > segmentPath_topK_matchesFloatArrayPath(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+HnswSegmentScoringRecallTest > segmentPath_topK_matchesFloatArrayPath(SimilarityFunction) > [3] sim=COSINE PASSED
+
+HnswSegmentScoringRecallTest > segmentPath_topK_matchesFloatArrayPath(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+QuantizedSearchTest > TwoPassAllSimilarityFunctions > twoPassSearch_worksWithAllFunctions(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+QuantizedSearchTest > TwoPassAllSimilarityFunctions > twoPassSearch_worksWithAllFunctions(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+QuantizedSearchTest > TwoPassAllSimilarityFunctions > twoPassSearch_worksWithAllFunctions(SimilarityFunction) > [3] sim=COSINE PASSED
+
+QuantizedSearchTest > TwoPassAllSimilarityFunctions > twoPassSearch_worksWithAllFunctions(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+QuantizedSearchTest > TwoPassRecall > recall10_withPQ_improvedByRescore() PASSED
+
+QuantizedSearchTest > TwoPassRecall > twoPassRecall_improvesWithLargerCandidatePool() PASSED
+
+QuantizedSearchTest > TwoPassRecall > recall10_above93_withSQ8() PASSED
+
+QuantizedSearchTest > TwoPassSearch > searchTwoPass_rescoresWithFullPrecision() PASSED
+
+QuantizedSearchTest > TwoPassSearch > searchTwoPass_withSQ8_returnsCorrectResults() PASSED
+
+QuantizedSearchTest > TwoPassSearch > searchTwoPass_usesFullPrecisionScoring_whenNoQuantization() PASSED
+
+QuantizedSearchTest > QuantizationAttachment > isQuantizationEnabled_reflectsState() PASSED
+
+QuantizedSearchTest > QuantizationAttachment > enableQuantization_validatesSize() PASSED
+
+QuantizedSearchTest > QuantizationAttachment > enableQuantization_validatesDimension() PASSED
+
+QuantizedSearchTest > Rescore > rescore_reranksWithFullPrecision() PASSED
+
+QuantizedSearchTest > Rescore > rescore_returnsTopK_whenMoreCandidatesThanK() PASSED
+
+QuantizedSearchTest > RefactoredSearcher > searchWithFullPrecisionScorer_matchesOriginalSearch() PASSED
+
+QuantizedSearchTest > RefactoredSearcher > searchWithCustomScorer_respectsScoringFunction() PASSED
+
+QuantizedSearchTest > VectorDatasetBridge > randomAccessVectorDataset_canTrainQuantizer() PASSED
+
+QuantizedSearchTest > VectorDatasetBridge > randomAccessVectorDataset_wrapsCorrectly() PASSED
+
+QuantizedSearchTest > NodeScorerBasics > quantizedNodeScorer_returnsApproximateScores() PASSED
+
+QuantizedSearchTest > NodeScorerBasics > fullPrecisionNodeScorer_matchesSimilarityFunction() PASSED
+
+SearcherAllocationTest > searcherDoesNotAllocateGraphSizedResultScratch() PASSED
+
+VectorStoreVectorsTest > exposesStoreSizeDimensionAndVectors() PASSED
+
+VectorStoreVectorsTest > reusesASharedReturnBuffer() PASSED
+
+> Task :vectors-db:test
+WARNING: Using incubator modules: jdk.incubator.vector
+
+PreparedFlatScanTest > singleAndBatchPreserveScoresAndTiesAndRecomputeAfterQueryMutation() PASSED
+WARNING: Using incubator modules: jdk.incubator.vector
+
+SuccessorVectorOwnershipTest > stagedRowsAreStableWhileCarriedRowsReuseScratch(Path) PASSED
+
+WriterGraphLifecycleTest > successfulAppendReusesGraphLocksAndExecutor() PASSED
+
+WriterGraphLifecycleTest > persistentAppendReopenAndCompaction() PASSED
+
+WriterGraphLifecycleTest > inMemoryAppendAfterCompaction() PASSED
+
+WriterGraphLifecycleTest > upsertAndDeleteBeforeAppendKeepVectorsAlignedWithPhysicalOrdinals() PASSED
+
+WriterGraphLifecycleTest > refreshReleasesGraphAndLocksBeforeTheNextAppend() PASSED
+
+WriterGraphLifecycleTest > compactingAnEmptyPersistentCollectionReleasesGraphAndLocksAndAllowsFreshIngest() PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 1 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 2 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 3 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 4 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 5 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 6 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 7 of 10 PASSED
+
+> Task :vectors-core:spotbugsMain
+
+> Task :vectors-db:test
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 8 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 9 of 10 PASSED
+
+WriterGraphLifecycleTest > failedPublicationDiscardsTheMutatedCacheAndRetryKeepsAllRows() > repetition 10 of 10 PASSED
+
+WriterGraphLifecycleTest > closeReleasesTheWriterGraphAndLocks() PASSED
+
+MappedFlatScanAdapterTest > CloseSemantics > closeIsNoOpArenaOwnsLifetime(Path) PASSED
+
+MappedFlatScanAdapterTest > ThreadSafety > concurrentSearchesAgreeWithReference(Path) PASSED
+
+MappedFlatScanAdapterTest > InputValidation > nonPositiveKRejected(Path) PASSED
+
+MappedFlatScanAdapterTest > InputValidation > nullQueryThrows(Path) PASSED
+
+MappedFlatScanAdapterTest > InputValidation > wrongDimensionQueryThrows(Path) PASSED
+
+MappedFlatScanAdapterTest > TopKEdgeCases > kEqualsOne(Path) PASSED
+
+MappedFlatScanAdapterTest > TopKEdgeCases > kEqualsSize(Path) PASSED
+
+MappedFlatScanAdapterTest > TopKEdgeCases > emptyStoreReturnsEmptyOutcome(Path) PASSED
+
+MappedFlatScanAdapterTest > TopKEdgeCases > kLargerThanSizeClampsToSize(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsDim16(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsDim64(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsMaximumInnerProductDim128(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsVeryPaddedDim7(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > topOneAt1000Vectors(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsCosineDim128(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsDim128(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsPaddedDim100(Path) PASSED
+
+MappedFlatScanAdapterTest > ThousandVectorAgreement > oneThousandVectorsDotProductDim128(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > cosineSmallDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > dotProductSmallDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > euclideanSmallDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > maximumInnerProductSmallDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > euclideanMediumDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > veryPaddedDimension(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > maximumInnerProductMediumDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > cosineMediumDim(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > paddedDimension(Path) PASSED
+
+MappedFlatScanAdapterTest > BitEquivalenceWithFlatScan > dotProductMediumDim(Path) PASSED
+
+MappedFlatScanAdapterTest > Construction > nullStoreThrows(Path) PASSED
+
+MappedFlatScanAdapterTest > Construction > buildMethodThrowsUnsupported(Path) PASSED
+
+MappedFlatScanAdapterTest > Construction > nullMetricThrows(Path) PASSED
+
+MappedFlatScanAdapterTest > Construction > sizeReportsStoreSize(Path) PASSED
+
+> Task :vectors-hnsw:spotbugsMain
+> Task :vectors-db:spotbugsMain
+
+BUILD SUCCESSFUL in 1m 14s
+34 actionable tasks: 16 executed, 18 up-to-date

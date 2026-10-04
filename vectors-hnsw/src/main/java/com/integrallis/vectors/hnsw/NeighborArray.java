@@ -48,28 +48,34 @@ public final class NeighborArray {
    * Equal-score runs are reversed to preserve the legacy insert-before-equals ordering exactly.
    */
   static NeighborArray drainResults(NodeQueue results) {
+    var array = new NeighborArray(Math.max(1, results.size()));
+    array.drainResultsFrom(results);
+    return array;
+  }
+
+  /** Replaces this array with distinct heap results, preserving legacy tie order. */
+  void drainResultsFrom(NodeQueue results) {
     int count = results.size();
-    var array = new NeighborArray(Math.max(1, count));
-    array.size = count;
+    if (count > nodes.length) throw new IllegalArgumentException("Result exceeds capacity");
+    size = count;
     for (int i = count - 1; i >= 0; i--) {
       long entry = results.poll();
-      array.nodes[i] = NodeQueue.nodeId(entry);
-      array.scores[i] = NodeQueue.score(entry);
+      nodes[i] = NodeQueue.nodeId(entry);
+      scores[i] = NodeQueue.score(entry);
     }
     for (int start = 0; start < count; ) {
       int end = start + 1;
-      while (end < count && array.scores[end] == array.scores[start]) end++;
+      while (end < count && scores[end] == scores[start]) end++;
       for (int lo = start, hi = end - 1; lo < hi; lo++, hi--) {
-        int node = array.nodes[lo];
-        array.nodes[lo] = array.nodes[hi];
-        array.nodes[hi] = node;
-        float score = array.scores[lo];
-        array.scores[lo] = array.scores[hi];
-        array.scores[hi] = score;
+        int node = nodes[lo];
+        nodes[lo] = nodes[hi];
+        nodes[hi] = node;
+        float score = scores[lo];
+        scores[lo] = scores[hi];
+        scores[hi] = score;
       }
       start = end;
     }
-    return array;
   }
 
   /** Returns the number of entries currently stored. */

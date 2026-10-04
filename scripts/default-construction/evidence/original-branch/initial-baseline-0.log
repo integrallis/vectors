@@ -1,0 +1,12 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+arm,documents,commits,ingest_ms,reopen_ms
+Oct 03, 2026 3:08:43 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 03, 2026 3:08:43 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+COMMIT rows=25000 ms=11988.868
+COMMIT rows=50000 ms=15679.396
+COMMIT rows=75000 ms=15318.454
+COMMIT rows=100000 ms=15920.082
+META efConstruction=200 initialLevelSeed=time-generated
+default,100000,4,60228.523,400.566

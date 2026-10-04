@@ -302,5 +302,10 @@ final class SuccessorVectors {
     public boolean sharesReturnBuffer() {
       return true;
     }
+
+    @Override
+    public boolean sharesReturnBuffer(int ordinal) {
+      return ordinal < carriedCount;
+    }
   }
 }

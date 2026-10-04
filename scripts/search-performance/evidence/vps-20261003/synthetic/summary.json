@@ -1,0 +1,256 @@
+{
+  "workloads": {
+    "flat-heap-d128": {
+      "baseline_ms": 20.708429,
+      "candidate_ms": 20.523693,
+      "less_time_percent": 0.8920811907074166,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        21001715,
+        20049245,
+        20708429
+      ],
+      "candidate_forks_ns": [
+        20523693,
+        20597611,
+        20108155
+      ]
+    },
+    "flat-heap-batch-d128": {
+      "baseline_ms": 19.223451,
+      "candidate_ms": 15.037983,
+      "less_time_percent": 21.772719164732703,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        19436652,
+        19223451,
+        19188264
+      ],
+      "candidate_forks_ns": [
+        15047934,
+        15027383,
+        15037983
+      ]
+    },
+    "flat-mapped-d128": {
+      "baseline_ms": 62.866822,
+      "candidate_ms": 58.264576,
+      "less_time_percent": 7.32062772315738,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        50485348,
+        62866822,
+        63635656
+      ],
+      "candidate_forks_ns": [
+        58264576,
+        45889813,
+        59093364
+      ]
+    },
+    "flat-heap-d512": {
+      "baseline_ms": 55.091176,
+      "candidate_ms": 55.520285,
+      "less_time_percent": -0.7789069523584047,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        53933774,
+        55091176,
+        58393503
+      ],
+      "candidate_forks_ns": [
+        51932283,
+        67991123,
+        55520285
+      ]
+    },
+    "flat-heap-batch-d512": {
+      "baseline_ms": 50.202607,
+      "candidate_ms": 38.744802,
+      "less_time_percent": 22.82312749216391,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        50202607,
+        50475616,
+        50008392
+      ],
+      "candidate_forks_ns": [
+        38687968,
+        38744802,
+        39809094
+      ]
+    },
+    "flat-mapped-d512": {
+      "baseline_ms": 132.389038,
+      "candidate_ms": 117.277633,
+      "less_time_percent": 11.414392934859151,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        151992487,
+        130335811,
+        132389038
+      ],
+      "candidate_forks_ns": [
+        116867815,
+        118022559,
+        117277633
+      ]
+    },
+    "flat-heap-d768": {
+      "baseline_ms": 94.768864,
+      "candidate_ms": 93.554324,
+      "less_time_percent": 1.2815812585872055,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        96113714,
+        92240454,
+        94768864
+      ],
+      "candidate_forks_ns": [
+        93554324,
+        92487663,
+        100092015
+      ]
+    },
+    "flat-heap-batch-d768": {
+      "baseline_ms": 73.219461,
+      "candidate_ms": 51.864512,
+      "less_time_percent": 29.165673590522612,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        73750688,
+        73155168,
+        73219461
+      ],
+      "candidate_forks_ns": [
+        51946964,
+        51864512,
+        50940085
+      ]
+    },
+    "flat-mapped-d768": {
+      "baseline_ms": 208.132472,
+      "candidate_ms": 188.105509,
+      "less_time_percent": 9.62221935268227,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        212425525,
+        201540577,
+        208132472
+      ],
+      "candidate_forks_ns": [
+        185369360,
+        188105509,
+        189761807
+      ]
+    },
+    "hnsw-32-d128": {
+      "baseline_ms": 49.501466,
+      "candidate_ms": 45.66128,
+      "less_time_percent": 7.757721761210057,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        49501466,
+        46697826,
+        49962679
+      ],
+      "candidate_forks_ns": [
+        45661280,
+        45194892,
+        45720829
+      ]
+    },
+    "hnsw-32-filtered-d128": {
+      "baseline_ms": 109.312266,
+      "candidate_ms": 106.484299,
+      "less_time_percent": 2.58705367977643,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        109312266,
+        107664764,
+        109508341
+      ],
+      "candidate_forks_ns": [
+        105291038,
+        106484299,
+        111929570
+      ]
+    },
+    "hnsw-128-d128": {
+      "baseline_ms": 156.844158,
+      "candidate_ms": 154.010102,
+      "less_time_percent": 1.806924807489485,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        161402356,
+        154820549,
+        156844158
+      ],
+      "candidate_forks_ns": [
+        147106516,
+        157269100,
+        154010102
+      ]
+    },
+    "hnsw-128-filtered-d128": {
+      "baseline_ms": 369.309949,
+      "candidate_ms": 365.281586,
+      "less_time_percent": 1.0907810663936424,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        369309949,
+        358546286,
+        375827381
+      ],
+      "candidate_forks_ns": [
+        362264379,
+        365281586,
+        367744417
+      ]
+    },
+    "hnsw-512-d128": {
+      "baseline_ms": 587.597478,
+      "candidate_ms": 552.241312,
+      "less_time_percent": 6.01707245584876,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        587597478,
+        577256225,
+        589230640
+      ],
+      "candidate_forks_ns": [
+        552241312,
+        554331327,
+        545320459
+      ]
+    },
+    "hnsw-512-filtered-d128": {
+      "baseline_ms": 1055.73674,
+      "candidate_ms": 1039.298379,
+      "less_time_percent": 1.5570511451557523,
+      "exact_result_parity": true,
+      "baseline_forks_ns": [
+        1045619144,
+        1063733237,
+        1055736740
+      ],
+      "candidate_forks_ns": [
+        1049932943,
+        1039298379,
+        1009401193
+      ]
+    }
+  },
+  "searcher_allocations": {
+    "baseline": [
+      246016,
+      246016,
+      246016
+    ],
+    "candidate": [
+      85976,
+      85976,
+      85976
+    ]
+  }
+}

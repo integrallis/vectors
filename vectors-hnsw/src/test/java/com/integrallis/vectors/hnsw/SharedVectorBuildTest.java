@@ -32,13 +32,45 @@ class SharedVectorBuildTest {
     assertGraph(expected, actual);
   }
 
+  @Test
+  void reusedReadBufferPreservesConcurrentBuilderGraphWithOneWorker() {
+    float[][] rows = rows();
+    HnswGraph expected = concurrent(source(rows, false)).build(1);
+    HnswGraph actual = concurrent(source(rows, true)).build(1);
+    assertGraph(expected, actual);
+  }
+
+  @Test
+  void rescoringCarriedEdgesDoesNotAliasTheSourceRow() {
+    float[][] rows = rows();
+    HnswGraph old = build(source(rows, false));
+    // No new rows isolates the restored edge scores from insertion scheduling.
+    HnswGraph expected = concurrent(source(rows, false)).append(old, rows.length, 1, false);
+    HnswGraph actual = concurrent(source(rows, true)).append(old, rows.length, 1, false);
+    assertGraph(expected, actual);
+  }
+
+  @Test
+  void appendedRowsDoNotAliasTheInsertionQuery() {
+    float[][] rows = rows();
+    float[][] prefix = java.util.Arrays.copyOf(rows, 200);
+    HnswGraph old = build(source(prefix, false));
+    HnswGraph expected = concurrent(source(rows, false)).append(old, 200, 1, true);
+    HnswGraph actual = concurrent(source(rows, true)).append(old, 200, 1, true);
+    assertGraph(expected, actual);
+  }
+
+  private static ConcurrentHnswGraphBuilder concurrent(RandomAccessVectors source) {
+    return ConcurrentHnswGraphBuilder.create(16, 200, source, SimilarityFunction.EUCLIDEAN, 42);
+  }
+
   private static HnswGraph build(RandomAccessVectors source) {
     return HnswGraphBuilder.create(16, 200, source, SimilarityFunction.EUCLIDEAN, 42).build();
   }
 
   private static RandomAccessVectors source(float[][] rows, boolean reuse) {
     return new RandomAccessVectors() {
-      private final float[] buffer = new float[16];
+      private final ThreadLocal<float[]> buffers = ThreadLocal.withInitial(() -> new float[16]);
 
       public int size() {
         return rows.length;
@@ -52,6 +84,7 @@ class SharedVectorBuildTest {
       // so both take the same scoring path. Only the actual aliasing differs.
       public float[] getVector(int id) {
         if (!reuse) return rows[id];
+        float[] buffer = buffers.get();
         System.arraycopy(rows[id], 0, buffer, 0, buffer.length);
         return buffer;
       }

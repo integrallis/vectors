@@ -62,9 +62,6 @@ public final class HnswSearcher {
   private final NodeQueue results;
   // Scratch buffer for rescore(): avoids allocating a new NodeQueue on every two-pass call.
   private final NodeQueue rescoreHeap;
-  // Scratch arrays for beamSearch() result reversal: pre-sized to graph capacity.
-  private final int[] tmpNodes;
-  private final float[] tmpScores;
   // Scratch buffers for fused bulk neighbor scoring. Sized to at least the maximum layer-0 degree
   // (2*M) so a single pass over an origin's full neighbor list never overflows when using the
   // neighbor-batch path (Fused ADC).
@@ -178,8 +175,6 @@ public final class HnswSearcher {
     this.results = new NodeQueue(256, true); // min-heap, current top-k by score
     // Rescore is bounded by k (typically <= 100), so a small starting capacity is enough.
     this.rescoreHeap = new NodeQueue(64, true); // min-heap, grows as needed
-    this.tmpNodes = new int[graphSize];
-    this.tmpScores = new float[graphSize];
     // Fit the widest possible layer-0 neighbor list (2M+1 upper bound) but never below BULK_BATCH.
     this.bulkCapacity = Math.max(BULK_BATCH, graph.maxConnections0() + 2);
     this.bulkIds = new int[bulkCapacity];
@@ -708,17 +703,9 @@ public final class HnswSearcher {
     }
 
     // Convert results min-heap to sorted NeighborArray (descending).
-    // Reuse pre-allocated tmpNodes/tmpScores scratch fields — no allocation per search.
     int resultSize = results.size();
     NeighborArray resultArray = obtainResultArray(resultSize == 0 ? 1 : resultSize);
-    for (int i = resultSize - 1; i >= 0; i--) {
-      long entry = results.poll();
-      tmpNodes[i] = NodeQueue.nodeId(entry);
-      tmpScores[i] = NodeQueue.score(entry);
-    }
-    for (int i = 0; i < resultSize; i++) {
-      resultArray.insert(tmpNodes[i], tmpScores[i]);
-    }
+    resultArray.drainResultsFrom(results);
 
     return resultArray;
   }
@@ -817,14 +804,7 @@ public final class HnswSearcher {
     // Convert results min-heap to sorted NeighborArray (descending).
     int resultSize = results.size();
     NeighborArray resultArray = obtainResultArray(resultSize == 0 ? 1 : resultSize);
-    for (int i = resultSize - 1; i >= 0; i--) {
-      long entry = results.poll();
-      tmpNodes[i] = NodeQueue.nodeId(entry);
-      tmpScores[i] = NodeQueue.score(entry);
-    }
-    for (int i = 0; i < resultSize; i++) {
-      resultArray.insert(tmpNodes[i], tmpScores[i]);
-    }
+    resultArray.drainResultsFrom(results);
 
     return resultArray;
   }

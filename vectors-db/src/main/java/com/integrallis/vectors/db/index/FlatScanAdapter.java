@@ -16,6 +16,7 @@
 package com.integrallis.vectors.db.index;
 
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.VectorUtil;
 import java.util.Objects;
 
 /**
@@ -137,22 +138,26 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
     int[][] heapIds = new int[q][actualK];
     float[][] heapScores = new float[q][actualK];
     int[] heapSizes = new int[q];
-    for (int v = 0; v < vectors.length; v++) {
-      float[] stored = vectors[v];
-      for (int qi = 0; qi < q; qi++) {
-        float score = metric.compare(queries[qi], stored);
-        int sz = heapSizes[qi];
-        int[] ids = heapIds[qi];
-        float[] scores = heapScores[qi];
-        if (sz < actualK) {
-          ids[sz] = v;
-          scores[sz] = score;
-          heapSizes[qi] = sz + 1;
-          siftUp(ids, scores, sz);
-        } else if (score > scores[0]) {
-          ids[0] = v;
-          scores[0] = score;
-          siftDown(ids, scores, 0, sz);
+    if (metric == SimilarityFunction.COSINE) {
+      scanCosineBatch(queries, actualK, heapIds, heapScores, heapSizes);
+    } else {
+      for (int v = 0; v < vectors.length; v++) {
+        float[] stored = vectors[v];
+        for (int qi = 0; qi < q; qi++) {
+          float score = metric.compare(queries[qi], stored);
+          int sz = heapSizes[qi];
+          int[] ids = heapIds[qi];
+          float[] scores = heapScores[qi];
+          if (sz < actualK) {
+            ids[sz] = v;
+            scores[sz] = score;
+            heapSizes[qi] = sz + 1;
+            siftUp(ids, scores, sz);
+          } else if (score > scores[0]) {
+            ids[0] = v;
+            scores[0] = score;
+            siftDown(ids, scores, 0, sz);
+          }
         }
       }
     }
@@ -172,6 +177,35 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
       out[qi] = new SearchOutcome(sortedIds, sortedScores);
     }
     return out;
+  }
+
+  /** Keep cosine preparation and dispatch out of the other metrics' inner scan loops. */
+  private void scanCosineBatch(
+      float[][] queries, int actualK, int[][] heapIds, float[][] heapScores, int[] heapSizes) {
+    float[] queryNorms = new float[queries.length];
+    for (int qi = 0; qi < queries.length; qi++) {
+      queryNorms[qi] = VectorUtil.cosineQueryNorm(queries[qi]);
+    }
+    for (int v = 0; v < vectors.length; v++) {
+      float[] stored = vectors[v];
+      for (int qi = 0; qi < queries.length; qi++) {
+        float score =
+            (1f + VectorUtil.cosineWithQueryNorm(queries[qi], stored, queryNorms[qi])) / 2f;
+        int sz = heapSizes[qi];
+        int[] ids = heapIds[qi];
+        float[] scores = heapScores[qi];
+        if (sz < actualK) {
+          ids[sz] = v;
+          scores[sz] = score;
+          heapSizes[qi] = sz + 1;
+          siftUp(ids, scores, sz);
+        } else if (score > scores[0]) {
+          ids[0] = v;
+          scores[0] = score;
+          siftDown(ids, scores, 0, sz);
+        }
+      }
+    }
   }
 
   @Override

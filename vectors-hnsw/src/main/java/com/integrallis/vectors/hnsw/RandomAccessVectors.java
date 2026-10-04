@@ -72,6 +72,15 @@ public interface RandomAccessVectors {
   }
 
   /**
+   * Whether the row at {@code ordinal} can be overwritten by subsequent reads. Mixed stores may
+   * return stable staged rows while reusing scratch for mapped rows. The default preserves the
+   * store-wide contract; the no-argument form must still be true if any row uses shared scratch.
+   */
+  default boolean sharesReturnBuffer(int ordinal) {
+    return sharesReturnBuffer();
+  }
+
+  /**
    * {@code true} when this implementation can hand out a zero-copy {@link
    * java.lang.foreign.MemorySegment} view of a stored vector via {@link #vectorSegment(int)}.
    * Off-heap / mmap-backed implementations that store contiguous little-endian float32 rows should

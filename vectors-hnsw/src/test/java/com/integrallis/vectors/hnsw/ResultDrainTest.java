@@ -30,6 +30,7 @@ class ResultDrainTest {
       for (int round = 0; round < 40; round++) {
         NodeQueue original = new NodeQueue(size, true);
         NodeQueue optimized = new NodeQueue(size, true);
+        NodeQueue reused = new NodeQueue(size, true);
         for (int id = 0; id < size; id++) {
           float score =
               switch (round % 4) {
@@ -40,14 +41,24 @@ class ResultDrainTest {
               };
           original.add(id, score);
           optimized.add(id, score);
+          reused.add(id, score);
         }
         NeighborArray expected = legacy(original);
         NeighborArray actual = NeighborArray.drainResults(optimized);
+        NeighborArray destination = new NeighborArray(Math.max(1, size + 3));
+        destination.insert(9999, 1f);
+        destination.drainResultsFrom(reused);
+        assertTrue(reused.isEmpty());
+        assertEquals(expected.size(), destination.size());
         assertTrue(optimized.isEmpty());
         assertEquals(expected.size(), actual.size());
         assertEquals(expected.maxSize(), actual.maxSize());
         for (int i = 0; i < size; i++) {
           assertEquals(expected.node(i), actual.node(i), "tie/order at " + i);
+          assertEquals(expected.node(i), destination.node(i));
+          assertEquals(
+              Float.floatToRawIntBits(expected.score(i)),
+              Float.floatToRawIntBits(destination.score(i)));
           assertEquals(
               Float.floatToRawIntBits(expected.score(i)), Float.floatToRawIntBits(actual.score(i)));
         }
@@ -56,6 +67,20 @@ class ResultDrainTest {
         assertEquals(1001, NodeQueue.nodeId(optimized.poll()));
       }
     }
+  }
+
+  @Test
+  void insufficientCapacityDoesNotConsumeTheQueueOrChangeTheDestination() {
+    NodeQueue queue = new NodeQueue(2, true);
+    queue.add(1, .5f);
+    queue.add(2, .75f);
+    NeighborArray destination = new NeighborArray(1);
+    destination.insert(3, .25f);
+    assertThrows(IllegalArgumentException.class, () -> destination.drainResultsFrom(queue));
+    assertEquals(2, queue.size());
+    assertEquals(1, destination.size());
+    assertEquals(3, destination.node(0));
+    assertEquals(.25f, destination.score(0));
   }
 
   private static NeighborArray legacy(NodeQueue queue) {

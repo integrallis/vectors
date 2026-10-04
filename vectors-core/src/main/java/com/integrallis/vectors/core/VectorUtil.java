@@ -104,6 +104,26 @@ public final class VectorUtil {
     return IMPL.cosine(a, b);
   }
 
+  /**
+   * Prepares the squared norm used by {@link #cosineWithQueryNorm(float[], float[], float)}.
+   * Recompute after mutating the query. Use the same query and dimensions for each comparison.
+   */
+  public static float cosineQueryNorm(float[] query) {
+    return IMPL.cosineQueryNorm(query);
+  }
+
+  /** Computes cosine using a norm prepared by {@link #cosineQueryNorm(float[])}. */
+  public static float cosineWithQueryNorm(float[] query, float[] row, float queryNorm) {
+    checkDimensions(query.length, row.length);
+    return IMPL.cosineWithQueryNorm(query, row, queryNorm);
+  }
+
+  /** Computes segment cosine using the norm prepared from the corresponding query array. */
+  public static float cosineWithQueryNorm(
+      MemorySegment query, MemorySegment row, int dimensions, float queryNorm) {
+    return IMPL.cosineWithQueryNorm(query, row, dimensions, queryNorm);
+  }
+
   // --- Byte distance operations ---
 
   /** Computes the dot product of two signed byte vectors. */

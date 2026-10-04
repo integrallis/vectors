@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.SplittableRandom;
 
 /**
- * TEMPORARY: where a commit's time goes at a realistic corpus size, per cadence.
+ * Manual commit-cadence and recall benchmark using the public collection API.
  *
  * <p>Arguments: count dimension withText cadence[,cadence...]
  */
@@ -159,23 +159,10 @@ public final class CommitPhaseProfile {
     System.out.printf(
         "%d vectors x %d dims, text=%s, cores=%d%n",
         count, dim, withText, Runtime.getRuntime().availableProcessors());
-    System.out.printf(
-        "%-9s %7s %9s | %7s %9s %8s %7s %8s | %8s %8s | %14s%n",
-        "cadence",
-        "gens",
-        "totalMs",
-        "materMs",
-        "id+metaMs",
-        "graphMs",
-        "crcMs",
-        "writeMs",
-        "appendMs",
-        "encodeMs",
-        "bytes");
+    System.out.printf("%-9s %7s %9s %14s%n", "cadence", "gens", "totalMs", "bytes");
 
     for (int cadence : cadences) {
       Path dir = Files.createTempDirectory("phase");
-      java.util.Arrays.fill(VectorCollectionImpl.PHASE, 0L);
       SplittableRandom random = new SplittableRandom(5);
       long gens;
       long start = System.nanoTime();
@@ -201,20 +188,9 @@ public final class CommitPhaseProfile {
         }
         gens = c.generationNumber();
       }
-      long[] p = VectorCollectionImpl.PHASE;
       System.out.printf(
-          "%-9d %7d %9d | %7d %9d %8d %7d %8d | %8d %8d | %,14d%n",
-          cadence,
-          gens,
-          (System.nanoTime() - start) / 1_000_000,
-          p[0] / 1_000_000,
-          p[1] / 1_000_000,
-          p[2] / 1_000_000,
-          p[3] / 1_000_000,
-          p[4] / 1_000_000,
-          p[5] / 1_000_000,
-          p[6] / 1_000_000,
-          occupied(dir));
+          "%-9d %7d %9d %,14d%n",
+          cadence, gens, (System.nanoTime() - start) / 1_000_000, occupied(dir));
       delete(dir);
     }
   }
