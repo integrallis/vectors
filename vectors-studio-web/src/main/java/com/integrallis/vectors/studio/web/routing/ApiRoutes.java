@@ -140,21 +140,12 @@ public final class ApiRoutes implements HttpService {
       return;
     }
     try (SseSink sink = res.sink(SseSink.TYPE)) {
-      if (job.state() == ProjectionJob.State.DONE && job.result() != null) {
-        try {
-          sink.emit(
-              SseEvent.builder()
-                  .data(MAPPER.writeValueAsString(new ProjectionEvent.Done(id, job.result())))
-                  .build());
-        } catch (Exception ignore) {
-        }
-        return;
-      }
       CountDownLatch done = new CountDownLatch(1);
       job.publisher()
           .subscribe(
               new Flow.Subscriber<>() {
                 private Flow.Subscription sub;
+                private boolean terminalDelivered;
 
                 @Override
                 public void onSubscribe(Flow.Subscription s) {
@@ -166,6 +157,7 @@ public final class ApiRoutes implements HttpService {
                 public void onNext(ProjectionEvent ev) {
                   try {
                     sink.emit(SseEvent.builder().data(MAPPER.writeValueAsString(ev)).build());
+                    if (!(ev instanceof ProjectionEvent.Progress)) terminalDelivered = true;
                   } catch (Exception ignore) {
                     sub.cancel();
                     done.countDown();
@@ -179,6 +171,11 @@ public final class ApiRoutes implements HttpService {
 
                 @Override
                 public void onComplete() {
+                  // Completion may race subscription, or the job may already have failed.
+                  // SubmissionPublisher replays only onComplete, so replay its retained result.
+                  if (!terminalDelivered && job.terminalEvent() != null) {
+                    onNext(job.terminalEvent());
+                  }
                   done.countDown();
                 }
               });

@@ -116,6 +116,35 @@ class ProjectionApiIT {
   }
 
   @Test
+  void replaysFailureToLateEventStreamSubscriber() throws Exception {
+    String body =
+        """
+        {"collection":"docs","algorithm":"TSNE","dimensions":2,
+         "params":{"perplexity":1,"iterations":500}}
+        """;
+    var submit =
+        client.send(
+            HttpRequest.newBuilder(uri("/api/projections"))
+                .timeout(Duration.ofSeconds(10))
+                .header("content-type", "application/json")
+                .POST(BodyPublishers.ofString(body))
+                .build(),
+            BodyHandlers.ofString());
+    assertThat(submit.statusCode()).isEqualTo(202);
+    String jobId = JSON.readTree(submit.body()).get("jobId").asText();
+    // The invalid Smile option fails immediately, before the browser connects its EventSource.
+    Thread.sleep(200);
+    var events =
+        client.send(
+            HttpRequest.newBuilder(uri("/api/projections/" + jobId + "/events"))
+                .timeout(Duration.ofSeconds(10))
+                .GET()
+                .build(),
+            BodyHandlers.ofString());
+    assertThat(events.body()).contains("Invalid perplexity", "\"message\":");
+  }
+
+  @Test
   void rejectsUnknownCollection() throws Exception {
     String body =
         "{\"collection\":\"missing\",\"algorithm\":\"PCA\",\"dimensions\":2,\"sampleSize\":0}";

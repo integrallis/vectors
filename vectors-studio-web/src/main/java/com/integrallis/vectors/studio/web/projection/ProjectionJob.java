@@ -40,6 +40,7 @@ public final class ProjectionJob {
   private final SubmissionPublisher<ProjectionEvent> publisher = new SubmissionPublisher<>();
   private final AtomicReference<State> state = new AtomicReference<>(State.RUNNING);
   private final AtomicReference<ProjectionResult> result = new AtomicReference<>();
+  private volatile ProjectionEvent terminalEvent;
   private final AtomicLong lastTouched = new AtomicLong(System.currentTimeMillis());
 
   public ProjectionJob(String jobId, String[] ids) {
@@ -61,6 +62,11 @@ public final class ProjectionJob {
 
   public ProjectionResult result() {
     return result.get();
+  }
+
+  /** Terminal event retained for subscribers that connect after the publisher closes. */
+  public ProjectionEvent terminalEvent() {
+    return terminalEvent;
   }
 
   public long lastTouched() {
@@ -88,7 +94,8 @@ public final class ProjectionJob {
   public void complete(ProjectionResult r) {
     result.set(r);
     if (state.compareAndSet(State.RUNNING, State.DONE)) {
-      publisher.submit(new ProjectionEvent.Done(jobId, r));
+      terminalEvent = new ProjectionEvent.Done(jobId, r);
+      publisher.submit(terminalEvent);
       publisher.close();
     }
   }
@@ -96,7 +103,8 @@ public final class ProjectionJob {
   /** Marks ERROR and publishes the {@link ProjectionEvent.Error} terminal event. */
   public void fail(Throwable t) {
     if (state.compareAndSet(State.RUNNING, State.ERROR)) {
-      publisher.submit(new ProjectionEvent.Error(jobId, t.getMessage()));
+      terminalEvent = new ProjectionEvent.Error(jobId, String.valueOf(t.getMessage()));
+      publisher.submit(terminalEvent);
       publisher.close();
     }
   }
@@ -104,6 +112,7 @@ public final class ProjectionJob {
   /** Marks CANCELLED. Returns true on first cancel, false if already terminal. */
   public boolean cancel() {
     if (state.compareAndSet(State.RUNNING, State.CANCELLED)) {
+      terminalEvent = new ProjectionEvent.Error(jobId, "Projection cancelled");
       publisher.close();
       return true;
     }

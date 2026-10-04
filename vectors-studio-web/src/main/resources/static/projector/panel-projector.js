@@ -22,6 +22,7 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus, get
   let activeJob = null;
   let activeStream = null;
   let pending = null; // setTimeout handle for debounced submit
+  let revision = 0;
 
   function selectAlgo(algo) {
     activeAlgo = algo;
@@ -72,7 +73,9 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus, get
   }
 
   async function submit(body) {
+    const current = ++revision;
     await cancelJob();
+    if (current !== revision) return;
     onStatus(`submitting ${body.algorithm}…`);
     let resp;
     try {
@@ -81,13 +84,28 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus, get
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-    } catch (e) { onStatus(`network error: ${e.message}`); return; }
+    } catch (e) { if (current === revision) onStatus(`network error: ${e.message}`); return; }
+    if (current !== revision) {
+      // A newer input won while this POST was in flight. Release the superseded server job.
+      if (resp.ok) {
+        const { jobId } = await resp.json();
+        fetch(`/api/projections/${jobId}`, { method: "DELETE" }).catch(() => {});
+      }
+      return;
+    }
     if (!resp.ok) { onStatus(`submit failed: ${resp.status}`); return; }
     const { jobId, n } = await resp.json();
+    if (current !== revision) {
+      fetch(`/api/projections/${jobId}`, { method: "DELETE" }).catch(() => {});
+      return;
+    }
     activeJob = jobId;
     onStatus(`running ${body.algorithm} on ${n} points…`);
-    activeStream = new EventSource(`/api/projections/${jobId}/events`);
-    activeStream.onmessage = (e) => {
+    const stream = new EventSource(`/api/projections/${jobId}/events`);
+    activeStream = stream;
+    const isCurrent = () => current === revision && activeStream === stream;
+    stream.onmessage = (e) => {
+      if (!isCurrent()) return;
       let ev; try { ev = JSON.parse(e.data); } catch { return; }
       const dim = body.dimensions;
       if (ev.coords) {
@@ -101,7 +119,7 @@ export function createProjectorPanel({ root, collection, onPoints, onStatus, get
         onStatus(`error: ${ev.message}`); finish();
       }
     };
-    activeStream.onerror = () => { onStatus("stream closed"); finish(); };
+    stream.onerror = () => { if (isCurrent()) { onStatus("stream closed"); finish(); } };
   }
 
   function finish() { closeStream(); activeJob = null; }
