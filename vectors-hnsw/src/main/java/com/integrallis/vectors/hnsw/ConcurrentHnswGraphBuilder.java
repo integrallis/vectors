@@ -501,8 +501,6 @@ public final class ConcurrentHnswGraphBuilder {
   // ---------------------------------------------------------------------------
 
   private static final class WorkContext {
-    // One bounded cache per worker and operation. No synchronization or cross-source reuse.
-    final ExactScoreCache scoreCache = new ExactScoreCache();
     final BitSet visited;
     final NodeQueue candidates; // max-heap
     final NodeQueue results; // min-heap
@@ -595,8 +593,7 @@ public final class ConcurrentHnswGraphBuilder {
               query, entryPoints, efConstruction, layer, graph, locks, ctx, nodeId);
 
       NeighborArray neighbors =
-          NeighborSelector.selectDiverse(
-              searchResults, maxConn, vectors, similarityFunction, ctx.scoreCache);
+          NeighborSelector.selectDiverse(searchResults, maxConn, vectors, similarityFunction);
 
       // Forward edges: nodeId → selected neighbors.
       // Use insert() (not copyFrom) so any backlinks already added by concurrent threads are
@@ -609,8 +606,7 @@ public final class ConcurrentHnswGraphBuilder {
         }
         if (nodeList.size() > maxConn) {
           NeighborArray pruned =
-              NeighborSelector.selectDiverse(
-                  nodeList, maxConn, vectors, similarityFunction, ctx.scoreCache);
+              NeighborSelector.selectDiverse(nodeList, maxConn, vectors, similarityFunction);
           nodeList.copyFrom(pruned);
         }
       } finally {
@@ -630,8 +626,7 @@ public final class ConcurrentHnswGraphBuilder {
             nList.insert(nodeId, score);
             if (nList.size() > maxConn) {
               NeighborArray pruned =
-                  NeighborSelector.selectDiverse(
-                      nList, maxConn, vectors, similarityFunction, ctx.scoreCache);
+                  NeighborSelector.selectDiverse(nList, maxConn, vectors, similarityFunction);
               nList.copyFrom(pruned);
             }
           }
@@ -769,13 +764,18 @@ public final class ConcurrentHnswGraphBuilder {
       }
     }
 
+    return drainResults(ctx.results);
+  }
+
+  /** Converts the distinct result heap into the pruning candidate order. */
+  static NeighborArray drainResults(NodeQueue results) {
     // Drain min-heap to descending NeighborArray
-    int sz = ctx.results.size();
+    int sz = results.size();
     var arr = new NeighborArray(Math.max(1, sz));
     int[] tmpN = new int[sz];
     float[] tmpS = new float[sz];
     for (int i = sz - 1; i >= 0; i--) {
-      long e = ctx.results.poll();
+      long e = results.poll();
       tmpN[i] = NodeQueue.nodeId(e);
       tmpS[i] = NodeQueue.score(e);
     }
