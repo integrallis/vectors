@@ -64,6 +64,14 @@ class FlatCollectionBatchTest {
   void batchRetainsProjectionCutoffsTombstonesTiesAndRequestOrder() {
     try (var collection = collection()) {
       var requests = requests(Runtime.getRuntime().availableProcessors() * 4 + 1, true);
+      requests.set(
+          0,
+          SearchRequest.builder(collection.get("v0").vector().clone(), 10)
+              .minScore(.9f)
+              .includeVector(false)
+              .includeText(false)
+              .includeMetadata(false)
+              .build());
       assertResults(collection, requests, collection.searchBatch(requests));
       collection.delete("v0");
       collection.commit();
