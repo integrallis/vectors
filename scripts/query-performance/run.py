@@ -23,10 +23,11 @@ real=r/'final-replay/candidate-0-collection/gen-0000000000000004'
 cases=[('glove',r/'inputs/glove-100-angular-train.fbin',r/'inputs/glove-100-angular-test.fbin',r/'combined-results/glove-100-angular-t1-s17-baseline.graph.bin','COSINE'),('dbpedia',real,real,real/'graph.bin','COSINE'),('fashion',r/'inputs/fashion-mnist-784-euclidean-train.fbin',r/'inputs/fashion-mnist-784-euclidean-test.fbin',r/'combined-results/fashion-mnist-784-euclidean-t1-s17-baseline.graph.bin','EUCLIDEAN')]
 def sha(path):
  with path.open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
-files=set([java,source])
+files=set([java,source,Path(__file__).resolve()])
 for _,data,query,graph,_ in cases:
  for f in [data,query,graph]:
   files.update([f/'manifest.bin',f/'vectors.bin'] if f.is_dir() else [f])
+files.update(f for f in real.parent.rglob('*') if f.is_file())
 if a.public_glove:files.update(f for f in a.public_glove.rglob('*') if f.is_file())
 for directory in [a.baseline,a.candidate]:files.update(directory.glob('*.jar'))
 prov={'baseline_sha':a.baseline_sha,'candidate_sha':a.candidate_sha,'files':{str(f):sha(f) for f in sorted(files)}}
@@ -44,7 +45,9 @@ for rep in range(a.rounds):
      original=a.public_glove.resolve() if name=='glove' else real.parent
      fixture=out/(name+'-'+arm+'-public-fixture')
      if not fixture.exists():shutil.copytree(original,fixture)
-     runtime_data=next(fixture.glob('gen-*'))
+     generation=int.from_bytes((fixture/'CURRENT').read_bytes()[:8], 'little', signed=True)
+     assert generation>=0,fixture
+     runtime_data=fixture/f'gen-{generation:016d}'
     cmd=[str(java),'--add-modules=jdk.incubator.vector','--enable-native-access=ALL-UNNAMED','-Xms3g','-Xmx3g','-cp',str(classes)+os.pathsep+cp[arm],'QueryPerformance',name,str(runtime_data),str(queries),str(graph),metric,mode]
     if a.cpu is not None:
      cmd.insert(1,'-XX:ActiveProcessorCount='+str(len(os.sched_getaffinity(0))))

@@ -1,24 +1,31 @@
-# Query norm reuse
+# Faster collection queries
 
 Baseline: merged main `c43c3160232dd20cf4b2ebd67f44b68c83edf56c`.
 
-Two default query optimizations, without changing graphs, search budgets or precision:
+Two automatic query optimizations, without changing graphs, search budgets or precision:
 
-- Large heap flat single-query scans score independent rows in the bounded common
-  fork/join pool, then feed the original heap in ordinal order. Ties and exact
-  scoring are preserved. This uses more CPU cores per query and allocates a
-  temporary `4 * rowCount` byte score buffer. Dispatch is automatic above four
-  million vector components when the common pool has multiple workers. Small
-  scans and the optimized COSINE batch route retain their original execution.
-- Full-precision HNSW COSINE scoring prepares the **batch kernel's** query norm
-  once per query, instead of per neighbor list. Heap and segment kernels keep
-  their original dot/row-norm accumulation, tail and score transform. Single-node
-  scoring keeps its original kernel. Shared-return-buffer sources without segment
-  support and custom/quantized scorers retain their original route.
+- Large heap flat single-query scans score independent rows using at most eight
+  common fork/join workers, then feed the original bounded heap in ordinal order.
+  This uses spare CPU cores to reduce latency and allocates a temporary
+  `4 * rowCount` byte score buffer. It does not establish a reduction in CPU work.
+  Dispatch starts at four million vector components. A shared permit bounds the
+  score buffer to one expanded query; active-query accounting curtails further
+  task splitting when independent queries compete. Expansion resumes after
+  50 milliseconds without observed overlap, preventing repeated expansion at the
+  start of successive concurrent bursts. The public collection batch
+  API automatically coordinates its existing query parallelism so its scans do
+  not expand into more workers. All scopes release on success or failure.
+- Persisted full-precision HNSW COSINE queries score neighbor rows using byte
+  offsets in the backing segment, avoiding one segment-view object per neighbor.
+  The batch kernel's query norm is prepared once per query. The four-row SIMD
+  accumulation, scalar tails and score transform match the original kernel.
+  Single-node, heap, scalar, short-vector, noncontiguous segment, custom and quantized scorers retain
+  their original algorithms. The storage adapter supplies offsets automatically.
 
-The array single-row and fused batch kernels have different reduction orders.
-Their prepared norms must not be interchanged. No norm persists between queries,
-no row norm cache is introduced, and each searcher owns its existing scratch.
+No application options are required. Norms never persist between queries, and no
+row norm cache is introduced. Caller-owned flat vectors remain mutable between
+queries. The single-row and fused batch kernels use different reduction orders;
+their prepared norms must not be interchanged.
 
 ## Qualification protocol
 
@@ -28,8 +35,14 @@ no row norm cache is introduced, and each searcher owns its existing scratch.
   v2 took 6.96% more median time on DBpedia across three unrestricted JVM pairs.
   `8374f2d` adds parallel flat tests before implementation (missing-method red);
   `bed834c` implements parallel scoring and passes the focused tests.
-  Exact warmed score bits have a separate subprocess
-  test; storage, filters, query mutation, ties and portable fallbacks are tested.
+  Offset contracts are introduced in `b4cc211` before `4733b61` implements them.
+  The missing batch-coordination API in `34156c0` fails compilation before
+  `aea59d4` implements the scoped scheduler. The original unqualified heap HNSW
+  norm-only path is removed in `7e7cbf8`.
+  `3edfd38` adds a deterministic injected-clock burst-budget contract and an
+  unaccelerated HNSW routing assertion; both fail before `63954f8` implements them.
+  Exact warmed offset score bits have a separate subprocess test; storage, filters,
+  query mutation, ties and portable fallbacks are tested.
 - Freeze baseline/candidate runtime jars and retain their SHA-256 checksums.
 - Run one process at a time on a dedicated VPS. Three alternating fresh-JVM pairs;
   identical heap sizes; corpus placement settled before timing in both arms;
@@ -41,6 +54,8 @@ no row norm cache is introduced, and each searcher owns its existing scratch.
 - Target at least 5% median query-time reduction on each of two COSINE corpora.
   Report all ef levels, storage paths, flat batch and Euclidean controls. No
   reduction in ef or relaxation of the existing recall gate is permitted.
+  Concurrent/control median time must not regress by more than 5%; every fork and
+  raw sample is retained so variability is visible.
 - Full unit/coverage and CI gates must pass before merging. Preserve unsuccessful
   experiments and controls alongside accepted results.
 
@@ -94,5 +109,25 @@ eight-processor environment. Subsequent HNSW affinity runs explicitly preserve
 `ActiveProcessorCount` from the unrestricted host while pinning the measured
 serial query process. Parallel flat measurements use all available VPS CPUs.
 
-Concurrent flat cases at Q=4,16,32 expose contention and allocation costs, rather
-than treating reduced single-query latency as proof of greater throughput.
+Concurrent public batch cases at Q=4,16,32 and independent `search()` calls at
+Q=4,16 expose contention and allocation costs. Single-query latency and concurrent
+throughput are reported separately.
+
+The parallel v3 pilot regressed Fashion Q32 by 104%; limiting expansion to one
+scan in v4 still regressed it by 39%. Both are rejected measurements. Automatic
+collection batch coordination in v5 removed that regression in the pilot. Three
+v6 pairs still showed 5.82% more time on independent Fashion Q16 searches, missing
+the 5% control limit. v7 adds a deterministic burst budget; the final repeated
+comparison determines acceptance.
+
+For a second actual public HNSW corpus, compile `BuildPublicFixture.java` alongside
+`QueryPerformance.java` with the baseline classpath, then invoke it with the GLOVE
+training fbin and a new output directory. It creates a 20k-row persistent collection
+once with baseline jars. Pass that directory as `--public-glove` to the runner;
+both arms reopen separate copies of the same frozen generation and use the
+published held-out test vectors. The native-segment diagnostic remains separate.
+
+`ALLOCATION` lines report calling-thread bytes per query after warmup. They cover
+HNSW's serial work but omit flat worker allocation; do not interpret them as total
+allocation for concurrent flat workloads.
+

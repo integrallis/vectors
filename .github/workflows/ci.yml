@@ -80,6 +80,7 @@ jobs:
         run: |
           python3 scripts/default-construction/run.py --help
           python3 -m unittest discover -s scripts/default-construction -p 'test_*.py'
+          python3 -m unittest discover -s scripts/query-performance -p 'test_*.py'
 
       # S3 compare-and-swap and Studio SSE/HTTP workflows are outside the default test tags.
       - name: Storage and Studio integration tests
