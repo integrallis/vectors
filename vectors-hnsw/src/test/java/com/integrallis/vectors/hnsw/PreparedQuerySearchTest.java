@@ -62,6 +62,16 @@ class PreparedQuerySearchTest {
                   return segment;
                 }
 
+                @Override
+                public MemorySegment vectorSegmentStorage() {
+                  return segment ? memory : null;
+                }
+
+                @Override
+                public long vectorSegmentOffset(int i) {
+                  return (long) i * dim * 4;
+                }
+
                 public MemorySegment vectorSegment(int i) {
                   return memory.asSlice((long) i * dim * 4, (long) dim * 4);
                 }
