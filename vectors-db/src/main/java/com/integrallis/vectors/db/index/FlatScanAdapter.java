@@ -38,7 +38,8 @@ import java.util.concurrent.RecursiveAction;
 public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
   // Shared across adapters: concurrent collections must also respect the CPU expansion budget.
-  static final java.util.concurrent.Semaphore PARALLEL_SCANS = new java.util.concurrent.Semaphore(1);
+  static final java.util.concurrent.Semaphore PARALLEL_SCANS =
+      new java.util.concurrent.Semaphore(1);
 
   private float[][] vectors = new float[0][];
   private SimilarityFunction metric;
@@ -70,8 +71,13 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
     // Large scans amortize parallel dispatch. The score array is private to this call, and
     // selection still consumes scores in ordinal order, including equal-score replacements.
     if ((long) vectors.length * dimension >= 4_000_000L
-        && ForkJoinPool.getCommonPoolParallelism() > 1) {
-      return selectScores(scoreAll(query, vectors, metric), k);
+        && ForkJoinPool.getCommonPoolParallelism() > 1
+        && PARALLEL_SCANS.tryAcquire()) {
+      try {
+        return selectScores(scoreAll(query, vectors, metric), k);
+      } finally {
+        PARALLEL_SCANS.release();
+      }
     }
     int actualK = Math.min(k, vectors.length);
 

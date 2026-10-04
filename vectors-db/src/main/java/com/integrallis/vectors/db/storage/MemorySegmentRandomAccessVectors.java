@@ -164,4 +164,14 @@ public final class MemorySegmentRandomAccessVectors
   public MemorySegment vectorSegment(int ordinal) {
     return mapped.vectorSlice(ordinal);
   }
+
+  @Override
+  public MemorySegment vectorSegmentStorage() {
+    return mapped.segment();
+  }
+
+  @Override
+  public long vectorSegmentOffset(int ordinal) {
+    return mapped.vectorOffsetFor(ordinal);
+  }
 }

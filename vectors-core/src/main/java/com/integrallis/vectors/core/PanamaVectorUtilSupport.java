@@ -7991,4 +7991,112 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
     return cosineValue(d, qNorm2, n);
   }
+
+  // Same reduction and row grouping as the view-based kernel; only addressing differs.
+  @Override
+  public void batchCosineWithQueryNorm(
+      float[] query,
+      MemorySegment matrix,
+      long[] offsets,
+      int dim,
+      float qNorm2,
+      float[] out,
+      int count) {
+    int rowGroup = count & ~3;
+    int limit = FLOAT_SPECIES.loopBound(dim);
+
+    for (int r = 0; r < rowGroup; r += 4) {
+      long o0 = offsets[r], o1 = offsets[r + 1], o2 = offsets[r + 2], o3 = offsets[r + 3];
+      FloatVector d0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector d1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector d2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector d3 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n0 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n1 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n2 = FloatVector.zero(FLOAT_SPECIES);
+      FloatVector n3 = FloatVector.zero(FLOAT_SPECIES);
+
+      for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+        long byteOff = (long) i * Float.BYTES;
+        FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i); // query chunk loaded ONCE
+        FloatVector v0 =
+            FloatVector.fromMemorySegment(
+                FLOAT_SPECIES, matrix, o0 + byteOff, ByteOrder.LITTLE_ENDIAN);
+        FloatVector v1 =
+            FloatVector.fromMemorySegment(
+                FLOAT_SPECIES, matrix, o1 + byteOff, ByteOrder.LITTLE_ENDIAN);
+        FloatVector v2 =
+            FloatVector.fromMemorySegment(
+                FLOAT_SPECIES, matrix, o2 + byteOff, ByteOrder.LITTLE_ENDIAN);
+        FloatVector v3 =
+            FloatVector.fromMemorySegment(
+                FLOAT_SPECIES, matrix, o3 + byteOff, ByteOrder.LITTLE_ENDIAN);
+        d0 = fma(qv, v0, d0);
+        d1 = fma(qv, v1, d1);
+        d2 = fma(qv, v2, d2);
+        d3 = fma(qv, v3, d3);
+        n0 = fma(v0, v0, n0);
+        n1 = fma(v1, v1, n1);
+        n2 = fma(v2, v2, n2);
+        n3 = fma(v3, v3, n3);
+      }
+
+      float dot0 = d0.reduceLanes(VectorOperators.ADD);
+      float dot1 = d1.reduceLanes(VectorOperators.ADD);
+      float dot2 = d2.reduceLanes(VectorOperators.ADD);
+      float dot3 = d3.reduceLanes(VectorOperators.ADD);
+      float rn0 = n0.reduceLanes(VectorOperators.ADD);
+      float rn1 = n1.reduceLanes(VectorOperators.ADD);
+      float rn2 = n2.reduceLanes(VectorOperators.ADD);
+      float rn3 = n3.reduceLanes(VectorOperators.ADD);
+
+      for (int i = limit; i < dim; i++) {
+        float q = query[i];
+        float e0 = matrix.get(ValueLayout.JAVA_FLOAT, o0 + (long) i * Float.BYTES);
+        dot0 = MathUtil.fma(q, e0, dot0);
+        rn0 = MathUtil.fma(e0, e0, rn0);
+        float e1 = matrix.get(ValueLayout.JAVA_FLOAT, o1 + (long) i * Float.BYTES);
+        dot1 = MathUtil.fma(q, e1, dot1);
+        rn1 = MathUtil.fma(e1, e1, rn1);
+        float e2 = matrix.get(ValueLayout.JAVA_FLOAT, o2 + (long) i * Float.BYTES);
+        dot2 = MathUtil.fma(q, e2, dot2);
+        rn2 = MathUtil.fma(e2, e2, rn2);
+        float e3 = matrix.get(ValueLayout.JAVA_FLOAT, o3 + (long) i * Float.BYTES);
+        dot3 = MathUtil.fma(q, e3, dot3);
+        rn3 = MathUtil.fma(e3, e3, rn3);
+      }
+
+      out[r] = cosineValue(dot0, qNorm2, rn0);
+      out[r + 1] = cosineValue(dot1, qNorm2, rn1);
+      out[r + 2] = cosineValue(dot2, qNorm2, rn2);
+      out[r + 3] = cosineValue(dot3, qNorm2, rn3);
+    }
+
+    // Tail rows (0-3 remaining)
+    for (int r = rowGroup; r < count; r++) {
+      out[r] = cosineSegRowAtOffset(query, matrix, offsets[r], qNorm2, limit, dim);
+    }
+  }
+
+  private float cosineSegRowAtOffset(
+      float[] query, MemorySegment row, long offset, float qNorm2, int limit, int dim) {
+    FloatVector dot = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector rn = FloatVector.zero(FLOAT_SPECIES);
+    for (int i = 0; i < limit; i += FLOAT_SPECIES.length()) {
+      FloatVector qv = FloatVector.fromArray(FLOAT_SPECIES, query, i);
+      FloatVector rv =
+          FloatVector.fromMemorySegment(
+              FLOAT_SPECIES, row, offset + (long) i * Float.BYTES, ByteOrder.LITTLE_ENDIAN);
+      dot = fma(qv, rv, dot);
+      rn = fma(rv, rv, rn);
+    }
+    float d = dot.reduceLanes(VectorOperators.ADD);
+    float n = rn.reduceLanes(VectorOperators.ADD);
+    for (int i = limit; i < dim; i++) {
+      float rv = row.get(ValueLayout.JAVA_FLOAT, offset + (long) i * Float.BYTES);
+      d = MathUtil.fma(query[i], rv, d);
+      n = MathUtil.fma(rv, rv, n);
+    }
+    return cosineValue(d, qNorm2, n);
+  }
 }

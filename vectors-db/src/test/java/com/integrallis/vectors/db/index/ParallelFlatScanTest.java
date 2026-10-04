@@ -35,7 +35,8 @@ class ParallelFlatScanTest {
     Arrays.fill(rows, row);
     var index = new FlatScanAdapter();
     index.build(rows, SimilarityFunction.EUCLIDEAN);
-    var bean = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
     org.junit.jupiter.api.Assumptions.assumeTrue(bean.isThreadAllocatedMemorySupported());
     bean.setThreadAllocatedMemoryEnabled(true);
     assertTrue(FlatScanAdapter.PARALLEL_SCANS.tryAcquire());
