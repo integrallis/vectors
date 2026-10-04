@@ -86,15 +86,21 @@ class PreparedCosineTest {
         }
         MemorySegment q = MemorySegment.ofArray(query), r = MemorySegment.ofArray(row);
         float warmNorm = VectorUtil.cosineQueryNorm(query);
+        float warmRowNorm = VectorUtil.cosineQueryNorm(row);
         for (int warm = 0; warm < 20000; warm++) {
           sink = VectorUtil.cosine(query, row);
           sink = VectorUtil.cosineWithQueryNorm(query, row, warmNorm);
+          sink = VectorUtil.cosineWithNorms(query, row, warmNorm, warmRowNorm);
           sink = VectorUtil.cosine(q, r, dim);
           sink = VectorUtil.cosineWithQueryNorm(q, r, dim, warmNorm);
         }
         for (int trial = 0; trial < 50; trial++) {
           for (int i = 0; i < dim; i++) row[i] = (float) random.nextDouble(-1, 1);
           float norm = VectorUtil.cosineQueryNorm(query);
+          sameBits(
+              VectorUtil.cosine(query, row),
+              VectorUtil.cosineWithNorms(query, row, norm, VectorUtil.cosineQueryNorm(row)),
+              "both norms dim=" + dim);
           sameBits(
               VectorUtil.cosine(query, row),
               VectorUtil.cosineWithQueryNorm(query, row, norm),
@@ -117,6 +123,10 @@ class PreparedCosineTest {
           float norm = VectorUtil.cosineQueryNorm(query);
           sameBits(
               VectorUtil.cosine(query, row),
+              VectorUtil.cosineWithNorms(query, row, norm, VectorUtil.cosineQueryNorm(row)),
+              "both norms dim=" + dim);
+          sameBits(
+              VectorUtil.cosine(query, row),
               VectorUtil.cosineWithQueryNorm(query, row, norm),
               "special array dim=" + dim);
           sameBits(
@@ -125,6 +135,10 @@ class PreparedCosineTest {
               "special segment dim=" + dim);
           java.util.Arrays.fill(query, special);
           norm = VectorUtil.cosineQueryNorm(query);
+          sameBits(
+              VectorUtil.cosine(query, row),
+              VectorUtil.cosineWithNorms(query, row, norm, VectorUtil.cosineQueryNorm(row)),
+              "both special norms dim=" + dim);
           sameBits(
               VectorUtil.cosine(query, row),
               VectorUtil.cosineWithQueryNorm(query, row, norm),
