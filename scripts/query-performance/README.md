@@ -4,7 +4,7 @@ Baseline: merged main `c43c3160232dd20cf4b2ebd67f44b68c83edf56c`.
 
 Two automatic query optimizations, without changing graphs, search budgets or precision:
 
-- Large heap flat single-query scans score independent rows using at most eight
+- Large heap flat COSINE single-query scans score independent rows using at most eight
   common fork/join workers, then feed the original bounded heap in ordinal order.
   This uses spare CPU cores to reduce latency and allocates a temporary
   `4 * rowCount` byte score buffer. It does not establish a reduction in CPU work.
@@ -12,7 +12,7 @@ Two automatic query optimizations, without changing graphs, search budgets or pr
   score buffer to one expanded query; active-query accounting curtails further
   task splitting when independent queries compete. Expansion resumes after
   50 milliseconds without observed overlap, preventing repeated expansion at the
-  start of successive concurrent bursts. The public collection batch
+  start of successive concurrent bursts. Euclidean and DOT scans keep serial scoring. The public collection batch
   API automatically coordinates its existing query parallelism so its scans do
   not expand into more workers. All scopes release on success or failure.
 - Persisted full-precision HNSW COSINE queries score neighbor rows using byte
@@ -131,3 +131,9 @@ published held-out test vectors. The native-segment diagnostic remains separate.
 HNSW's serial work but omit flat worker allocation; do not interpret them as total
 allocation for concurrent flat workloads.
 
+
+The v7 burst-budget pilot still regressed independent Fashion Q16 queries by
+11.83%. Expansion for Euclidean/DOT is therefore excluded: only COSINE has
+qualified positive evidence on both target corpora. The original serial heap
+loop remains inside `search`, preserving its compilation context as closely as
+possible. Earlier all-metric single-query gains are not shipped claims.

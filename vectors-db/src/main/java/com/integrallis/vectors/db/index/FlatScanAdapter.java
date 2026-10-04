@@ -118,14 +118,14 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
 
-    // Large isolated scans can use spare cores. A collection batch already has query-level
-    // parallelism; expanding each of its scans would compete with those query workers.
-    if ((long) vectors.length * dimension < 4_000_000L
-        || ForkJoinPool.getCommonPoolParallelism() <= 1
-        || CONCURRENT_BATCHES.get() != 0) {
-      return searchSerial(query, k);
-    }
-    boolean isolated = QUERY_BUDGET.enter();
+    // COSINE scans are qualified for expansion; other metrics keep the original serial loop.
+    // Batches already distribute queries across processors and do not acquire this budget.
+    boolean budgeted =
+        metric == SimilarityFunction.COSINE
+            && (long) vectors.length * dimension >= 4_000_000L
+            && ForkJoinPool.getCommonPoolParallelism() > 1
+            && CONCURRENT_BATCHES.get() == 0;
+    boolean isolated = budgeted && QUERY_BUDGET.enter();
     try {
       if (isolated && CONCURRENT_BATCHES.get() == 0 && PARALLEL_SCANS.tryAcquire()) {
         try {
@@ -134,46 +134,42 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
           PARALLEL_SCANS.release();
         }
       }
-      return searchSerial(query, k);
-    } finally {
-      QUERY_BUDGET.exit();
-    }
-  }
+      int actualK = Math.min(k, vectors.length);
 
-  private SearchOutcome searchSerial(float[] query, int k) {
-    int actualK = Math.min(k, vectors.length);
+      // Bounded min-heap (by score) over at most actualK entries. When full, the root is the
+      // worst-so-far kept result; a new candidate with strictly higher score replaces the root.
+      int[] heapIds = new int[actualK];
+      float[] heapScores = new float[actualK];
+      int heapSize = 0;
 
-    // Bounded min-heap (by score) over at most actualK entries. When full, the root is the
-    // worst-so-far kept result; a new candidate with strictly higher score replaces the root.
-    int[] heapIds = new int[actualK];
-    float[] heapScores = new float[actualK];
-    int heapSize = 0;
-
-    for (int i = 0; i < vectors.length; i++) {
-      float score = metric.compare(query, vectors[i]);
-      if (heapSize < actualK) {
-        heapIds[heapSize] = i;
-        heapScores[heapSize] = score;
-        heapSize++;
-        siftUp(heapIds, heapScores, heapSize - 1);
-      } else if (score > heapScores[0]) {
-        heapIds[0] = i;
-        heapScores[0] = score;
-        siftDown(heapIds, heapScores, 0, heapSize);
+      for (int i = 0; i < vectors.length; i++) {
+        float score = metric.compare(query, vectors[i]);
+        if (heapSize < actualK) {
+          heapIds[heapSize] = i;
+          heapScores[heapSize] = score;
+          heapSize++;
+          siftUp(heapIds, heapScores, heapSize - 1);
+        } else if (score > heapScores[0]) {
+          heapIds[0] = i;
+          heapScores[0] = score;
+          siftDown(heapIds, heapScores, 0, heapSize);
+        }
       }
-    }
 
-    // Drain heap into a descending-sorted result array.
-    int[] sortedIds = new int[heapSize];
-    float[] sortedScores = new float[heapSize];
-    for (int i = heapSize - 1; i >= 0; i--) {
-      sortedIds[i] = heapIds[0];
-      sortedScores[i] = heapScores[0];
-      heapIds[0] = heapIds[i];
-      heapScores[0] = heapScores[i];
-      siftDown(heapIds, heapScores, 0, i);
+      // Drain heap into a descending-sorted result array.
+      int[] sortedIds = new int[heapSize];
+      float[] sortedScores = new float[heapSize];
+      for (int i = heapSize - 1; i >= 0; i--) {
+        sortedIds[i] = heapIds[0];
+        sortedScores[i] = heapScores[0];
+        heapIds[0] = heapIds[i];
+        heapScores[0] = heapScores[i];
+        siftDown(heapIds, heapScores, 0, i);
+      }
+      return new SearchOutcome(sortedIds, sortedScores);
+    } finally {
+      if (budgeted) QUERY_BUDGET.exit();
     }
-    return new SearchOutcome(sortedIds, sortedScores);
   }
 
   /** Score independent rows using a bounded shared pool; never cache caller-owned vector data. */

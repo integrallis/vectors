@@ -58,7 +58,7 @@ class ParallelFlatScanTest {
     float[][] rows = new float[n][];
     Arrays.fill(rows, row);
     var index = new FlatScanAdapter();
-    index.build(rows, SimilarityFunction.EUCLIDEAN);
+    index.build(rows, SimilarityFunction.COSINE);
     var bean =
         (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
     org.junit.jupiter.api.Assumptions.assumeTrue(bean.isThreadAllocatedMemorySupported());
@@ -89,7 +89,7 @@ class ParallelFlatScanTest {
     float[][] rows = new float[n][];
     Arrays.fill(rows, row);
     var index = new FlatScanAdapter();
-    index.build(rows, SimilarityFunction.EUCLIDEAN);
+    index.build(rows, SimilarityFunction.COSINE);
     var bean =
         (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
     org.junit.jupiter.api.Assumptions.assumeTrue(bean.isThreadAllocatedMemorySupported());
@@ -135,9 +135,9 @@ class ParallelFlatScanTest {
     Arrays.fill(worst, -.1f);
     for (int i = 0; i < n; i++) rows[i] = (i % 3 == 0) ? best : worst;
     var large = new FlatScanAdapter();
-    large.build(rows, SimilarityFunction.EUCLIDEAN);
+    large.build(rows, SimilarityFunction.COSINE);
     var small = new FlatScanAdapter();
-    small.build(Arrays.copyOf(rows, 40), SimilarityFunction.EUCLIDEAN);
+    small.build(Arrays.copyOf(rows, 40), SimilarityFunction.COSINE);
     // All admitted top-k entries occur in the first 40 rows. Subsequent equal scores must never
     // change the bounded heap's tie order; this compares the automatic route to a serial scan.
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
