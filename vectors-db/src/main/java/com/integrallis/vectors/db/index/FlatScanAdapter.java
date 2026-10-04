@@ -35,9 +35,9 @@ import java.util.function.Supplier;
  * to affect flat-scan output — any value produces the same result. This matches the parameter
  * contract documented on {@link IndexSpi#search(float[], int, int, float)}.
  *
- * <p>Not thread-safe for concurrent {@link #build(float[][], SimilarityFunction)} calls; reads via
- * {@link #search(float[], int, int, float)} are safe as long as no build is in flight (the {@link
- * com.integrallis.vectors.db.VectorCollection} facade enforces this with a read/write lock).
+ * <p>Build requires exclusive access. Concurrent searches require safe publication after build
+ * and no concurrent rebuild. The collection facade publishes complete index generations through
+ * a volatile reference.
  */
 public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 

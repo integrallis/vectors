@@ -319,6 +319,20 @@
         <Class name="com.integrallis.vectors.db.SearchResult"/>
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
+    <!-- FlatScanAdapter.build writes dimension only while the adapter is exclusively owned.
+         VectorCollectionImpl builds a fresh adapter in commitInMemory, then publishes it through
+         its volatile generation field; acquireReadSnapshot performs the corresponding read.
+         Direct IndexSpi users must also safely publish after build and must not rebuild during
+         searches, as the class contract states. Fork/join tasks capture final rows/metric fields
+         after that acquisition. Scope this publication false positive to the build-only field;
+         query scheduling state and all other concurrency findings remain checked. -->
+    <Match>
+        <Class name="com.integrallis.vectors.db.index.FlatScanAdapter"/>
+        <Method name="build"/>
+        <Field name="dimension"/>
+        <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+    </Match>
+
     <!-- vectors-db: IndexSpi.SearchOutcome and FlatScanAdapter intentionally share
          array references for zero-copy between the backend and the facade. -->
     <Match>

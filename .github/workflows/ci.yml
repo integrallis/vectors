@@ -42,6 +42,10 @@ jobs:
         env:
           JAVA_TOOL_OPTIONS: ${{ matrix.java_options }}
         run: ./gradlew :vectors-core:test :vectors-hnsw:test :vectors-quantization:test --rerun-tasks --max-workers=4 --no-daemon
+      - name: Execute flat scheduling contracts
+        env:
+          JAVA_TOOL_OPTIONS: ${{ matrix.java_options }}
+        run: ./gradlew :vectors-db:test --tests '*ParallelFlatScanTest' --tests '*FlatCollectionBatchTest' --max-workers=4 --no-daemon
       - name: Retain portability evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -52,6 +56,7 @@ jobs:
             vectors-core/build/test-results/test/
             vectors-hnsw/build/test-results/test/
             vectors-quantization/build/test-results/test/
+            vectors-db/build/test-results/test/
           retention-days: 30
 
   build:

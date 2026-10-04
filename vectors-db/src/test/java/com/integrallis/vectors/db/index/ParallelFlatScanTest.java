@@ -131,8 +131,8 @@ class ParallelFlatScanTest {
     int n = 40001, dim = 128;
     float[][] rows = new float[n][];
     float[] best = new float[dim], worst = new float[dim];
-    Arrays.fill(best, .1f);
-    Arrays.fill(worst, -.1f);
+    Arrays.fill(best, .125f);
+    Arrays.fill(worst, -.125f);
     for (int i = 0; i < n; i++) rows[i] = (i % 3 == 0) ? best : worst;
     var large = new FlatScanAdapter();
     large.build(rows, SimilarityFunction.COSINE);
@@ -155,7 +155,7 @@ class ParallelFlatScanTest {
       }
       for (var job : jobs) job.get();
     }
-    Arrays.fill(best, .2f);
+    Arrays.fill(best, .25f);
     assertArrayEquals(
         small.search(worst, 10, 100, 1f).ordinals(), large.search(worst, 10, 100, 1f).ordinals());
   }
