@@ -91,11 +91,17 @@ jobs:
       - name: Storage and Studio integration tests
         run: ./gradlew :vectors-storage:integrationTest :vectors-studio-web:integrationTest
 
+      - name: Studio t-SNE regression tests
+        run: ./gradlew :vectors-studio-core:slowTest --tests '*SmileTsne*'
+
       - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: docs/package-lock.json
+
+      - name: Studio projection browser state tests
+        run: node --test vectors-studio-web/src/test/js/*.test.mjs
 
       - name: Build Documentation
         run: ./gradlew :docs:build

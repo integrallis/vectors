@@ -21,6 +21,7 @@ import com.integrallis.vectors.studio.core.projection.ProjectionAlgorithm;
 import com.integrallis.vectors.studio.core.projection.ProjectionParams.TsneParams;
 import com.integrallis.vectors.studio.core.projection.ProjectionResult;
 import smile.manifold.TSNE;
+import smile.math.MathEx;
 
 /** t-SNE projection backed by Smile's {@code smile.manifold.TSNE}. */
 public final class SmileTsneProjection implements Projection {
@@ -43,7 +44,23 @@ public final class SmileTsneProjection implements Projection {
     SmilePcaProjection.checkInterrupted();
     TSNE.Options opts =
         new TSNE.Options(
-            dimensions, params.perplexity(), params.learningRate(), 12.0, params.iterations());
+            dimensions,
+            params.perplexity(),
+            params.learningRate(),
+            12.0,
+            params.iterations(),
+            params.iterations(),
+            Double.MIN_NORMAL,
+            0.5,
+            0.8,
+            250,
+            0.01,
+            null);
+    // Normalized embeddings can contract below Smile's absolute gradient tolerance during
+    // early exaggeration. Stopping at that point returns a collapsed cloud. Run the requested
+    // iteration budget so the non-exaggerated phase has time to separate the neighborhoods.
+    // Smile initializes coordinates on this thread, whose RNG must honor the requested seed.
+    MathEx.setSeed(params.seed());
     // Smile's TSNE.fit is a blocking call with no mid-iteration callbacks. The heartbeat emits
     // time-based progress estimates with coords == null so consumers can render "still computing"
     // honestly rather than the previous 0%→100% synthetic jump (audit T4.12).
@@ -54,6 +71,23 @@ public final class SmileTsneProjection implements Projection {
     }
     SmilePcaProjection.checkInterrupted();
     float[][] coords = SmilePcaProjection.toFloat(result.coordinates());
+    double largestRange = 0;
+    for (int axis = 0; axis < dimensions; axis++) {
+      double min = Double.POSITIVE_INFINITY;
+      double max = Double.NEGATIVE_INFINITY;
+      for (float[] point : coords) {
+        if (!Float.isFinite(point[axis])) {
+          throw new IllegalStateException("t-SNE produced non-finite coordinates");
+        }
+        min = Math.min(min, point[axis]);
+        max = Math.max(max, point[axis]);
+      }
+      largestRange = Math.max(largestRange, max - min);
+    }
+    if (largestRange < 1e-7) {
+      throw new IllegalStateException(
+          "t-SNE collapsed to a point; try a higher learning rate or check for identical vectors");
+    }
     long ms = System.currentTimeMillis() - start;
     ProjectionResult out =
         new ProjectionResult(coords, ProjectionAlgorithm.TSNE, params, ms, null, null);
