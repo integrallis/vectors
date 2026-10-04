@@ -1,3 +1,18 @@
+/*
+ * Copyright 2025-2026 Integrallis Software, LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.integrallis.vectors.db.index;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -16,42 +31,50 @@ class ParallelFlatScanTest {
     var random = new SplittableRandom(635);
     float[][] rows = new float[4099][129];
     float[] query = new float[129];
-    for(var row:rows) for(int d=0;d<row.length;d++) row[d]=(float)random.nextDouble(-.08,.08);
-    for(int pass=0;pass<3;pass++) {
-      for(int d=0;d<query.length;d++) query[d]=(float)random.nextDouble(-.08,.08);
-      for(var metric:SimilarityFunction.values()) {
-        float[] scores=FlatScanAdapter.scoreAll(query,rows,metric);
-        for(int i=0;i<rows.length;i++) assertEquals(metric.compare(query,rows[i]),scores[i],1e-6f);
+    for (var row : rows)
+      for (int d = 0; d < row.length; d++) row[d] = (float) random.nextDouble(-.08, .08);
+    for (int pass = 0; pass < 3; pass++) {
+      for (int d = 0; d < query.length; d++) query[d] = (float) random.nextDouble(-.08, .08);
+      for (var metric : SimilarityFunction.values()) {
+        float[] scores = FlatScanAdapter.scoreAll(query, rows, metric);
+        for (int i = 0; i < rows.length; i++)
+          assertEquals(metric.compare(query, rows[i]), scores[i], 1e-6f);
       }
-      Arrays.fill(rows[137],.031f);
+      Arrays.fill(rows[137], .031f);
     }
   }
 
   @Test
   void largeSearchPreservesTieOrderAndConcurrentQueryIsolation() throws Exception {
-    int n=40001,dim=128;
-    float[][] rows=new float[n][];
-    float[] best=new float[dim],worst=new float[dim];
-    Arrays.fill(best,.1f);Arrays.fill(worst,-.1f);
-    for(int i=0;i<n;i++) rows[i]=(i%3==0)?best:worst;
-    var large=new FlatScanAdapter();large.build(rows,SimilarityFunction.EUCLIDEAN);
-    var small=new FlatScanAdapter();small.build(Arrays.copyOf(rows,40),SimilarityFunction.EUCLIDEAN);
+    int n = 40001, dim = 128;
+    float[][] rows = new float[n][];
+    float[] best = new float[dim], worst = new float[dim];
+    Arrays.fill(best, .1f);
+    Arrays.fill(worst, -.1f);
+    for (int i = 0; i < n; i++) rows[i] = (i % 3 == 0) ? best : worst;
+    var large = new FlatScanAdapter();
+    large.build(rows, SimilarityFunction.EUCLIDEAN);
+    var small = new FlatScanAdapter();
+    small.build(Arrays.copyOf(rows, 40), SimilarityFunction.EUCLIDEAN);
     // All admitted top-k entries occur in the first 40 rows. Subsequent equal scores must never
     // change the bounded heap's tie order; this compares the automatic route to a serial scan.
-    try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
-      var jobs=new java.util.ArrayList<java.util.concurrent.Future<?>>();
-      for(int task=0;task<16;task++) {
-        final float[] q=task%2==0?best:worst;
-        jobs.add(executor.submit(()-> {
-          var expected=small.search(q,10,100,1f);
-          var actual=large.search(q,10,100,1f);
-          assertArrayEquals(expected.ordinals(),actual.ordinals());
-          assertArrayEquals(expected.scores(),actual.scores());
-        }));
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      var jobs = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+      for (int task = 0; task < 16; task++) {
+        final float[] q = task % 2 == 0 ? best : worst;
+        jobs.add(
+            executor.submit(
+                () -> {
+                  var expected = small.search(q, 10, 100, 1f);
+                  var actual = large.search(q, 10, 100, 1f);
+                  assertArrayEquals(expected.ordinals(), actual.ordinals());
+                  assertArrayEquals(expected.scores(), actual.scores());
+                }));
       }
-      for(var job:jobs) job.get();
+      for (var job : jobs) job.get();
     }
-    Arrays.fill(best,.2f);
-    assertArrayEquals(small.search(worst,10,100,1f).ordinals(),large.search(worst,10,100,1f).ordinals());
+    Arrays.fill(best, .2f);
+    assertArrayEquals(
+        small.search(worst, 10, 100, 1f).ordinals(), large.search(worst, 10, 100, 1f).ordinals());
   }
 }

@@ -18,6 +18,8 @@ package com.integrallis.vectors.db.index;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
 import java.util.Objects;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RecursiveAction;
 
 /**
  * Brute-force reference implementation of {@link IndexSpi}. Scores every stored vector against the
@@ -62,8 +64,11 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
 
-    if (metric == SimilarityFunction.COSINE && VectorUtil.supportsCosineNormReuse(dimension)) {
-      return searchCosine(query, k);
+    // Large scans amortize parallel dispatch. The score array is private to this call, and
+    // selection still consumes scores in ordinal order, including equal-score replacements.
+    if ((long) vectors.length * dimension >= 4_000_000L
+        && ForkJoinPool.getCommonPoolParallelism() > 1) {
+      return selectScores(scoreAll(query, vectors, metric), k);
     }
     int actualK = Math.min(k, vectors.length);
 
@@ -100,10 +105,63 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
     return new SearchOutcome(sortedIds, sortedScores);
   }
 
-  /** Prepare the query once; row norms remain live so caller mutations are visible. */
-  private SearchOutcome searchCosine(float[] query, int k) {
-    int actualK = Math.min(k, vectors.length);
-    float norm = VectorUtil.cosineQueryNorm(query);
+  /** Score independent rows using a bounded shared pool; never cache caller-owned vector data. */
+  static float[] scoreAll(float[] query, float[][] rows, SimilarityFunction metric) {
+    float[] scores = new float[rows.length];
+    int workers = Math.min(8, ForkJoinPool.getCommonPoolParallelism());
+    int chunk = Math.max(1, (rows.length - 1) / workers + 1);
+    ForkJoinPool.commonPool()
+        .invoke(new ScoreTask(query, rows, metric, scores, 0, rows.length, chunk));
+    return scores;
+  }
+
+  private static final class ScoreTask extends RecursiveAction {
+    @java.io.Serial private static final long serialVersionUID = 1L;
+    private final float[] query;
+    private final float[][] rows;
+    private final SimilarityFunction metric;
+    private final float[] scores;
+    private final int from, to, chunk;
+
+    ScoreTask(
+        float[] query,
+        float[][] rows,
+        SimilarityFunction metric,
+        float[] scores,
+        int from,
+        int to,
+        int chunk) {
+      this.query = query;
+      this.rows = rows;
+      this.metric = metric;
+      this.scores = scores;
+      this.from = from;
+      this.to = to;
+      this.chunk = chunk;
+    }
+
+    @Override
+    protected void compute() {
+      if (to - from <= chunk) {
+        for (int i = from; i < to; i++) scores[i] = metric.compare(query, rows[i]);
+      } else {
+        int middle = (from + to) >>> 1;
+        var left = new ScoreTask(query, rows, metric, scores, from, middle, chunk);
+        var right = new ScoreTask(query, rows, metric, scores, middle, to, chunk);
+        left.fork();
+        try {
+          right.compute();
+        } finally {
+          // Join even on failure: no worker may retain query inputs after this call returns.
+          left.join();
+        }
+      }
+    }
+  }
+
+  /** Run the original bounded heap in the original row order, preserving ties exactly. */
+  private SearchOutcome selectScores(float[] allScores, int k) {
+    int actualK = Math.min(k, allScores.length);
 
     // Bounded min-heap (by score) over at most actualK entries. When full, the root is the
     // worst-so-far kept result; a new candidate with strictly higher score replaces the root.
@@ -111,8 +169,8 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
     float[] heapScores = new float[actualK];
     int heapSize = 0;
 
-    for (int i = 0; i < vectors.length; i++) {
-      float score = (1f + VectorUtil.cosineWithQueryNorm(query, vectors[i], norm)) / 2f;
+    for (int i = 0; i < allScores.length; i++) {
+      float score = allScores[i];
       if (heapSize < actualK) {
         heapIds[heapSize] = i;
         heapScores[heapSize] = score;
