@@ -501,6 +501,8 @@ public final class ConcurrentHnswGraphBuilder {
   // ---------------------------------------------------------------------------
 
   private static final class WorkContext {
+    // One bounded cache per worker and operation. No synchronization or cross-source reuse.
+    final ExactScoreCache scoreCache = new ExactScoreCache();
     final BitSet visited;
     final NodeQueue candidates; // max-heap
     final NodeQueue results; // min-heap
@@ -593,7 +595,8 @@ public final class ConcurrentHnswGraphBuilder {
               query, entryPoints, efConstruction, layer, graph, locks, ctx, nodeId);
 
       NeighborArray neighbors =
-          NeighborSelector.selectDiverse(searchResults, maxConn, vectors, similarityFunction);
+          NeighborSelector.selectDiverse(
+              searchResults, maxConn, vectors, similarityFunction, ctx.scoreCache);
 
       // Forward edges: nodeId → selected neighbors.
       // Use insert() (not copyFrom) so any backlinks already added by concurrent threads are
@@ -606,7 +609,8 @@ public final class ConcurrentHnswGraphBuilder {
         }
         if (nodeList.size() > maxConn) {
           NeighborArray pruned =
-              NeighborSelector.selectDiverse(nodeList, maxConn, vectors, similarityFunction);
+              NeighborSelector.selectDiverse(
+                  nodeList, maxConn, vectors, similarityFunction, ctx.scoreCache);
           nodeList.copyFrom(pruned);
         }
       } finally {
@@ -626,7 +630,8 @@ public final class ConcurrentHnswGraphBuilder {
             nList.insert(nodeId, score);
             if (nList.size() > maxConn) {
               NeighborArray pruned =
-                  NeighborSelector.selectDiverse(nList, maxConn, vectors, similarityFunction);
+                  NeighborSelector.selectDiverse(
+                      nList, maxConn, vectors, similarityFunction, ctx.scoreCache);
               nList.copyFrom(pruned);
             }
           }
