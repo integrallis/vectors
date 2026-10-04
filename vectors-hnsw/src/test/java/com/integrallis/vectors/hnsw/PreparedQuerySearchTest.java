@@ -123,7 +123,8 @@ class PreparedQuerySearchTest {
           if (offsets && com.integrallis.vectors.core.VectorUtil.supportsCosineNormReuse(dim)) {
             assertTrue(offsetReads.get() > 0);
           } else {
-            assertEquals(0, offsetReads.get(), "unaccelerated storage must retain its original scorer");
+            assertEquals(
+                0, offsetReads.get(), "unaccelerated storage must retain its original scorer");
           }
         }
       }

@@ -78,13 +78,7 @@ class ParallelFlatScanTest {
                 () -> {
                   throw new IllegalStateException("fixture");
                 }));
-    if (java.util.concurrent.ForkJoinPool.getCommonPoolParallelism() > 1) {
-      long tid = Thread.currentThread().threadId(), before = bean.getThreadAllocatedBytes(tid);
-      index.search(row, 10, 100, 1f);
-      assertTrue(
-          bean.getThreadAllocatedBytes(tid) - before >= 4L * n,
-          "batch context leaked after failure");
-    }
+    assertEquals(0, FlatScanAdapter.CONCURRENT_BATCHES.get(), "batch context leaked after failure");
   }
 
   @Test

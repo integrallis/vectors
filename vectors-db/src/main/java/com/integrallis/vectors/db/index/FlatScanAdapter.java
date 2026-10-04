@@ -22,6 +22,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -42,8 +43,39 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
   // Shared across adapters: concurrent collections must also respect the CPU expansion budget.
   static final Semaphore PARALLEL_SCANS = new Semaphore(1);
-  private static final AtomicInteger CONCURRENT_BATCHES = new AtomicInteger();
-  private static final AtomicInteger ACTIVE_LARGE_SEARCHES = new AtomicInteger();
+  static final AtomicInteger CONCURRENT_BATCHES = new AtomicInteger();
+  private static final QueryBudget QUERY_BUDGET = new QueryBudget(System::nanoTime);
+
+  /** Avoid expanding the first query of every burst while callers supply their own parallelism. */
+  static final class QueryBudget {
+    private static final long QUIET_NANOS = 50_000_000L;
+    private final AtomicInteger active = new AtomicInteger();
+    private final LongSupplier clock;
+    private volatile long lastOverlap;
+
+    QueryBudget(LongSupplier clock) {
+      this.clock = clock;
+      lastOverlap = clock.getAsLong() - QUIET_NANOS;
+    }
+
+    boolean enter() {
+      int count = active.incrementAndGet();
+      long now = clock.getAsLong();
+      if (count > 1) {
+        lastOverlap = now;
+        return false;
+      }
+      return now - lastOverlap >= QUIET_NANOS;
+    }
+
+    void exit() {
+      if (active.getAndDecrement() > 1) lastOverlap = clock.getAsLong();
+    }
+
+    boolean contended() {
+      return active.get() > 1;
+    }
+  }
 
   /**
    * Run a collection batch that already distributes queries across processors. The collection
@@ -93,9 +125,9 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
         || CONCURRENT_BATCHES.get() != 0) {
       return searchSerial(query, k);
     }
-    int active = ACTIVE_LARGE_SEARCHES.incrementAndGet();
+    boolean isolated = QUERY_BUDGET.enter();
     try {
-      if (active == 1 && CONCURRENT_BATCHES.get() == 0 && PARALLEL_SCANS.tryAcquire()) {
+      if (isolated && CONCURRENT_BATCHES.get() == 0 && PARALLEL_SCANS.tryAcquire()) {
         try {
           return selectScores(scoreAll(query, vectors, metric), k);
         } finally {
@@ -104,7 +136,7 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
       }
       return searchSerial(query, k);
     } finally {
-      ACTIVE_LARGE_SEARCHES.decrementAndGet();
+      QUERY_BUDGET.exit();
     }
   }
 
@@ -181,7 +213,7 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
     @Override
     protected void compute() {
-      if (to - from <= chunk || ACTIVE_LARGE_SEARCHES.get() > 1 || CONCURRENT_BATCHES.get() != 0) {
+      if (to - from <= chunk || QUERY_BUDGET.contended() || CONCURRENT_BATCHES.get() != 0) {
         for (int i = from; i < to; i++) scores[i] = metric.compare(query, rows[i]);
       } else {
         int middle = (from + to) >>> 1;

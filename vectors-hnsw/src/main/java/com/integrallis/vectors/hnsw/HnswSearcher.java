@@ -197,7 +197,10 @@ public final class HnswSearcher {
       // float[][] scorerPool, allocated ONCE here, refilled per bulkScore call.
       this.scorerRows = new MemorySegment[bulkCapacity];
       this.scorerMatrix =
-          similarityFunction == SimilarityFunction.COSINE ? vectors.vectorSegmentStorage() : null;
+          similarityFunction == SimilarityFunction.COSINE
+                  && VectorUtil.supportsCosineNormReuse(vectors.dimension())
+              ? vectors.vectorSegmentStorage()
+              : null;
       this.scorerOffsets = scorerMatrix == null ? null : new long[bulkCapacity];
     } else {
       this.scorerArena = null;
