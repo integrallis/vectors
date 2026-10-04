@@ -42,6 +42,7 @@ class PreparedQuerySearchTest {
         for (int storage = 0; storage < 3; storage++) {
           boolean segment = storage != 0;
           boolean offsets = storage == 2;
+          var offsetReads = new java.util.concurrent.atomic.AtomicInteger();
           RandomAccessVectors source =
               new RandomAccessVectors() {
                 public int size() {
@@ -71,6 +72,7 @@ class PreparedQuerySearchTest {
 
                 @Override
                 public long vectorSegmentOffset(int i) {
+                  offsetReads.incrementAndGet();
                   return (long) i * dim * 4;
                 }
 
@@ -117,6 +119,11 @@ class PreparedQuerySearchTest {
                   expected.searchFiltered(query, 10, ef, id -> id % 5 == 0),
                   actual.searchFiltered(query, 10, ef, id -> id % 5 == 0));
             }
+          }
+          if (offsets && com.integrallis.vectors.core.VectorUtil.supportsCosineNormReuse(dim)) {
+            assertTrue(offsetReads.get() > 0);
+          } else {
+            assertEquals(0, offsetReads.get(), "unaccelerated storage must retain its original scorer");
           }
         }
       }

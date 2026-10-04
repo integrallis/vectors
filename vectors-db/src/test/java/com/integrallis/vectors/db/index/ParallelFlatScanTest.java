@@ -27,6 +27,30 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class ParallelFlatScanTest {
   @Test
+  void queryBudgetRemembersRecentContentionAndRecoversWithoutSleeping() {
+    var now = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
+    var budget = new FlatScanAdapter.QueryBudget(now::get);
+    assertTrue(budget.enter());
+    assertFalse(budget.enter());
+    assertTrue(budget.contended());
+    now.addAndGet(100_000_000L);
+    budget.exit();
+    budget.exit();
+    // A new burst arriving immediately after the old one must not expand its first query.
+    assertFalse(budget.enter());
+    budget.exit();
+    now.addAndGet(49_000_000L);
+    assertFalse(budget.enter());
+    budget.exit();
+    now.addAndGet(1_000_000L);
+    assertTrue(budget.enter());
+    assertFalse(budget.contended());
+    budget.exit();
+    assertTrue(budget.enter());
+    budget.exit();
+  }
+
+  @Test
   void collectionBatchContextKeepsSerialScansAndRestoresBudgetAfterFailure() {
     int n = 40001;
     float[] row = new float[128];
