@@ -879,6 +879,18 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public boolean supportsCosineNormReuse(int dimensions) {
+    return dimensions >= 4 * FLOAT_SPECIES.length();
+  }
+
+  @Override
+  public float cosineWithNorms(float[] a, float[] b, float norm1, float norm2) {
+    if (!supportsCosineNormReuse(a.length)) return cosine(a, b);
+    // The long dot-product kernel uses the same four accumulators and reduction tree as cosine.
+    return (float) (dotProduct(a, b) / Math.sqrt((double) norm1 * (double) norm2));
+  }
+
+  @Override
   public float cosineWithQueryNorm(float[] a, float[] b, float norm1) {
     if (a.length < 4 * FLOAT_SPECIES.length()) return cosine(a, b);
     int limit = FLOAT_SPECIES.loopBound(a.length);

@@ -118,6 +118,20 @@ public final class VectorUtil {
     return IMPL.cosineWithQueryNorm(query, row, queryNorm);
   }
 
+  /** Whether the active provider can reuse both norms for this dimension. */
+  public static boolean supportsCosineNormReuse(int dimensions) {
+    return IMPL.supportsCosineNormReuse(dimensions);
+  }
+
+  /**
+   * Computes cosine with both squared norms prepared by {@link #cosineQueryNorm(float[])}.
+   * Recompute each norm after mutating its vector.
+   */
+  public static float cosineWithNorms(float[] a, float[] b, float norm1, float norm2) {
+    checkDimensions(a.length, b.length);
+    return IMPL.cosineWithNorms(a, b, norm1, norm2);
+  }
+
   /** Computes segment cosine using the norm prepared from the corresponding query array. */
   public static float cosineWithQueryNorm(
       MemorySegment query, MemorySegment row, int dimensions, float queryNorm) {

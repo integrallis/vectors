@@ -186,11 +186,17 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
     for (int qi = 0; qi < queries.length; qi++) {
       queryNorms[qi] = VectorUtil.cosineQueryNorm(queries[qi]);
     }
+    boolean reuseRowNorm = queries.length > 1 && VectorUtil.supportsCosineNormReuse(dimension);
     for (int v = 0; v < vectors.length; v++) {
       float[] stored = vectors[v];
+      // Rows are mutable: reuse only within this scan, never across calls.
+      float rowNorm = reuseRowNorm ? VectorUtil.cosineQueryNorm(stored) : 0f;
       for (int qi = 0; qi < queries.length; qi++) {
-        float score =
-            (1f + VectorUtil.cosineWithQueryNorm(queries[qi], stored, queryNorms[qi])) / 2f;
+        float cosine =
+            reuseRowNorm
+                ? VectorUtil.cosineWithNorms(queries[qi], stored, queryNorms[qi], rowNorm)
+                : VectorUtil.cosineWithQueryNorm(queries[qi], stored, queryNorms[qi]);
+        float score = (1f + cosine) / 2f;
         int sz = heapSizes[qi];
         int[] ids = heapIds[qi];
         float[] scores = heapScores[qi];
