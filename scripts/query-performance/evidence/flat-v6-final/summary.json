@@ -1,0 +1,326 @@
+{
+  "glove-flat-public-single": {
+    "baseline_us": 10073.48853125,
+    "candidate_us": 1178.283,
+    "less_time_percent": 88.303128590014,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        10247022.34375,
+        10073488.53125,
+        10027562.25
+      ],
+      "candidate": [
+        1190744.8125,
+        1175342.34375,
+        1178283.0
+      ]
+    }
+  },
+  "glove-flat-public-batch4": {
+    "baseline_us": 1344.03575,
+    "candidate_us": 1192.727,
+    "less_time_percent": 11.257792063938776,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1389912.0,
+        1234370.25,
+        1344035.75
+      ],
+      "candidate": [
+        1201503.75,
+        1189313.75,
+        1192727.0
+      ]
+    }
+  },
+  "glove-flat-public-batch16": {
+    "baseline_us": 1199.3796875,
+    "candidate_us": 703.339875,
+    "less_time_percent": 41.358030127552915,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1215833.5,
+        1177160.125,
+        1199379.6875
+      ],
+      "candidate": [
+        703339.875,
+        697453.8125,
+        708390.9375
+      ]
+    }
+  },
+  "glove-flat-public-batch32": {
+    "baseline_us": 525.558,
+    "candidate_us": 514.70403125,
+    "less_time_percent": 2.065227577165607,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        525558.0,
+        523790.1875,
+        533687.4375
+      ],
+      "candidate": [
+        527946.21875,
+        512491.21875,
+        514704.03125
+      ]
+    }
+  },
+  "glove-flat-independent4": {
+    "baseline_us": 1313.4285,
+    "candidate_us": 1253.94175,
+    "less_time_percent": 4.529119780787461,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1317706.5,
+        1202951.75,
+        1313428.5
+      ],
+      "candidate": [
+        1256915.25,
+        1214841.75,
+        1253941.75
+      ]
+    }
+  },
+  "glove-flat-independent16": {
+    "baseline_us": 954.2319375,
+    "candidate_us": 815.16625,
+    "less_time_percent": 14.57357294750995,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        954231.9375,
+        922945.625,
+        970026.8125
+      ],
+      "candidate": [
+        815166.25,
+        873511.6875,
+        808772.25
+      ]
+    }
+  },
+  "dbpedia-flat-public-single": {
+    "baseline_us": 18449.71490625,
+    "candidate_us": 5712.30821875,
+    "less_time_percent": 69.03850141979751,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        18449714.90625,
+        18512913.65625,
+        18060983.75
+      ],
+      "candidate": [
+        5712308.21875,
+        5718695.71875,
+        5631227.84375
+      ]
+    }
+  },
+  "dbpedia-flat-public-batch4": {
+    "baseline_us": 5278.36775,
+    "candidate_us": 5320.2855,
+    "less_time_percent": -0.7941422800637588,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        5301186.25,
+        5278367.75,
+        5243389.25
+      ],
+      "candidate": [
+        5355142.25,
+        5312266.5,
+        5320285.5
+      ]
+    }
+  },
+  "dbpedia-flat-public-batch16": {
+    "baseline_us": 3471.0856875,
+    "candidate_us": 3521.048,
+    "less_time_percent": -1.4393857426200363,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        3518246.625,
+        3471085.6875,
+        3405957.0625
+      ],
+      "candidate": [
+        3521048.0,
+        3818353.375,
+        3483410.1875
+      ]
+    }
+  },
+  "dbpedia-flat-public-batch32": {
+    "baseline_us": 1395.41078125,
+    "candidate_us": 1398.7239375,
+    "less_time_percent": -0.2374323241957521,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1395410.78125,
+        1401265.84375,
+        1385630.1875
+      ],
+      "candidate": [
+        1395340.5625,
+        1398723.9375,
+        1401557.1875
+      ]
+    }
+  },
+  "dbpedia-flat-independent4": {
+    "baseline_us": 5293.69625,
+    "candidate_us": 5345.88325,
+    "less_time_percent": -0.9858329140059796,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        5317501.75,
+        5293696.25,
+        5222237.0
+      ],
+      "candidate": [
+        5348695.0,
+        5322019.5,
+        5345883.25
+      ]
+    }
+  },
+  "dbpedia-flat-independent16": {
+    "baseline_us": 4490.6253125,
+    "candidate_us": 4305.616875,
+    "less_time_percent": 4.1198814112817335,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        4148436.8125,
+        4490625.3125,
+        4516665.5625
+      ],
+      "candidate": [
+        4305616.875,
+        4184701.0,
+        4402446.5
+      ]
+    }
+  },
+  "fashion-flat-public-single": {
+    "baseline_us": 9966.3474375,
+    "candidate_us": 4706.1729375,
+    "less_time_percent": 52.77936107472774,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        10243910.1875,
+        9880171.28125,
+        9966347.4375
+      ],
+      "candidate": [
+        4706172.9375,
+        4566616.75,
+        4718590.875
+      ]
+    }
+  },
+  "fashion-flat-public-batch4": {
+    "baseline_us": 2923.27525,
+    "candidate_us": 2923.3545,
+    "less_time_percent": -0.0027110002727148697,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2923275.25,
+        2928161.75,
+        2902744.0
+      ],
+      "candidate": [
+        3047505.5,
+        2895708.25,
+        2923354.5
+      ]
+    }
+  },
+  "fashion-flat-public-batch16": {
+    "baseline_us": 1824.9198125,
+    "candidate_us": 1804.697125,
+    "less_time_percent": 1.1081411556542076,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1841585.25,
+        1804789.625,
+        1824919.8125
+      ],
+      "candidate": [
+        1801191.375,
+        1804697.125,
+        1829256.625
+      ]
+    }
+  },
+  "fashion-flat-public-batch32": {
+    "baseline_us": 1818.81971875,
+    "candidate_us": 1811.53759375,
+    "less_time_percent": 0.40037640481513925,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1818819.71875,
+        1801873.625,
+        1819515.59375
+      ],
+      "candidate": [
+        1811537.59375,
+        1806121.3125,
+        1827595.0625
+      ]
+    }
+  },
+  "fashion-flat-independent4": {
+    "baseline_us": 2874.2985,
+    "candidate_us": 2906.10225,
+    "less_time_percent": -1.1064873742236525,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2874298.5,
+        2884562.25,
+        2864416.75
+      ],
+      "candidate": [
+        3059668.25,
+        2904652.75,
+        2906102.25
+      ]
+    }
+  },
+  "fashion-flat-independent16": {
+    "baseline_us": 2924.851125,
+    "candidate_us": 3095.0491875,
+    "less_time_percent": -5.819033353364267,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2781696.125,
+        3090034.0625,
+        2924851.125
+      ],
+      "candidate": [
+        3179728.1875,
+        3095049.1875,
+        2859097.875
+      ]
+    }
+  }
+}

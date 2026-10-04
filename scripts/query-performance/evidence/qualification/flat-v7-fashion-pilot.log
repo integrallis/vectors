@@ -1,0 +1,90 @@
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+1 warning
+fashion-flat-baseline-0
+fashion-flat-candidate-0
+{
+  "fashion-flat-public-single": {
+    "baseline_us": 10273.27503125,
+    "candidate_us": 4722.22090625,
+    "less_time_percent": 54.03392888941839,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        10273275.03125
+      ],
+      "candidate": [
+        4722220.90625
+      ]
+    }
+  },
+  "fashion-flat-public-batch4": {
+    "baseline_us": 2889.76875,
+    "candidate_us": 2988.21575,
+    "less_time_percent": -3.406743186630412,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2889768.75
+      ],
+      "candidate": [
+        2988215.75
+      ]
+    }
+  },
+  "fashion-flat-public-batch16": {
+    "baseline_us": 1815.73425,
+    "candidate_us": 1816.0691875,
+    "less_time_percent": -0.01844639434431805,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1815734.25
+      ],
+      "candidate": [
+        1816069.1875
+      ]
+    }
+  },
+  "fashion-flat-public-batch32": {
+    "baseline_us": 1807.18478125,
+    "candidate_us": 1836.4260625,
+    "less_time_percent": -1.61805707713929,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1807184.78125
+      ],
+      "candidate": [
+        1836426.0625
+      ]
+    }
+  },
+  "fashion-flat-independent4": {
+    "baseline_us": 2871.82275,
+    "candidate_us": 2961.904,
+    "less_time_percent": -3.1367273624390624,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2871822.75
+      ],
+      "candidate": [
+        2961904.0
+      ]
+    }
+  },
+  "fashion-flat-independent16": {
+    "baseline_us": 2731.8179375,
+    "candidate_us": 3055.126125,
+    "less_time_percent": -11.83490975229018,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2731817.9375
+      ],
+      "candidate": [
+        3055126.125
+      ]
+    }
+  }
+}

@@ -18,6 +18,12 @@ package com.integrallis.vectors.db.index;
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.VectorUtil;
 import java.util.Objects;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RecursiveAction;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 
 /**
  * Brute-force reference implementation of {@link IndexSpi}. Scores every stored vector against the
@@ -29,11 +35,61 @@ import java.util.Objects;
  * to affect flat-scan output — any value produces the same result. This matches the parameter
  * contract documented on {@link IndexSpi#search(float[], int, int, float)}.
  *
- * <p>Not thread-safe for concurrent {@link #build(float[][], SimilarityFunction)} calls; reads via
- * {@link #search(float[], int, int, float)} are safe as long as no build is in flight (the {@link
- * com.integrallis.vectors.db.VectorCollection} facade enforces this with a read/write lock).
+ * <p>Build requires exclusive access. Concurrent searches require safe publication after build and
+ * no concurrent rebuild. The collection facade publishes complete index generations through a
+ * volatile reference.
  */
 public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
+
+  // Shared across adapters: concurrent collections must also respect the CPU expansion budget.
+  static final Semaphore PARALLEL_SCANS = new Semaphore(1);
+  static final AtomicInteger CONCURRENT_BATCHES = new AtomicInteger();
+  private static final QueryBudget QUERY_BUDGET = new QueryBudget(System::nanoTime);
+
+  /** Avoid expanding the first query of every burst while callers supply their own parallelism. */
+  static final class QueryBudget {
+    private static final long QUIET_NANOS = 50_000_000L;
+    private final AtomicInteger active = new AtomicInteger();
+    private final LongSupplier clock;
+    private volatile long lastOverlap;
+
+    QueryBudget(LongSupplier clock) {
+      this.clock = clock;
+      lastOverlap = clock.getAsLong() - QUIET_NANOS;
+    }
+
+    boolean enter() {
+      int count = active.incrementAndGet();
+      long now = clock.getAsLong();
+      if (count > 1) {
+        lastOverlap = now;
+        return false;
+      }
+      return now - lastOverlap >= QUIET_NANOS;
+    }
+
+    void exit() {
+      if (active.getAndDecrement() > 1) lastOverlap = clock.getAsLong();
+    }
+
+    boolean contended() {
+      return active.get() > 1;
+    }
+  }
+
+  /**
+   * Run a collection batch that already distributes queries across processors. The collection
+   * facade owns this scope; callers do not need to select a scheduling mode. A global counter
+   * covers worker threads and concurrent collections, and is released even when a query fails.
+   */
+  public static <T> T withConcurrentQueries(Supplier<T> batch) {
+    CONCURRENT_BATCHES.incrementAndGet();
+    try {
+      return batch.get();
+    } finally {
+      CONCURRENT_BATCHES.decrementAndGet();
+    }
+  }
 
   private float[][] vectors = new float[0][];
   private SimilarityFunction metric;
@@ -62,7 +118,117 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
 
-    int actualK = Math.min(k, vectors.length);
+    // COSINE scans are qualified for expansion; other metrics keep the original serial loop.
+    // Batches already distribute queries across processors and do not acquire this budget.
+    boolean budgeted =
+        metric == SimilarityFunction.COSINE
+            && (long) vectors.length * dimension >= 4_000_000L
+            && ForkJoinPool.getCommonPoolParallelism() > 1
+            && CONCURRENT_BATCHES.get() == 0;
+    boolean isolated = budgeted && QUERY_BUDGET.enter();
+    try {
+      if (isolated && CONCURRENT_BATCHES.get() == 0 && PARALLEL_SCANS.tryAcquire()) {
+        try {
+          return selectScores(scoreAll(query, vectors, metric), k);
+        } finally {
+          PARALLEL_SCANS.release();
+        }
+      }
+      int actualK = Math.min(k, vectors.length);
+
+      // Bounded min-heap (by score) over at most actualK entries. When full, the root is the
+      // worst-so-far kept result; a new candidate with strictly higher score replaces the root.
+      int[] heapIds = new int[actualK];
+      float[] heapScores = new float[actualK];
+      int heapSize = 0;
+
+      for (int i = 0; i < vectors.length; i++) {
+        float score = metric.compare(query, vectors[i]);
+        if (heapSize < actualK) {
+          heapIds[heapSize] = i;
+          heapScores[heapSize] = score;
+          heapSize++;
+          siftUp(heapIds, heapScores, heapSize - 1);
+        } else if (score > heapScores[0]) {
+          heapIds[0] = i;
+          heapScores[0] = score;
+          siftDown(heapIds, heapScores, 0, heapSize);
+        }
+      }
+
+      // Drain heap into a descending-sorted result array.
+      int[] sortedIds = new int[heapSize];
+      float[] sortedScores = new float[heapSize];
+      for (int i = heapSize - 1; i >= 0; i--) {
+        sortedIds[i] = heapIds[0];
+        sortedScores[i] = heapScores[0];
+        heapIds[0] = heapIds[i];
+        heapScores[0] = heapScores[i];
+        siftDown(heapIds, heapScores, 0, i);
+      }
+      return new SearchOutcome(sortedIds, sortedScores);
+    } finally {
+      if (budgeted) QUERY_BUDGET.exit();
+    }
+  }
+
+  /** Score independent rows using a bounded shared pool; never cache caller-owned vector data. */
+  static float[] scoreAll(float[] query, float[][] rows, SimilarityFunction metric) {
+    float[] scores = new float[rows.length];
+    int workers = Math.min(8, ForkJoinPool.getCommonPoolParallelism());
+    int chunk = Math.max(1, (rows.length - 1) / workers + 1);
+    ForkJoinPool.commonPool()
+        .invoke(new ScoreTask(query, rows, metric, scores, 0, rows.length, chunk));
+    return scores;
+  }
+
+  private static final class ScoreTask extends RecursiveAction {
+    @java.io.Serial private static final long serialVersionUID = 1L;
+    private final float[] query;
+    private final float[][] rows;
+    private final SimilarityFunction metric;
+    private final float[] scores;
+    private final int from, to, chunk;
+
+    ScoreTask(
+        float[] query,
+        float[][] rows,
+        SimilarityFunction metric,
+        float[] scores,
+        int from,
+        int to,
+        int chunk) {
+      this.query = query;
+      this.rows = rows;
+      this.metric = metric;
+      this.scores = scores;
+      this.from = from;
+      this.to = to;
+      this.chunk = chunk;
+    }
+
+    @Override
+    protected void compute() {
+      if (to - from <= chunk || QUERY_BUDGET.contended() || CONCURRENT_BATCHES.get() != 0) {
+        for (int i = from; i < to; i++) scores[i] = metric.compare(query, rows[i]);
+      } else {
+        int middle = (from + to) >>> 1;
+        var left = new ScoreTask(query, rows, metric, scores, from, middle, chunk);
+        var right = new ScoreTask(query, rows, metric, scores, middle, to, chunk);
+        left.fork();
+        try {
+          right.compute();
+        } finally {
+          // Join even on failure: no worker may retain query inputs after this call returns.
+          left.join();
+        }
+      }
+    }
+  }
+
+  /** Run the original bounded heap in the original row order, preserving ties exactly. */
+  private SearchOutcome selectScores(float[] allScores, int k) {
+    int actualK = Math.min(k, allScores.length);
 
     // Bounded min-heap (by score) over at most actualK entries. When full, the root is the
     // worst-so-far kept result; a new candidate with strictly higher score replaces the root.
@@ -70,8 +236,8 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
     float[] heapScores = new float[actualK];
     int heapSize = 0;
 
-    for (int i = 0; i < vectors.length; i++) {
-      float score = metric.compare(query, vectors[i]);
+    for (int i = 0; i < allScores.length; i++) {
+      float score = allScores[i];
       if (heapSize < actualK) {
         heapIds[heapSize] = i;
         heapScores[heapSize] = score;

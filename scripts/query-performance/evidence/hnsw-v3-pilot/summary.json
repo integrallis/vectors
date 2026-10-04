@@ -1,0 +1,198 @@
+{
+  "glove-hnsw-heap-ef32": {
+    "baseline_us": 41.2223388671875,
+    "candidate_us": 39.0568154296875,
+    "less_time_percent": 5.253276492818637,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        41222.3388671875
+      ],
+      "candidate": [
+        39056.8154296875
+      ]
+    }
+  },
+  "glove-hnsw-heap-ef100": {
+    "baseline_us": 108.036490234375,
+    "candidate_us": 104.233986328125,
+    "less_time_percent": 3.5196477579018226,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        108036.490234375
+      ],
+      "candidate": [
+        104233.986328125
+      ]
+    }
+  },
+  "glove-hnsw-heap-ef128": {
+    "baseline_us": 140.425916015625,
+    "candidate_us": 136.243869140625,
+    "less_time_percent": 2.9781161438424686,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        140425.916015625
+      ],
+      "candidate": [
+        136243.869140625
+      ]
+    }
+  },
+  "glove-hnsw-heap-ef512": {
+    "baseline_us": 478.920783203125,
+    "candidate_us": 457.4927119140625,
+    "less_time_percent": 4.474241260892242,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        478920.783203125
+      ],
+      "candidate": [
+        457492.7119140625
+      ]
+    }
+  },
+  "glove-hnsw-heap-filtered128": {
+    "baseline_us": 747.2426181640625,
+    "candidate_us": 789.667837890625,
+    "less_time_percent": -5.67756959992447,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        747242.6181640625
+      ],
+      "candidate": [
+        789667.837890625
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-ef32": {
+    "baseline_us": 145.9501669921875,
+    "candidate_us": 143.5169677734375,
+    "less_time_percent": 1.6671438401850147,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        145950.1669921875
+      ],
+      "candidate": [
+        143516.9677734375
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-ef100": {
+    "baseline_us": 375.5472119140625,
+    "candidate_us": 378.2209619140625,
+    "less_time_percent": -0.7119610837669654,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        375547.2119140625
+      ],
+      "candidate": [
+        378220.9619140625
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-ef128": {
+    "baseline_us": 465.105037109375,
+    "candidate_us": 468.366642578125,
+    "less_time_percent": -0.7012621254374851,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        465105.037109375
+      ],
+      "candidate": [
+        468366.642578125
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-ef512": {
+    "baseline_us": 1525.857234375,
+    "candidate_us": 1498.1442802734375,
+    "less_time_percent": 1.8162219555824866,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1525857.234375
+      ],
+      "candidate": [
+        1498144.2802734375
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-filtered128": {
+    "baseline_us": 1979.9108681640625,
+    "candidate_us": 1915.3069912109374,
+    "less_time_percent": 3.262968954407075,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1979910.8681640625
+      ],
+      "candidate": [
+        1915306.9912109375
+      ]
+    }
+  },
+  "dbpedia-hnsw-public-ef32": {
+    "baseline_us": 238.403556640625,
+    "candidate_us": 233.84256640625,
+    "less_time_percent": 1.9131385029000803,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        238403.556640625
+      ],
+      "candidate": [
+        233842.56640625
+      ]
+    }
+  },
+  "dbpedia-hnsw-public-ef100": {
+    "baseline_us": 618.2918564453125,
+    "candidate_us": 622.51550390625,
+    "less_time_percent": -0.6831154926121963,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        618291.8564453125
+      ],
+      "candidate": [
+        622515.50390625
+      ]
+    }
+  },
+  "dbpedia-hnsw-public-ef128": {
+    "baseline_us": 670.6981708984375,
+    "candidate_us": 656.3642783203125,
+    "less_time_percent": 2.1371599327494772,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        670698.1708984375
+      ],
+      "candidate": [
+        656364.2783203125
+      ]
+    }
+  },
+  "dbpedia-hnsw-public-ef512": {
+    "baseline_us": 2057.4919111328127,
+    "candidate_us": 2096.96792578125,
+    "less_time_percent": -1.9186473800863135,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2057491.9111328125
+      ],
+      "candidate": [
+        2096967.92578125
+      ]
+    }
+  }
+}

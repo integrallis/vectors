@@ -1,0 +1,337 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/root/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :spotlessInternalRegisterDependencies
+> Task :vectors-gpu:processResources
+> Task :vectors:spotlessJava
+> Task :demos:spotlessJava
+> Task :demos:spotlessJavaApply
+> Task :vectors:spotlessJavaApply
+> Task :vectors:spotlessApply
+> Task :demos:spotlessApply
+> Task :vectors-cache-jcache:spotlessJava
+> Task :vectors-cache-jcache:spotlessJavaApply
+> Task :vectors-cache-jcache:spotlessApply
+> Task :vectors-cache:spotlessJava
+> Task :vectors-cache:spotlessJavaApply
+> Task :vectors-cache:spotlessApply
+> Task :vectors-cache-langchain4j:spotlessJava
+> Task :vectors-cache-langchain4j:spotlessJavaApply
+> Task :vectors-cache-langchain4j:spotlessApply
+> Task :vectors-cache-semantic-langchain4j:spotlessJava
+> Task :vectors-cache-semantic-db:spotlessJava
+> Task :vectors-cache-semantic-langchain4j:spotlessJavaApply
+> Task :vectors-cache-semantic-langchain4j:spotlessApply
+> Task :vectors-cache-semantic-db:spotlessJavaApply
+> Task :vectors-cache-semantic-db:spotlessApply
+> Task :vectors-cache-semantic-spring-ai:spotlessJava
+> Task :vectors-cache-spring-ai:spotlessJava
+> Task :vectors-cache-semantic-spring-ai:spotlessJavaApply
+> Task :vectors-cache-spring-ai:spotlessJavaApply
+> Task :vectors-cache-spring-ai:spotlessApply
+> Task :vectors-cache-semantic-spring-ai:spotlessApply
+> Task :vectors-cluster:spotlessJava
+> Task :vectors-cluster:spotlessJavaApply
+> Task :vectors-cluster:spotlessApply
+> Task :vectors-db-arrow:spotlessJava FROM-CACHE
+> Task :vectors-db-arrow:spotlessJavaApply UP-TO-DATE
+> Task :vectors-db-arrow:spotlessApply UP-TO-DATE
+> Task :vectors-db-jackson:spotlessJava
+> Task :vectors-db-jackson:spotlessJavaApply
+> Task :vectors-db-jackson:spotlessApply
+> Task :vectors-distributed:spotlessJava
+> Task :vectors-distributed:spotlessJavaApply
+> Task :vectors-distributed:spotlessApply
+> Task :vectors-gpu:spotlessJava
+> Task :vectors-gpu:spotlessJavaApply
+> Task :vectors-gpu:spotlessApply
+> Task :vectors-bench:spotlessJava
+> Task :vectors-bench:spotlessJavaApply
+> Task :vectors-bench:spotlessApply
+> Task :vectors-hybrid:spotlessJava
+> Task :vectors-hybrid:spotlessJavaApply
+> Task :vectors-hybrid:spotlessApply
+> Task :vectors-hnsw:spotlessJava
+> Task :vectors-hnsw:spotlessJavaApply
+> Task :vectors-hnsw:spotlessApply
+> Task :vectors-ingest:spotlessJava
+> Task :vectors-ingest:spotlessJavaApply
+> Task :vectors-ingest:spotlessApply
+> Task :vectors-jakarta-batch:spotlessJava
+> Task :vectors-jakarta-batch:spotlessJavaApply
+> Task :vectors-jakarta-batch:spotlessApply
+> Task :vectors-core:compileJava
+> Task :vectors-langchain4j:spotlessJava
+> Task :vectors-langchain4j:spotlessJavaApply
+> Task :vectors-langchain4j:spotlessApply
+> Task :vectors-ivf:spotlessJava
+> Task :vectors-ivf:spotlessJavaApply
+> Task :vectors-ivf:spotlessApply
+> Task :vectors-optimizer:spotlessJava
+> Task :vectors-optimizer:spotlessJavaApply
+> Task :vectors-optimizer:spotlessApply
+> Task :vectors-router:spotlessJava
+> Task :vectors-router:spotlessJavaApply
+> Task :vectors-router:spotlessApply
+> Task :vectors-server:spotlessJava
+> Task :vectors-server:spotlessJavaApply
+> Task :vectors-server:spotlessApply
+> Task :vectors-server-client:spotlessJava
+> Task :vectors-server-client:spotlessJavaApply
+> Task :vectors-server-client:spotlessApply
+> Task :vectors-spring-ai:spotlessJava
+> Task :vectors-spring-ai:spotlessJavaApply
+> Task :vectors-spring-ai:spotlessApply
+> Task :vectors-spring-batch:spotlessJava
+> Task :vectors-spring-batch:spotlessJavaApply
+> Task :vectors-spring-batch:spotlessApply
+> Task :vectors-spring-boot-starter:spotlessJava
+> Task :vectors-spring-boot-starter:spotlessJavaApply
+> Task :vectors-spring-boot-starter:spotlessApply
+> Task :vectors-quantization:spotlessJava
+> Task :vectors-quantization:spotlessJavaApply
+> Task :vectors-quantization:spotlessApply
+> Task :vectors-storage-s3:spotlessJava FROM-CACHE
+> Task :vectors-storage-s3:spotlessJavaApply UP-TO-DATE
+> Task :vectors-storage-s3:spotlessApply UP-TO-DATE
+> Task :vectors-db:spotlessJava
+> Task :vectors-db:spotlessJavaApply
+> Task :vectors-db:spotlessApply
+> Task :vectors-studio-core:spotlessJava
+> Task :vectors-studio-core:spotlessJavaApply
+> Task :vectors-studio-core:spotlessApply
+> Task :vectors-studio-distributed:spotlessJava
+> Task :vectors-studio-distributed:spotlessJavaApply
+> Task :vectors-studio-distributed:spotlessApply
+> Task :vectors-storage:spotlessJava
+> Task :vectors-storage:spotlessJavaApply
+> Task :vectors-storage:spotlessApply
+> Task :vectors-text-h2:spotlessJava
+> Task :vectors-text-h2:spotlessJavaApply
+> Task :vectors-text-h2:spotlessApply
+> Task :vectors-studio-sidecart:spotlessJava
+> Task :vectors-studio-sidecart:spotlessJavaApply
+> Task :vectors-studio-sidecart:spotlessApply
+> Task :vectors-studio-web:spotlessJava
+> Task :vectors-studio-web:spotlessJavaApply
+> Task :vectors-studio-web:spotlessApply
+> Task :vectors-vcr-core:spotlessJava
+> Task :vectors-vcr-core:spotlessJavaApply
+> Task :vectors-vcr-core:spotlessApply
+> Task :vectors-vamana:spotlessJava
+> Task :vectors-vamana:spotlessJavaApply
+> Task :vectors-vamana:spotlessApply
+> Task :vectors-core:spotlessJava
+> Task :vectors-core:spotlessJavaApply
+> Task :vectors-core:spotlessApply
+> Task :vectors-vcr-junit5:spotlessJava
+> Task :vectors-vcr-junit5:spotlessJavaApply
+> Task :vectors-vcr-junit5:spotlessApply
+> Task :vectors-vcr-serde-avaje:spotlessJava
+> Task :vectors-vcr-serde-avaje:spotlessJavaApply
+> Task :vectors-vcr-serde-avaje:spotlessApply
+> Task :vectors-vcr-semantic-db:spotlessJava
+> Task :vectors-vcr-semantic-db:spotlessJavaApply
+> Task :vectors-vcr-semantic-db:spotlessApply
+> Task :vectors-vcr-serde-jackson:spotlessJava
+> Task :vectors-vcr-serde-jackson:spotlessJavaApply
+> Task :vectors-vcr-serde-jackson:spotlessApply
+> Task :vectors-vcr-langchain4j:spotlessJava
+> Task :vectors-vcr-langchain4j:spotlessJavaApply
+> Task :vectors-vcr-langchain4j:spotlessApply
+> Task :demos:embedding-cache:spotlessJava
+> Task :demos:langchain4j-rag:spotlessJava
+> Task :demos:langchain4j-rag:spotlessJavaApply
+> Task :demos:embedding-cache:spotlessJavaApply
+> Task :demos:langchain4j-rag:spotlessApply
+> Task :demos:embedding-cache:spotlessApply
+> Task :vectors-vcr-testng:spotlessJava
+> Task :vectors-vcr-testng:spotlessJavaApply
+> Task :vectors-vcr-testng:spotlessApply
+> Task :demos:quickstart:spotlessJava
+> Task :demos:quickstart:spotlessJavaApply
+> Task :demos:quickstart:spotlessApply
+> Task :vectors-vcr-spring-ai:spotlessJava
+> Task :vectors-vcr-spring-ai:spotlessJavaApply
+> Task :vectors-vcr-spring-ai:spotlessApply
+> Task :demos:rerank-after-retrieval:spotlessJava
+> Task :demos:rerank-after-retrieval:spotlessJavaApply
+> Task :demos:rerank-after-retrieval:spotlessApply
+> Task :demos:semantic-cache:spotlessJava
+> Task :demos:semantic-cache:spotlessJavaApply
+> Task :demos:semantic-cache:spotlessApply
+> Task :demos:spring-ai-rag:spotlessJava
+> Task :demos:spring-ai-rag:spotlessJavaApply
+> Task :demos:spring-ai-rag:spotlessApply
+> Task :demos:optimizer-tutorial:spotlessJava
+> Task :demos:optimizer-tutorial:spotlessJavaApply
+> Task :demos:optimizer-tutorial:spotlessApply
+> Task :demos:server-client:spotlessJava
+> Task :demos:server-client:spotlessJavaApply
+> Task :demos:server-client:spotlessApply
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes
+> Task :demos:vcr-e2e:spotlessJava
+> Task :demos:vcr-e2e:spotlessJavaApply
+> Task :demos:vcr-e2e:spotlessApply
+> Task :demos:studio-r2-sidecart:spotlessJava
+> Task :demos:studio-r2-sidecart:spotlessJavaApply
+> Task :demos:studio-r2-sidecart:spotlessApply
+> Task :vectors-core:jar
+> Task :demos:rag-multimodal:spotlessJava
+> Task :demos:rag-multimodal:spotlessJavaApply
+> Task :demos:rag-multimodal:spotlessApply
+> Task :vectors-storage:compileJava
+> Task :vectors-storage:classes
+> Task :vectors-storage:jar
+> Task :vectors-gpu:compileJava
+> Task :vectors-gpu:classes
+> Task :vectors-gpu:jar
+> Task :vectors-quantization:compileJava
+> Task :vectors-quantization:classes
+> Task :vectors-quantization:jar
+> Task :vectors-vamana:compileJava
+> Task :vectors-vamana:classes
+> Task :vectors-vamana:jar
+> Task :vectors-hnsw:compileJava
+> Task :vectors-hnsw:classes
+> Task :vectors-ivf:compileJava
+> Task :vectors-ivf:classes
+> Task :vectors-hnsw:jar
+> Task :vectors-ivf:jar
+> Task :vectors-core:compileTestJava
+> Task :vectors-core:processTestResources
+> Task :vectors-core:testClasses
+> Task :vectors-hnsw:compileTestJava
+> Task :vectors-hnsw:testClasses
+
+> Task :vectors-core:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+> Task :vectors-db:compileJava
+> Task :vectors-db:classes
+
+> Task :vectors-hnsw:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+> Task :vectors-db:jar
+
+> Task :vectors-hnsw:test
+
+HnswSearcherMultiStartTest > ExceptionPropagation > workerExceptionPropagatesWithOriginalCause() PASSED
+
+HnswSearcherMultiStartTest > Concurrency > parallelWorkersDoNotCorrupt() PASSED
+
+HnswSearcherMultiStartTest > EdgeCases > maxLevelZeroFallsBack() PASSED
+
+HnswSearcherMultiStartTest > EdgeCases > emptyGraphThrows() PASSED
+
+HnswSearcherMultiStartTest > EdgeCases > nStartsLargerThanGraph() PASSED
+
+HnswSearcherMultiStartTest > Recall > nStartsFourRecallAtLeastAsGood() PASSED
+
+HnswSearcherMultiStartTest > Identity > nStartsOneIsIdenticalToSearch() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcIndex_buildsWithoutError() PASSED
+
+HnswSearcherTest > FusedAdcSearch > defaultSubvectors_rejectsNonPositiveDim() PASSED
+
+HnswSearcherTest > FusedAdcSearch > adcTable_scoreOrdering_correlatesWithExactSimilarity() PASSED
+
+HnswSearcherTest > FusedAdcSearch > defaultSubvectors_clampsToDivisorsOfDim() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcSearch_neighborListSize_matches() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcIndex_buildsWithDefaultsOverload() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcSearch_returnsSelf() PASSED
+
+HnswSearcherTest > FusedAdcSearch > fusedAdcBatchScoring_matchesPerNodeScoring() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > builderCustomParameters() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > deterministicWithSameSeed() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > builderDefaults_M16_ef200() PASSED
+
+HnswSearcherTest > HnswIndexApiTests > buildAndSearch_endToEnd() PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+> Task :vectors-db:compileTestJava
+> Task :vectors-db:testClasses
+
+> Task :vectors-core:test
+
+PreparedBatchCosineTest > preparedBatchesPreserveScoresTailsAndQueryMutation() PASSED
+
+PreparedBatchCosineTest > validatesArgumentsAndPreservesZeroVectorBehavior() PASSED
+
+PreparedCosineTest > preparedBothNormsAgreeWithIndependentDoublePrecisionReference() PASSED
+
+PreparedCosineTest > preparedQueryPreservesArrayAndSegmentScoreBits() PASSED
+
+> Task :vectors-hnsw:test
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [3] sim=COSINE PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > recall_above85_forAllFunctions(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [1] sim=EUCLIDEAN PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [2] sim=DOT_PRODUCT PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [3] sim=COSINE PASSED
+
+HnswSearcherTest > AllSimilarityFunctions > searchWithAllFunctions_returnsFiniteScores(SimilarityFunction) > [4] sim=MAXIMUM_INNER_PRODUCT PASSED
+
+HnswSearcherTest > MediumDatasetSearch > searchAllQueries_averageRecall_above90() PASSED
+
+HnswSearcherTest > MediumDatasetSearch > recall10_above90_euclidean() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > recall10_above80_euclidean() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > recall10_above80_cosine() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > selfQuery_returnsQueryAsTopResult() PASSED
+
+HnswSearcherTest > SmallDatasetSearch > recallIncreasesWithEfSearch() PASSED
+
+HnswSearcherTest > BasicSearch > efSearchLessThanK_throws() PASSED
+
+HnswSearcherTest > BasicSearch > searchTwoVectors_returnsNearest() PASSED
+
+HnswSearcherTest > BasicSearch > searchSingleVector_returnsSelf() PASSED
+
+HnswSearcherTest > BasicSearch > searchReturnsRequestedK() PASSED
+
+HnswSearcherTest > BasicSearch > searchResultsSortedByScoreDescending() PASSED
+
+> Task :vectors-db:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+PreparedFlatScanTest > batchRecomputesNormsAfterStoredRowsAndQueriesChange() PASSED
+
+PreparedFlatScanTest > singleAndBatchPreserveScoresAndTiesAndRecomputeAfterQueryMutation() PASSED
+
+> Task :vectors-db:freezePerf
+
+BUILD SUCCESSFUL in 54s
+143 actionable tasks: 138 executed, 2 from cache, 3 up-to-date

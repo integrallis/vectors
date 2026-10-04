@@ -1,0 +1,13 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 11:46:37 AM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 11:46:37 AM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=1 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,glove-flat-public-single,24,3073047489
+RESULT,glove-flat-public-single,0,107056444,1177092119961519121,32
+RESULT,glove-flat-public-single,1,107832861,1177092119961519121,32
+RESULT,glove-flat-public-single,2,108401829,1177092119961519121,32
+RESULT,glove-flat-public-single,3,109134254,1177092119961519121,32
+RESULT,glove-flat-public-single,4,107971863,1177092119961519121,32
+RESULT,glove-flat-public-single,5,108178910,1177092119961519121,32
+RESULT,glove-flat-public-single,6,107911368,1177092119961519121,32

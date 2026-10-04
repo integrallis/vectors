@@ -1,0 +1,110 @@
+{
+  "glove-flat-public-single": {
+    "baseline_us": 6342.46696875,
+    "candidate_us": 3899.71759375,
+    "less_time_percent": 38.51418362974033,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        6113743.46875,
+        6342466.96875,
+        6482274.4375
+      ],
+      "candidate": [
+        3880988.34375,
+        3986849.65625,
+        3899717.59375
+      ]
+    }
+  },
+  "glove-flat-public-batch32": {
+    "baseline_us": 540.35859375,
+    "candidate_us": 536.2456875,
+    "less_time_percent": 0.7611438584620434,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        544732.53125,
+        540358.59375,
+        537667.375
+      ],
+      "candidate": [
+        536245.6875,
+        538032.6875,
+        518832.25
+      ]
+    }
+  },
+  "dbpedia-flat-public-single": {
+    "baseline_us": 17985.32534375,
+    "candidate_us": 19236.8875625,
+    "less_time_percent": -6.95879665688075,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        17985325.34375,
+        18141587.65625,
+        12341045.375
+      ],
+      "candidate": [
+        20503562.9375,
+        12108451.71875,
+        19236887.5625
+      ]
+    }
+  },
+  "dbpedia-flat-public-batch32": {
+    "baseline_us": 1412.66296875,
+    "candidate_us": 1413.30328125,
+    "less_time_percent": -0.04532662879714877,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1575935.84375,
+        1412662.96875,
+        1121593.6875
+      ],
+      "candidate": [
+        1561569.15625,
+        1143144.0,
+        1413303.28125
+      ]
+    }
+  },
+  "fashion-flat-public-single": {
+    "baseline_us": 10262.711625,
+    "candidate_us": 10127.77890625,
+    "less_time_percent": 1.3147862249320519,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        10215769.96875,
+        10309407.125,
+        10262711.625
+      ],
+      "candidate": [
+        10151349.03125,
+        10127778.90625,
+        9876319.78125
+      ]
+    }
+  },
+  "fashion-flat-public-batch32": {
+    "baseline_us": 1814.76553125,
+    "candidate_us": 1833.85165625,
+    "less_time_percent": -1.0517129993566465,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1822511.15625,
+        1814765.53125,
+        1814385.4375
+      ],
+      "candidate": [
+        1833851.65625,
+        1923526.21875,
+        1817640.25
+      ]
+    }
+  }
+}

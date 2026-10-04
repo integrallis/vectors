@@ -1,0 +1,23 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 2:13:11 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 2:13:11 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,glove-hnsw-heap-filtered-filtered128,128,23881587461
+ALLOCATION,glove-hnsw-heap-filtered-filtered128,80236808,256
+RESULT,glove-hnsw-heap-filtered-filtered128,0,664403502,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-filtered128,1,664981213,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-filtered128,2,664176087,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-filtered128,3,674790497,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-filtered128,4,677975797,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-filtered128,5,672842841,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-filtered128,6,669731486,4487054836497175703,1024
+WARMUP,glove-hnsw-heap-filtered-reused128,128,20169850368
+ALLOCATION,glove-hnsw-heap-filtered-reused128,43040,256
+RESULT,glove-hnsw-heap-filtered-reused128,0,616638600,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-reused128,1,617241439,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-reused128,2,623050843,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-reused128,3,621220867,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-reused128,4,611340032,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-reused128,5,616087729,4487054836497175703,1024
+RESULT,glove-hnsw-heap-filtered-reused128,6,637058804,4487054836497175703,1024

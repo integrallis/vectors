@@ -1,0 +1,168 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/root/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-db:processResources NO-SOURCE
+> Task :vectors-ivf:processResources NO-SOURCE
+> Task :vectors-db:processTestResources NO-SOURCE
+> Task :vectors-vamana:processResources NO-SOURCE
+> Task :vectors-gpu:processResources UP-TO-DATE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-core:jar UP-TO-DATE
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-gpu:compileJava UP-TO-DATE
+> Task :vectors-gpu:classes UP-TO-DATE
+> Task :vectors-gpu:jar UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-hnsw:compileJava UP-TO-DATE
+> Task :vectors-hnsw:classes UP-TO-DATE
+> Task :vectors-vamana:compileJava UP-TO-DATE
+> Task :vectors-vamana:classes UP-TO-DATE
+> Task :vectors-vamana:jar UP-TO-DATE
+> Task :vectors-ivf:compileJava UP-TO-DATE
+> Task :vectors-hnsw:jar UP-TO-DATE
+> Task :vectors-ivf:classes UP-TO-DATE
+> Task :vectors-ivf:jar UP-TO-DATE
+
+> Task :vectors-hnsw:compileTestJava FAILED
+/opt/query/source/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/PreparedQuerySearchTest.java:65: error: method does not override or implement a method from a supertype
+                @Override
+                ^
+/opt/query/source/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/PreparedQuerySearchTest.java:70: error: method does not override or implement a method from a supertype
+                @Override
+                ^
+2 errors
+
+> Task :vectors-db:compileJava
+> Task :vectors-db:classes
+
+> Task :vectors-core:compileTestJava
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/OffsetBatchCosineTest.java:33: error: no suitable method found for batchCosineWithQueryNorm(float[],MemorySegment,long[],int,float,float[],int)
+          VectorUtil.batchCosineWithQueryNorm(query,matrix,offsets,dim,VectorUtil.batchCosineQueryNorm(query),actual,count);
+                    ^
+    method VectorUtil.batchCosineWithQueryNorm(float[],float[][],float,float[],int) is not applicable
+      (actual and formal argument lists differ in length)
+    method VectorUtil.batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int) is not applicable
+      (actual and formal argument lists differ in length)
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/OffsetBatchCosineTest.java:38: error: no suitable method found for batchCosineWithQueryNorm(float[],MemorySegment,long[],int,float,float[],int)
+        assertThrows(IndexOutOfBoundsException.class,()->VectorUtil.batchCosineWithQueryNorm(query,matrix,new long[]{-4},dim,1f,actual,1));
+                                                                   ^
+    method VectorUtil.batchCosineWithQueryNorm(float[],float[][],float,float[],int) is not applicable
+      (actual and formal argument lists differ in length)
+    method VectorUtil.batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int) is not applicable
+      (actual and formal argument lists differ in length)
+/opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/OffsetBatchCosineTest.java:39: error: no suitable method found for batchCosineWithQueryNorm(float[],MemorySegment,long[],int,float,float[],int)
+        assertThrows(IndexOutOfBoundsException.class,()->VectorUtil.batchCosineWithQueryNorm(query,matrix,new long[]{Long.MAX_VALUE},dim,1f,actual,1));
+                                                                   ^
+    method VectorUtil.batchCosineWithQueryNorm(float[],float[][],float,float[],int) is not applicable
+      (actual and formal argument lists differ in length)
+    method VectorUtil.batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int) is not applicable
+      (actual and formal argument lists differ in length)
+3 errors
+
+> Task :vectors-core:compileTestJava FAILED
+> Task :vectors-core:processTestResources UP-TO-DATE
+> Task :vectors-db:compileTestJava
+> Task :vectors-db:testClasses
+
+> Task :vectors-db:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+ParallelFlatScanTest > largeSearchPreservesTieOrderAndConcurrentQueryIsolation() PASSED
+
+ParallelFlatScanTest > competingQueriesDoNotAllocateAnotherFullScoreBuffer() FAILED
+    org.opentest4j.AssertionFailedError: competing scan allocated 160560 bytes ==> expected: <true> but was: <false>
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+        at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+        at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+        at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+        at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+        at app//com.integrallis.vectors.db.index.ParallelFlatScanTest.competingQueriesDoNotAllocateAnotherFullScoreBuffer(ParallelFlatScanTest.java:49)
+
+ParallelFlatScanTest > parallelScoresPreserveOrdinalOrderMetricsAndMutations() PASSED
+
+3 tests completed, 1 failed
+
+> Task :vectors-db:test FAILED
+
+[Incubating] Problems report is available at: file:///opt/query/source/build/reports/problems/problems-report.html
+
+FAILURE: Build completed with 3 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':vectors-hnsw:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /opt/query/source/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/PreparedQuerySearchTest.java:65: error: method does not override or implement a method from a supertype
+                  @Override
+                  ^
+  /opt/query/source/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/PreparedQuerySearchTest.java:70: error: method does not override or implement a method from a supertype
+                  @Override
+                  ^
+  2 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+2: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':vectors-core:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/OffsetBatchCosineTest.java:33: error: no suitable method found for batchCosineWithQueryNorm(float[],MemorySegment,long[],int,float,float[],int)
+            VectorUtil.batchCosineWithQueryNorm(query,matrix,offsets,dim,VectorUtil.batchCosineQueryNorm(query),actual,count);
+                      ^
+      method VectorUtil.batchCosineWithQueryNorm(float[],float[][],float,float[],int) is not applicable
+        (actual and formal argument lists differ in length)
+      method VectorUtil.batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int) is not applicable
+        (actual and formal argument lists differ in length)
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/OffsetBatchCosineTest.java:38: error: no suitable method found for batchCosineWithQueryNorm(float[],MemorySegment,long[],int,float,float[],int)
+          assertThrows(IndexOutOfBoundsException.class,()->VectorUtil.batchCosineWithQueryNorm(query,matrix,new long[]{-4},dim,1f,actual,1));
+                                                                     ^
+      method VectorUtil.batchCosineWithQueryNorm(float[],float[][],float,float[],int) is not applicable
+        (actual and formal argument lists differ in length)
+      method VectorUtil.batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int) is not applicable
+        (actual and formal argument lists differ in length)
+  /opt/query/source/vectors-core/src/test/java/com/integrallis/vectors/core/OffsetBatchCosineTest.java:39: error: no suitable method found for batchCosineWithQueryNorm(float[],MemorySegment,long[],int,float,float[],int)
+          assertThrows(IndexOutOfBoundsException.class,()->VectorUtil.batchCosineWithQueryNorm(query,matrix,new long[]{Long.MAX_VALUE},dim,1f,actual,1));
+                                                                     ^
+      method VectorUtil.batchCosineWithQueryNorm(float[],float[][],float,float[],int) is not applicable
+        (actual and formal argument lists differ in length)
+      method VectorUtil.batchCosineWithQueryNorm(float[],MemorySegment[],int,float,float[],int) is not applicable
+        (actual and formal argument lists differ in length)
+  3 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+3: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':vectors-db:test'.
+> There were failing tests. See the report at: file:///opt/query/source/vectors-db/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+BUILD FAILED in 14s
+22 actionable tasks: 5 executed, 17 up-to-date

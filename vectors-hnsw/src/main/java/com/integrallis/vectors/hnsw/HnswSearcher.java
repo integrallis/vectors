@@ -17,6 +17,7 @@ package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.VectorUtil;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -95,6 +96,8 @@ public final class HnswSearcher {
   // (bulkScore on the zero-copy path). Sized to bulkCapacity and refilled with vectorSegment()
   // views per bulkScore call — NEVER re-allocated per call. Null unless the segment scorer is used.
   private final MemorySegment[] scorerRows;
+  private final MemorySegment scorerMatrix;
+  private final long[] scorerOffsets;
   // True when scorerFactory == this::defaultScorer (stateful — bound to this searcher's scratch).
   // Multi-start workers must then build their OWN default scorer rather than share this one, so a
   // worker never touches another thread's scorer scratch.
@@ -193,10 +196,18 @@ public final class HnswSearcher {
       // Reusable row-segment scratch for the fused segment GEMV — sized to bulkCapacity like the
       // float[][] scorerPool, allocated ONCE here, refilled per bulkScore call.
       this.scorerRows = new MemorySegment[bulkCapacity];
+      this.scorerMatrix =
+          similarityFunction == SimilarityFunction.COSINE
+                  && VectorUtil.supportsCosineNormReuse(vectors.dimension())
+              ? vectors.vectorSegmentStorage()
+              : null;
+      this.scorerOffsets = scorerMatrix == null ? null : new long[bulkCapacity];
     } else {
       this.scorerArena = null;
       this.queryScratchSeg = null;
       this.scorerRows = null;
+      this.scorerMatrix = null;
+      this.scorerOffsets = null;
     }
     this.scorerFactory = useDefaultScorer ? this::defaultScorer : factory;
   }
@@ -217,6 +228,9 @@ public final class HnswSearcher {
   private NodeScorer defaultScorer(float[] query) {
     final SimilarityFunction sim = similarityFunction;
     final RandomAccessVectors v = vectors;
+    if (scorerMatrix != null) {
+      return preparedCosineScorer(query);
+    }
     if (v.supportsSegments()) {
       // Zero-copy path: SIMD-score directly from the mmap slice, no per-neighbor float[] copy. The
       // QUERY is uploaded into the searcher's reusable off-heap segment exactly ONCE per query
@@ -259,6 +273,28 @@ public final class HnswSearcher {
       public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
         for (int i = 0; i < count; i++) pool[i] = v.getVector(nodeIds[offset + i]);
         FusedSimilarity.bulkCompare(sim, query, pool, out, outScores, count);
+      }
+    };
+  }
+
+  /** Score contiguous segment rows without allocating a view object for each neighbor. */
+  private NodeScorer preparedCosineScorer(float[] query) {
+    final float norm = VectorUtil.batchCosineQueryNorm(query);
+    final int dim = vectors.dimension();
+    MemorySegment.copy(query, 0, queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dim);
+    return new NodeScorer() {
+      @Override
+      public float score(int nodeId) {
+        return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
+      }
+
+      @Override
+      public void bulkScore(int[] ids, int offset, int count, float[] out) {
+        for (int i = 0; i < count; i++)
+          scorerOffsets[i] = vectors.vectorSegmentOffset(ids[offset + i]);
+        VectorUtil.batchCosineWithQueryNorm(
+            query, scorerMatrix, scorerOffsets, dim, norm, out, count);
+        for (int i = 0; i < count; i++) out[i] = (1f + out[i]) * 0.5f;
       }
     };
   }

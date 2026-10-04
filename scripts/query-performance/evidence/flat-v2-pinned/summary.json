@@ -1,0 +1,56 @@
+{
+  "glove-flat-public-single": {
+    "baseline_us": 3293.01559375,
+    "candidate_us": 3363.89309375,
+    "less_time_percent": -2.1523584684664865,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        3274629.0,
+        3293015.59375,
+        3307374.75
+      ],
+      "candidate": [
+        3363893.09375,
+        3374120.71875,
+        3339061.96875
+      ]
+    }
+  },
+  "dbpedia-flat-public-single": {
+    "baseline_us": 11049.14315625,
+    "candidate_us": 11177.9886875,
+    "less_time_percent": -1.1661133304904148,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        11049143.15625,
+        11709462.09375,
+        11012487.25
+      ],
+      "candidate": [
+        11062997.875,
+        11177988.6875,
+        11416716.71875
+      ]
+    }
+  },
+  "fashion-flat-public-single": {
+    "baseline_us": 9797.50378125,
+    "candidate_us": 9818.25978125,
+    "less_time_percent": -0.21184987996352156,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        10012893.78125,
+        9797503.78125,
+        9791664.9375
+      ],
+      "candidate": [
+        9818259.78125,
+        9758539.90625,
+        9880737.9375
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+1 warning
+glove-flat-baseline-0
+glove-flat-candidate-0
+dbpedia-flat-baseline-0
+dbpedia-flat-candidate-0
+fashion-flat-baseline-0
+fashion-flat-candidate-0
+glove-flat-candidate-1
+glove-flat-baseline-1
+dbpedia-flat-candidate-1

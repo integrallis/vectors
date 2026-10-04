@@ -1,0 +1,23 @@
+{
+  "measured": {
+    "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+    "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8",
+    "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+    "vectors-core-0.1.26.jar": "e1fd395a7e2be8ff01004a91d71da71f473d46cfb233660cc3cea1c287b239d4",
+    "vectors-hnsw-0.1.26.jar": "c24e6f3ade1b1748c04d9bd751c518ec7e8fc81fa8cf18b4f93c4197a600b5e8",
+    "vectors-db-0.1.26.jar": "8056c1261bf80ab7e9660ce30574d0fd1be448d29d76280f49776429d6f7f3ad",
+    "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+    "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832"
+  },
+  "final": {
+    "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+    "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8",
+    "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+    "vectors-core-0.1.26.jar": "e1fd395a7e2be8ff01004a91d71da71f473d46cfb233660cc3cea1c287b239d4",
+    "vectors-hnsw-0.1.26.jar": "c24e6f3ade1b1748c04d9bd751c518ec7e8fc81fa8cf18b4f93c4197a600b5e8",
+    "vectors-db-0.1.26.jar": "8056c1261bf80ab7e9660ce30574d0fd1be448d29d76280f49776429d6f7f3ad",
+    "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+    "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832"
+  },
+  "identical": true
+}

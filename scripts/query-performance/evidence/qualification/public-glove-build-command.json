@@ -1,0 +1,12 @@
+[
+  "/opt/query/jdk/bin/java",
+  "--add-modules=jdk.incubator.vector",
+  "--enable-native-access=ALL-UNNAMED",
+  "-Xms3g",
+  "-Xmx3g",
+  "-cp",
+  "/opt/query/fixture-classes:/opt/archive/vectors-search/public-final-jars/slf4j-api-2.0.17.jar:/opt/archive/vectors-search/public-final-jars/vectors-core-0.1.26.jar:/opt/archive/vectors-search/public-final-jars/vectors-db-0.1.26.jar:/opt/archive/vectors-search/public-final-jars/vectors-hnsw-0.1.26.jar:/opt/archive/vectors-search/public-final-jars/vectors-ivf-0.1.26.jar:/opt/archive/vectors-search/public-final-jars/vectors-quantization-0.1.26.jar:/opt/archive/vectors-search/public-final-jars/vectors-storage-0.1.26.jar:/opt/archive/vectors-search/public-final-jars/vectors-vamana-0.1.26.jar",
+  "BuildPublicFixture",
+  "/opt/archive/vectors-search/inputs/glove-100-angular-train.fbin",
+  "/opt/query/public-glove-baseline"
+]

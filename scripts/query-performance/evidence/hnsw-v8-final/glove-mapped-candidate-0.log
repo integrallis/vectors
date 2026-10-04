@@ -1,0 +1,50 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 1:43:16 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 1:43:16 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,glove-hnsw-mapped-ef32,110,3010863335
+ALLOCATION,glove-hnsw-mapped-ef32,94240,256
+RESULT,glove-hnsw-mapped-ef32,0,45508759,968596850537911539,1024
+RESULT,glove-hnsw-mapped-ef32,1,44910563,968596850537911539,1024
+RESULT,glove-hnsw-mapped-ef32,2,44529793,968596850537911539,1024
+RESULT,glove-hnsw-mapped-ef32,3,45213970,968596850537911539,1024
+RESULT,glove-hnsw-mapped-ef32,4,44675434,968596850537911539,1024
+RESULT,glove-hnsw-mapped-ef32,5,45654220,968596850537911539,1024
+RESULT,glove-hnsw-mapped-ef32,6,45586244,968596850537911539,1024
+WARMUP,glove-hnsw-mapped-ef100,91,3012259844
+ALLOCATION,glove-hnsw-mapped-ef100,94240,256
+RESULT,glove-hnsw-mapped-ef100,0,123257291,8243387538707746299,1024
+RESULT,glove-hnsw-mapped-ef100,1,123631788,8243387538707746299,1024
+RESULT,glove-hnsw-mapped-ef100,2,135294975,8243387538707746299,1024
+RESULT,glove-hnsw-mapped-ef100,3,132265174,8243387538707746299,1024
+RESULT,glove-hnsw-mapped-ef100,4,123841893,8243387538707746299,1024
+RESULT,glove-hnsw-mapped-ef100,5,124436952,8243387538707746299,1024
+RESULT,glove-hnsw-mapped-ef100,6,131779059,8243387538707746299,1024
+WARMUP,glove-hnsw-mapped-ef128,73,3000528034
+ALLOCATION,glove-hnsw-mapped-ef128,94240,256
+RESULT,glove-hnsw-mapped-ef128,0,150719776,-2514401863691559910,1024
+RESULT,glove-hnsw-mapped-ef128,1,155513449,-2514401863691559910,1024
+RESULT,glove-hnsw-mapped-ef128,2,154903029,-2514401863691559910,1024
+RESULT,glove-hnsw-mapped-ef128,3,155697984,-2514401863691559910,1024
+RESULT,glove-hnsw-mapped-ef128,4,155057860,-2514401863691559910,1024
+RESULT,glove-hnsw-mapped-ef128,5,155330961,-2514401863691559910,1024
+RESULT,glove-hnsw-mapped-ef128,6,152218203,-2514401863691559910,1024
+WARMUP,glove-hnsw-mapped-ef512,24,3120834215
+ALLOCATION,glove-hnsw-mapped-ef512,94240,256
+RESULT,glove-hnsw-mapped-ef512,0,518681424,2109002028201814438,1024
+RESULT,glove-hnsw-mapped-ef512,1,519956191,2109002028201814438,1024
+RESULT,glove-hnsw-mapped-ef512,2,516347547,2109002028201814438,1024
+RESULT,glove-hnsw-mapped-ef512,3,519233752,2109002028201814438,1024
+RESULT,glove-hnsw-mapped-ef512,4,514045799,2109002028201814438,1024
+RESULT,glove-hnsw-mapped-ef512,5,521788193,2109002028201814438,1024
+RESULT,glove-hnsw-mapped-ef512,6,524355690,2109002028201814438,1024
+WARMUP,glove-hnsw-mapped-filtered128,14,3028159583
+ALLOCATION,glove-hnsw-mapped-filtered128,80546056,256
+RESULT,glove-hnsw-mapped-filtered128,0,860176655,4487054836497175703,1024
+RESULT,glove-hnsw-mapped-filtered128,1,894814145,4487054836497175703,1024
+RESULT,glove-hnsw-mapped-filtered128,2,913608668,4487054836497175703,1024
+RESULT,glove-hnsw-mapped-filtered128,3,810117213,4487054836497175703,1024
+RESULT,glove-hnsw-mapped-filtered128,4,731756819,4487054836497175703,1024
+RESULT,glove-hnsw-mapped-filtered128,5,740884184,4487054836497175703,1024
+RESULT,glove-hnsw-mapped-filtered128,6,710717502,4487054836497175703,1024

@@ -113,4 +113,18 @@ public interface RandomAccessVectors {
   default java.lang.foreign.MemorySegment vectorSegment(int ordinal) {
     return null;
   }
+
+  /**
+   * Stable backing segment for offset-addressed scoring, or {@code null} when unavailable. Its
+   * lifetime must match the vector views. Returning a segment also requires implementing {@link
+   * #vectorSegmentOffset(int)}. This avoids allocating a view for each scored neighbor.
+   */
+  default java.lang.foreign.MemorySegment vectorSegmentStorage() {
+    return null;
+  }
+
+  /** Byte offset of a valid ordinal within {@link #vectorSegmentStorage()}. */
+  default long vectorSegmentOffset(int ordinal) {
+    throw new UnsupportedOperationException("Offset-addressed vectors unavailable");
+  }
 }

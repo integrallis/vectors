@@ -3132,6 +3132,40 @@ public final class VectorUtil {
     IMPL.batchCosine(query, rows, dim, out, count);
   }
 
+  /**
+   * Prepares the squared query norm for repeated {@code batchCosineWithQueryNorm} calls. This uses
+   * the batch kernel's reduction order, which can differ from {@link #cosineQueryNorm}. Recompute
+   * after any query mutation; the supplied norm must belong to this query.
+   */
+  public static float batchCosineQueryNorm(float[] query) {
+    return IMPL.batchCosineQueryNorm(query);
+  }
+
+  /**
+   * Prepared cosine over rows addressed by byte offsets, avoiding one view object per row. Offsets
+   * may be noncontiguous, padded or repeated; each must cover {@code dim} float32 values.
+   */
+  public static void batchCosineWithQueryNorm(
+      float[] query,
+      MemorySegment matrix,
+      long[] offsets,
+      int dim,
+      float queryNorm,
+      float[] out,
+      int count) {
+    Objects.requireNonNull(query, "query");
+    Objects.requireNonNull(matrix, "matrix");
+    Objects.requireNonNull(offsets, "offsets");
+    Objects.requireNonNull(out, "out");
+    checkDimensions(query.length, dim);
+    if (count < 0 || count > offsets.length || count > out.length)
+      throw new IllegalArgumentException("count exceeds offsets or output: " + count);
+    long rowBytes = (long) dim * Float.BYTES;
+    for (int i = 0; i < count; i++)
+      Objects.checkFromIndexSize(offsets[i], rowBytes, matrix.byteSize());
+    IMPL.batchCosineWithQueryNorm(query, matrix, offsets, dim, queryNorm, out, count);
+  }
+
   // --- PQ ADC (Asymmetric Distance Computation) kernels ---
 
   /**

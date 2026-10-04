@@ -1,0 +1,686 @@
+{
+  "glove-hnsw-heap-ef32": {
+    "baseline_us": 38.8312275390625,
+    "candidate_us": 40.1103154296875,
+    "less_time_percent": -3.2939671797351577,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        37803.390625,
+        38831.2275390625,
+        41942.3349609375
+      ],
+      "candidate": [
+        40110.3154296875,
+        38655.50390625,
+        41473.2744140625
+      ]
+    }
+  },
+  "glove-hnsw-heap-ef100": {
+    "baseline_us": 105.183802734375,
+    "candidate_us": 106.6132626953125,
+    "less_time_percent": -1.3590114863477387,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        102056.611328125,
+        105757.9482421875,
+        105183.802734375
+      ],
+      "candidate": [
+        106613.2626953125,
+        104317.322265625,
+        110233.875
+      ]
+    }
+  },
+  "glove-hnsw-heap-ef128": {
+    "baseline_us": 133.5891103515625,
+    "candidate_us": 135.4649306640625,
+    "less_time_percent": -1.4041715732393545,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        132524.2470703125,
+        133589.1103515625,
+        140993.3154296875
+      ],
+      "candidate": [
+        135464.9306640625,
+        134091.17578125,
+        135914.1572265625
+      ]
+    }
+  },
+  "glove-hnsw-heap-ef512": {
+    "baseline_us": 460.0317763671875,
+    "candidate_us": 459.593765625,
+    "less_time_percent": 0.09521314932773306,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        456226.9453125,
+        460031.7763671875,
+        487878.623046875
+      ],
+      "candidate": [
+        467409.9677734375,
+        458322.6396484375,
+        459593.765625
+      ]
+    }
+  },
+  "glove-hnsw-heap-filtered128": {
+    "baseline_us": 748.3226259765624,
+    "candidate_us": 751.2325517578125,
+    "less_time_percent": -0.38885978857750025,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        649417.3203125,
+        754511.2353515625,
+        748322.6259765625
+      ],
+      "candidate": [
+        786045.5458984375,
+        728170.666015625,
+        751232.5517578125
+      ]
+    }
+  },
+  "glove-hnsw-mapped-ef32": {
+    "baseline_us": 57.5065341796875,
+    "candidate_us": 44.4399921875,
+    "less_time_percent": 22.721838793760718,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        54972.84375,
+        57817.5634765625,
+        57506.5341796875
+      ],
+      "candidate": [
+        44154.267578125,
+        44439.9921875,
+        45179.1884765625
+      ]
+    }
+  },
+  "glove-hnsw-mapped-ef100": {
+    "baseline_us": 146.1934580078125,
+    "candidate_us": 121.5204609375,
+    "less_time_percent": 16.876950177205597,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        145031.1455078125,
+        146563.4794921875,
+        146193.4580078125
+      ],
+      "candidate": [
+        121520.4609375,
+        126226.4697265625,
+        118692.5234375
+      ]
+    }
+  },
+  "glove-hnsw-mapped-ef128": {
+    "baseline_us": 182.585048828125,
+    "candidate_us": 153.177314453125,
+    "less_time_percent": 16.10632117128207,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        182585.048828125,
+        178278.689453125,
+        188785.9970703125
+      ],
+      "candidate": [
+        151423.69140625,
+        154244.115234375,
+        153177.314453125
+      ]
+    }
+  },
+  "glove-hnsw-mapped-ef512": {
+    "baseline_us": 603.039181640625,
+    "candidate_us": 507.0642109375,
+    "less_time_percent": 15.915213078197677,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        603039.181640625,
+        596935.515625,
+        615351.78125
+      ],
+      "candidate": [
+        507064.2109375,
+        504638.6728515625,
+        532334.56640625
+      ]
+    }
+  },
+  "glove-hnsw-mapped-filtered128": {
+    "baseline_us": 821.4753720703125,
+    "candidate_us": 791.1300908203125,
+    "less_time_percent": 3.6939976877849334,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        808526.9140625,
+        821475.3720703125,
+        833494.4814453125
+      ],
+      "candidate": [
+        791130.0908203125,
+        831952.708984375,
+        753344.72265625
+      ]
+    }
+  },
+  "glove-hnsw-public-ef32": {
+    "baseline_us": 74.76158203125,
+    "candidate_us": 68.4261962890625,
+    "less_time_percent": 8.474119420773274,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        73472.9609375,
+        76006.8642578125,
+        74761.58203125
+      ],
+      "candidate": [
+        69105.203125,
+        68426.1962890625,
+        65522.615234375
+      ]
+    }
+  },
+  "glove-hnsw-public-ef100": {
+    "baseline_us": 179.6401533203125,
+    "candidate_us": 160.39741796875,
+    "less_time_percent": 10.711823050635672,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        179640.1533203125,
+        181540.4375,
+        179472.26171875
+      ],
+      "candidate": [
+        160397.41796875,
+        159751.763671875,
+        166143.1494140625
+      ]
+    }
+  },
+  "glove-hnsw-public-ef128": {
+    "baseline_us": 228.0747646484375,
+    "candidate_us": 205.184859375,
+    "less_time_percent": 10.036141135000543,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        228585.0654296875,
+        228074.7646484375,
+        225515.84375
+      ],
+      "candidate": [
+        197900.41015625,
+        210356.0517578125,
+        205184.859375
+      ]
+    }
+  },
+  "glove-hnsw-public-ef512": {
+    "baseline_us": 710.6596162109375,
+    "candidate_us": 647.9923427734375,
+    "less_time_percent": 8.818184121904448,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        709792.755859375,
+        741211.056640625,
+        710659.6162109375
+      ],
+      "candidate": [
+        636907.0869140625,
+        667486.6201171875,
+        647992.3427734375
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-ef32": {
+    "baseline_us": 147.8271259765625,
+    "candidate_us": 145.243701171875,
+    "less_time_percent": 1.7475986140034205,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        147827.1259765625,
+        147068.4736328125,
+        151307.224609375
+      ],
+      "candidate": [
+        145243.701171875,
+        145789.62890625,
+        144129.748046875
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-ef100": {
+    "baseline_us": 385.8567548828125,
+    "candidate_us": 374.96612109375,
+    "less_time_percent": 2.8224551342557302,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        385856.7548828125,
+        373131.5654296875,
+        390405.6669921875
+      ],
+      "candidate": [
+        374966.12109375,
+        372154.615234375,
+        379948.7734375
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-ef128": {
+    "baseline_us": 474.89926171875,
+    "candidate_us": 468.0383857421875,
+    "less_time_percent": 1.4447013355488703,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        474899.26171875,
+        469897.6162109375,
+        480775.01171875
+      ],
+      "candidate": [
+        467874.8642578125,
+        468038.3857421875,
+        477563.8720703125
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-ef512": {
+    "baseline_us": 1531.7094208984374,
+    "candidate_us": 1539.953994140625,
+    "less_time_percent": -0.5382596156751074,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1553320.90625,
+        1528318.3134765625,
+        1531709.4208984375
+      ],
+      "candidate": [
+        1539953.994140625,
+        1514493.375,
+        1539967.0498046875
+      ]
+    }
+  },
+  "dbpedia-hnsw-heap-filtered128": {
+    "baseline_us": 1980.0908251953124,
+    "candidate_us": 1990.871453125,
+    "less_time_percent": -0.5444511833756049,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1981753.3505859375,
+        1980090.8251953125,
+        1970117.7802734375
+      ],
+      "candidate": [
+        2022015.46484375,
+        1983657.5009765625,
+        1990871.453125
+      ]
+    }
+  },
+  "dbpedia-hnsw-mapped-ef32": {
+    "baseline_us": 168.82147265625,
+    "candidate_us": 150.5950654296875,
+    "less_time_percent": 10.796261245555328,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        170292.265625,
+        168821.47265625,
+        161997.3662109375
+      ],
+      "candidate": [
+        150577.9794921875,
+        154955.4013671875,
+        150595.0654296875
+      ]
+    }
+  },
+  "dbpedia-hnsw-mapped-ef100": {
+    "baseline_us": 418.8663984375,
+    "candidate_us": 389.2591220703125,
+    "less_time_percent": 7.068429570295375,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        422838.3935546875,
+        417204.7431640625,
+        418866.3984375
+      ],
+      "candidate": [
+        385437.296875,
+        389259.1220703125,
+        395906.82421875
+      ]
+    }
+  },
+  "dbpedia-hnsw-mapped-ef128": {
+    "baseline_us": 596.8090791015625,
+    "candidate_us": 475.833384765625,
+    "less_time_percent": 20.27041788942865,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        609876.001953125,
+        593606.15234375,
+        596809.0791015625
+      ],
+      "candidate": [
+        475436.318359375,
+        477079.169921875,
+        475833.384765625
+      ]
+    }
+  },
+  "dbpedia-hnsw-mapped-ef512": {
+    "baseline_us": 1670.164001953125,
+    "candidate_us": 1546.70748046875,
+    "less_time_percent": 7.391880159074338,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        1670164.001953125,
+        1643461.5087890625,
+        1691782.7392578125
+      ],
+      "candidate": [
+        1546707.48046875,
+        1604315.8984375,
+        1526127.669921875
+      ]
+    }
+  },
+  "dbpedia-hnsw-mapped-filtered128": {
+    "baseline_us": 2125.11916015625,
+    "candidate_us": 2025.895349609375,
+    "less_time_percent": 4.669093969280269,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2137720.19140625,
+        2118148.853515625,
+        2125119.16015625
+      ],
+      "candidate": [
+        2025895.349609375,
+        2036944.5576171875,
+        2011793.1552734375
+      ]
+    }
+  },
+  "dbpedia-hnsw-public-ef32": {
+    "baseline_us": 244.3658662109375,
+    "candidate_us": 222.203822265625,
+    "less_time_percent": 9.069206059320145,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        237555.580078125,
+        246451.3115234375,
+        244365.8662109375
+      ],
+      "candidate": [
+        222203.822265625,
+        226487.5595703125,
+        218864.2451171875
+      ]
+    }
+  },
+  "dbpedia-hnsw-public-ef100": {
+    "baseline_us": 633.32873046875,
+    "candidate_us": 517.9966396484375,
+    "less_time_percent": 18.21046247735374,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        633328.73046875,
+        657816.1298828125,
+        622717.173828125
+      ],
+      "candidate": [
+        521700.5546875,
+        517996.6396484375,
+        516637.1640625
+      ]
+    }
+  },
+  "dbpedia-hnsw-public-ef128": {
+    "baseline_us": 700.0985537109375,
+    "candidate_us": 658.55319140625,
+    "less_time_percent": 5.934216273476423,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        667126.7568359375,
+        712807.2021484375,
+        700098.5537109375
+      ],
+      "candidate": [
+        658553.19140625,
+        653523.671875,
+        662815.353515625
+      ]
+    }
+  },
+  "dbpedia-hnsw-public-ef512": {
+    "baseline_us": 2109.4302744140623,
+    "candidate_us": 2025.338125,
+    "less_time_percent": 3.9864863244849724,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        2109430.2744140625,
+        2108159.501953125,
+        2150712.466796875
+      ],
+      "candidate": [
+        2015315.294921875,
+        2025338.125,
+        2062280.650390625
+      ]
+    }
+  },
+  "fashion-hnsw-heap-ef32": {
+    "baseline_us": 75.81762109375,
+    "candidate_us": 76.81114453125,
+    "less_time_percent": -1.3104123067531948,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        75817.62109375,
+        75786.9755859375,
+        80686.7685546875
+      ],
+      "candidate": [
+        81085.576171875,
+        76811.14453125,
+        75863.4150390625
+      ]
+    }
+  },
+  "fashion-hnsw-heap-ef100": {
+    "baseline_us": 168.935263671875,
+    "candidate_us": 166.2743310546875,
+    "less_time_percent": 1.5751196993162186,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        168935.263671875,
+        165694.7587890625,
+        171087.9404296875
+      ],
+      "candidate": [
+        175013.4423828125,
+        166274.3310546875,
+        164744.349609375
+      ]
+    }
+  },
+  "fashion-hnsw-heap-ef128": {
+    "baseline_us": 203.7442822265625,
+    "candidate_us": 199.4848623046875,
+    "less_time_percent": 2.090571512155881,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        203744.2822265625,
+        197950.1455078125,
+        206847.51953125
+      ],
+      "candidate": [
+        208205.498046875,
+        199484.8623046875,
+        198435.3818359375
+      ]
+    }
+  },
+  "fashion-hnsw-heap-ef512": {
+    "baseline_us": 564.942888671875,
+    "candidate_us": 559.2935908203125,
+    "less_time_percent": 0.9999768055924063,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        583768.3818359375,
+        558754.8955078125,
+        564942.888671875
+      ],
+      "candidate": [
+        557142.84765625,
+        559293.5908203125,
+        577052.06640625
+      ]
+    }
+  },
+  "fashion-hnsw-heap-filtered128": {
+    "baseline_us": 730.3436328125,
+    "candidate_us": 730.7045947265625,
+    "less_time_percent": -0.049423572390505655,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        763240.5087890625,
+        725220.9677734375,
+        730343.6328125
+      ],
+      "candidate": [
+        729575.76953125,
+        742410.5263671875,
+        730704.5947265625
+      ]
+    }
+  },
+  "fashion-hnsw-mapped-ef32": {
+    "baseline_us": 92.4494228515625,
+    "candidate_us": 92.06462109375,
+    "less_time_percent": 0.4162294862893212,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        92754.091796875,
+        92449.4228515625,
+        90652.896484375
+      ],
+      "candidate": [
+        94178.927734375,
+        89858.044921875,
+        92064.62109375
+      ]
+    }
+  },
+  "fashion-hnsw-mapped-ef100": {
+    "baseline_us": 217.731123046875,
+    "candidate_us": 210.6695595703125,
+    "less_time_percent": 3.243249461879749,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        220213.794921875,
+        217731.123046875,
+        211187.3388671875
+      ],
+      "candidate": [
+        206547.2158203125,
+        210669.5595703125,
+        214314.89453125
+      ]
+    }
+  },
+  "fashion-hnsw-mapped-ef128": {
+    "baseline_us": 256.573201171875,
+    "candidate_us": 250.4098310546875,
+    "less_time_percent": 2.402187792426047,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        268965.5224609375,
+        251765.701171875,
+        256573.201171875
+      ],
+      "candidate": [
+        243365.7509765625,
+        250409.8310546875,
+        254006.486328125
+      ]
+    }
+  },
+  "fashion-hnsw-mapped-ef512": {
+    "baseline_us": 622.6382939453125,
+    "candidate_us": 624.74146484375,
+    "less_time_percent": -0.33778373718564847,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        630782.6650390625,
+        622638.2939453125,
+        620985.51171875
+      ],
+      "candidate": [
+        624741.46484375,
+        618490.23828125,
+        627176.962890625
+      ]
+    }
+  },
+  "fashion-hnsw-mapped-filtered128": {
+    "baseline_us": 738.9282421875,
+    "candidate_us": 746.1555146484375,
+    "less_time_percent": -0.9780750076004763,
+    "exact_parity": true,
+    "forks_ns_per_query": {
+      "baseline": [
+        776439.1201171875,
+        738928.2421875,
+        735379.224609375
+      ],
+      "candidate": [
+        746155.5146484375,
+        800461.5537109375,
+        743572.4619140625
+      ]
+    }
+  }
+}

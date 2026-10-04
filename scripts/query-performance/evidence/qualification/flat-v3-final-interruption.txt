@@ -1,0 +1,1 @@
+Stopped the repeated V3 comparison: the completed pilot already showed severe concurrent-query regressions. Preserve partial samples; not a qualified final run.

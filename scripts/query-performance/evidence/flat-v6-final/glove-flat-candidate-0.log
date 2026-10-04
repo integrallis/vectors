@@ -1,0 +1,59 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 04, 2026 1:19:40 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 04, 2026 1:19:40 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+WARMUP,glove-flat-public-single,76,3022651636
+ALLOCATION,glove-flat-public-single,12844352,32
+RESULT,glove-flat-public-single,0,38058430,1177092119961519121,32
+RESULT,glove-flat-public-single,1,38159419,1177092119961519121,32
+RESULT,glove-flat-public-single,2,38298729,1177092119961519121,32
+RESULT,glove-flat-public-single,3,38874238,1177092119961519121,32
+RESULT,glove-flat-public-single,4,38040034,1177092119961519121,32
+RESULT,glove-flat-public-single,5,37964584,1177092119961519121,32
+RESULT,glove-flat-public-single,6,38103834,1177092119961519121,32
+WARMUP,glove-flat-public-batch4,597,3001560186
+ALLOCATION,glove-flat-public-batch4,2504,4
+RESULT,glove-flat-public-batch4,0,4863494,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,1,4796217,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,2,4790026,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,3,4779246,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,4,4822798,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,5,4864616,-5393426958338102730,4
+RESULT,glove-flat-public-batch4,6,4806015,-5393426958338102730,4
+WARMUP,glove-flat-public-batch16,241,3007704007
+ALLOCATION,glove-flat-public-batch16,7560,16
+RESULT,glove-flat-public-batch16,0,11216569,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,1,11313971,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,2,11253438,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,3,11318560,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,4,11194668,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,5,11419359,-4616742646284636308,16
+RESULT,glove-flat-public-batch16,6,11221257,-4616742646284636308,16
+WARMUP,glove-flat-public-batch32,168,3004563829
+ALLOCATION,glove-flat-public-batch32,4616,32
+RESULT,glove-flat-public-batch32,0,16894279,1177092119961519121,32
+RESULT,glove-flat-public-batch32,1,17247340,1177092119961519121,32
+RESULT,glove-flat-public-batch32,2,16711547,1177092119961519121,32
+RESULT,glove-flat-public-batch32,3,16731914,1177092119961519121,32
+RESULT,glove-flat-public-batch32,4,17508139,1177092119961519121,32
+RESULT,glove-flat-public-batch32,5,17029582,1177092119961519121,32
+RESULT,glove-flat-public-batch32,6,16688994,1177092119961519121,32
+WARMUP,glove-flat-independent4,606,3002769765
+ALLOCATION,glove-flat-independent4,728,4
+RESULT,glove-flat-independent4,0,4967919,-5393426958338102730,4
+RESULT,glove-flat-independent4,1,5008466,-5393426958338102730,4
+RESULT,glove-flat-independent4,2,5052488,-5393426958338102730,4
+RESULT,glove-flat-independent4,3,5027661,-5393426958338102730,4
+RESULT,glove-flat-independent4,4,5063608,-5393426958338102730,4
+RESULT,glove-flat-independent4,5,5061735,-5393426958338102730,4
+RESULT,glove-flat-independent4,6,5020217,-5393426958338102730,4
+WARMUP,glove-flat-independent16,223,3003151758
+ALLOCATION,glove-flat-independent16,1744,16
+RESULT,glove-flat-independent16,0,13220213,-4616742646284636308,16
+RESULT,glove-flat-independent16,1,13042660,-4616742646284636308,16
+RESULT,glove-flat-independent16,2,12487490,-4616742646284636308,16
+RESULT,glove-flat-independent16,3,12362366,-4616742646284636308,16
+RESULT,glove-flat-independent16,4,14229886,-4616742646284636308,16
+RESULT,glove-flat-independent16,5,14944995,-4616742646284636308,16
+RESULT,glove-flat-independent16,6,11447321,-4616742646284636308,16

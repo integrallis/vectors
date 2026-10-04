@@ -42,6 +42,10 @@ jobs:
         env:
           JAVA_TOOL_OPTIONS: ${{ matrix.java_options }}
         run: ./gradlew :vectors-core:test :vectors-hnsw:test :vectors-quantization:test --rerun-tasks --max-workers=4 --no-daemon
+      - name: Execute flat scheduling contracts
+        env:
+          JAVA_TOOL_OPTIONS: ${{ matrix.java_options }}
+        run: ./gradlew :vectors-db:test --tests '*ParallelFlatScanTest' --tests '*FlatCollectionBatchTest' --max-workers=4 --no-daemon
       - name: Retain portability evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -52,6 +56,7 @@ jobs:
             vectors-core/build/test-results/test/
             vectors-hnsw/build/test-results/test/
             vectors-quantization/build/test-results/test/
+            vectors-db/build/test-results/test/
           retention-days: 30
 
   build:
@@ -80,6 +85,7 @@ jobs:
         run: |
           python3 scripts/default-construction/run.py --help
           python3 -m unittest discover -s scripts/default-construction -p 'test_*.py'
+          python3 -m unittest discover -s scripts/query-performance -p 'test_*.py'
 
       # S3 compare-and-swap and Studio SSE/HTTP workflows are outside the default test tags.
       - name: Storage and Studio integration tests
