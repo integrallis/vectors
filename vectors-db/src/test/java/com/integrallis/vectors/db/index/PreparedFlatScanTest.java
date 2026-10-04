@@ -36,7 +36,7 @@ class PreparedFlatScanTest {
     var index = new FlatScanAdapter();
     index.build(rows, SimilarityFunction.COSINE);
     for (int pass = 0; pass < 3; pass++) {
-      for (int count : new int[] {1, 2, 4, 16}) {
+      for (int count : new int[] {1, 2, 3, 4, 16}) {
         var subset = Arrays.copyOf(queries, count);
         var batch = index.searchBatch(subset, 256, 128, 1f);
         for (int qi = 0; qi < count; qi++) {

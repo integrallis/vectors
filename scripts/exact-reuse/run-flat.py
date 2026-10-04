@@ -11,6 +11,7 @@ p.add_argument("inputs", type=Path)
 p.add_argument("collection", type=Path)
 p.add_argument("output", type=Path)
 p.add_argument("--rounds", type=int, default=3)
+p.add_argument("--query-counts", default="1,2,3,4,16,64")
 p.add_argument("--baseline-sha", required=True)
 p.add_argument("--candidate-sha", required=True)
 a = p.parse_args()
@@ -90,7 +91,7 @@ for repeat in range(a.rounds):
                 str(classes) + os.pathsep + str(getattr(a, arm) / "*"),
                 "FlatBatchPerformance",
                 *case,
-                "1,2,4,16,64",
+                a.query_counts,
                 "8",
                 "7",
             ]
@@ -107,7 +108,9 @@ for repeat in range(a.rounds):
                 key = f"{corpus}-{mode}-n{n}-d{d}-q{q}"
                 current.setdefault(key, []).append(int(ns))
                 digests.setdefault((arm, key), set()).add(digest)
-            if len(current) != 10 or any(len(times) != 7 for times in current.values()):
+            if len(current) != 2 * len(a.query_counts.split(",")) or any(
+                len(times) != 7 for times in current.values()
+            ):
                 raise SystemExit("Incomplete flat samples: " + name)
             for key, times in current.items():
                 samples.setdefault((arm, key), []).append(statistics.median(times))
