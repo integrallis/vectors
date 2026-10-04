@@ -12,12 +12,18 @@ p.add_argument("collection", type=Path)
 p.add_argument("output", type=Path)
 p.add_argument("--rounds", type=int, default=3)
 p.add_argument("--query-counts", default="1,2,3,4,16,64")
+p.add_argument("--public-api", action="store_true")
 p.add_argument("--baseline-sha", required=True)
 p.add_argument("--candidate-sha", required=True)
 a = p.parse_args()
 a.output.mkdir(parents=True, exist_ok=False)
 java = Path(os.environ["JAVA_HOME"]) / "bin/java"
-source = Path(__file__).with_name("FlatBatchPerformance.java")
+source = Path(__file__).with_name(
+    "CollectionBatchPerformance.java" if a.public_api else "FlatBatchPerformance.java"
+)
+sources = [source] + (
+    [Path(__file__).with_name("FlatBatchPerformance.java")] if a.public_api else []
+)
 classes = a.output / "classes"
 classes.mkdir()
 subprocess.run(
@@ -28,7 +34,7 @@ subprocess.run(
         str(a.baseline / "*"),
         "-d",
         str(classes),
-        str(source),
+        *[str(f) for f in sources],
     ],
     check=True,
 )
@@ -40,7 +46,10 @@ provenance = {
     ),
     "baseline_sha": a.baseline_sha,
     "candidate_sha": a.candidate_sha,
-    "harness_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+    "harness_sha256": {
+        f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in sources
+    },
+    "api": "VectorCollection" if a.public_api else "FlatScanAdapter",
     "jars": {
         arm: {
             f.name: hashlib.sha256(f.read_bytes()).hexdigest()
@@ -89,7 +98,7 @@ for repeat in range(a.rounds):
                 "-Xbatch",
                 "-cp",
                 str(classes) + os.pathsep + str(getattr(a, arm) / "*"),
-                "FlatBatchPerformance",
+                source.stem,
                 *case,
                 a.query_counts,
                 "8",
