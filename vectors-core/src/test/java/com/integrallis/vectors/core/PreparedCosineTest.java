@@ -64,6 +64,48 @@ class PreparedCosineTest {
     }
   }
 
+  @Test
+  void preparedBothNormsAgreeWithIndependentDoublePrecisionReference() {
+    var random = new SplittableRandom(518372);
+    var scalar = new ScalarVectorUtilSupport();
+    org.junit.jupiter.api.Assertions.assertFalse(scalar.supportsCosineNormReuse(1536));
+    for (int dim :
+        new int[] {
+          1, 7, 8, 15, 16, 17, 31, 32, 33, 63, 64, 65, 100, 127, 128, 129, 384, 512, 768, 960, 1536
+        }) {
+      for (int trial = 0; trial < 4; trial++) {
+        float[] a = new float[dim], b = new float[dim];
+        double dot = 0, na = 0, nb = 0;
+        for (int i = 0; i < dim; i++) {
+          a[i] = (float) random.nextDouble(-1, 1);
+          b[i] = (float) random.nextDouble(-1, 1);
+          dot += (double) a[i] * b[i];
+          na += (double) a[i] * a[i];
+          nb += (double) b[i] * b[i];
+        }
+        float expected = (float) (dot / Math.sqrt(na * nb));
+        assertEquals(
+            expected,
+            VectorUtil.cosineWithNorms(
+                a, b, VectorUtil.cosineQueryNorm(a), VectorUtil.cosineQueryNorm(b)),
+            2e-6f);
+        assertEquals(
+            expected,
+            scalar.cosineWithNorms(a, b, scalar.cosineQueryNorm(a), scalar.cosineQueryNorm(b)),
+            2e-6f);
+        // Exercise provider dispatch in the instrumented JVM too; the separate probe above
+        // continues to enforce exact warmed bits, without an epsilon or coverage instrumentation.
+        boolean reusable = VectorUtil.supportsCosineNormReuse(dim);
+        if (dim == 1) org.junit.jupiter.api.Assertions.assertFalse(reusable);
+      }
+    }
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalArgumentException.class,
+        () -> VectorUtil.cosineWithNorms(new float[3], new float[4], 1f, 1f));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        Float.isNaN(VectorUtil.cosineWithNorms(new float[64], new float[64], 0f, 0f)));
+  }
+
   public static final class Probe {
     private static volatile float sink;
 

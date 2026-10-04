@@ -12,13 +12,20 @@ p.add_argument("--count", type=int, default=100000)
 p.add_argument("--cadence", type=int, default=25000)
 p.add_argument("--threads", type=int, default=8)
 p.add_argument("--queries", type=int, default=1000)
+p.add_argument(
+    "--recall-only",
+    action="store_true",
+    help="Resume recall for completed timing records",
+)
 p.add_argument("--baseline-sha", required=True)
 p.add_argument("--candidate-sha", required=True)
 a = p.parse_args()
-a.output.mkdir(parents=True, exist_ok=False)
+for name in ("baseline", "candidate", "source", "generation", "output"):
+    setattr(a, name, getattr(a, name).resolve())
+a.output.mkdir(parents=True, exist_ok=a.recall_only)
 java = Path(os.environ["JAVA_HOME"]) / "bin/java"
 classes = a.output / "classes"
-classes.mkdir()
+classes.mkdir(exist_ok=a.recall_only)
 sources = [
     a.source
     / "vectors-bench/src/main/java/com/integrallis/vectors/bench"
@@ -60,9 +67,11 @@ provenance = {
         for arm in ("baseline", "candidate")
     },
 }
-(a.output / "provenance.json").write_text(json.dumps(provenance, indent=2))
-commands = []
-records = []
+(
+    a.output / ("recall-resume-provenance.json" if a.recall_only else "provenance.json")
+).write_text(json.dumps(provenance, indent=2))
+commands = json.loads((a.output / "commands.json").read_text()) if a.recall_only else []
+records = json.loads((a.output / "records.json").read_text()) if a.recall_only else []
 
 
 def run(arm, label, main, args):
@@ -80,12 +89,17 @@ def run(arm, label, main, args):
     (a.output / "commands.json").write_text(json.dumps(commands, indent=2))
     print(label, flush=True)
     log = a.output / (label + ".log")
+    if log.exists():
+        attempt = 1
+        while log.with_suffix(f".attempt{attempt}.log").exists():
+            attempt += 1
+        log.rename(log.with_suffix(f".attempt{attempt}.log"))
     with log.open("w") as out:
         subprocess.run(cmd, stdout=out, stderr=subprocess.STDOUT, check=True)
     return log.read_text()
 
 
-for repeat in range(a.rounds):
+for repeat in range(0 if a.recall_only else a.rounds):
     for arm in (
         ("baseline", "candidate") if repeat % 2 == 0 else ("candidate", "baseline")
     ):

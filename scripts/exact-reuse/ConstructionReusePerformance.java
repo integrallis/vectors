@@ -23,7 +23,7 @@ public class ConstructionReusePerformance {
   }
 
   public static void main(String[] args) throws Exception {
-    // train, test, rows, threads, seed, metric, oracle, warmup rows, search samples
+    // train, test, rows, threads, seed, metric, oracle, warmup rows, search samples, graph output
     var data =
         Arrays.copyOf(FlatBatchPerformance.read(Path.of(args[0])), Integer.parseInt(args[2]));
     var queries = FlatBatchPerformance.read(Path.of(args[1]));
@@ -57,9 +57,9 @@ public class ConstructionReusePerformance {
     long start = System.nanoTime();
     var graph = ConcurrentHnswGraphBuilder.create(16, 200, source, metric, seed).build(threads);
     long elapsed = System.nanoTime() - start;
+    byte[] encodedGraph = HnswGraphCodec.encode(graph);
     String graphHash =
-        HexFormat.of()
-            .formatHex(MessageDigest.getInstance("SHA-256").digest(HnswGraphCodec.encode(graph)));
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(encodedGraph));
     System.out.printf(
         Locale.ROOT,
         "BUILD,%d,%d,%d,%s,%d,%s%n",
@@ -96,5 +96,6 @@ public class ConstructionReusePerformance {
         System.out.printf(Locale.ROOT, "SEARCH,%d,%d,%d,%d%n", ef, sample, elapsed, hash);
       }
     }
+    if (args.length > 9) Files.write(Path.of(args[9]), encodedGraph);
   }
 }

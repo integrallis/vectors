@@ -101,6 +101,7 @@ for corpus, metric in [
                     str(oracle),
                     "2048",
                     "7",
+                    str(a.output / (name + ".graph.bin")),
                 ]
                 commands.append(cmd)
                 (a.output / "commands.json").write_text(json.dumps(commands, indent=2))
@@ -136,6 +137,14 @@ for corpus, metric in [
                     )
                 ):
                     raise SystemExit("Incomplete construction samples: " + name)
+                if (
+                    hashlib.sha256(
+                        (a.output / (name + ".graph.bin")).read_bytes()
+                    ).hexdigest()
+                    != r["graph_hash"]
+                ):
+                    raise SystemExit("Graph snapshot hash mismatch: " + name)
+                os.sync()  # Snapshot persistence completes between measured JVMs.
                 records.append(r)
                 pair[arm] = r
                 (a.output / "records.json").write_text(json.dumps(records, indent=2))
