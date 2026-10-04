@@ -37,6 +37,7 @@ subprocess.run(
 )
 provenance = {
     "host": platform.platform(),
+    "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     "java": subprocess.check_output(
         [str(java), "-version"], stderr=subprocess.STDOUT, text=True
     ),
@@ -126,6 +127,15 @@ for corpus, metric in [
                     elif f[0] == "SEARCH":
                         r["search_ns"].setdefault(f[1], []).append(int(f[3]))
                         r["search_hash"][f[1]] = f[4]
+                if (
+                    "build_ns" not in r
+                    or set(r["recall"]) != {"32", "128", "512"}
+                    or any(
+                        len(r["search_ns"].get(ef, [])) != 7
+                        for ef in ("32", "128", "512")
+                    )
+                ):
+                    raise SystemExit("Incomplete construction samples: " + name)
                 records.append(r)
                 pair[arm] = r
                 (a.output / "records.json").write_text(json.dumps(records, indent=2))

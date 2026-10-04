@@ -33,6 +33,7 @@ subprocess.run(
 )
 provenance = {
     "host": platform.platform(),
+    "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     "java": subprocess.check_output(
         [str(java), "-version"], stderr=subprocess.STDOUT, text=True
     ),
@@ -106,6 +107,8 @@ for repeat in range(a.rounds):
                 key = f"{corpus}-{mode}-n{n}-d{d}-q{q}"
                 current.setdefault(key, []).append(int(ns))
                 digests.setdefault((arm, key), set()).add(digest)
+            if len(current) != 10 or any(len(times) != 7 for times in current.values()):
+                raise SystemExit("Incomplete flat samples: " + name)
             for key, times in current.items():
                 samples.setdefault((arm, key), []).append(statistics.median(times))
         for key in current:
