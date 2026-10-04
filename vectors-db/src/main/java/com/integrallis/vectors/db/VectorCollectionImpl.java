@@ -92,8 +92,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
@@ -2234,6 +2236,103 @@ final class VectorCollectionImpl implements VectorCollection {
   // ---------------------------------------------------------------------------
   // Read API
   // ---------------------------------------------------------------------------
+
+  @Override
+  public List<SearchResult> searchBatch(List<SearchRequest> requests) {
+    int workers = Runtime.getRuntime().availableProcessors();
+    if (!canShareFlatScans(requests, workers)) {
+      return VectorCollection.super.searchBatch(requests);
+    }
+    Generation gen;
+    try {
+      gen = acquireReadSnapshot();
+    } catch (RuntimeException e) {
+      throw new RuntimeException("searchBatch query failed", e);
+    }
+    if (!(gen.spi instanceof FlatScanAdapter)) {
+      gen.release();
+      return VectorCollection.super.searchBatch(requests);
+    }
+    // Pin the snapshot until executor.close() has joined every task, including failed batches.
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      List<Future<List<SearchResult>>> futures = new ArrayList<>(workers);
+      for (int worker = 0; worker < workers; worker++) {
+        int from = worker * requests.size() / workers;
+        int to = (worker + 1) * requests.size() / workers;
+        futures.add(executor.submit(() -> searchFlatBatch(gen, requests.subList(from, to))));
+      }
+      List<SearchResult> results = new ArrayList<>(requests.size());
+      for (var future : futures) {
+        try {
+          results.addAll(future.get());
+        } catch (ExecutionException e) {
+          throw new RuntimeException("searchBatch query failed", e.getCause());
+        }
+      }
+      return List.copyOf(results);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("searchBatch interrupted", e);
+    } finally {
+      gen.release();
+    }
+  }
+
+  private boolean canShareFlatScans(List<SearchRequest> requests, int workers) {
+    // Keep all processors busy, with at least four queries sharing each row norm and scan.
+    if (requests == null
+        || requests.size() / 4 < workers
+        || config.indexType() != IndexType.FLAT
+        || indexMetric() != SimilarityFunction.COSINE
+        || queryCache.isEnabled()
+        || !VectorUtil.supportsCosineNormReuse(config.dimension())) {
+      return false;
+    }
+    int k = requests.getFirst() == null ? -1 : requests.getFirst().k();
+    for (var request : requests) {
+      if (request == null
+          || request.query().length != config.dimension()
+          || request.k() != k
+          || (request.filter() != null && !(request.filter() instanceof Filter.All))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private List<SearchResult> searchFlatBatch(Generation gen, List<SearchRequest> requests) {
+    long start = System.nanoTime();
+    float[][] queries = new float[requests.size()][];
+    for (int i = 0; i < queries.length; i++) queries[i] = requests.get(i).query();
+    var first = requests.getFirst();
+    var outcomes =
+        gen.spi.searchBatch(queries, first.k(), first.searchListSize(), first.overQueryFactor());
+    List<SearchResult> results = new ArrayList<>(requests.size());
+    for (int q = 0; q < outcomes.length; q++) {
+      var request = requests.get(q);
+      var outcome = outcomes[q];
+      List<SearchResult.Hit> hits =
+          new ArrayList<>(Math.min(outcome.ordinals().length, request.k()));
+      for (int i = 0; i < outcome.ordinals().length && hits.size() < request.k(); i++) {
+        int ordinal = outcome.ordinals()[i];
+        float score = outcome.scores()[i];
+        if (gen.tombstones.get(ordinal) || score < request.minScore()) continue;
+        Document stored = gen.metadataStore.get(ordinal);
+        if (stored == null) continue;
+        float[] vector =
+            request.includeVector() ? hydrateVector(gen, ordinal, stored).vector() : null;
+        Document projected =
+            new Document(
+                stored.id(),
+                vector,
+                request.includeText() ? stored.text() : null,
+                request.includeMetadata() ? stored.metadata() : null);
+        hits.add(new SearchResult.Hit(stored.id(), score, projected));
+      }
+      results.add(new SearchResult(hits, System.nanoTime() - start));
+    }
+    return results;
+  }
 
   @Override
   public SearchResult search(SearchRequest request) {

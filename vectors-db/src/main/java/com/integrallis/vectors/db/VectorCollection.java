@@ -175,10 +175,10 @@ public interface VectorCollection extends AutoCloseable {
   /**
    * Searches the currently-committed generation for multiple queries in parallel.
    *
-   * <p>Each query in {@code requests} is dispatched as an independent task on a virtual-thread
-   * executor. This method blocks while collecting the results in request order. If a query fails,
-   * its cause is wrapped in {@link RuntimeException}; closing the executor waits for already
-   * submitted tasks to terminate.
+   * <p>The default implementation dispatches each query as an independent virtual-thread task.
+   * Implementations may group compatible queries to share scans. This method blocks while
+   * collecting the results in request order. If a query fails, its cause is wrapped in {@link
+   * RuntimeException}; closing the executor waits for already submitted tasks to terminate.
    *
    * <p>The result list has the same size as {@code requests} and preserves request order: {@code
    * results.get(i)} corresponds to {@code requests.get(i)}.
