@@ -4,9 +4,12 @@ Baseline: merged main `c43c3160232dd20cf4b2ebd67f44b68c83edf56c`.
 
 Two default query optimizations, without changing graphs, search budgets or precision:
 
-- Heap flat single-query COSINE scans prepare the query squared norm once. Row
-  norms remain live; caller mutations between calls are visible. Short vectors
-  and providers without the existing norm-reuse capability retain the old route.
+- Large heap flat single-query scans score independent rows in the bounded common
+  fork/join pool, then feed the original heap in ordinal order. Ties and exact
+  scoring are preserved. This uses more CPU cores per query and allocates a
+  temporary `4 * rowCount` byte score buffer. Dispatch is automatic above four
+  million vector components when the common pool has multiple workers. Small
+  scans and the optimized COSINE batch route retain their original execution.
 - Full-precision HNSW COSINE scoring prepares the **batch kernel's** query norm
   once per query, instead of per neighbor list. Heap and segment kernels keep
   their original dot/row-norm accumulation, tail and score transform. Single-node
@@ -21,7 +24,11 @@ no row norm cache is introduced, and each searcher owns its existing scratch.
 
 - TDD: `8280599` adds the prepared-batch contract before implementation. The VPS
   compiler fails with missing methods; `aedc00b` implements the candidate and
-  passes the focused tests. Exact warmed score bits have a separate subprocess
+  passes the focused tests. The flat norm-reuse candidate was subsequently rejected:
+  v2 took 6.96% more median time on DBpedia across three unrestricted JVM pairs.
+  `8374f2d` adds parallel flat tests before implementation (missing-method red);
+  `bed834c` implements parallel scoring and passes the focused tests.
+  Exact warmed score bits have a separate subprocess
   test; storage, filters, query mutation, ties and portable fallbacks are tested.
 - Freeze baseline/candidate runtime jars and retain their SHA-256 checksums.
 - Run one process at a time on a dedicated VPS. Three alternating fresh-JVM pairs;
@@ -71,3 +78,21 @@ Latency summaries are the median of seven samples per JVM and then the median
 across JVMs, expressed per query. Timing includes result materialization and
 consumption. Steady-state measurements do not establish cold-start or cold-page
 performance, nor a ranking against competing libraries.
+
+## Diagnostic revisions retained
+
+The first query-norm-only pilot passed exact output parity but regressed DBpedia
+flat single-query time by 8.88%. Separating the SIMD loop and scalar tail (v2)
+also failed: three unrestricted pairs measured 6.96% more median time on DBpedia,
+with large between-JVM variability in both baseline and candidate. Those flat
+runtime changes were removed. The later parallel implementation retains the
+original single-row similarity kernels.
+
+A diagnostic pinned to one CPU also changed the JVM's detected CPU count and GC
+ergonomics. It is retained, but must not be substituted for the ordinary
+eight-processor environment. Subsequent HNSW affinity runs explicitly preserve
+`ActiveProcessorCount` from the unrestricted host while pinning the measured
+serial query process. Parallel flat measurements use all available VPS CPUs.
+
+Concurrent flat cases at Q=4,16,32 expose contention and allocation costs, rather
+than treating reduced single-query latency as proof of greater throughput.

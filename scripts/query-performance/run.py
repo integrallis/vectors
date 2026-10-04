@@ -43,7 +43,9 @@ for rep in range(a.rounds):
      if not fixture.exists():shutil.copytree(real.parent,fixture)
      runtime_data=fixture/real.name
     cmd=[str(java),'--add-modules=jdk.incubator.vector','--enable-native-access=ALL-UNNAMED','-Xms3g','-Xmx3g','-cp',str(classes)+os.pathsep+cp[arm],'QueryPerformance',name,str(runtime_data),str(queries),str(graph),metric,mode]
-    if a.cpu is not None:cmd=['taskset','-c',str(a.cpu)]+cmd
+    if a.cpu is not None:
+     cmd.insert(1,'-XX:ActiveProcessorCount='+str(len(os.sched_getaffinity(0))))
+     cmd=['taskset','-c',str(a.cpu)]+cmd
     commands.append(cmd);(out/'commands.json').write_text(json.dumps(commands,indent=2))
     with (out/(label+'.log')).open('w') as log:subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT,check=True)
     values={}

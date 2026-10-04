@@ -73,11 +73,14 @@ public class QueryPerformance {
           for (var r : requests) for (var hit : c.search(r).hits()) h=31*(31*h+hit.id().hashCode())+Float.floatToRawIntBits(hit.score());
           return h;
         });
-        if (!mode.equals("flat-single")) measure(name+"-flat-public-batch32", 32, 1, () -> {
-          long h=1;
-          for (var r : c.searchBatch(requests)) for (var hit : r.hits()) h=31*(31*h+hit.id().hashCode())+Float.floatToRawIntBits(hit.score());
-          return h;
-        });
+        if (!mode.equals("flat-single")) for (int count : new int[]{4,16,32}) {
+          var batchRequests = requests.subList(0,count);
+          measure(name+"-flat-public-batch"+count, count, 1, () -> {
+            long h=1;
+            for (var r : c.searchBatch(batchRequests)) for (var hit : r.hits()) h=31*(31*h+hit.id().hashCode())+Float.floatToRawIntBits(hit.score());
+            return h;
+          });
+        }
       }
       return;
     }
