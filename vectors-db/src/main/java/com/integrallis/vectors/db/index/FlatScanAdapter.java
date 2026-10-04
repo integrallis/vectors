@@ -186,17 +186,46 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
     for (int qi = 0; qi < queries.length; qi++) {
       queryNorms[qi] = VectorUtil.cosineQueryNorm(queries[qi]);
     }
-    boolean reuseRowNorm = queries.length > 1 && VectorUtil.supportsCosineNormReuse(dimension);
+    if (queries.length > 1 && VectorUtil.supportsCosineNormReuse(dimension)) {
+      scanCosineWithBothNorms(queries, queryNorms, actualK, heapIds, heapScores, heapSizes);
+      return;
+    }
+    for (int v = 0; v < vectors.length; v++) {
+      float[] stored = vectors[v];
+      for (int qi = 0; qi < queries.length; qi++) {
+        float score =
+            (1f + VectorUtil.cosineWithQueryNorm(queries[qi], stored, queryNorms[qi])) / 2f;
+        int sz = heapSizes[qi];
+        int[] ids = heapIds[qi];
+        float[] scores = heapScores[qi];
+        if (sz < actualK) {
+          ids[sz] = v;
+          scores[sz] = score;
+          heapSizes[qi] = sz + 1;
+          siftUp(ids, scores, sz);
+        } else if (score > scores[0]) {
+          ids[0] = v;
+          scores[0] = score;
+          siftDown(ids, scores, 0, sz);
+        }
+      }
+    }
+  }
+
+  private void scanCosineWithBothNorms(
+      float[][] queries,
+      float[] queryNorms,
+      int actualK,
+      int[][] heapIds,
+      float[][] heapScores,
+      int[] heapSizes) {
     for (int v = 0; v < vectors.length; v++) {
       float[] stored = vectors[v];
       // Rows are mutable: reuse only within this scan, never across calls.
-      float rowNorm = reuseRowNorm ? VectorUtil.cosineQueryNorm(stored) : 0f;
+      float rowNorm = VectorUtil.cosineQueryNorm(stored);
       for (int qi = 0; qi < queries.length; qi++) {
-        float cosine =
-            reuseRowNorm
-                ? VectorUtil.cosineWithNorms(queries[qi], stored, queryNorms[qi], rowNorm)
-                : VectorUtil.cosineWithQueryNorm(queries[qi], stored, queryNorms[qi]);
-        float score = (1f + cosine) / 2f;
+        float score =
+            (1f + VectorUtil.cosineWithNorms(queries[qi], stored, queryNorms[qi], rowNorm)) / 2f;
         int sz = heapSizes[qi];
         int[] ids = heapIds[qi];
         float[] scores = heapScores[qi];
