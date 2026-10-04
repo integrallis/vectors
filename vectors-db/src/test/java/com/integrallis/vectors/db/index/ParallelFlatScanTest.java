@@ -35,23 +35,31 @@ class ParallelFlatScanTest {
     Arrays.fill(rows, row);
     var index = new FlatScanAdapter();
     index.build(rows, SimilarityFunction.EUCLIDEAN);
-    var bean = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
     org.junit.jupiter.api.Assumptions.assumeTrue(bean.isThreadAllocatedMemorySupported());
     bean.setThreadAllocatedMemoryEnabled(true);
-    FlatScanAdapter.withConcurrentQueries(() -> {
-      for (int warm = 0; warm < 10; warm++) index.search(row, 10, 100, 1f);
-      long tid = Thread.currentThread().threadId(), before = bean.getThreadAllocatedBytes(tid);
-      index.search(row, 10, 100, 1f);
-      assertTrue(bean.getThreadAllocatedBytes(tid) - before < 2L * n);
-      return null;
-    });
-    assertThrows(IllegalStateException.class, () -> FlatScanAdapter.withConcurrentQueries(() -> {
-      throw new IllegalStateException("fixture");
-    }));
+    FlatScanAdapter.withConcurrentQueries(
+        () -> {
+          for (int warm = 0; warm < 10; warm++) index.search(row, 10, 100, 1f);
+          long tid = Thread.currentThread().threadId(), before = bean.getThreadAllocatedBytes(tid);
+          index.search(row, 10, 100, 1f);
+          assertTrue(bean.getThreadAllocatedBytes(tid) - before < 2L * n);
+          return null;
+        });
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            FlatScanAdapter.withConcurrentQueries(
+                () -> {
+                  throw new IllegalStateException("fixture");
+                }));
     if (java.util.concurrent.ForkJoinPool.getCommonPoolParallelism() > 1) {
       long tid = Thread.currentThread().threadId(), before = bean.getThreadAllocatedBytes(tid);
       index.search(row, 10, 100, 1f);
-      assertTrue(bean.getThreadAllocatedBytes(tid) - before >= 4L * n, "batch context leaked after failure");
+      assertTrue(
+          bean.getThreadAllocatedBytes(tid) - before >= 4L * n,
+          "batch context leaked after failure");
     }
   }
 

@@ -20,6 +20,9 @@ import com.integrallis.vectors.core.VectorUtil;
 import java.util.Objects;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 /**
  * Brute-force reference implementation of {@link IndexSpi}. Scores every stored vector against the
@@ -38,8 +41,23 @@ import java.util.concurrent.RecursiveAction;
 public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
   // Shared across adapters: concurrent collections must also respect the CPU expansion budget.
-  static final java.util.concurrent.Semaphore PARALLEL_SCANS =
-      new java.util.concurrent.Semaphore(1);
+  static final Semaphore PARALLEL_SCANS = new Semaphore(1);
+  private static final AtomicInteger CONCURRENT_BATCHES = new AtomicInteger();
+  private static final AtomicInteger ACTIVE_LARGE_SEARCHES = new AtomicInteger();
+
+  /**
+   * Run a collection batch that already distributes queries across processors. The collection
+   * facade owns this scope; callers do not need to select a scheduling mode. A global counter
+   * covers worker threads and concurrent collections, and is released even when a query fails.
+   */
+  public static <T> T withConcurrentQueries(Supplier<T> batch) {
+    CONCURRENT_BATCHES.incrementAndGet();
+    try {
+      return batch.get();
+    } finally {
+      CONCURRENT_BATCHES.decrementAndGet();
+    }
+  }
 
   private float[][] vectors = new float[0][];
   private SimilarityFunction metric;
@@ -68,17 +86,29 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
 
-    // Large scans amortize parallel dispatch. The score array is private to this call, and
-    // selection still consumes scores in ordinal order, including equal-score replacements.
-    if ((long) vectors.length * dimension >= 4_000_000L
-        && ForkJoinPool.getCommonPoolParallelism() > 1
-        && PARALLEL_SCANS.tryAcquire()) {
-      try {
-        return selectScores(scoreAll(query, vectors, metric), k);
-      } finally {
-        PARALLEL_SCANS.release();
-      }
+    // Large isolated scans can use spare cores. A collection batch already has query-level
+    // parallelism; expanding each of its scans would compete with those query workers.
+    if ((long) vectors.length * dimension < 4_000_000L
+        || ForkJoinPool.getCommonPoolParallelism() <= 1
+        || CONCURRENT_BATCHES.get() != 0) {
+      return searchSerial(query, k);
     }
+    int active = ACTIVE_LARGE_SEARCHES.incrementAndGet();
+    try {
+      if (active == 1 && CONCURRENT_BATCHES.get() == 0 && PARALLEL_SCANS.tryAcquire()) {
+        try {
+          return selectScores(scoreAll(query, vectors, metric), k);
+        } finally {
+          PARALLEL_SCANS.release();
+        }
+      }
+      return searchSerial(query, k);
+    } finally {
+      ACTIVE_LARGE_SEARCHES.decrementAndGet();
+    }
+  }
+
+  private SearchOutcome searchSerial(float[] query, int k) {
     int actualK = Math.min(k, vectors.length);
 
     // Bounded min-heap (by score) over at most actualK entries. When full, the root is the
@@ -151,7 +181,7 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
     @Override
     protected void compute() {
-      if (to - from <= chunk) {
+      if (to - from <= chunk || ACTIVE_LARGE_SEARCHES.get() > 1 || CONCURRENT_BATCHES.get() != 0) {
         for (int i = from; i < to; i++) scores[i] = metric.compare(query, rows[i]);
       } else {
         int middle = (from + to) >>> 1;

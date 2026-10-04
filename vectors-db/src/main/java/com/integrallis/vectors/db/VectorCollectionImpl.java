@@ -2239,6 +2239,13 @@ final class VectorCollectionImpl implements VectorCollection {
 
   @Override
   public List<SearchResult> searchBatch(List<SearchRequest> requests) {
+    if (requests != null && requests.size() > 1) {
+      return FlatScanAdapter.withConcurrentQueries(() -> searchBatchInternal(requests));
+    }
+    return searchBatchInternal(requests);
+  }
+
+  private List<SearchResult> searchBatchInternal(List<SearchRequest> requests) {
     int workers = Runtime.getRuntime().availableProcessors();
     if (!canShareFlatScans(requests, workers)) {
       return VectorCollection.super.searchBatch(requests);
