@@ -225,7 +225,7 @@ public final class HnswSearcher {
   private NodeScorer defaultScorer(float[] query) {
     final SimilarityFunction sim = similarityFunction;
     final RandomAccessVectors v = vectors;
-    if (sim == SimilarityFunction.COSINE && (v.supportsSegments() || !v.sharesReturnBuffer())) {
+    if (scorerMatrix != null) {
       return preparedCosineScorer(query);
     }
     if (v.supportsSegments()) {
@@ -274,55 +274,23 @@ public final class HnswSearcher {
     };
   }
 
-  /**
-   * Reuse only the query norm across neighbor batches; single scores keep their original kernel.
-   */
+  /** Score contiguous segment rows without allocating a view object for each neighbor. */
   private NodeScorer preparedCosineScorer(float[] query) {
     final float norm = VectorUtil.batchCosineQueryNorm(query);
-    if (vectors.supportsSegments()) {
-      final int dim = vectors.dimension();
-      MemorySegment.copy(query, 0, queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dim);
-      if (scorerMatrix != null) {
-        return new NodeScorer() {
-          @Override
-          public float score(int nodeId) {
-            return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
-          }
-
-          @Override
-          public void bulkScore(int[] ids, int offset, int count, float[] out) {
-            for (int i = 0; i < count; i++)
-              scorerOffsets[i] = vectors.vectorSegmentOffset(ids[offset + i]);
-            VectorUtil.batchCosineWithQueryNorm(
-                query, scorerMatrix, scorerOffsets, dim, norm, out, count);
-            for (int i = 0; i < count; i++) out[i] = (1f + out[i]) * 0.5f;
-          }
-        };
-      }
-      return new NodeScorer() {
-        @Override
-        public float score(int nodeId) {
-          return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
-        }
-
-        @Override
-        public void bulkScore(int[] ids, int offset, int count, float[] out) {
-          for (int i = 0; i < count; i++) scorerRows[i] = vectors.vectorSegment(ids[offset + i]);
-          VectorUtil.batchCosineWithQueryNorm(query, scorerRows, dim, norm, out, count);
-          for (int i = 0; i < count; i++) out[i] = (1f + out[i]) * 0.5f;
-        }
-      };
-    }
+    final int dim = vectors.dimension();
+    MemorySegment.copy(query, 0, queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dim);
     return new NodeScorer() {
       @Override
       public float score(int nodeId) {
-        return similarityFunction.compare(query, vectors.getVector(nodeId));
+        return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
       }
 
       @Override
       public void bulkScore(int[] ids, int offset, int count, float[] out) {
-        for (int i = 0; i < count; i++) scorerPool[i] = vectors.getVector(ids[offset + i]);
-        VectorUtil.batchCosineWithQueryNorm(query, scorerPool, norm, out, count);
+        for (int i = 0; i < count; i++)
+          scorerOffsets[i] = vectors.vectorSegmentOffset(ids[offset + i]);
+        VectorUtil.batchCosineWithQueryNorm(
+            query, scorerMatrix, scorerOffsets, dim, norm, out, count);
         for (int i = 0; i < count; i++) out[i] = (1f + out[i]) * 0.5f;
       }
     };

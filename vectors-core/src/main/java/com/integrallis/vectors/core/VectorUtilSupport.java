@@ -2663,18 +2663,6 @@ public interface VectorUtilSupport {
     return dotProduct(query, 0, query, 0, query.length);
   }
 
-  /** Prepared batch cosine; providers may retain their original arithmetic as a fallback. */
-  default void batchCosineWithQueryNorm(
-      float[] query, float[][] rows, float queryNorm, float[] out, int count) {
-    batchCosine(query, rows, out, count);
-  }
-
-  /** Segment equivalent of the prepared batch kernel. */
-  default void batchCosineWithQueryNorm(
-      float[] query, MemorySegment[] rows, int dim, float queryNorm, float[] out, int count) {
-    batchCosine(query, rows, dim, out, count);
-  }
-
   /** Prepared segment batch addressed by byte offsets in one stable backing segment. */
   default void batchCosineWithQueryNorm(
       float[] query,
@@ -2686,7 +2674,7 @@ public interface VectorUtilSupport {
       int count) {
     MemorySegment[] rows = new MemorySegment[count];
     for (int i = 0; i < count; i++) rows[i] = matrix.asSlice(offsets[i], (long) dim * Float.BYTES);
-    batchCosineWithQueryNorm(query, rows, dim, queryNorm, out, count);
+    batchCosine(query, rows, dim, out, count);
   }
 
   // --- PQ ADC (Asymmetric Distance Computation) kernels ---

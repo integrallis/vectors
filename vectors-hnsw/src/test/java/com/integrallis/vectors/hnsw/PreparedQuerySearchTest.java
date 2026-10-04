@@ -39,7 +39,9 @@ class PreparedQuerySearchTest {
         var memory = arena.allocate((long) data.length * dim * 4);
         for (int i = 0; i < data.length; i++)
           MemorySegment.copy(data[i], 0, memory, ValueLayout.JAVA_FLOAT, (long) i * dim * 4, dim);
-        for (boolean segment : new boolean[] {false, true}) {
+        for (int storage = 0; storage < 3; storage++) {
+          boolean segment = storage != 0;
+          boolean offsets = storage == 2;
           RandomAccessVectors source =
               new RandomAccessVectors() {
                 public int size() {
@@ -64,7 +66,7 @@ class PreparedQuerySearchTest {
 
                 @Override
                 public MemorySegment vectorSegmentStorage() {
-                  return segment ? memory : null;
+                  return offsets ? memory : null;
                 }
 
                 @Override

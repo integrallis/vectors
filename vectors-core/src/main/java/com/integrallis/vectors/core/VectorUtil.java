@@ -3141,20 +3141,6 @@ public final class VectorUtil {
     return IMPL.batchCosineQueryNorm(query);
   }
 
-  /** Fused batch cosine with a norm prepared by {@link #batchCosineQueryNorm}. */
-  public static void batchCosineWithQueryNorm(
-      float[] query, float[][] rows, float queryNorm, float[] out, int count) {
-    checkBatchArguments(query, rows, out, count);
-    IMPL.batchCosineWithQueryNorm(query, rows, queryNorm, out, count);
-  }
-
-  /** Zero-copy segment batch cosine with a norm prepared by {@link #batchCosineQueryNorm}. */
-  public static void batchCosineWithQueryNorm(
-      float[] query, MemorySegment[] rows, int dim, float queryNorm, float[] out, int count) {
-    checkBatchSegmentArguments(query, rows, dim, out, count);
-    IMPL.batchCosineWithQueryNorm(query, rows, dim, queryNorm, out, count);
-  }
-
   /**
    * Prepared cosine over rows addressed by byte offsets, avoiding one view object per row. Offsets
    * may be noncontiguous, padded or repeated; each must cover {@code dim} float32 values.

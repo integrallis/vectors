@@ -25,6 +25,35 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class OffsetBatchCosineTest {
   @Test
+  void validatesBoundsAndKeepsScalarAndZeroVectorSemantics() {
+    float[] query = {1f, 2f, -3f};
+    var matrix = MemorySegment.ofArray(new float[] {2f, -1f, 4f, 3f, 2f, 1f});
+    long[] offsets = {12, 0, 12};
+    MemorySegment[] rows = {matrix.asSlice(12), matrix.asSlice(0, 12), matrix.asSlice(12)};
+    var scalar = new ScalarVectorUtilSupport();
+    float[] expected = new float[3], actual = new float[3];
+    scalar.batchCosine(query, rows, 3, expected, 3);
+    scalar.batchCosineWithQueryNorm(query, matrix, offsets, 3,
+        scalar.batchCosineQueryNorm(query), actual, 3);
+    assertArrayEquals(expected, actual);
+    for (int count : new int[] {-1, 4}) {
+      assertThrows(IllegalArgumentException.class, () ->
+          VectorUtil.batchCosineWithQueryNorm(query, matrix, offsets, 3, 14f, actual, count));
+    }
+    assertThrows(IllegalArgumentException.class, () ->
+        VectorUtil.batchCosineWithQueryNorm(query, matrix, offsets, 2, 14f, actual, 3));
+    assertThrows(IllegalArgumentException.class, () ->
+        VectorUtil.batchCosineWithQueryNorm(query, matrix, offsets, 3, 14f, new float[1], 3));
+    assertThrows(IndexOutOfBoundsException.class, () ->
+        VectorUtil.batchCosineWithQueryNorm(query, matrix, new long[] {16}, 3, 14f, actual, 1));
+    float[] zero = new float[3];
+    VectorUtil.batchCosineWithQueryNorm(zero, matrix, offsets, 3, 0f, actual, 3);
+    for (float score : actual) assertTrue(Float.isNaN(score));
+    // Empty batches do not touch unselected offsets.
+    VectorUtil.batchCosineWithQueryNorm(query, matrix, new long[] {-1}, 3, 14f, actual, 0);
+  }
+
+  @Test
   void offsetsPreserveRowOrderPaddingDuplicatesAndTails() {
     var random = new SplittableRandom(7353);
     try (var arena = Arena.ofConfined()) {

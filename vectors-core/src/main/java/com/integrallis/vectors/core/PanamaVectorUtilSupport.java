@@ -7788,13 +7788,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
    */
   @Override
   public void batchCosine(float[] query, float[][] rows, float[] out, int count) {
-    batchCosineWithQueryNorm(query, rows, batchCosineQueryNorm(query), out, count);
-  }
-
-  @Override
-  public void batchCosineWithQueryNorm(
-      float[] query, float[][] rows, float qNorm2, float[] out, int count) {
     int dim = query.length;
+    float qNorm2 = dotProduct(query, 0, query, 0, dim); // ‖query‖² — computed once for the batch
     int rowGroup = count & ~3;
     int limit = FLOAT_SPECIES.loopBound(dim);
 
@@ -7892,12 +7887,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
    */
   @Override
   public void batchCosine(float[] query, MemorySegment[] rows, int dim, float[] out, int count) {
-    batchCosineWithQueryNorm(query, rows, dim, batchCosineQueryNorm(query), out, count);
-  }
-
-  @Override
-  public void batchCosineWithQueryNorm(
-      float[] query, MemorySegment[] rows, int dim, float qNorm2, float[] out, int count) {
+    float qNorm2 = dotProduct(query, 0, query, 0, dim); // ‖query‖² — computed once for the batch
     int rowGroup = count & ~3;
     int limit = FLOAT_SPECIES.loopBound(dim);
 
@@ -7991,7 +7981,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
     return cosineValue(d, qNorm2, n);
   }
-
   // Same reduction and row grouping as the view-based kernel; only addressing differs.
   @Override
   public void batchCosineWithQueryNorm(
