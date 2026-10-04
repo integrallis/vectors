@@ -40,6 +40,11 @@ class ConcurrentExactScoreReuseTest {
     // Repeated ordinal pairs now refer to unrelated vectors. Each build must own its cache.
     var first = new CountingVectors(37);
     var second = new CountingVectors(91);
+    // Warm the existing SIMD scorer before comparing raw bits: its interpreted reduction can
+    // round differently from C2 even on main, independently of caching.
+    ConcurrentHnswGraphBuilder.create(
+            16, 200, new CountingVectors(91), SimilarityFunction.COSINE, 42)
+        .build(1);
     var expected =
         ConcurrentHnswGraphBuilder.create(16, 200, second, SimilarityFunction.COSINE, 42).build(1);
     ConcurrentHnswGraphBuilder.create(16, 200, first, SimilarityFunction.COSINE, 42).build(1);
