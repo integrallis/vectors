@@ -67,6 +67,13 @@ provenance = {
         for arm in ("baseline", "candidate")
     },
 }
+if a.recall_only:
+    original = json.loads((a.output / "provenance.json").read_text())
+    if (
+        original["inputs_sha256"] != provenance["inputs_sha256"]
+        or original["jars"] != provenance["jars"]
+    ):
+        raise SystemExit("Frozen inputs or runtimes changed since timing")
 (
     a.output / ("recall-resume-provenance.json" if a.recall_only else "provenance.json")
 ).write_text(json.dumps(provenance, indent=2))
@@ -125,6 +132,10 @@ for repeat in range(0 if a.recall_only else a.rounds):
             }
         )
         (a.output / "records.json").write_text(json.dumps(records, indent=2))
+if {(r["arm"], r["round"]) for r in records} != {
+    (arm, repeat) for arm in ("baseline", "candidate") for repeat in range(a.rounds)
+} or len(records) != 2 * a.rounds:
+    raise SystemExit("Incomplete timing records; cannot evaluate replay")
 # Recall runs only after every timing run. Both collections use the same baseline query runtime.
 for r in records:
     label = f'{r["arm"]}-{r["round"]}'
