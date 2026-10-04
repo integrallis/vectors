@@ -27,6 +27,32 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class ParallelFlatScanTest {
   @Test
+  void competingQueriesDoNotAllocateAnotherFullScoreBuffer() {
+    int n = 40001;
+    float[] row = new float[128];
+    Arrays.fill(row, .1f);
+    float[][] rows = new float[n][];
+    Arrays.fill(rows, row);
+    var index = new FlatScanAdapter();
+    index.build(rows, SimilarityFunction.EUCLIDEAN);
+    var bean = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    org.junit.jupiter.api.Assumptions.assumeTrue(bean.isThreadAllocatedMemorySupported());
+    bean.setThreadAllocatedMemoryEnabled(true);
+    assertTrue(FlatScanAdapter.PARALLEL_SCANS.tryAcquire());
+    try {
+      for (int warm = 0; warm < 10; warm++) index.search(row, 10, 100, 1f);
+      long id = Thread.currentThread().threadId();
+      long before = bean.getThreadAllocatedBytes(id);
+      index.search(row, 10, 100, 1f);
+      long allocated = bean.getThreadAllocatedBytes(id) - before;
+      System.out.println("CONTENDED_SCAN_ALLOCATION=" + allocated);
+      assertTrue(allocated < 2L * n, "competing scan allocated " + allocated + " bytes");
+    } finally {
+      FlatScanAdapter.PARALLEL_SCANS.release();
+    }
+  }
+
+  @Test
   void parallelScoresPreserveOrdinalOrderMetricsAndMutations() {
     var random = new SplittableRandom(635);
     float[][] rows = new float[4099][129];

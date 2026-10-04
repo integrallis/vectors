@@ -37,6 +37,9 @@ import java.util.concurrent.RecursiveAction;
  */
 public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
+  // Shared across adapters: concurrent collections must also respect the CPU expansion budget.
+  static final java.util.concurrent.Semaphore PARALLEL_SCANS = new java.util.concurrent.Semaphore(1);
+
   private float[][] vectors = new float[0][];
   private SimilarityFunction metric;
   private int dimension;
