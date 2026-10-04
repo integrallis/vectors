@@ -142,6 +142,21 @@ public final class NeighborArray {
     }
   }
 
+  /**
+   * Inserts into available capacity when the caller has proved the ID is absent. Diversity
+   * selection filters distinct candidate IDs into disjoint accepted and blocked sets, so its result
+   * does not need another duplicate scan. Public insertion retains duplicate protection.
+   */
+  void insertDistinct(int nodeId, float score) {
+    if (size == nodes.length) throw new IllegalStateException("Neighbor array is full");
+    int pos = findInsertPosition(score);
+    System.arraycopy(nodes, pos, nodes, pos + 1, size - pos);
+    System.arraycopy(scores, pos, scores, pos + 1, size - pos);
+    nodes[pos] = nodeId;
+    scores[pos] = score;
+    size++;
+  }
+
   /** Returns true if the given nodeId is present. O(n) linear scan. */
   public boolean contains(int nodeId) {
     for (int i = 0; i < size; i++) {

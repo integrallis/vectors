@@ -31,6 +31,7 @@ class ResultDrainTest {
         NodeQueue original = new NodeQueue(size, true);
         NodeQueue optimized = new NodeQueue(size, true);
         NodeQueue reused = new NodeQueue(size, true);
+        NodeQueue concurrent = new NodeQueue(size, true);
         for (int id = 0; id < size; id++) {
           float score =
               switch (round % 4) {
@@ -42,9 +43,13 @@ class ResultDrainTest {
           original.add(id, score);
           optimized.add(id, score);
           reused.add(id, score);
+          concurrent.add(id, score);
         }
         NeighborArray expected = legacy(original);
         NeighborArray actual = NeighborArray.drainResults(optimized);
+        NeighborArray concurrentResult = ConcurrentHnswGraphBuilder.drainResults(concurrent);
+        assertTrue(concurrent.isEmpty());
+        assertEquals(expected.size(), concurrentResult.size());
         NeighborArray destination = new NeighborArray(Math.max(1, size + 3));
         destination.insert(9999, 1f);
         destination.drainResultsFrom(reused);
@@ -55,6 +60,10 @@ class ResultDrainTest {
         assertEquals(expected.maxSize(), actual.maxSize());
         for (int i = 0; i < size; i++) {
           assertEquals(expected.node(i), actual.node(i), "tie/order at " + i);
+          assertEquals(expected.node(i), concurrentResult.node(i));
+          assertEquals(
+              Float.floatToRawIntBits(expected.score(i)),
+              Float.floatToRawIntBits(concurrentResult.score(i)));
           assertEquals(expected.node(i), destination.node(i));
           assertEquals(
               Float.floatToRawIntBits(expected.score(i)),
@@ -81,6 +90,30 @@ class ResultDrainTest {
     assertEquals(1, destination.size());
     assertEquals(3, destination.node(0));
     assertEquals(.25f, destination.score(0));
+  }
+
+  private static volatile NeighborArray retained;
+
+  @Test
+  void concurrentDrainAllocatesOnlyItsDestinationArrays() {
+    int count = 4096;
+    NodeQueue queue = new NodeQueue(count, true);
+    for (int i = 0; i < count; i++) queue.add(i, i / (float) count);
+    retained = ConcurrentHnswGraphBuilder.drainResults(queue); // initialize classes
+    for (int i = 0; i < count; i++) queue.add(i, i / (float) count);
+    var bean =
+        (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    assertTrue(bean.isThreadAllocatedMemorySupported());
+    bean.setThreadAllocatedMemoryEnabled(true);
+    long thread = Thread.currentThread().threadId();
+    long before = bean.getThreadAllocatedBytes(thread);
+    retained = ConcurrentHnswGraphBuilder.drainResults(queue);
+    long allocated = bean.getThreadAllocatedBytes(thread) - before;
+    System.out.println(
+        "concurrent drain allocation: " + allocated + " bytes for " + count + " results");
+    // Destination needs 8 bytes/result. The two old temporary arrays added another 8.
+    assertTrue(allocated < 12L * count, "concurrent drain allocation: " + allocated);
+    assertEquals(count, retained.size());
   }
 
   private static NeighborArray legacy(NodeQueue queue) {

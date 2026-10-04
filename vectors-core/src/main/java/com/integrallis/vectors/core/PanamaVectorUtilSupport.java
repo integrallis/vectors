@@ -879,6 +879,54 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public boolean supportsCosineNormReuse(int dimensions) {
+    return dimensions >= 4 * FLOAT_SPECIES.length();
+  }
+
+  @Override
+  public float cosineWithNorms(float[] a, float[] b, float norm1, float norm2) {
+    if (!supportsCosineNormReuse(a.length)) return cosine(a, b);
+    // Match the long cosine loop and reduction tree, omitting the prepared norms.
+    int limit = FLOAT_SPECIES.loopBound(a.length);
+    FloatVector s0 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector s1 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector s2 = FloatVector.zero(FLOAT_SPECIES);
+    FloatVector s3 = FloatVector.zero(FLOAT_SPECIES);
+    int i = 0;
+    int lanes = FLOAT_SPECIES.length();
+    int unrolledLimit = limit - 3 * lanes;
+
+    for (; i < unrolledLimit; i += 4 * lanes) {
+      FloatVector va0 = FloatVector.fromArray(FLOAT_SPECIES, a, i);
+      FloatVector vb0 = FloatVector.fromArray(FLOAT_SPECIES, b, i);
+      FloatVector va1 = FloatVector.fromArray(FLOAT_SPECIES, a, i + lanes);
+      FloatVector vb1 = FloatVector.fromArray(FLOAT_SPECIES, b, i + lanes);
+      FloatVector va2 = FloatVector.fromArray(FLOAT_SPECIES, a, i + 2 * lanes);
+      FloatVector vb2 = FloatVector.fromArray(FLOAT_SPECIES, b, i + 2 * lanes);
+      FloatVector va3 = FloatVector.fromArray(FLOAT_SPECIES, a, i + 3 * lanes);
+      FloatVector vb3 = FloatVector.fromArray(FLOAT_SPECIES, b, i + 3 * lanes);
+
+      s0 = fma(va0, vb0, s0);
+      s1 = fma(va1, vb1, s1);
+      s2 = fma(va2, vb2, s2);
+      s3 = fma(va3, vb3, s3);
+    }
+
+    // Vector tail (1 lane-width at a time)
+    for (; i < limit; i += lanes) {
+      FloatVector va = FloatVector.fromArray(FLOAT_SPECIES, a, i);
+      FloatVector vb = FloatVector.fromArray(FLOAT_SPECIES, b, i);
+      s0 = fma(va, vb, s0);
+    }
+
+    float sum = s0.add(s1).add(s2.add(s3)).reduceLanes(VectorOperators.ADD);
+    for (; i < a.length; i++) {
+      sum = MathUtil.fma(a[i], b[i], sum);
+    }
+    return (float) (sum / Math.sqrt((double) norm1 * (double) norm2));
+  }
+
+  @Override
   public float cosineWithQueryNorm(float[] a, float[] b, float norm1) {
     if (a.length < 4 * FLOAT_SPECIES.length()) return cosine(a, b);
     int limit = FLOAT_SPECIES.loopBound(a.length);
