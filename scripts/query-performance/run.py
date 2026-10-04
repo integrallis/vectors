@@ -10,6 +10,7 @@ p.add_argument('--baseline-sha',required=True);p.add_argument('--candidate-sha',
 p.add_argument('--modes',default='flat,heap,mapped')
 p.add_argument('--cases',default='glove,dbpedia,fashion')
 p.add_argument('--cpu',type=int)
+p.add_argument('--public-glove',type=Path)
 a=p.parse_args();out=a.output.resolve();out.mkdir(parents=True,exist_ok=False)
 java=Path(os.environ['JAVA_HOME'])/'bin/java'; source=Path(__file__).with_name('QueryPerformance.java').resolve()
 cp={k:os.pathsep.join(str(j.resolve()) for j in sorted(d.glob('*.jar'))) for k,d in [('baseline',a.baseline),('candidate',a.candidate)]}
@@ -26,6 +27,7 @@ files=set([java,source])
 for _,data,query,graph,_ in cases:
  for f in [data,query,graph]:
   files.update([f/'manifest.bin',f/'vectors.bin'] if f.is_dir() else [f])
+if a.public_glove:files.update(f for f in a.public_glove.rglob('*') if f.is_file())
 for directory in [a.baseline,a.candidate]:files.update(directory.glob('*.jar'))
 prov={'baseline_sha':a.baseline_sha,'candidate_sha':a.candidate_sha,'files':{str(f):sha(f) for f in sorted(files)}}
 (out/'provenance.json').write_text(json.dumps(prov,indent=2))
@@ -34,14 +36,15 @@ for rep in range(a.rounds):
  for name,data,queries,graph,metric in cases:
   if name not in a.cases.split(','):continue
   for mode in a.modes.split(','):
-   if mode=='public' and name!='dbpedia':continue
+   if mode=='public' and name!='dbpedia' and not (name=='glove' and a.public_glove):continue
    for arm in (['baseline','candidate'] if rep%2==0 else ['candidate','baseline']):
     label=f'{name}-{mode}-{arm}-{rep}';print(label,flush=True)
     runtime_data=data
     if mode=='public':
-     fixture=out/(arm+'-public-fixture')
-     if not fixture.exists():shutil.copytree(real.parent,fixture)
-     runtime_data=fixture/real.name
+     original=a.public_glove.resolve() if name=='glove' else real.parent
+     fixture=out/(name+'-'+arm+'-public-fixture')
+     if not fixture.exists():shutil.copytree(original,fixture)
+     runtime_data=next(fixture.glob('gen-*'))
     cmd=[str(java),'--add-modules=jdk.incubator.vector','--enable-native-access=ALL-UNNAMED','-Xms3g','-Xmx3g','-cp',str(classes)+os.pathsep+cp[arm],'QueryPerformance',name,str(runtime_data),str(queries),str(graph),metric,mode]
     if a.cpu is not None:
      cmd.insert(1,'-XX:ActiveProcessorCount='+str(len(os.sched_getaffinity(0))))

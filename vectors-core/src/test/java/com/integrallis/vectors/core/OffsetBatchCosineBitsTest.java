@@ -80,7 +80,8 @@ class OffsetBatchCosineBitsTest {
           for (int d = 0; d < dim; d++) rows[r][d] = (float) random.nextDouble(-1, 1);
           offsets[r] = (long) r * (dim + 13) * Float.BYTES;
           segments[r] = matrix.asSlice(offsets[r], (long) dim * Float.BYTES);
-          MemorySegment.copy(rows[r], 0, segments[r], java.lang.foreign.ValueLayout.JAVA_FLOAT, 0L, dim);
+          MemorySegment.copy(
+              rows[r], 0, segments[r], java.lang.foreign.ValueLayout.JAVA_FLOAT, 0L, dim);
         }
         float[] expected = new float[9], actual = new float[9];
         for (int warm = 0; warm < 12000; warm++) {

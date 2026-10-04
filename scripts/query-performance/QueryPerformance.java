@@ -29,6 +29,13 @@ public class QueryPerformance {
     int warm = 0;
     while (warm < 12 || System.nanoTime() - start < 3_000_000_000L) { sink = task.getAsLong(); warm++; }
     System.out.printf("WARMUP,%s,%d,%d%n", name, warm, System.nanoTime()-start);
+    var memory = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+    if (memory.isThreadAllocatedMemorySupported()) {
+      memory.setThreadAllocatedMemoryEnabled(true);
+      long tid = Thread.currentThread().threadId(), before = memory.getThreadAllocatedBytes(tid);
+      sink = task.getAsLong();
+      System.out.printf("ALLOCATION,%s,%d,%d%n", name, memory.getThreadAllocatedBytes(tid)-before, queryCount);
+    }
     long expected = task.getAsLong();
     for (int sample = 0; sample < 7; sample++) {
       start = System.nanoTime();
@@ -52,10 +59,14 @@ public class QueryPerformance {
         var s = MemorySegmentVectors.open(input.resolve("vectors.bin"), data.length, m.dimension(), arena);
         for (int i = 0; i < data.length; i++) MemorySegment.copy(s.vectorSlice(i), ValueLayout.JAVA_FLOAT, 0, data[i], 0, m.dimension());
       }
-      queries = new float[256][];
-      for (int q = 0; q < queries.length; q++) {
-        queries[q] = data[(int)((long) q * data.length / queries.length)].clone();
-        queries[q][q % queries[q].length] += .001f;
+      if (Files.isRegularFile(Path.of(args[2]))) {
+        queries = read(Path.of(args[2]));
+      } else {
+        queries = new float[256][];
+        for (int q = 0; q < queries.length; q++) {
+          queries[q] = data[(int)((long) q * data.length / queries.length)].clone();
+          queries[q][q % queries[q].length] += .001f;
+        }
       }
     } else {
       data = read(input); queries = read(Path.of(args[2]));
@@ -80,6 +91,23 @@ public class QueryPerformance {
             for (var r : c.searchBatch(batchRequests)) for (var hit : r.hits()) h=31*(31*h+hit.id().hashCode())+Float.floatToRawIntBits(hit.score());
             return h;
           });
+        }
+        if (!mode.equals("flat-single")) for (int count : new int[]{4,16}) {
+          try (var executor = java.util.concurrent.Executors.newFixedThreadPool(count)) {
+            measure(name+"-flat-independent"+count, count, 1, () -> {
+              var start = new java.util.concurrent.CountDownLatch(1);
+              var jobs = new ArrayList<java.util.concurrent.Future<com.integrallis.vectors.db.SearchResult>>();
+              for (var request : requests.subList(0,count))
+                jobs.add(executor.submit(() -> { start.await(); return c.search(request); }));
+              start.countDown();
+              long h=1;
+              try {
+                for (var job : jobs) for (var hit : job.get().hits())
+                  h=31*(31*h+hit.id().hashCode())+Float.floatToRawIntBits(hit.score());
+              } catch (Exception e) { throw new RuntimeException(e); }
+              return h;
+            });
+          }
         }
       }
       return;
@@ -114,6 +142,8 @@ public class QueryPerformance {
           public boolean sharesReturnBuffer(){return false;}
           public boolean supportsSegments(){return true;}
           public MemorySegment vectorSegment(int i){return segment.asSlice((long)i*dim*4,(long)dim*4);}
+          public MemorySegment vectorSegmentStorage(){return segment;}
+          public long vectorSegmentOffset(int i){return (long)i*dim*4;}
         };
       }
       var index = HnswIndex.ofPrebuilt(graph, source, metric);

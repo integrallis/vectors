@@ -7981,6 +7981,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
     return cosineValue(d, qNorm2, n);
   }
+
   // Same reduction and row grouping as the view-based kernel; only addressing differs.
   @Override
   public void batchCosineWithQueryNorm(
