@@ -4,6 +4,52 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-10-04
+
+### Performance
+
+- Persisted full-precision HNSW COSINE queries avoid per-neighbor segment-view allocations
+  and prepare the batch query norm once. On the recorded 8-vCPU AMD EPYC VPS, public queries
+  at ef=100 took 10.71% less time on GLOVE and 18.21% less on DBpedia versus the preceding
+  merged main. Graphs, search budgets and precision were unchanged, and all measured result-ID
+  and raw score-bit digests matched. See the [query results](scripts/query-performance/RESULTS.md)
+  for every workload, control, baseline and reproduction command.
+- Large isolated in-memory COSINE flat queries automatically use available CPU workers, with
+  a shared expansion limit and coordination for batches and concurrent bursts. The same VPS
+  comparison measured 87.91% and 68.70% less single-query time on GLOVE and DBpedia respectively.
+  This uses more cores and a temporary score buffer; it is not a claim of reduced CPU work.
+  Euclidean and DOT scans retain their original serial scoring.
+- Compatible exact COSINE batches reuse stored-vector norms and coordinate parallel scans.
+  Concurrent HNSW construction and serial construction avoid additional allocation and scoring
+  work. The [batch/construction results](scripts/exact-reuse/RESULTS.md) and
+  [default-construction results](scripts/default-construction/RESULTS.md) retain the separate
+  baselines, raw evidence and unchanged recall gates; their percentages are not additive.
+- Persistent commits append eligible vector payloads instead of materializing collection-sized
+  vector arrays, combine prefix checksums, stream metadata, and reuse writer graph resources.
+  Prefix-aware verification and recovery handle interrupted appends. Generation subscribers,
+  including object-store shipping, retain independent payload files.
+- Includes the merged model-kernel work for banded GEMM and SIMD K-quant dequantization.
+
+### Fixed
+
+- Studio projection requests and event streams retain ownership of the latest request, so stale
+  responses cannot replace its result or change a completed status to `stream closed`.
+- Projection SSE endpoints replay completion, failure and cancellation to late subscribers,
+  including jobs that finish while the connection is subscribing.
+- Studio t-SNE honors the requested seed and allows normalized embeddings to finish the requested
+  optimization budget instead of stopping at a collapsed early-exaggeration state. Non-finite or
+  collapsed output produces an explicit error. Completing that budget can take longer than the
+  previous premature exit; this is a correctness fix.
+
+### Validation and compatibility
+
+- Regression coverage includes exact score bits, filtered/tied/deleted results, query mutation,
+  concurrent scan scheduling, commit recovery, projection races and t-SNE reproducibility.
+  CI exercises ARM64, x86 128-bit vectors and scalar fallback, plus the unchanged recall gate.
+- These optimizations apply automatically. No new runtime switch or on-disk format migration is
+  required. Measured performance is specific to the retained workloads and hardware; it does not
+  establish a ranking against other libraries or cold-start performance.
+
 ## [0.1.26] - 2026-10-02
 
 Committing often no longer costs more than committing once. Every commit rebuilt the HNSW graph from
