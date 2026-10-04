@@ -62,6 +62,9 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
           "Query dimension " + query.length + " does not match index dimension " + dimension);
     }
 
+    if (metric == SimilarityFunction.COSINE && VectorUtil.supportsCosineNormReuse(dimension)) {
+      return searchCosine(query, k);
+    }
     int actualK = Math.min(k, vectors.length);
 
     // Bounded min-heap (by score) over at most actualK entries. When full, the root is the
@@ -72,6 +75,44 @@ public final class FlatScanAdapter implements IndexSpi, ExactOrdinalScorer {
 
     for (int i = 0; i < vectors.length; i++) {
       float score = metric.compare(query, vectors[i]);
+      if (heapSize < actualK) {
+        heapIds[heapSize] = i;
+        heapScores[heapSize] = score;
+        heapSize++;
+        siftUp(heapIds, heapScores, heapSize - 1);
+      } else if (score > heapScores[0]) {
+        heapIds[0] = i;
+        heapScores[0] = score;
+        siftDown(heapIds, heapScores, 0, heapSize);
+      }
+    }
+
+    // Drain heap into a descending-sorted result array.
+    int[] sortedIds = new int[heapSize];
+    float[] sortedScores = new float[heapSize];
+    for (int i = heapSize - 1; i >= 0; i--) {
+      sortedIds[i] = heapIds[0];
+      sortedScores[i] = heapScores[0];
+      heapIds[0] = heapIds[i];
+      heapScores[0] = heapScores[i];
+      siftDown(heapIds, heapScores, 0, i);
+    }
+    return new SearchOutcome(sortedIds, sortedScores);
+  }
+
+  /** Prepare the query once; row norms remain live so caller mutations are visible. */
+  private SearchOutcome searchCosine(float[] query, int k) {
+    int actualK = Math.min(k, vectors.length);
+    float norm = VectorUtil.cosineQueryNorm(query);
+
+    // Bounded min-heap (by score) over at most actualK entries. When full, the root is the
+    // worst-so-far kept result; a new candidate with strictly higher score replaces the root.
+    int[] heapIds = new int[actualK];
+    float[] heapScores = new float[actualK];
+    int heapSize = 0;
+
+    for (int i = 0; i < vectors.length; i++) {
+      float score = (1f + VectorUtil.cosineWithQueryNorm(query, vectors[i], norm)) / 2f;
       if (heapSize < actualK) {
         heapIds[heapSize] = i;
         heapScores[heapSize] = score;

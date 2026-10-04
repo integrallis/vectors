@@ -17,6 +17,7 @@ package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
+import com.integrallis.vectors.core.VectorUtil;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
@@ -217,6 +218,9 @@ public final class HnswSearcher {
   private NodeScorer defaultScorer(float[] query) {
     final SimilarityFunction sim = similarityFunction;
     final RandomAccessVectors v = vectors;
+    if (sim == SimilarityFunction.COSINE && (v.supportsSegments() || !v.sharesReturnBuffer())) {
+      return preparedCosineScorer(query);
+    }
     if (v.supportsSegments()) {
       // Zero-copy path: SIMD-score directly from the mmap slice, no per-neighbor float[] copy. The
       // QUERY is uploaded into the searcher's reusable off-heap segment exactly ONCE per query
@@ -259,6 +263,43 @@ public final class HnswSearcher {
       public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
         for (int i = 0; i < count; i++) pool[i] = v.getVector(nodeIds[offset + i]);
         FusedSimilarity.bulkCompare(sim, query, pool, out, outScores, count);
+      }
+    };
+  }
+
+  /**
+   * Reuse only the query norm across neighbor batches; single scores keep their original kernel.
+   */
+  private NodeScorer preparedCosineScorer(float[] query) {
+    final float norm = VectorUtil.batchCosineQueryNorm(query);
+    if (vectors.supportsSegments()) {
+      final int dim = vectors.dimension();
+      MemorySegment.copy(query, 0, queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dim);
+      return new NodeScorer() {
+        @Override
+        public float score(int nodeId) {
+          return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
+        }
+
+        @Override
+        public void bulkScore(int[] ids, int offset, int count, float[] out) {
+          for (int i = 0; i < count; i++) scorerRows[i] = vectors.vectorSegment(ids[offset + i]);
+          VectorUtil.batchCosineWithQueryNorm(query, scorerRows, dim, norm, out, count);
+          for (int i = 0; i < count; i++) out[i] = (1f + out[i]) * 0.5f;
+        }
+      };
+    }
+    return new NodeScorer() {
+      @Override
+      public float score(int nodeId) {
+        return similarityFunction.compare(query, vectors.getVector(nodeId));
+      }
+
+      @Override
+      public void bulkScore(int[] ids, int offset, int count, float[] out) {
+        for (int i = 0; i < count; i++) scorerPool[i] = vectors.getVector(ids[offset + i]);
+        VectorUtil.batchCosineWithQueryNorm(query, scorerPool, norm, out, count);
+        for (int i = 0; i < count; i++) out[i] = (1f + out[i]) * 0.5f;
       }
     };
   }

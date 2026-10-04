@@ -2658,6 +2658,23 @@ public interface VectorUtilSupport {
     }
   }
 
+  /** Prepare the query norm using the batch kernel's reduction order. */
+  default float batchCosineQueryNorm(float[] query) {
+    return dotProduct(query, 0, query, 0, query.length);
+  }
+
+  /** Prepared batch cosine; providers may retain their original arithmetic as a fallback. */
+  default void batchCosineWithQueryNorm(
+      float[] query, float[][] rows, float queryNorm, float[] out, int count) {
+    batchCosine(query, rows, out, count);
+  }
+
+  /** Segment equivalent of the prepared batch kernel. */
+  default void batchCosineWithQueryNorm(
+      float[] query, MemorySegment[] rows, int dim, float queryNorm, float[] out, int count) {
+    batchCosine(query, rows, dim, out, count);
+  }
+
   // --- PQ ADC (Asymmetric Distance Computation) kernels ---
 
   /**

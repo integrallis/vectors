@@ -1,3 +1,18 @@
+/*
+ * Copyright 2025-2026 Integrallis Software, LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.integrallis.vectors.core;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -48,10 +63,17 @@ class PreparedBatchCosineTest {
     float[] out = new float[1];
     VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, out, 1);
     assertTrue(Float.isNaN(out[0]));
-    VectorUtil.batchCosineWithQueryNorm(q, new MemorySegment[] {MemorySegment.ofArray(q)}, 32, 0f, out, 1);
+    VectorUtil.batchCosineWithQueryNorm(
+        q, new MemorySegment[] {MemorySegment.ofArray(q)}, 32, 0f, out, 1);
     assertTrue(Float.isNaN(out[0]));
-    assertThrows(IllegalArgumentException.class, () -> VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, out, 2));
-    assertThrows(IllegalArgumentException.class, () -> VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, new float[0], 1));
-    assertThrows(IllegalArgumentException.class, () -> VectorUtil.batchCosineWithQueryNorm(q, new MemorySegment[1], 31, 0f, out, 1));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, out, 2));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> VectorUtil.batchCosineWithQueryNorm(q, rows, 0f, new float[0], 1));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> VectorUtil.batchCosineWithQueryNorm(q, new MemorySegment[1], 31, 0f, out, 1));
   }
 }

@@ -3132,6 +3132,29 @@ public final class VectorUtil {
     IMPL.batchCosine(query, rows, dim, out, count);
   }
 
+  /**
+   * Prepares the squared query norm for repeated {@code batchCosineWithQueryNorm} calls. This uses
+   * the batch kernel's reduction order, which can differ from {@link #cosineQueryNorm}. Recompute
+   * after any query mutation; the supplied norm must belong to this query.
+   */
+  public static float batchCosineQueryNorm(float[] query) {
+    return IMPL.batchCosineQueryNorm(query);
+  }
+
+  /** Fused batch cosine with a norm prepared by {@link #batchCosineQueryNorm}. */
+  public static void batchCosineWithQueryNorm(
+      float[] query, float[][] rows, float queryNorm, float[] out, int count) {
+    checkBatchArguments(query, rows, out, count);
+    IMPL.batchCosineWithQueryNorm(query, rows, queryNorm, out, count);
+  }
+
+  /** Zero-copy segment batch cosine with a norm prepared by {@link #batchCosineQueryNorm}. */
+  public static void batchCosineWithQueryNorm(
+      float[] query, MemorySegment[] rows, int dim, float queryNorm, float[] out, int count) {
+    checkBatchSegmentArguments(query, rows, dim, out, count);
+    IMPL.batchCosineWithQueryNorm(query, rows, dim, queryNorm, out, count);
+  }
+
   // --- PQ ADC (Asymmetric Distance Computation) kernels ---
 
   /**
