@@ -1,0 +1,172 @@
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+1 warning
+glove-100-angular-t1-s17-baseline
+glove-100-angular-t1-s17-candidate
+glove-100-angular-t1-s42-candidate
+glove-100-angular-t1-s42-baseline
+glove-100-angular-t1-s91-baseline
+glove-100-angular-t1-s91-candidate
+glove-100-angular-t8-s17-baseline
+glove-100-angular-t8-s17-candidate
+glove-100-angular-t8-s42-candidate
+glove-100-angular-t8-s42-baseline
+glove-100-angular-t8-s91-baseline
+glove-100-angular-t8-s91-candidate
+fashion-mnist-784-euclidean-t1-s17-baseline
+fashion-mnist-784-euclidean-t1-s17-candidate
+fashion-mnist-784-euclidean-t1-s42-candidate
+fashion-mnist-784-euclidean-t1-s42-baseline
+fashion-mnist-784-euclidean-t1-s91-baseline
+fashion-mnist-784-euclidean-t1-s91-candidate
+fashion-mnist-784-euclidean-t8-s17-baseline
+fashion-mnist-784-euclidean-t8-s17-candidate
+fashion-mnist-784-euclidean-t8-s42-candidate
+fashion-mnist-784-euclidean-t8-s42-baseline
+fashion-mnist-784-euclidean-t8-s91-baseline
+fashion-mnist-784-euclidean-t8-s91-candidate
+{
+  "fashion-mnist-784-euclidean-t1": {
+    "baseline_build_ns": [
+      11585360860,
+      11370959827,
+      11460365651
+    ],
+    "candidate_build_ns": [
+      11372167568,
+      11222517286,
+      11526622389
+    ],
+    "median_build_time_reduction_pct": 0.7695922249418286,
+    "recall_delta": {
+      "32": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "128": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "512": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      true,
+      true,
+      true
+    ]
+  },
+  "fashion-mnist-784-euclidean-t8": {
+    "baseline_build_ns": [
+      2719631058,
+      2725652008,
+      2730070263
+    ],
+    "candidate_build_ns": [
+      2588515608,
+      2519584818,
+      2449887087
+    ],
+    "median_build_time_reduction_pct": 7.560289772692064,
+    "recall_delta": {
+      "32": [
+        -0.0015625000000000222,
+        -0.0003906200000000082,
+        0.00039063000000005843
+      ],
+      "128": [
+        -0.0015625000000000222,
+        -0.0003906200000000082,
+        0.0
+      ],
+      "512": [
+        -0.0015625000000000222,
+        -0.0003906200000000082,
+        0.0
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      false,
+      false,
+      false
+    ]
+  },
+  "glove-100-angular-t1": {
+    "baseline_build_ns": [
+      12268021134,
+      12039922401,
+      12568071328
+    ],
+    "candidate_build_ns": [
+      11637274830,
+      12041759729,
+      12187604569
+    ],
+    "median_build_time_reduction_pct": 1.8443186764076525,
+    "recall_delta": {
+      "32": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "128": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "512": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      true,
+      true,
+      true
+    ]
+  },
+  "glove-100-angular-t8": {
+    "baseline_build_ns": [
+      2555979060,
+      2568491820,
+      2585351313
+    ],
+    "candidate_build_ns": [
+      2435384832,
+      2512629866,
+      2462724488
+    ],
+    "median_build_time_reduction_pct": 4.117876925923014,
+    "recall_delta": {
+      "32": [
+        0.0015624999999999112,
+        -0.001171879999999903,
+        0.0003906299999999474
+      ],
+      "128": [
+        0.00039063000000005843,
+        -0.0003906200000000082,
+        -0.0007812500000000666
+      ],
+      "512": [
+        0.00039063000000005843,
+        -0.0007812499999999556,
+        -0.0003906200000000082
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      false,
+      false,
+      false
+    ]
+  }
+}

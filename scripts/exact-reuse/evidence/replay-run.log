@@ -1,0 +1,18 @@
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+1 warning
+baseline-0
+candidate-0
+candidate-1
+baseline-1
+baseline-2
+candidate-2
+baseline-0-recall
+Traceback (most recent call last):
+  File "/opt/vectors-search/harness/run-replay.py", line 117, in <module>
+    log = run(
+          ^^^^
+  File "/opt/vectors-search/harness/run-replay.py", line 84, in run
+    subprocess.run(cmd, stdout=out, stderr=subprocess.STDOUT, check=True)
+  File "/usr/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/opt/vectors-search/jdk/bin/java', '--add-modules=jdk.incubator.vector', '--enable-native-access=ALL-UNNAMED', '-Xmx6g', '-cp', 'replay-results/classes:baseline-jars/*', 'com.integrallis.vectors.bench.CollectionRecallProbe', 'collection', 'replay-results/baseline-0-collection', '100000', '1000']' returned non-zero exit status 1.

@@ -1,0 +1,72 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/root/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :vectors-hnsw:processResources NO-SOURCE
+> Task :vectors-quantization:processResources NO-SOURCE
+> Task :vectors-storage:processResources NO-SOURCE
+> Task :vectors-hnsw:processTestResources NO-SOURCE
+> Task :vectors-core:compileJava UP-TO-DATE
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes UP-TO-DATE
+> Task :vectors-core:jar UP-TO-DATE
+> Task :vectors-storage:compileJava UP-TO-DATE
+> Task :vectors-storage:classes UP-TO-DATE
+> Task :vectors-storage:jar UP-TO-DATE
+> Task :vectors-quantization:compileJava UP-TO-DATE
+> Task :vectors-quantization:classes UP-TO-DATE
+> Task :vectors-quantization:jar UP-TO-DATE
+> Task :vectors-hnsw:compileJava UP-TO-DATE
+> Task :vectors-hnsw:classes UP-TO-DATE
+
+> Task :vectors-hnsw:compileTestJava FAILED
+/opt/candidate/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/DistinctNeighborInsertTest.java:44: error: cannot find symbol
+          actual.insertDistinct(id, score);
+                ^
+  symbol:   method insertDistinct(int,float)
+  location: variable actual of type NeighborArray
+/opt/candidate/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/DistinctNeighborInsertTest.java:57: error: cannot find symbol
+    actual.insertDistinct(3, .5f);
+          ^
+  symbol:   method insertDistinct(int,float)
+  location: variable actual of type NeighborArray
+/opt/candidate/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/DistinctNeighborInsertTest.java:58: error: cannot find symbol
+    assertThrows(IllegalStateException.class, () -> actual.insertDistinct(7, 1f));
+                                                          ^
+  symbol:   method insertDistinct(int,float)
+  location: variable actual of type NeighborArray
+3 errors
+
+[Incubating] Problems report is available at: file:///opt/candidate/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':vectors-hnsw:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /opt/candidate/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/DistinctNeighborInsertTest.java:44: error: cannot find symbol
+            actual.insertDistinct(id, score);
+                  ^
+    symbol:   method insertDistinct(int,float)
+    location: variable actual of type NeighborArray
+  /opt/candidate/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/DistinctNeighborInsertTest.java:57: error: cannot find symbol
+      actual.insertDistinct(3, .5f);
+            ^
+    symbol:   method insertDistinct(int,float)
+    location: variable actual of type NeighborArray
+  /opt/candidate/vectors-hnsw/src/test/java/com/integrallis/vectors/hnsw/DistinctNeighborInsertTest.java:58: error: cannot find symbol
+      assertThrows(IllegalStateException.class, () -> actual.insertDistinct(7, 1f));
+                                                            ^
+    symbol:   method insertDistinct(int,float)
+    location: variable actual of type NeighborArray
+  3 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 8s
+9 actionable tasks: 1 executed, 8 up-to-date

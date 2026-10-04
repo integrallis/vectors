@@ -1,0 +1,14 @@
+[
+  {
+    "case": "changed_summary",
+    "rejected": true
+  },
+  {
+    "case": "changed_digest",
+    "rejected": true
+  },
+  {
+    "case": "duplicate_sample",
+    "rejected": true
+  }
+]

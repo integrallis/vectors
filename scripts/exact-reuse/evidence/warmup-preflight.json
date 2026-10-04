@@ -1,0 +1,11 @@
+{
+  "at": "2026-10-04T02:48:00.021890+00:00",
+  "runtime": "7df85192e27db800a7065808d6fe9d126cfde066",
+  "reason": "The initial public API run passed Q64 speed/parity gates, but control medians included regressions up to 16.43% and unchanged GLOVE single-query timings varied approximately 2.98 to 4.66 ms across forks. Preserve that run and investigate longer warmup before promoting.",
+  "change": "No production change. Add a fixed minimum 3 seconds of warmup per case, retaining at least 8 warmup passes, seven measurement samples, three alternating fresh-JVM pairs and all 30 public API cases. Same policy for both arms.",
+  "gates": [
+    "Exact result digest equality in every case",
+    "Q64 median reduction >=5% for both cosine corpora",
+    "Report every control and compare with the initial eight-pass run; do not attribute untouched-path improvements to the code change"
+  ]
+}

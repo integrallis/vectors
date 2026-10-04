@@ -764,18 +764,12 @@ public final class ConcurrentHnswGraphBuilder {
       }
     }
 
-    // Drain min-heap to descending NeighborArray
-    int sz = ctx.results.size();
-    var arr = new NeighborArray(Math.max(1, sz));
-    int[] tmpN = new int[sz];
-    float[] tmpS = new float[sz];
-    for (int i = sz - 1; i >= 0; i--) {
-      long e = ctx.results.poll();
-      tmpN[i] = NodeQueue.nodeId(e);
-      tmpS[i] = NodeQueue.score(e);
-    }
-    for (int i = 0; i < sz; i++) arr.insert(tmpN[i], tmpS[i]);
-    return arr;
+    return drainResults(ctx.results);
+  }
+
+  /** Converts the distinct result heap into the pruning candidate order. */
+  static NeighborArray drainResults(NodeQueue results) {
+    return NeighborArray.drainResults(results);
   }
 
   // ---------------------------------------------------------------------------

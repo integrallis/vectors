@@ -1,0 +1,10 @@
+allprojects {
+    plugins.withId('java') {
+        tasks.register('freezePerf', Copy) {
+            dependsOn tasks.named('jar'), configurations.runtimeClasspath
+            from configurations.runtimeClasspath
+            from tasks.named('jar')
+            into providers.gradleProperty('freezeDir').get()
+        }
+    }
+}

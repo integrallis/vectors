@@ -1,0 +1,172 @@
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+1 warning
+glove-100-angular-t1-s17-baseline
+glove-100-angular-t1-s17-candidate
+glove-100-angular-t1-s42-candidate
+glove-100-angular-t1-s42-baseline
+glove-100-angular-t1-s91-baseline
+glove-100-angular-t1-s91-candidate
+glove-100-angular-t8-s17-baseline
+glove-100-angular-t8-s17-candidate
+glove-100-angular-t8-s42-candidate
+glove-100-angular-t8-s42-baseline
+glove-100-angular-t8-s91-baseline
+glove-100-angular-t8-s91-candidate
+fashion-mnist-784-euclidean-t1-s17-baseline
+fashion-mnist-784-euclidean-t1-s17-candidate
+fashion-mnist-784-euclidean-t1-s42-candidate
+fashion-mnist-784-euclidean-t1-s42-baseline
+fashion-mnist-784-euclidean-t1-s91-baseline
+fashion-mnist-784-euclidean-t1-s91-candidate
+fashion-mnist-784-euclidean-t8-s17-baseline
+fashion-mnist-784-euclidean-t8-s17-candidate
+fashion-mnist-784-euclidean-t8-s42-candidate
+fashion-mnist-784-euclidean-t8-s42-baseline
+fashion-mnist-784-euclidean-t8-s91-baseline
+fashion-mnist-784-euclidean-t8-s91-candidate
+{
+  "fashion-mnist-784-euclidean-t1": {
+    "baseline_build_ns": [
+      11158203855,
+      11458343929,
+      11287539128
+    ],
+    "candidate_build_ns": [
+      10955392113,
+      10998383624,
+      11069569348
+    ],
+    "median_build_time_reduction_pct": 2.561723159680729,
+    "recall_delta": {
+      "32": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "128": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "512": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      true,
+      true,
+      true
+    ]
+  },
+  "fashion-mnist-784-euclidean-t8": {
+    "baseline_build_ns": [
+      2664995932,
+      2559023650,
+      2671692163
+    ],
+    "candidate_build_ns": [
+      2416648508,
+      2427428580,
+      2484100430
+    ],
+    "median_build_time_reduction_pct": 8.914360774341324,
+    "recall_delta": {
+      "32": [
+        -0.0011718700000000748,
+        0.0003906200000000082,
+        -0.0003906200000000082
+      ],
+      "128": [
+        -0.001171880000000014,
+        0.0003906200000000082,
+        -0.0007812499999999556
+      ],
+      "512": [
+        -0.001171880000000014,
+        0.0003906200000000082,
+        -0.0007812499999999556
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      false,
+      false,
+      false
+    ]
+  },
+  "glove-100-angular-t1": {
+    "baseline_build_ns": [
+      12392185300,
+      12072395877,
+      12324064945
+    ],
+    "candidate_build_ns": [
+      11890879793,
+      12018483324,
+      12090407331
+    ],
+    "median_build_time_reduction_pct": 2.479552179932143,
+    "recall_delta": {
+      "32": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "128": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "512": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      true,
+      true,
+      true
+    ]
+  },
+  "glove-100-angular-t8": {
+    "baseline_build_ns": [
+      2624865469,
+      2617940822,
+      2576689270
+    ],
+    "candidate_build_ns": [
+      2401140720,
+      2374356002,
+      2419635460
+    ],
+    "median_build_time_reduction_pct": 8.281321723474766,
+    "recall_delta": {
+      "32": [
+        -0.0003906200000000082,
+        0.00039063000000005843,
+        -0.0003906200000000082
+      ],
+      "128": [
+        -0.0019531299999999696,
+        -0.0003906200000000082,
+        -0.0007812500000000666
+      ],
+      "512": [
+        -0.001171880000000014,
+        0.0,
+        -0.0003906200000000082
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      false,
+      false,
+      false
+    ]
+  }
+}

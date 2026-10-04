@@ -1,0 +1,52 @@
+{
+  "args": {
+    "baseline": "/opt/vectors-search/baseline-jars",
+    "candidate": "/opt/vectors-search/combined-distinct-jars",
+    "source": "/opt/baseline",
+    "generation": "/opt/vectors-search/collection",
+    "output": "/opt/vectors-search/combined-replay",
+    "rounds": "3",
+    "count": "100000",
+    "cadence": "25000",
+    "threads": "8",
+    "queries": "1000",
+    "recall_only": "False",
+    "baseline_sha": "212ad282",
+    "candidate_sha": "724db8d"
+  },
+  "host": "Linux-6.8.0-117-generic-x86_64-with-glibc2.39",
+  "runner_sha256": "17727faab904945b6e9038d609738e8ea36dd2a0279868eba2851fc5951ff375",
+  "java": "openjdk version \"25.0.3\" 2026-04-21 LTS\nOpenJDK Runtime Environment Temurin-25.0.3+9 (build 25.0.3+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.3+9 (build 25.0.3+9-LTS, mixed mode, sharing)\n",
+  "source_sha256": {
+    "DefaultCollectionReplayBenchmark.java": "8c5641eee044f9d1ad12d9653261e3f39a6a8e515509d867832f6049c463569a",
+    "CollectionRecallProbe.java": "75aeeef5779d23175bb86b43ecafa64581958aac65dc0be4fc77b97ae66f4f49"
+  },
+  "inputs_sha256": {
+    "manifest.bin": "b248971c9ab994d6f7bb3815521a365f70a00f6243fa9e360d5dc57beba86e7a",
+    "vectors.bin": "e2df67a3af29a301ca7e8353fd2af0290ff99682759fb625b4423e870db27b5a",
+    "idmap.bin": "d465229d4802dcae001b25490880ffef684453be2e212412531136a0f14f22f1",
+    "metadata.bin": "5942017671deaa03b72c5b2635473349832184b66ca5185edbc9ecfd0c6fb303"
+  },
+  "jars": {
+    "baseline": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "3a3bab97f33af6bb391e536cf139dcf8ce29f58845f78ce5b45de5fadf029f65",
+      "vectors-db-0.1.26.jar": "f9f70792d4996e05df02ecfefbdedfd38788cf8852c46722d81b550e0520ae16",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "b1d3c92a269e71d7be1b26a30f3168afc376b99628f037bfb506a1afaeeb46eb",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    },
+    "candidate": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "5b1df710a0bd41c8e144ade973523d6399943f789b52a019ffa041b1c8484ccb",
+      "vectors-db-0.1.26.jar": "a584f72430508e4da4b304c5a7b6252309c337f7eaae8fbc3fd9c0786b610ad3",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "c213aee959116e45a5e43870f8b2ec7a728a685040b9e236d80f44e9cf66d2e5",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    }
+  }
+}

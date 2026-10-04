@@ -109,14 +109,14 @@ final class NeighborSelector {
       }
 
       if (!isBlocked) {
-        result.insert(candidateId, scoreToQuery);
+        result.insertDistinct(candidateId, scoreToQuery);
       }
     }
 
     // keepPruned=true: fill remaining slots with blocked candidates
     for (int i = 0; i < candidates.size() && result.size() < maxConnections; i++) {
       if (blocked[i]) {
-        result.insert(candidates.node(i), candidates.score(i));
+        result.insertDistinct(candidates.node(i), candidates.score(i));
       }
     }
 

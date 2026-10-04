@@ -82,6 +82,16 @@ public interface VectorUtilSupport {
     return cosine(a, b);
   }
 
+  /** Whether this provider can reuse both norms without changing cosine arithmetic. */
+  default boolean supportsCosineNormReuse(int dimensions) {
+    return false;
+  }
+
+  /** Cosine with both norms prepared by this provider. */
+  default float cosineWithNorms(float[] a, float[] b, float norm1, float norm2) {
+    return cosine(a, b);
+  }
+
   /** Segment cosine with the norm of the first vector prepared by this provider. */
   default float cosineWithQueryNorm(
       MemorySegment a, MemorySegment b, int dimensions, float queryNorm) {

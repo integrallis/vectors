@@ -1,0 +1,2 @@
+# Retain raw qualification output alongside provenance.
+!*.log

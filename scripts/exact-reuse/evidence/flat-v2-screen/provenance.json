@@ -1,0 +1,38 @@
+{
+  "host": "Linux-6.8.0-117-generic-x86_64-with-glibc2.39",
+  "java": "openjdk version \"25.0.3\" 2026-04-21 LTS\nOpenJDK Runtime Environment Temurin-25.0.3+9 (build 25.0.3+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.3+9 (build 25.0.3+9-LTS, mixed mode, sharing)\n",
+  "baseline_sha": "212ad282",
+  "candidate_sha": "a9570da",
+  "harness_sha256": "fd94eba8ddae11c8440928260c0985942b793e0d76617f1d1621128b1f59635c",
+  "jars": {
+    "baseline": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "3a3bab97f33af6bb391e536cf139dcf8ce29f58845f78ce5b45de5fadf029f65",
+      "vectors-db-0.1.26.jar": "f9f70792d4996e05df02ecfefbdedfd38788cf8852c46722d81b550e0520ae16",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "b1d3c92a269e71d7be1b26a30f3168afc376b99628f037bfb506a1afaeeb46eb",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    },
+    "candidate": {
+      "vectors-storage-0.1.26.jar": "1014056f4813170bf830be949150f85810799087ffec6efabb70370201437ae7",
+      "vectors-quantization-0.1.26.jar": "9f3a72a1ab40ce4b55e9a70bfc49cb8e515ab77a54b60f3d2be36467448c2096",
+      "vectors-hnsw-0.1.26.jar": "3a3bab97f33af6bb391e536cf139dcf8ce29f58845f78ce5b45de5fadf029f65",
+      "vectors-db-0.1.26.jar": "7951d86cdf5bdea8602061742775437ebc10cf57706a974471f2baf4dcd18e84",
+      "vectors-vamana-0.1.26.jar": "41c42bab5318a0294ebcd48df80c87466ad0a38dc2e3da4c9cd55d28564e8792",
+      "vectors-core-0.1.26.jar": "c213aee959116e45a5e43870f8b2ec7a728a685040b9e236d80f44e9cf66d2e5",
+      "slf4j-api-2.0.17.jar": "7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832",
+      "vectors-ivf-0.1.26.jar": "a39689306b1380a395e5e56578ff8ebe12e9068838e3493c3088b559771577c8"
+    }
+  },
+  "inputs": {
+    "inputs/glove-100-angular-train.fbin": "3f8ddba7070f08a5c333ccacf3098118037785927387a00f9fff42f9a064b4c9",
+    "inputs/provenance.json": "dd6238690b8e9070b681ae99df57479b933b46052ab1958ad87d0db96c405429",
+    "inputs/fashion-mnist-784-euclidean-test.fbin": "5a88808a02aa219e3c064d368fcbddcff8675481ae586b4eaa8a086405df93bf",
+    "inputs/fashion-mnist-784-euclidean-train.fbin": "90d9ed17a7241085cd2ac39fa7e097a5e1be987483c9eb878aa9f6e5dbd54d5c",
+    "inputs/glove-100-angular-test.fbin": "bdf73b26e2b63279e79e465af8a85c58d2690f38b88112531a9e237794c834c9",
+    "collection/manifest.bin": "b248971c9ab994d6f7bb3815521a365f70a00f6243fa9e360d5dc57beba86e7a",
+    "collection/vectors.bin": "e2df67a3af29a301ca7e8353fd2af0290ff99682759fb625b4423e870db27b5a"
+  }
+}

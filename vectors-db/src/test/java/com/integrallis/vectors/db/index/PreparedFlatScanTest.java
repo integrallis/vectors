@@ -26,6 +26,33 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class PreparedFlatScanTest {
   @Test
+  void batchRecomputesNormsAfterStoredRowsAndQueriesChange() {
+    var random = new SplittableRandom(93821);
+    float[][] rows = new float[256][65];
+    float[][] queries = new float[16][65];
+    for (var matrix : new float[][][] {rows, queries})
+      for (var row : matrix)
+        for (int i = 0; i < row.length; i++) row[i] = (float) random.nextDouble(-1, 1);
+    var index = new FlatScanAdapter();
+    index.build(rows, SimilarityFunction.COSINE);
+    for (int pass = 0; pass < 3; pass++) {
+      for (int count : new int[] {1, 2, 3, 4, 16}) {
+        var subset = Arrays.copyOf(queries, count);
+        var batch = index.searchBatch(subset, 256, 128, 1f);
+        for (int qi = 0; qi < count; qi++) {
+          var single = index.search(subset[qi], 256, 128, 1f);
+          assertArrayEquals(single.ordinals(), batch[qi].ordinals());
+          assertArrayEquals(single.scores(), batch[qi].scores(), 1e-6f);
+        }
+      }
+      for (int i = 0; i < 65; i++) {
+        rows[17][i] = (float) random.nextDouble(-1, 1);
+        queries[0][i] = (float) random.nextDouble(-1, 1);
+      }
+    }
+  }
+
+  @Test
   void singleAndBatchPreserveScoresAndTiesAndRecomputeAfterQueryMutation() {
     var random = new SplittableRandom(7932);
     for (int dim : new int[] {7, 32, 129, 512, 768}) {

@@ -1,0 +1,88 @@
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+1 warning
+glove-100-angular-t8-s17-baseline
+glove-100-angular-t8-s17-candidate
+glove-100-angular-t8-s42-candidate
+glove-100-angular-t8-s42-baseline
+glove-100-angular-t8-s91-baseline
+glove-100-angular-t8-s91-candidate
+fashion-mnist-784-euclidean-t8-s17-baseline
+fashion-mnist-784-euclidean-t8-s17-candidate
+fashion-mnist-784-euclidean-t8-s42-candidate
+fashion-mnist-784-euclidean-t8-s42-baseline
+fashion-mnist-784-euclidean-t8-s91-baseline
+fashion-mnist-784-euclidean-t8-s91-candidate
+{
+  "fashion-mnist-784-euclidean-t8": {
+    "baseline_build_ns": [
+      2694418815,
+      2552667136,
+      2641316312
+    ],
+    "candidate_build_ns": [
+      2577596075,
+      2669010004,
+      2634096728
+    ],
+    "median_build_time_reduction_pct": 0.2733328063435625,
+    "recall_delta": {
+      "32": [
+        -0.0003906299999999474,
+        0.0003906200000000082,
+        -0.0003906200000000082
+      ],
+      "128": [
+        -0.0003906200000000082,
+        0.0003906200000000082,
+        -0.0007812499999999556
+      ],
+      "512": [
+        -0.0003906200000000082,
+        0.0003906200000000082,
+        -0.0007812499999999556
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      false,
+      false,
+      false
+    ]
+  },
+  "glove-100-angular-t8": {
+    "baseline_build_ns": [
+      2619880350,
+      2612669095,
+      2608599639
+    ],
+    "candidate_build_ns": [
+      2544077570,
+      2531322598,
+      2532294546
+    ],
+    "median_build_time_reduction_pct": 3.076338643642895,
+    "recall_delta": {
+      "32": [
+        0.002734369999999986,
+        0.0003906299999999474,
+        0.0011718700000000748
+      ],
+      "128": [
+        0.0003906200000000082,
+        0.001171880000000014,
+        0.0003906299999999474
+      ],
+      "512": [
+        0.0,
+        0.0007812499999999556,
+        0.0003906200000000082
+      ]
+    },
+    "recall_gate_pass": true,
+    "graph_parity": [
+      false,
+      false,
+      false
+    ]
+  }
+}

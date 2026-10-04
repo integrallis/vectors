@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-04T03:15:04.869457+00:00",
+  "runtime_unchanged": "7df85192e27db800a7065808d6fe9d126cfde066",
+  "finding": "Longer warmup exposed a 2.25x candidate GLOVE single-Q64 slowdown following earlier query shapes. Candidate and baseline JFR/GC diagnostic runs both reproduced approximately 400-460 ms per single-Q64 pass after a young GC at about 20 seconds, versus earlier 178 ms. This suggests relocated heap corpus locality confounds the comparison; it does not establish a scorer regression.",
+  "protocol": "Call System.gc once immediately after building each public benchmark collection, before any timing or warmup. Both arms use the same harness and existing JVM flags, fixed >=3 seconds and >=8 warmup passes per case, all 30 cases, three alternating JVM pairs, unchanged production jars. Retain every earlier run.",
+  "gates": [
+    "all raw digests equal",
+    "Q64 COSINE time reduction >=5% on both corpora",
+    "report every control and initial anomalous runs",
+    "no public API runtime option, production GC call or production warmup"
+  ]
+}
