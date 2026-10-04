@@ -929,7 +929,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   @Override
   public float cosineWithQueryNorm(float[] a, float[] b, float norm1) {
     if (a.length < 4 * FLOAT_SPECIES.length()) return cosine(a, b);
-    int limit = FLOAT_SPECIES.loopBound(a.length);
+    return cosineWithQueryNormBody(a, b, norm1, FLOAT_SPECIES.loopBound(a.length));
+  }
+
+  private float cosineWithQueryNormBody(float[] a, float[] b, float norm1, int limit) {
     FloatVector s0 = FloatVector.zero(FLOAT_SPECIES);
     FloatVector s1 = FloatVector.zero(FLOAT_SPECIES);
     FloatVector s2 = FloatVector.zero(FLOAT_SPECIES);
@@ -972,6 +975,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
 
     float sum = s0.add(s1).add(s2.add(s3)).reduceLanes(VectorOperators.ADD);
     float norm2 = n2_0.add(n2_1).add(n2_2.add(n2_3)).reduceLanes(VectorOperators.ADD);
+    return finishPreparedCosine(a, b, limit, sum, norm1, norm2);
+  }
+
+  private float finishPreparedCosine(
+      float[] a, float[] b, int i, float sum, float norm1, float norm2) {
     for (; i < a.length; i++) {
       sum = MathUtil.fma(a[i], b[i], sum);
       norm2 = MathUtil.fma(b[i], b[i], norm2);
