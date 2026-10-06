@@ -3474,7 +3474,18 @@ public final class VectorUtil {
       int blockBytes) {
     Objects.requireNonNull(query, "query");
     Objects.requireNonNull(out, "out");
-    checkDimensions(query.length, cols);
+    // A prefix, like out and like the q8 scratch arrays this path already documents as holding "at
+    // least cols" entries: the kernels quantize and read exactly cols values and never consult
+    // query.length. Requiring exact equality here made one buffer sized for a maximum width
+    // unusable
+    // for a narrower call, which is how a model whose feed-forward width varies per layer -- Gemma
+    // 4
+    // E2B publishes [6144 x15, 12288 x20] -- failed on the quantized path while the float path,
+    // which takes cols the same way and checks nothing, worked.
+    if (query.length < cols) {
+      throw new IllegalArgumentException(
+          "query.length must be >= cols: " + query.length + " < " + cols);
+    }
     checkGgufQuantizedMatrixArguments(qWeight, rows, cols, blockSize, blockBytes);
     if (out.length < rows) {
       throw new IllegalArgumentException(

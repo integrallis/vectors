@@ -8,6 +8,14 @@ All notable changes to java-vectors are documented here.
 
 ### Fixed
 
+- The GGUF quantized batched GEMV required the activation vector's length to equal `cols` exactly,
+  while `out` was already allowed to be oversized and the q8 scratch arrays are documented as
+  holding "at least `cols`" entries. The kernels quantize and read exactly `cols` values and never
+  consult `query.length`, so the activation is now accepted as a prefix too. A model whose
+  feed-forward width varies per layer reuses one buffer sized for its widest layer; requiring exact
+  equality made its narrower layers fail on the quantized path while the float path, which takes
+  `cols` the same way, worked. A buffer shorter than `cols` is still rejected.
+
 - `ScalarQuantizer.decode` on an int8 quantizer sized its result by the encoded buffer's length
   rather than by the quantizer's dimension. One int8 byte holds one dimension, so a correctly sized
   buffer was always decoded correctly; a longer buffer — a pooled or reused array, or one sized for
