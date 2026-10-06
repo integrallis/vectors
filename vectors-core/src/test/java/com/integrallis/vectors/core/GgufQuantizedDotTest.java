@@ -39,6 +39,73 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class GgufQuantizedDotTest {
 
+  /**
+   * An activation buffer longer than {@code cols} is a prefix, not an error. The kernels quantize
+   * and read exactly {@code cols} values, {@code out} is already allowed to be oversized, and the
+   * q8 scratch arrays are documented as holding "at least cols" entries. A model whose feed-forward
+   * width varies per layer reuses one buffer sized for its widest layer, so requiring exact
+   * equality made the narrower layers unusable on the quantized path.
+   */
+  @Test
+  void quantizedBatchDotAcceptsAnOversizedActivationBuffer() {
+    int cols = 1024;
+    int rows = 3;
+    byte[] block = q4Block(0.125f, ones(cols), (low, high) -> (low * 11 + high * 7) & 0xFF);
+    MemorySegment segment = MemorySegment.ofArray(repeat(block, rows * (cols / 32)));
+
+    float[] exact = patternedQuery(cols);
+    float[] oversized = new float[cols * 2];
+    System.arraycopy(exact, 0, oversized, 0, cols);
+
+    float[] fromExact = new float[rows];
+    float[] fromOversized = new float[rows];
+    VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+        exact,
+        segment,
+        rows,
+        cols,
+        fromExact,
+        new byte[cols],
+        new float[cols / 32],
+        q4Corrections(cols),
+        GgufQ4Kernel.WIDENED);
+    VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+        oversized,
+        segment,
+        rows,
+        cols,
+        fromOversized,
+        new byte[cols],
+        new float[cols / 32],
+        q4Corrections(cols),
+        GgufQ4Kernel.WIDENED);
+
+    assertThat(fromOversized).isEqualTo(fromExact);
+  }
+
+  /** Too short is still an error: the kernel would read past the activation. */
+  @Test
+  void quantizedBatchDotRejectsAnActivationShorterThanCols() {
+    int cols = 1024;
+    byte[] block = q4Block(0.125f, ones(cols), (low, high) -> (low * 11 + high * 7) & 0xFF);
+    MemorySegment segment = MemorySegment.ofArray(repeat(block, cols / 32));
+
+    assertThatThrownBy(
+            () ->
+                VectorUtil.ggufQ4_0Q8_0BatchDotProduct(
+                    new float[cols - 32],
+                    segment,
+                    1,
+                    cols,
+                    new float[1],
+                    new byte[cols],
+                    new float[cols / 32],
+                    q4Corrections(cols),
+                    GgufQ4Kernel.WIDENED))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("query.length must be >= cols");
+  }
+
   @Test
   void f32BatchDotProduct_readsLittleEndianMappedRows() {
     float[] query = {1.5f, -2.0f, 0.25f, 4.0f, -0.5f};
