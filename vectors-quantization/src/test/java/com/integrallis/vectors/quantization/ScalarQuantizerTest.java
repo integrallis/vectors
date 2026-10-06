@@ -286,6 +286,23 @@ class ScalarQuantizerTest {
       assertThat(decoded[2]).isCloseTo(1f, within(1e-6f));
     }
 
+    /**
+     * A buffer longer than the quantizer's dimension must still decode to {@code dimension} values.
+     * int8 decode used to size its result by {@code encoded.length}, so a pooled or oversized array
+     * produced a longer vector with a decoded-padding tail, while int4 decode already stopped at
+     * {@code dimension}.
+     */
+    @Test
+    void decodeInt8_sizesByDimensionNotBufferLength() {
+      var sq = ScalarQuantizer.fromQuantiles(3, 0f, 1.0f);
+      byte[] exact = {0, 63, 127};
+      byte[] oversized = {0, 63, 127, 0, 0, 0, 0, 0};
+
+      assertThat(sq.decode(exact)).hasSize(3);
+      assertThat(sq.decode(oversized)).hasSize(3);
+      assertThat(sq.decode(oversized)).isEqualTo(sq.decode(exact));
+    }
+
     /** Gaussian data round-trip (JVector pattern). */
     @Test
     void gaussianData_roundTrip_withinTolerance() {

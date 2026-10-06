@@ -271,9 +271,17 @@ public final class ScalarQuantizer implements Quantizer<ScalarQuantizedVectors> 
     return correction;
   }
 
+  /**
+   * Decodes {@code dimension} values, like {@link #decodeInt4(byte[])} and unlike sizing the result
+   * by {@code encoded.length}. One int8 byte holds one dimension, so a correctly sized buffer gives
+   * the same answer either way; a longer buffer — a pooled or reused array, or one sized for a
+   * wider quantizer — previously returned a longer vector whose tail was decoded padding. {@link
+   * #encode(float[], byte[])} already rejects a vector that is not {@code dimension} long, so the
+   * decode side now holds the same contract.
+   */
   private float[] decodeInt8(byte[] encoded) {
-    float[] result = new float[encoded.length];
-    for (int i = 0; i < encoded.length; i++) {
+    float[] result = new float[dimension];
+    for (int i = 0; i < dimension; i++) {
       result[i] = (encoded[i] & 0xFF) * alpha + minQuantile;
     }
     return result;
