@@ -4,6 +4,17 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.28] - 2026-10-06
+
+### Fixed
+
+- `ScalarQuantizer.decode` on an int8 quantizer sized its result by the encoded buffer's length
+  rather than by the quantizer's dimension. One int8 byte holds one dimension, so a correctly sized
+  buffer was always decoded correctly; a longer buffer — a pooled or reused array, or one sized for
+  a wider quantizer — returned a longer vector whose tail was decoded padding. The int4 path already
+  stopped at the declared dimension, and `encode` already rejects a vector that is not that long, so
+  both sides of the codec now hold the same contract.
+
 ## [0.1.27] - 2026-10-04
 
 ### Performance
