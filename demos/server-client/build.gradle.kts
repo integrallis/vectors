@@ -3,7 +3,7 @@ description = "End-to-end HTTP round-trip demo against an embedded vectors-serve
 dependencies {
     implementation(project(":vectors-server"))
     implementation(project(":vectors-core"))
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:${rootProject.extra["jacksonVersion"]}")
     runtimeOnly("ch.qos.logback:logback-classic:1.5.15")
 
     // CI-gating assertions on the demo's golden path (audit T3.10).

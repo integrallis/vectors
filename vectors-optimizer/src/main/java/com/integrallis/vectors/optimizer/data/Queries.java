@@ -59,7 +59,7 @@ public record Queries(Map<String, String> byId) {
       JsonNode root = mapper.readTree(Files.readAllBytes(path));
       Map<String, String> out = new LinkedHashMap<>();
       if (root.isObject()) {
-        var it = root.fields();
+        var it = root.properties().iterator();
         while (it.hasNext()) {
           var f = it.next();
           out.put(f.getKey(), f.getValue().asText());

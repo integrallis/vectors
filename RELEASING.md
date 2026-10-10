@@ -44,3 +44,10 @@ namespace and GPG identity must already be configured in Central.
 
 Artifacts are written to `build/staging-deploy`. A real release must be built
 from a clean commit with a non-`SNAPSHOT` version.
+
+`complianceCheck` includes `verifyReleaseTrain` and `verifyPublishedConsumerGraph`. These validate
+the resolved production/test dependency graphs and then consume every staged publication through
+independent Maven and Gradle builds. Keep `build/reports/release-dependencies/` and
+`build/published-consumers/` with the release evidence. The release workflow repeats the consumers
+against Central after publication; Models can advance its Vectors pin only after that check passes.
+See [the shared dependency policy](gradle/DEPENDENCY-POLICY.md) for update and rejection-test commands.

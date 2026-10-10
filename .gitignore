@@ -57,6 +57,8 @@ research/
 
 # Jupyter notebook auto-save checkpoints
 **/.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
 org/
 
 # Local performance campaigns: datasets, source backups, frozen jars and generated collections

@@ -4,7 +4,7 @@ description = "Off-heap memory, mmap, arena-based storage, and on-disk formats"
 // Pin to a specific LocalStack image version to avoid Docker Hub auth requirements
 // introduced in March 2026 for localstack/localstack:latest.
 val testcontainersVersion = "1.21.4"
-val awsSdkVersion = "2.29.52"
+val awsSdkVersion = "2.55.14"
 
 dependencies {
     api(project(":vectors-core"))
@@ -13,6 +13,7 @@ dependencies {
     // package and API stay stable, while vectors-storage-s3 supplies the SDK at runtime.
     compileOnly("software.amazon.awssdk:s3:$awsSdkVersion")
     testImplementation("software.amazon.awssdk:s3:$awsSdkVersion")
+    testImplementation(platform("io.netty:netty-bom:4.1.139.Final"))
 
     // Integration tests: LocalStack container exercises the real S3 API surface.
     testImplementation("org.testcontainers:testcontainers:$testcontainersVersion")

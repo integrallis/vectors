@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "policyRevision": "2026-10-10",
+  "jacksonBom": "2.22.3",
+  "jacksonAnnotations": "2.22",
+  "slf4j": "2.0.20",
+  "modules": {
+    "commons-codec:commons-codec": "1.22.1",
+    "org.apache.httpcomponents.client5:httpclient5": "5.6.5",
+    "org.apache.httpcomponents.core5:httpcore5": "5.4.4",
+    "org.apache.httpcomponents.core5:httpcore5-h2": "5.4.4"
+  },
+  "families": {
+    "io.netty": "4.1.139.Final",
+    "software.amazon.awssdk": "2.55.14",
+    "com.github.ben-manes.caffeine": "3.3.0"
+  }
+}

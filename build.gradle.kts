@@ -13,6 +13,11 @@ plugins {
     jacoco
 }
 
+val releaseDependencyPolicy = JsonSlurper().parse(file("gradle/dependency-policy.json")) as Map<*, *>
+extra["jacksonVersion"] = releaseDependencyPolicy["jacksonBom"] as String
+extra["slf4jVersion"] = releaseDependencyPolicy["slf4j"] as String
+extra["releaseDependencyModules"] = releaseDependencyPolicy["modules"] as Map<*, *>
+
 val notebookRepositoryUrl = providers.gradleProperty("notebookRepository")
     .orElse(providers.environmentVariable("VECTORS_NOTEBOOK_REPOSITORY"))
     .map { it.trim() }
@@ -145,7 +150,7 @@ dependencies {
         "org.springframework.ai:spring-ai-model:1.1.4",
         "io.micrometer:micrometer-observation:1.14.4",
         "dev.langchain4j:langchain4j-core:1.13.1",
-        "org.slf4j:slf4j-nop:2.0.17"
+        "org.slf4j:slf4j-nop:${rootProject.extra["slf4jVersion"]}"
     ).forEach { dependency ->
         notebookSourceClasspath(dependency)
         notebookReleaseClasspath(dependency)
@@ -522,7 +527,7 @@ configure(libraryProjects) {
 
     dependencies {
         // Logging
-        implementation("org.slf4j:slf4j-api:2.0.17")
+        implementation("org.slf4j:slf4j-api:${rootProject.extra["slf4jVersion"]}")
 
         // Testing
         testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
@@ -628,7 +633,7 @@ configure(demoProjects) {
     }
 
     dependencies {
-        "implementation"("org.slf4j:slf4j-api:2.0.16")
+        "implementation"("org.slf4j:slf4j-api:${rootProject.extra["slf4jVersion"]}")
         "runtimeOnly"("ch.qos.logback:logback-classic:1.5.15")
     }
 }
@@ -1255,3 +1260,16 @@ tasks.register("generateModuleJavadocs") {
     group = "documentation"
     dependsOn(perModuleJavadocCopies)
 }
+
+// Enforce the same release contract in local checks and every staged publication.
+extra["javaAIFamily"] = "vectors"
+extra["javaAIReleaseVersions"] = mapOf("vectors" to project.version.toString())
+extra["javaAIPublishedProjects"] = publishedProjects
+apply(from = "gradle/dependency-policy.gradle")
+tasks.register<Exec>("verifyPublishedConsumerGraph") {
+    group = "verification"
+    description = "Consume every staged publication through clean Maven and Gradle projects"
+    dependsOn("verifyReleaseTrain", "verifyStagedPublications")
+    commandLine("python3", "scripts/verify-maven-runtime.py", "--repository", "build/staging-deploy")
+}
+tasks.named("complianceCheck") { dependsOn("verifyPublishedConsumerGraph") }

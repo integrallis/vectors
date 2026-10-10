@@ -5,7 +5,7 @@ plugins {
 description = "Vectors Studio — Helidon SE 4 web frontend (HTMX + JTE + Three.js projector island, port 8288)"
 
 val helidonVersion = "4.3.4"
-val jacksonVersion = "2.18.2"
+val jacksonVersion = rootProject.extra["jacksonVersion"] as String
 val jteVersion = "3.2.3"
 val langchain4jVersion = "1.13.1"
 

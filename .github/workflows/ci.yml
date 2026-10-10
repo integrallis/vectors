@@ -81,6 +81,11 @@ jobs:
       - name: Build + Test
         run: ./gradlew spotlessCheck build -x :docs:build
 
+      - name: Test dependency policy rejection cases
+        run: |
+          python3 scripts/test-dependency-policy.py
+          python3 scripts/test-published-consumers.py
+
       - name: Validate performance reproduction command
         run: |
           python3 scripts/default-construction/run.py --help
@@ -118,17 +123,14 @@ jobs:
       - name: Compliance Check
         run: ./gradlew complianceCheck verifyLockfiles verifyGithubWorkflows
 
-      - name: Verify staged Maven runtime dependencies
-        run: |
-          ./gradlew publish
-          python3 scripts/verify-maven-runtime.py --repository build/staging-deploy
-
-      - name: Retain Maven consumer evidence
+      - name: Retain dependency and consumer evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: maven-runtime-consumers
-          path: build/maven-runtime-smoke/
+          path: |
+            build/reports/release-dependencies/
+            build/published-consumers/
           retention-days: 30
 
       - name: Upload SBOM

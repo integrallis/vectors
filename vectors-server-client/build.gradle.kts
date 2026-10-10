@@ -1,6 +1,6 @@
 description = "HTTP client for the vectors-server REST API"
 
-val jacksonVersion = "2.18.2"
+val jacksonVersion = rootProject.extra["jacksonVersion"] as String
 
 dependencies {
     api(project(":vectors-core"))

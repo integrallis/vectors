@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -75,6 +76,60 @@ class ScatterGatherExecutorTest {
   }
 
   // ---- P11 acceptance tests ----
+
+  @Test
+  void timeoutReturnsBeforeAnInterruptionResistantClientFinishes() throws Exception {
+    NodeId node = new NodeId("ignores-interrupts");
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    CountDownLatch exited = new CountDownLatch(1);
+    NodeSearchClient client =
+        new NodeSearchClient() {
+          @Override
+          public SearchResult search(LocalSearchRequest request) {
+            entered.countDown();
+            try {
+              while (release.getCount() != 0) {
+                try {
+                  release.await();
+                } catch (InterruptedException ignored) {
+                  // Deliberately simulate a transport that does not support cancellation.
+                }
+              }
+              return new SearchResult(List.of(), 0);
+            } finally {
+              exited.countDown();
+            }
+          }
+
+          @Override
+          public int size() {
+            return 0;
+          }
+
+          @Override
+          public int physicalSize() {
+            return 0;
+          }
+        };
+    var directory = InProcessNodeDirectory.builder().registerClient(node, client).build();
+    var executor = new ScatterGatherExecutor(directory, Duration.ofSeconds(1));
+    try (var caller = Executors.newVirtualThreadPerTaskExecutor()) {
+      try {
+        var result =
+            caller.submit(
+                () ->
+                    executor.execute(
+                        List.of(LocalSearchRequest.of(node, new float[DIM], new int[0], K, 0)), K));
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(result.get(5, TimeUnit.SECONDS).hits()).isEmpty();
+        assertThat(exited.getCount()).isEqualTo(1);
+      } finally {
+        release.countDown();
+      }
+    }
+    assertThat(exited.await(5, TimeUnit.SECONDS)).isTrue();
+  }
 
   /**
    * Scatter-gather across 3 nodes (10K docs each) must return top-10 results and match brute-force

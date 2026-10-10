@@ -26,7 +26,7 @@ dependencies {
     jmhImplementation(project(":vectors-cache"))
     jmhImplementation(project(":vectors-cache-jcache"))
     jmhImplementation(project(":vectors-cache-semantic-db"))
-    jmhImplementation("com.github.ben-manes.caffeine:jcache:3.1.8")
+    jmhImplementation("com.github.ben-manes.caffeine:jcache:3.3.0")
 
     // HDF5 reader for ANN-Benchmarks datasets (MIT, pure Java, no native code)
     implementation("io.jhdf:jhdf:0.9.4")

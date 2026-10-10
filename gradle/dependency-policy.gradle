@@ -1,0 +1,209 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import groovy.json.JsonSlurperClassic
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ModuleComponentSelector
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+
+// Shared release contract. Downstream repositories consume the policy embedded in released jars;
+// neither a sibling checkout nor a build-only resolution override can satisfy that contract.
+def policyFile = rootProject.file('gradle/dependency-policy.json')
+// JsonSlurper's lazy maps mutate on first lookup and cannot be shared by parallel project tasks.
+def policy = new JsonSlurperClassic().parseText(policyFile.text)
+if (policy.schemaVersion != 1) throw new GradleException('Unsupported dependency policy schema')
+def family = rootProject.ext.javaAIFamily
+def versions = new LinkedHashMap(rootProject.ext.javaAIReleaseVersions)
+def published = rootProject.ext.javaAIPublishedProjects
+def rank = [vectors: 0, models: 1, modeljars: 2]
+def isMarker = { String group -> group in ['org.modeljars.huggingface', 'org.modeljars.github'] }
+def classify = { String group, String name ->
+    if (group == 'org.modeljars' || group.startsWith('org.modeljars.')) return 'modeljars'
+    if (group == 'com.integrallis' && name.startsWith('vectors')) return 'vectors'
+    if (group == 'com.integrallis' && (name == 'models' || name.startsWith('models-') || name.startsWith('backend-'))) return 'models'
+    return null
+}
+def stable = { String value -> value != null && value ==~ /[0-9]+\.[0-9]+\.[0-9]+/ }
+versions.each { key, value ->
+    if (!stable(value)) throw new GradleException("Release dependency ${key} must be an exact stable version: ${value}")
+}
+if (versions[family] != rootProject.version.toString()) {
+    throw new GradleException('Release manifest version does not match the project version')
+}
+def metadataDir = rootProject.layout.buildDirectory.dir('release-dependency-metadata')
+def writeManifest = rootProject.tasks.register('writeReleaseDependencyManifest') {
+    inputs.file(policyFile)
+    inputs.property('family', family)
+    inputs.property('versions', versions)
+    outputs.dir(metadataDir)
+    doLast {
+        def target = metadataDir.get().file('META-INF/jvm-ai/release-dependencies.json').asFile
+        target.parentFile.mkdirs()
+        target.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+            schemaVersion: 1, family: family, versions: versions, externalPolicy: policy
+        ])) + '\n'
+    }
+}
+def chain = rootProject.tasks.register('verifyResolvedDependencyChain') {
+    group = 'verification'
+    description = 'Verify released internal dependency versions, direction and upstream policy metadata'
+}
+def shared = rootProject.tasks.register('verifySharedDependencyPolicy') {
+    group = 'verification'
+    description = 'Verify governed external versions in production and test dependency graphs'
+}
+def receiptFiles = []
+def invalidateTrain = rootProject.tasks.register('invalidateReleaseDependencyReceipt') {
+    doLast { rootProject.layout.buildDirectory.file('reports/release-dependencies/train.json').get().asFile.delete() }
+}
+published.each { target ->
+    target.plugins.withId('java') {
+        target.tasks.named('processResources') {
+            dependsOn(writeManifest)
+            from(metadataDir)
+        }
+        // BOM constraints are published through api; direct unversioned dependencies are checked
+        // separately in clean Maven consumers because Maven mediation differs from Gradle's.
+        target.dependencies.add('api', target.dependencies.platform("com.fasterxml.jackson:jackson-bom:${policy.jacksonBom}"))
+        target.dependencies.add('api', target.dependencies.platform("org.slf4j:slf4j-bom:${policy.slf4j}"))
+        policy.modules?.each { coordinate, selectedVersion ->
+            target.dependencies.constraints.add('api', "${coordinate}:${selectedVersion}")
+        }
+        def receipt = target.layout.buildDirectory.file('reports/release-dependencies/graph.json')
+        receiptFiles.add(receipt)
+        def verify = target.tasks.register('verifyDependencyPolicy') {
+            group = 'verification'
+            description = 'Check production and test graphs against the release dependency contract'
+            notCompatibleWithConfigurationCache('Audits resolved configurations and published jar metadata')
+            outputs.file(receipt)
+            outputs.upToDateWhen { false }
+            dependsOn(invalidateTrain)
+            doLast {
+                receipt.get().asFile.delete()
+                def failures = []
+                def graphs = [:]
+                def upstreamArtifacts = []
+                ['compileClasspath', 'runtimeClasspath', 'testRuntimeClasspath'].each { configName ->
+                    def config = target.configurations.findByName(configName)
+                    if (config == null || !config.canBeResolved) return
+                    def result = config.incoming.resolutionResult
+                    def nodes = []
+                    result.allDependencies.each { edge ->
+                        if (edge instanceof UnresolvedDependencyResult) {
+                            failures.add("${configName}: unresolved ${edge.requested.displayName}: ${edge.failure.message}")
+                        }
+                        if (edge.requested instanceof ModuleComponentSelector) {
+                            def request = edge.requested
+                            def requestedFamily = classify(request.group, request.module)
+                            if (request.version =~ /(?i)(SNAPSHOT|latest\.|\+|[\[\](),])/) {
+                                failures.add("${configName}: ${edge.from.id.displayName} requests non-release ${request.displayName}")
+                            }
+                            if (requestedFamily != null && !isMarker(request.group) && !stable(request.version)) {
+                                failures.add("${configName}: ${edge.from.id.displayName} requests non-release ${request.displayName}")
+                            }
+                            if (requestedFamily != null && !isMarker(request.group) && rank[requestedFamily] <= rank[family] && versions[requestedFamily] != request.version) {
+                                failures.add("${configName}: ${edge.from.id.displayName} requests ${request.displayName}, expected ${versions[requestedFamily]}")
+                            }
+                            if (requestedFamily != null && edge.hasProperty('selected') && edge.selected.id instanceof ProjectComponentIdentifier) {
+                                failures.add("${configName}: released ${request.displayName} was substituted by a project")
+                            }
+                        }
+                    }
+                    result.allComponents.each { component ->
+                        def id = component.id
+                        if (!(id instanceof ModuleComponentIdentifier)) return
+                        def coordinate = "${id.group}:${id.module}"
+                        def selectedFamily = classify(id.group, id.module)
+                        nodes.add([coordinate: coordinate, version: id.version,
+                                   reason: component.selectionReason.descriptions*.description,
+                                   requests: component.dependents.collect { edge ->
+                                       [from: edge.from.id.displayName, requested: edge.requested.displayName]
+                                   }.sort { a, b -> a.from <=> b.from ?: a.requested <=> b.requested }])
+                        if (selectedFamily != null) {
+                            if (rank[selectedFamily] > rank[family]) {
+                                failures.add("${configName}: reverse dependency ${coordinate}:${id.version} from ${family}")
+                            } else if (!isMarker(id.group) && versions[selectedFamily] != id.version) {
+                                failures.add("${configName}: ${coordinate} resolved ${id.version}, expected ${versions[selectedFamily]}")
+                            }
+                        }
+                        def expected = policy.modules?.get(coordinate.toString()) ?: policy.families?.get(id.group)
+                        if (id.group == 'com.fasterxml.jackson' || id.group.startsWith('com.fasterxml.jackson.')) {
+                            expected = id.module == 'jackson-annotations' ? policy.jacksonAnnotations : policy.jacksonBom
+                        } else if (id.group == 'org.slf4j') {
+                            expected = policy.slf4j
+                        }
+                        if (expected != null && id.version != expected) {
+                            failures.add("${configName}: ${coordinate} resolved ${id.version}, policy requires ${expected}")
+                        }
+                    }
+                    graphs[configName] = nodes.sort { a, b -> a.coordinate <=> b.coordinate }
+                    // Verify metadata in the actual upstream jars, not a source-tree version file.
+                    if (configName == 'runtimeClasspath') {
+                        config.incoming.artifacts.artifacts.each { artifact ->
+                            def id = artifact.id.componentIdentifier
+                            if (!(id instanceof ModuleComponentIdentifier) || !artifact.file.name.endsWith('.jar')) return
+                            def upstream = classify(id.group, id.module)
+                            if (upstream == null || rank[upstream] >= rank[family]) return
+                            def digest = java.security.MessageDigest.getInstance('SHA-256')
+                            artifact.file.withInputStream { stream ->
+                                byte[] buffer = new byte[65536]
+                                int size
+                                while ((size = stream.read(buffer)) != -1) digest.update(buffer, 0, size)
+                            }
+                            upstreamArtifacts.add([coordinate: id.displayName,
+                                sha256: digest.digest().encodeHex().toString()])
+                            new java.util.zip.ZipFile(artifact.file).withCloseable { zip ->
+                                def entry = zip.getEntry('META-INF/jvm-ai/release-dependencies.json')
+                                if (entry == null) {
+                                    failures.add("${id.displayName}: missing released dependency manifest")
+                                    return
+                                }
+                                def manifest = zip.getInputStream(entry).withCloseable { stream -> new JsonSlurper().parse(stream) }
+                                if (manifest.schemaVersion != 1 || manifest.family != upstream || manifest.versions[upstream] != id.version) {
+                                    failures.add("${id.displayName}: invalid upstream release manifest")
+                                }
+                                if (manifest.externalPolicy != policy) failures.add("${id.displayName}: upstream external dependency policy differs")
+                                manifest.versions.each { key, value ->
+                                    if (versions[key] != value) failures.add("${id.displayName}: upstream binds ${key}=${value}, expected ${versions[key]}")
+                                }
+                            }
+                        }
+                    }
+                }
+                def output = receipt.get().asFile
+                def publication = target.extensions.findByName('publishing')?.publications?.findByName('maven')
+                output.parentFile.mkdirs()
+                output.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+                    schemaVersion: 1, project: target.path, family: family, versions: versions,
+                    publication: publication == null ? null : [group: publication.groupId,
+                        artifact: publication.artifactId, version: publication.version],
+                    externalPolicy: policy, graphs: graphs, upstreamArtifacts: upstreamArtifacts,
+                    failures: failures.unique()
+                ])) + '\n'
+                if (!failures.isEmpty()) throw new GradleException(failures.unique().join('\n'))
+            }
+        }
+        target.tasks.named('check') { dependsOn(verify) }
+        target.tasks.withType(PublishToMavenRepository).configureEach { dependsOn(verify) }
+        chain.configure { dependsOn(verify) }
+        shared.configure { dependsOn(verify) }
+    }
+}
+rootProject.tasks.register('verifyReleaseTrain') {
+    group = 'verification'
+    description = 'Collect verified dependency receipts for every published module'
+    dependsOn(chain, shared)
+    def output = rootProject.layout.buildDirectory.file('reports/release-dependencies/train.json')
+    outputs.file(output)
+    outputs.upToDateWhen { false }
+    doLast {
+        def target = output.get().asFile
+        target.parentFile.mkdirs()
+        target.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+            schemaVersion: 1, family: family, versions: versions, externalPolicy: policy,
+            modules: receiptFiles.collect { new JsonSlurper().parse(it.get().asFile) }
+        ])) + '\n'
+    }
+}
+rootProject.tasks.named('check') { dependsOn(chain, shared) }

@@ -53,8 +53,10 @@ jobs:
           :vectors-studio-web:integrationTest complianceCheck publish
           --no-daemon --stacktrace
 
-      - name: Verify staged Maven runtime dependencies
-        run: python3 scripts/verify-maven-runtime.py --repository build/staging-deploy
+      - name: Test dependency policy rejection cases
+        run: |
+          python3 scripts/test-dependency-policy.py
+          python3 scripts/test-published-consumers.py
 
       - name: Resolve project version
         id: version
@@ -189,6 +191,10 @@ jobs:
           echo "::error::Published deployment did not synchronize to $artifact_url"
           exit 1
 
+      - name: Verify released consumer graphs
+        if: ${{ github.event_name == 'push' || (!inputs.dry_run && !inputs.skip_deploy) }}
+        run: python3 scripts/verify-maven-runtime.py --central --output build/central-consumers
+
       - name: Publish GitHub release
         if: ${{ github.event_name == 'push' || !inputs.dry_run }}
         env:
@@ -214,3 +220,6 @@ jobs:
           path: |
             out/jreleaser/trace.log
             out/jreleaser/output.properties
+            build/reports/release-dependencies/
+            build/published-consumers/
+            build/central-consumers/

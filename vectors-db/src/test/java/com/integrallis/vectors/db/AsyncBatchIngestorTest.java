@@ -22,9 +22,11 @@ import com.integrallis.vectors.core.Document;
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -49,6 +51,54 @@ class AsyncBatchIngestorTest {
         .metric(SimilarityFunction.EUCLIDEAN)
         .indexType(IndexType.FLAT)
         .build();
+  }
+
+  @Test
+  void successfulCompletionCallbackCanCloseIngestor() throws Exception {
+    completionCallbackCanClose(null);
+  }
+
+  @Test
+  void failedCompletionCallbackCanCloseIngestor() throws Exception {
+    completionCallbackCanClose(new IllegalStateException("publisher failed"));
+  }
+
+  private static void completionCallbackCanClose(Throwable failure) throws Exception {
+    try (VectorCollection col = inMemory()) {
+      AsyncBatchIngestor ingestor = new AsyncBatchIngestor(col, 1);
+      AtomicReference<Thread> callbackThread = new AtomicReference<>();
+      var callback =
+          ingestor
+              .completion()
+              .handle(
+                  (token, error) -> {
+                    callbackThread.set(Thread.currentThread());
+                    ingestor.close();
+                    return error;
+                  })
+              .toCompletableFuture();
+      try {
+        if (failure == null) {
+          ingestor.onComplete();
+        } else {
+          ingestor.onError(failure);
+        }
+        Throwable observed = callback.get(5, TimeUnit.SECONDS);
+        if (failure == null) {
+          assertThat(observed).isNull();
+        } else {
+          assertThat(observed).isInstanceOf(CompletionException.class);
+          assertThat(observed.getCause()).isSameAs(failure);
+        }
+      } finally {
+        // Also let the original self-join defect unwind when this regression is run against it.
+        Thread thread = callbackThread.get();
+        if (!callback.isDone() && thread != null) {
+          thread.interrupt();
+        }
+        ingestor.close();
+      }
+    }
   }
 
   @Test

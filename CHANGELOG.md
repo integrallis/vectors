@@ -4,6 +4,24 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.29] - 2026-10-10
+
+### Fixed
+
+- Async ingestion completion callbacks can close the ingestor without joining their own worker.
+- Scatter/gather returns after its deadline even when a client ignores interruption. Clients remain
+  responsible for transport deadlines; cancellation cannot forcibly terminate an uncooperative client.
+- Remove an unused demo helper and accidentally tracked Python bytecode.
+
+### Build and dependencies
+
+- Verify resolved internal release versions, dependency direction, and shared external policy in
+  every published module. Embed the dependency contract in released jars for downstream validation.
+- Align Jackson through BOM 2.22.3 (annotations 2.22) and SLF4J 2.0.20. Update the optional S3 runtime
+  to AWS SDK 2.55.14, Netty 4.1.139.Final and HttpClient 5.6.5 / HttpCore 5.4.4.
+  Update Commons Codec to 1.22.1, Caffeine to 3.3.0, and Avaje JSON to 3.15.
+- Check published dependency graphs using separate Maven and Gradle consumers.
+
 ## [0.1.28] - 2026-10-06
 
 ### Fixed

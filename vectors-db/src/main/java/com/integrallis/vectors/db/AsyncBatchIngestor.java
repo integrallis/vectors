@@ -143,12 +143,16 @@ public final class AsyncBatchIngestor implements Flow.Subscriber<Document>, Auto
 
   /**
    * Signals completion (flush the final partial batch and commit), then waits for the worker to
-   * finish. Idempotent; safe to call after {@link #onComplete}/{@link #onError}.
+   * finish. Idempotent; safe to call after {@link #onComplete}/{@link #onError}. A synchronous
+   * completion callback may close the ingestor without waiting for its own thread.
    */
   @Override
   public void close() {
     if (terminated.compareAndSet(false, true)) {
       offerTerminal(new CompleteItem());
+    }
+    if (Thread.currentThread() == worker) {
+      return;
     }
     try {
       worker.join();
