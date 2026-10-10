@@ -44,6 +44,11 @@ cases = {
     'private-ci-staging': ('', '', 'Public release requires an exact stable version'),
     'private-ci-disguised-repository': ('', '', 'Public release requires an exact stable version'),
     'private-ci-upstream': ('', '', 'Release dependency vectors must be an exact stable version'),
+    'private-preview-check': ('', '', None),
+    'private-preview-release': ('', '', 'Public release requires an exact stable version'),
+    'private-preview-staging': ('', '', 'Public release requires an exact stable version'),
+    'private-preview-disguised-repository': ('', '', 'Public release requires an exact stable version'),
+    'private-preview-upstream': ('', '', 'Release dependency vectors must be an exact stable version'),
     'snapshot-project': ('', '', 'Release dependency models must be an exact stable version'),
 }
 with tempfile.TemporaryDirectory(prefix='release-policy-test-') as temporary:
@@ -71,14 +76,15 @@ with tempfile.TemporaryDirectory(prefix='release-policy-test-') as temporary:
     artifact(repo, 'com.fasterxml.jackson', 'jackson-bom', policy['jacksonBom'], packaging='pom')
     artifact(repo, 'org.slf4j', 'slf4j-bom', policy['slf4j'], packaging='pom')
     for name, (dependency, configuration, expected) in cases.items():
-        version = '3.4.5-ci.123.1.0123456789ab' if name.startswith('private-ci-') else '3.4.5'
+        private_kind = 'preview' if name.startswith('private-preview-') else 'ci'
+        version = f'3.4.5-{private_kind}.123.1.0123456789ab' if name.startswith('private-') else '3.4.5'
         if name == 'snapshot-project':
             version = '3.4.5-SNAPSHOT'
-        upstream = '1.2.3-ci.123.1.0123456789ab' if name == 'private-ci-upstream' else '1.2.3'
-        task = 'verifyDependencyPolicy' if name == 'private-ci-check' else 'verifyReleaseTrain'
+        upstream = f'1.2.3-{private_kind}.123.1.0123456789ab' if name.endswith('-upstream') else '1.2.3'
+        task = 'verifyDependencyPolicy' if name.endswith('-check') else 'verifyReleaseTrain'
         publication = ''
-        if name in ('private-ci-staging', 'private-ci-disguised-repository'):
-            repository_name = 'Staging' if name == 'private-ci-staging' else 'GitHubPackages'
+        if name.endswith(('-staging', '-disguised-repository')):
+            repository_name = 'Staging' if name.endswith('-staging') else 'GitHubPackages'
             task = f'publishMavenPublicationTo{repository_name}Repository'
             publication = f"""
 publishing {{
@@ -107,7 +113,7 @@ apply from: 'gradle/dependency-policy.gradle'
 {publication}
 """)
         stale_receipt = project / 'build/reports/release-dependencies/train.json'
-        if name == 'private-ci-release':
+        if name in ('private-ci-release', 'private-preview-release'):
             stale_receipt.parent.mkdir(parents=True)
             stale_receipt.write_text('{"stale":true}')
         run = subprocess.run([str(root / 'gradlew'), '-p', str(project), '--offline',
@@ -116,6 +122,6 @@ apply from: 'gradle/dependency-policy.gradle'
         if (expected is None and run.returncode != 0) or (
                 expected is not None and (run.returncode == 0 or expected not in run.stdout)):
             raise AssertionError(f'{name}: expected {expected!r}\n{run.stdout}')
-        if name == 'private-ci-release' and stale_receipt.exists():
-            raise AssertionError('Rejected CI release left behind a stale success receipt')
+        if name in ('private-ci-release', 'private-preview-release') and stale_receipt.exists():
+            raise AssertionError('Rejected private release left behind a stale success receipt')
         print(f'{name}: PASS', flush=True)
