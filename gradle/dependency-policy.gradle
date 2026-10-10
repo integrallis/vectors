@@ -25,11 +25,11 @@ def classify = { String group, String name ->
     return null
 }
 def stable = { String value -> value != null && value ==~ /[0-9]+\.[0-9]+\.[0-9]+/ }
-// Native CI uses an immutable run/attempt/commit version for private test artifacts. It is a
-// valid version of this source build, never an acceptable released upstream dependency.
-def privateCi = { String value -> value != null && value ==~ /[0-9]+\.[0-9]+\.[0-9]+-ci\.[0-9]+\.[0-9]+\.[0-9a-f]{12}/ }
+// Native CI and invited previews use immutable run/attempt/commit versions for private artifacts.
+// These identify this source build and are never acceptable released upstream dependencies.
+def privateBuild = { String value -> value != null && value ==~ /[0-9]+\.[0-9]+\.[0-9]+-(ci|preview)\.[0-9]+\.[0-9]+\.[0-9a-f]{12}/ }
 versions.each { key, value ->
-    if (!stable(value) && !(key == family && privateCi(value))) {
+    if (!stable(value) && !(key == family && privateBuild(value))) {
         throw new GradleException("Release dependency ${key} must be an exact stable version: ${value}")
     }
 }
