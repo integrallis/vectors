@@ -103,7 +103,7 @@ public class WriteAheadLogS3Benchmark {
               .credentialsProvider(
                   StaticCredentialsProvider.create(AwsBasicCredentials.create("test", "test")));
     } else {
-      b = b.credentialsProvider(DefaultCredentialsProvider.create());
+      b = b.credentialsProvider(DefaultCredentialsProvider.builder().build());
     }
     s3 = b.build();
     backend = new S3StorageBackend(s3, bucket);

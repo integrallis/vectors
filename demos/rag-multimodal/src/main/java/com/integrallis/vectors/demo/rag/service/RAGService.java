@@ -717,26 +717,6 @@ public class RAGService {
     return map;
   }
 
-  /**
-   * Parses the image_number from a tool call's JSON arguments.
-   *
-   * @param arguments JSON string like {@code {"image_number": 5}}
-   * @return the parsed image number
-   * @throws IllegalArgumentException if the arguments cannot be parsed
-   */
-  private static int parseImageNumber(String arguments) {
-    try {
-      JsonNode node = OBJECT_MAPPER.readTree(arguments);
-      JsonNode imageNumber = node.get("image_number");
-      if (imageNumber != null) {
-        return imageNumber.asInt();
-      }
-      throw new IllegalArgumentException("Missing 'image_number' in tool arguments: " + arguments);
-    } catch (Exception e) {
-      throw new IllegalArgumentException("Failed to parse tool arguments: " + arguments, e);
-    }
-  }
-
   /** Extracts the page number from a search hit's metadata. Returns 0 if not available. */
   private static int extractPageNumber(SearchHit hit) {
     if (hit.metadata() == null) return 0;

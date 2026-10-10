@@ -1,6 +1,6 @@
 description = "Hyperparameter optimization for vectors-* — index/router/cache studies with Grid/Random/TPE samplers"
 
-val jacksonVersion = "2.18.2"
+val jacksonVersion = rootProject.extra["jacksonVersion"] as String
 
 dependencies {
     api(project(":vectors-core"))

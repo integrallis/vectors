@@ -12,7 +12,7 @@ dependencies {
     compileOnly("dev.langchain4j:langchain4j-core:$langchain4jVersion")
 
     // JSONL parsing and cursor JSON serialisation.
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:${rootProject.extra["jacksonVersion"]}")
 
     testImplementation("dev.langchain4j:langchain4j-core:$langchain4jVersion")
     testImplementation("dev.langchain4j:langchain4j:$langchain4jVersion")

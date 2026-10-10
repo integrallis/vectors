@@ -6,7 +6,7 @@ dependencies {
     implementation(project(":vectors-router"))
     implementation(project(":vectors-optimizer"))
     implementation(project(":vectors-bench"))
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:${rootProject.extra["jacksonVersion"]}")
 }
 
 application {

@@ -1,7 +1,7 @@
 description = "Pluggable caching SPI (VectorCache / SemanticCache) with Caffeine default"
 
 dependencies {
-    api("com.github.ben-manes.caffeine:caffeine:3.1.8")
+    api("com.github.ben-manes.caffeine:caffeine:3.3.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testImplementation("org.assertj:assertj-core:3.27.2")

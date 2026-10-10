@@ -5,7 +5,7 @@ plugins {
 description = "HTTP server for java-vectors (Helidon SE 4 / Nima, JSON-over-HTTP, port 8287)"
 
 val helidonVersion = "4.3.4"
-val jacksonVersion = "2.18.2"
+val jacksonVersion = rootProject.extra["jacksonVersion"] as String
 
 dependencies {
     api(project(":vectors-db"))

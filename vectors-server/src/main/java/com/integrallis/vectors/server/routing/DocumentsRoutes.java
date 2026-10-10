@@ -267,7 +267,8 @@ public final class DocumentsRoutes implements HttpService {
       com.fasterxml.jackson.databind.JsonNode node) {
     Map<String, String> map = new HashMap<>();
     if (node != null && node.isObject()) {
-      Iterator<Map.Entry<String, com.fasterxml.jackson.databind.JsonNode>> it = node.fields();
+      Iterator<Map.Entry<String, com.fasterxml.jackson.databind.JsonNode>> it =
+          node.properties().iterator();
       while (it.hasNext()) {
         Map.Entry<String, com.fasterxml.jackson.databind.JsonNode> entry = it.next();
         map.put(entry.getKey(), entry.getValue().asText());

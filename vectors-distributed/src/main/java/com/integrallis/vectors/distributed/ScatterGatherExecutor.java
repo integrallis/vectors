@@ -35,7 +35,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Each call to {@link #execute} fans out all {@link LocalSearchRequest}s in parallel, collects
  * results within the configured timeout, merges them via {@link TopKMerger}, and returns. Nodes
- * that time out or throw are skipped with a WARNING log (partial results).
+ * that time out or throw are skipped with a WARNING log (partial results). Cancellation interrupts
+ * outstanding calls but does not wait for a client that ignores interruption. Clients must enforce
+ * their own transport deadlines to release resources after cancellation.
  *
  * <p>Thread-safe: a single instance may be shared across concurrent callers.
  */
@@ -87,7 +89,8 @@ public final class ScatterGatherExecutor {
     long start = System.nanoTime();
     List<SearchResult> partials = new ArrayList<>(plan.size());
 
-    try (ExecutorService vt = Executors.newVirtualThreadPerTaskExecutor()) {
+    ExecutorService vt = Executors.newVirtualThreadPerTaskExecutor();
+    try {
       List<Callable<SearchResult>> tasks = new ArrayList<>(plan.size());
       for (LocalSearchRequest req : plan) {
         tasks.add(
@@ -123,6 +126,10 @@ public final class ScatterGatherExecutor {
           LOG.warn("Node {} threw an exception — skipping its results", targetNode, e.getCause());
         }
       }
+    } finally {
+      // ExecutorService.close() waits for termination, defeating the deadline when a client ignores
+      // interruption. Cancel the per-call tasks without joining their virtual threads here.
+      vt.shutdownNow();
     }
 
     long elapsed = System.nanoTime() - start;

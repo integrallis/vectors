@@ -37,8 +37,8 @@ dependencies {
 
     // Token counting
     implementation("com.knuddels:jtokkit:1.1.0")
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.2")
+    implementation("com.fasterxml.jackson.core:jackson-databind:${rootProject.extra["jacksonVersion"]}")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${rootProject.extra["jacksonVersion"]}")
 
     // MaterialFX - Modern Material Design components
     implementation("io.github.palexdev:materialfx:11.17.0")
