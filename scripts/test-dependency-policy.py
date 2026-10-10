@@ -39,6 +39,12 @@ cases = {
     'missing-manifest': ("implementation 'com.integrallis:vectors-missing-metadata:1.2.3'", '', 'missing released dependency manifest'),
     'wrong-policy': ("implementation 'com.integrallis:vectors-wrong-policy:1.2.3'", '', 'upstream external dependency policy differs'),
     'framework-baseline': ("compileOnly 'org.springframework:spring-core:1.0.0'", '', None),
+    'private-ci-check': ('', '', None),
+    'private-ci-release': ('', '', 'Public release requires an exact stable version'),
+    'private-ci-staging': ('', '', 'Public release requires an exact stable version'),
+    'private-ci-disguised-repository': ('', '', 'Public release requires an exact stable version'),
+    'private-ci-upstream': ('', '', 'Release dependency vectors must be an exact stable version'),
+    'snapshot-project': ('', '', 'Release dependency models must be an exact stable version'),
 }
 with tempfile.TemporaryDirectory(prefix='release-policy-test-') as temporary:
     base = Path(temporary)
@@ -65,6 +71,21 @@ with tempfile.TemporaryDirectory(prefix='release-policy-test-') as temporary:
     artifact(repo, 'com.fasterxml.jackson', 'jackson-bom', policy['jacksonBom'], packaging='pom')
     artifact(repo, 'org.slf4j', 'slf4j-bom', policy['slf4j'], packaging='pom')
     for name, (dependency, configuration, expected) in cases.items():
+        version = '3.4.5-ci.123.1.0123456789ab' if name.startswith('private-ci-') else '3.4.5'
+        if name == 'snapshot-project':
+            version = '3.4.5-SNAPSHOT'
+        upstream = '1.2.3-ci.123.1.0123456789ab' if name == 'private-ci-upstream' else '1.2.3'
+        task = 'verifyDependencyPolicy' if name == 'private-ci-check' else 'verifyReleaseTrain'
+        publication = ''
+        if name in ('private-ci-staging', 'private-ci-disguised-repository'):
+            repository_name = 'Staging' if name == 'private-ci-staging' else 'GitHubPackages'
+            task = f'publishMavenPublicationTo{repository_name}Repository'
+            publication = f"""
+publishing {{
+    publications {{ maven(MavenPublication) {{ from components.java }} }}
+    repositories {{ maven {{ name = '{repository_name}'; url = uri('{base.as_uri()}/staging') }} }}
+}}
+"""
         project = base / name
         (project / 'gradle').mkdir(parents=True)
         shutil.copy(root / 'gradle/dependency-policy.json', project / 'gradle')
@@ -75,19 +96,26 @@ with tempfile.TemporaryDirectory(prefix='release-policy-test-') as temporary:
         (project / 'build.gradle').write_text(f"""
 plugins {{ id 'java-library'; id 'maven-publish' }}
 group = 'com.integrallis'
-version = '3.4.5'
+version = '{version}'
 repositories {{ maven {{ url = uri('{repo.as_uri()}') }} }}
 dependencies {{ implementation 'com.integrallis:vectors-core:1.2.3'; {dependency} }}
 {configuration}
 ext.javaAIFamily = 'models'
-ext.javaAIReleaseVersions = [vectors: '1.2.3', models: '3.4.5']
+ext.javaAIReleaseVersions = [vectors: '{upstream}', models: '{version}']
 ext.javaAIPublishedProjects = [project]
 apply from: 'gradle/dependency-policy.gradle'
+{publication}
 """)
+        stale_receipt = project / 'build/reports/release-dependencies/train.json'
+        if name == 'private-ci-release':
+            stale_receipt.parent.mkdir(parents=True)
+            stale_receipt.write_text('{"stale":true}')
         run = subprocess.run([str(root / 'gradlew'), '-p', str(project), '--offline',
-                              '--console=plain', '--max-workers=2', 'verifyReleaseTrain'],
+                              '--console=plain', '--max-workers=2', task],
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=120)
         if (expected is None and run.returncode != 0) or (
                 expected is not None and (run.returncode == 0 or expected not in run.stdout)):
             raise AssertionError(f'{name}: expected {expected!r}\n{run.stdout}')
+        if name == 'private-ci-release' and stale_receipt.exists():
+            raise AssertionError('Rejected CI release left behind a stale success receipt')
         print(f'{name}: PASS', flush=True)

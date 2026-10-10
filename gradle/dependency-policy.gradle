@@ -25,13 +25,25 @@ def classify = { String group, String name ->
     return null
 }
 def stable = { String value -> value != null && value ==~ /[0-9]+\.[0-9]+\.[0-9]+/ }
+// Native CI uses an immutable run/attempt/commit version for private test artifacts. It is a
+// valid version of this source build, never an acceptable released upstream dependency.
+def privateCi = { String value -> value != null && value ==~ /[0-9]+\.[0-9]+\.[0-9]+-ci\.[0-9]+\.[0-9]+\.[0-9a-f]{12}/ }
 versions.each { key, value ->
-    if (!stable(value)) throw new GradleException("Release dependency ${key} must be an exact stable version: ${value}")
+    if (!stable(value) && !(key == family && privateCi(value))) {
+        throw new GradleException("Release dependency ${key} must be an exact stable version: ${value}")
+    }
 }
 if (versions[family] != rootProject.version.toString()) {
     throw new GradleException('Release manifest version does not match the project version')
 }
 def metadataDir = rootProject.layout.buildDirectory.dir('release-dependency-metadata')
+def verifyReleaseVersion = rootProject.tasks.register('verifyReleaseVersion') {
+    doLast {
+        if (!stable(versions[family])) {
+            throw new GradleException("Public release requires an exact stable version: ${versions[family]}")
+        }
+    }
+}
 def writeManifest = rootProject.tasks.register('writeReleaseDependencyManifest') {
     inputs.file(policyFile)
     inputs.property('family', family)
@@ -57,6 +69,7 @@ def receiptFiles = []
 def invalidateTrain = rootProject.tasks.register('invalidateReleaseDependencyReceipt') {
     doLast { rootProject.layout.buildDirectory.file('reports/release-dependencies/train.json').get().asFile.delete() }
 }
+verifyReleaseVersion.configure { dependsOn(invalidateTrain) }
 published.each { target ->
     target.plugins.withId('java') {
         target.tasks.named('processResources') {
@@ -185,12 +198,24 @@ published.each { target ->
             }
         }
         target.tasks.named('check') { dependsOn(verify) }
-        target.tasks.withType(PublishToMavenRepository).configureEach { dependsOn(verify) }
+        target.tasks.withType(PublishToMavenRepository).configureEach {
+            dependsOn(verify)
+            doFirst {
+                // Private CI publication is confined to GitHub Packages. Naming a file repository
+                // GitHubPackages must not bypass the public/staging release check.
+                def privateRepository = repository.name == 'GitHubPackages' &&
+                    repository.url.scheme == 'https' && repository.url.host == 'maven.pkg.github.com'
+                if (!stable(versions[family]) && !privateRepository) {
+                    throw new GradleException("Public release requires an exact stable version: ${versions[family]}")
+                }
+            }
+        }
         chain.configure { dependsOn(verify) }
         shared.configure { dependsOn(verify) }
     }
 }
 rootProject.tasks.register('verifyReleaseTrain') {
+    dependsOn(verifyReleaseVersion)
     group = 'verification'
     description = 'Collect verified dependency receipts for every published module'
     dependsOn(chain, shared)
