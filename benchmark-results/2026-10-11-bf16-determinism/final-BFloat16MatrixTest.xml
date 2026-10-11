@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.integrallis.vectors.core.BFloat16MatrixTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-11T22:26:42.745Z" hostname="Brians-MacBook-Pro.local" time="0.819">
+  <properties/>
+  <testcase name="multipliesKnownBfloat16BitPatternsWithFloatAccumulation()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.185"/>
+  <testcase name="readsFromMappedStorage(Path)" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.008"/>
+  <testcase name="multipliesLargeRowCountsWithSequentialMemoryAccess()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.082"/>
+  <testcase name="multipliesBatchMajorActivationsIntoAnOffsetOutputRegion()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.003"/>
+  <testcase name="slicesRowsWithoutCopyingAndReadsIndividualValues()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.001"/>
+  <testcase name="sharedLargeBatchMatchesIndependentMatrixVectorProductsExactly()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.512"/>
+  <testcase name="rejectsBadGeometryStorageAndInvocation()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.016"/>
+  <testcase name="multipliesCompleteVectorBlocksAndScalarTail()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.002"/>
+  <testcase name="preservesSubnormalAndRoundedReferenceValues()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Oct 11, 2026 3:26:42 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 11, 2026 3:26:42 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+]]></system-err>
+</testsuite>

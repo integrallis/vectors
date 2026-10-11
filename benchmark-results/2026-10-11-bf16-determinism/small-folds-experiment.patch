@@ -1,0 +1,51 @@
+--- a/vectors-core/src/main/java/com/integrallis/vectors/core/BFloat16Matrix.java
++++ b/vectors-core/src/main/java/com/integrallis/vectors/core/BFloat16Matrix.java
+@@ -271,7 +271,7 @@
+       int columns,
+       long rowOffset,
+       int vectorBound) {
+-    float sum = vectorSum.reduceLanes(VectorOperators.ADD);
++    float sum = PanamaVectorUtilSupport.reduceLanesFixedTree(vectorSum);
+     for (int column = vectorBound; column < columns; column++) {
+       float value = decode(weight.get(LE_SHORT, rowOffset + (long) column * Short.BYTES));
+       sum = MathUtil.fma(input[inputOffset + column], value, sum);
+--- a/vectors-core/src/main/java/com/integrallis/vectors/core/PanamaVectorUtilSupport.java
++++ b/vectors-core/src/main/java/com/integrallis/vectors/core/PanamaVectorUtilSupport.java
+@@ -148,20 +148,23 @@
+   }
+ 
+   static float reduceLanesFixedTree(FloatVector vector) {
+-    int lanes = vector.length();
+-    if (lanes == 16) {
+-      vector = vector.add(vector.rearrange(REDUCE_ROTATE_8));
+-    }
+-    if (lanes >= 8) {
+-      vector = vector.add(vector.rearrange(REDUCE_ROTATE_4));
+-    }
+-    if (lanes >= 4) {
+-      vector = vector.add(vector.rearrange(REDUCE_ROTATE_2));
+-    }
+-    if (lanes >= 2) {
+-      vector = vector.add(vector.rearrange(REDUCE_ROTATE_1));
+-    }
+-    return vector.lane(0);
++    return foldOneLane(foldTwoLanes(foldFourLanes(foldEightLanes(vector)))).lane(0);
++  }
++
++  private static FloatVector foldEightLanes(FloatVector vector) {
++    return vector.length() == 16 ? vector.add(vector.rearrange(REDUCE_ROTATE_8)) : vector;
++  }
++
++  private static FloatVector foldFourLanes(FloatVector vector) {
++    return vector.length() >= 8 ? vector.add(vector.rearrange(REDUCE_ROTATE_4)) : vector;
++  }
++
++  private static FloatVector foldTwoLanes(FloatVector vector) {
++    return vector.length() >= 4 ? vector.add(vector.rearrange(REDUCE_ROTATE_2)) : vector;
++  }
++
++  private static FloatVector foldOneLane(FloatVector vector) {
++    return vector.length() >= 2 ? vector.add(vector.rearrange(REDUCE_ROTATE_1)) : vector;
+   }
+ 
+   private static VectorShuffle<Float> reductionRotation(int distance) {

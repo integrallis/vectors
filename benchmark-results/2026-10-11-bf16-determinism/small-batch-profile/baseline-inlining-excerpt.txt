@@ -1,0 +1,9 @@
+Complete local diagnostic log SHA-256: b490c19994b6bf677c1166d3fb4e9875645ac788f5cff83acb0a4402a6d92c97
+                                                                      @ 58  @ 171   java.lang.invoke.Invokers$Holder:: com.integrallis.vectors.core.BFloat16Matrix::finishRowlinkToTargetMethod (68 bytes) (8 bytes)   failed to inline: callee is too large
+ com.integrallis.vectors.core.BFloat16Matrix::finishRow (68 bytes)   inline (hot)
+                              @ 171   com.integrallis.vectors.core.BFloat16Matrix::finishRow (68 bytes)   inline (hot)
+                              @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                  @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                              @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                          @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method

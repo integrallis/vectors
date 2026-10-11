@@ -4,6 +4,19 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-10-11
+
+### Fixed
+
+- Use a fixed-order SIMD reduction for BF16 matrix projections. Cold and compiled
+  execution now retain identical results across single and batched calls; small gate projection
+  differences previously compounded through Bonsai's recurrent state. Fresh-JVM regression tests
+  exercise 64-, 128-, and 256-bit ceilings, scalar tails, grouped/tall rows, and parallel batches.
+  Keep the reduction in the row-finishing method to avoid per-row vector boxing, with a fresh-JVM
+  allocation regression check.
+- Refresh the benchmark runtime dependency locks and build the JMH artifact in CI, so a release
+  dependency update cannot leave the performance reproduction path unbuildable.
+
 ## [0.1.29] - 2026-10-10
 
 ### Fixed

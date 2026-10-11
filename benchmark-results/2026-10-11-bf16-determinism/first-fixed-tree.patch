@@ -1,0 +1,15 @@
+diff --git a/vectors-core/src/main/java/com/integrallis/vectors/core/BFloat16Matrix.java b/vectors-core/src/main/java/com/integrallis/vectors/core/BFloat16Matrix.java
+index cf0a3d3..c914add 100644
+--- a/vectors-core/src/main/java/com/integrallis/vectors/core/BFloat16Matrix.java
++++ b/vectors-core/src/main/java/com/integrallis/vectors/core/BFloat16Matrix.java
+@@ -271,7 +271,9 @@ public final class BFloat16Matrix {
+       int columns,
+       long rowOffset,
+       int vectorBound) {
+-    float sum = vectorSum.reduceLanes(VectorOperators.ADD);
++    // reduceLanes(ADD) can change addition order when the JIT compiles this method. BF16 gate
++    // projections feed recurrent state, where that cold/hot drift compounds across tokens.
++    float sum = PanamaVectorUtilSupport.reduceLanesFixedTree(vectorSum);
+     for (int column = vectorBound; column < columns; column++) {
+       float value = decode(weight.get(LE_SHORT, rowOffset + (long) column * Short.BYTES));
+       sum = MathUtil.fma(input[inputOffset + column], value, sum);

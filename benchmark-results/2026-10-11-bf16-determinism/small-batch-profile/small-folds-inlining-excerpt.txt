@@ -1,0 +1,11 @@
+Complete local diagnostic log SHA-256: cc13fb902058fb54495951221690c3d5c6112d8c0cc342965bded7bddb7ffdbd
+                              @ 1   com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (18 bytes)   inline
+                              @ 171   com.integrallis.vectors.core.BFloat16Matrix::finishRow (65 bytes)   inline (hot)
+                                @ 1   com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (18 bytes)   failed to inline: low call site frequency
+                              @ 171   com.integrallis.vectors.core.BFloat16Matrix::finishRow (65 bytes)   inline (hot)
+                                @ 1   com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (18 bytes)   failed to inline: low call site frequency
+                              @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                  @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                              @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                          @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method

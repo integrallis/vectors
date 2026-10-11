@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-11T22:03:56.871Z" hostname="Brians-MacBook-Pro.local" time="35.645">
+  <properties/>
+  <testcase name="[1] maxBits=64, rows=48, columns=5120" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="12.708"/>
+  <testcase name="[2] maxBits=128, rows=48, columns=5120" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="1.448"/>
+  <testcase name="[3] maxBits=256, rows=48, columns=5120" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="1.338"/>
+  <testcase name="[4] maxBits=64, rows=5, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="0.786"/>
+  <testcase name="[5] maxBits=128, rows=5, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="0.827"/>
+  <testcase name="[6] maxBits=256, rows=5, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="0.803"/>
+  <testcase name="[7] maxBits=64, rows=8193, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="14.532"/>
+  <testcase name="[8] maxBits=128, rows=8193, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="1.689"/>
+  <testcase name="[9] maxBits=256, rows=8193, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="1.299"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

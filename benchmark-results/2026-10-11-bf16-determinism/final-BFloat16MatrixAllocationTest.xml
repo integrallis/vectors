@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.integrallis.vectors.core.BFloat16MatrixAllocationTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-11T22:26:36.944Z" hostname="Brians-MacBook-Pro.local" time="5.796">
+  <properties/>
+  <testcase name="compiledBatchesDoNotBoxAVectorForEveryOutputRow(Path)" classname="com.integrallis.vectors.core.BFloat16MatrixAllocationTest" time="5.729"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,13 @@
+Complete local diagnostic log SHA-256: bb62b44f71a96f942cf8e252a11e068f9df51decc65f99a270ec6e83cb7a472b
+                              @ 171   com.integrallis.vectors.core.BFloat16Matrix::finishRow (65 bytes)   failed to inline: callee is too large
+                              @ 171   com.integrallis.vectors.core.BFloat16Matrix::finishRow (65 bytes)   failed to inline: callee is too large
+                                         @ 1   com.integrallis.vectors.core.PanamaVectorUtilSupport::           reduceLanesFixedTree     (85 bytes)       failed to inline: callee is too large@ 2  
+                              @ 171   com.integrallis.vectors.core.BFloat16Matrix::finishRow (65 bytes)   inline (hot)
+                                @ 1   com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (85 bytes)   failed to inline: too big
+                                                 @ 1     com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (85 bytes)@ 1     failed to inline: too big java.lang.Object::
+                              @ 38   jdk.incubator.vector.Float256Vector::rearrange (6 bytes)   force inline by annotation   callee changed to  com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (85 bytes)    \-> TypeProfile (10252/10252 counts) = jdk/incubator/vector/Float256Vector
+                              @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                  @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                              @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                          @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method

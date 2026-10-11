@@ -1,0 +1,47 @@
+{
+  "decision": "Reject first fixed-tree implementation pending small-batch performance repair",
+  "results": [
+    {
+      "kernel": "mappedBfloat16MatVec",
+      "shape": "48x5120",
+      "baselineMicroseconds": 34.43301919180826,
+      "fixedMicroseconds": 30.774168720774746,
+      "fixedToBaselineLatencyRatio": 0.8937400623903474
+    },
+    {
+      "kernel": "mappedBfloat16MatVec",
+      "shape": "4864x896",
+      "baselineMicroseconds": 936.1289362496157,
+      "fixedMicroseconds": 945.7722248690663,
+      "fixedToBaselineLatencyRatio": 1.010301239760929
+    },
+    {
+      "kernel": "mappedBfloat16MatVec",
+      "shape": "151936x896",
+      "baselineMicroseconds": 37577.38531074481,
+      "fixedMicroseconds": 37660.066645536564,
+      "fixedToBaselineLatencyRatio": 1.0022002950473543
+    },
+    {
+      "kernel": "mappedBfloat16PromptBatch",
+      "shape": "48x5120",
+      "baselineMicroseconds": 565.4803492522474,
+      "fixedMicroseconds": 685.6002266260534,
+      "fixedToBaselineLatencyRatio": 1.2124209577444103
+    },
+    {
+      "kernel": "mappedBfloat16PromptBatch",
+      "shape": "4864x896",
+      "baselineMicroseconds": 3184.2206768256137,
+      "fixedMicroseconds": 3096.100198763942,
+      "fixedToBaselineLatencyRatio": 0.9723258884966729
+    },
+    {
+      "kernel": "mappedBfloat16PromptBatch",
+      "shape": "151936x896",
+      "baselineMicroseconds": 95837.95663636364,
+      "fixedMicroseconds": 96691.01438863637,
+      "fixedToBaselineLatencyRatio": 1.008901042783179
+    }
+  ]
+}

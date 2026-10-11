@@ -1,0 +1,20 @@
+{
+  "baseline": {
+    "sha256": "21eeae4fcaa56fa26ed45d99610142f794cdec0e1d852894e637263f5bd0b40c"
+  },
+  "fixed": {
+    "sha256": "6ba1ccb6dc6cc3b39deb757738503f6d29ed0da9b743b75f79c772c602d6f184"
+  },
+  "batch-fixed": {
+    "sha256": "f987d1fea0f1d3f7435a2e04d3c10093c5e0d58963455ec3d534868e5dee69d4"
+  },
+  "constant-lanes": {
+    "sha256": "00a349b228d933137d4f4f994d2ff71a03a5d93173a6c3c46b225fb6b7c00891"
+  },
+  "small-folds": {
+    "sha256": "95c86408690ea7bd0fe7a07c03f36a0e22d8880edf66a3e835eeca7f12e7fb0c"
+  },
+  "inline-fold": {
+    "sha256": "71a62792de1702ad84beb3e18a796062a97fc7f901f6e7241e87a51abf2fbfc4"
+  }
+}

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-10-11T22:26:37.151Z" hostname="Brians-MacBook-Pro.local" time="39.669">
+  <properties/>
+  <testcase name="[1] maxBits=64, rows=48, columns=5120" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="7.941"/>
+  <testcase name="[2] maxBits=128, rows=48, columns=5120" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="0.984"/>
+  <testcase name="[3] maxBits=256, rows=48, columns=5120" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="0.994"/>
+  <testcase name="[4] maxBits=64, rows=5, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="0.64"/>
+  <testcase name="[5] maxBits=128, rows=5, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="0.61"/>
+  <testcase name="[6] maxBits=256, rows=5, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="0.568"/>
+  <testcase name="[7] maxBits=64, rows=8193, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="11.059"/>
+  <testcase name="[8] maxBits=128, rows=8193, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="1.057"/>
+  <testcase name="[9] maxBits=256, rows=8193, columns=37" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="0.987"/>
+  <testcase name="[10] maxBits=64, rows=512, columns=2048" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="12.157"/>
+  <testcase name="[11] maxBits=128, rows=512, columns=2048" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="1.126"/>
+  <testcase name="[12] maxBits=256, rows=512, columns=2048" classname="com.integrallis.vectors.core.BFloat16MatrixColdHotTest" time="1.237"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

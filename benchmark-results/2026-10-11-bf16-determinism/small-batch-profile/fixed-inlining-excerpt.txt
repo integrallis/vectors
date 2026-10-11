@@ -1,0 +1,11 @@
+Complete local diagnostic log SHA-256: 1a7c3d85be7cba8485c22b20ba658c165a913dffae7667f93eb6e3ed34e9a826
+                              @ 1   com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (81 bytes)   failed to inline: callee is too large
+                              @ 171   com.integrallis.vectors.core.BFloat16Matrix::finishRow (65 bytes)   inline (hot)
+                                @ 1   com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (81 bytes)   failed to inline: too big
+                              @ 171   com.integrallis.vectors.core.BFloat16Matrix::finishRow (65 bytes)   inline (hot)
+                                @ 1   com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (81 bytes)   failed to inline: too big
+                              @ 1   jdk.incubator.vector.Float256Vector::length (4 bytes)   force inline by annotation   callee changed to  com.integrallis.vectors.core.PanamaVectorUtilSupport::reduceLanesFixedTree (81 bytes)    \-> TypeProfile (18833/18833 counts) = jdk/incubator/vector/Float256Vector
+                                @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                  @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                              @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method
+                                          @ 14   com.integrallis.vectors.core.BFloat16Matrix::vectorMultiplyBatchRow (182 bytes)   failed to inline: already compiled into a big method

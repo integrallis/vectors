@@ -1,0 +1,47 @@
+{
+  "decision": "Additional isolated-host verification required; outlier local windows retained",
+  "results": [
+    {
+      "kernel": "mappedBfloat16MatVec",
+      "shape": "48x5120",
+      "baselineMicroseconds": 32.30684854403486,
+      "fixedMicroseconds": 29.05938342535146,
+      "latencyRatio": 0.899480597302549
+    },
+    {
+      "kernel": "mappedBfloat16MatVec",
+      "shape": "4864x896",
+      "baselineMicroseconds": 877.6279373549905,
+      "fixedMicroseconds": 1112.350214774727,
+      "latencyRatio": 1.2674507811671838
+    },
+    {
+      "kernel": "mappedBfloat16MatVec",
+      "shape": "151936x896",
+      "baselineMicroseconds": 37471.97056569665,
+      "fixedMicroseconds": 38217.13884024692,
+      "latencyRatio": 1.0198860178234777
+    },
+    {
+      "kernel": "mappedBfloat16PromptBatch",
+      "shape": "48x5120",
+      "baselineMicroseconds": 566.4936868526056,
+      "fixedMicroseconds": 584.0297705226217,
+      "latencyRatio": 1.0309554794289857
+    },
+    {
+      "kernel": "mappedBfloat16PromptBatch",
+      "shape": "4864x896",
+      "baselineMicroseconds": 3005.8319872695547,
+      "fixedMicroseconds": 2975.5342279815936,
+      "latencyRatio": 0.9899203417169424
+    },
+    {
+      "kernel": "mappedBfloat16PromptBatch",
+      "shape": "151936x896",
+      "baselineMicroseconds": 148457.5419530303,
+      "fixedMicroseconds": 91926.57138636365,
+      "latencyRatio": 0.619211191139402
+    }
+  ]
+}
