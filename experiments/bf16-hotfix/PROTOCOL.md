@@ -31,3 +31,10 @@ A successful workflow proves only these kernel cases on the recorded hardware. H
 may lack SVE and do not stand in for unmeasured SVE systems. Actual unchanged Bonsai and Qwen BF16
 fixtures, whole-model resource/performance comparisons, full build and normal dependency-pinned
 consumer CI remain required before publication. No release/tag/publish action is in this workflow.
+
+Historical protocol audit: the earlier `experiments/bf16-tiles/run-host.py` six-pair v2 script
+rotated a two-arm list and then reversed odd pairs. Those two operations canceled, so its actual
+order was baseline then candidate in every pair, despite its description as counterbalanced.
+That historical result does not qualify this candidate. The present script explicitly alternates
+the two orders and records every executed command. The older four-arm masked-reduction experiment
+is a separate data set and is not affected by this two-arm ordering defect.
