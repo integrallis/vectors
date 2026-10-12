@@ -1,0 +1,7 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+CONFIG requested=512 effective=256 preferred=256 vectorFma=true scalarFma=true java=25.0.3+9-LTS arch=x86_64
+Oct 12, 2026 4:19:05 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 12, 2026 4:19:05 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=512 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[vectors.maxBits=512]
+BONSAI_ACTIVATIONS_STABLE heads=48 kernel=4 steps=12 iterations=2000
