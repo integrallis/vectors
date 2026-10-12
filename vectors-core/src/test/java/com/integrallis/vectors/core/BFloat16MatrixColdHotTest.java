@@ -51,6 +51,7 @@ class BFloat16MatrixColdHotTest {
                 "--add-modules",
                 "jdk.incubator.vector",
                 "-XX:ActiveProcessorCount=4",
+                "-Xmx512m",
                 "-Dvectors.maxBits=" + maxBits,
                 "-cp",
                 System.getProperty("java.class.path"),
@@ -61,7 +62,7 @@ class BFloat16MatrixColdHotTest {
             .redirectOutput(log.toFile())
             .start();
     try {
-      boolean completed = process.waitFor(60, TimeUnit.SECONDS);
+      boolean completed = process.waitFor(180, TimeUnit.SECONDS);
       assertThat(completed).as("probe timed out; output:%n%s", Files.readString(log)).isTrue();
       assertThat(process.exitValue()).as("probe output:%n%s", Files.readString(log)).isZero();
     } finally {

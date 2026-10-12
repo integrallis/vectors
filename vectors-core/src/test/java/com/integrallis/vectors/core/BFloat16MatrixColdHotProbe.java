@@ -68,7 +68,10 @@ final class BFloat16MatrixColdHotProbe {
         for (int iteration = 0; iteration < 32; iteration++) {
           matrix.multiplyBatch(tiledInput, 1, batchSize, tiledOutput, 1);
           for (int token = 0; token < batchSize; token++) {
-            assertBits(expected[token], tiledOutput, 1 + token * rows,
+            assertBits(
+                expected[token],
+                tiledOutput,
+                1 + token * rows,
                 "batch " + batchSize + " token " + token + " iteration " + iteration);
           }
         }
