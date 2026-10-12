@@ -1,0 +1,24 @@
+{
+  "baseRevision": "7e77a637d74350dca3fb5cc0e01401a08f26f27a",
+  "activationSourceRevision": "6893a587d7f1d8fd2cd58e85310ef87579b42b25",
+  "runtimeScope": [
+    "Panama activation methods",
+    "Scalar activation methods",
+    "ReproducibleActivationExp",
+    "Sun license NOTICE"
+  ],
+  "unchanged": [
+    "BFloat16Matrix",
+    "GgufPersistentRowExecutor",
+    "PanamaConstants",
+    "private reduction shuffle visibility"
+  ],
+  "jarSha256": "4d447d40ee0c5dd3942d0f9045f1d7edb4fa31a11b9029d1d6a512089cce7c58",
+  "tests": {
+    "tests": 35,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "wholeModelStatus": "Not yet measured on this artifact"
+}

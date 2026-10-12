@@ -8,9 +8,11 @@ All notable changes to java-vectors are documented here.
 
 ### Fixed
 
-- Preserve SwiGLU's float-intermediate exponential arithmetic before and after JIT compilation,
-  across vector widths, tails and chunk boundaries. This corrects the activation used by
-  sequential and batched Qwen-family inference, including Bonsai.
+- Keep SwiGLU, recurrent sigmoid/softplus gates and convolution/SiLU numerically stable
+  before and after JIT compilation. This corrects Bonsai 2 native sequential/batched
+  prefill divergence while preserving existing float intermediates and convolution history.
+- Exercise 48-head recurrent gates, persistent four-tap history, offsets, tails, aliases,
+  concurrent callers, vector-width settings and disabled-FMA operation in regression checks.
 
 ## [0.1.29] - 2026-10-10
 
