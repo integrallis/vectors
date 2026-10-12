@@ -156,4 +156,116 @@ final class ReproducibleActivationExp {
           value / (1.0f + (float) StrictMath.exp(-value)) * up[upOffset + index];
     }
   }
+
+  /** Keeps convolution and its exponential behind an array-only call boundary. */
+  static void causalDepthwiseConv1dSilu(
+      float[] values,
+      int valuesOffset,
+      float[] history,
+      int historyOffset,
+      float[] weights,
+      int weightsOffset,
+      int channels,
+      int kernelSize) {
+    int historyLength = kernelSize - 1;
+    int channel = 0;
+    int limit = PanamaVectorUtilSupport.FLOAT_SPECIES.loopBound(channels);
+    FloatVector oneFloat = FloatVector.broadcast(ReproducibleActivationExp.FLOAT_SPECIES, 1.0f);
+    for (; channel < limit; channel += ReproducibleActivationExp.FLOAT_SPECIES.length()) {
+      FloatVector input =
+          FloatVector.fromArray(
+              ReproducibleActivationExp.FLOAT_SPECIES, values, valuesOffset + channel);
+      FloatVector convolved =
+          input.mul(
+              FloatVector.fromArray(
+                  ReproducibleActivationExp.FLOAT_SPECIES,
+                  weights,
+                  weightsOffset + historyLength * channels + channel));
+      FloatVector previous =
+          FloatVector.fromArray(
+              ReproducibleActivationExp.FLOAT_SPECIES, history, historyOffset + channel);
+      convolved =
+          PanamaVectorUtilSupport.fma(
+              previous,
+              FloatVector.fromArray(
+                  ReproducibleActivationExp.FLOAT_SPECIES, weights, weightsOffset + channel),
+              convolved);
+      for (int tap = 1; tap < historyLength; tap++) {
+        int historyIndex = historyOffset + tap * channels + channel;
+        FloatVector current =
+            FloatVector.fromArray(ReproducibleActivationExp.FLOAT_SPECIES, history, historyIndex);
+        convolved =
+            PanamaVectorUtilSupport.fma(
+                current,
+                FloatVector.fromArray(
+                    ReproducibleActivationExp.FLOAT_SPECIES,
+                    weights,
+                    weightsOffset + tap * channels + channel),
+                convolved);
+        current.intoArray(history, historyIndex - channels);
+      }
+      input.intoArray(history, historyOffset + (historyLength - 1) * channels + channel);
+      FloatVector exponentialInput = convolved.neg();
+      FloatVector result;
+      if (DOUBLE_SPECIES.length() == 1) {
+        result = exp(exponentialInput);
+      } else {
+        var bounded = exponentialInput.max(-104.0f).min(89.0f);
+        DoubleVector x =
+            (DoubleVector) bounded.convertShape(VectorOperators.F2D, DOUBLE_SPECIES, 0);
+        var half =
+            DoubleVector.broadcast(DOUBLE_SPECIES, .5)
+                .blend(-.5, x.compare(VectorOperators.LT, 0.0));
+        var integers =
+            (IntVector)
+                x.mul(0x1.71547652b82fep0)
+                    .add(half)
+                    .convertShape(VectorOperators.D2I, INT_SPECIES, 0);
+        var kd = (DoubleVector) integers.convertShape(VectorOperators.I2D, DOUBLE_SPECIES, 0);
+        var k = (LongVector) integers.convertShape(VectorOperators.I2L, LONG_SPECIES, 0);
+        var hi = x.sub(kd.mul(HI));
+        var lo = kd.mul(LO);
+        var r = hi.sub(lo);
+        var t = r.mul(r);
+        var polynomial =
+            t.mul(0x1.6376972bea4d0p-25)
+                .add(-0x1.bbd41c5d26bf1p-20)
+                .mul(t)
+                .add(0x1.1566aaf25de2cp-14)
+                .mul(t)
+                .add(-0x1.6c16c16bebd93p-9)
+                .mul(t)
+                .add(0x1.555555555553ep-3);
+        var c = r.sub(t.mul(polynomial));
+        var one = DoubleVector.broadcast(DOUBLE_SPECIES, 1.0);
+        var y = one.sub(lo.sub(r.mul(c).div(c.neg().add(2.0))).sub(hi));
+        y = y.reinterpretAsLongs().add(k.lanewise(VectorOperators.LSHL, 52)).reinterpretAsDoubles();
+
+        result = (FloatVector) y.convertShape(VectorOperators.D2F, FLOAT_SPECIES, 0);
+        result =
+            result.blend(
+                Float.POSITIVE_INFINITY, exponentialInput.compare(VectorOperators.GT, 89.0f));
+        result = result.blend(0.0f, exponentialInput.compare(VectorOperators.LT, -104.0f));
+        result =
+            result.blend(
+                exponentialInput.add(exponentialInput),
+                exponentialInput.test(VectorOperators.IS_NAN));
+      }
+      convolved.div(oneFloat.add(result)).intoArray(values, valuesOffset + channel);
+    }
+    for (; channel < channels; channel++) {
+      float input = values[valuesOffset + channel];
+      float convolved = input * weights[weightsOffset + historyLength * channels + channel];
+      float previous = history[historyOffset + channel];
+      convolved += previous * weights[weightsOffset + channel];
+      for (int tap = 1; tap < historyLength; tap++) {
+        int historyIndex = historyOffset + tap * channels + channel;
+        float current = history[historyIndex];
+        convolved += current * weights[weightsOffset + tap * channels + channel];
+        history[historyIndex - channels] = current;
+      }
+      history[historyOffset + (historyLength - 1) * channels + channel] = input;
+      values[valuesOffset + channel] = convolved / (1.0f + (float) StrictMath.exp(-convolved));
+    }
+  }
 }
