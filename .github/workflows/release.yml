@@ -191,6 +191,13 @@ jobs:
           echo "::error::Published deployment did not synchronize to $artifact_url"
           exit 1
 
+      # JReleaser installs Java 21 for its CLI and changes JAVA_HOME for subsequent steps.
+      - name: Restore JDK 25 for published consumers
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: "25"
+
       - name: Verify released consumer graphs
         if: ${{ github.event_name == 'push' || (!inputs.dry_run && !inputs.skip_deploy) }}
         run: python3 scripts/verify-maven-runtime.py --central --output build/central-consumers
