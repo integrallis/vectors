@@ -1,0 +1,46 @@
+{
+  "baselineTag": "v0.1.29",
+  "candidateRuntime": "BFloat16Matrix+GgufPersistentRowExecutor from 6893a587; Panama shuffle visibility from 292c889b; all other runtime source v0.1.29",
+  "java": "Temurin25.0.3 Intel macOS",
+  "command": "./gradlew :vectors-core:jar :vectors-core:test --tests *BFloat16* --tests *GgufParallelSupportTest --rerun-tasks --max-workers=2",
+  "jarSha256": "107b807f5dfd3ec420ebbdfd72c3e825240b224861fcb2f7d940683c5843fd96",
+  "tests": {
+    "TEST-com.integrallis.vectors.core.BFloat16NestedDispatchTest.xml": {
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "TEST-com.integrallis.vectors.core.BFloat16MatrixTest.xml": {
+      "tests": "9",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "TEST-com.integrallis.vectors.core.GgufParallelSupportTest.xml": {
+      "tests": "21",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "TEST-com.integrallis.vectors.core.BFloat16MatrixAllocationTest.xml": {
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "TEST-com.integrallis.vectors.core.BFloat16MatrixDispatchTest.xml": {
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "TEST-com.integrallis.vectors.core.BFloat16MatrixColdHotTest.xml": {
+      "tests": "12",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  },
+  "scope": "Local fresh correctness/allocation contracts; supported-host performance and real-model qualification pending"
+}

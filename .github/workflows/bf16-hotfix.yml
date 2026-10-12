@@ -1,0 +1,55 @@
+name: BF16 dependency candidate
+on:
+  push:
+    branches: [fix/bf16-correctness-hotfix]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  paired-kernels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            runner: ubuntu-latest
+          - arch: arm
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: candidate
+      - uses: actions/checkout@v5
+        with:
+          ref: 1440ca7555e492ae7c2a17cde7cb3ffe6c07b7b5
+          path: baseline
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25.0.3
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Record host
+        run: |
+          mkdir -p evidence
+          { uname -a; lscpu; java -version; } > evidence/host.txt 2>&1
+      - name: Build actual candidate and validate BF16 contracts
+        working-directory: candidate
+        run: ./gradlew :vectors-core:jar :vectors-core:test --tests '*BFloat16*' --tests '*GgufParallelSupportTest' --rerun-tasks --max-workers=2 --no-daemon
+      - name: Build actual published source control
+        working-directory: baseline
+        run: ./gradlew :vectors-core:jar --max-workers=2 --no-daemon
+      - name: Twelve paired kernel measurements
+        run: python3 candidate/experiments/bf16-hotfix/run-paired.py candidate baseline evidence
+      - name: Retain complete and failed evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bf16-hotfix-${{ matrix.arch }}
+          path: |
+            evidence/
+            candidate/vectors-core/build/test-results/test/
+            candidate/vectors-core/build/libs/*.jar
+            baseline/vectors-core/build/libs/*.jar
+          retention-days: 30

@@ -38,6 +38,43 @@ import org.junit.jupiter.api.Test;
 class GgufParallelSupportTest {
 
   @Test
+  void maximumRowCountNeverEmitsNegativeRows() {
+    assertTimeoutPreemptively(Duration.ofSeconds(5), GgufMaximumRangeProbe::maximumRows);
+  }
+
+  @Test
+  void maximumStageRangesCoverEveryRowExactlyOnce() {
+    assertTimeoutPreemptively(Duration.ofSeconds(5), GgufMaximumRangeProbe::maximumStages);
+  }
+
+  @Test
+  void maximumChunkConfigurationMakesProgressAtIntegerLimit() {
+    assertTimeoutPreemptively(Duration.ofSeconds(5), GgufMaximumRangeProbe::maximumChunks);
+  }
+
+  @Test
+  void callbackCloseFailsWithoutPoisoningEitherPool() {
+    assertTimeoutPreemptively(
+        Duration.ofSeconds(5),
+        () -> {
+          try (var first = new GgufPersistentRowExecutor(2, 1, "close-first");
+              var second = new GgufPersistentRowExecutor(2, 1, "close-second")) {
+            first.forEach(
+                2,
+                row -> {
+                  assertThatThrownBy(first::close).isInstanceOf(IllegalStateException.class);
+                  assertThatThrownBy(second::close).isInstanceOf(IllegalStateException.class);
+                });
+            AtomicInteger visits = new AtomicInteger();
+            first.forEach(2, row -> visits.incrementAndGet());
+            second.execute(
+                GgufStagePlan.of(GgufStagePlan.stage(2, (a, b) -> visits.addAndGet(b - a))));
+            assertThat(visits).hasValue(4);
+          }
+        });
+  }
+
+  @Test
   void parallelizesOnlyLargeMatricesWhenMultipleProcessorsAreAvailable() {
     assertThat(GgufParallelSupport.shouldParallelize(1024, 2048, 8, true, 1_048_576L)).isTrue();
     assertThat(GgufParallelSupport.shouldParallelize(32, 2048, 8, true, 1_048_576L)).isFalse();
@@ -305,6 +342,32 @@ class GgufParallelSupportTest {
       AtomicInteger rowsVisited = new AtomicInteger();
       executor.forEach(64, ignored -> rowsVisited.incrementAndGet());
       assertThat(rowsVisited).hasValue(64);
+    }
+  }
+
+  @Test
+  void nestedDispatchRejectsClosedExecutorsWithoutRunningCallbacks() {
+    AtomicInteger visits = new AtomicInteger();
+    var closed = new GgufPersistentRowExecutor(2, 1, "closed-test");
+    closed.close();
+    try (var active = new GgufPersistentRowExecutor(2, 1, "active-test")) {
+      active.forEach(
+          4,
+          row -> {
+            assertThatThrownBy(() -> closed.forEach(1, ignored -> visits.incrementAndGet()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("executor is closed");
+            assertThatThrownBy(
+                    () ->
+                        closed.execute(
+                            GgufStagePlan.of(
+                                GgufStagePlan.stage(1, (from, to) -> visits.incrementAndGet()))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("executor is closed");
+          });
+      assertThat(visits).hasValue(0);
+      active.forEach(4, row -> visits.incrementAndGet());
+      assertThat(visits).hasValue(4);
     }
   }
 
