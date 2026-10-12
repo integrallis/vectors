@@ -98,3 +98,7 @@ The preceding ARM core CI ran 1,601 cases with 1,597 passes and four hardware sk
 The original macro helper retained backend-owned logit arrays. Those per-step hashes and quality labels are invalid. The model-fixture helper always cloned immediately and remains valid. Corrected macros snapshot immediately, verify ownership with a deliberately reused-buffer probe, and separately record copy time/allocation before subtracting only that measured overhead from request totals. Raw totals remain available. All arms use the corrected harness.
 
 `FINAL-PROTOCOL.md`, `collect-final.py` and per-phase payload/host receipts define the final analysis. The collector verifies immutable payload hashes and actual JAR hashes before combining complete host-paired blocks; old/new timings are never pooled. Original failed reduction/layout experiments are preserved by merging their source history. No final release acceptance is claimed until all required gates are resolved.
+
+## Latest assembled runtime smoke
+
+Actual Models `d2d0fb4f` JARs (lazy Q5 decoder initialization and BERT scalar projection restoration), with overflow-fixed core SHA `79f536b453c5ad6d7339b30e41d8c8c440da3ff613caf5d1bea6f83e40ade1c7`, pass the Qwen pinned/full-snapshot fixture, unchanged literal Bonsai CI method, and complete Bonsai oracle/fresh-session/reset/batch fixture. [Commands, output and artifact hashes](final-d2d0-afc-smoke/provenance.json) are retained. This is correctness evidence on the assembled runtime; frozen `0bc5de31`/`ae337eeb` macro timings remain separately scoped.
