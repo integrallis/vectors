@@ -59,3 +59,33 @@ for arch in ['x86', 'arm']:
             output = repo / f'experiments/bf16-models/combined-final-{arch}-{model}-analysis.json'
             subprocess.run([sys.executable, str(repo / 'experiments/bf16-models/analyze.py'),
                             str(aggregate), str(output), model], check=True)
+    correspondence = []
+    old = central / 'remote-bf16-models-v2' / arch
+    for model in models:
+        for pair in range(10):
+            for arm in ['control', 'candidate']:
+                name = f'{model}-pair{pair}-{arm}.stdout'
+                if not (old / name).exists() or not (aggregate / name).exists():
+                    continue
+                def requests(path):
+                    records = [json.loads(line) for line in path.read_text().splitlines()
+                               if line.startswith('{')]
+                    return [row for row in records if row['kind'] == 'request']
+                before, after = requests(old / name), requests(aggregate / name)
+                if len(before) != 7 or len(after) != 7:
+                    continue
+                differences = []
+                for previous, current in zip(before, after):
+                    fields = [key for key in ['id', 'repeat', 'inputTokens', 'fullLogitSha256',
+                                             'greedyTokens', 'prediction']
+                              if previous[key] != current[key]]
+                    if fields:
+                        differences.append({'id': current['id'], 'repeat': current['repeat'],
+                                            'fields': fields})
+                correspondence.append({'model': model, 'pair': pair, 'arm': arm,
+                                       'requests': 7, 'differences': differences})
+    (aggregate / 'historical-numeric-correspondence.json').write_text(json.dumps({
+        'oldRuntime': 'Models12796ebf/Vectorsd92aceb',
+        'finalRuntime': 'Models0bc5de31/Vectorsae337eeb',
+        'scope': 'Exact output comparison only; old timing samples are never pooled with final timing.',
+        'comparisons': correspondence}, indent=2) + '\n')

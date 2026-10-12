@@ -130,7 +130,7 @@ remain historical evidence. The unlaunched v4/v5 continuations are superseded.
 The newly frozen runtime is ae337eebccbbae50e750b68babcd58788aeefbf8, jar SHA256
 696c2a58843181a2b02c91043208b56c9c6ebdc976e0d3f44dc051cc1f36d555. It adds an explicit callback-close
 rejection and moves exact SwiGLU vector work behind an array boundary; the arithmetic stays unchanged.
-Nineteen focused executor tests pass, and a child reproduces the old close deadlock and verifies the
+Eighteen focused executor tests pass, and a child reproduces the old close deadlock and verifies the
 fixed rejection. The boundary's full performance and correctness qualification remains pending.
 
 Fresh v6/v7/v8 phases measure every Qwen BF16 and Bonsai triplet on the new artifact: pairs 0–3,

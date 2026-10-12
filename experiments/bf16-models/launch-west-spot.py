@@ -36,7 +36,7 @@ fleet={'region':'us-west-2','lifecycle':'spot','maximumCombinedUsd':budget,'maxi
        'payloadSha256':meta['payloadSha256'],'quota':quota,'usedVcpus':used,'rates':rates,'hosts':[]}
 receipt.write_text(json.dumps(fleet,indent=2)+'\n')
 for arch,kind,jdkarch,awsarch,ami in configs:
-    deadline=datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(seconds=duration)
+    deadline=min(campaign_deadline,datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(seconds=duration))
     result=f's3://models-qual-077051030817/results/{runName}/{arch}/'
     jdk=meta['jdk'][jdkarch]
     body=f'''#!/bin/bash
