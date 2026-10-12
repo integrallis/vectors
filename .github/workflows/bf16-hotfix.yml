@@ -2,6 +2,12 @@ name: BF16 dependency candidate
 on:
   push:
     branches: [fix/bf16-correctness-hotfix]
+    paths:
+      - vectors-core/src/main/**
+      - vectors-core/src/test/**
+      - vectors-bench/src/jmh/**
+      - experiments/bf16-hotfix/run-paired.py
+      - .github/workflows/bf16-hotfix.yml
   workflow_dispatch:
 permissions:
   contents: read
@@ -33,7 +39,7 @@ jobs:
       - name: Record host
         run: |
           mkdir -p evidence
-          { uname -a; lscpu; java -version; } > evidence/host.txt 2>&1
+          { uname -a; lscpu; java -version; } 2>&1 | tee evidence/host.txt
       - name: Build actual candidate and validate BF16 contracts
         working-directory: candidate
         run: ./gradlew :vectors-core:jar :vectors-core:test --tests '*BFloat16*' --tests '*GgufParallelSupportTest' --rerun-tasks --max-workers=2 --no-daemon
