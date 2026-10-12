@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/opt/jdk/bin/java",
+    "--add-modules",
+    "jdk.incubator.vector",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xms2g",
+    "-Xmx10g",
+    "-cp",
+    "lib/candidate/*:model-proof.jar",
+    "com.integrallis.models.backend.purejava.Bf16ModelProof",
+    "fixture",
+    "bonsai2/model.gguf",
+    "/work/rust/corrected/target/release/libjmodels_kernels.so"
+  ],
+  "exitCode": 0,
+  "wallSeconds": 42.22024953099998
+}

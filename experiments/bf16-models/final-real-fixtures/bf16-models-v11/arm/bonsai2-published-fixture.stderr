@@ -1,0 +1,8 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 12, 2026 9:25:13 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 12, 2026 9:25:13 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=true ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=16 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=false,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+Exception in thread "main" java.lang.AssertionError: fresh session changed after compilation
+	at com.integrallis.models.backend.purejava.Bf16ModelProof.fixture(Bf16ModelProof.java:230)
+	at com.integrallis.models.backend.purejava.Bf16ModelProof.main(Bf16ModelProof.java:299)

@@ -1,0 +1,14 @@
+[
+  {
+    "model": "qwen-bf16",
+    "arm": "published",
+    "gate": "model-fixture",
+    "exitCode": 1
+  },
+  {
+    "model": "bonsai2",
+    "arm": "published",
+    "gate": "model-fixture",
+    "exitCode": 1
+  }
+]

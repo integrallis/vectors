@@ -1,0 +1,52 @@
+{
+  "region": "us-west-2",
+  "lifecycle": "spot",
+  "maximumCombinedUsd": 4.0,
+  "maximumSecondsPerHost": 5332,
+  "payload": "s3://models-qual-077051030817/payload/gdn-proof-bf16-models-v9.tar.gz",
+  "payloadSha256": "612b3d46ef6e95e6df695174887276d6fb7d5971ae455d68de50be2e0b35f219",
+  "quota": 32.0,
+  "usedVcpus": 0,
+  "rates": {
+    "arm": 0.6528
+  },
+  "hosts": [
+    {
+      "arch": "arm",
+      "instanceId": "i-03049eadf0ea69fab",
+      "instanceType": "m7g.4xlarge",
+      "deadline": "2026-10-12T22:32:03.017397+00:00",
+      "resultUri": "s3://models-qual-077051030817/results/gdn-proof-bf16-models-v9/arm/",
+      "launchCommand": [
+        "aws",
+        "ec2",
+        "run-instances",
+        "--region",
+        "us-west-2",
+        "--image-id",
+        "ami-0ac0ed4cc59d81934",
+        "--instance-type",
+        "m7g.4xlarge",
+        "--iam-instance-profile",
+        "Name=models-qual-worker",
+        "--security-group-ids",
+        "sg-c75bb5a8",
+        "--subnet-id",
+        "subnet-d63efbbd",
+        "--block-device-mappings",
+        "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": {\"VolumeSize\": 40, \"VolumeType\": \"gp3\", \"DeleteOnTermination\": true}}]",
+        "--instance-initiated-shutdown-behavior",
+        "terminate",
+        "--metadata-options",
+        "HttpTokens=required,HttpEndpoint=enabled",
+        "--instance-market-options",
+        "{\"MarketType\": \"spot\", \"SpotOptions\": {\"SpotInstanceType\": \"one-time\", \"InstanceInterruptionBehavior\": \"terminate\"}}",
+        "--user-data",
+        "file:///Users/briansam-bodden/Code/java-ai/projects/models-gdn-proof/benchmark-results/2026-10-11-gdn-proof/arm-bf16-models-v9-worker.sh",
+        "--tag-specifications",
+        "ResourceType=instance,Tags=[{Key=Name,Value=models-gdn-proof-bf16-models-v9-arm},{Key=project,Value=models-qualification},{Key=delete-after,Value=2026-10-12T22:32:03.017397+00:00}]"
+      ],
+      "userDataSha256": "fbf97c5cf60f218eabaee9d8993b6040122c156b42e85fb60f73c40f3b21d6ee"
+    }
+  ]
+}
