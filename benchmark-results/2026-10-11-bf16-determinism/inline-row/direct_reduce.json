@@ -1,0 +1,6 @@
+{
+  "sourceSha256": "c51bcc1d447df691ce2f31b405cc270bc7f9e1300fcc7e0b0d3791b1e75a0fbf",
+  "jarSha256": "dcc00880ddb4c15cdd0365f893e04f575963501bee448d208c24308602351634",
+  "baseSource": "292c889",
+  "change": "Call existing fixed-tree reduction directly at each accumulation loop; scalar tail helper receives only the reduced float"
+}

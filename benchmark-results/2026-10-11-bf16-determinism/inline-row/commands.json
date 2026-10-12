@@ -1,0 +1,509 @@
+[
+  {
+    "name": "baseline-allocation",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-cp",
+      "/tmp/vectors-bf16-final-expressions-v1/baseline.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "org.openjdk.jmh.Main",
+      "BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "-f",
+      "1",
+      "-wi",
+      "3",
+      "-i",
+      "3",
+      "-w",
+      "500ms",
+      "-r",
+      "500ms",
+      "-p",
+      "shape=48x5120,4864x896",
+      "-jvmArgsAppend",
+      "-XX:ActiveProcessorCount=4 -Xmx1g",
+      "-prof",
+      "gc",
+      "-rf",
+      "json",
+      "-rff",
+      "/Users/briansam-bodden/Code/java-ai/projects/vectors/benchmark-results/2026-10-11-bf16-determinism/inline-row/baseline-allocation.json"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-64-48x5120",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-64-5x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-64-8193x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-64-512x2048",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-128-48x5120",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-128-5x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-128-8193x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-128-512x2048",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-256-48x5120",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-256-5x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-256-8193x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-cold-256-512x2048",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_four-allocation",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_four.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "org.openjdk.jmh.Main",
+      "BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "-f",
+      "1",
+      "-wi",
+      "3",
+      "-i",
+      "3",
+      "-w",
+      "500ms",
+      "-r",
+      "500ms",
+      "-p",
+      "shape=48x5120,4864x896",
+      "-jvmArgsAppend",
+      "-XX:ActiveProcessorCount=4 -Xmx1g",
+      "-prof",
+      "gc",
+      "-rf",
+      "json",
+      "-rff",
+      "/Users/briansam-bodden/Code/java-ai/projects/vectors/benchmark-results/2026-10-11-bf16-determinism/inline-row/inline_four-allocation.json"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-64-48x5120",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-64-5x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-64-8193x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-64-512x2048",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-128-48x5120",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-128-5x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-128-8193x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-128-512x2048",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-256-48x5120",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-256-5x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-256-8193x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-cold-256-512x2048",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "inline_two-allocation",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-cp",
+      "/tmp/bf16-inline-row/inline_two.jar:/tmp/vectors-bf16-final-expressions-v1/probes.jar:/tmp/vectors-bf16-final-expressions-v1/benchmark.jar",
+      "org.openjdk.jmh.Main",
+      "BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "-f",
+      "1",
+      "-wi",
+      "3",
+      "-i",
+      "3",
+      "-w",
+      "500ms",
+      "-r",
+      "500ms",
+      "-p",
+      "shape=48x5120,4864x896",
+      "-jvmArgsAppend",
+      "-XX:ActiveProcessorCount=4 -Xmx1g",
+      "-prof",
+      "gc",
+      "-rf",
+      "json",
+      "-rff",
+      "/Users/briansam-bodden/Code/java-ai/projects/vectors/benchmark-results/2026-10-11-bf16-determinism/inline-row/inline_two-allocation.json"
+    ],
+    "exitCode": 0
+  }
+]

@@ -1,0 +1,6 @@
+{
+  "sourceSha256": "e0f7b531b3dad121af2ef9ebc31c5100ba997c21a12804255a9bbd4da72101ac",
+  "jarSha256": "e1059400c70b8c004cc3283826793bf9ea2f7e1fff65f75cd29b311297e642a9",
+  "baseSource": "292c889",
+  "change": "Inline fixed-tree reduction for four-row small matvec and two-row tall matvec, retaining the existing row-count boundary"
+}

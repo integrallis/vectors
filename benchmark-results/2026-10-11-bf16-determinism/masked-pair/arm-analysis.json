@@ -1,0 +1,707 @@
+{
+  "method": "Geometric mean of process-paired ratios; paired percentile bootstrap, 20000 resamples, seed 716309; six independent process pairs",
+  "comparisons": [
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "shape": "151936x896",
+      "candidate": "rotate",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.035575852701826,
+        "ci95": [
+          1.033624987217715,
+          1.0382327527164923
+        ],
+        "precisionTargetMet": true,
+        "direction": "slower",
+        "processRatios": [
+          1.035347272917342,
+          1.0353094071226148,
+          1.0336575326964272,
+          1.0418656423528858,
+          1.0348335116741738,
+          1.0324675524800702
+        ]
+      },
+      "candidateBytesPerOp": [
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947
+      ],
+      "baselineBytesPerOp": [
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "shape": "151936x896",
+      "candidate": "sve_lanes",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0347538338086835,
+        "ci95": [
+          1.0330098764651752,
+          1.036196018667029
+        ],
+        "precisionTargetMet": true,
+        "direction": "slower",
+        "processRatios": [
+          1.0360254545740064,
+          1.0343169072355298,
+          1.0309140037236975,
+          1.036262719914195,
+          1.0369376818159646,
+          1.0340778720131667
+        ]
+      },
+      "candidateBytesPerOp": [
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947
+      ],
+      "baselineBytesPerOp": [
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "shape": "151936x896",
+      "candidate": "masked",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0322882543435916,
+        "ci95": [
+          1.0312669588859322,
+          1.0331568459625284
+        ],
+        "precisionTargetMet": true,
+        "direction": "slower",
+        "processRatios": [
+          1.0338593561673026,
+          1.029956448165251,
+          1.0326279213452687,
+          1.0320528807341776,
+          1.0330568549742678,
+          1.0321802709877914
+        ]
+      },
+      "candidateBytesPerOp": [
+        135.41052631578947,
+        133.91603145795523,
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947,
+        135.41052631578947
+      ],
+      "baselineBytesPerOp": [
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085,
+        130.82033898305085
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "shape": "4864x896",
+      "candidate": "rotate",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0192531105697855,
+        "ci95": [
+          1.0096072357634054,
+          1.031115678456984
+        ],
+        "precisionTargetMet": false,
+        "direction": "slower",
+        "processRatios": [
+          1.0033376722890974,
+          1.0116199947632887,
+          1.0138946694517688,
+          1.024921059148322,
+          1.0485069717039621,
+          1.013848750981203
+        ]
+      },
+      "candidateBytesPerOp": [
+        233475.39663643748,
+        233475.44016020471,
+        233475.48104022522,
+        233475.51508666348,
+        233475.5389131681,
+        233475.36658444052
+      ],
+      "baselineBytesPerOp": [
+        233475.3799040805,
+        233475.3867692481,
+        233475.43563609145,
+        233475.4288981598,
+        233475.37096648052,
+        233475.32110661245
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "shape": "4864x896",
+      "candidate": "sve_lanes",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0208624198191463,
+        "ci95": [
+          1.0112103741918412,
+          1.0321272489385118
+        ],
+        "precisionTargetMet": false,
+        "direction": "slower",
+        "processRatios": [
+          1.0022467055444406,
+          1.0463560148791557,
+          1.0184091195599498,
+          1.01745797142052,
+          1.0163048577971545,
+          1.0249116468527386
+        ]
+      },
+      "candidateBytesPerOp": [
+        233475.39879400088,
+        233475.55265648174,
+        233475.49035334663,
+        233475.49435384246,
+        233475.43204839388,
+        233475.4026278196
+      ],
+      "baselineBytesPerOp": [
+        233475.3799040805,
+        233475.3867692481,
+        233475.43563609145,
+        233475.4288981598,
+        233475.37096648052,
+        233475.32110661245
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "shape": "4864x896",
+      "candidate": "masked",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0120486741439272,
+        "ci95": [
+          0.9994699737368864,
+          1.0240033841365848
+        ],
+        "precisionTargetMet": false,
+        "direction": "unresolved",
+        "processRatios": [
+          1.0287233764108887,
+          0.9961031962560138,
+          1.008188962193415,
+          0.9886821004434772,
+          1.0241050384620938,
+          1.0272173505258504
+        ]
+      },
+      "candidateBytesPerOp": [
+        233475.48422546862,
+        233475.37425814228,
+        233475.45247597262,
+        233475.38799606604,
+        233475.45946057132,
+        233475.4131093432
+      ],
+      "baselineBytesPerOp": [
+        233475.3799040805,
+        233475.3867692481,
+        233475.43563609145,
+        233475.4288981598,
+        233475.37096648052,
+        233475.32110661245
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "shape": "48x5120",
+      "candidate": "rotate",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0028661366308846,
+        "ci95": [
+          1.001124858148859,
+          1.0045096316247197
+        ],
+        "precisionTargetMet": true,
+        "direction": "slower",
+        "processRatios": [
+          1.001936047117996,
+          1.002645050856272,
+          1.0040672561023374,
+          0.9991680624477055,
+          1.0032543084645449,
+          1.0061395102683468
+        ]
+      },
+      "candidateBytesPerOp": [
+        2304.1389511769767,
+        2304.138780093837,
+        2304.1390190255697,
+        2304.1387836343456,
+        2304.138801035989,
+        2304.1388794664854
+      ],
+      "baselineBytesPerOp": [
+        2304.138565211647,
+        2304.1384149919418,
+        2304.138461530493,
+        2304.1388616332606,
+        2304.1384672993295,
+        2304.138001807775
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "shape": "48x5120",
+      "candidate": "sve_lanes",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0087470292763965,
+        "ci95": [
+          1.0032923253555697,
+          1.0156431837911577
+        ],
+        "precisionTargetMet": true,
+        "direction": "slower",
+        "processRatios": [
+          1.003242882002136,
+          1.0230930575500046,
+          1.012726856187818,
+          1.0015458861677917,
+          1.00140081754721,
+          1.0106511339848385
+        ]
+      },
+      "candidateBytesPerOp": [
+        2304.139103140618,
+        2304.141613131623,
+        2304.14023049217,
+        2304.1391190032637,
+        2304.1385211373668,
+        2304.139500026434
+      ],
+      "baselineBytesPerOp": [
+        2304.138565211647,
+        2304.1384149919418,
+        2304.138461530493,
+        2304.1388616332606,
+        2304.1384672993295,
+        2304.138001807775
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16MatVec",
+      "shape": "48x5120",
+      "candidate": "masked",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0078416726559942,
+        "ci95": [
+          1.0034853135545534,
+          1.0131747207163613
+        ],
+        "precisionTargetMet": true,
+        "direction": "slower",
+        "processRatios": [
+          1.0031431862010654,
+          1.020189683478075,
+          1.0075790192337584,
+          1.0007613812099714,
+          1.0075529854452316,
+          1.0079348650429447
+        ]
+      },
+      "candidateBytesPerOp": [
+        2304.139113437769,
+        2304.1410869145025,
+        2304.1393535916586,
+        2304.138981701856,
+        2304.1394903010537,
+        2304.1391096243674
+      ],
+      "baselineBytesPerOp": [
+        2304.138565211647,
+        2304.1384149919418,
+        2304.138461530493,
+        2304.1388616332606,
+        2304.1384672993295,
+        2304.138001807775
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16PromptBatch",
+      "shape": "151936x896",
+      "candidate": "rotate",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0457715502005749,
+        "ci95": [
+          1.0155098227611452,
+          1.0739279622721858
+        ],
+        "precisionTargetMet": false,
+        "direction": "slower",
+        "processRatios": [
+          0.9826648426135675,
+          1.0217351842207645,
+          1.0466280127133134,
+          1.0649329622862196,
+          1.0989741117837235,
+          1.063592053299222
+        ]
+      },
+      "candidateBytesPerOp": [
+        532.2,
+        564.48,
+        564.48,
+        564.48,
+        564.48,
+        564.48
+      ],
+      "baselineBytesPerOp": [
+        532.2,
+        532.2,
+        532.2,
+        532.2,
+        503.7176470588236,
+        532.2
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16PromptBatch",
+      "shape": "151936x896",
+      "candidate": "sve_lanes",
+      "reference": "baseline",
+      "time": {
+        "ratio": 0.9962166391648317,
+        "ci95": [
+          0.9705287247870227,
+          1.023487625107912
+        ],
+        "precisionTargetMet": false,
+        "direction": "unresolved",
+        "processRatios": [
+          0.9911620505822201,
+          0.9435768962844739,
+          0.9931545788981696,
+          0.9823968351358614,
+          1.0507086708899456,
+          1.019564400262884
+        ]
+      },
+      "candidateBytesPerOp": [
+        532.2,
+        503.7176470588236,
+        534.0,
+        524.1411764705883,
+        532.2,
+        532.2
+      ],
+      "baselineBytesPerOp": [
+        532.2,
+        532.2,
+        532.2,
+        532.2,
+        503.7176470588236,
+        532.2
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16PromptBatch",
+      "shape": "151936x896",
+      "candidate": "masked",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0020595903909362,
+        "ci95": [
+          0.9801035202105856,
+          1.027358500270314
+        ],
+        "precisionTargetMet": false,
+        "direction": "unresolved",
+        "processRatios": [
+          0.9670678257436138,
+          1.0034314487318545,
+          1.053763327230766,
+          0.9808017247700626,
+          1.0258603474055754,
+          0.9840204089514965
+        ]
+      },
+      "candidateBytesPerOp": [
+        503.7176470588236,
+        532.2,
+        564.48,
+        508.8235294117647,
+        511.7764705882353,
+        503.7176470588236
+      ],
+      "baselineBytesPerOp": [
+        532.2,
+        532.2,
+        532.2,
+        532.2,
+        503.7176470588236,
+        532.2
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16PromptBatch",
+      "shape": "4864x896",
+      "candidate": "rotate",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.039258415530931,
+        "ci95": [
+          1.0287316434571703,
+          1.0507135014220808
+        ],
+        "precisionTargetMet": false,
+        "direction": "slower",
+        "processRatios": [
+          1.0562067336910876,
+          1.03389392172328,
+          1.058356226824367,
+          1.025477290379548,
+          1.0227585384731768,
+          1.0394063250077155
+        ]
+      },
+      "candidateBytesPerOp": [
+        63.81639344262295,
+        63.68780487804878,
+        63.784049079754595,
+        63.746064258697366,
+        63.81639344262295,
+        63.68782820060719
+      ],
+      "baselineBytesPerOp": [
+        62.987184466019414,
+        63.169221725476845,
+        62.92920696324952,
+        63.34722064124454,
+        63.46539718580825,
+        63.10450097847358
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16PromptBatch",
+      "shape": "4864x896",
+      "candidate": "sve_lanes",
+      "reference": "baseline",
+      "time": {
+        "ratio": 0.9757408072277847,
+        "ci95": [
+          0.9572306396309839,
+          0.9925241639991872
+        ],
+        "precisionTargetMet": false,
+        "direction": "faster",
+        "processRatios": [
+          0.9938477496232039,
+          0.9569804350466867,
+          1.0024395199241365,
+          0.9721670627201769,
+          0.9397996008364106,
+          0.9907168588903039
+        ]
+      },
+      "candidateBytesPerOp": [
+        62.890054381383855,
+        62.50827067669174,
+        62.95813953488372,
+        62.92920696324952,
+        62.540528017624275,
+        62.95813953488372
+      ],
+      "baselineBytesPerOp": [
+        62.987184466019414,
+        63.169221725476845,
+        62.92920696324952,
+        63.34722064124454,
+        63.46539718580825,
+        63.10450097847358
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16PromptBatch",
+      "shape": "4864x896",
+      "candidate": "masked",
+      "reference": "baseline",
+      "time": {
+        "ratio": 0.9950209662464445,
+        "ci95": [
+          0.9786220514183138,
+          1.0132488448891883
+        ],
+        "precisionTargetMet": false,
+        "direction": "unresolved",
+        "processRatios": [
+          0.9760760815174767,
+          1.0304210946653072,
+          0.9789097619333742,
+          1.0149890326361188,
+          1.0013870193686552,
+          0.9698152602619831
+        ]
+      },
+      "candidateBytesPerOp": [
+        62.62317290552585,
+        63.62756353921643,
+        62.61043707395314,
+        63.59272727272727,
+        63.498795180722894,
+        62.645920303605315
+      ],
+      "baselineBytesPerOp": [
+        62.987184466019414,
+        63.169221725476845,
+        62.92920696324952,
+        63.34722064124454,
+        63.46539718580825,
+        63.10450097847358
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16PromptBatch",
+      "shape": "48x5120",
+      "candidate": "rotate",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0054921165464716,
+        "ci95": [
+          1.0046264886174119,
+          1.0065483111578568
+        ],
+        "precisionTargetMet": true,
+        "direction": "slower",
+        "processRatios": [
+          1.0051417221757253,
+          1.005373754523199,
+          1.0045455354976476,
+          1.0059251695007325,
+          1.0078944365387112,
+          1.0040765507693308
+        ]
+      },
+      "candidateBytesPerOp": [
+        3.042549323637919,
+        3.0411347517730496,
+        3.036349331235248,
+        3.0401525019778144,
+        3.0491128944944466,
+        3.0411347517730496
+      ],
+      "baselineBytesPerOp": [
+        51.02713197731711,
+        51.02521034839125,
+        51.02208300704777,
+        51.02241510122392,
+        51.02542367674364,
+        51.028345055539894
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16PromptBatch",
+      "shape": "48x5120",
+      "candidate": "sve_lanes",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.00433144510643,
+        "ci95": [
+          1.0039786005045217,
+          1.0046408888739604
+        ],
+        "precisionTargetMet": true,
+        "direction": "slower",
+        "processRatios": [
+          1.0035758502275918,
+          1.0043250668527266,
+          1.0044944130456859,
+          1.0045733254700155,
+          1.0049003323193115,
+          1.0041201927379158
+        ]
+      },
+      "candidateBytesPerOp": [
+        51.038094618338,
+        51.037879777222976,
+        51.03601469361135,
+        51.03634933123525,
+        51.0399369830642,
+        51.04113475177305
+      ],
+      "baselineBytesPerOp": [
+        51.02713197731711,
+        51.02521034839125,
+        51.02208300704777,
+        51.02241510122392,
+        51.02542367674364,
+        51.028345055539894
+      ]
+    },
+    {
+      "benchmark": "com.integrallis.vectors.bench.BFloat16MatrixBenchmark.mappedBfloat16PromptBatch",
+      "shape": "48x5120",
+      "candidate": "masked",
+      "reference": "baseline",
+      "time": {
+        "ratio": 1.0032014223268717,
+        "ci95": [
+          1.0023796370398586,
+          1.003780849843559
+        ],
+        "precisionTargetMet": true,
+        "direction": "slower",
+        "processRatios": [
+          1.0013532591795284,
+          1.0037398899833696,
+          1.0038963367656517,
+          1.00395721496626,
+          1.0032382973997795,
+          1.0030259257813514
+        ]
+      },
+      "candidateBytesPerOp": [
+        3.031245865315987,
+        3.03780954673583,
+        3.0289308176100627,
+        3.0341769365652906,
+        3.0349408248383964,
+        3.0375442739079106
+      ],
+      "baselineBytesPerOp": [
+        51.02713197731711,
+        51.02521034839125,
+        51.02208300704777,
+        51.02241510122392,
+        51.02542367674364,
+        51.028345055539894
+      ]
+    }
+  ]
+}
