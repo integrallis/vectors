@@ -41,6 +41,9 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   private final int chunksPerWorker;
   private final Phaser phase;
   private final ReentrantLock publicationLock = new ReentrantLock();
+  // Both the publishing caller and workers execute callbacks. Nested callbacks must not
+  // republish this pool or wait for workers already occupied by the outer publication.
+  private final ThreadLocal<Boolean> executingCallback = ThreadLocal.withInitial(() -> false);
   private final AtomicInteger nextChunk = new AtomicInteger();
   private final AtomicReference<Throwable> failure = new AtomicReference<>();
   private final Thread[] workers;
@@ -84,6 +87,10 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     if (rowCount == 0) {
       return;
     }
+    if (executingCallback.get()) {
+      for (int row = 0; row < rowCount; row++) rowOperation.accept(row);
+      return;
+    }
 
     publicationLock.lock();
     try {
@@ -117,6 +124,10 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   @Override
   public void execute(GgufStagePlan plan) {
     Objects.requireNonNull(plan, "plan");
+    if (executingCallback.get()) {
+      plan.executeSerially();
+      return;
+    }
 
     publicationLock.lock();
     try {
@@ -157,9 +168,14 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   }
 
   private void executePublishedPlan(GgufStagePlan plan) {
-    for (int stageIndex = 0; stageIndex < plan.stageCount(); stageIndex++) {
-      executeStage(plan.stage(stageIndex), stageIndex);
-      awaitAdvancePolling();
+    executingCallback.set(true);
+    try {
+      for (int stageIndex = 0; stageIndex < plan.stageCount(); stageIndex++) {
+        executeStage(plan.stage(stageIndex), stageIndex);
+        awaitAdvancePolling();
+      }
+    } finally {
+      executingCallback.set(false);
     }
   }
 
@@ -198,6 +214,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   }
 
   private void executePublishedOperation() {
+    executingCallback.set(true);
     try {
       while (failure.get() == null) {
         int start = nextChunk.getAndIncrement() * chunkSize;
@@ -211,6 +228,8 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
       }
     } catch (Throwable thrown) {
       failure.compareAndSet(null, thrown);
+    } finally {
+      executingCallback.set(false);
     }
   }
 
