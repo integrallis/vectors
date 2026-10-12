@@ -1,0 +1,52 @@
+{
+  "region": "us-west-2",
+  "lifecycle": "spot",
+  "maximumCombinedUsd": 4.0,
+  "maximumSecondsPerHost": 3784,
+  "payload": "s3://models-qual-077051030817/payload/gdn-proof-bf16-models-v11.tar.gz",
+  "payloadSha256": "f9f819d0734738cad087c506239cd581a8842557ad37f07ec96a80f2b07bfdb5",
+  "quota": 32.0,
+  "usedVcpus": 16,
+  "rates": {
+    "x86": 0.6912
+  },
+  "hosts": [
+    {
+      "arch": "x86",
+      "instanceId": "i-06ec204eaef412e7d",
+      "instanceType": "m6a.4xlarge",
+      "deadline": "2026-10-12T22:32:00+00:00",
+      "resultUri": "s3://models-qual-077051030817/results/gdn-proof-bf16-models-v11/x86/",
+      "launchCommand": [
+        "aws",
+        "ec2",
+        "run-instances",
+        "--region",
+        "us-west-2",
+        "--image-id",
+        "ami-03d70b8354a16a8bc",
+        "--instance-type",
+        "m6a.4xlarge",
+        "--iam-instance-profile",
+        "Name=models-qual-worker",
+        "--security-group-ids",
+        "sg-c75bb5a8",
+        "--subnet-id",
+        "subnet-d63efbbd",
+        "--block-device-mappings",
+        "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": {\"VolumeSize\": 40, \"VolumeType\": \"gp3\", \"DeleteOnTermination\": true}}]",
+        "--instance-initiated-shutdown-behavior",
+        "terminate",
+        "--metadata-options",
+        "HttpTokens=required,HttpEndpoint=enabled",
+        "--user-data",
+        "file:///Users/briansam-bodden/Code/java-ai/projects/models-gdn-proof/benchmark-results/2026-10-11-gdn-proof/x86-bf16-models-v11-worker.sh",
+        "--tag-specifications",
+        "ResourceType=instance,Tags=[{Key=Name,Value=models-gdn-proof-bf16-models-v11-x86},{Key=project,Value=models-qualification},{Key=delete-after,Value=2026-10-12T22:32:00+00:00}]",
+        "--instance-market-options",
+        "{\"MarketType\": \"spot\", \"SpotOptions\": {\"SpotInstanceType\": \"one-time\", \"InstanceInterruptionBehavior\": \"terminate\"}}"
+      ],
+      "userDataSha256": "07349334455ae410bf185715a7329d87f7809b766dcdf48d00f2c531ce387509"
+    }
+  ]
+}

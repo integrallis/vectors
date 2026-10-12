@@ -1,3 +1,5 @@
+> Historical report snapshot. The artifacts, continuation plans and status statements below are superseded; use [BF16-REPORT.md](BF16-REPORT.md) for the current qualification scope. Failed results are retained.
+
 # BF16 production validation
 
 Status: qualification is incomplete. Qwen ARM prefill regresses against the published stack;

@@ -1,0 +1,52 @@
+{
+  "region": "us-east-1",
+  "lifecycle": "on-demand",
+  "maximumCombinedUsd": 4.0,
+  "maximumSecondsPerHost": 5178,
+  "payload": "s3://models-qual-077051030817/payload/gdn-proof-bf16-models-v9.tar.gz",
+  "payloadSha256": "612b3d46ef6e95e6df695174887276d6fb7d5971ae455d68de50be2e0b35f219",
+  "quota": 192.0,
+  "usedVcpus": 176,
+  "rates": {
+    "x86": 0.6912
+  },
+  "hosts": [
+    {
+      "arch": "x86",
+      "instanceId": "i-08e8ee153d9268ef7",
+      "instanceType": "m6a.4xlarge",
+      "deadline": "2026-10-12T22:32:00+00:00",
+      "resultUri": "s3://models-qual-077051030817/results/gdn-proof-bf16-models-v9/x86/",
+      "launchCommand": [
+        "aws",
+        "ec2",
+        "run-instances",
+        "--region",
+        "us-east-1",
+        "--image-id",
+        "ami-0045d7fc2ad003464",
+        "--instance-type",
+        "m6a.4xlarge",
+        "--key-name",
+        "qual-milan",
+        "--iam-instance-profile",
+        "Name=models-qual-worker",
+        "--security-group-ids",
+        "sg-0e9ff523da4140d55",
+        "--subnet-id",
+        "subnet-08fcc910aba0d5b23",
+        "--block-device-mappings",
+        "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": {\"VolumeSize\": 40, \"VolumeType\": \"gp3\", \"DeleteOnTermination\": true}}]",
+        "--instance-initiated-shutdown-behavior",
+        "terminate",
+        "--metadata-options",
+        "HttpTokens=required,HttpEndpoint=enabled",
+        "--user-data",
+        "file:///Users/briansam-bodden/Code/java-ai/projects/models-gdn-proof/benchmark-results/2026-10-11-gdn-proof/x86-bf16-models-v9-worker.sh",
+        "--tag-specifications",
+        "ResourceType=instance,Tags=[{Key=Name,Value=models-gdn-proof-bf16-models-v9-x86},{Key=project,Value=models-qualification},{Key=delete-after,Value=2026-10-12T22:32:00+00:00}]"
+      ],
+      "userDataSha256": "68795e4e36b0184e94856da8bee2c377b43f05f36ad4da064c4790c14dcffe57"
+    }
+  ]
+}

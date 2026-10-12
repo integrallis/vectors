@@ -75,6 +75,22 @@ All ten final process triplets completed across the three declared hosts. The co
 
 **The final candidate still fails the published-stack ARM prefill gate.** Its 1.009760 ratio has interval [1.000627, 1.017865]; faster decode and request totals do not remove this regression. Startup and cold-request intervals cross one and remain unresolved. Allocation improves substantially. Every metric retains its separate precision-target result in [the analysis](combined-final-arm-qwen-bf16-analysis.json); the complete paired raw files and artifact/host provenance are in [final-results/arm](final-results/arm/provenance.json). Remaining shared-runtime prefill work must be diagnosed before whole-model acceptance.
 
+## Final x86 Qwen BF16 result
+
+All ten final process triplets completed with exact candidate/control snapshots, tokens and predictions across 70 requests. All arms retain the same 10/15 JEVBench and 14/15 SNIPS scores.
+
+| Metric | Candidate/control ratio [95% CI] | Candidate/published ratio [95% CI] |
+|---|---|---|
+| loadNanos | 1.015080 [1.003587, 1.026042] (slower) | 1.005832 [0.996340, 1.015956] (unresolved) |
+| coldRequestNanos | 0.847739 [0.832302, 0.868930] (faster) | 0.971327 [0.944799, 1.002313] (unresolved) |
+| prefillNanos | 0.945111 [0.942688, 0.947776] (faster) | 0.875084 [0.870101, 0.880553] (faster) |
+| decodeNanos | 0.435440 [0.415952, 0.461655] (faster) | 0.436071 [0.417223, 0.459234] (faster) |
+| requestNanos | 0.741992 [0.732534, 0.752177] (faster) | 0.708452 [0.701071, 0.716482] (faster) |
+| peakRssKiB | 0.931321 [0.910765, 0.951413] (faster) | 0.939884 [0.920253, 0.959242] (faster) |
+| javaAllocatedBytes | 0.313890 [0.216975, 0.653660] (faster) | 0.409163 [0.282997, 0.851421] (faster) |
+
+The candidate improves published prefill, decode, request time, peak RSS and allocation. Published-relative startup and cold-request intervals remain unresolved. **Candidate/control startup regresses**:1.015080 [1.003587,1.026042], approximately 1,042 ms versus 1,026 ms mean load time. It is retained as a failed gate, not dismissed as noise. The two arms differ only in the BF16 runtime class; their other class contents and compressed-entry sizes match. Further class-loading attribution is separate from performance acceptance. Precision results and raw samples are retained in [the analysis](combined-final-x86-qwen-bf16-analysis.json) and [artifact/host inventory](final-results/x86/provenance.json).
+
 ## Build, harness and provenance
 
 The preceding ARM core CI ran 1,601 cases with 1,597 passes and four hardware skips. Two local forced 64-bit child timeouts under severe contention passed unchanged 180-second retries; the original failures remain retained. Frozen ae337 release dry-run 38307108275 passed. Overflow-final head a40bcb71 CI and release dry-run 38310390999 are running.
