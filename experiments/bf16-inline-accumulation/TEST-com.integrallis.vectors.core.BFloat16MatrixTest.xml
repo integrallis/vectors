@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.integrallis.vectors.core.BFloat16MatrixTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-10-12T22:11:43.400Z" hostname="Brians-MacBook-Pro.local" time="0.291">
+  <properties/>
+  <testcase name="multipliesKnownBfloat16BitPatternsWithFloatAccumulation()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.002"/>
+  <testcase name="readsFromMappedStorage(Path)" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.027"/>
+  <testcase name="multipliesLargeRowCountsWithSequentialMemoryAccess()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.021"/>
+  <testcase name="multipliesBatchMajorActivationsIntoAnOffsetOutputRegion()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.003"/>
+  <testcase name="slicesRowsWithoutCopyingAndReadsIndividualValues()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.006"/>
+  <testcase name="sharedLargeBatchMatchesIndependentMatrixVectorProductsExactly()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.192"/>
+  <testcase name="rejectsBadGeometryStorageAndInvocation()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.02"/>
+  <testcase name="multipliesCompleteVectorBlocksAndScalarTail()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.003"/>
+  <testcase name="preservesSubnormalAndRoundedReferenceValues()" classname="com.integrallis.vectors.core.BFloat16MatrixTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

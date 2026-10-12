@@ -1,0 +1,85 @@
+{
+  "scope": "two-pair diagnostic, not full release qualification",
+  "pairs": [
+    {
+      "pair": 0,
+      "completedRequests": {
+        "inline": 4,
+        "control": 4
+      },
+      "inline": {
+        "javaAllocatedBytes": 703943336,
+        "prefillNanos": 32849601074,
+        "decodeNanos": 3136734922,
+        "requestNanos": 36029068126.5,
+        "loadNanos": 676502238,
+        "coldRequestNanos": 49135665767,
+        "peakRssKiB": 8360548
+      },
+      "control": {
+        "javaAllocatedBytes": 1460100648,
+        "prefillNanos": 32916755658,
+        "decodeNanos": 3278616883.5,
+        "requestNanos": 36208208203,
+        "loadNanos": 653569808,
+        "coldRequestNanos": 48128912416,
+        "peakRssKiB": 8511280
+      },
+      "fullSnapshotMatches": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "inlineControlRatios": {
+        "javaAllocatedBytes": 0.4821197339815166,
+        "prefillNanos": 0.9979598662548118,
+        "decodeNanos": 0.9567250561619333,
+        "requestNanos": 0.995052500927534,
+        "loadNanos": 1.0350879580410484,
+        "coldRequestNanos": 1.0209178495931546,
+        "peakRssKiB": 0.9822903253094717
+      }
+    },
+    {
+      "pair": 1,
+      "completedRequests": {
+        "inline": 4,
+        "control": 4
+      },
+      "inline": {
+        "javaAllocatedBytes": 721765152,
+        "prefillNanos": 32455514308,
+        "decodeNanos": 3445443635,
+        "requestNanos": 35951171662.5,
+        "loadNanos": 723958840,
+        "coldRequestNanos": 48050120184,
+        "peakRssKiB": 8325404
+      },
+      "control": {
+        "javaAllocatedBytes": 1472400544,
+        "prefillNanos": 32672339547.5,
+        "decodeNanos": 3594247104.5,
+        "requestNanos": 36278153268,
+        "loadNanos": 699697853,
+        "coldRequestNanos": 48404902957,
+        "peakRssKiB": 8484372
+      },
+      "fullSnapshotMatches": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "inlineControlRatios": {
+        "javaAllocatedBytes": 0.49019620030784233,
+        "prefillNanos": 0.9933636451352137,
+        "decodeNanos": 0.95859954388954,
+        "requestNanos": 0.9909868177940463,
+        "loadNanos": 1.0346735192854737,
+        "coldRequestNanos": 0.9926705198992927,
+        "peakRssKiB": 0.9812634335222453
+      }
+    }
+  ]
+}

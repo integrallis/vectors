@@ -1,0 +1,12 @@
+{
+  "scope": "cross-host numerical comparison only; not timing",
+  "comparedRequests": 1,
+  "comparisons": [
+    {
+      "repeat": -4,
+      "id": "easy-intent-00",
+      "fullLogitsEqual": true,
+      "tokensEqual": true
+    }
+  ]
+}

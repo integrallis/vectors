@@ -1,0 +1,9 @@
+{
+  "authorizedAtUtc": "2026-10-12T22:06:47.673324+00:00",
+  "authorization": "Parent approved matching ARM16 actual-model diagnostic with same frozen payload. This prospectively expands the single-host phase to two independently capped hosts; no existing host is replaced.",
+  "maximumSecondsPerHost": 1200,
+  "maximumUsdPerHost": 0.5,
+  "maximumCombinedUsd": 1,
+  "absoluteDeadline": "2026-10-12T22:30:00Z",
+  "payloadSha256": "06ae38dc0ac61121f61283fe23c6275a6f6a90a86b70060f8e0cdfb45597d750"
+}
