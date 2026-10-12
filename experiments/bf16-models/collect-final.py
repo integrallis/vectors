@@ -1,6 +1,7 @@
 """Collect only the owned immutable final phases and preserve complete host-paired blocks."""
 from pathlib import Path
 import hashlib
+import datetime
 import json
 import shutil
 import subprocess
@@ -35,7 +36,22 @@ for arch in ['x86', 'arm']:
             remote = json.loads((raw / 'provenance.json').read_text())
             assert remote['files'] == payload['files']
         status = (raw / 'STATUS').read_text().strip() if (raw / 'STATUS').exists() else 'BOOTSTRAP'
-        print(phase, arch, host['instanceId'], status)
+        state_path = raw / 'ec2-state.json'
+        state = json.loads(state_path.read_text()) if state_path.exists() else {}
+        if state.get('state') != 'terminated':
+            response = json.loads(subprocess.check_output([
+                'aws', 'ec2', 'describe-instances', '--region', fleet['region'],
+                '--instance-ids', host['instanceId'], '--output', 'json']))
+            instance = response['Reservations'][0]['Instances'][0]
+            state = {'observedAtUtc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                     'instanceId': host['instanceId'], 'region': fleet['region'],
+                     'state': instance['State']['Name'],
+                     'stateReason': instance.get('StateReason'),
+                     'stateTransitionReason': instance.get('StateTransitionReason'),
+                     'rawStatusIsNotLivenessEvidence': True}
+            state_path.write_text(json.dumps(state, indent=2) + '\n')
+        print(phase, arch, host['instanceId'], 'EC2=' + state['state'],
+              'last_uploaded_status=' + status, state.get('stateReason'))
         for model in models:
             for pair in pairs:
                 paths = [raw / f'{model}-pair{pair}-{arm}.{suffix}'
@@ -46,6 +62,20 @@ for arch in ['x86', 'arm']:
                 for path in paths:
                     if path.name.endswith('.execution.json'):
                         assert json.loads(path.read_text())['exitCode'] == 0, path
+                complete = True
+                for path in paths:
+                    if path.name.endswith('.stdout'):
+                        try:
+                            records = [json.loads(line) for line in path.read_text().splitlines()
+                                       if line.startswith('{')]
+                        except json.JSONDecodeError:
+                            complete = False
+                            break
+                        if sum(row.get('kind') == 'request' for row in records) != 7:
+                            complete = False
+                            break
+                if not complete:
+                    continue
                 for path in paths:
                     shutil.copy2(path, aggregate / path.name)
                     provenance.append({'phase': phase, 'host': host['instanceId'],

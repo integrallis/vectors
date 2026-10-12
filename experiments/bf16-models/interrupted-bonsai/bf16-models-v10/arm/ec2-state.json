@@ -1,0 +1,12 @@
+{
+  "observedAtUtc": "2026-10-12T22:16:02.348258+00:00",
+  "instanceId": "i-0c37d50276f2b598b",
+  "region": "us-east-1",
+  "state": "terminated",
+  "stateReason": {
+    "Code": "Server.SpotInstanceTermination",
+    "Message": "Server.SpotInstanceTermination: Spot instance termination"
+  },
+  "stateTransitionReason": "Service initiated (2026-10-12 22:09:16 GMT)",
+  "rawStatusIsNotLivenessEvidence": true
+}

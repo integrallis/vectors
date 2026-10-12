@@ -1,6 +1,6 @@
 # BF16 and executor qualification
 
-**Status: final whole-model qualification is running; release acceptance is not yet established.**
+**Status: whole-model release acceptance is blocked. Qwen completes ten pairs per architecture with remaining failed/unresolved gates. Frozen Bonsai is incomplete after Spot interruptions and reproduces the allocation regression; the isolated Java allocation correction is undergoing separate diagnostics.**
 
 The corrected BF16 kernel is deterministic across compilation and sequential/batched execution. Every measured kernel latency interval excludes a regression on x86, SVE ARM and NEON ARM. Actual model runs expose additional regressions, including BF16 vector-object escape in the Bonsai caller context. Their failures are retained; a faster standalone kernel does not establish whole-model acceptance.
 
@@ -108,3 +108,9 @@ Actual Models `d2d0fb4f` JARs (lazy Q5 decoder initialization and BERT scalar pr
 A separate predeclared 100-pair fresh-process x86 comparison completed with candidate/control load ratio **0.998746 [0.994769, 1.002647]**. Its precision target is met; the interval still crosses one, so its verdict is **unresolved**. It does not erase or pool with the failed ten-pair startup result above. [All process outputs, class-load traces and paired analysis](startup-attribution/results/analysis.json) are retained. The owned instance shut down within its 780-second cap.
 
 Actual Bonsai JFR independently attributes much of its excess allocation to escaped vector objects in the BF16 four-row projection, with a smaller activation contribution. An isolated source-form experiment directly expands the four-row unpack/FMA body to preserve its array-only boundary. This experiment is not integrated or qualified; a separate bounded actual-model diagnostic must establish whether it changes caller-context allocation.
+
+## Frozen Bonsai campaign interruptions
+
+The frozen campaign completes **8/10 x86 triplets (pairs 0–7)** and **9/10 ARM triplets (all except pair 6)**. AWS terminated x86 worker `i-06ec204eaef412e7d` with `Server.SpotInstanceTermination` at 21:52:33 UTC and ARM worker `i-0c37d50276f2b598b` at 22:09:16 UTC. Uploaded status files remained unchanged. The collector initially read these files without checking EC2 state, and the x86 interruption was therefore detected late at approximately 22:15 UTC. This monitoring error is documented, not attributed to a still-running model. The collector now queries and retains EC2 state and refuses incomplete seven-request process records.
+
+[Complete-triplet inventory](final-bonsai-incomplete.json) and [interrupted raw outputs](interrupted-bonsai/) preserve the evidence. Missing/partial triplets do not count as completed qualification and no complete-ten-pair Bonsai verdict is reported. Additional replacement hosts were explicitly declined after the reproduced allocation failure already prevented acceptance of this frozen source; the remaining approved work validates the isolated corrected Java boundary.
