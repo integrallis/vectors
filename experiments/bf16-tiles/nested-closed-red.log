@@ -1,0 +1,6 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Exception in thread "main" java.lang.AssertionError: closed nested row executor accepted work
+	at com.integrallis.vectors.core.ClosedNestedProbe.lambda$main$0(ClosedNestedProbe.java:7)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.executePublishedOperation(GgufPersistentRowExecutor.java:227)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.workerLoop(GgufPersistentRowExecutor.java:165)
+	at java.base/java.lang.Thread.run(Thread.java:1474)

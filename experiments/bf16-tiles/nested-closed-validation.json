@@ -1,0 +1,8 @@
+{
+  "focusedTestsPassed": 18,
+  "childProcessTestPassed": true,
+  "oldArtifactRegression": "closed nested row executor accepted work",
+  "patchedProbeExitCode": 0,
+  "runtimeJarSha256": "3b037e5e405b526e67cd4078c58e191e60589b7b3dbccb9992f8d98d258f5202",
+  "ordinaryDispatchChanges": "Closed flag is volatile; ensureOpen added only to nested branches. BF16 kernel class unchanged."
+}

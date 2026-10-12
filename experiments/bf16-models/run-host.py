@@ -37,6 +37,7 @@ for arm in ['published','corrected']:
  (out/('native-'+arm+'.sha256')).write_text(hashlib.sha256(path.read_bytes()).hexdigest()+'\n')
 base=['/opt/jdk/bin/java','--add-modules','jdk.incubator.vector','--enable-native-access=ALL-UNNAMED','-Xms2g','-Xmx10g']
 assert not any(a.startswith(('-Dmodels.','-Dvectors.')) for a in base)
+run([*base,'-cp','lib/candidate/*:model-proof.jar','com.integrallis.models.backend.purejava.SnapshotCaptureProbe'],'snapshot-ownership-probe')
 for model in config['models']:
  key=model['key'];status('DOWNLOAD_'+key)
  for entry in model['files']:fetch(entry,Path(key),key)

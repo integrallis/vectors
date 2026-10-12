@@ -1,0 +1,19 @@
+{
+  "runtimeRevision": "dd58fdefd972b4b6709d0613a9aa725a96ee8b82",
+  "tests": 1600,
+  "failures": 2,
+  "errors": 0,
+  "skipped": 0,
+  "failureCases": [
+    "maxBits=64,rows=8193,columns=37",
+    "maxBits=64,rows=512,columns=2048"
+  ],
+  "reason": "180-second process timeout during concurrent host load; no numerical mismatch reported",
+  "standaloneTallProbe": {
+    "exitCode": 0,
+    "realSeconds": 208.49,
+    "userSeconds": 57.81,
+    "systemSeconds": 1.28
+  },
+  "timeoutUnchanged": true
+}

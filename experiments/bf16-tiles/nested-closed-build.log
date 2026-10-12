@@ -1,0 +1,44 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :writeReleaseDependencyManifest UP-TO-DATE
+> Task :vectors-core:compileJava
+> Task :vectors-core:spotlessJava
+> Task :vectors-core:spotlessJavaApply
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes
+> Task :vectors-core:jar
+
+> Task :vectors-core:compileTestJava FAILED
+/Users/briansam-bodden/Code/java-ai/projects/vectors-bf16-production/vectors-core/src/test/java/com/integrallis/vectors/core/GgufParallelSupportTest.java:316: warning: [try] explicit call to close() on an auto-closeable resource
+      closed.close();
+            ^
+error: warnings found and -Werror specified
+1 error
+1 warning
+
+[Incubating] Problems report is available at: file:///Users/briansam-bodden/Code/java-ai/projects/vectors-bf16-production/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':vectors-core:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /Users/briansam-bodden/Code/java-ai/projects/vectors-bf16-production/vectors-core/src/test/java/com/integrallis/vectors/core/GgufParallelSupportTest.java:316: warning: [try] explicit call to close() on an auto-closeable resource
+        closed.close();
+              ^
+  error: warnings found and -Werror specified
+  1 error
+  1 warning
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 39s
+8 actionable tasks: 5 executed, 3 up-to-date

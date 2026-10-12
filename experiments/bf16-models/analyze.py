@@ -31,21 +31,27 @@ def paired(candidate,reference):
         'processRatios':[math.exp(x) for x in logs]}
 
 for model in ['qwen-bf16','bonsai2']:
-    samples={arm:[] for arm in arms};changes=[]
+    samples={arm:[] for arm in arms};changes=[];quality={arm:[] for arm in arms}
     for pair in range(10):
         records={}
         for arm in arms:
             values,records[arm]=read(model,pair,arm);samples[arm].append(values)
+            quality[arm].extend(r for r in records[arm] if r['repeat']>=0)
         for arm in arms[1:]:
             for baseline,candidate in zip(records['control'],records[arm]):
                 assert (baseline['id'],baseline['repeat'])==(candidate['id'],candidate['repeat'])
                 changed=[k for k in ['inputTokens','fullLogitSha256','greedyTokens','prediction'] if baseline[k]!=candidate[k]]
-                if changed:changes.append({'pair':pair,'arm':arm,'id':candidate['id'],'repeat':candidate['repeat'],'fields':changed})
+                if changed:changes.append({'pair':pair,'arm':arm,'id':candidate['id'],'repeat':candidate['repeat'],'fields':changed,'controlPrediction':baseline['prediction'],'otherPrediction':candidate['prediction'],'expected':baseline['expected'],'controlGreedyTokens':baseline['greedyTokens'],'otherGreedyTokens':candidate['greedyTokens']})
     comparisons=[]
     for candidate,reference in [('candidate','control'),('candidate','published'),('control','published')]:
         comparisons.append({'candidate':candidate,'reference':reference,'metrics':{
             metric:paired([s[metric] for s in samples[candidate]],[s[metric] for s in samples[reference]]) for metric in metrics}})
-    results.append({'model':model,'processPairs':10,'warmRequestsPerArm':30,'changes':changes,'comparisons':comparisons})
+    quality_summary={}
+    for arm,requests in quality.items():
+        assert len(requests)==30 and len({r['id'] for r in requests})==30
+        datasets=sorted({r['dataset'] for r in requests})
+        quality_summary[arm]={dataset:{'count':sum(r['dataset']==dataset for r in requests),'correct':sum(r['dataset']==dataset and r['prediction']==r['expected'] for r in requests)} for dataset in datasets}
+    results.append({'model':model,'processPairs':10,'warmRequestsPerArm':30,'quality':quality_summary,'changes':changes,'comparisons':comparisons})
 output.write_text(json.dumps({'method':'geometric mean of process-paired ratios; paired percentile bootstrap, 20000 resamples, fixed seed; warm metrics average three requests per process',
     'results':results},indent=2)+'\n')
 assert not any(c['arm']!='published' for r in results for c in r['changes']), 'candidate numeric contract mismatch'

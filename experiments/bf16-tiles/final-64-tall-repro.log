@@ -1,0 +1,24 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+BF16_ORDINARY_REDUCTION=direct-helper
+Oct 12, 2026 12:41:51 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 64 (capped from hardware-preferred 256; raise with -Dvectors.maxBits))
+Oct 12, 2026 12:41:51 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=64 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=4 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=false q4UnsignedPairwiseSupported=false toggles=[vectors.maxBits=64]
+      208.49 real        57.81 user         1.28 sys
+           409534464  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              100940  page reclaims
+                   1  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                 359  messages sent
+                  12  messages received
+                   2  signals received
+                  32  voluntary context switches
+              101688  involuntary context switches
+        238358686633  instructions retired
+        141232124885  cycles elapsed
+           384393216  peak memory footprint

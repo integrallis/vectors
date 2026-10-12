@@ -44,11 +44,21 @@ public final class Bf16ModelProof {
     return best;
   }
 
+  static void captureSnapshot(float[] logits, List<float[]> snapshots, long[] cost) {
+    long start = System.nanoTime();
+    long thread = Thread.currentThread().threadId();
+    long allocated = ALLOCATION.getThreadAllocatedBytes(thread);
+    snapshots.add(logits.clone());
+    cost[1] += ALLOCATION.getThreadAllocatedBytes(thread) - allocated;
+    cost[0] += System.nanoTime() - start;
+  }
+
   static Map<String, Object> request(
       BatchInferenceBackend backend, JsonNode task, int repeat, int steps) throws Exception {
     int[] input = backend.tokenizer().encode(task.path("prompt").asText());
     List<String> hashes = new ArrayList<>();
-    List<float[]> snapshots = new ArrayList<>();
+    List<float[]> snapshots = new ArrayList<>(steps + 1);
+    long[] snapshotCost = new long[2];
     List<Integer> tokens = new ArrayList<>();
     long prefill, decode = 0;
     float[] initial;
@@ -58,19 +68,21 @@ public final class Bf16ModelProof {
       long start = System.nanoTime();
       float[] logits = backend.prefill(session, input, 0);
       prefill = System.nanoTime() - start;
-      initial = logits;
-      snapshots.add(logits);
+      captureSnapshot(logits, snapshots, snapshotCost);
+      initial = snapshots.getFirst();
       for (int n = 0; n < steps; n++) {
         int token = argmax(logits);
         tokens.add(token);
         start = System.nanoTime();
         logits = backend.forward(session, token, input.length + n);
         decode += System.nanoTime() - start;
-        snapshots.add(logits);
+        captureSnapshot(logits, snapshots, snapshotCost);
       }
     }
-    long requestNanos = System.nanoTime() - requestStart;
-    long javaAllocatedBytes = ALLOCATION.getTotalThreadAllocatedBytes() - allocatedBefore;
+    long observedRequestNanos = System.nanoTime() - requestStart;
+    long observedJavaAllocatedBytes = ALLOCATION.getTotalThreadAllocatedBytes() - allocatedBefore;
+    long requestNanos = observedRequestNanos - snapshotCost[0];
+    long javaAllocatedBytes = observedJavaAllocatedBytes - snapshotCost[1];
     if (allocatedBefore < 0 || javaAllocatedBytes < 0)
       throw new AssertionError("invalid allocation counter");
     for (float[] snapshot : snapshots) hashes.add(digest(snapshot));
@@ -94,6 +106,10 @@ public final class Bf16ModelProof {
     row.put("prefillNanos", prefill);
     row.put("decodeNanos", decode);
     row.put("javaAllocatedBytes", javaAllocatedBytes);
+    row.put("observedJavaAllocatedBytes", observedJavaAllocatedBytes);
+    row.put("snapshotAllocatedBytes", snapshotCost[1]);
+    row.put("observedRequestNanos", observedRequestNanos);
+    row.put("snapshotCaptureNanos", snapshotCost[0]);
     row.put("modelNanos", prefill + decode);
     row.put("requestNanos", requestNanos);
     row.put("greedyTokens", tokens);

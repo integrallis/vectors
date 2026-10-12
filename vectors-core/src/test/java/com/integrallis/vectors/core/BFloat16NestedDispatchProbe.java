@@ -71,6 +71,7 @@ final class BFloat16NestedDispatchProbe {
           .execute();
       matrix.multiply(input, expected);
       crossPoolDispatch();
+      ClosedNestedDispatchProbe.main(new String[0]);
       System.out.println("NESTED_DISPATCH_COMPLETE");
     }
   }

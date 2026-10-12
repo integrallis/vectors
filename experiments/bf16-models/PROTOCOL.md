@@ -64,3 +64,13 @@ this pair of hosts; forced widths on the SVE host establish correctness only.
 Final BF16 qualification uses the stable exact activation implementation from `a5511d6`.
 Rejected polynomial candidates are retained separately and are not present in this payload.
 Any later activation replacement requires fresh whole-model evidence on that changed artifact.
+
+The closed-executor follow-up repeats every model fixture, cold/hot, allocation and nested
+correctness probe on its new artifact. Its BF16 class must be byte-identical to the v1 artifact
+before reusing v1 kernel timing; full model timing is always repeated. The executor now rejects
+nested work on a closed pool, with volatile visibility of closure. The v1 macro harness retained
+backend-owned logit arrays and therefore cannot prove per-step hashes or first-token label
+scores. Fixture snapshots already cloned before every forward call, so those fixture results
+remain valid. Follow-up macro snapshots clone immediately; measured snapshot-copy wall time and
+main-thread allocations are retained separately and subtracted from observed request/all-thread
+totals. Prefill/decode timers exclude capture, and all arms run the same corrected harness.

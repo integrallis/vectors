@@ -54,7 +54,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   private GgufStagePlan stagePlan;
   private int rows;
   private int chunkSize;
-  private boolean closed;
+  private volatile boolean closed;
 
   GgufPersistentRowExecutor(int parallelism, int chunksPerWorker, String threadNamePrefix) {
     if (parallelism < 1) {
@@ -89,6 +89,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
       return;
     }
     if (EXECUTING_CALLBACK.get()) {
+      ensureOpen();
       for (int row = 0; row < rowCount; row++) rowOperation.accept(row);
       return;
     }
@@ -126,6 +127,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   public void execute(GgufStagePlan plan) {
     Objects.requireNonNull(plan, "plan");
     if (EXECUTING_CALLBACK.get()) {
+      ensureOpen();
       plan.executeSerially();
       return;
     }

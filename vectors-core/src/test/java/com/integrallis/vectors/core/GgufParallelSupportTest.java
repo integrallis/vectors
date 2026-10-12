@@ -309,6 +309,32 @@ class GgufParallelSupportTest {
   }
 
   @Test
+  void nestedDispatchRejectsClosedExecutorsWithoutRunningCallbacks() {
+    AtomicInteger visits = new AtomicInteger();
+    var closed = new GgufPersistentRowExecutor(2, 1, "closed-test");
+    closed.close();
+    try (var active = new GgufPersistentRowExecutor(2, 1, "active-test")) {
+      active.forEach(
+          4,
+          row -> {
+            assertThatThrownBy(() -> closed.forEach(1, ignored -> visits.incrementAndGet()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("executor is closed");
+            assertThatThrownBy(
+                    () ->
+                        closed.execute(
+                            GgufStagePlan.of(
+                                GgufStagePlan.stage(1, (from, to) -> visits.incrementAndGet()))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("executor is closed");
+          });
+      assertThat(visits).hasValue(0);
+      active.forEach(4, row -> visits.incrementAndGet());
+      assertThat(visits).hasValue(4);
+    }
+  }
+
+  @Test
   void persistentExecutorClosesImmediatelyAfterACompletedDispatch() {
     assertTimeoutPreemptively(
         Duration.ofSeconds(5),

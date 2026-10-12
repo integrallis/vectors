@@ -4,6 +4,8 @@ import subprocess,shutil,hashlib,json,tarfile,zipfile,sys
 repo=Path(__file__).resolve().parents[2];source=repo/'experiments/bf16-models'
 central=repo.parent/'models-gdn-proof/benchmark-results/2026-10-11-gdn-proof'
 version=sys.argv[1];assert version.startswith('bf16-models-v')
+reuse_kernel=sys.argv[2] if len(sys.argv)>2 else None
+if reuse_kernel:assert reuse_kernel=='bf16-models-v1'
 stage=Path('/tmp')/version;stage.mkdir(exist_ok=False)
 revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
 assert not subprocess.check_output(['git','status','--porcelain','--','vectors-core'],cwd=repo,text=True).strip()
@@ -28,7 +30,7 @@ shutil.copy(source/'run-host.py',stage/'run-host.py')
 (stage/'source/vectors-core.patch').write_bytes(subprocess.check_output(['git','diff','7e77a63',revision,'--','vectors-core'],cwd=repo))
 (stage/'source/models-corrected.patch').write_bytes(subprocess.check_output(['git','diff','4337ee45','12796ebf','--','backend-native','backend-java'],cwd=repo.parent/'models-gdn-proof'))
 script=(repo/'experiments/bf16-tiles/run-host.py').read_text()
-script=script.replace('for pair in range(6):', 'for pair in range(12):')
+script=script.replace('for pair in range(6):', 'for pair in range(0):' if reuse_kernel else 'for pair in range(12):')
 script=script.replace("    except (AssertionError", "        run(arm+'-nested',common+['-cp',arm+'.jar:probes.jar:benchmark.jar','com.integrallis.vectors.core.BFloat16NestedDispatchProbe'])\n    except (AssertionError")
 script=script.replace("(out/'STATUS').write_text('COMPLETE\\n')", "(out/'STATUS').write_text('KERNEL_COMPLETE\\n')")
 (stage/'run-kernel-host.py').write_text(script)
@@ -36,14 +38,18 @@ shutil.copy(candidate,stage/'tile2parallel.jar')
 shutil.copy('/tmp/vectors-bf16-final-expressions-v1/baseline.jar',stage/'baseline.jar')
 shutil.copy('/tmp/vectors-bf16-final-expressions-v1/benchmark.jar',stage/'benchmark.jar')
 classes=stage/'classes';classes.mkdir()
-subprocess.run([str(java/'javac'),'-cp',str(stage/'lib/candidate/*'),'-d',str(classes),str(source/'Bf16ModelProof.java')],check=True)
+subprocess.run([str(java/'javac'),'-cp',str(stage/'lib/candidate/*'),'-d',str(classes),str(source/'Bf16ModelProof.java'),str(source/'SnapshotCaptureProbe.java')],check=True)
 subprocess.run([str(java/'jar'),'--create','--file',str(stage/'model-proof.jar'),'-C',str(classes),'.'],check=True)
 shutil.rmtree(classes);classes.mkdir()
-probes=['BFloat16MatrixColdHotProbe','BFloat16MatrixAllocationProbe','BFloat16NestedDispatchProbe']
+probes=['BFloat16MatrixColdHotProbe','BFloat16MatrixAllocationProbe','BFloat16NestedDispatchProbe','ClosedNestedDispatchProbe']
 subprocess.run([str(java/'javac'),'--add-modules','jdk.incubator.vector','-cp',str(candidate),'-d',str(classes),*[str(repo/'vectors-core/src/test/java/com/integrallis/vectors/core'/(name+'.java')) for name in probes]],check=True)
 subprocess.run([str(java/'jar'),'--create','--file',str(stage/'probes.jar'),'-C',str(classes),'.'],check=True);shutil.rmtree(classes)
 qwen=json.loads((repo.parent/'models/scripts/fleet/smoke-qwen-bf16.json').read_text())[0]
+with zipfile.ZipFile(candidate) as z:bf16_class=z.read('com/integrallis/vectors/core/BFloat16Matrix.class')
+if reuse_kernel:
+ with zipfile.ZipFile('/tmp/bf16-models-v1/lib/candidate/vectors-core-0.1.30.jar') as z:assert z.read('com/integrallis/vectors/core/BFloat16Matrix.class')==bf16_class
 config={'arms':['published','control','candidate'],'vectorsRevision':revision,
+ 'kernelTimingReusedFrom':reuse_kernel,'bf16KernelClassSha256':hashlib.sha256(bf16_class).hexdigest(),
  'modelsRevisions':{'published':'4337ee45','control':'12796ebf','candidate':'12796ebf'},
  'controlBf16Revision':'292c889','controlBf16ClassSha256':hashlib.sha256(control_class).hexdigest(),
  'models':[{'key':'qwen-bf16','entrypoint':'.','files':qwen['files']},
