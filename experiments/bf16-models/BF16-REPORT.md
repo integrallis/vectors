@@ -2,12 +2,13 @@
 
 **Status: whole-model release acceptance is blocked. Qwen completes ten pairs per architecture with remaining failed/unresolved gates. Frozen Bonsai is incomplete after Spot interruptions and reproduces the allocation regression; the isolated Java allocation correction is undergoing separate diagnostics.**
 
-The corrected BF16 kernel is deterministic across compilation and sequential/batched execution. Every measured kernel latency interval excludes a regression on x86, SVE ARM and NEON ARM. Actual model runs expose additional regressions, including BF16 vector-object escape in the Bonsai caller context. Their failures are retained; a faster standalone kernel does not establish whole-model acceptance.
+The frozen pre-inline BF16 kernel is deterministic across compilation and sequential/batched execution. Its measured kernel latency intervals exclude regression on x86, SVE ARM and NEON ARM. Those performance results apply to the older frozen class, not the later allocation correction now present on this continued-work branch. Actual model runs expose additional regressions, including BF16 vector-object escape in the Bonsai caller context. Their failures are retained; a faster standalone kernel does not establish whole-model acceptance.
 
 ## Frozen artifacts and scope
 
 | Evidence | Runtime | Scope |
 |---|---|---|
+| Current continued-work candidate | Inline Java correction from `9a3e775d`, consolidated by `6893a587`; Gradle core `e3e7b0ab…` | Exact numeric/targeted tests and two-pair actual-model allocation diagnostics; full performance acceptance remains open |
 | Final macro campaign v9/v10/v11 | Vectors `ae337eeb`; Models `0bc5de31` | Fresh real-weight fixtures and ten same-host triplets per model/architecture |
 | Executor maximum-range correction | Vectors production `a40bcb71` | Adds overflow-safe range arithmetic after macro freeze; separate actual-artifact correctness proof |
 | Earlier complete Qwen model campaign | Vectors `d92aceb0`; Models `12796ebf` | Historical regression evidence; never pooled with final measurements |
@@ -114,3 +115,9 @@ Actual Bonsai JFR independently attributes much of its excess allocation to esca
 The frozen campaign completes **8/10 x86 triplets (pairs 0–7)** and **9/10 ARM triplets (all except pair 6)**. AWS terminated x86 worker `i-06ec204eaef412e7d` with `Server.SpotInstanceTermination` at 21:52:33 UTC and ARM worker `i-0c37d50276f2b598b` at 22:09:16 UTC. Uploaded status files remained unchanged. The collector initially read these files without checking EC2 state, and the x86 interruption was therefore detected late at approximately 22:15 UTC. This monitoring error is documented, not attributed to a still-running model. The collector now queries and retains EC2 state and refuses incomplete seven-request process records.
 
 [Complete-triplet inventory](final-bonsai-incomplete.json) and [interrupted raw outputs](interrupted-bonsai/) preserve the evidence. Missing/partial triplets do not count as completed qualification and no complete-ten-pair Bonsai verdict is reported. Additional replacement hosts were explicitly declined after the reproduced allocation failure already prevented acceptance of this frozen source; the remaining approved work validates the isolated corrected Java boundary.
+
+## Current continued-work source
+
+The complete two-pair diagnostics on x86 and SVE confirm that expanding BF16 unpack/FMA inside its existing array-only method removes the dominant Bonsai allocation. All eight requests per architecture retain exact complete logits/tokens. The corrected source and evidence are now consolidated into draft PR 98; the isolated experimental branch is an ancestor of that branch.
+
+This is **not a release-qualified artifact**. X86 measured prefill is 0.22–0.26% slower in the two diagnostic pairs, ARM load is 3.47–3.51% slower, and ARM retains allocation above the published runtime. The previous twelve-pair kernel/NEON and ten-pair Qwen measurements are for the older runtime class. They must not be carried forward as passing labels for this correction. [Complete diagnostic report and raw evidence](../bf16-inline-accumulation/EXPERIMENT.md) record every metric and the required remaining qualification.
