@@ -273,7 +273,8 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
       int length) {
     for (int index = 0; index < length; index++) {
       float value = gate[gateOffset + index];
-      out[outOffset + index] = value / (1.0f + (float) Math.exp(-value)) * up[upOffset + index];
+      out[outOffset + index] =
+          value / (1.0f + (float) StrictMath.exp(-value)) * up[upOffset + index];
     }
   }
 
@@ -293,14 +294,14 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
     for (int index = 0; index < length; index++) {
       int sigmoidIndex = sigmoidOffset + index;
       float sigmoidValue = sigmoidValues[sigmoidIndex];
-      sigmoidValues[sigmoidIndex] = 1.0f / (1.0f + (float) Math.exp(-sigmoidValue));
+      sigmoidValues[sigmoidIndex] = 1.0f / (1.0f + (float) StrictMath.exp(-sigmoidValue));
       float softplusValue = softplusValues[softplusOffset + index] + bias[biasOffset + index];
       float softplus =
           softplusValue > 20.0f
               ? softplusValue
               : softplusValue < -20.0f
-                  ? (float) Math.exp(softplusValue)
-                  : (float) Math.log1p(Math.exp(softplusValue));
+                  ? (float) StrictMath.exp(softplusValue)
+                  : (float) StrictMath.log1p(StrictMath.exp(softplusValue));
       scaledSoftplus[scaledSoftplusOffset + index] = scale[scaleOffset + index] * softplus;
     }
   }
@@ -328,7 +329,7 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
         history[historyIndex - channels] = current;
       }
       history[historyOffset + (historyLength - 1) * channels + channel] = input;
-      values[valuesOffset + channel] = convolved / (1.0f + (float) Math.exp(-convolved));
+      values[valuesOffset + channel] = convolved / (1.0f + (float) StrictMath.exp(-convolved));
     }
   }
 
