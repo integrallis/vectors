@@ -1,0 +1,28 @@
+{
+  "purpose": "local real-weight correctness only; no performance evidence",
+  "exitCode": 0,
+  "vectorsRevision": "b87e9ba",
+  "vectorsJar": "vectors-core/build/libs/vectors-core-0.1.30.jar",
+  "vectorsJarSha256": "f6e430c5c8d1bdb2f8dbc21de1e5ba4725c595716c4d73fc20e3f0c6d319453e",
+  "harnessClassSha256": "b653754bb5d8ee3332c99e55830380a1948d1f64d8015dd78c416f7836e61bf2",
+  "modelsRevision": "12796ebf",
+  "jdk": "25.0.3-tem",
+  "model": "../../.model-fixtures/qwen_qwen2_5_0_5b_instruct_bf16",
+  "weightsSha256": "fdf756fa7fcbe7404d5c60e26bff1a0c8b8aa1f72ced49e7dd0210fe288fb7fe",
+  "jvmOptions": [
+    "--add-modules",
+    "jdk.incubator.vector",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xms512m",
+    "-Xmx3g"
+  ],
+  "checks": [
+    "16 pinned Transformers logits within1e-3",
+    "winner3966 at20.877668 within1e-3",
+    "three fresh sessions full-vocabulary hashes equal over three generation steps",
+    "28-token prompt batch1 vs16 exact full-vocabulary hashes over three steps"
+  ],
+  "stdout": "qwen-stable-candidate-fixture.log",
+  "limitations": "Final ordinary-row inlining and activation selection are not present; final artifacts require a fresh run.",
+  "retainedArtifact": "/tmp/vectors-bf16-stable-b87e9ba.jar"
+}
