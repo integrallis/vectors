@@ -1,0 +1,124 @@
+29163:
+2026-10-12 14:29:14
+Full thread dump OpenJDK 64-Bit Server VM (25.0.3+9-LTS mixed mode):
+
+Threads class SMR info:
+_java_thread_list=0x00007fdfde7829c0, length=11, elements={
+0x00007fdfde80e600, 0x00007fdf9f022000, 0x00007fdfde899200, 0x00007fdf9f009400,
+0x00007fdf8f80a400, 0x00007fdf9f024a00, 0x00007fdf8f80ac00, 0x00007fdf8f80b600,
+0x00007fdfae8da400, 0x00007fdfe800d400, 0x00007fdfdebbdc00
+}
+
+"main" #3 [8707] prio=5 os_prio=31 cpu=83536.07ms elapsed=312.25s tid=0x00007fdfde80e600 nid=8707 runnable  [0x0000700002bdc000]
+   java.lang.Thread.State: RUNNABLE
+	at java.lang.invoke.LambdaForm$MH/0x0000000168226c00.invoke(java.base@25.0.3/LambdaForm$MH)
+	at java.lang.invoke.LambdaForm$MH/0x000000016821f800.invokeExact_MT(java.base@25.0.3/LambdaForm$MH)
+	at jdk.internal.foreign.abi.DowncallStub/0x0000000168098000.invoke(java.base@25.0.3/Unknown Source)
+	at java.lang.invoke.LambdaForm$DMH/0x0000000168098400.invokeStatic(java.base@25.0.3/LambdaForm$DMH)
+	at java.lang.invoke.LambdaForm$MH/0x0000000168228c00.invoke(java.base@25.0.3/LambdaForm$MH)
+	at java.lang.invoke.LambdaForm$MH/0x000000016821f000.invokeExact_MT(java.base@25.0.3/LambdaForm$MH)
+	at com.integrallis.models.backend.nativekernel.NativeKernelLibrary.invokeBatched(NativeKernelLibrary.java:1129)
+	at com.integrallis.models.backend.nativekernel.NativeKernelLibrary.ptq1_0F32BatchedMatmul(NativeKernelLibrary.java:875)
+	at com.integrallis.models.backend.nativekernel.RustGgufBatchedMatrixKernel.multiply(RustGgufBatchedMatrixKernel.java:717)
+	- locked <0x00000006129cde98> (a com.integrallis.models.backend.nativekernel.RustGgufBatchedMatrixKernel)
+	at com.integrallis.models.backend.purejava.qwen35.Qwen35ForwardPass.projectBatched(Qwen35ForwardPass.java:2065)
+	at com.integrallis.models.backend.purejava.qwen35.Qwen35ForwardPass.gatedDeltaNetBatched(Qwen35ForwardPass.java:1269)
+	at com.integrallis.models.backend.purejava.qwen35.Qwen35ForwardPass.executePrefillBatch(Qwen35ForwardPass.java:1111)
+	at com.integrallis.models.backend.purejava.qwen35.Qwen35ForwardPass.prefill(Qwen35ForwardPass.java:295)
+	at com.integrallis.models.backend.purejava.Qwen35DecoderAdapter.prefill(Qwen35DecoderAdapter.java:61)
+	at com.integrallis.models.backend.purejava.PureJavaBackend.prefill(PureJavaBackend.java:1158)
+	at com.integrallis.models.backend.nativekernel.RustFfmBackend.prefill(RustFfmBackend.java:196)
+	at com.integrallis.models.backend.nativekernel.Bonsai2NativeModelFixtureSlowTest.transformedBatchesMatchSequentialRealWeightLogitsAcrossChunkBoundaries(Bonsai2NativeModelFixtureSlowTest.java:122)
+	at com.integrallis.models.backend.nativekernel.LiteralBonsaiCiProbe.main(LiteralBonsaiCiProbe.java:2)
+
+"Reference Handler" #11 [29187] daemon prio=10 os_prio=31 cpu=0.84ms elapsed=312.19s tid=0x00007fdf9f022000 nid=29187 waiting on condition  [0x00007000034fb000]
+   java.lang.Thread.State: RUNNABLE
+	at java.lang.ref.Reference.waitForReferencePendingList(java.base@25.0.3/Native Method)
+	at java.lang.ref.Reference.processPendingReferences(java.base@25.0.3/Reference.java:246)
+	at java.lang.ref.Reference$ReferenceHandler.run(java.base@25.0.3/Reference.java:208)
+
+"Finalizer" #12 [25091] daemon prio=8 os_prio=31 cpu=0.15ms elapsed=312.19s tid=0x00007fdfde899200 nid=25091 in Object.wait()  [0x00007000035fe000]
+   java.lang.Thread.State: WAITING (on object monitor)
+	at java.lang.Object.wait0(java.base@25.0.3/Native Method)
+	- waiting on <0x0000000612970638> (a java.lang.ref.ReferenceQueue$Lock)
+	at java.lang.Object.wait(java.base@25.0.3/Object.java:389)
+	at java.lang.Object.wait(java.base@25.0.3/Object.java:351)
+	at java.lang.ref.ReferenceQueue.remove0(java.base@25.0.3/ReferenceQueue.java:137)
+	at java.lang.ref.ReferenceQueue.remove(java.base@25.0.3/ReferenceQueue.java:215)
+	- locked <0x0000000612970638> (a java.lang.ref.ReferenceQueue$Lock)
+	at java.lang.ref.Finalizer$FinalizerThread.run(java.base@25.0.3/Finalizer.java:165)
+
+"Signal Dispatcher" #13 [25347] daemon prio=9 os_prio=31 cpu=0.34ms elapsed=312.19s tid=0x00007fdf9f009400 nid=25347 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Service Thread" #14 [25603] daemon prio=9 os_prio=31 cpu=9.88ms elapsed=312.19s tid=0x00007fdf8f80a400 nid=25603 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Monitor Deflation Thread" #15 [25859] daemon prio=9 os_prio=31 cpu=16.97ms elapsed=312.19s tid=0x00007fdf9f024a00 nid=25859 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"C2 CompilerThread0" #16 [26371] daemon prio=9 os_prio=31 cpu=3502.86ms elapsed=312.19s tid=0x00007fdf8f80ac00 nid=26371 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+   No compile task
+
+"C1 CompilerThread0" #19 [26883] daemon prio=9 os_prio=31 cpu=1324.76ms elapsed=312.18s tid=0x00007fdf8f80b600 nid=26883 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+   No compile task
+
+"Notification Thread" #20 [27651] daemon prio=9 os_prio=31 cpu=0.06ms elapsed=311.90s tid=0x00007fdfae8da400 nid=27651 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Common-Cleaner" #21 [32771] daemon prio=8 os_prio=31 cpu=0.51ms elapsed=311.88s tid=0x00007fdfe800d400 nid=32771 in Object.wait()  [0x0000700003e16000]
+   java.lang.Thread.State: TIMED_WAITING (on object monitor)
+	at java.lang.Object.wait0(java.base@25.0.3/Native Method)
+	- waiting on <0x00000006116b1eb8> (a java.lang.ref.ReferenceQueue$Lock)
+	at java.lang.Object.wait(java.base@25.0.3/Object.java:389)
+	at java.lang.ref.ReferenceQueue.remove0(java.base@25.0.3/ReferenceQueue.java:123)
+	at java.lang.ref.ReferenceQueue.remove(java.base@25.0.3/ReferenceQueue.java:201)
+	- locked <0x00000006116b1eb8> (a java.lang.ref.ReferenceQueue$Lock)
+	at jdk.internal.ref.CleanerImpl.run(java.base@25.0.3/CleanerImpl.java:146)
+	at java.lang.Thread.runWith(java.base@25.0.3/Thread.java:1487)
+	at java.lang.Thread.run(java.base@25.0.3/Thread.java:1474)
+	at jdk.internal.misc.InnocuousThread.run(java.base@25.0.3/InnocuousThread.java:148)
+
+"Attach Listener" #38 [23831] daemon prio=9 os_prio=31 cpu=1.63ms elapsed=0.12s tid=0x00007fdfdebbdc00 nid=23831 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"G1 Conc#2" os_prio=31 cpu=327.98ms elapsed=305.00s tid=0x00007fdfe8150600 nid=37379 runnable  
+
+"G1 Conc#1" os_prio=31 cpu=322.16ms elapsed=305.00s tid=0x00007fdfdf88e200 nid=41243 runnable  
+
+"GC Thread#9" os_prio=31 cpu=167.99ms elapsed=309.72s tid=0x00007fdfaebf0a00 nid=39427 runnable  
+
+"GC Thread#8" os_prio=31 cpu=162.85ms elapsed=309.72s tid=0x00007fdfaebf0400 nid=36355 runnable  
+
+"GC Thread#7" os_prio=31 cpu=138.43ms elapsed=309.72s tid=0x00007fdfdf8bf400 nid=39683 runnable  
+
+"GC Thread#6" os_prio=31 cpu=153.98ms elapsed=309.72s tid=0x00007fdfdf8bee00 nid=35843 runnable  
+
+"GC Thread#5" os_prio=31 cpu=161.90ms elapsed=309.72s tid=0x00007fdfdf8be800 nid=35587 runnable  
+
+"GC Thread#4" os_prio=31 cpu=163.74ms elapsed=309.72s tid=0x00007fdf9e835e00 nid=35075 runnable  
+
+"GC Thread#3" os_prio=31 cpu=170.75ms elapsed=309.72s tid=0x00007fdfdf8be200 nid=40707 runnable  
+
+"GC Thread#2" os_prio=31 cpu=148.26ms elapsed=309.72s tid=0x00007fdfdebc1600 nid=34819 runnable  
+
+"GC Thread#1" os_prio=31 cpu=146.41ms elapsed=309.72s tid=0x00007fdfdebc1000 nid=34307 runnable  
+
+"VM Thread" os_prio=31 cpu=14.51ms elapsed=312.22s tid=0x00007fdf9e821800 nid=18435 runnable  
+
+"VM Periodic Task Thread" os_prio=31 cpu=2.64ms elapsed=312.24s tid=0x00007fdfdf20d230 nid=20483 waiting on condition  
+
+"G1 Service" os_prio=31 cpu=8.99ms elapsed=312.25s tid=0x00007fdfdf80e400 nid=21251 runnable  
+
+"G1 Refine#0" os_prio=31 cpu=200.30ms elapsed=312.25s tid=0x00007fdfde88ac00 nid=16643 runnable  
+
+"G1 Conc#0" os_prio=31 cpu=316.83ms elapsed=312.25s tid=0x00007fdfde84e600 nid=16387 runnable  
+
+"G1 Main Marker" os_prio=31 cpu=1.37ms elapsed=312.25s tid=0x00007fdfde84e000 nid=14339 runnable  
+
+"GC Thread#0" os_prio=31 cpu=161.87ms elapsed=312.25s tid=0x00007fdfde835200 nid=13059 runnable  
+
+JNI global refs: 9, weak refs: 0
+

@@ -1,0 +1,39 @@
+{
+  "vectorsSource": "afc4ebd8",
+  "modelsSource": "0bc5de31",
+  "literalSource": "/Users/briansam-bodden/Code/java-ai/projects/models-final-integration/backend-native/src/test/java/com/integrallis/models/backend/nativekernel/Bonsai2NativeModelFixtureSlowTest.java",
+  "files": {
+    "LiteralBonsaiCiProbe.java": "701cd8addafe3f1f45e5b8e047a3e225fe6a108405bcb1dcfbffd32cd05271bb",
+    "Bonsai2NativeModelFixtureSlowTest.java": "335cec4fdcedb900c63c8394ae244bfb1d351731918a4c33e8d6c53a37794c68",
+    "lib/vectors-storage-0.1.29.jar": "ca7e303ae7e693945537b692eb88939ba56018a0a8f71249e5f494add3a3412e",
+    "lib/vectors-db-0.1.29.jar": "d6ac2e6f03cced3c8f5a57d8c97fc678886f0946ac709af1c26bc3d4cfb8b9b5",
+    "lib/vectors-hnsw-0.1.29.jar": "9dfcfd2e4457c3cb0d1031516bdcf7e92dcb57f9369cd0a2eb772c485c9dacce",
+    "lib/jackson-datatype-jdk8-2.22.3.jar": "f223061a5aaecdc9506458143807c73bcd1a744d6b3bbb8da4703a0abc408f7d",
+    "lib/models-bench-0.3.59.jar": "5a21be64fe254e2345b3a2e3582588b3eb484e857aeaa95d25ff3e1015faa93f",
+    "lib/backend-native-0.3.59.jar": "5174ed677965742a9d936c0b09c3ca9f1460fa91d2ccb0b076f175bb2bf400a0",
+    "lib/assertj-core-3.27.7.jar": "c4a445426c3c2861666863b842cc4ec7bbb1c4226fefd370b6d2fe83d6c4ff0f",
+    "lib/vectors-quantization-0.1.29.jar": "d4c9e4b679590c33d9aad16834e07b5e908d1aefd25951ca0850071a1fe32406",
+    "lib/junit-jupiter-api-6.0.3.jar": "d655d7e6f0c7ae07f10a2f3bbaaebb6d30e9b26204a068ad9e9b3950aa28792c",
+    "lib/vectors-core-0.1.30.jar": "79f536b453c5ad6d7339b30e41d8c8c440da3ff613caf5d1bea6f83e40ade1c7",
+    "lib/models-api-0.3.59.jar": "9b06e481274a694418bfebfcfc480f7c0dcb09fbde77f32ee8d352fea2389d9c",
+    "lib/backend-java-0.3.59.jar": "32e23a3018b8df004a305d77376e0678984e508a04a03f2a085324e09c472e8b",
+    "lib/jackson-databind-2.22.3.jar": "556db5439e206114346043f68d200497dc96a0bca62a360a81784092ebd0e0a9",
+    "lib/slf4j-api-2.0.20.jar": "7e1446499b359675d8aabe6af2de86b85e72ae8a2a932c0b40d0e5ba57097439",
+    "lib/jackson-annotations-2.22.jar": "21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0",
+    "lib/jackson-core-2.22.3.jar": "8a501126a385b25841915d839508f8a66e2a0dbc8a6709d055ef3b3e852b094c",
+    "lib/models-runtime-0.3.59.jar": "011d70e6df8a1f71441e93a3e05c77e390f5c0d1f4ff254df4556606422a325d",
+    "lib/apiguardian-api-1.1.2.jar": "b509448ac506d607319f182537f0b35d71007582ec741832a1f111e5b5b70b38",
+    "lib/vectors-ivf-0.1.29.jar": "06eb621153278f5ced4851c50c6a5ec293210213ea3f73c6d6afc9e654fb05ff",
+    "lib/opentest4j-1.3.0.jar": "48e2df636cab6563ced64dcdff8abb2355627cb236ef0bf37598682ddf742f1b",
+    "lib/models-router-0.3.59.jar": "59843100da9425dd9d458bca6f052f95810902874cd665fcbd01f19cd84bb327",
+    "lib/vectors-vamana-0.1.29.jar": "15b80d088fef22ce53898d8c10afba60c6884d500f591db00bf497f8861b0de0",
+    "lib/backend-cuda-0.3.59.jar": "59f3f54c58f13ba16342cbda516422c60976a28e1949cfb2b5aaeb6d97b54246",
+    "classes/com/integrallis/models/backend/nativekernel/LiteralBonsaiCiProbe.class": "ea2ab19b60af6df8d3e3cf7e5b546bdaf9e812d5ea76c8fdf68ded4cddbef305",
+    "classes/com/integrallis/models/backend/nativekernel/Bonsai2NativeModelFixtureSlowTest.class": "e93b011fca4a7d55336cdf20beba2e4fea2ae6992b6981b750525145d52ac589"
+  },
+  "nativeLibrary": {
+    "path": "/Users/briansam-bodden/Code/java-ai/projects/models-final-integration/backend-native/build/rust-target/release/libjmodels_kernels.dylib",
+    "sha256": "4cedd2f7c55912265c6b10963b80d3364ec9dca7e6a935c535a003859a409643"
+  },
+  "note": "Literal unchanged CI test method; contended local execution is correctness evidence only."
+}
