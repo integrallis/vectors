@@ -204,8 +204,48 @@ public final class BFloat16Matrix {
         sum2 = accumulate(weight, sum2, evenInputs, oddInputs, base2 + byteOffset);
         sum3 = accumulate(weight, sum3, evenInputs, oddInputs, base3 + byteOffset);
       }
-      // Keep reductions in this loop: the measured small ARM projection benefits from
-      // avoiding vector values escaping into a helper. Each row retains the fixed addition tree.
+      // Paired measurements select different compiler layouts: the direct reduction helper
+      // is faster on x86, while SVE benefits from keeping all four reductions in this loop.
+      // Both layouts retain the same arithmetic tree; the capability is fixed at startup.
+      if (!PanamaConstants.HAS_SVE) {
+        output[outputOffset + row] =
+            finishRow(
+                weight,
+                PanamaVectorUtilSupport.reduceLanesFixedTree(sum0),
+                input,
+                inputOffset,
+                columns,
+                base0,
+                vectorBound);
+        output[outputOffset + row + 1] =
+            finishRow(
+                weight,
+                PanamaVectorUtilSupport.reduceLanesFixedTree(sum1),
+                input,
+                inputOffset,
+                columns,
+                base1,
+                vectorBound);
+        output[outputOffset + row + 2] =
+            finishRow(
+                weight,
+                PanamaVectorUtilSupport.reduceLanesFixedTree(sum2),
+                input,
+                inputOffset,
+                columns,
+                base2,
+                vectorBound);
+        output[outputOffset + row + 3] =
+            finishRow(
+                weight,
+                PanamaVectorUtilSupport.reduceLanesFixedTree(sum3),
+                input,
+                inputOffset,
+                columns,
+                base3,
+                vectorBound);
+        continue;
+      }
       {
         int lanes = sum0.length();
         if (lanes == 16) sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));

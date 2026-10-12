@@ -11,8 +11,12 @@ layout/dispatch change; the published arm exposes regressions against the shippe
 The final artifact also repeats the complete six-shape BF16 kernel matrix using twelve
 prospectively declared counterbalanced process pairs. The earlier six-pair two-query candidate
 left the ARM small matvec interval crossing one; that result remains inconclusive. The final
-artifact inlines the four ordinary-row reductions, motivated by the previously measured ARM
-benefit, and includes the nested-executor fix. Neither previous source is represented as this
+artifact uses the existing `HAS_SVE` capability to inline the four ordinary-row reductions
+on SVE and retain direct helper reduction elsewhere. Previous paired measurements found the
+SVE inline ratio 0.9657 [0.9606, 0.9699], while direct helper was inconclusive there; on x86
+direct helper measured 0.7565 [0.7475, 0.7662], while inline was inconclusive. The arithmetic
+tree is identical in both layouts, and there is no new route property. The final matrix
+validates this prospective hardware policy, and also includes the nested-executor fix. Neither previous source is represented as this
 artifact. All twelve cold/hot probes, allocation and nested dispatch run before kernel timing.
 
 Run real-model fixture gates before the kernel timing matrix so a model failure is visible
@@ -50,3 +54,7 @@ checks, immutable payload/commit receipts, periodic diagnostic upload, and confi
 Oracle values are copied without changing tolerances from Models
 `Qwen2HuggingFaceBackendIntegrationTest` and `Bonsai2NativeModelFixtureSlowTest`.
 The frozen payload contains the exact harness and pinned artifact hashes.
+
+The fixture/probe output records the ordinary-row reduction branch derived from the immutable
+SVE capability used by the production dispatch. Non-SVE ARM performance is not established by
+this pair of hosts; forced widths on the SVE host establish correctness only.

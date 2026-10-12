@@ -1,0 +1,47 @@
+{
+  "method": "same-host paired ratios from all six original process pairs; geometric mean, percentile paired bootstrap20000,seed716309",
+  "results": [
+    {
+      "host": "x86",
+      "sourceRevision": "a14ec65",
+      "phase": "bf16-row-layout-v1",
+      "shape": "48x5120",
+      "comparison": "inline ordinary-row reduction / direct-helper reduction",
+      "ratio": 1.2814070945422196,
+      "ci95": [
+        1.257895166685363,
+        1.3114631031969903
+      ],
+      "processRatios": [
+        1.2625690185426626,
+        1.298412801302458,
+        1.2587292077630123,
+        1.2466202553788137,
+        1.2743202498579083,
+        1.3505471622477594
+      ],
+      "limitations": "Only the ordinary-row path executes for this shape; the rejected tall-row two-way path is not used here. These prior component measurements motivate the final hardware policy; they do not qualify the final artifact."
+    },
+    {
+      "host": "arm",
+      "sourceRevision": "a14ec65",
+      "phase": "bf16-row-layout-v1",
+      "shape": "48x5120",
+      "comparison": "inline ordinary-row reduction / direct-helper reduction",
+      "ratio": 0.9649153869473068,
+      "ci95": [
+        0.9612513027132923,
+        0.9684767383907803
+      ],
+      "processRatios": [
+        0.9574934581769451,
+        0.9654853480463698,
+        0.963023316857596,
+        0.9678565371698892,
+        0.963548099802458,
+        0.972148698424493
+      ],
+      "limitations": "Only the ordinary-row path executes for this shape; the rejected tall-row two-way path is not used here. These prior component measurements motivate the final hardware policy; they do not qualify the final artifact."
+    }
+  ]
+}

@@ -26,6 +26,8 @@ final class BFloat16MatrixColdHotProbe {
   private BFloat16MatrixColdHotProbe() {}
 
   public static void main(String[] args) {
+    System.out.println(
+        "BF16_ORDINARY_REDUCTION=" + (PanamaConstants.HAS_SVE ? "inline-sve" : "direct-helper"));
     int rows = Integer.parseInt(args[0]);
     int columns = Integer.parseInt(args[1]);
     Random random = new Random(0xBF16C01DL + rows * 31L + columns);

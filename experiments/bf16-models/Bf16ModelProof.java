@@ -262,6 +262,8 @@ public final class Bf16ModelProof {
         Map.of(
             "kind",
             "runtime-origin",
+            "bf16OrdinaryReduction",
+            com.integrallis.vectors.core.PanamaConstants.HAS_SVE ? "inline-sve" : "direct-helper",
             "bf16",
             com.integrallis.vectors.core.BFloat16Matrix.class
                 .getProtectionDomain()
