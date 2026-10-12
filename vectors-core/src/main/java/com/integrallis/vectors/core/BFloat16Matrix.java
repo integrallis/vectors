@@ -24,7 +24,12 @@ import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorShuffle;
 
-/** A row-major matrix stored as little-endian IEEE bfloat16 values. */
+/**
+ * A row-major matrix stored as little-endian IEEE bfloat16 values.
+ *
+ * <p>For a fixed provider, SIMD width and FMA configuration, single and batched products use the
+ * same summation order before and after JIT compilation.
+ */
 public final class BFloat16Matrix {
 
   private static final ValueLayout.OfShort LE_SHORT =
@@ -271,7 +276,19 @@ public final class BFloat16Matrix {
       int columns,
       long rowOffset,
       int vectorBound) {
-    float sum = vectorSum.reduceLanes(VectorOperators.ADD);
+    // reduceLanes(ADD) changes addition order after compilation. Keep this fixed tree inside
+    // finishRow: passing the vector to another helper prevents escape analysis in the batched
+    // loop and allocates a boxed vector for each row/token pair. See the BF16 JMH/GC evidence.
+    int lanes = vectorSum.length();
+    if (lanes == 16)
+      vectorSum = vectorSum.add(vectorSum.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+    if (lanes >= 8)
+      vectorSum = vectorSum.add(vectorSum.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+    if (lanes >= 4)
+      vectorSum = vectorSum.add(vectorSum.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+    if (lanes >= 2)
+      vectorSum = vectorSum.add(vectorSum.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+    float sum = vectorSum.lane(0);
     for (int column = vectorBound; column < columns; column++) {
       float value = decode(weight.get(LE_SHORT, rowOffset + (long) column * Short.BYTES));
       sum = MathUtil.fma(input[inputOffset + column], value, sum);
