@@ -6906,21 +6906,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] up,
       int upOffset,
       int length) {
-    int index = 0;
-    int limit = FLOAT_SPECIES.loopBound(length);
-    FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
-    for (; index < limit; index += FLOAT_SPECIES.length()) {
-      FloatVector value = FloatVector.fromArray(FLOAT_SPECIES, gate, gateOffset + index);
-      FloatVector multiplier = FloatVector.fromArray(FLOAT_SPECIES, up, upOffset + index);
-      value
-          .div(one.add(value.neg().lanewise(VectorOperators.EXP)))
-          .mul(multiplier)
-          .intoArray(out, outOffset + index);
-    }
-    for (; index < length; index++) {
-      float value = gate[gateOffset + index];
-      out[outOffset + index] = value / (1.0f + (float) Math.exp(-value)) * up[upOffset + index];
-    }
+    ReproducibleSwiGlu.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
   }
 
   @Override

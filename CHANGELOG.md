@@ -4,6 +4,14 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-10-12
+
+### Fixed
+
+- Preserve SwiGLU's float-intermediate exponential arithmetic before and after JIT compilation,
+  across vector widths, tails and chunk boundaries. This corrects the activation used by
+  sequential and batched Qwen-family inference, including Bonsai.
+
 ## [0.1.29] - 2026-10-10
 
 ### Fixed

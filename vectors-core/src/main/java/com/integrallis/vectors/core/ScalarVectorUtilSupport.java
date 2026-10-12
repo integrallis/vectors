@@ -273,7 +273,8 @@ final class ScalarVectorUtilSupport implements VectorUtilSupport {
       int length) {
     for (int index = 0; index < length; index++) {
       float value = gate[gateOffset + index];
-      out[outOffset + index] = value / (1.0f + (float) Math.exp(-value)) * up[upOffset + index];
+      out[outOffset + index] =
+          value / (1.0f + (float) StrictMath.exp(-value)) * up[upOffset + index];
     }
   }
 
