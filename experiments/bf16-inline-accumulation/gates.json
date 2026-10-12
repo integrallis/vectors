@@ -1,0 +1,62 @@
+[
+  {
+    "label": "cold-64-48x5120",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-accumulation/vectors-core-0.1.30.jar:/tmp/bf16-models-v9/probes.jar:/tmp/bf16-models-v9/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 75.03177958307788
+  },
+  {
+    "label": "cold-64-5x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-accumulation/vectors-core-0.1.30.jar:/tmp/bf16-models-v9/probes.jar:/tmp/bf16-models-v9/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 1.3167977610137314
+  },
+  {
+    "label": "cold-64-8193x37",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bf16-inline-accumulation/vectors-core-0.1.30.jar:/tmp/bf16-models-v9/probes.jar:/tmp/bf16-models-v9/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 72.34564052894711
+  },
+  {
+    "label": "cold-64-512x2048",
+    "exitCode": null,
+    "timeoutSeconds": 180,
+    "result": "TIMEOUT; retained as failed execution; no numerical acceptance claimed"
+  }
+]

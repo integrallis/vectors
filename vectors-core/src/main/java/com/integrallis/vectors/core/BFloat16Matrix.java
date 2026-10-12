@@ -199,10 +199,58 @@ public final class BFloat16Matrix {
         FloatVector evenInputs = first.rearrange(EVEN_INPUTS, second);
         FloatVector oddInputs = first.rearrange(ODD_INPUTS, second);
         long byteOffset = (long) column * Short.BYTES;
-        sum0 = accumulate(weight, sum0, evenInputs, oddInputs, base0 + byteOffset);
-        sum1 = accumulate(weight, sum1, evenInputs, oddInputs, base1 + byteOffset);
-        sum2 = accumulate(weight, sum2, evenInputs, oddInputs, base2 + byteOffset);
-        sum3 = accumulate(weight, sum3, evenInputs, oddInputs, base3 + byteOffset);
+        {
+          IntVector packed = IntVector.fromMemorySegment(
+              PanamaVectorUtilSupport.INT_SPECIES, weight, base0 + byteOffset, ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights = packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
+          if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
+            sum0 = evenWeights.fma(evenInputs, sum0);
+            sum0 = oddWeights.fma(oddInputs, sum0);
+          } else {
+            sum0 = evenWeights.mul(evenInputs).add(sum0);
+            sum0 = oddWeights.mul(oddInputs).add(sum0);
+          }
+        }
+        {
+          IntVector packed = IntVector.fromMemorySegment(
+              PanamaVectorUtilSupport.INT_SPECIES, weight, base1 + byteOffset, ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights = packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
+          if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
+            sum1 = evenWeights.fma(evenInputs, sum1);
+            sum1 = oddWeights.fma(oddInputs, sum1);
+          } else {
+            sum1 = evenWeights.mul(evenInputs).add(sum1);
+            sum1 = oddWeights.mul(oddInputs).add(sum1);
+          }
+        }
+        {
+          IntVector packed = IntVector.fromMemorySegment(
+              PanamaVectorUtilSupport.INT_SPECIES, weight, base2 + byteOffset, ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights = packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
+          if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
+            sum2 = evenWeights.fma(evenInputs, sum2);
+            sum2 = oddWeights.fma(oddInputs, sum2);
+          } else {
+            sum2 = evenWeights.mul(evenInputs).add(sum2);
+            sum2 = oddWeights.mul(oddInputs).add(sum2);
+          }
+        }
+        {
+          IntVector packed = IntVector.fromMemorySegment(
+              PanamaVectorUtilSupport.INT_SPECIES, weight, base3 + byteOffset, ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights = packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
+          if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
+            sum3 = evenWeights.fma(evenInputs, sum3);
+            sum3 = oddWeights.fma(oddInputs, sum3);
+          } else {
+            sum3 = evenWeights.mul(evenInputs).add(sum3);
+            sum3 = oddWeights.mul(oddInputs).add(sum3);
+          }
+        }
       }
       // Paired measurements select different compiler layouts: the direct reduction helper
       // is faster on x86, while SVE benefits from keeping all four reductions in this loop.
