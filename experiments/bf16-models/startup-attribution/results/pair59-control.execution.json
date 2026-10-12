@@ -1,0 +1,20 @@
+{
+  "command": [
+    "/opt/jdk/bin/java",
+    "--add-modules",
+    "jdk.incubator.vector",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xms2g",
+    "-Xmx10g",
+    "-cp",
+    "lib/control/*:model-proof.jar",
+    "com.integrallis.models.backend.purejava.Bf16ModelProof",
+    "startup",
+    "qwen",
+    ".",
+    "data/tasks.json",
+    "0"
+  ],
+  "exitCode": 0,
+  "wallSeconds": 1.417049067000022
+}

@@ -102,3 +102,9 @@ The original macro helper retained backend-owned logit arrays. Those per-step ha
 ## Latest assembled runtime smoke
 
 Actual Models `d2d0fb4f` JARs (lazy Q5 decoder initialization and BERT scalar projection restoration), with overflow-fixed core SHA `79f536b453c5ad6d7339b30e41d8c8c440da3ff613caf5d1bea6f83e40ade1c7`, pass the Qwen pinned/full-snapshot fixture, unchanged literal Bonsai CI method, and complete Bonsai oracle/fresh-session/reset/batch fixture. [Commands, output and artifact hashes](final-d2d0-afc-smoke/provenance.json) are retained. This is correctness evidence on the assembled runtime; frozen `0bc5de31`/`ae337eeb` macro timings remain separately scoped.
+
+## Prospective startup attribution
+
+A separate predeclared 100-pair fresh-process x86 comparison completed with candidate/control load ratio **0.998746 [0.994769, 1.002647]**. Its precision target is met; the interval still crosses one, so its verdict is **unresolved**. It does not erase or pool with the failed ten-pair startup result above. [All process outputs, class-load traces and paired analysis](startup-attribution/results/analysis.json) are retained. The owned instance shut down within its 780-second cap.
+
+Actual Bonsai JFR independently attributes much of its excess allocation to escaped vector objects in the BF16 four-row projection, with a smaller activation contribution. An isolated source-form experiment directly expands the four-row unpack/FMA body to preserve its array-only boundary. This experiment is not integrated or qualified; a separate bounded actual-model diagnostic must establish whether it changes caller-context allocation.

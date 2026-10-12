@@ -1,0 +1,513 @@
+{
+  "pairs": 100,
+  "ratio": 0.9987459922180211,
+  "ci95": [
+    0.9947688475472604,
+    1.0026473304683665
+  ],
+  "direction": "unresolved",
+  "precisionTargetMet": true,
+  "method": "100 prospective counterbalanced fresh-process pairs; geometric mean, paired percentile bootstrap20000 seed716309; previous failed ten-pair result retained separately",
+  "rows": [
+    {
+      "pair": 0,
+      "control": 1044713817,
+      "candidate": 1048524496
+    },
+    {
+      "pair": 1,
+      "candidate": 1061520988,
+      "control": 1050031128
+    },
+    {
+      "pair": 2,
+      "control": 1057622086,
+      "candidate": 1032763142
+    },
+    {
+      "pair": 3,
+      "candidate": 1034624876,
+      "control": 1027297247
+    },
+    {
+      "pair": 4,
+      "control": 1048346491,
+      "candidate": 1051929322
+    },
+    {
+      "pair": 5,
+      "candidate": 1060186860,
+      "control": 1054008768
+    },
+    {
+      "pair": 6,
+      "control": 1049334287,
+      "candidate": 1062835831
+    },
+    {
+      "pair": 7,
+      "candidate": 1060040525,
+      "control": 1058659477
+    },
+    {
+      "pair": 8,
+      "control": 1047528775,
+      "candidate": 1098585870
+    },
+    {
+      "pair": 9,
+      "candidate": 1070855928,
+      "control": 1072916116
+    },
+    {
+      "pair": 10,
+      "control": 1050443717,
+      "candidate": 1057707673
+    },
+    {
+      "pair": 11,
+      "candidate": 1070718545,
+      "control": 1062561014
+    },
+    {
+      "pair": 12,
+      "control": 1059849884,
+      "candidate": 1078430791
+    },
+    {
+      "pair": 13,
+      "candidate": 1061230760,
+      "control": 1096004806
+    },
+    {
+      "pair": 14,
+      "control": 1079386713,
+      "candidate": 1063873150
+    },
+    {
+      "pair": 15,
+      "candidate": 1048054196,
+      "control": 1076998774
+    },
+    {
+      "pair": 16,
+      "control": 1035929334,
+      "candidate": 1083445994
+    },
+    {
+      "pair": 17,
+      "candidate": 1038286891,
+      "control": 1059430845
+    },
+    {
+      "pair": 18,
+      "control": 1063054887,
+      "candidate": 1089979235
+    },
+    {
+      "pair": 19,
+      "candidate": 1055207142,
+      "control": 1059471476
+    },
+    {
+      "pair": 20,
+      "control": 1080752934,
+      "candidate": 1043435565
+    },
+    {
+      "pair": 21,
+      "candidate": 1080383841,
+      "control": 1041056508
+    },
+    {
+      "pair": 22,
+      "control": 1044743513,
+      "candidate": 1072469608
+    },
+    {
+      "pair": 23,
+      "candidate": 1049297666,
+      "control": 1072316592
+    },
+    {
+      "pair": 24,
+      "control": 1063430903,
+      "candidate": 1068222244
+    },
+    {
+      "pair": 25,
+      "candidate": 1055793276,
+      "control": 1053625462
+    },
+    {
+      "pair": 26,
+      "control": 1037744667,
+      "candidate": 1044716341
+    },
+    {
+      "pair": 27,
+      "candidate": 1063658989,
+      "control": 1053102416
+    },
+    {
+      "pair": 28,
+      "control": 1084594075,
+      "candidate": 1054295886
+    },
+    {
+      "pair": 29,
+      "candidate": 1072994295,
+      "control": 1079151193
+    },
+    {
+      "pair": 30,
+      "control": 1053937013,
+      "candidate": 1062386957
+    },
+    {
+      "pair": 31,
+      "candidate": 1108634665,
+      "control": 1071525016
+    },
+    {
+      "pair": 32,
+      "control": 1058922942,
+      "candidate": 1072425286
+    },
+    {
+      "pair": 33,
+      "candidate": 1061807277,
+      "control": 1104182688
+    },
+    {
+      "pair": 34,
+      "control": 1079717561,
+      "candidate": 1085936682
+    },
+    {
+      "pair": 35,
+      "candidate": 1056961314,
+      "control": 1075338303
+    },
+    {
+      "pair": 36,
+      "control": 1080792498,
+      "candidate": 1073782622
+    },
+    {
+      "pair": 37,
+      "candidate": 1085824917,
+      "control": 1101896330
+    },
+    {
+      "pair": 38,
+      "control": 1117678893,
+      "candidate": 1068236459
+    },
+    {
+      "pair": 39,
+      "candidate": 1067148163,
+      "control": 1073486817
+    },
+    {
+      "pair": 40,
+      "control": 1086148546,
+      "candidate": 1067565217
+    },
+    {
+      "pair": 41,
+      "candidate": 1051045368,
+      "control": 1057746934
+    },
+    {
+      "pair": 42,
+      "control": 1075924549,
+      "candidate": 1056566234
+    },
+    {
+      "pair": 43,
+      "candidate": 1092086546,
+      "control": 1060111904
+    },
+    {
+      "pair": 44,
+      "control": 1093232912,
+      "candidate": 1032929414
+    },
+    {
+      "pair": 45,
+      "candidate": 1050206517,
+      "control": 1085523307
+    },
+    {
+      "pair": 46,
+      "control": 1061114421,
+      "candidate": 1055713605
+    },
+    {
+      "pair": 47,
+      "candidate": 1044568078,
+      "control": 1061548953
+    },
+    {
+      "pair": 48,
+      "control": 1068263860,
+      "candidate": 1051307298
+    },
+    {
+      "pair": 49,
+      "candidate": 1055380355,
+      "control": 1064371296
+    },
+    {
+      "pair": 50,
+      "control": 1060309749,
+      "candidate": 1049763903
+    },
+    {
+      "pair": 51,
+      "candidate": 1055384493,
+      "control": 1050425226
+    },
+    {
+      "pair": 52,
+      "control": 1073501355,
+      "candidate": 1067787311
+    },
+    {
+      "pair": 53,
+      "candidate": 1066462787,
+      "control": 1074818379
+    },
+    {
+      "pair": 54,
+      "control": 1059827593,
+      "candidate": 1076066855
+    },
+    {
+      "pair": 55,
+      "candidate": 1071985991,
+      "control": 1054415297
+    },
+    {
+      "pair": 56,
+      "control": 1060030577,
+      "candidate": 1064998574
+    },
+    {
+      "pair": 57,
+      "candidate": 1063416482,
+      "control": 1062428828
+    },
+    {
+      "pair": 58,
+      "control": 1068364118,
+      "candidate": 1100916259
+    },
+    {
+      "pair": 59,
+      "candidate": 1102551354,
+      "control": 1071272857
+    },
+    {
+      "pair": 60,
+      "control": 1067222041,
+      "candidate": 1038925484
+    },
+    {
+      "pair": 61,
+      "candidate": 1090656634,
+      "control": 1086513653
+    },
+    {
+      "pair": 62,
+      "control": 1067262382,
+      "candidate": 1081049509
+    },
+    {
+      "pair": 63,
+      "candidate": 1041608245,
+      "control": 1059889804
+    },
+    {
+      "pair": 64,
+      "control": 1042432923,
+      "candidate": 1051766299
+    },
+    {
+      "pair": 65,
+      "candidate": 1063398752,
+      "control": 1076711875
+    },
+    {
+      "pair": 66,
+      "control": 1061989481,
+      "candidate": 1045799923
+    },
+    {
+      "pair": 67,
+      "candidate": 1083788699,
+      "control": 1035288537
+    },
+    {
+      "pair": 68,
+      "control": 1075620513,
+      "candidate": 1084455682
+    },
+    {
+      "pair": 69,
+      "candidate": 1074567417,
+      "control": 1075254061
+    },
+    {
+      "pair": 70,
+      "control": 1084631268,
+      "candidate": 1052205418
+    },
+    {
+      "pair": 71,
+      "candidate": 1057595808,
+      "control": 1056359066
+    },
+    {
+      "pair": 72,
+      "control": 1086927639,
+      "candidate": 1059471341
+    },
+    {
+      "pair": 73,
+      "candidate": 1060076162,
+      "control": 1062739841
+    },
+    {
+      "pair": 74,
+      "control": 1059189852,
+      "candidate": 1062142382
+    },
+    {
+      "pair": 75,
+      "candidate": 1076475326,
+      "control": 1060782386
+    },
+    {
+      "pair": 76,
+      "control": 1087740657,
+      "candidate": 1057029587
+    },
+    {
+      "pair": 77,
+      "candidate": 1040552340,
+      "control": 1061451046
+    },
+    {
+      "pair": 78,
+      "control": 1065066799,
+      "candidate": 1083805373
+    },
+    {
+      "pair": 79,
+      "candidate": 1112323247,
+      "control": 1113185375
+    },
+    {
+      "pair": 80,
+      "control": 1086485384,
+      "candidate": 1091487322
+    },
+    {
+      "pair": 81,
+      "candidate": 1064761252,
+      "control": 1097089142
+    },
+    {
+      "pair": 82,
+      "control": 1045049870,
+      "candidate": 1056796997
+    },
+    {
+      "pair": 83,
+      "candidate": 1056386254,
+      "control": 1061958072
+    },
+    {
+      "pair": 84,
+      "control": 1075563913,
+      "candidate": 1045026180
+    },
+    {
+      "pair": 85,
+      "candidate": 1071735064,
+      "control": 1080131098
+    },
+    {
+      "pair": 86,
+      "control": 1067922415,
+      "candidate": 1049355936
+    },
+    {
+      "pair": 87,
+      "candidate": 1059267817,
+      "control": 1071796642
+    },
+    {
+      "pair": 88,
+      "control": 1034735404,
+      "candidate": 1062675282
+    },
+    {
+      "pair": 89,
+      "candidate": 1062203557,
+      "control": 1060142966
+    },
+    {
+      "pair": 90,
+      "control": 1079052588,
+      "candidate": 1079277006
+    },
+    {
+      "pair": 91,
+      "candidate": 1078803539,
+      "control": 1074131321
+    },
+    {
+      "pair": 92,
+      "control": 1068371300,
+      "candidate": 1076941253
+    },
+    {
+      "pair": 93,
+      "candidate": 1066231640,
+      "control": 1065013679
+    },
+    {
+      "pair": 94,
+      "control": 1057687281,
+      "candidate": 1083894578
+    },
+    {
+      "pair": 95,
+      "candidate": 1048760830,
+      "control": 1045406457
+    },
+    {
+      "pair": 96,
+      "control": 1086421113,
+      "candidate": 1082340435
+    },
+    {
+      "pair": 97,
+      "candidate": 1077982298,
+      "control": 1058654675
+    },
+    {
+      "pair": 98,
+      "control": 1036684599,
+      "candidate": 1054556993
+    },
+    {
+      "pair": 99,
+      "candidate": 1025413509,
+      "control": 1030138208
+    }
+  ]
+}
