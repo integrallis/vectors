@@ -38,6 +38,28 @@ import org.junit.jupiter.api.Test;
 class GgufParallelSupportTest {
 
   @Test
+  void callbackCloseFailsWithoutPoisoningEitherPool() {
+    assertTimeoutPreemptively(
+        Duration.ofSeconds(5),
+        () -> {
+          try (var first = new GgufPersistentRowExecutor(2, 1, "close-first");
+              var second = new GgufPersistentRowExecutor(2, 1, "close-second")) {
+            first.forEach(
+                2,
+                row -> {
+                  assertThatThrownBy(first::close).isInstanceOf(IllegalStateException.class);
+                  assertThatThrownBy(second::close).isInstanceOf(IllegalStateException.class);
+                });
+            AtomicInteger visits = new AtomicInteger();
+            first.forEach(2, row -> visits.incrementAndGet());
+            second.execute(
+                GgufStagePlan.of(GgufStagePlan.stage(2, (a, b) -> visits.addAndGet(b - a))));
+            assertThat(visits).hasValue(4);
+          }
+        });
+  }
+
+  @Test
   void parallelizesOnlyLargeMatricesWhenMultipleProcessorsAreAvailable() {
     assertThat(GgufParallelSupport.shouldParallelize(1024, 2048, 8, true, 1_048_576L)).isTrue();
     assertThat(GgufParallelSupport.shouldParallelize(32, 2048, 8, true, 1_048_576L)).isFalse();

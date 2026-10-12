@@ -24,6 +24,11 @@ final class ClosedNestedDispatchProbe {
           2,
           row -> {
             try {
+              closeFromCallback(active);
+              throw new AssertionError("callback closed its active executor");
+            } catch (IllegalStateException expected) {
+            }
+            try {
               closed.forEach(1, ignored -> {});
               throw new AssertionError("closed nested row executor accepted work");
             } catch (IllegalStateException expected) {
@@ -35,5 +40,9 @@ final class ClosedNestedDispatchProbe {
             }
           });
     }
+  }
+
+  private static void closeFromCallback(GgufRowExecutor executor) {
+    executor.close();
   }
 }

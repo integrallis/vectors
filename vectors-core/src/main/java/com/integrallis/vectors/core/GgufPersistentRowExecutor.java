@@ -323,6 +323,11 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
 
   @Override
   public void close() {
+    // A callback cannot wait for a publication/barrier that includes itself. Cross-pool
+    // callbacks can form the same cycle, so closing must happen outside all row callbacks.
+    if (EXECUTING_CALLBACK.get()) {
+      throw new IllegalStateException("cannot close an executor from a row callback");
+    }
     publicationLock.lock();
     try {
       if (closed) {
