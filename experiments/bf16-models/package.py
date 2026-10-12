@@ -62,7 +62,7 @@ if pair_indices:
  config['continuationOf']='bf16-models-v2'
 (stage/'model-proof.json').write_text(json.dumps(config,indent=2)+'\n')
 meta=json.loads((central/'payload-bf16-tiles-v2.json').read_text());meta={k:meta[k] for k in ['jdk','rust']}
-meta.update(runName='gdn-proof-'+version,sourceRepository='vectors',revision=revision,maximumSecondsPerHost=3600 if pair_indices else 7200,maximumCombinedUsd=12.0 if pair_indices else 3.5,
+meta.update(runName='gdn-proof-'+version,sourceRepository='vectors',revision=revision,maximumSecondsPerHost=3600 if pair_indices else 7200,maximumCombinedUsd=6.0 if pair_indices else 3.5,
  files={str(p.relative_to(stage)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(stage.rglob('*')) if p.is_file()})
 (stage/'inputs.sha256').write_text(''.join(f'{sha}  {name}\n' for name,sha in meta['files'].items()))
 (stage/'provenance.json').write_text(json.dumps(meta,indent=2)+'\n')
