@@ -1,0 +1,36 @@
+{
+  "source": "d92aceb0cabde1436098c7461f95b94e6f09d9cb",
+  "runUrl": "https://github.com/integrallis/vectors/actions/runs/38300330724",
+  "artifact": "core-portability-arm64",
+  "counts": {
+    "tests": 1601,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 4
+  },
+  "mergeCommit": "4fe97a100d9b6639117d0d3c348b420d2e3bcac8",
+  "mergeTreeEqualsHead": true,
+  "tree": "c1faac318c1dcb6b1de6ab1d0423945e83993dd9",
+  "skips": [
+    {
+      "name": "maxBits=256 dequant=scalar",
+      "classname": "com.integrallis.vectors.core.GgufKQuantDequantTest",
+      "time": "0.007"
+    },
+    {
+      "name": "maxBits=256 dequant=simd-byte",
+      "classname": "com.integrallis.vectors.core.GgufKQuantDequantTest",
+      "time": "0.001"
+    },
+    {
+      "name": "maxBits=256 dequant=simd-int",
+      "classname": "com.integrallis.vectors.core.GgufKQuantDequantTest",
+      "time": "0.002"
+    },
+    {
+      "name": "maxBits=256 dequant=simd-split",
+      "classname": "com.integrallis.vectors.core.GgufKQuantDequantTest",
+      "time": "0.001"
+    }
+  ]
+}

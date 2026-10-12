@@ -1,0 +1,384 @@
+{
+  "runtimeRevision": "d92aceb0cabde1436098c7461f95b94e6f09d9cb",
+  "runtimeJarSha256": "3b037e5e405b526e67cd4078c58e191e60589b7b3dbccb9992f8d98d258f5202",
+  "fixtures": [
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-0f20dd70e58d02955",
+      "instanceType": "m6a.4xlarge",
+      "arch": "x86",
+      "model": "qwen-bf16",
+      "arm": "published",
+      "exitCode": 1,
+      "wallSeconds": 3.121644935000006,
+      "stdoutSha256": "554c8660f6742a956e41f2f49afb012bf33706734680a8630cbbae3df0e25867",
+      "stderrSha256": "f12eebbe06b6cc84ae13c02bedf8787bf56cf1b045bbbd4ec18ddf8f498eae21",
+      "recordKinds": {
+        "diagnostics": 1,
+        "oracle": 2,
+        "runtime-origin": 1
+      },
+      "stderrTail": [
+        "INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=16 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults \u2014 no -Dvectors.* overrides)]",
+        "Exception in thread \"main\" java.lang.AssertionError: fresh session changed after compilation",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.fixture(Bf16ModelProof.java:230)",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.main(Bf16ModelProof.java:299)"
+      ]
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-0f20dd70e58d02955",
+      "instanceType": "m6a.4xlarge",
+      "arch": "x86",
+      "model": "qwen-bf16",
+      "arm": "control",
+      "exitCode": 0,
+      "wallSeconds": 8.482937919999998,
+      "stdoutSha256": "9e541e0ccd4ec2115de739ffa09daeac11fedd27f4113a8e38ce2065a60332b1",
+      "stderrSha256": "9c803adc254ac7b4e5d630538b41f2975fb4187ceedfd334bfad718f6b94289b",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-0f20dd70e58d02955",
+      "instanceType": "m6a.4xlarge",
+      "arch": "x86",
+      "model": "qwen-bf16",
+      "arm": "candidate",
+      "exitCode": 0,
+      "wallSeconds": 6.4816429729999925,
+      "stdoutSha256": "66bb60e502dd916cb5445ebec058221a525e6008c97319cd9a7f4e6b73b22cb1",
+      "stderrSha256": "d01f684c5508b5307a838ff12b9ac83d2fd3c65a4452cd22127a549f49bcc4fe",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-0f20dd70e58d02955",
+      "instanceType": "m6a.4xlarge",
+      "arch": "x86",
+      "model": "bonsai2",
+      "arm": "published",
+      "exitCode": 1,
+      "wallSeconds": 11.098760108999997,
+      "stdoutSha256": "ab3528183db4429ae2301a7c39c80a4c03027a096c27f9d704b89b970d218cb6",
+      "stderrSha256": "829e6c10c62804b8e5e83965a2c3da991f57b732b877b4ae2e80eebdc37f78ec",
+      "recordKinds": {
+        "diagnostics": 1,
+        "oracle": 2,
+        "runtime-origin": 1
+      },
+      "stderrTail": [
+        "INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=16 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults \u2014 no -Dvectors.* overrides)]",
+        "Exception in thread \"main\" java.lang.AssertionError: fresh session changed after compilation",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.fixture(Bf16ModelProof.java:230)",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.main(Bf16ModelProof.java:299)"
+      ]
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-0f20dd70e58d02955",
+      "instanceType": "m6a.4xlarge",
+      "arch": "x86",
+      "model": "bonsai2",
+      "arm": "control",
+      "exitCode": 0,
+      "wallSeconds": 44.80292165200001,
+      "stdoutSha256": "fedf44a03999e1c77dc02647bc6f4333ad21dc4cff5319ccd9653ee56389f125",
+      "stderrSha256": "4e11cb3d346adc53b3bdce8894a34e72998e4a48da9cb4ef44237829863d88f2",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-0f20dd70e58d02955",
+      "instanceType": "m6a.4xlarge",
+      "arch": "x86",
+      "model": "bonsai2",
+      "arm": "candidate",
+      "exitCode": 0,
+      "wallSeconds": 42.158695177,
+      "stdoutSha256": "341fbda7da747f27eae6d59117cfeafb30bb14bd83292f26483e93d4b67eebc7",
+      "stderrSha256": "64c4d369d2549a590a67f65a2f5d40df699d5de7d449adfe78443210b6edfb69",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-055244d0474d2468b",
+      "instanceType": "m7g.4xlarge",
+      "arch": "arm",
+      "model": "qwen-bf16",
+      "arm": "published",
+      "exitCode": 1,
+      "wallSeconds": 3.269315707000004,
+      "stdoutSha256": "1a6d5408a53486c7959aafcbdc3ae199a4a612489d2153c7f993796b5fde0c66",
+      "stderrSha256": "2106c2fd96d7fa6768f40c80c8bbae348a6f2ec20482cf3d95309b97257cf623",
+      "recordKinds": {
+        "diagnostics": 1,
+        "oracle": 2,
+        "runtime-origin": 1
+      },
+      "stderrTail": [
+        "INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=true ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=16 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=false,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults \u2014 no -Dvectors.* overrides)]",
+        "Exception in thread \"main\" java.lang.AssertionError: fresh session changed after compilation",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.fixture(Bf16ModelProof.java:230)",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.main(Bf16ModelProof.java:299)"
+      ]
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-055244d0474d2468b",
+      "instanceType": "m7g.4xlarge",
+      "arch": "arm",
+      "model": "qwen-bf16",
+      "arm": "control",
+      "exitCode": 0,
+      "wallSeconds": 7.92766038100001,
+      "stdoutSha256": "7a5c7369de97c69b362f5330e5933b63aedbde04cd719f1261b668200acddb92",
+      "stderrSha256": "4345ccddcb549c72d57602e449e0ef126cc5fe67428de1be0d9736ca048324ef",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-055244d0474d2468b",
+      "instanceType": "m7g.4xlarge",
+      "arch": "arm",
+      "model": "qwen-bf16",
+      "arm": "candidate",
+      "exitCode": 0,
+      "wallSeconds": 5.928631561000003,
+      "stdoutSha256": "4f1747bc5113ac4a1bf55482373bd60ebbd49919248a078f9d3d7491a638261f",
+      "stderrSha256": "f81d0795be728a96cb51a98b1718f17954b5522dd45f373148d50c685d0ee780",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-055244d0474d2468b",
+      "instanceType": "m7g.4xlarge",
+      "arch": "arm",
+      "model": "bonsai2",
+      "arm": "published",
+      "exitCode": 1,
+      "wallSeconds": 11.247405684,
+      "stdoutSha256": "c584e4c639217372a51d92cff6455385d7c67ead852f2fdfa104e6b0eae82e33",
+      "stderrSha256": "f4bda3578bb87b26bd2ce49d67a1fec67f8de5158e8401d1ea00b7f41b7cbc98",
+      "recordKinds": {
+        "diagnostics": 1,
+        "oracle": 2,
+        "runtime-origin": 1
+      },
+      "stderrTail": [
+        "INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=true ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=16 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=false,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults \u2014 no -Dvectors.* overrides)]",
+        "Exception in thread \"main\" java.lang.AssertionError: fresh session changed after compilation",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.fixture(Bf16ModelProof.java:230)",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.main(Bf16ModelProof.java:299)"
+      ]
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-055244d0474d2468b",
+      "instanceType": "m7g.4xlarge",
+      "arch": "arm",
+      "model": "bonsai2",
+      "arm": "control",
+      "exitCode": 0,
+      "wallSeconds": 42.24593610100001,
+      "stdoutSha256": "15c5d8e356cd1a4283b9acf6b81b56fbec90a18eb09bd7b5ea34558581b4ca70",
+      "stderrSha256": "9b0d861c8186ea137c914e536b8b84718d1077935799b37fd7f37538986d52e8",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v2",
+      "host": "i-055244d0474d2468b",
+      "instanceType": "m7g.4xlarge",
+      "arch": "arm",
+      "model": "bonsai2",
+      "arm": "candidate",
+      "exitCode": 0,
+      "wallSeconds": 40.840442373,
+      "stdoutSha256": "ba84098975c0612e7276b1955d8c555a0ca173cde016cd9ae1823d3ff2949417",
+      "stderrSha256": "160c57139bdcd598eb26eeb14a3d3e628616221585706b90eebfce02fc2d0b2c",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v3",
+      "host": "i-074982f87b258b12b",
+      "instanceType": "m6g.4xlarge",
+      "arch": "arm",
+      "model": "qwen-bf16",
+      "arm": "published",
+      "exitCode": 1,
+      "wallSeconds": 6.131360934,
+      "stdoutSha256": "610233d5e4ee68a2f31e9fcfcffeaf1c1edb7a1a47468c33dbd6bb5dc8658e2c",
+      "stderrSha256": "c2cb2c8ff708614108ef2a56a46020b77639a0c08e66a5125bbaa4be97ddd56b",
+      "recordKinds": {
+        "diagnostics": 1,
+        "oracle": 2,
+        "runtime-origin": 1
+      },
+      "stderrTail": [
+        "INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=128 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=16 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=false,q5=false,q6=false) q4ShortPairwiseSupported=false q4UnsignedPairwiseSupported=false toggles=[(defaults \u2014 no -Dvectors.* overrides)]",
+        "Exception in thread \"main\" java.lang.AssertionError: fresh session changed after compilation",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.fixture(Bf16ModelProof.java:230)",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.main(Bf16ModelProof.java:299)"
+      ]
+    },
+    {
+      "phase": "bf16-models-v3",
+      "host": "i-074982f87b258b12b",
+      "instanceType": "m6g.4xlarge",
+      "arch": "arm",
+      "model": "qwen-bf16",
+      "arm": "control",
+      "exitCode": 0,
+      "wallSeconds": 19.518079208999993,
+      "stdoutSha256": "59a2edc644c36cb730d640453fcf296c2bbb3f864bcb76474d8191f6bef647cd",
+      "stderrSha256": "4040ada75d363f7ab44a592a18d16e4b71d83ff7ed8f77b84bd6433095400082",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v3",
+      "host": "i-074982f87b258b12b",
+      "instanceType": "m6g.4xlarge",
+      "arch": "arm",
+      "model": "qwen-bf16",
+      "arm": "candidate",
+      "exitCode": 0,
+      "wallSeconds": 13.313857764000005,
+      "stdoutSha256": "8392b5be50ba97cc331a339575db6c6fa9350bf0e2dbd0893050bb627fbeb1d0",
+      "stderrSha256": "2e41fcd7d485cbb535c65d8eda06bf3f99687c753815195315c05c0fab299649",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v3",
+      "host": "i-074982f87b258b12b",
+      "instanceType": "m6g.4xlarge",
+      "arch": "arm",
+      "model": "bonsai2",
+      "arm": "published",
+      "exitCode": 1,
+      "wallSeconds": 18.491263059999994,
+      "stdoutSha256": "bda81d50e52e0659a9fe241e9af57b95da79a116596b4b5f13d540d21b4121ba",
+      "stderrSha256": "a44f70405ae9c76ee7216cd07c6be9313a69b12a33a664a163bba87a30eb5f1f",
+      "recordKinds": {
+        "diagnostics": 1,
+        "oracle": 2,
+        "runtime-origin": 1
+      },
+      "stderrTail": [
+        "INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=128 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=16 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=false,q5=false,q6=false) q4ShortPairwiseSupported=false q4UnsignedPairwiseSupported=false toggles=[(defaults \u2014 no -Dvectors.* overrides)]",
+        "Exception in thread \"main\" java.lang.AssertionError: fresh session changed after compilation",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.fixture(Bf16ModelProof.java:230)",
+        "\tat com.integrallis.models.backend.purejava.Bf16ModelProof.main(Bf16ModelProof.java:299)"
+      ]
+    },
+    {
+      "phase": "bf16-models-v3",
+      "host": "i-074982f87b258b12b",
+      "instanceType": "m6g.4xlarge",
+      "arch": "arm",
+      "model": "bonsai2",
+      "arm": "control",
+      "exitCode": 0,
+      "wallSeconds": 68.05742491200002,
+      "stdoutSha256": "276c2daedc9158a545aada6e847dd58c71ae67718b6f709b9a4d7b2b9ea2677d",
+      "stderrSha256": "54d5b3b668aae6eaa041b95b33b8cefd2620c8117b14b74a49cb5a5781dd50ad",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    },
+    {
+      "phase": "bf16-models-v3",
+      "host": "i-074982f87b258b12b",
+      "instanceType": "m6g.4xlarge",
+      "arch": "arm",
+      "model": "bonsai2",
+      "arm": "candidate",
+      "exitCode": 0,
+      "wallSeconds": 67.80037843999997,
+      "stdoutSha256": "45da1e811ba10b6a616b87053eb21dfa43a5dc0ef0d98f3387fad946c11a2bf6",
+      "stderrSha256": "7f1064e6d0947f2082557e8a2792b70512736a242eed75bf20ff29136ef77017",
+      "recordKinds": {
+        "batch-parity": 3,
+        "diagnostics": 1,
+        "implicit-reset": 1,
+        "oracle": 3,
+        "runtime-origin": 1
+      },
+      "stderrTail": []
+    }
+  ]
+}

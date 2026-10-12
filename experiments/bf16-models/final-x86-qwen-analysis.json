@@ -1,0 +1,2745 @@
+{
+  "method": "geometric mean of process-paired ratios; paired percentile bootstrap, 20000 resamples, fixed seed; warm metrics average three requests per process",
+  "results": [
+    {
+      "model": "qwen-bf16",
+      "processPairs": 10,
+      "warmRequestsPerArm": 30,
+      "quality": {
+        "control": {
+          "jevbench": {
+            "count": 15,
+            "correct": 10
+          },
+          "snips": {
+            "count": 15,
+            "correct": 14
+          }
+        },
+        "candidate": {
+          "jevbench": {
+            "count": 15,
+            "correct": 10
+          },
+          "snips": {
+            "count": 15,
+            "correct": 14
+          }
+        },
+        "published": {
+          "jevbench": {
+            "count": 15,
+            "correct": 10
+          },
+          "snips": {
+            "count": 15,
+            "correct": 14
+          }
+        }
+      },
+      "changes": [
+        {
+          "pair": 0,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 0,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 0,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 0,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 0,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 0,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 0,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 1,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 1,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 1,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 1,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 1,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-1",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            7385,
+            315,
+            419
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            7385,
+            315,
+            419
+          ]
+        },
+        {
+          "pair": 1,
+          "arm": "published",
+          "id": "easy-intent-02",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "change_address",
+          "otherPrediction": "change_address",
+          "expected": "change_address",
+          "controlGreedyTokens": [
+            356,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            356,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 1,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-2",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "PlayMusic",
+          "otherPrediction": "PlayMusic",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            422,
+            25,
+            7054,
+            24128,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            422,
+            25,
+            7054,
+            24128,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 2,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 2,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 2,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 2,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 2,
+          "arm": "published",
+          "id": "easy-intent-03",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "change_address",
+          "otherPrediction": "change_address",
+          "expected": "report_damage",
+          "controlGreedyTokens": [
+            356,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            356,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 2,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-3",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            1096,
+            3405,
+            7032,
+            279
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            1096,
+            3405,
+            7032,
+            279
+          ]
+        },
+        {
+          "pair": 2,
+          "arm": "published",
+          "id": "easy-intent-04",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "report_damage",
+          "otherPrediction": "report_damage",
+          "expected": "billing_question",
+          "controlGreedyTokens": [
+            422,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            422,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 3,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 3,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 3,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 3,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 3,
+          "arm": "published",
+          "id": "snips-BookRestaurant-0",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "BookRestaurant",
+          "otherPrediction": "BookRestaurant",
+          "expected": "BookRestaurant",
+          "controlGreedyTokens": [
+            425,
+            25,
+            5893,
+            51997,
+            198,
+            69769,
+            25,
+            1096
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            5893,
+            51997,
+            198,
+            69769,
+            25,
+            1096
+          ]
+        },
+        {
+          "pair": 3,
+          "arm": "published",
+          "id": "easy-intent-05",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 3,
+          "arm": "published",
+          "id": "snips-BookRestaurant-1",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "BookRestaurant",
+          "otherPrediction": "BookRestaurant",
+          "expected": "BookRestaurant",
+          "controlGreedyTokens": [
+            425,
+            198,
+            69769,
+            25,
+            1096,
+            3405,
+            7032,
+            279
+          ],
+          "otherGreedyTokens": [
+            425,
+            198,
+            69769,
+            25,
+            1096,
+            3405,
+            7032,
+            279
+          ]
+        },
+        {
+          "pair": 4,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 4,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 4,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 4,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 4,
+          "arm": "published",
+          "id": "easy-intent-06",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "set_alarm",
+          "otherPrediction": "set_alarm",
+          "expected": "set_alarm",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 4,
+          "arm": "published",
+          "id": "snips-BookRestaurant-2",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "BookRestaurant",
+          "otherPrediction": "BookRestaurant",
+          "expected": "BookRestaurant",
+          "controlGreedyTokens": [
+            425,
+            25,
+            5893,
+            51997,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            5893,
+            51997,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 4,
+          "arm": "published",
+          "id": "easy-intent-07",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "play_music",
+          "otherPrediction": "play_music",
+          "expected": "play_music",
+          "controlGreedyTokens": [
+            425,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            425,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 5,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 5,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 5,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 5,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 5,
+          "arm": "published",
+          "id": "snips-BookRestaurant-3",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "BookRestaurant",
+          "otherPrediction": "BookRestaurant",
+          "expected": "BookRestaurant",
+          "controlGreedyTokens": [
+            425,
+            25,
+            5893,
+            51997,
+            198,
+            69769,
+            25,
+            1096
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            5893,
+            51997,
+            198,
+            69769,
+            25,
+            1096
+          ]
+        },
+        {
+          "pair": 5,
+          "arm": "published",
+          "id": "easy-intent-08",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "weather",
+          "otherPrediction": "weather",
+          "expected": "weather",
+          "controlGreedyTokens": [
+            356,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            356,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 5,
+          "arm": "published",
+          "id": "snips-GetWeather-0",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "GetWeather",
+          "otherPrediction": "GetWeather",
+          "expected": "GetWeather",
+          "controlGreedyTokens": [
+            356,
+            271,
+            16141,
+            25,
+            422,
+            271,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            356,
+            271,
+            16141,
+            25,
+            422,
+            271,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 6,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 6,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 6,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 6,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 6,
+          "arm": "published",
+          "id": "easy-intent-09",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "send_message",
+          "otherPrediction": "send_message",
+          "expected": "send_message",
+          "controlGreedyTokens": [
+            422,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            422,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 6,
+          "arm": "published",
+          "id": "snips-GetWeather-1",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "GetWeather",
+          "otherPrediction": "GetWeather",
+          "expected": "GetWeather",
+          "controlGreedyTokens": [
+            356,
+            271,
+            1249,
+            8253,
+            421,
+            1052,
+            686,
+            387
+          ],
+          "otherGreedyTokens": [
+            356,
+            271,
+            1249,
+            8253,
+            421,
+            1052,
+            686,
+            387
+          ]
+        },
+        {
+          "pair": 6,
+          "arm": "published",
+          "id": "easy-intent-10",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "send_message",
+          "otherPrediction": "send_message",
+          "expected": "turn_off_lights",
+          "controlGreedyTokens": [
+            422,
+            198,
+            69769,
+            25,
+            576,
+            13829,
+            374,
+            264
+          ],
+          "otherGreedyTokens": [
+            422,
+            198,
+            69769,
+            25,
+            576,
+            13829,
+            374,
+            264
+          ]
+        },
+        {
+          "pair": 7,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 7,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 7,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 7,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 7,
+          "arm": "published",
+          "id": "snips-GetWeather-2",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "GetWeather",
+          "otherPrediction": "GetWeather",
+          "expected": "GetWeather",
+          "controlGreedyTokens": [
+            356,
+            271,
+            785,
+            7385,
+            315,
+            419,
+            1681,
+            374
+          ],
+          "otherGreedyTokens": [
+            356,
+            271,
+            785,
+            7385,
+            315,
+            419,
+            1681,
+            374
+          ]
+        },
+        {
+          "pair": 7,
+          "arm": "published",
+          "id": "easy-intent-11",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "set_alarm",
+          "otherPrediction": "set_alarm",
+          "expected": "set_alarm",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            16624,
+            374,
+            738
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            16624,
+            374,
+            738
+          ]
+        },
+        {
+          "pair": 7,
+          "arm": "published",
+          "id": "snips-GetWeather-3",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "GetWeather",
+          "otherPrediction": "GetWeather",
+          "expected": "GetWeather",
+          "controlGreedyTokens": [
+            356,
+            271,
+            16141,
+            25,
+            479,
+            271,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            356,
+            271,
+            16141,
+            25,
+            479,
+            271,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 8,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 8,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 8,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 8,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 8,
+          "arm": "published",
+          "id": "easy-fact-00",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "no",
+          "otherPrediction": "no",
+          "expected": "yes",
+          "controlGreedyTokens": [
+            362,
+            25,
+            902,
+            198,
+            69769,
+            369,
+            279,
+            3403
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            902,
+            198,
+            69769,
+            369,
+            279,
+            3403
+          ]
+        },
+        {
+          "pair": 8,
+          "arm": "published",
+          "id": "snips-PlayMusic-0",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "PlayMusic",
+          "otherPrediction": "PlayMusic",
+          "expected": "PlayMusic",
+          "controlGreedyTokens": [
+            422,
+            198,
+            69769,
+            25,
+            576,
+            7385,
+            315,
+            419
+          ],
+          "otherGreedyTokens": [
+            422,
+            198,
+            69769,
+            25,
+            576,
+            7385,
+            315,
+            419
+          ]
+        },
+        {
+          "pair": 8,
+          "arm": "published",
+          "id": "easy-fact-01",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "no",
+          "otherPrediction": "no",
+          "expected": "no",
+          "controlGreedyTokens": [
+            362,
+            25,
+            902,
+            198,
+            69769,
+            369,
+            279,
+            3403
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            902,
+            198,
+            69769,
+            369,
+            279,
+            3403
+          ]
+        },
+        {
+          "pair": 9,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -4,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 9,
+          "arm": "published",
+          "id": "easy-intent-00",
+          "repeat": -3,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "track_order",
+          "otherPrediction": "track_order",
+          "expected": "track_order",
+          "controlGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ],
+          "otherGreedyTokens": [
+            362,
+            198,
+            69769,
+            25,
+            576,
+            1196,
+            594,
+            1943
+          ]
+        },
+        {
+          "pair": 9,
+          "arm": "published",
+          "id": "snips-AddToPlaylist-0",
+          "repeat": -2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "AddToPlaylist",
+          "otherPrediction": "AddToPlaylist",
+          "expected": "AddToPlaylist",
+          "controlGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            2691,
+            1249,
+            52581,
+            198,
+            69769,
+            25
+          ]
+        },
+        {
+          "pair": 9,
+          "arm": "published",
+          "id": "easy-intent-01",
+          "repeat": -1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "cancel_order",
+          "otherPrediction": "cancel_order",
+          "expected": "cancel_order",
+          "controlGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            425,
+            25,
+            9121,
+            7869,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 9,
+          "arm": "published",
+          "id": "snips-PlayMusic-1",
+          "repeat": 0,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "PlayMusic",
+          "otherPrediction": "PlayMusic",
+          "expected": "PlayMusic",
+          "controlGreedyTokens": [
+            422,
+            25,
+            7054,
+            24128,
+            198,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            422,
+            25,
+            7054,
+            24128,
+            198,
+            69769,
+            25,
+            576
+          ]
+        },
+        {
+          "pair": 9,
+          "arm": "published",
+          "id": "easy-fact-02",
+          "repeat": 1,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "no",
+          "otherPrediction": "no",
+          "expected": "yes",
+          "controlGreedyTokens": [
+            362,
+            25,
+            902,
+            198,
+            69769,
+            369,
+            279,
+            3403
+          ],
+          "otherGreedyTokens": [
+            362,
+            25,
+            902,
+            198,
+            69769,
+            369,
+            279,
+            3403
+          ]
+        },
+        {
+          "pair": 9,
+          "arm": "published",
+          "id": "snips-PlayMusic-2",
+          "repeat": 2,
+          "fields": [
+            "fullLogitSha256"
+          ],
+          "controlPrediction": "PlayMusic",
+          "otherPrediction": "PlayMusic",
+          "expected": "PlayMusic",
+          "controlGreedyTokens": [
+            422,
+            25,
+            7054,
+            24128,
+            271,
+            69769,
+            25,
+            576
+          ],
+          "otherGreedyTokens": [
+            422,
+            25,
+            7054,
+            24128,
+            271,
+            69769,
+            25,
+            576
+          ]
+        }
+      ],
+      "comparisons": [
+        {
+          "candidate": "candidate",
+          "reference": "control",
+          "metrics": {
+            "loadNanos": {
+              "ratio": 0.9984029865881029,
+              "ci95": [
+                0.9878722985926208,
+                1.0105823300872965
+              ],
+              "precisionTargetMet": false,
+              "direction": "unresolved",
+              "processRatios": [
+                0.9946776410314752,
+                0.9786132001225123,
+                1.0038994324948276,
+                0.9863334787332009,
+                1.039218939701284,
+                1.0012478218680756,
+                0.989316818340456,
+                1.021670431172261,
+                0.9959589069760183,
+                0.9747989046233719
+              ]
+            },
+            "coldRequestNanos": {
+              "ratio": 0.8706791008064304,
+              "ci95": [
+                0.8408762765384759,
+                0.902647963243928
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.8661261214901376,
+                0.9843744741051116,
+                0.8014809121430937,
+                0.8578022700121213,
+                0.8678146953796726,
+                0.8807527279261754,
+                0.7950421994853313,
+                0.8702638601139969,
+                0.9096206660697709,
+                0.8879262599993798
+              ]
+            },
+            "prefillNanos": {
+              "ratio": 0.9413438983185759,
+              "ci95": [
+                0.9361427611965396,
+                0.9486284900765007
+              ],
+              "precisionTargetMet": true,
+              "direction": "faster",
+              "processRatios": [
+                0.9414536171449891,
+                0.9442949092505474,
+                0.9336261665868333,
+                0.9401029714919542,
+                0.9702672777304141,
+                0.9448095175541872,
+                0.9384971848215323,
+                0.9348666496128095,
+                0.9332943123105397,
+                0.9328057119694619
+              ]
+            },
+            "decodeNanos": {
+              "ratio": 0.4347406494443089,
+              "ci95": [
+                0.40952478216054294,
+                0.46866855889272097
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.45927612181868677,
+                0.5706593811986425,
+                0.39352920932974883,
+                0.39233331313826525,
+                0.4796343112869235,
+                0.42873089143171844,
+                0.40417735388750603,
+                0.43799434869704645,
+                0.4033910386010097,
+                0.40584272186075043
+              ]
+            },
+            "requestNanos": {
+              "ratio": 0.736577542276482,
+              "ci95": [
+                0.7176172294775442,
+                0.757659994344008
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.7715353578539229,
+                0.7929939424457543,
+                0.7391885473863987,
+                0.7103929511901348,
+                0.7873338063671342,
+                0.7163109121991317,
+                0.7298525994118934,
+                0.7252760419079455,
+                0.7007391235266205,
+                0.6994389836608248
+              ]
+            },
+            "peakRssKiB": {
+              "ratio": 0.792326372021018,
+              "ci95": [
+                0.767443004349851,
+                0.8366758156394969
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.7541995200548509,
+                1.0010608806467896,
+                0.7713992122503646,
+                0.7689717517872842,
+                0.7798775574346577,
+                0.7737727047343921,
+                0.7879611900698651,
+                0.7646992563999536,
+                0.7666699387891261,
+                0.7810179862262107
+              ]
+            },
+            "javaAllocatedBytes": {
+              "ratio": 0.31393391297990486,
+              "ci95": [
+                0.21637809343278405,
+                0.6556278207220365
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.21895186907063485,
+                8.562071482396382,
+                0.21888648410973116,
+                0.2183765052802824,
+                0.21905843547492143,
+                0.21829413097767317,
+                0.2187577866089765,
+                0.21335212901099607,
+                0.21815206826739922,
+                0.21311209185992225
+              ]
+            }
+          }
+        },
+        {
+          "candidate": "candidate",
+          "reference": "published",
+          "metrics": {
+            "loadNanos": {
+              "ratio": 0.9924097804186713,
+              "ci95": [
+                0.9790350230635283,
+                1.0064794703097684
+              ],
+              "precisionTargetMet": false,
+              "direction": "unresolved",
+              "processRatios": [
+                0.9677812082541866,
+                0.9655868626876943,
+                0.9732489833037473,
+                1.00751934877457,
+                1.0329539168411024,
+                0.970571967127255,
+                1.0056714098194608,
+                1.01941081812284,
+                0.9952351400896268,
+                0.9886094002599074
+              ]
+            },
+            "coldRequestNanos": {
+              "ratio": 0.8722964057081558,
+              "ci95": [
+                0.8428542243784559,
+                0.9057916083783627
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.8800190749164553,
+                0.9931573805124732,
+                0.8791284707999302,
+                0.8202655419793753,
+                0.8709866806896853,
+                0.8570505706092878,
+                0.8160993058052651,
+                0.809089975836539,
+                0.9165033794973602,
+                0.895843186151189
+              ]
+            },
+            "prefillNanos": {
+              "ratio": 0.8720695682199822,
+              "ci95": [
+                0.8677688932170241,
+                0.8775254205305748
+              ],
+              "precisionTargetMet": true,
+              "direction": "faster",
+              "processRatios": [
+                0.8783563006386977,
+                0.8694150348354285,
+                0.8678236283520794,
+                0.8732516779676859,
+                0.8928698149966083,
+                0.8697092366376724,
+                0.8716984342807049,
+                0.8632504127896626,
+                0.8711211902731049,
+                0.8635722673837027
+              ]
+            },
+            "decodeNanos": {
+              "ratio": 0.44092592698474625,
+              "ci95": [
+                0.4160263462238819,
+                0.47399772675375035
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.46002258707088034,
+                0.578537472330273,
+                0.40869970281131035,
+                0.41868867883712263,
+                0.46173506644822326,
+                0.46335528314535185,
+                0.4311176607370603,
+                0.42792093006833204,
+                0.39412814883264546,
+                0.39205446360143353
+              ]
+            },
+            "requestNanos": {
+              "ratio": 0.707044062012638,
+              "ci95": [
+                0.6886835184202026,
+                0.725426147397797
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.737644182150753,
+                0.7583387466614071,
+                0.7140905243585512,
+                0.6978428743318594,
+                0.7366455696291923,
+                0.7057832463951026,
+                0.7139982126378042,
+                0.6856075508062291,
+                0.6671282863229663,
+                0.6596775557559845
+              ]
+            },
+            "peakRssKiB": {
+              "ratio": 0.799786478606003,
+              "ci95": [
+                0.7727242819113332,
+                0.8460284767243862
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.7622867262680926,
+                1.0133203776145283,
+                0.780466924771377,
+                0.7813160977171797,
+                0.7792873836264285,
+                0.7877121662823167,
+                0.8032969938678205,
+                0.7576047796475226,
+                0.7712032053341902,
+                0.7891168094033556
+              ]
+            },
+            "javaAllocatedBytes": {
+              "ratio": 0.40922319364486814,
+              "ci95": [
+                0.28229683717417525,
+                0.8537844487737472
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.2853502607222283,
+                11.11860102647704,
+                0.2852729873448465,
+                0.2846770055009202,
+                0.28549268775922293,
+                0.2845706969239577,
+                0.2851193810685645,
+                0.27866340666996464,
+                0.2844234454453862,
+                0.2784220987959579
+              ]
+            }
+          }
+        },
+        {
+          "candidate": "control",
+          "reference": "published",
+          "metrics": {
+            "loadNanos": {
+              "ratio": 0.993997207290102,
+              "ci95": [
+                0.9825441083550321,
+                1.0054819032732067
+              ],
+              "precisionTargetMet": false,
+              "direction": "unresolved",
+              "processRatios": [
+                0.9729596487668134,
+                0.9866889824976944,
+                0.9694686059191111,
+                1.0214794189776253,
+                0.9939714119702411,
+                0.9693623755569455,
+                1.016531197262409,
+                0.9977883151156403,
+                0.9992732964369092,
+                1.0141675329865818
+              ]
+            },
+            "coldRequestNanos": {
+              "ratio": 1.0018575212155976,
+              "ci95": [
+                0.9760967398041956,
+                1.0287966514904623
+              ],
+              "precisionTargetMet": false,
+              "direction": "unresolved",
+              "processRatios": [
+                1.016040335329473,
+                1.00892232238686,
+                1.0968801096575254,
+                0.956240815226316,
+                1.0036551412725558,
+                0.9730887494692217,
+                1.0264855203076833,
+                0.9297065096217546,
+                1.0075665754795653,
+                1.0089161977840533
+              ]
+            },
+            "prefillNanos": {
+              "ratio": 0.9264091154971832,
+              "ci95": [
+                0.9234991214273051,
+                0.9293459628035543
+              ],
+              "precisionTargetMet": true,
+              "direction": "faster",
+              "processRatios": [
+                0.9329788368144598,
+                0.920702871866006,
+                0.9295193937469469,
+                0.92888939238414,
+                0.9202307812391151,
+                0.9205127811255273,
+                0.928823707070011,
+                0.9233941687268361,
+                0.9333831555412418,
+                0.9257793518013687
+              ]
+            },
+            "decodeNanos": {
+              "ratio": 1.0142275113871764,
+              "ci95": [
+                0.9889390454088488,
+                1.0414824636776183
+              ],
+              "precisionTargetMet": false,
+              "direction": "unresolved",
+              "processRatios": [
+                1.0016253082116213,
+                1.0138052424812207,
+                1.0385498537895055,
+                1.06717595681091,
+                0.9626814754126448,
+                1.0807601980767179,
+                1.066654666795242,
+                0.9770010305870818,
+                0.9770374428730776,
+                0.9660256116061438
+              ]
+            },
+            "requestNanos": {
+              "ratio": 0.9599044519161322,
+              "ci95": [
+                0.950164123727979,
+                0.970244816894807
+              ],
+              "precisionTargetMet": false,
+              "direction": "faster",
+              "processRatios": [
+                0.9560730751245925,
+                0.9562982843507436,
+                0.9660465207197969,
+                0.9823336129148663,
+                0.9356203984535804,
+                0.9853029381170415,
+                0.9782772757309292,
+                0.9453056645889439,
+                0.9520351639073605,
+                0.9431523995177804
+              ]
+            },
+            "peakRssKiB": {
+              "ratio": 1.0094154465235787,
+              "ci95": [
+                1.0039035016994602,
+                1.014161582668049
+              ],
+              "precisionTargetMet": true,
+              "direction": "slower",
+              "processRatios": [
+                1.0107229002381937,
+                1.0122465048877125,
+                1.0117548895267339,
+                1.0160530551365563,
+                0.9992432481193964,
+                1.0180149305637622,
+                1.0194626385045633,
+                0.9907225269371513,
+                1.005912931126821,
+                1.0103695731980227
+              ]
+            },
+            "javaAllocatedBytes": {
+              "ratio": 1.3035329307383965,
+              "ci95": [
+                1.302243078215934,
+                1.304651017681547
+              ],
+              "precisionTargetMet": true,
+              "direction": "slower",
+              "processRatios": [
+                1.3032556512690605,
+                1.2985877365468024,
+                1.3032919255162179,
+                1.3036063798875352,
+                1.3032718285432434,
+                1.3036113048456772,
+                1.3033564907026947,
+                1.3061196434351143,
+                1.3037852343290874,
+                1.3064584762227553
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
