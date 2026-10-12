@@ -1,0 +1,17 @@
+[
+  {
+    "name": "tile2parallel",
+    "javaSha256": "e244edb29cb8cc12fe681948f392ceb4213956edd38e161669925d78fe397b53",
+    "jarSha256": "eeab9fde9cb8bc6fee7cdfd4a2e6acd10ae7cddc171bd9c4fa1446e0103ddd07"
+  },
+  {
+    "name": "tile4parallel",
+    "javaSha256": "de62a9afcd2103b6c614dd4b6324e083878bee962bf782f6c9b5bc9190d1a71d",
+    "jarSha256": "e38dcc9158ae40c68f8e46ca8052ab5bfedfb7b83b4cfc69f5ea0b306dbe23fc"
+  },
+  {
+    "name": "tile4serial",
+    "javaSha256": "dfc5df4435d37b00eab67c7084a9a138b8c07254f6518a3194f87d6f15878e4c",
+    "jarSha256": "b7fca73b798f7c47d9ec58f94b4829755e3c7ce1aa67c07bd312b728217262c3"
+  }
+]

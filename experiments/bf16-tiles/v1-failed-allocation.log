@@ -1,0 +1,9 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 12, 2026 11:34:37 AM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 12, 2026 11:34:37 AM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=4 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+BF16_ALLOC batch=2 iterations=1000 bytes=10080
+BF16_ALLOC batch=13 iterations=1000 bytes=2952192000
+Exception in thread "main" java.lang.AssertionError: BF16 batch 13 allocated 2952192000 bytes
+	at com.integrallis.vectors.core.BFloat16MatrixAllocationProbe.main(BFloat16MatrixAllocationProbe.java:59)
