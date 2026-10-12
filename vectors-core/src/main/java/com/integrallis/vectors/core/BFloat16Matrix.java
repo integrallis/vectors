@@ -468,6 +468,15 @@ public final class BFloat16Matrix {
       int columns,
       float[] output,
       int outputOffset) {
+    if (!GgufParallelSupport.willParallelize(
+        weight, (long) rows * columns, GgufParallelSupport.DEFAULT_MIN_ELEMENTS)) {
+      // Avoid allocating a captured row callback when the calling thread performs every row.
+      for (int row = 0; row < rows; row++) {
+        vectorMultiplyBatchRow(
+            input, inputOffset, weight, batchSize, rows, columns, output, outputOffset, row);
+      }
+      return;
+    }
     GgufParallelSupport.forEachRow(
         weight,
         rows,
