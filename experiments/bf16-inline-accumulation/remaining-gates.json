@@ -1,0 +1,104 @@
+[
+  {
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-accumulation/vectors-core-0.1.30.jar:/tmp/bf16-models-v9/probes.jar:/tmp/bf16-models-v9/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "wallSeconds": 2.1078156831208616,
+    "exitCode": 0
+  },
+  {
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-accumulation/vectors-core-0.1.30.jar:/tmp/bf16-models-v9/probes.jar:/tmp/bf16-models-v9/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "wallSeconds": 2.1589616099372506,
+    "exitCode": 0
+  },
+  {
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bf16-inline-accumulation/vectors-core-0.1.30.jar:/tmp/bf16-models-v9/probes.jar:/tmp/bf16-models-v9/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "wallSeconds": 1.8331685930024832,
+    "exitCode": 0
+  },
+  {
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-accumulation/vectors-core-0.1.30.jar:/tmp/bf16-models-v9/probes.jar:/tmp/bf16-models-v9/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "wallSeconds": 1.9485889680217952,
+    "exitCode": 0
+  },
+  {
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-accumulation/vectors-core-0.1.30.jar:/tmp/bf16-models-v9/probes.jar:/tmp/bf16-models-v9/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "wallSeconds": 2.3422440229915082,
+    "exitCode": 0
+  },
+  {
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bf16-inline-accumulation/vectors-core-0.1.30.jar:/tmp/bf16-models-v9/probes.jar:/tmp/bf16-models-v9/benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "wallSeconds": 1.6754679679870605,
+    "exitCode": 0
+  }
+]

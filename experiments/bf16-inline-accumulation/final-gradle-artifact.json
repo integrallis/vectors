@@ -1,0 +1,8 @@
+{
+  "sourceCommit": "9a3e775d4bd10e88373fa52dd0a51697068998fa",
+  "jarPath": "/Users/briansam-bodden/Code/java-ai/projects/vectors-bf16-inline/vectors-core/build/libs/vectors-core-0.1.30.jar",
+  "jarSha256": "e3e7b0ab79d0630bcad65c4cbe9fd356cf589dd159eba8e6c0aa402db24bd33c",
+  "frozenDiagnosticJarSha256": "4320bd5cb517a891517de41704690d52aa47b77ba0497c49a1cd7c07fd67c331",
+  "sameBf16Instructions": true,
+  "instructionsSha256": "6c74af527076cf2bf97ad8e700d724f60535c09983e80ddca3cb009b74a41cee"
+}

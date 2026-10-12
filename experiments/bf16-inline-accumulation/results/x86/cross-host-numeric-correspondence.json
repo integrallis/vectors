@@ -1,0 +1,26 @@
+[
+  {
+    "repeat": -4,
+    "id": "easy-intent-00",
+    "fullLogitsEqual": true,
+    "tokensEqual": true
+  },
+  {
+    "repeat": -3,
+    "id": "easy-intent-00",
+    "fullLogitsEqual": true,
+    "tokensEqual": true
+  },
+  {
+    "repeat": 0,
+    "id": "easy-intent-00",
+    "fullLogitsEqual": true,
+    "tokensEqual": true
+  },
+  {
+    "repeat": 1,
+    "id": "snips-AddToPlaylist-0",
+    "fullLogitsEqual": true,
+    "tokensEqual": true
+  }
+]

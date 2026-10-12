@@ -1,13 +1,27 @@
-# BF16 four-row array boundary experiment
+# BF16 four-row Java allocation correction
 
-This source is isolated and **not approved for release**. Expanding packed BF16 loads and per-row FMA inside the array-only four-row method attempts to stop vector objects escaping in actual Bonsai inference. The reduction tree and hardware FMA choice remain unchanged.
+This candidate is consolidated into the existing draft BF16 branch for continued work. **It is not qualified for release.** The frozen ten-pair campaign used the older BF16 class; its kernel, NEON and whole-model performance results do not qualify this new class.
 
-The existing actual-model JFR shows escaped BF16 vectors even though the standalone kernel improved. The new small-kernel allocation is still about 2,305 bytes/op on this local Intel host; this experiment must therefore be assessed in its actual model caller context. Local forced-64 cold/hot shapes 48×5120, 5×37, 8193×37 pass. The unchanged 180-second 512×2048 child timed out under contention and is retained as a failed execution. Small 5×37 forced-128/256 probes pass. Local first Bonsai request matches all nine full-logit hashes of the frozen supported-host runtime; its elapsed time is not a benchmark due contention.
+JFR identified temporary vector objects escaping through the four-row BF16 projection in actual Bonsai inference. Expanding the packed loads/FMA inside its existing array-only method removes the dominant allocation while preserving every row's even/odd arithmetic and reduction tree. No tuning switch or alternate user-selected route is added.
 
-A separate immutable supported-host diagnostic runs two counterbalanced fresh-process pairs, each with one cold, one warm and two measured actual Bonsai requests. It preserves owned full-logit snapshots, ordinary default runtime settings and an uninstrumented control. Limits: one x86 16-vCPU host, 1,200 seconds, $0.50, absolute 22:30 UTC. It cannot substitute for the original ten-pair qualification matrix.
+Two predeclared counterbalanced fresh-process pairs completed on each supported x86/SVE host. Each process executes one cold, one warm and two measured actual Bonsai requests, with eight generated tokens and owned snapshots. All eight requests per architecture match the control's complete nine vocabulary snapshots and tokens exactly. These are diagnostic observations, not a substitute for full qualification.
 
-Experimental core SHA256: `4320bd5cb517a891517de41704690d52aa47b77ba0497c49a1cd7c07fd67c331`. Control core: overflow-fixed `79f536b453c5ad6d7339b30e41d8c8c440da3ff613caf5d1bea6f83e40ade1c7`.
+| Metric, candidate/control | x86 pair 0 / pair 1 | SVE pair 0 / pair 1 |
+|---|---:|---:|
+| javaAllocatedBytes | 0.392064 / 0.403822 | 0.482120 / 0.490196 |
+| prefillNanos | 1.002162 / 1.002605 | 0.997960 / 0.993364 |
+| decodeNanos | 0.971724 / 0.969778 | 0.956725 / 0.958600 |
+| requestNanos | 0.999684 / 0.999875 | 0.995053 / 0.990987 |
+| loadNanos | 0.999700 / 0.998906 | 1.035088 / 1.034674 |
+| coldRequestNanos | 1.021964 / 0.999088 | 1.020918 / 0.992671 |
+| peakRssKiB | 0.945317 / 0.963858 | 0.982290 / 0.981263 |
 
-The unchanged 180-second forced-64 512×2048 probe passes in 55.2 seconds after the redundant local full-model run was stopped at the parent's request. The original timeout and explicit stop receipt remain retained. Actual Gradle core assembly passes; its BF16 bytecode instructions match the frozen diagnostic artifact exactly, with only debug metadata differing. Eleven focused matrix/dispatch/nested tests pass with no skips.
+Measured allocation falls from 1,242–1,257 MB to 487–507 MB/request on x86 and from 1,460–1,472 MB to 704–722 MB on SVE. **Open gates remain:** x86 prefill observations are 0.22–0.26% slower; ARM load observations are 3.47–3.51% slower; ARM still allocates more than the published runtime. Two process pairs cannot establish the predeclared full no-regression/precision gates. No confidence claim or discarded sample hides these observations.
 
-The parent prospectively approved a matching ARM diagnostic, expanding the phase to two separately capped $0.50 hosts ($1 total). The first East1a capacity attempt created no instance; its receipt is retained. East1b succeeds. This amendment changes capacity only, with the identical frozen runtime/payload and analysis plan.
+Correctness and assembly evidence: all twelve local cold/hot shape×width probes pass (64/128/256), including the unchanged 180-second retry after a retained contention timeout. Eleven actual Gradle matrix/dispatch/nested tests pass without skips. The batch allocation probe passes at 9,792 bytes per 1,000 batch-2 calls and 48,000 bytes per 1,000 batch-13 calls. The final actual Gradle JAR passes the pinned Qwen BF16 oracle, fresh-session/reset full snapshots and chunk-boundary batch parity in 21 seconds.
+
+Frozen supported-host diagnostic JAR SHA256: `4320bd5cb517a891517de41704690d52aa47b77ba0497c49a1cd7c07fd67c331`. Final formatted/documented source `9a3e775d` Gradle JAR: `e3e7b0ab79d0630bcad65c4cbe9fd356cf589dd159eba8e6c0aa402db24bd33c`. Its BF16 instructions match the frozen diagnostic exactly; all other runtime classes are identical. Formatting/comments/debug metadata and packaging retain distinct hashes and provenance.
+
+The original single-host diagnostic was prospectively expanded by the parent to one x86 and one ARM host, each capped at 1,200 seconds/$0.50 ($1 combined), absolute 22:30 UTC. East1a ARM capacity failed without creating an instance; East1b succeeded. Both complete raw processes, manifests and failed launch receipt are retained. The redundant contended local full-model process was explicitly stopped with its partial outputs preserved.
+
+Next qualification must use this exact source/artifact: rerun the complete kernel matrix including actual NEON, all supported model fixtures, and the full counterbalanced Qwen/Bonsai macro gates. Investigate ARM's remaining allocation with its actual model caller profile and resolve startup/prefill regressions before release.

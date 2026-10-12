@@ -1,0 +1,6 @@
+{
+  "scope": "Diagnostic, not release acceptance: two same-host counterbalanced fresh-process actual Bonsai pairs, one cold/one warm/two measured requests each; eight tokens; no profiling or nondefault route flags; unchanged owning full-logit snapshots; compare all request snapshots and allocation. Same Models0bc and native source in both, only BF16 codeform changed from overflow-fixed core. All timeouts are failures.",
+  "maxSeconds": 1200,
+  "maxUsd": 0.5,
+  "absoluteDeadline": "2026-10-12T22:30:00Z"
+}
