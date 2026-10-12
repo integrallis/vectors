@@ -12,10 +12,11 @@ stage=Path('/tmp')/version;stage.mkdir(exist_ok=False)
 revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
 assert not subprocess.check_output(['git','status','--porcelain','--','vectors-core'],cwd=repo,text=True).strip()
 old=repo.parent/'models-gdn-proof/experiments/gdn/generated/payload-production-timing-v3'
+final_models=repo.parent/'models-gdn-proof/experiments/gdn/generated/payload-production-final-v11'
 candidate=repo/'vectors-core/build/libs/vectors-core-0.1.30.jar';assert candidate.is_file()
 java=Path('/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin')
 for arm in ['published','control','candidate']:
- shutil.copytree(old/'lib'/('published' if arm=='published' else 'native'),stage/'lib'/arm)
+ shutil.copytree((old if arm=='published' else final_models)/'lib'/('published' if arm=='published' else 'native'),stage/'lib'/arm)
  if arm!='published':
   jars=list((stage/'lib'/arm).glob('vectors-core-*.jar'));assert len(jars)==1;jars[0].unlink()
   shutil.copy(candidate,stage/'lib'/arm/candidate.name)
@@ -25,12 +26,12 @@ with zipfile.ZipFile('/tmp/vectors-core-bf16-final.jar') as z:control_class=z.re
 control_dir=stage/'control-override';(control_dir/name).parent.mkdir(parents=True);(control_dir/name).write_bytes(control_class)
 subprocess.run([str(java/'jar'),'--update','--file',str(stage/'lib/control'/candidate.name),'-C',str(control_dir),name],check=True)
 shutil.rmtree(control_dir)
-for arm,original in [('published','published'),('corrected','native')]:shutil.copytree(old/'rust'/original,stage/'rust'/arm)
+for arm,original in [('published','published'),('corrected','native')]:shutil.copytree((old if arm=='published' else final_models)/'rust'/original,stage/'rust'/arm)
 shutil.copytree(old/'data',stage/'data')
 shutil.copytree(source,stage/'source',ignore=shutil.ignore_patterns('classes','*.log','*.jar','__pycache__'))
 shutil.copy(source/'run-host.py',stage/'run-host.py')
 (stage/'source/vectors-core.patch').write_bytes(subprocess.check_output(['git','diff','7e77a63',revision,'--','vectors-core'],cwd=repo))
-(stage/'source/models-corrected.patch').write_bytes(subprocess.check_output(['git','diff','4337ee45','12796ebf','--','backend-native','backend-java'],cwd=repo.parent/'models-gdn-proof'))
+(stage/'source/models-corrected.patch').write_bytes(subprocess.check_output(['git','diff','4337ee45','0bc5de31','--','backend-native','backend-java'],cwd=repo.parent/'models-gdn-proof'))
 script=(repo/'experiments/bf16-tiles/run-host.py').read_text()
 script=script.replace('for pair in range(6):', 'for pair in range(0):' if reuse_kernel else 'for pair in range(12):')
 script=script.replace("    except (AssertionError", "        run(arm+'-nested',common+['-cp',arm+'.jar:probes.jar:benchmark.jar','com.integrallis.vectors.core.BFloat16NestedDispatchProbe'])\n    except (AssertionError")
@@ -52,7 +53,7 @@ if reuse_kernel:
  with zipfile.ZipFile('/tmp/bf16-models-v1/lib/candidate/vectors-core-0.1.30.jar') as z:assert z.read('com/integrallis/vectors/core/BFloat16Matrix.class')==bf16_class
 config={'arms':['published','control','candidate'],'vectorsRevision':revision,
  'kernelTimingReusedFrom':reuse_kernel,'bf16KernelClassSha256':hashlib.sha256(bf16_class).hexdigest(),
- 'modelsRevisions':{'published':'4337ee45','control':'12796ebf','candidate':'12796ebf'},
+ 'modelsRevisions':{'published':'4337ee45','control':'0bc5de31','candidate':'0bc5de31'},
  'controlBf16Revision':'292c889','controlBf16ClassSha256':hashlib.sha256(control_class).hexdigest(),
  'models':[{'key':'qwen-bf16','entrypoint':'.','files':qwen['files']},
  {'key':'bonsai2','entrypoint':'model.gguf','files':[{'path':'model.gguf','uri':'https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PTQ1_0.gguf','sha256':'53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3','sizeBytes':5946648928}]}]}

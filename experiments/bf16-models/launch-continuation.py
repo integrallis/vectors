@@ -32,7 +32,7 @@ duration=min(meta['maximumSecondsPerHost'],5400,int((campaign_deadline-datetime.
 assert duration>=3000, 'Insufficient time for declared continuation'
 assert sum(rates.values())*duration/3600+.15<=budget
 assert aws('s3api','list-objects-v2','--bucket','models-qual-077051030817','--prefix',f'results/{runName}/'+('' if archFilter=='both' else archFilter+'/'),'--max-keys','1').get('KeyCount',0)==0
-fleet={'maximumCombinedUsd':budget,'maximumSecondsPerHost':duration,'payload':meta['payloadUri'],
+fleet={'region':'us-east-1','lifecycle':'on-demand','maximumCombinedUsd':budget,'maximumSecondsPerHost':duration,'payload':meta['payloadUri'],
        'payloadSha256':meta['payloadSha256'],'quota':quota,'usedVcpus':used,'rates':rates,'hosts':[]}
 receipt.write_text(json.dumps(fleet,indent=2)+'\n')
 for arch,kind,jdkarch,awsarch,ami in configs:
