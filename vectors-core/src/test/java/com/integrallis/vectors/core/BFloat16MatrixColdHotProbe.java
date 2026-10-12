@@ -26,6 +26,8 @@ final class BFloat16MatrixColdHotProbe {
   private BFloat16MatrixColdHotProbe() {}
 
   public static void main(String[] args) {
+    System.out.println(
+        "BF16_ORDINARY_REDUCTION=" + (PanamaConstants.HAS_SVE ? "inline-sve" : "direct-helper"));
     int rows = Integer.parseInt(args[0]);
     int columns = Integer.parseInt(args[1]);
     Random random = new Random(0xBF16C01DL + rows * 31L + columns);
@@ -52,6 +54,29 @@ final class BFloat16MatrixColdHotProbe {
         matrix.multiplyBatch(batchInput, 1, 2, batchOutput, 1);
         assertBits(first, batchOutput, 1, "batch first token iteration " + iteration);
         assertBits(first, batchOutput, 1 + rows, "batch second token iteration " + iteration);
+      }
+      for (int batchSize : new int[] {3, 4, 5, 8, 13}) {
+        float[] tiledInput = new float[batchSize * columns + 2];
+        float[] tiledOutput = new float[batchSize * rows + 2];
+        float[][] expected = new float[batchSize][rows];
+        float[] one = new float[columns];
+        for (int token = 0; token < batchSize; token++) {
+          for (int column = 0; column < columns; column++) {
+            one[column] = input[column] + token * 0.001f;
+            tiledInput[1 + token * columns + column] = one[column];
+          }
+          matrix.multiply(one, expected[token]);
+        }
+        for (int iteration = 0; iteration < 32; iteration++) {
+          matrix.multiplyBatch(tiledInput, 1, batchSize, tiledOutput, 1);
+          for (int token = 0; token < batchSize; token++) {
+            assertBits(
+                expected[token],
+                tiledOutput,
+                1 + token * rows,
+                "batch " + batchSize + " token " + token + " iteration " + iteration);
+          }
+        }
       }
     }
   }
