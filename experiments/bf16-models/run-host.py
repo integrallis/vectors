@@ -57,7 +57,7 @@ status('KERNEL_GATES_AND_TIMING')
 run(['python3','run-kernel-host.py'],'kernel-matrix')
 for model in config['models']:
  key=model['key'];path=str(Path(key)/model['entrypoint'])
- for pair in range(10):
+ for pair in config.get('pairIndices',list(range(10))):
   arms=config['arms'];order=arms[pair%len(arms):]+arms[:pair%len(arms)]
   if pair%2:order.reverse()
   for arm in order:

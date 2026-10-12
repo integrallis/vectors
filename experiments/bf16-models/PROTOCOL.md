@@ -74,3 +74,16 @@ scores. Fixture snapshots already cloned before every forward call, so those fix
 remain valid. Follow-up macro snapshots clone immediately; measured snapshot-copy wall time and
 main-thread allocations are retained separately and subtracted from observed request/all-thread
 totals. Prefill/decode timers exclude capture, and all arms run the same corrected harness.
+
+Bonsai continuation amendment, declared before continuation launch: the first complete macro
+processes took291–301seconds. The original two-hour host cap cannot contain30 processes. Retain
+original-host blocks0–5 and run blocks6–7 and8–9 on two additional hosts of the same instance type
+per architecture. Every three-arm triplet stays on one host; preserve the original counterbalanced
+order and all30 distinct measured prompts. Do not combine any incomplete triplet. Analyze all ten
+pairs with bootstrap resampling stratified by host, retaining each host's original sample count;
+report individual host ratios as well. New hosts repeat the pinned Bonsai fixtures, kernel correctness,
+allocation and nested probes on byte-identical runtime artifacts. No latency/correctness gate changes.
+The continuation group has a declared$12 maximum budget and one-hour per-host bound, with the
+campaign's22:32UTC deadline taking precedence. Original-host work beyond block5 is superseded, not
+used to choose observations. NEON model macros must remain incomplete unless every declared block
+finishes; its completed fixture/kernel evidence remains separately reportable.

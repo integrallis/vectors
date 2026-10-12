@@ -6,6 +6,8 @@ central=repo.parent/'models-gdn-proof/benchmark-results/2026-10-11-gdn-proof'
 version=sys.argv[1];assert version.startswith('bf16-models-v')
 reuse_kernel=sys.argv[2] if len(sys.argv)>2 else None
 if reuse_kernel:assert reuse_kernel=='bf16-models-v1'
+pair_indices=[int(v) for v in sys.argv[3].split(',')] if len(sys.argv)>3 else None
+if pair_indices:assert len(set(pair_indices))==len(pair_indices) and all(0<=v<10 for v in pair_indices)
 stage=Path('/tmp')/version;stage.mkdir(exist_ok=False)
 revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
 assert not subprocess.check_output(['git','status','--porcelain','--','vectors-core'],cwd=repo,text=True).strip()
@@ -54,9 +56,13 @@ config={'arms':['published','control','candidate'],'vectorsRevision':revision,
  'controlBf16Revision':'292c889','controlBf16ClassSha256':hashlib.sha256(control_class).hexdigest(),
  'models':[{'key':'qwen-bf16','entrypoint':'.','files':qwen['files']},
  {'key':'bonsai2','entrypoint':'model.gguf','files':[{'path':'model.gguf','uri':'https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PTQ1_0.gguf','sha256':'53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3','sizeBytes':5946648928}]}]}
+if pair_indices:
+ config['pairIndices']=pair_indices
+ config['models']=[m for m in config['models'] if m['key']=='bonsai2']
+ config['continuationOf']='bf16-models-v2'
 (stage/'model-proof.json').write_text(json.dumps(config,indent=2)+'\n')
 meta=json.loads((central/'payload-bf16-tiles-v2.json').read_text());meta={k:meta[k] for k in ['jdk','rust']}
-meta.update(runName='gdn-proof-'+version,sourceRepository='vectors',revision=revision,maximumSecondsPerHost=7200,maximumCombinedUsd=3.5,
+meta.update(runName='gdn-proof-'+version,sourceRepository='vectors',revision=revision,maximumSecondsPerHost=3600 if pair_indices else 7200,maximumCombinedUsd=12.0 if pair_indices else 3.5,
  files={str(p.relative_to(stage)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(stage.rglob('*')) if p.is_file()})
 (stage/'inputs.sha256').write_text(''.join(f'{sha}  {name}\n' for name,sha in meta['files'].items()))
 (stage/'provenance.json').write_text(json.dumps(meta,indent=2)+'\n')
