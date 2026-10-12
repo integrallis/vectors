@@ -31,3 +31,9 @@ roughly 2.95 MB per batch call, and v2 because the separate remainder reduction 
 about 3 KB per call. V3 puts the fixed reduction directly in both tile and remainder methods.
 A superseded v2 four-query probe was stopped after its tile source was revised; it provides no
 performance evidence. The final candidate's checks run separately on immutable packaged bytes.
+
+The four-query candidate failed the unchanged local allocation gate at 17,703,936 bytes per
+13-token call. It and the serial four-query derivative are rejected before supported-host
+timing. Payload v1 is retained but its launcher was stopped before creating a host receipt
+or calling RunInstances. Version v2 compares the baseline with the passing two-query
+parallel candidate over the same six pairs and complete shape matrix; no trial is discarded.

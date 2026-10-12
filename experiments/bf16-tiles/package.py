@@ -2,8 +2,8 @@ from pathlib import Path
 import subprocess, shutil, hashlib, json, tarfile
 repo=Path(__file__).resolve().parents[2];root=repo/'experiments/bf16-tiles'
 central=repo.parent/'models-gdn-proof/benchmark-results/2026-10-11-gdn-proof'
-version='bf16-tiles-v1';stage=Path('/tmp')/version;stage.mkdir(exist_ok=False)
-for arm in ['tile2parallel','tile4parallel','tile4serial']:
+version='bf16-tiles-v2';stage=Path('/tmp')/version;stage.mkdir(exist_ok=False)
+for arm in ['tile2parallel']:
  shutil.copy(root/(arm+'.jar'),stage)
 for name in ['baseline.jar','benchmark.jar']:
  shutil.copy(Path('/tmp/vectors-bf16-final-expressions-v1')/name,stage)

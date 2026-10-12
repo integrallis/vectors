@@ -11,7 +11,7 @@ def run(label,command,timeout=120):
     assert result.returncode==0,label
 common=[java,'--add-modules','jdk.incubator.vector','-XX:ActiveProcessorCount=4','-Xmx512m']
 valid=['baseline']; rejected=[]
-for arm in ['tile2parallel','tile4parallel','tile4serial']:
+for arm in ['tile2parallel']:
     try:
         for bits in [64,128,256]:
             for rows,cols in [(48,5120),(5,37),(8193,37),(512,2048)]:
