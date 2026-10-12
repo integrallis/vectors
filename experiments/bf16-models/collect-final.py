@@ -57,8 +57,17 @@ for arch in ['x86', 'arm']:
     for model in models:
         if len(hosts[model]) == 10:
             output = repo / f'experiments/bf16-models/combined-final-{arch}-{model}-analysis.json'
-            subprocess.run([sys.executable, str(repo / 'experiments/bf16-models/analyze.py'),
-                            str(aggregate), str(output), model], check=True)
+            analyzer = repo / 'experiments/bf16-models/analyze.py'
+            digest = hashlib.sha256(analyzer.read_bytes())
+            digest.update(json.dumps(hosts[model], sort_keys=True).encode())
+            for path in sorted(aggregate.glob(model + '-pair*')):
+                digest.update(path.name.encode())
+                digest.update(path.read_bytes())
+            stamp = output.with_suffix('.inputs.sha256')
+            fingerprint = digest.hexdigest()
+            if not output.exists() or not stamp.exists() or stamp.read_text().strip() != fingerprint:
+                subprocess.run([sys.executable, str(analyzer), str(aggregate), str(output), model], check=True)
+                stamp.write_text(fingerprint + '\n')
     correspondence = []
     old = central / 'remote-bf16-models-v2' / arch
     for model in models:

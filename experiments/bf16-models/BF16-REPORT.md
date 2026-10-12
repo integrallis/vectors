@@ -59,6 +59,22 @@ The campaign deadline is 22:32 UTC; per-phase caps and the approved combined $12
 
 Historical d92 Qwen completed all ten triplets on each host: candidate/control logits, tokens and predictions match exactly. All three arms scored 10/15 JEVBench and 14/15 SNIPS; this small classification sample is not general model-quality certification. Candidate/control prefill improves on both hosts, but candidate/published ARM prefill regresses 1.027957 [1.017914,1.040664]. Early Bonsai d92 allocation was 2.3–2.5 times published. These are rejected historical results, not accepted tradeoffs. Fresh ae337 samples must establish whether the array-boundary fix resolves them. The first final ARM Bonsai triplet still allocates 1.484 GB per measured candidate request versus 610 MB published (corrected control 1.485 GB); this early complete block exposes a remaining defect and has triggered separate JFR diagnosis. It is not a ten-pair statistical result. Full historical metrics remain in [the retained report](HISTORICAL-D92-REPORT.md) and per-host JSON.
 
+## Final ARM Qwen BF16 result
+
+All ten final process triplets completed across the three declared hosts. The corrected control and candidate match exactly for all 70 complete request snapshots, tokens and predictions. All three arms score 10/15 JEVBench and 14/15 SNIPS. These are limited qualification samples.
+
+| Metric | Candidate/control ratio [95% CI] | Candidate/published ratio [95% CI] |
+|---|---|---|
+| loadNanos | 0.982700 [0.963009, 1.002823] (unresolved) | 0.991161 [0.968828, 1.012460] (unresolved) |
+| coldRequestNanos | 0.793877 [0.785496, 0.802098] (faster) | 0.995933 [0.985281, 1.007229] (unresolved) |
+| prefillNanos | 0.931223 [0.924654, 0.937283] (faster) | 1.009760 [1.000627, 1.017865] (slower) |
+| decodeNanos | 0.236024 [0.226378, 0.247790] (faster) | 0.226042 [0.216452, 0.237540] (faster) |
+| requestNanos | 0.670679 [0.657724, 0.683766] (faster) | 0.692684 [0.678091, 0.706792] (faster) |
+| peakRssKiB | 0.838715 [0.833594, 0.842969] (faster) | 0.845979 [0.839776, 0.851429] (faster) |
+| javaAllocatedBytes | 0.067532 [0.065874, 0.069664] (faster) | 0.088061 [0.085949, 0.090773] (faster) |
+
+**The final candidate still fails the published-stack ARM prefill gate.** Its 1.009760 ratio has interval [1.000627, 1.017865]; faster decode and request totals do not remove this regression. Startup and cold-request intervals cross one and remain unresolved. Allocation improves substantially. Every metric retains its separate precision-target result in [the analysis](combined-final-arm-qwen-bf16-analysis.json); the complete paired raw files and artifact/host provenance are in [final-results/arm](final-results/arm/provenance.json). Remaining shared-runtime prefill work must be diagnosed before whole-model acceptance.
+
 ## Build, harness and provenance
 
 The preceding ARM core CI ran 1,601 cases with 1,597 passes and four hardware skips. Two local forced 64-bit child timeouts under severe contention passed unchanged 180-second retries; the original failures remain retained. Frozen ae337 release dry-run 38307108275 passed. Overflow-final head a40bcb71 CI and release dry-run 38310390999 are running.
