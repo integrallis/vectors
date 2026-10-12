@@ -1,0 +1,50 @@
+{
+  "maximumCombinedUsd": 1.5,
+  "maximumSecondsPerHost": 2700,
+  "payload": "s3://models-qual-077051030817/payload/activation-boundary-v2.tar.gz",
+  "payloadSha256": "9a2ff9fd849d3be662bc6cb0ce1f0238790f98c7323daac09e28b9fc56eba01b",
+  "quota": 32.0,
+  "usedVcpus": 4,
+  "rates": {
+    "x86": 0.6912
+  },
+  "hosts": [
+    {
+      "arch": "x86",
+      "instanceId": "i-06aa47206de734b7f",
+      "instanceType": "m6a.4xlarge",
+      "deadline": "2026-10-12T21:27:48.310404+00:00",
+      "resultUri": "s3://models-qual-077051030817/results/activation-boundary-v2/x86/",
+      "launchCommand": [
+        "aws",
+        "ec2",
+        "run-instances",
+        "--region",
+        "us-west-2",
+        "--image-id",
+        "ami-03d70b8354a16a8bc",
+        "--instance-type",
+        "m6a.4xlarge",
+        "--instance-market-options",
+        "{\"MarketType\": \"spot\", \"SpotOptions\": {\"SpotInstanceType\": \"one-time\", \"InstanceInterruptionBehavior\": \"terminate\", \"MaxPrice\": \"1.00\"}}",
+        "--iam-instance-profile",
+        "Name=models-qual-worker",
+        "--security-group-ids",
+        "sg-c75bb5a8",
+        "--subnet-id",
+        "subnet-d63efbbd",
+        "--block-device-mappings",
+        "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": {\"VolumeSize\": 40, \"VolumeType\": \"gp3\", \"DeleteOnTermination\": true}}]",
+        "--instance-initiated-shutdown-behavior",
+        "terminate",
+        "--metadata-options",
+        "HttpTokens=required,HttpEndpoint=enabled",
+        "--user-data",
+        "file://projects/vectors-activation-boundary/experiments/activation-boundary/x86-v2-worker.sh",
+        "--tag-specifications",
+        "ResourceType=instance,Tags=[{Key=Name,Value=models-activation-boundary-v2-x86},{Key=project,Value=models-qualification},{Key=delete-after,Value=2026-10-12T21:27:48.310404+00:00}]"
+      ],
+      "userDataSha256": "583a1410580639a11ca73232e098e73bf2acadf67e095ed02452bb18185cb171"
+    }
+  ]
+}

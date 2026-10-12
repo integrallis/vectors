@@ -1,0 +1,1336 @@
+[
+  {
+    "sampledBytesWeight": 2433374200,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$SessionState.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$Session.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.openSession",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter$Qwen35Session.<init>",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter.openSession"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1195537216,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/AbstractVector.convert0",
+      "jdk/incubator/vector/AbstractVector.convertShapeTemplate",
+      "jdk/incubator/vector/Float128Vector.convertShape",
+      "com/integrallis/vectors/core/ReproducibleActivationExp.exp",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1064472464,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/AbstractVector.convert0",
+      "jdk/incubator/vector/AbstractVector.asVectorRawTemplate",
+      "jdk/incubator/vector/Long256Vector.asVectorRaw",
+      "jdk/incubator/vector/AbstractVector.reinterpretAsDoubles",
+      "jdk/incubator/vector/LongVector.reinterpretAsDoubles"
+    ]
+  },
+  {
+    "sampledBytesWeight": 669836072,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/AbstractVector.convert0",
+      "jdk/incubator/vector/AbstractVector.convertShapeTemplate",
+      "jdk/incubator/vector/Double256Vector.convertShape",
+      "com/integrallis/vectors/core/ReproducibleActivationExp.exp",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 664986912,
+    "class": "jdk/incubator/vector/Double256Vector",
+    "stack": [
+      "jdk/incubator/vector/AbstractVector.convert0",
+      "jdk/incubator/vector/AbstractVector.convertShapeTemplate",
+      "jdk/incubator/vector/Float128Vector.convertShape",
+      "com/integrallis/vectors/core/ReproducibleActivationExp.exp",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 592340752,
+    "class": "jdk/incubator/vector/Double256Vector",
+    "stack": [
+      "jdk/incubator/vector/AbstractVector.convert0",
+      "jdk/incubator/vector/AbstractVector.asVectorRawTemplate",
+      "jdk/incubator/vector/Long256Vector.asVectorRaw",
+      "jdk/incubator/vector/AbstractVector.reinterpretAsDoubles",
+      "jdk/incubator/vector/LongVector.reinterpretAsDoubles"
+    ]
+  },
+  {
+    "sampledBytesWeight": 305440896,
+    "class": "[B",
+    "stack": [
+      "java/nio/HeapByteBuffer.<init>",
+      "java/nio/ByteBuffer.allocate",
+      "com/integrallis/models/backend/purejava/qwen35/ProductionRouteProof.digest",
+      "com/integrallis/models/backend/purejava/qwen35/ProductionRouteProof.request",
+      "com/integrallis/models/backend/purejava/qwen35/ProductionRouteProof.main"
+    ]
+  },
+  {
+    "sampledBytesWeight": 259246032,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.fullAttention",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.forwardToken",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.advance",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.forward",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter.forward"
+    ]
+  },
+  {
+    "sampledBytesWeight": 236432816,
+    "class": "jdk/incubator/vector/Float128Vector",
+    "stack": [
+      "jdk/incubator/vector/AbstractVector.convert0",
+      "jdk/incubator/vector/AbstractVector.convertShapeTemplate",
+      "jdk/incubator/vector/Double256Vector.convertShape",
+      "com/integrallis/vectors/core/ReproducibleActivationExp.exp",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 199199440,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.batchBuffer",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$BatchScratch.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$SessionState.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$Session.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.openSession"
+    ]
+  },
+  {
+    "sampledBytesWeight": 190890256,
+    "class": "[F",
+    "stack": [
+      "java/lang/Object.clone",
+      "com/integrallis/models/backend/purejava/qwen35/ProductionRouteProof.request",
+      "com/integrallis/models/backend/purejava/qwen35/ProductionRouteProof.main"
+    ]
+  },
+  {
+    "sampledBytesWeight": 168388720,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.projectLogits",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.advance",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.forward",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter.forward",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.forward"
+    ]
+  },
+  {
+    "sampledBytesWeight": 71799296,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$SessionState.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$Session.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.openSession",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter$Qwen35Session.<init>",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter.<init>"
+    ]
+  },
+  {
+    "sampledBytesWeight": 44750216,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.ldOp",
+      "jdk/incubator/vector/FloatVector$FloatSpecies.ldOp",
+      "jdk/incubator/vector/FloatVector.lambda$fromArray0Template$0",
+      "jdk.incubator.vector.FloatVector$$Lambda/0x000000008216a4a8.load",
+      "jdk/internal/vm/vector/VectorSupport.load"
+    ]
+  },
+  {
+    "sampledBytesWeight": 40702384,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$GatedDeltaNetScratch.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$SessionState.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$Session.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.openSession",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter$Qwen35Session.<init>"
+    ]
+  },
+  {
+    "sampledBytesWeight": 30361312,
+    "class": "jdk/incubator/vector/Float256Vector",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.fromArray0Template",
+      "jdk/incubator/vector/Float256Vector.fromArray0",
+      "jdk/incubator/vector/FloatVector.fromArray",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.addScaledInPlace",
+      "com/integrallis/vectors/core/VectorUtil.addScaledInPlace"
+    ]
+  },
+  {
+    "sampledBytesWeight": 24109656,
+    "class": "[B",
+    "stack": [
+      "com/integrallis/models/backend/purejava/gguf/GgufReader$Cursor.readString",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readArray",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readValue"
+    ]
+  },
+  {
+    "sampledBytesWeight": 19591800,
+    "class": "[I",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$BatchProjectionScratch.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$BatchScratch.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$SessionState.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$Session.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.openSession"
+    ]
+  },
+  {
+    "sampledBytesWeight": 18680672,
+    "class": "[B",
+    "stack": [
+      "java/lang/StringUTF16.newBytesFor",
+      "java/lang/String.<init>",
+      "java/lang/String.<init>",
+      "com/integrallis/models/backend/purejava/gguf/GgufReader$Cursor.readString",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue"
+    ]
+  },
+  {
+    "sampledBytesWeight": 16759352,
+    "class": "[Ljava/util/concurrent/ConcurrentHashMap$Node;",
+    "stack": [
+      "java/util/concurrent/ConcurrentHashMap.initTable",
+      "java/util/concurrent/ConcurrentHashMap.putVal",
+      "java/util/concurrent/ConcurrentHashMap.put",
+      "jdk/jfr/internal/StringPool.storeString",
+      "jdk/jfr/internal/StringPool.addString"
+    ]
+  },
+  {
+    "sampledBytesWeight": 14305848,
+    "class": "jdk/incubator/vector/Float256Vector",
+    "stack": [
+      "jdk/incubator/vector/Float256Vector.vectorFactory",
+      "jdk/incubator/vector/Float256Vector.vectorFactory",
+      "jdk/incubator/vector/FloatVector.ldOp",
+      "jdk/incubator/vector/FloatVector$FloatSpecies.ldOp",
+      "jdk/incubator/vector/FloatVector.lambda$fromArray0Template$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 12504904,
+    "class": "[B",
+    "stack": [
+      "java/util/Arrays.copyOf",
+      "jdk/internal/loader/Resource.getBytes",
+      "jdk/internal/loader/URLClassPath$JarLoader$1.getBytes",
+      "jdk/internal/loader/BuiltinClassLoader.defineClass",
+      "jdk/internal/loader/BuiltinClassLoader.findClassOnClassPathOrNull"
+    ]
+  },
+  {
+    "sampledBytesWeight": 12169320,
+    "class": "com/integrallis/models/backend/purejava/gguf/GgufMetadataValue$StringValue",
+    "stack": [
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readArray",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.parse"
+    ]
+  },
+  {
+    "sampledBytesWeight": 12001672,
+    "class": "jdk/incubator/vector/Float128Vector",
+    "stack": [
+      "jdk/incubator/vector/Float128Vector.vectorFactory",
+      "jdk/incubator/vector/Float128Vector.vectorFactory",
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/Float128Vector.bOp"
+    ]
+  },
+  {
+    "sampledBytesWeight": 11667320,
+    "class": "[B",
+    "stack": [
+      "java/util/Arrays.copyOfRange",
+      "java/lang/String.<init>",
+      "java/lang/String.<init>",
+      "com/integrallis/models/backend/purejava/gguf/GgufReader$Cursor.readString",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue"
+    ]
+  },
+  {
+    "sampledBytesWeight": 11411824,
+    "class": "java/lang/Integer",
+    "stack": [
+      "java/lang/Integer.valueOf",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.fromMetadata",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load"
+    ]
+  },
+  {
+    "sampledBytesWeight": 10407888,
+    "class": "[I",
+    "stack": [
+      "jdk/internal/classfile/impl/EntryMap.<init>",
+      "jdk/internal/classfile/impl/SplitConstantPool.map",
+      "jdk/internal/classfile/impl/SplitConstantPool.tryFindClassOrInterface",
+      "jdk/internal/classfile/impl/SplitConstantPool.classEntryForClassOrInterface",
+      "jdk/internal/classfile/impl/SplitConstantPool.classEntry"
+    ]
+  },
+  {
+    "sampledBytesWeight": 9974656,
+    "class": "java/lang/Integer",
+    "stack": [
+      "java/lang/Integer.valueOf",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.lambda$fromMetadata$2",
+      "com.integrallis.models.backend.purejava.tokenizer.GgufTokenizer$$Lambda/0x0000000082188488.accept",
+      "java/util/Optional.ifPresent",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.fromMetadata"
+    ]
+  },
+  {
+    "sampledBytesWeight": 8771296,
+    "class": "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer$BpeMerge",
+    "stack": [
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.addBpeMerge",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.applyMerges",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.encodeByteLevelBpePiece",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.encodeByteLevelBpe",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.encodeOrdinaryText"
+    ]
+  },
+  {
+    "sampledBytesWeight": 7947704,
+    "class": "jdk/incubator/vector/Float256Vector",
+    "stack": [
+      "jdk/incubator/vector/Float256Vector.vectorFactory",
+      "jdk/incubator/vector/Float256Vector.vectorFactory",
+      "jdk/incubator/vector/FloatVector.tOpTemplate",
+      "jdk/incubator/vector/FloatVector.tOpTemplate",
+      "jdk/incubator/vector/Float256Vector.tOp"
+    ]
+  },
+  {
+    "sampledBytesWeight": 7947648,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.tOpTemplate",
+      "jdk/incubator/vector/FloatVector.tOpTemplate",
+      "jdk/incubator/vector/Float128Vector.tOp",
+      "jdk/incubator/vector/Float128Vector.tOp",
+      "jdk/incubator/vector/FloatVector.lambda$ternaryOperations$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 7947640,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.fromArray0Template",
+      "jdk/incubator/vector/Float128Vector.fromArray0",
+      "jdk/incubator/vector/FloatVector.fromArray",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.causalDepthwiseConv1dSilu",
+      "com/integrallis/vectors/core/VectorUtil.causalDepthwiseConv1dSilu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 7553536,
+    "class": "java/lang/String",
+    "stack": [
+      "com/integrallis/models/backend/purejava/gguf/GgufReader$Cursor.readString",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readArray",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readValue"
+    ]
+  },
+  {
+    "sampledBytesWeight": 7218664,
+    "class": "[B",
+    "stack": [
+      "java/util/Arrays.copyOf",
+      "java/lang/String.<init>",
+      "java/lang/String.<init>",
+      "com/integrallis/models/backend/purejava/gguf/GgufReader$Cursor.readString",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue"
+    ]
+  },
+  {
+    "sampledBytesWeight": 7173600,
+    "class": "[Ljava/lang/Object;",
+    "stack": [
+      "java/util/ArrayList.grow",
+      "java/util/ArrayList.grow",
+      "java/util/ArrayList.add",
+      "java/util/ArrayList.add",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.encodeByteLevelBpePiece"
+    ]
+  },
+  {
+    "sampledBytesWeight": 7171688,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$BatchScratch.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$SessionState.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$Session.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.openSession",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter$Qwen35Session.<init>"
+    ]
+  },
+  {
+    "sampledBytesWeight": 6795568,
+    "class": "jdk/incubator/vector/Double256Vector",
+    "stack": [
+      "jdk/incubator/vector/Double256Vector.vectorFactory",
+      "jdk/incubator/vector/Double256Vector.vectorFactory",
+      "jdk/incubator/vector/DoubleVector.bOpTemplate",
+      "jdk/incubator/vector/DoubleVector.bOpTemplate",
+      "jdk/incubator/vector/Double256Vector.bOp"
+    ]
+  },
+  {
+    "sampledBytesWeight": 6358072,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.tOpTemplate",
+      "jdk/incubator/vector/FloatVector.tOpTemplate",
+      "jdk/incubator/vector/Float256Vector.tOp",
+      "jdk/incubator/vector/Float256Vector.tOp",
+      "jdk/incubator/vector/FloatVector.lambda$ternaryOperations$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 6180304,
+    "class": "[B",
+    "stack": [
+      "java/lang/String.encodeUTF8",
+      "java/lang/String.encode",
+      "java/lang/String.getBytes",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.encodeByteLevelBpePiece",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.encodeByteLevelBpe"
+    ]
+  },
+  {
+    "sampledBytesWeight": 6176632,
+    "class": "[I",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$Session.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.openSession",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter$Qwen35Session.<init>",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter.openSession",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.openSession"
+    ]
+  },
+  {
+    "sampledBytesWeight": 5712984,
+    "class": "jdk/incubator/vector/Float256Vector",
+    "stack": [
+      "jdk/incubator/vector/Float256Vector.vectorFactory",
+      "jdk/incubator/vector/Float256Vector.vectorFactory",
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/Float256Vector.bOp"
+    ]
+  },
+  {
+    "sampledBytesWeight": 5601560,
+    "class": "[B",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$BatchProjectionScratch.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$BatchScratch.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$SessionState.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$Session.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.openSession"
+    ]
+  },
+  {
+    "sampledBytesWeight": 5206048,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.uOpTemplate",
+      "jdk/incubator/vector/FloatVector.uOpTemplate",
+      "jdk/incubator/vector/Float128Vector.uOp",
+      "jdk/incubator/vector/Float128Vector.uOp",
+      "jdk/incubator/vector/FloatVector.lambda$unaryOperations$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 4983800,
+    "class": "com/integrallis/models/backend/purejava/gguf/GgufMetadataValue$Int32Value",
+    "stack": [
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readArray",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.parse"
+    ]
+  },
+  {
+    "sampledBytesWeight": 4963552,
+    "class": "[Ljava/lang/Object;",
+    "stack": [
+      "java/util/ArrayList.<init>",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readArray",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readTypedValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.readValue",
+      "com/integrallis/models/backend/purejava/gguf/GgufHeaderParser.parse"
+    ]
+  },
+  {
+    "sampledBytesWeight": 4768592,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/Float128Vector.bOp",
+      "jdk/incubator/vector/Float128Vector.bOp",
+      "jdk/incubator/vector/FloatVector.lambda$binaryOperations$4"
+    ]
+  },
+  {
+    "sampledBytesWeight": 4768584,
+    "class": "jdk/incubator/vector/Float128Vector",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.div",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 4768576,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.blendTemplate",
+      "jdk/incubator/vector/Float128Vector.blend",
+      "jdk/incubator/vector/Float128Vector.blend",
+      "com/integrallis/vectors/core/ReproducibleActivationExp.exp",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.causalDepthwiseConv1dSilu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 4768560,
+    "class": "[B",
+    "stack": [
+      "jdk/incubator/vector/AbstractVector.defaultReinterpret",
+      "jdk.incubator.vector.AbstractVector$$Lambda/0x000000008217d920.apply",
+      "jdk/internal/vm/vector/VectorSupport.convert",
+      "jdk/incubator/vector/AbstractVector.convert0",
+      "jdk/incubator/vector/AbstractVector.asVectorRawTemplate"
+    ]
+  },
+  {
+    "sampledBytesWeight": 4699608,
+    "class": "java/util/HashMap$Node",
+    "stack": [
+      "java/util/HashMap.newNode",
+      "java/util/HashMap.putVal",
+      "java/util/HashMap.put",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.lambda$fromMetadata$2",
+      "com.integrallis.models.backend.purejava.tokenizer.GgufTokenizer$$Lambda/0x0000000082188488.accept"
+    ]
+  },
+  {
+    "sampledBytesWeight": 3616592,
+    "class": "jdk/incubator/vector/Float128Vector",
+    "stack": [
+      "jdk/incubator/vector/Float128Vector.vectorFactory",
+      "jdk/incubator/vector/Float128Vector.vectorFactory",
+      "jdk/incubator/vector/FloatVector.ldOp",
+      "jdk/incubator/vector/FloatVector$FloatSpecies.ldOp",
+      "jdk/incubator/vector/FloatVector.lambda$fromArray0Template$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 3616568,
+    "class": "jdk/incubator/vector/Float128Vector",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.fromArray0Template",
+      "jdk/incubator/vector/Float128Vector.fromArray0",
+      "jdk/incubator/vector/FloatVector.fromArray",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu",
+      "com/integrallis/vectors/core/VectorUtil.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 3616544,
+    "class": "jdk/incubator/vector/Float128Vector",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.fromArray0Template",
+      "jdk/incubator/vector/Float128Vector.fromArray0",
+      "jdk/incubator/vector/FloatVector.fromArray",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.causalDepthwiseConv1dSilu",
+      "com/integrallis/vectors/core/VectorUtil.causalDepthwiseConv1dSilu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 3179104,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.fromArray0Template",
+      "jdk/incubator/vector/Float128Vector.fromArray0",
+      "jdk/incubator/vector/FloatVector.fromArray",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu",
+      "com/integrallis/vectors/core/VectorUtil.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 3179064,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector$DoubleSpecies.broadcastBits",
+      "jdk/incubator/vector/DoubleVector$DoubleSpecies.broadcast",
+      "jdk/incubator/vector/DoubleVector.broadcastTemplate",
+      "jdk/incubator/vector/Double256Vector.broadcast",
+      "jdk/incubator/vector/Double256Vector.broadcast"
+    ]
+  },
+  {
+    "sampledBytesWeight": 3179008,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector$DoubleSpecies.rvOp",
+      "jdk/incubator/vector/DoubleVector$DoubleSpecies.lambda$broadcastBits$0",
+      "jdk.incubator.vector.DoubleVector$DoubleSpecies$$Lambda/0x0000000082178ec8.fromBits",
+      "jdk/internal/vm/vector/VectorSupport.fromBitsCoerced",
+      "jdk/incubator/vector/DoubleVector$DoubleSpecies.broadcastBits"
+    ]
+  },
+  {
+    "sampledBytesWeight": 3179008,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector.bOpTemplate",
+      "jdk/incubator/vector/DoubleVector.bOpTemplate",
+      "jdk/incubator/vector/Double256Vector.bOp",
+      "jdk/incubator/vector/Double256Vector.bOp",
+      "jdk/incubator/vector/DoubleVector.lambda$binaryOperations$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 3144432,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.fromArray0Template",
+      "jdk/incubator/vector/Float256Vector.fromArray0",
+      "jdk/incubator/vector/FloatVector.fromArray",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.activationExp",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.sigmoidAndScaledSoftplus"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2638088,
+    "class": "jdk/internal/classfile/impl/EntryMap",
+    "stack": [
+      "jdk/internal/classfile/impl/SplitConstantPool.map",
+      "jdk/internal/classfile/impl/SplitConstantPool.tryFindClassOrInterface",
+      "jdk/internal/classfile/impl/SplitConstantPool.classEntryForClassOrInterface",
+      "jdk/internal/classfile/impl/SplitConstantPool.classEntry",
+      "java/lang/invoke/InnerClassLambdaMetafactory.<init>"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2568488,
+    "class": "jdk.incubator.vector.DoubleVector$DoubleSpecies$$Lambda/0x00000000821790f0",
+    "stack": [
+      "jdk/internal/misc/Unsafe.allocateInstance",
+      "java/lang/invoke/DirectMethodHandle.allocateInstance",
+      "java.lang.invoke.LambdaForm$DMH/0x0000000082115400.newInvokeSpecial",
+      "java/lang/invoke/Invokers$Holder.linkToTargetMethod",
+      "jdk/incubator/vector/DoubleVector$DoubleSpecies.lambda$broadcastBits$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2274816,
+    "class": "java/util/zip/ZipFile$ZipFileInputStream",
+    "stack": [
+      "java/util/zip/ZipFile.getInputStream",
+      "java/util/jar/JarFile.getInputStream",
+      "jdk/internal/loader/URLClassPath$JarLoader$1.getInputStream",
+      "jdk/internal/loader/Resource.cachedInputStream",
+      "jdk/internal/loader/Resource.getByteBuffer"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2240928,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/Float256Vector.bOp",
+      "jdk/incubator/vector/Float256Vector.bOp",
+      "jdk/incubator/vector/FloatVector.lambda$binaryOperations$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2207136,
+    "class": "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$BatchScratch",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$SessionState.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$Session.<init>",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.openSession",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter$Qwen35Session.<init>",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter.openSession"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2144720,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.forwardToken",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.advance",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.forward",
+      "com/integrallis/models/backend/purejava/Qwen35DecoderAdapter.forward",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.forward"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2097168,
+    "class": "[Ljava/util/HashMap$Node;",
+    "stack": [
+      "java/util/HashMap.resize",
+      "java/util/HashMap.putVal",
+      "java/util/HashMap.put",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.fromMetadata",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2097168,
+    "class": "[Ljava/util/HashMap$Node;",
+    "stack": [
+      "java/util/HashMap.resize",
+      "java/util/HashMap.putVal",
+      "java/util/HashMap.put",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.lambda$fromMetadata$2",
+      "com.integrallis.models.backend.purejava.tokenizer.GgufTokenizer$$Lambda/0x0000000082188488.accept"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2027056,
+    "class": "[Ljava/lang/classfile/constantpool/PoolEntry;",
+    "stack": [
+      "jdk/internal/classfile/impl/SplitConstantPool.<init>",
+      "java/lang/classfile/constantpool/ConstantPoolBuilder.of",
+      "java/lang/classfile/ClassFile.build",
+      "jdk/internal/foreign/abi/BindingSpecializer.specializeHelper",
+      "jdk/internal/foreign/abi/BindingSpecializer.specializeDowncall"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2027048,
+    "class": "jdk/incubator/vector/Float128Vector",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.neg",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2026984,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector$FloatSpecies.broadcastBits",
+      "jdk/incubator/vector/FloatVector$FloatSpecies.broadcast",
+      "jdk/incubator/vector/FloatVector.broadcastTemplate",
+      "jdk/incubator/vector/Float128Vector.broadcast",
+      "jdk/incubator/vector/Float128Vector.broadcast"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2026984,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/Float128Vector.bOp",
+      "jdk/incubator/vector/Float128Vector.bOp",
+      "jdk/incubator/vector/FloatVector.lambda$binaryOperations$6"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2015344,
+    "class": "[I",
+    "stack": [
+      "java/math/BigInteger.shiftLeft",
+      "java/math/BigInteger.shiftLeft",
+      "java/math/BigInteger.squareToomCook3",
+      "java/math/BigInteger.square",
+      "java/math/BigInteger$RecursiveOp$RecursiveSquare.compute"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2014736,
+    "class": "java/lang/String",
+    "stack": [
+      "java/lang/StringConcatHelper.doConcat",
+      "java/lang/String.concat",
+      "jdk/internal/loader/BuiltinClassLoader.definePackage",
+      "jdk/internal/loader/BuiltinClassLoader.defineOrCheckPackage",
+      "jdk/internal/loader/ClassLoaders$AppClassLoader.defineOrCheckPackage"
+    ]
+  },
+  {
+    "sampledBytesWeight": 2011904,
+    "class": "[Ljava/util/concurrent/ConcurrentHashMap$Node;",
+    "stack": [
+      "java/util/concurrent/ConcurrentHashMap.transfer",
+      "java/util/concurrent/ConcurrentHashMap.addCount",
+      "java/util/concurrent/ConcurrentHashMap.putVal",
+      "java/util/concurrent/ConcurrentHashMap.put",
+      "jdk/internal/util/ReferencedKeyMap.put"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1986592,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.fromMetadata",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load",
+      "com/integrallis/models/backend/nativekernel/RustFfmBackend.load"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1986592,
+    "class": "[Ljava/lang/Object;",
+    "stack": [
+      "java/util/stream/ReferencePipeline.lambda$toArray$0",
+      "java.util.stream.ReferencePipeline$$Lambda/0x00000000820ec080.apply",
+      "java/util/stream/Nodes$ArrayNode.<init>",
+      "java/util/stream/Nodes$FixedNodeBuilder.<init>",
+      "java/util/stream/Nodes.builder"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1980736,
+    "class": "[Ljava/lang/Object;",
+    "stack": [
+      "java/util/ImmutableCollections.listFromArray",
+      "java/util/List.of",
+      "java/util/ImmutableCollections.listCopy",
+      "java/util/List.copyOf",
+      "com/integrallis/models/backend/purejava/gguf/GgufMetadataValue$ArrayValue.<init>"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1769536,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/gguf/GgufTensorValues.toFloatArray",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35Weights.vector",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35Weights.fromGgufFile",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.fromGgufFile",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.fromGgufFile"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1605904,
+    "class": "[B",
+    "stack": [
+      "jdk/internal/misc/Unsafe.allocateUninitializedArray",
+      "java/lang/StringConcatHelper.newArray",
+      "java/lang/StringConcatHelper.newArrayWithSuffix",
+      "java.lang.String$$StringConcat/0x0000000082139800.concat",
+      "java/lang/invoke/DirectMethodHandle$Holder.invokeSpecial"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589552,
+    "class": "[J",
+    "stack": [
+      "jdk/incubator/vector/IntVector.toLongArray",
+      "jdk/incubator/vector/AbstractVector.defaultCast",
+      "jdk.incubator.vector.AbstractVector$$Lambda/0x0000000082178648.apply",
+      "jdk/internal/vm/vector/VectorSupport.convert",
+      "jdk/incubator/vector/AbstractVector.convert0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589552,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector.blendTemplate",
+      "jdk/incubator/vector/Double256Vector.blend",
+      "jdk/incubator/vector/Double256Vector.blend",
+      "jdk/incubator/vector/DoubleVector.blend",
+      "com/integrallis/vectors/core/ReproducibleActivationExp.expDouble"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589544,
+    "class": "java/lang/Byte",
+    "stack": [
+      "java/lang/invoke/MemberName.hashCode",
+      "java/util/concurrent/ConcurrentHashMap.get",
+      "java/lang/invoke/MethodHandles$Lookup.linkMethodHandleConstant",
+      "java/lang/invoke/MethodHandleNatives.linkMethodHandleConstant",
+      "jdk/incubator/vector/AbstractVector.convert0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589544,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector.bOpTemplate",
+      "jdk/incubator/vector/Double256Vector.bOp",
+      "jdk/incubator/vector/Double256Vector.bOp",
+      "jdk/incubator/vector/DoubleVector.lambda$blendTemplate$0",
+      "jdk.incubator.vector.DoubleVector$$Lambda/0x0000000082179d80.apply"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589544,
+    "class": "jdk/incubator/vector/Int128Vector",
+    "stack": [
+      "jdk/incubator/vector/Int128Vector.vectorFactory",
+      "jdk/incubator/vector/Int128Vector.vectorFactory",
+      "jdk/incubator/vector/IntVector$IntSpecies.rvOp",
+      "jdk/incubator/vector/IntVector$IntSpecies.lambda$broadcastBits$0",
+      "jdk.incubator.vector.IntVector$IntSpecies$$Lambda/0x00000000821c3d88.fromBits"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589536,
+    "class": "[J",
+    "stack": [
+      "jdk/incubator/vector/LongVector.fromArray0Template",
+      "jdk/incubator/vector/Long256Vector.fromArray0",
+      "jdk/incubator/vector/LongVector.fromArray",
+      "jdk/incubator/vector/AbstractVector.defaultCast",
+      "jdk.incubator.vector.AbstractVector$$Lambda/0x0000000082178648.apply"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589536,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector.bOpTemplate",
+      "jdk/incubator/vector/DoubleVector.bOpTemplate",
+      "jdk/incubator/vector/Double256Vector.bOp",
+      "jdk/incubator/vector/Double256Vector.bOp",
+      "jdk/incubator/vector/DoubleVector.lambda$binaryOperations$2"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589528,
+    "class": "jdk/incubator/vector/Double256Vector",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector$DoubleSpecies.broadcastBits",
+      "jdk/incubator/vector/DoubleVector$DoubleSpecies.broadcast",
+      "jdk/incubator/vector/DoubleVector.broadcastTemplate",
+      "jdk/incubator/vector/Double256Vector.broadcast",
+      "jdk/incubator/vector/Double256Vector.broadcast"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589528,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.div",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.causalDepthwiseConv1dSilu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589528,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.fma",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.fma"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589528,
+    "class": "jdk/incubator/vector/Float128Vector",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.add",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589520,
+    "class": "java/util/concurrent/ConcurrentHashMap$Node",
+    "stack": [
+      "java/util/concurrent/ConcurrentHashMap.putVal",
+      "java/util/concurrent/ConcurrentHashMap.putIfAbsent",
+      "jdk/internal/util/ReferencedKeyMap.internKey",
+      "jdk/internal/util/ReferencedKeyMap.intern",
+      "jdk/internal/util/ReferencedKeySet.intern"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589520,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/AbstractVector.defaultCast",
+      "jdk.incubator.vector.AbstractVector$$Lambda/0x0000000082178648.apply",
+      "jdk/internal/vm/vector/VectorSupport.convert",
+      "jdk/incubator/vector/AbstractVector.convert0",
+      "jdk/incubator/vector/AbstractVector.convertShapeTemplate"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589520,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector.toArray",
+      "jdk/incubator/vector/DoubleVector.toDoubleArray",
+      "jdk/incubator/vector/AbstractVector.defaultCast",
+      "jdk.incubator.vector.AbstractVector$$Lambda/0x0000000082178648.apply",
+      "jdk/internal/vm/vector/VectorSupport.convert"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589520,
+    "class": "[I",
+    "stack": [
+      "jdk/incubator/vector/IntVector.toArray",
+      "jdk/incubator/vector/IntVector.toLongArray",
+      "jdk/incubator/vector/AbstractVector.defaultCast",
+      "jdk.incubator.vector.AbstractVector$$Lambda/0x0000000082178648.apply",
+      "jdk/internal/vm/vector/VectorSupport.convert"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589520,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.add",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589520,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/Float256Vector.bOp",
+      "jdk/incubator/vector/Float256Vector.bOp",
+      "jdk/incubator/vector/FloatVector.lambda$binaryOperations$4"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589520,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.neg",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589512,
+    "class": "jdk.incubator.vector.FloatVector$FloatSpecies$$Lambda/0x000000008216fc88",
+    "stack": [
+      "jdk/internal/misc/Unsafe.allocateInstance",
+      "java/lang/invoke/DirectMethodHandle.allocateInstance",
+      "java.lang.invoke.LambdaForm$DMH/0x0000000082115400.newInvokeSpecial",
+      "java/lang/invoke/Invokers$Holder.linkToTargetMethod",
+      "jdk/incubator/vector/FloatVector$FloatSpecies.lambda$broadcastBits$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589512,
+    "class": "jdk/incubator/vector/Double256Vector",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector.fromArray0Template",
+      "jdk/incubator/vector/Double256Vector.fromArray0",
+      "jdk/incubator/vector/DoubleVector.fromArray",
+      "jdk/incubator/vector/AbstractVector.defaultCast",
+      "jdk.incubator.vector.AbstractVector$$Lambda/0x0000000082178648.apply"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589512,
+    "class": "jdk/incubator/vector/Float128Vector",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.blendTemplate",
+      "jdk/incubator/vector/Float128Vector.blend",
+      "jdk/incubator/vector/Float128Vector.blend",
+      "com/integrallis/vectors/core/ReproducibleActivationExp.exp",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.causalDepthwiseConv1dSilu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589512,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.blendTemplate",
+      "jdk/incubator/vector/Float128Vector.blend",
+      "jdk/incubator/vector/Float128Vector.blend",
+      "com/integrallis/vectors/core/ReproducibleActivationExp.exp",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589512,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.div",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589512,
+    "class": "jdk/incubator/vector/Float256Vector",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float256Vector.lanewise",
+      "jdk/incubator/vector/Float256Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.fma",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.fma"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589504,
+    "class": "[Z",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.bTest",
+      "jdk/incubator/vector/FloatVector.lambda$compareTemplate$0",
+      "jdk.incubator.vector.FloatVector$$Lambda/0x00000000821c2408.apply",
+      "jdk/internal/vm/vector/VectorSupport.compare",
+      "jdk/incubator/vector/FloatVector.compareTemplate"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589504,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/FloatVector.bOpTemplate",
+      "jdk/incubator/vector/Float128Vector.bOp",
+      "jdk/incubator/vector/Float128Vector.bOp",
+      "jdk/incubator/vector/FloatVector.lambda$binaryOperations$0"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589488,
+    "class": "[B",
+    "stack": [
+      "com/integrallis/models/backend/purejava/gguf/GgufReader$Cursor.readString",
+      "com/integrallis/models/backend/purejava/gguf/GgufParser.parseSegment",
+      "com/integrallis/models/backend/purejava/gguf/GgufParser.parse",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589488,
+    "class": "[D",
+    "stack": [
+      "jdk/incubator/vector/DoubleVector.bOpTemplate",
+      "jdk/incubator/vector/DoubleVector.bOpTemplate",
+      "jdk/incubator/vector/Double256Vector.bOp",
+      "jdk/incubator/vector/Double256Vector.bOp",
+      "jdk/incubator/vector/DoubleVector.lambda$binaryOperations$6"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589488,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.fromArray0Template",
+      "jdk/incubator/vector/Float256Vector.fromArray0",
+      "jdk/incubator/vector/FloatVector.fromArray",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.dotProductBody",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.dotProduct"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589472,
+    "class": "[B",
+    "stack": [
+      "jdk/internal/classfile/impl/BufWriterImpl.<init>",
+      "jdk/internal/classfile/impl/BufWriterImpl.<init>",
+      "jdk/internal/classfile/impl/DirectClassBuilder.build",
+      "jdk/internal/classfile/impl/ClassFileImpl.build",
+      "java/lang/invoke/InvokerBytecodeGenerator.classFileSetup"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1589448,
+    "class": "[B",
+    "stack": [
+      "java/lang/Class.initClassName",
+      "java/lang/Class.getName",
+      "java/lang/Class.getPackageName",
+      "java/lang/ClassLoader.postDefineClass",
+      "java/lang/ClassLoader.defineClass"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1213816,
+    "class": "[Ljava/lang/Object;",
+    "stack": [
+      "java/util/List.of",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35Weights.feedForwardMatrices",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35Weights.layerMatrices",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35Weights.widestProjectionInput",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass$ProjectionScratch.<init>"
+    ]
+  },
+  {
+    "sampledBytesWeight": 1168592,
+    "class": "[F",
+    "stack": [
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35Weights.toTapMajorConvolution",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35Weights.fromGgufFile",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.fromGgufFile",
+      "com/integrallis/models/backend/purejava/qwen35/Qwen35ForwardPass.fromGgufFile",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.loadQwen35"
+    ]
+  },
+  {
+    "sampledBytesWeight": 874856,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.add",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.causalDepthwiseConv1dSilu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 506360,
+    "class": "[Ljdk/internal/classfile/impl/StackMapGenerator$Type;",
+    "stack": [
+      "jdk/internal/classfile/impl/StackMapGenerator$Frame.checkLocal",
+      "jdk/internal/classfile/impl/StackMapGenerator$Frame.setLocalsFromArg",
+      "jdk/internal/classfile/impl/StackMapGenerator.processMethod",
+      "jdk/internal/classfile/impl/StackMapGenerator.generate",
+      "jdk/internal/classfile/impl/StackMapGenerator.<init>"
+    ]
+  },
+  {
+    "sampledBytesWeight": 437536,
+    "class": "java/util/HashMap$Node",
+    "stack": [
+      "java/util/HashMap.newNode",
+      "java/util/HashMap.putVal",
+      "java/util/HashMap.put",
+      "com/integrallis/models/backend/purejava/tokenizer/GgufTokenizer.fromMetadata",
+      "com/integrallis/models/backend/purejava/PureJavaBackend.load"
+    ]
+  },
+  {
+    "sampledBytesWeight": 437520,
+    "class": "jdk/incubator/vector/Long256Vector",
+    "stack": [
+      "jdk/incubator/vector/LongVector.fromArray0Template",
+      "jdk/incubator/vector/Long256Vector.fromArray0",
+      "jdk/incubator/vector/LongVector.fromArray",
+      "jdk/incubator/vector/AbstractVector.defaultCast",
+      "jdk.incubator.vector.AbstractVector$$Lambda/0x0000000082178648.apply"
+    ]
+  },
+  {
+    "sampledBytesWeight": 437472,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector.lanewiseTemplate",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/Float128Vector.lanewise",
+      "jdk/incubator/vector/FloatVector.mul",
+      "com/integrallis/vectors/core/PanamaVectorUtilSupport.swiGlu"
+    ]
+  },
+  {
+    "sampledBytesWeight": 437464,
+    "class": "jdk/incubator/vector/Long256Vector",
+    "stack": [
+      "jdk/incubator/vector/Long256Vector.vectorFactory",
+      "jdk/incubator/vector/Long256Vector.vectorFactory",
+      "jdk/incubator/vector/LongVector.uOpTemplate",
+      "jdk/incubator/vector/LongVector.uOpTemplate",
+      "jdk/incubator/vector/Long256Vector.uOp"
+    ]
+  },
+  {
+    "sampledBytesWeight": 437456,
+    "class": "[F",
+    "stack": [
+      "jdk/incubator/vector/FloatVector$FloatSpecies.rvOp",
+      "jdk/incubator/vector/FloatVector.lambda$zero$0",
+      "jdk.incubator.vector.FloatVector$$Lambda/0x0000000082169e50.fromBits",
+      "jdk/internal/vm/vector/VectorSupport.fromBitsCoerced",
+      "jdk/incubator/vector/FloatVector.zero"
+    ]
+  },
+  {
+    "sampledBytesWeight": 384192,
+    "class": "java/lang/String",
+    "stack": [
+      "java/lang/StringBuilder.toString",
+      "jdk/internal/constant/MethodTypeDescImpl.buildDescriptorString",
+      "jdk/internal/constant/MethodTypeDescImpl.descriptorString",
+      "jdk/internal/classfile/impl/SplitConstantPool.utf8Entry",
+      "java/lang/classfile/ClassBuilder.withMethod"
+    ]
+  },
+  {
+    "sampledBytesWeight": 98536,
+    "class": "java/util/ArrayList$Itr",
+    "stack": [
+      "java/util/ArrayList.iterator",
+      "jdk/jfr/internal/periodic/PeriodicEvents.doPeriodic",
+      "jdk/jfr/internal/PlatformRecorder.periodicTask",
+      "jdk/jfr/internal/PlatformRecorder.lambda$startDiskMonitor$0",
+      "jdk.jfr.internal.PlatformRecorder$$Lambda/0x0000000082076aa0.run"
+    ]
+  },
+  {
+    "sampledBytesWeight": 70576,
+    "class": "java/lang/Class",
+    "stack": [
+      "java/lang/ClassLoader.defineClass1",
+      "java/lang/ClassLoader.defineClass",
+      "java/security/SecureClassLoader.defineClass",
+      "jdk/internal/loader/BuiltinClassLoader.defineClass",
+      "jdk/internal/loader/BuiltinClassLoader.findClassOnClassPathOrNull"
+    ]
+  },
+  {
+    "sampledBytesWeight": 6160,
+    "class": "java/lang/String",
+    "stack": []
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/usr/bin/time",
+    "-v",
+    "/opt/jdk/bin/java",
+    "--add-modules",
+    "jdk.incubator.vector",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Xms2g",
+    "-Xmx10g",
+    "-cp",
+    "lib/native/*:route-proof.jar",
+    "com.integrallis.models.backend.purejava.qwen35.ProductionRouteProof",
+    "timing",
+    "model.gguf",
+    "/work/rust/native/target/release/libjmodels_kernels.so",
+    "data/tasks.json",
+    "7"
+  ],
+  "exitCode": 0,
+  "wallSeconds": 23.60418201599998
+}
