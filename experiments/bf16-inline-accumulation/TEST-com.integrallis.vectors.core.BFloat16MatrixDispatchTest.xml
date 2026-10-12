@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.integrallis.vectors.core.BFloat16MatrixDispatchTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-12T22:11:41.662Z" hostname="Brians-MacBook-Pro.local" time="1.731">
+  <properties/>
+  <testcase name="sharedConcurrentMatvecMatchesConfinedCallingThreadExecution()" classname="com.integrallis.vectors.core.BFloat16MatrixDispatchTest" time="1.681"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Oct 12, 2026 3:11:42 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 12, 2026 3:11:42 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=12 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+]]></system-err>
+</testsuite>

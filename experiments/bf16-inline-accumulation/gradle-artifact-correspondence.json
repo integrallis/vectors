@@ -1,0 +1,11 @@
+{
+  "frozenDiagnostic": {
+    "jarSha256": "4320bd5cb517a891517de41704690d52aa47b77ba0497c49a1cd7c07fd67c331",
+    "bf16InstructionsSha256": "6c74af527076cf2bf97ad8e700d724f60535c09983e80ddca3cb009b74a41cee"
+  },
+  "gradle": {
+    "jarSha256": "0ed0aed088a0c9a572614aa9271e2c61837e09213e3be73c5f35b70c549e3345",
+    "bf16InstructionsSha256": "6c74af527076cf2bf97ad8e700d724f60535c09983e80ddca3cb009b74a41cee"
+  },
+  "sameInstructions": true
+}

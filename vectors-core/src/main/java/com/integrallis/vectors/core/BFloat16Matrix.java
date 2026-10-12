@@ -167,6 +167,10 @@ public final class BFloat16Matrix {
     }
   }
 
+  // Keep packed loads and FMA inside this array-only boundary. Splitting these operations
+  // across vector-valued helpers lets C2 materialize temporary vectors in Bonsai's caller
+  // context, even when isolated kernel measurements look healthy. The expansion preserves
+  // each row's even/odd accumulation order; measure the actual model before refactoring it.
   private static void vectorMultiplyFourRows(
       float[] input,
       int inputOffset,
@@ -200,9 +204,14 @@ public final class BFloat16Matrix {
         FloatVector oddInputs = first.rearrange(ODD_INPUTS, second);
         long byteOffset = (long) column * Short.BYTES;
         {
-          IntVector packed = IntVector.fromMemorySegment(
-              PanamaVectorUtilSupport.INT_SPECIES, weight, base0 + byteOffset, ByteOrder.LITTLE_ENDIAN);
-          FloatVector evenWeights = packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          IntVector packed =
+              IntVector.fromMemorySegment(
+                  PanamaVectorUtilSupport.INT_SPECIES,
+                  weight,
+                  base0 + byteOffset,
+                  ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights =
+              packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
           FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
           if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
             sum0 = evenWeights.fma(evenInputs, sum0);
@@ -213,9 +222,14 @@ public final class BFloat16Matrix {
           }
         }
         {
-          IntVector packed = IntVector.fromMemorySegment(
-              PanamaVectorUtilSupport.INT_SPECIES, weight, base1 + byteOffset, ByteOrder.LITTLE_ENDIAN);
-          FloatVector evenWeights = packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          IntVector packed =
+              IntVector.fromMemorySegment(
+                  PanamaVectorUtilSupport.INT_SPECIES,
+                  weight,
+                  base1 + byteOffset,
+                  ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights =
+              packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
           FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
           if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
             sum1 = evenWeights.fma(evenInputs, sum1);
@@ -226,9 +240,14 @@ public final class BFloat16Matrix {
           }
         }
         {
-          IntVector packed = IntVector.fromMemorySegment(
-              PanamaVectorUtilSupport.INT_SPECIES, weight, base2 + byteOffset, ByteOrder.LITTLE_ENDIAN);
-          FloatVector evenWeights = packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          IntVector packed =
+              IntVector.fromMemorySegment(
+                  PanamaVectorUtilSupport.INT_SPECIES,
+                  weight,
+                  base2 + byteOffset,
+                  ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights =
+              packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
           FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
           if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
             sum2 = evenWeights.fma(evenInputs, sum2);
@@ -239,9 +258,14 @@ public final class BFloat16Matrix {
           }
         }
         {
-          IntVector packed = IntVector.fromMemorySegment(
-              PanamaVectorUtilSupport.INT_SPECIES, weight, base3 + byteOffset, ByteOrder.LITTLE_ENDIAN);
-          FloatVector evenWeights = packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          IntVector packed =
+              IntVector.fromMemorySegment(
+                  PanamaVectorUtilSupport.INT_SPECIES,
+                  weight,
+                  base3 + byteOffset,
+                  ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights =
+              packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
           FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
           if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
             sum3 = evenWeights.fma(evenInputs, sum3);

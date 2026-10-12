@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-10-12T22:09:16.766341+00:00",
+  "reason": "Parent requested stop redundant contended local full-model phase after supported-host counterparts secured; partial outputs retained, no completion claim.",
+  "javaPid": 45627,
+  "wrapperPid": 45618,
+  "javaCommand": "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java --add-modules jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xms2g -Xmx10g -cp /tmp/bf16-inline-accumulation/lib/*:/tmp/bf16-models-v9/model-proof.jar com.integrallis.models.backend.purejava.Bf16ModelProof timing /Users/briansam-bodden/.jvllm/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf /Users/briansam-bodden/Code/java-ai/projects/models-final-integration/backend-native/build/rust-target/release/libjmodels_kernels.dylib /tmp/bf16-models-v9/data/tasks.json 0",
+  "wrapperCommand": "/usr/local/Cellar/python@3.14/3.14.8/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -"
+}

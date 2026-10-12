@@ -1,0 +1,15 @@
+{
+  "region": "us-east-1",
+  "lifecycle": "on-demand",
+  "maximumCombinedUsd": 0.5,
+  "maximumSecondsPerHost": 1200,
+  "payload": "s3://models-qual-077051030817/payload/gdn-proof-bf16-inline-v1.tar.gz",
+  "payloadSha256": "06ae38dc0ac61121f61283fe23c6275a6f6a90a86b70060f8e0cdfb45597d750",
+  "quota": 192.0,
+  "usedVcpus": 112,
+  "rates": {
+    "arm": 0.6528
+  },
+  "hosts": [],
+  "failure": "InsufficientInstanceCapacity in us-east-1a; no instance created"
+}
