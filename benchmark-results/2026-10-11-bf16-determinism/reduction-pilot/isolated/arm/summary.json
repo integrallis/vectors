@@ -1,0 +1,209 @@
+{
+  "results": [
+    {
+      "kernel": "mappedBfloat16MatVec",
+      "shape": "4864x896",
+      "arms": {
+        "baseline": {
+          "microseconds": 429.0273995724018,
+          "latencyRatio": 1.0,
+          "forkMicroseconds": [
+            428.35881999449896,
+            429.6959791503047
+          ],
+          "bytesPerCall": 233475.39942515508
+        },
+        "rotate": {
+          "microseconds": 434.9248905308941,
+          "latencyRatio": 1.0137461872234037,
+          "forkMicroseconds": [
+            433.2043607367121,
+            436.6454203250761
+          ],
+          "bytesPerCall": 233475.44522708206
+        },
+        "hybrid": {
+          "microseconds": 454.3064041455036,
+          "latencyRatio": 1.0589216553495107,
+          "forkMicroseconds": [
+            469.71781146752335,
+            438.89499682348395
+          ],
+          "bytesPerCall": 233475.60820362088
+        },
+        "narrow": {
+          "microseconds": 466.6845160922046,
+          "latencyRatio": 1.0877732204454411,
+          "forkMicroseconds": [
+            471.07018691004015,
+            462.298845274369
+          ],
+          "bytesPerCall": 311299.69967964716
+        },
+        "scalar_tree": {
+          "microseconds": 447.22481302955487,
+          "latencyRatio": 1.0424155041736025,
+          "forkMicroseconds": [
+            446.83294804632067,
+            447.616678012789
+          ],
+          "bytesPerCall": 233475.54383953178
+        }
+      }
+    },
+    {
+      "kernel": "mappedBfloat16MatVec",
+      "shape": "151936x896",
+      "arms": {
+        "baseline": {
+          "microseconds": 17068.332074576276,
+          "latencyRatio": 1.0,
+          "forkMicroseconds": [
+            17062.91298305085,
+            17073.751166101698
+          ],
+          "bytesPerCall": 131.76949152542375
+        },
+        "rotate": {
+          "microseconds": 17719.559289473684,
+          "latencyRatio": 1.0381541214485408,
+          "forkMicroseconds": [
+            17708.89617894737,
+            17730.2224
+          ],
+          "bytesPerCall": 136.39298245614034
+        },
+        "hybrid": {
+          "microseconds": 17536.065415305507,
+          "latencyRatio": 1.027403576324012,
+          "forkMicroseconds": [
+            17525.88345862069,
+            17546.24737199032
+          ],
+          "bytesPerCall": 134.464851784634
+        },
+        "narrow": {
+          "microseconds": 17532.460594827586,
+          "latencyRatio": 1.0271923769834923,
+          "forkMicroseconds": [
+            17529.230048275866,
+            17535.69114137931
+          ],
+          "bytesPerCall": 134.04137931034484
+        },
+        "scalar_tree": {
+          "microseconds": 17678.808487719296,
+          "latencyRatio": 1.0357666121373594,
+          "forkMicroseconds": [
+            17653.759238596493,
+            17703.857736842103
+          ],
+          "bytesPerCall": 136.39298245614034
+        }
+      }
+    },
+    {
+      "kernel": "mappedBfloat16PromptBatch",
+      "shape": "4864x896",
+      "arms": {
+        "baseline": {
+          "microseconds": 2084.1694849807423,
+          "latencyRatio": 1.0,
+          "forkMicroseconds": [
+            2105.3675342353804,
+            2062.971435726104
+          ],
+          "bytesPerCall": 64.18467620347941
+        },
+        "rotate": {
+          "microseconds": 1992.3235398356005,
+          "latencyRatio": 0.9559316332922941,
+          "forkMicroseconds": [
+            1975.419018967521,
+            2009.2280607036803
+          ],
+          "bytesPerCall": 63.475678803247646
+        },
+        "hybrid": {
+          "microseconds": 2049.090975837038,
+          "latencyRatio": 0.9831690707514469,
+          "forkMicroseconds": [
+            2031.3804251281103,
+            2066.8015265459653
+          ],
+          "bytesPerCall": 63.908505795158256
+        },
+        "narrow": {
+          "microseconds": 2000.1900048425161,
+          "latencyRatio": 0.9597060216343192,
+          "forkMicroseconds": [
+            1938.303776567218,
+            2062.0762331178144
+          ],
+          "bytesPerCall": 63.53964585861786
+        },
+        "scalar_tree": {
+          "microseconds": 2026.955529038241,
+          "latencyRatio": 0.9725483189563972,
+          "forkMicroseconds": [
+            2004.3150535838686,
+            2049.5960044926132
+          ],
+          "bytesPerCall": 63.73821307799014
+        }
+      }
+    },
+    {
+      "kernel": "mappedBfloat16PromptBatch",
+      "shape": "151936x896",
+      "arms": {
+        "baseline": {
+          "microseconds": 64796.81625625001,
+          "latencyRatio": 1.0,
+          "forkMicroseconds": [
+            64491.4266625,
+            65102.205850000006
+          ],
+          "bytesPerCall": 535.7
+        },
+        "rotate": {
+          "microseconds": 67052.80562,
+          "latencyRatio": 1.0348163612673236,
+          "forkMicroseconds": [
+            66825.38996,
+            67280.22128000001
+          ],
+          "bytesPerCall": 568.2133333333334
+        },
+        "hybrid": {
+          "microseconds": 64566.66540625,
+          "latencyRatio": 0.99644811484117,
+          "forkMicroseconds": [
+            64610.1490875,
+            64523.181724999995
+          ],
+          "bytesPerCall": 535.7
+        },
+        "narrow": {
+          "microseconds": 63147.286505514705,
+          "latencyRatio": 0.9745430432228035,
+          "forkMicroseconds": [
+            64718.322187499994,
+            61576.250823529415
+          ],
+          "bytesPerCall": 521.3558823529412
+        },
+        "scalar_tree": {
+          "microseconds": 64888.160925000004,
+          "latencyRatio": 1.0014097092114642,
+          "forkMicroseconds": [
+            64225.396075,
+            65550.92577500001
+          ],
+          "bytesPerCall": 535.7
+        }
+      }
+    }
+  ],
+  "scope": "Diagnostic two-shape pilot; remaining shape and real-model checks required"
+}

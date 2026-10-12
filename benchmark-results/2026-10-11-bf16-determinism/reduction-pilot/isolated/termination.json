@@ -1,0 +1,13 @@
+{
+  "checkedAt": "2026-10-12T01:09:29.621973+00:00",
+  "instances": [
+    {
+      "instanceId": "i-0682086d957879453",
+      "state": "terminated"
+    },
+    {
+      "instanceId": "i-09292497e969296a0",
+      "state": "terminated"
+    }
+  ]
+}
