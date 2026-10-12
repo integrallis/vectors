@@ -1,0 +1,79 @@
+{
+  "runtimeCommit": "dd58fdefd972b4b6709d0613a9aa725a96ee8b82",
+  "candidateJarSha256": "bf1e8a2f3a4f7224aea11c828f112c99cf9a5b18bc6daca625feeae43282b95f",
+  "cases": [
+    {
+      "host": "x86",
+      "case": "bonsai2-control-fixture.execution",
+      "exitCode": 0,
+      "seconds": 44.45178736400001
+    },
+    {
+      "host": "x86",
+      "case": "qwen-bf16-published-fixture.execution",
+      "exitCode": 1,
+      "seconds": 3.0204147950000078
+    },
+    {
+      "host": "x86",
+      "case": "qwen-bf16-candidate-fixture.execution",
+      "exitCode": 0,
+      "seconds": 6.2808297640000035
+    },
+    {
+      "host": "x86",
+      "case": "qwen-bf16-control-fixture.execution",
+      "exitCode": 0,
+      "seconds": 8.536580973
+    },
+    {
+      "host": "x86",
+      "case": "bonsai2-published-fixture.execution",
+      "exitCode": 1,
+      "seconds": 11.252368392999998
+    },
+    {
+      "host": "x86",
+      "case": "bonsai2-candidate-fixture.execution",
+      "exitCode": 0,
+      "seconds": 42.828875159000006
+    },
+    {
+      "host": "arm",
+      "case": "bonsai2-control-fixture.execution",
+      "exitCode": 0,
+      "seconds": 41.68742470699999
+    },
+    {
+      "host": "arm",
+      "case": "qwen-bf16-published-fixture.execution",
+      "exitCode": 1,
+      "seconds": 3.0188248810000005
+    },
+    {
+      "host": "arm",
+      "case": "qwen-bf16-candidate-fixture.execution",
+      "exitCode": 0,
+      "seconds": 5.826729416999996
+    },
+    {
+      "host": "arm",
+      "case": "qwen-bf16-control-fixture.execution",
+      "exitCode": 0,
+      "seconds": 7.578248615000007
+    },
+    {
+      "host": "arm",
+      "case": "bonsai2-published-fixture.execution",
+      "exitCode": 1,
+      "seconds": 11.143005553000009
+    },
+    {
+      "host": "arm",
+      "case": "bonsai2-candidate-fixture.execution",
+      "exitCode": 0,
+      "seconds": 40.42025731299998
+    }
+  ],
+  "publishedFailures": "Both models and hosts: fresh session changed after compilation. Published failures retained, candidate/control pass."
+}

@@ -1,0 +1,104 @@
+79052:
+2026-10-12 12:42:51
+Full thread dump OpenJDK 64-Bit Server VM (25.0.3+9-LTS mixed mode):
+
+Threads class SMR info:
+_java_thread_list=0x00007fc6bfe15370, length=11, elements={
+0x00007fc6b9008200, 0x00007fc6c0808600, 0x00007fc6c1808800, 0x00007fc6af012800,
+0x00007fc6af015200, 0x00007fc6c1809000, 0x00007fc6bf00c200, 0x00007fc6c0828c00,
+0x00007fc6b982a400, 0x00007fc6b8029a00, 0x00007fc6b91ef000
+}
+
+"main" #3 [9987] prio=5 os_prio=31 cpu=10993.59ms elapsed=62.16s tid=0x00007fc6b9008200 nid=9987 runnable  [0x0000700005e66000]
+   java.lang.Thread.State: RUNNABLE
+	at jdk.incubator.vector.IntVector.compareTemplate(jdk.incubator.vector@25.0.3/IntVector.java:2057)
+	at jdk.incubator.vector.IntVector.compareTemplate(jdk.incubator.vector@25.0.3/IntVector.java:2140)
+	at jdk.incubator.vector.Int64Vector.compare(jdk.incubator.vector@25.0.3/Int64Vector.java:390)
+	at jdk.incubator.vector.Float64Vector$Float64Shuffle.laneIsValid(jdk.incubator.vector@25.0.3/Float64Vector.java:857)
+	at jdk.incubator.vector.Float64Vector$Float64Shuffle.laneIsValid(jdk.incubator.vector@25.0.3/Float64Vector.java:783)
+	at jdk.incubator.vector.FloatVector.rearrangeTemplate(jdk.incubator.vector@25.0.3/FloatVector.java:2351)
+	at jdk.incubator.vector.Float64Vector.rearrange(jdk.incubator.vector@25.0.3/Float64Vector.java:459)
+	at jdk.incubator.vector.Float64Vector.rearrange(jdk.incubator.vector@25.0.3/Float64Vector.java:43)
+	at com.integrallis.vectors.core.BFloat16Matrix.vectorMultiplyRows(BFloat16Matrix.java:343)
+	at com.integrallis.vectors.core.BFloat16Matrix.vectorMultiplySequential(BFloat16Matrix.java:313)
+	at com.integrallis.vectors.core.BFloat16Matrix.vectorMultiply(BFloat16Matrix.java:164)
+	at com.integrallis.vectors.core.BFloat16Matrix.vectorMultiply(BFloat16Matrix.java:139)
+	at com.integrallis.vectors.core.PanamaVectorUtilSupport.bfloat16MatVecDot(PanamaVectorUtilSupport.java:7534)
+	at com.integrallis.vectors.core.BFloat16Matrix.multiply(BFloat16Matrix.java:94)
+	at com.integrallis.vectors.core.BFloat16MatrixColdHotProbe.main(BFloat16MatrixColdHotProbe.java:52)
+
+"Reference Handler" #11 [28931] daemon prio=10 os_prio=31 cpu=0.65ms elapsed=62.05s tid=0x00007fc6c0808600 nid=28931 waiting on condition  [0x0000700006785000]
+   java.lang.Thread.State: RUNNABLE
+	at java.lang.ref.Reference.waitForReferencePendingList(java.base@25.0.3/Native Method)
+	at java.lang.ref.Reference.processPendingReferences(java.base@25.0.3/Reference.java:246)
+	at java.lang.ref.Reference$ReferenceHandler.run(java.base@25.0.3/Reference.java:208)
+
+"Finalizer" #12 [24835] daemon prio=8 os_prio=31 cpu=0.23ms elapsed=62.05s tid=0x00007fc6c1808800 nid=24835 in Object.wait()  [0x0000700006888000]
+   java.lang.Thread.State: WAITING (on object monitor)
+	at java.lang.Object.wait0(java.base@25.0.3/Native Method)
+	- waiting on <0x00000007e01018a8> (a java.lang.ref.ReferenceQueue$Lock)
+	at java.lang.Object.wait(java.base@25.0.3/Object.java:389)
+	at java.lang.Object.wait(java.base@25.0.3/Object.java:351)
+	at java.lang.ref.ReferenceQueue.remove0(java.base@25.0.3/ReferenceQueue.java:137)
+	at java.lang.ref.ReferenceQueue.remove(java.base@25.0.3/ReferenceQueue.java:215)
+	- locked <0x00000007e01018a8> (a java.lang.ref.ReferenceQueue$Lock)
+	at java.lang.ref.Finalizer$FinalizerThread.run(java.base@25.0.3/Finalizer.java:165)
+
+"Signal Dispatcher" #13 [25347] daemon prio=9 os_prio=31 cpu=0.39ms elapsed=62.05s tid=0x00007fc6af012800 nid=25347 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Service Thread" #14 [25603] daemon prio=9 os_prio=31 cpu=1.49ms elapsed=62.05s tid=0x00007fc6af015200 nid=25603 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Monitor Deflation Thread" #15 [28163] daemon prio=9 os_prio=31 cpu=5.01ms elapsed=62.05s tid=0x00007fc6c1809000 nid=28163 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"C2 CompilerThread0" #16 [26115] daemon prio=9 os_prio=31 cpu=657.09ms elapsed=62.05s tid=0x00007fc6bf00c200 nid=26115 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+   No compile task
+
+"C1 CompilerThread0" #18 [27395] daemon prio=9 os_prio=31 cpu=545.66ms elapsed=62.04s tid=0x00007fc6c0828c00 nid=27395 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+   No compile task
+
+"Notification Thread" #19 [26883] daemon prio=9 os_prio=31 cpu=0.11ms elapsed=61.59s tid=0x00007fc6b982a400 nid=26883 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Common-Cleaner" #20 [26371] daemon prio=8 os_prio=31 cpu=0.34ms elapsed=61.47s tid=0x00007fc6b8029a00 nid=26371 in Object.wait()  [0x0000700006f9d000]
+   java.lang.Thread.State: TIMED_WAITING (on object monitor)
+	at java.lang.Object.wait0(java.base@25.0.3/Native Method)
+	- waiting on <0x00000007e0100958> (a java.lang.ref.ReferenceQueue$Lock)
+	at java.lang.Object.wait(java.base@25.0.3/Object.java:389)
+	at java.lang.ref.ReferenceQueue.remove0(java.base@25.0.3/ReferenceQueue.java:123)
+	at java.lang.ref.ReferenceQueue.remove(java.base@25.0.3/ReferenceQueue.java:201)
+	- locked <0x00000007e0100958> (a java.lang.ref.ReferenceQueue$Lock)
+	at jdk.internal.ref.CleanerImpl.run(java.base@25.0.3/CleanerImpl.java:146)
+	at java.lang.Thread.runWith(java.base@25.0.3/Thread.java:1487)
+	at java.lang.Thread.run(java.base@25.0.3/Thread.java:1474)
+	at jdk.internal.misc.InnocuousThread.run(java.base@25.0.3/InnocuousThread.java:148)
+
+"Attach Listener" #26 [43299] daemon prio=9 os_prio=31 cpu=1.71ms elapsed=0.16s tid=0x00007fc6b91ef000 nid=43299 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"GC Thread#3" os_prio=31 cpu=65.09ms elapsed=57.63s tid=0x00007fc6bf3e9c00 nid=33539 runnable  
+
+"GC Thread#2" os_prio=31 cpu=65.76ms elapsed=57.63s tid=0x00007fc6bf3e9600 nid=33027 runnable  
+
+"GC Thread#1" os_prio=31 cpu=65.82ms elapsed=57.63s tid=0x00007fc6bf3e9000 nid=42755 runnable  
+
+"VM Thread" os_prio=31 cpu=33.08ms elapsed=62.10s tid=0x00007fc68f010200 nid=18179 runnable  
+
+"VM Periodic Task Thread" os_prio=31 cpu=0.98ms elapsed=62.13s tid=0x00007fc6bfa09120 nid=17667 waiting on condition  
+
+"G1 Service" os_prio=31 cpu=4.90ms elapsed=62.13s tid=0x00007fc6c0815e00 nid=17155 runnable  
+
+"G1 Refine#0" os_prio=31 cpu=0.09ms elapsed=62.14s tid=0x00007fc6c080a000 nid=16899 runnable  
+
+"G1 Conc#0" os_prio=31 cpu=0.06ms elapsed=62.14s tid=0x00007fc6c1809c00 nid=21507 runnable  
+
+"G1 Main Marker" os_prio=31 cpu=0.10ms elapsed=62.14s tid=0x00007fc6b882f000 nid=13571 runnable  
+
+"GC Thread#0" os_prio=31 cpu=65.64ms elapsed=62.14s tid=0x00007fc6b8828200 nid=12547 runnable  
+
+JNI global refs: 8, weak refs: 0
+

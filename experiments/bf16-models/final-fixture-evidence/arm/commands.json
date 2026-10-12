@@ -1,0 +1,248 @@
+[
+  {
+    "label": "tile2parallel-cold-64-48x5120",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.8146164139999996
+  },
+  {
+    "label": "tile2parallel-cold-64-5x37",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.3642752439999981
+  },
+  {
+    "label": "tile2parallel-cold-64-8193x37",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.8648507610000138
+  },
+  {
+    "label": "tile2parallel-cold-64-512x2048",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.8147671579999951
+  },
+  {
+    "label": "tile2parallel-cold-128-48x5120",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.76478544699998
+  },
+  {
+    "label": "tile2parallel-cold-128-5x37",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.36424003700000185
+  },
+  {
+    "label": "tile2parallel-cold-128-8193x37",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.8648263869999937
+  },
+  {
+    "label": "tile2parallel-cold-128-512x2048",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.7148437300000126
+  },
+  {
+    "label": "tile2parallel-cold-256-48x5120",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "48",
+      "5120"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.7648642059999986
+  },
+  {
+    "label": "tile2parallel-cold-256-5x37",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "5",
+      "37"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.3642303900000172
+  },
+  {
+    "label": "tile2parallel-cold-256-8193x37",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "8193",
+      "37"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 1.015032801000018
+  },
+  {
+    "label": "tile2parallel-cold-256-512x2048",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixColdHotProbe",
+      "512",
+      "2048"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 0.7648619839999924
+  },
+  {
+    "label": "tile2parallel-allocation",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16MatrixAllocationProbe"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 3.167679549999974
+  },
+  {
+    "label": "tile2parallel-nested",
+    "command": [
+      "/opt/jdk/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-XX:ActiveProcessorCount=4",
+      "-Xmx512m",
+      "-cp",
+      "tile2parallel.jar:probes.jar:benchmark.jar",
+      "com.integrallis.vectors.core.BFloat16NestedDispatchProbe"
+    ],
+    "exitCode": 0,
+    "wallSeconds": 1.0150350419999938
+  }
+]
