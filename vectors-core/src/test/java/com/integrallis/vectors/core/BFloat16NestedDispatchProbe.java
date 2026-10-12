@@ -21,6 +21,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /** Child-process regression check: nested work must never republish its active worker pool. */
 final class BFloat16NestedDispatchProbe {
@@ -68,7 +70,44 @@ final class BFloat16NestedDispatchProbe {
                   }))
           .execute();
       matrix.multiply(input, expected);
+      crossPoolDispatch();
       System.out.println("NESTED_DISPATCH_COMPLETE");
     }
+  }
+
+  private static void crossPoolDispatch() {
+    System.out.println("ENTER_CROSS_POOL_DISPATCH");
+    int[] actual = new int[8];
+    try (var first = new GgufPersistentRowExecutor(2, 1, "bf16-nested-first");
+        var second = new GgufPersistentRowExecutor(2, 1, "bf16-nested-second")) {
+      first.forEach(
+          1,
+          ignored -> {
+            Thread outer = Thread.currentThread();
+            var otherCallback = new CountDownLatch(1);
+            second.forEach(
+                2,
+                row -> {
+                  // Give a second-pool worker the opportunity to reenter the first pool. Correct
+                  // nested dispatch executes inline, so the bounded wait then simply expires.
+                  if (Thread.currentThread() == outer) {
+                    try {
+                      otherCallback.await(200, TimeUnit.MILLISECONDS);
+                    } catch (InterruptedException failure) {
+                      Thread.currentThread().interrupt();
+                      throw new AssertionError(failure);
+                    }
+                  } else {
+                    otherCallback.countDown();
+                  }
+                  first.forEach(4, item -> actual[row * 4 + item]++);
+                });
+          });
+      for (int value : actual) if (value != 1) throw new AssertionError("cross-pool row lost");
+      first.forEach(8, row -> actual[row]++);
+      second.forEach(8, row -> actual[row]++);
+      for (int value : actual) if (value != 3) throw new AssertionError("cross-pool reuse failed");
+    }
+    System.out.println("CROSS_POOL_DISPATCH_COMPLETE");
   }
 }

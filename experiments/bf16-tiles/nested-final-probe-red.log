@@ -1,0 +1,179 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+Oct 12, 2026 12:14:31 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Oct 12, 2026 12:14:31 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=persistent ggufThreads=4 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+ENTER_NESTED_DISPATCH
+69561:
+2026-10-12 12:14:51
+Full thread dump OpenJDK 64-Bit Server VM (25.0.3+9-LTS mixed mode):
+
+Threads class SMR info:
+_java_thread_list=0x00007f92ed81f740, length=14, elements={
+0x00007f92cd808200, 0x00007f92ef00a200, 0x00007f92cd817200, 0x00007f92ad808200,
+0x00007f92cd817a00, 0x00007f92f180ba00, 0x00007f92f080fe00, 0x00007f92f1814200,
+0x00007f92ee82b200, 0x00007f92ad820a00, 0x00007f92cd9df000, 0x00007f92f0038800,
+0x00007f92ef91fe00, 0x00007f92f10c0400
+}
+
+"main" #3 [8707] prio=5 os_prio=31 cpu=2135.28ms elapsed=21.47s tid=0x00007f92cd808200 nid=8707 waiting on condition  [0x0000700001983000]
+   java.lang.Thread.State: WAITING (parking)
+	at jdk.internal.misc.Unsafe.park(java.base@25.0.3/Native Method)
+	- parking to wait for  <0x00000007fd950a68> (a java.util.concurrent.Phaser$QNode)
+	at java.util.concurrent.locks.LockSupport.park(java.base@25.0.3/LockSupport.java:223)
+	at java.util.concurrent.Phaser$QNode.block(java.base@25.0.3/Phaser.java:1135)
+	at java.util.concurrent.ForkJoinPool.unmanagedBlock(java.base@25.0.3/ForkJoinPool.java:4364)
+	at java.util.concurrent.ForkJoinPool.managedBlock(java.base@25.0.3/ForkJoinPool.java:4310)
+	at java.util.concurrent.Phaser.internalAwaitAdvance(java.base@25.0.3/Phaser.java:1065)
+	at java.util.concurrent.Phaser.awaitAdvance(java.base@25.0.3/Phaser.java:727)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.awaitAdvancePolling(GgufPersistentRowExecutor.java:238)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.execute(GgufPersistentRowExecutor.java:129)
+	at com.integrallis.vectors.core.GgufParallelSupport.execute(GgufParallelSupport.java:183)
+	at com.integrallis.vectors.core.GgufStagePlan.execute(GgufStagePlan.java:49)
+	at com.integrallis.vectors.core.BFloat16NestedDispatchProbe.lambda$main$1(BFloat16NestedDispatchProbe.java:67)
+	at com.integrallis.vectors.core.BFloat16NestedDispatchProbe$$Lambda/0x00000007a0148650.execute(Unknown Source)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.executeStage(GgufPersistentRowExecutor.java:182)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.executePublishedPlan(GgufPersistentRowExecutor.java:161)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.execute(GgufPersistentRowExecutor.java:130)
+	at com.integrallis.vectors.core.GgufParallelSupport.execute(GgufParallelSupport.java:183)
+	at com.integrallis.vectors.core.GgufStagePlan.execute(GgufStagePlan.java:49)
+	at com.integrallis.vectors.core.BFloat16NestedDispatchProbe.main(BFloat16NestedDispatchProbe.java:69)
+
+"Reference Handler" #11 [25603] daemon prio=10 os_prio=31 cpu=0.76ms elapsed=21.32s tid=0x00007f92ef00a200 nid=25603 waiting on condition  [0x0000700002324000]
+   java.lang.Thread.State: RUNNABLE
+	at java.lang.ref.Reference.waitForReferencePendingList(java.base@25.0.3/Native Method)
+	at java.lang.ref.Reference.processPendingReferences(java.base@25.0.3/Reference.java:246)
+	at java.lang.ref.Reference$ReferenceHandler.run(java.base@25.0.3/Reference.java:208)
+
+"Finalizer" #12 [29955] daemon prio=8 os_prio=31 cpu=0.28ms elapsed=21.32s tid=0x00007f92cd817200 nid=29955 in Object.wait()  [0x0000700002427000]
+   java.lang.Thread.State: WAITING (on object monitor)
+	at java.lang.Object.wait0(java.base@25.0.3/Native Method)
+	- waiting on <0x00000007fe318078> (a java.lang.ref.ReferenceQueue$Lock)
+	at java.lang.Object.wait(java.base@25.0.3/Object.java:389)
+	at java.lang.Object.wait(java.base@25.0.3/Object.java:351)
+	at java.lang.ref.ReferenceQueue.remove0(java.base@25.0.3/ReferenceQueue.java:137)
+	at java.lang.ref.ReferenceQueue.remove(java.base@25.0.3/ReferenceQueue.java:215)
+	- locked <0x00000007fe318078> (a java.lang.ref.ReferenceQueue$Lock)
+	at java.lang.ref.Finalizer$FinalizerThread.run(java.base@25.0.3/Finalizer.java:165)
+
+"Signal Dispatcher" #13 [29443] daemon prio=9 os_prio=31 cpu=0.81ms elapsed=21.32s tid=0x00007f92ad808200 nid=29443 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Service Thread" #14 [29187] daemon prio=9 os_prio=31 cpu=0.90ms elapsed=21.32s tid=0x00007f92cd817a00 nid=29187 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Monitor Deflation Thread" #15 [28931] daemon prio=9 os_prio=31 cpu=2.72ms elapsed=21.32s tid=0x00007f92f180ba00 nid=28931 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"C2 CompilerThread0" #16 [28419] daemon prio=9 os_prio=31 cpu=1431.42ms elapsed=21.32s tid=0x00007f92f080fe00 nid=28419 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+   No compile task
+
+"C1 CompilerThread0" #18 [27907] daemon prio=9 os_prio=31 cpu=888.43ms elapsed=21.31s tid=0x00007f92f1814200 nid=27907 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+   No compile task
+
+"Notification Thread" #19 [26883] daemon prio=9 os_prio=31 cpu=0.23ms elapsed=20.88s tid=0x00007f92ee82b200 nid=26883 runnable  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"Common-Cleaner" #20 [27395] daemon prio=8 os_prio=31 cpu=0.33ms elapsed=20.86s tid=0x00007f92ad820a00 nid=27395 in Object.wait()  [0x0000700002b3c000]
+   java.lang.Thread.State: TIMED_WAITING (on object monitor)
+	at java.lang.Object.wait0(java.base@25.0.3/Native Method)
+	- waiting on <0x00000007fe310808> (a java.lang.ref.ReferenceQueue$Lock)
+	at java.lang.Object.wait(java.base@25.0.3/Object.java:389)
+	at java.lang.ref.ReferenceQueue.remove0(java.base@25.0.3/ReferenceQueue.java:123)
+	at java.lang.ref.ReferenceQueue.remove(java.base@25.0.3/ReferenceQueue.java:201)
+	- locked <0x00000007fe310808> (a java.lang.ref.ReferenceQueue$Lock)
+	at jdk.internal.ref.CleanerImpl.run(java.base@25.0.3/CleanerImpl.java:146)
+	at java.lang.Thread.runWith(java.base@25.0.3/Thread.java:1487)
+	at java.lang.Thread.run(java.base@25.0.3/Thread.java:1474)
+	at jdk.internal.misc.InnocuousThread.run(java.base@25.0.3/InnocuousThread.java:148)
+
+"vectors-gguf-0" #26 [33539] daemon prio=5 os_prio=31 cpu=0.79ms elapsed=16.63s tid=0x00007f92cd9df000 nid=33539 waiting on condition  [0x000070000304b000]
+   java.lang.Thread.State: WAITING (parking)
+	at jdk.internal.misc.Unsafe.park(java.base@25.0.3/Native Method)
+	- parking to wait for  <0x00000007fd9347e8> (a java.util.concurrent.locks.ReentrantLock$NonfairSync)
+	at java.util.concurrent.locks.LockSupport.park(java.base@25.0.3/LockSupport.java:223)
+	at java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(java.base@25.0.3/AbstractQueuedSynchronizer.java:790)
+	at java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(java.base@25.0.3/AbstractQueuedSynchronizer.java:1030)
+	at java.util.concurrent.locks.ReentrantLock$Sync.lock(java.base@25.0.3/ReentrantLock.java:154)
+	at java.util.concurrent.locks.ReentrantLock.lock(java.base@25.0.3/ReentrantLock.java:323)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.execute(GgufPersistentRowExecutor.java:121)
+	at com.integrallis.vectors.core.GgufParallelSupport.execute(GgufParallelSupport.java:183)
+	at com.integrallis.vectors.core.GgufStagePlan.execute(GgufStagePlan.java:49)
+	at com.integrallis.vectors.core.BFloat16NestedDispatchProbe.lambda$main$1(BFloat16NestedDispatchProbe.java:67)
+	at com.integrallis.vectors.core.BFloat16NestedDispatchProbe$$Lambda/0x00000007a0148650.execute(Unknown Source)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.executeStage(GgufPersistentRowExecutor.java:182)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.executePublishedPlan(GgufPersistentRowExecutor.java:161)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.workerLoop(GgufPersistentRowExecutor.java:151)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor$$Lambda/0x00000007a0148ce8.run(Unknown Source)
+	at java.lang.Thread.runWith(java.base@25.0.3/Thread.java:1487)
+	at java.lang.Thread.run(java.base@25.0.3/Thread.java:1474)
+
+"vectors-gguf-1" #27 [41731] daemon prio=5 os_prio=31 cpu=0.35ms elapsed=16.63s tid=0x00007f92f0038800 nid=41731 waiting on condition  [0x000070000314e000]
+   java.lang.Thread.State: WAITING (parking)
+	at jdk.internal.misc.Unsafe.park(java.base@25.0.3/Native Method)
+	- parking to wait for  <0x00000007fd9347e8> (a java.util.concurrent.locks.ReentrantLock$NonfairSync)
+	at java.util.concurrent.locks.LockSupport.park(java.base@25.0.3/LockSupport.java:223)
+	at java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(java.base@25.0.3/AbstractQueuedSynchronizer.java:790)
+	at java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(java.base@25.0.3/AbstractQueuedSynchronizer.java:1030)
+	at java.util.concurrent.locks.ReentrantLock$Sync.lock(java.base@25.0.3/ReentrantLock.java:154)
+	at java.util.concurrent.locks.ReentrantLock.lock(java.base@25.0.3/ReentrantLock.java:323)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.execute(GgufPersistentRowExecutor.java:121)
+	at com.integrallis.vectors.core.GgufParallelSupport.execute(GgufParallelSupport.java:183)
+	at com.integrallis.vectors.core.GgufStagePlan.execute(GgufStagePlan.java:49)
+	at com.integrallis.vectors.core.BFloat16NestedDispatchProbe.lambda$main$1(BFloat16NestedDispatchProbe.java:67)
+	at com.integrallis.vectors.core.BFloat16NestedDispatchProbe$$Lambda/0x00000007a0148650.execute(Unknown Source)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.executeStage(GgufPersistentRowExecutor.java:182)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.executePublishedPlan(GgufPersistentRowExecutor.java:161)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.workerLoop(GgufPersistentRowExecutor.java:151)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor$$Lambda/0x00000007a0148ce8.run(Unknown Source)
+	at java.lang.Thread.runWith(java.base@25.0.3/Thread.java:1487)
+	at java.lang.Thread.run(java.base@25.0.3/Thread.java:1474)
+
+"vectors-gguf-2" #28 [33795] daemon prio=5 os_prio=31 cpu=1.23ms elapsed=16.63s tid=0x00007f92ef91fe00 nid=33795 waiting on condition  [0x0000700003251000]
+   java.lang.Thread.State: WAITING (parking)
+	at jdk.internal.misc.Unsafe.park(java.base@25.0.3/Native Method)
+	- parking to wait for  <0x00000007fd9347e8> (a java.util.concurrent.locks.ReentrantLock$NonfairSync)
+	at java.util.concurrent.locks.LockSupport.park(java.base@25.0.3/LockSupport.java:223)
+	at java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(java.base@25.0.3/AbstractQueuedSynchronizer.java:790)
+	at java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(java.base@25.0.3/AbstractQueuedSynchronizer.java:1030)
+	at java.util.concurrent.locks.ReentrantLock$Sync.lock(java.base@25.0.3/ReentrantLock.java:154)
+	at java.util.concurrent.locks.ReentrantLock.lock(java.base@25.0.3/ReentrantLock.java:323)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.execute(GgufPersistentRowExecutor.java:121)
+	at com.integrallis.vectors.core.GgufParallelSupport.execute(GgufParallelSupport.java:183)
+	at com.integrallis.vectors.core.GgufStagePlan.execute(GgufStagePlan.java:49)
+	at com.integrallis.vectors.core.BFloat16NestedDispatchProbe.lambda$main$1(BFloat16NestedDispatchProbe.java:67)
+	at com.integrallis.vectors.core.BFloat16NestedDispatchProbe$$Lambda/0x00000007a0148650.execute(Unknown Source)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.executeStage(GgufPersistentRowExecutor.java:182)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.executePublishedPlan(GgufPersistentRowExecutor.java:161)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor.workerLoop(GgufPersistentRowExecutor.java:151)
+	at com.integrallis.vectors.core.GgufPersistentRowExecutor$$Lambda/0x00000007a0148ce8.run(Unknown Source)
+	at java.lang.Thread.runWith(java.base@25.0.3/Thread.java:1487)
+	at java.lang.Thread.run(java.base@25.0.3/Thread.java:1474)
+
+"Attach Listener" #29 [32787] daemon prio=9 os_prio=31 cpu=3.79ms elapsed=0.16s tid=0x00007f92f10c0400 nid=32787 waiting on condition  [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+
+"GC Thread#3" os_prio=31 cpu=5.75ms elapsed=17.81s tid=0x00007f92ed010e00 nid=42499 runnable  
+
+"GC Thread#2" os_prio=31 cpu=5.83ms elapsed=17.81s tid=0x00007f92f1850400 nid=33283 runnable  
+
+"GC Thread#1" os_prio=31 cpu=5.95ms elapsed=17.81s tid=0x00007f92cd9dea00 nid=43011 runnable  
+
+"VM Thread" os_prio=31 cpu=5.84ms elapsed=21.41s tid=0x00007f92f1808200 nid=18435 runnable  
+
+"VM Periodic Task Thread" os_prio=31 cpu=1.07ms elapsed=21.46s tid=0x00007f92edd0cf60 nid=16643 waiting on condition  
+
+"G1 Service" os_prio=31 cpu=1.55ms elapsed=21.46s tid=0x00007f92f080a200 nid=20739 runnable  
+
+"G1 Refine#0" os_prio=31 cpu=0.16ms elapsed=21.46s tid=0x00007f92ee009200 nid=21251 runnable  
+
+"G1 Conc#0" os_prio=31 cpu=0.10ms elapsed=21.47s tid=0x00007f92ef81ae00 nid=16387 runnable  
+
+"G1 Main Marker" os_prio=31 cpu=0.12ms elapsed=21.47s tid=0x00007f92ef80bc00 nid=13827 runnable  
+
+"GC Thread#0" os_prio=31 cpu=6.03ms elapsed=21.47s tid=0x00007f92ee826400 nid=12547 runnable  
+
+JNI global refs: 8, weak refs: 0
+

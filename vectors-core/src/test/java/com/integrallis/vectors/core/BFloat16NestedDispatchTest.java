@@ -47,7 +47,8 @@ class BFloat16NestedDispatchTest {
       assertThat(process.exitValue())
           .as("nested dispatch output: %s", Files.readString(log))
           .isZero();
-      assertThat(Files.readString(log)).contains("NESTED_DISPATCH_COMPLETE");
+      assertThat(Files.readString(log))
+          .contains("CROSS_POOL_DISPATCH_COMPLETE", "NESTED_DISPATCH_COMPLETE");
     } finally {
       if (process.isAlive()) process.destroyForcibly().waitFor();
     }

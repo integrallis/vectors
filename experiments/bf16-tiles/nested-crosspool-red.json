@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+    "--add-modules",
+    "jdk.incubator.vector",
+    "-XX:ActiveProcessorCount=4",
+    "-Xmx512m",
+    "-cp",
+    "/tmp/bf16-crosspool-probe:/tmp/vectors-bf16-stable-b87e9ba.jar",
+    "com.integrallis.vectors.core.BFloat16NestedDispatchProbe"
+  ],
+  "referenceJarSha256": "f6e430c5c8d1bdb2f8dbc21de1e5ba4725c595716c4d73fc20e3f0c6d319453e",
+  "referenceRevision": "b87e9ba",
+  "threadDumpAfterSeconds": 15,
+  "terminatedOwnedProbe": true
+}
