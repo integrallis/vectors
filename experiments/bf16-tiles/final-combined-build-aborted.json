@@ -1,0 +1,6 @@
+{
+  "reason": "Horner activation helper rejected for supported-host performance; parent directs final BF16 proof using stable a551 helper. This build was deliberately stopped, not reported as a passed complete suite.",
+  "ownedWrapperPid": 75155,
+  "signal": "SIGTERM",
+  "log": "final-combined-build.log"
+}

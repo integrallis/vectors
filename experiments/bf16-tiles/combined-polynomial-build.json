@@ -1,0 +1,13 @@
+{
+  "tests": 18,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "bf16RuntimeRevision": "a3c6e87",
+  "activationSourceRevision": "d3aae7b",
+  "activationSource": "experiments/activation-exp/polynomial/degree10-ReproducibleActivationExp.java",
+  "command": "JAVA_HOME=25.0.3-tem ./gradlew :vectors-core:spotlessApply :vectors-core:jar :vectors-core:test --tests *Activation* --no-daemon",
+  "log": "combined-polynomial-build.log",
+  "wallTimeSeconds": 47,
+  "jarSha256": "83f7069a6fd7c63e14c60b51c68b1b4897810fa8cde11d60e14f26f83534b5f8"
+}

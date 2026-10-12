@@ -1,0 +1,1002 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :writeReleaseDependencyManifest UP-TO-DATE
+> Task :vectors-core:compileJava
+> Task :vectors-core:spotlessJava
+> Task :vectors-core:spotlessJavaApply
+> Task :vectors-core:spotlessApply
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes
+> Task :vectors-core:jar
+> Task :vectors-core:compileTestJava
+> Task :vectors-core:processTestResources UP-TO-DATE
+> Task :vectors-core:testClasses
+
+> Task :vectors-core:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+ActivationColdHotTest > activationsStayStableAcrossCompilationAndConcurrentCallers() PASSED
+
+BFloat16MatrixTest > multipliesKnownBfloat16BitPatternsWithFloatAccumulation() PASSED
+
+BFloat16MatrixTest > readsFromMappedStorage(Path) PASSED
+
+BFloat16MatrixTest > multipliesLargeRowCountsWithSequentialMemoryAccess() PASSED
+
+BFloat16MatrixTest > multipliesBatchMajorActivationsIntoAnOffsetOutputRegion() PASSED
+
+BFloat16MatrixTest > slicesRowsWithoutCopyingAndReadsIndividualValues() PASSED
+
+BFloat16MatrixAllocationTest > compiledBatchesDoNotBoxAVectorForEveryOutputRow(Path) PASSED
+
+BFloat16MatrixTest > sharedLargeBatchMatchesIndependentMatrixVectorProductsExactly() PASSED
+
+BFloat16MatrixTest > rejectsBadGeometryStorageAndInvocation() PASSED
+
+BFloat16MatrixTest > multipliesCompleteVectorBlocksAndScalarTail() PASSED
+
+BFloat16MatrixTest > preservesSubnormalAndRoundedReferenceValues() PASSED
+
+CoreValueTypesTest > documentFactoriesAndMetadataValuesPreserveTheirContracts() PASSED
+
+CoreValueTypesTest > filterFactoriesBuildTheFullTypedAst() PASSED
+
+CoreValueTypesTest > filterNodesRejectInvalidStructureAndCopyLists() PASSED
+
+EmbeddingProvenanceTest > a bare vector is allowed and simply carries no provenance PASSED
+
+EmbeddingProvenanceTest > staleness is decidable: changed content stops matching PASSED
+
+EmbeddingProvenanceTest > a recipe accepts a document that carries provenance, by text or by hash PASSED
+
+EmbeddingProvenanceTest > length prefixing stops adjacent fields colliding PASSED
+
+EmbeddingProvenanceTest > attestation distinguishes a verifiable model from one we were merely told about PASSED
+
+EmbeddingProvenanceTest > recipeHash is stable across map ordering, so it can be compared across versions PASSED
+
+EmbeddingProvenanceTest > the recipe's prefixes are asymmetric, which is the point of holding them centrally PASSED
+
+EmbeddingProvenanceTest > every component that changes the vector changes the recipe hash PASSED
+
+EmbeddingProvenanceTest > a malformed supplied hash is rejected, not stored PASSED
+
+EmbeddingProvenanceTest > a recipe refuses a document with no provenance, and says why PASSED
+
+EmbeddingProvenanceTest > a document always has a hash, derived from its text when one is given PASSED
+
+EmbeddingProvenanceTest > source may be omitted deliberately, in which case the hash carries the provenance PASSED
+
+F32ExecutionMatrixTest > ownsLittleEndianF32WeightsCopiedFromForeignMemory() PASSED
+
+F32ExecutionMatrixTest > rejectsInvalidGeometryAndStorage() PASSED
+
+F32ExecutionMatrixTest > ownsAndMultipliesARowMajorExecutionCopyForBatchAndRowTails() PASSED
+
+GgufBandGemmTest > defaultEntryPointRunsTheReportedKernel() PASSED
+
+GgufBandGemmTest > rejectsUnknownKernelNames() PASSED
+
+BFloat16MatrixDispatchTest > sharedConcurrentMatvecMatchesConfinedCallingThreadExecution() PASSED
+
+BFloat16NestedDispatchTest > nestedPlansAndProjectionsCompleteWithoutRepublishingActiveWorkers(Path) PASSED
+
+DocumentsTest > andAppendsPrebuiltDocuments() PASSED
+
+DocumentsTest > emptyFactoryThenAdds() PASSED
+
+DocumentsTest > iteratesInInsertionOrder() PASSED
+
+DocumentsTest > isAListOfDocument() PASSED
+
+DocumentsTest > varargsFactoryWrapsExistingDocuments() PASSED
+
+DocumentsTest > seedFactoryThenFluentAddsBuildInOrder() PASSED
+
+GgufBandGemmTest > propertySelectsBandAndCapabilitiesReportItInAFreshJvm(int, String) > maxBits=256 tile=4x4 PASSED
+
+F32ExecutionMatrixColdHotTest > ownedF32ExecutionIsBitIdenticalBeforeAndAfterCompilationAt128Bits() PASSED
+
+F32ExecutionMatrixColdHotTest > ownedF32ExecutionIsBitIdenticalBeforeAndAfterCompilationAt256Bits() PASSED
+
+F32ExecutionMatrixColdHotTest > ownedF32ExecutionIsBitIdenticalBeforeAndAfterCompilationAt64Bits() PASSED
+
+FusedSimilarityTest > everySimilarityMatchesItsScalarComparison() PASSED
+
+FusedSimilarityTest > zeroCountIsAllowed() PASSED
+
+FusedSimilarityTest > validatesEveryInputBoundary() PASSED
+
+GgufKQuantDequantTest > propertyParsingAndDefault() PASSED
+
+GgufKQuantDequantTest > scalarArmIsTheExistingReferenceLoops() PASSED
+
+GgufBandGemmTest > propertySelectsBandAndCapabilitiesReportItInAFreshJvm(int, String) > maxBits=128 tile=3x3 PASSED
+
+GgufKQuantDequantTest > propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int, String) > maxBits=128 dequant=scalar PASSED
+
+GgufKQuantDequantTest > propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int, String) > maxBits=128 dequant=simd-byte PASSED
+
+GgufBandGemmTest > propertySelectsBandAndCapabilitiesReportItInAFreshJvm(int, String) > maxBits=128 tile=4x4 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=1 rows=1 cols=256 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=1 rows=7 cols=256 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=2 rows=5 cols=512 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=3 rows=3 cols=768 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=4 rows=97 cols=768 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=5 rows=13 cols=2560 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=7 rows=200 cols=1280 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=11 rows=64 cols=256 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=1 rows=130 cols=2560 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q4_K batch=5 rows=512 cols=2560 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=1 rows=1 cols=256 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=1 rows=7 cols=256 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=2 rows=5 cols=512 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=3 rows=3 cols=768 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=4 rows=97 cols=768 PASSED
+
+GgufKQuantDequantTest > propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int, String) > maxBits=128 dequant=simd-int PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=5 rows=13 cols=2560 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=7 rows=200 cols=1280 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=11 rows=64 cols=256 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=1 rows=130 cols=2560 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q6_K batch=5 rows=512 cols=2560 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q8_0 batch=1 rows=1 cols=32 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q8_0 batch=2 rows=3 cols=96 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q8_0 batch=5 rows=7 cols=544 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q8_0 batch=4 rows=97 cols=1024 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q8_0 batch=7 rows=33 cols=2048 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q8_0 batch=1 rows=200 cols=2560 PASSED
+
+GgufBandGemmTest > bandMatchesExactReferenceAndIntegerKernelsWithinBounds(Format, int, int, int) > Q8_0 batch=3 rows=1600 cols=2560 PASSED
+
+GgufBatchDispatchTest > routingPredicateSwitchesExactlyAtTheThreshold() PASSED
+
+GgufBatchDispatchTest > singleMatrixEntryPointRoutesByBatchAtTheBoundary(Format) > [1] format=Q4_K PASSED
+
+GgufBatchDispatchTest > singleMatrixEntryPointRoutesByBatchAtTheBoundary(Format) > [2] format=Q6_K PASSED
+
+GgufBatchDispatchTest > singleMatrixEntryPointRoutesByBatchAtTheBoundary(Format) > [3] format=Q8_0 PASSED
+
+GgufKQuantDequantTest > propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int, String) > maxBits=128 dequant=simd-split PASSED
+
+GgufBatchDispatchTest > propertySelectsDispatchReportsThresholdsAndCountsInAFreshJvm() PASSED
+
+GgufBatchDispatchTest > thresholdsAreThePreRegisteredValues() PASSED
+
+GgufBatchDispatchTest > groupedQ8_0EntryPointsRouteByBatch() PASSED
+
+GgufBatchDispatchTest > groupedQ4_KEntryPointsRouteEachMatrixByItsOwnFormatThreshold() PASSED
+
+GgufParallelSupportTest > persistentExecutorRunsEveryRowExactlyOnceAcrossRepeatedDispatches() PASSED
+
+GgufParallelSupportTest > persistentExecutorSerializesConcurrentPublishersWithoutLosingRows() PASSED
+
+GgufParallelSupportTest > persistentExecutorClosesImmediatelyAfterACompletedDispatch() PASSED
+
+GgufParallelSupportTest > confinedSegmentsRemainOnTheirOwnerThread() PASSED
+
+GgufParallelSupportTest > executionModePropertyIsValidated() PASSED
+
+GgufParallelSupportTest > workCalculationDoesNotOverflowIntRange() PASSED
+
+GgufParallelSupportTest > persistentExecutorPropagatesWorkerFailureAndRemainsReusable() PASSED
+
+GgufParallelSupportTest > persistentExecutorRunsOrderedStagesWithExactRangeCoverage() PASSED
+
+GgufParallelSupportTest > persistentExecutorPropagatesStageFailureAndRemainsReusable() PASSED
+
+GgufParallelSupportTest > groupedRowsRemainOnOwnerWhenAnySegmentIsConfined() PASSED
+
+GgufParallelSupportTest > persistentExecutorSerializesConcurrentStagePublishers() PASSED
+
+GgufParallelSupportTest > parallelizesOnlyLargeMatricesWhenMultipleProcessorsAreAvailable() PASSED
+
+GgufParallelSupportTest > everyExecutionModeRunsEachRowExactlyOnce() PASSED
+
+GgufParallelSupportTest > pollBudgetIsSettableAtRunTimeAndParksWhenZero() PASSED
+
+GgufParallelSupportTest > persistentExecutorHandlesMaximumChunkConfigurationWithoutOverflow() PASSED
+
+GgufParallelSupportTest > q8ThresholdKeepsSmallMatricesSerialAndLargeMatricesParallel() PASSED
+
+GgufQuantizedDotTest > q8_0BlockRangeActivationQuantizationMatchesWholeBatchExactly() PASSED
+
+GgufQuantizedDotTest > q4_KQ8_KTripleBatchDotProductMatchesSeparateMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0DualBatchedMatmulMatchesSeparateBatchedMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q8_0Q8_0TripleBatchedMatmulMatchesSeparateBatchedMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q4_KQ8_KBatchedMatmulMatchesGemvAtProjectionScaleAfterWarmup() PASSED
+
+GgufQuantizedDotTest > q8_0Q8_0BatchedMatmulMatchesIndependentQueriesExactly() PASSED
+
+GgufKQuantDequantTest > propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int, String) > maxBits=256 dequant=scalar PASSED
+
+GgufQuantizedDotTest > q5_KQ8_KBatchedMatmulMatchesGemvAtProjectionScaleAfterWarmup() PASSED
+
+GgufQuantizedDotTest > q8_0Q8_0DualBatchedMatmulMatchesSeparateBatchedMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q8_0Q8_0TripleBatchDotProductMatchesSeparateMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q5_KQ8_KBatchDotProduct_matchesQuantizedActivationReferenceWithMins() PASSED
+
+GgufQuantizedDotTest > q5_KQ8_KTripleBatchDotProductMatchesSeparateMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q6_KQ8_KBatchedMatmulMatchesGemvAtProjectionScaleAfterWarmup() PASSED
+
+GgufQuantizedDotTest > q5_KDotProduct_matchesDecodedReferenceWithHighBitsScalesAndMins() PASSED
+
+GgufQuantizedDotTest > q4_KQ8_KBatchedMatmulRejectsUndersizedSumScratch() PASSED
+
+GgufQuantizedDotTest > q4_KLongOffsetRowsMatchTheEstablishedMappedKernelExactly() PASSED
+
+GgufQuantizedDotTest > q4_0DotProduct_matchesDecodedReference() PASSED
+
+GgufQuantizedDotTest > q6_KDotProduct_matchesDecodedReference() PASSED
+
+GgufQuantizedDotTest > activationQuantizedBatchDotProducts_rejectUndersizedScratch() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0ExplicitKernelModesMatchExactlyForModelSizedRows() PASSED
+
+GgufQuantizedDotTest > q5_0Q8_0BatchDotProduct_quantizesTheQueryOnceUsingGgmlSemantics() PASSED
+
+GgufQuantizedDotTest > q5_KMappedBatchedMatmulMatchesDirectKernelExactly() PASSED
+
+GgufQuantizedDotTest > blockMajorQ8_0ActivationLayoutMatchesPackedWholeAndSplitQuantizationExactly() PASSED
+
+GgufQuantizedDotTest > q4_0PrequantizedRowRangesComposeToTheExactBatchedResult() PASSED
+
+GgufQuantizedDotTest > quantizedBatchDotRejectsAnActivationShorterThanCols() PASSED
+
+GgufQuantizedDotTest > q4_KQ4_KQ6_KQ8_KTripleBatchedMatmulMatchesSeparateBatchedMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q4_KDequantize_matchesDecodedReferenceAtOutputOffset() PASSED
+
+GgufQuantizedDotTest > q4_KDotProduct_matchesDecodedReferenceWithPackedScalesAndMins() PASSED
+
+GgufQuantizedDotTest > q4_KQ8_KBatchedMatmulMatchesIndependentQueriesExactly() PASSED
+
+GgufQuantizedDotTest > q8_0Q8_0DualBatchDotProductMatchesSeparateMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q6_KQ8_KBatchDotProduct_reusesIndependentScratchAcrossParallelRows() PASSED
+
+GgufQuantizedDotTest > quantizedDotRejectsNonBlockAlignedDimensions() PASSED
+
+GgufQuantizedDotTest > q5_KLongOffsetRowsMatchTheEstablishedMappedKernelExactly() PASSED
+
+GgufQuantizedDotTest > q6_KQ8_KBatchedMatmulRejectsUndersizedScaleScratch() PASSED
+
+GgufQuantizedDotTest > q8_0Q8_0BatchedMatmulMatchesGemvAtProjectionScaleAfterWarmup() PASSED
+
+GgufQuantizedDotTest > quantizedBatchDotAcceptsAnOversizedActivationBuffer() PASSED
+
+GgufQuantizedDotTest > q8_0Q8_0BatchedMatmulDoesNotOverflowA16BitLaneReduction() PASSED
+
+GgufQuantizedDotTest > q4_KQ8_KBatchDotProduct_quantizesTheQueryOnceUsingGgmlSemantics() PASSED
+
+GgufQuantizedDotTest > blockMajorQ8_0BatchRangeQuantizationMatchesWholeBatchExactlyWhenConcurrent() PASSED
+
+GgufQuantizedDotTest > explicitBlockMajorQ8KernelsMatchPackedRowsExactly() PASSED
+
+GgufQuantizedDotTest > q6_KQ8_KBatchedMatmulRejectsMissingKernelStrategy() PASSED
+
+GgufQuantizedDotTest > q5_0Q8_0BatchedMatmulMatchesIndependentQueriesExactly() PASSED
+
+GgufQuantizedDotTest > q6_KMappedBatchedMatmulMatchesDirectKernelExactly() PASSED
+
+GgufQuantizedDotTest > q4_KQ4_KQ6_KQ8_KTripleBatchDotProductMatchesSeparateMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0TripleBatchDotProductMatchesSeparateMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q5_KQ8_KBatchedMatmulMatchesIndependentQueriesExactly() PASSED
+
+GgufQuantizedDotTest > q6_KQ8_KFourQueryBlockAccumulatorMatchesWorstCaseSignedInputsExactly() PASSED
+
+GgufQuantizedDotTest > q5_KBatchDotProduct_respectsRowOffsets() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0SingleQueryBatchMatchesGemvExactly() PASSED
+
+GgufQuantizedDotTest > q8_0DotProduct_matchesDecodedReference() PASSED
+
+GgufQuantizedDotTest > q6_KLongOffsetRowsMatchTheEstablishedMappedKernelExactly() PASSED
+
+GgufQuantizedDotTest > q5_KQ8_KTwoQueryBatchedMatmulMatchesIndependentQueriesExactly() PASSED
+
+GgufQuantizedDotTest > q4_KQ8_KDualBatchDotProductMatchesSeparateMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0BatchedMatmulMatchesIndependentQueriesNumerically() PASSED
+
+GgufQuantizedDotTest > q4_0DotProduct_usesGgmlSplitNibbleLayout() PASSED
+
+GgufQuantizedDotTest > q6_KQ8_KBatchDotProduct_quantizesTheQueryOnceUsingGgmlSemantics() PASSED
+
+GgufQuantizedDotTest > q4_KLongOffsetBatchedMatmulMatchesTheEstablishedKernelExactly() PASSED
+
+GgufQuantizedDotTest > q4_KQ8_KDualBatchedMatmulMatchesSeparateBatchedMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q5_KDequantize_matchesDecodedReferenceAtOutputOffset() PASSED
+
+GgufQuantizedDotTest > q4_0BatchDotProduct_respectsRowOffsets() PASSED
+
+GgufQuantizedDotTest > q6_KBatchDotProduct_respectsRowOffsets() PASSED
+
+GgufQuantizedDotTest > q5_0Dequantize_matchesDecodedReferenceAtOutputOffset() PASSED
+
+GgufQuantizedDotTest > q4_KQ8_KBatchDotProduct_matchesDequantizedReferenceWithMins() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0TripleBatchedMatmulMatchesSeparateBatchedMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q5_KQ8_KBatchedMatmulRejectsUndersizedSumScratch() PASSED
+
+GgufQuantizedDotTest > q5_0DotProduct_matchesDecodedReferenceWithHighBitMask() PASSED
+
+GgufQuantizedDotTest > f32BatchDotProduct_rejectsTruncatedMatrix() PASSED
+
+GgufQuantizedDotTest > f32BatchDotProduct_readsLittleEndianMappedRows() PASSED
+
+GgufQuantizedDotTest > q6_KQ8_KBatchedMatmulMatchesIndependentQueriesExactly() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0DualBatchDotProductMatchesSeparateMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q4_0BlockRangeActivationQuantizationMatchesWholeBatchExactly() PASSED
+
+GgufQuantizedDotTest > q5_KQ8_KDualBatchDotProductMatchesSeparateMatmulsExactly() PASSED
+
+GgufQuantizedDotTest > q8_0PrequantizedRowRangesComposeToTheExactBatchedResult() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0BatchedMatmulMatchesGemvAtQwenProjectionScaleAfterWarmup() PASSED
+
+GgufQuantizedDotTest > q8_0Q8_0BatchDotProduct_quantizesEachQueryBlockUsingGgmlSemantics() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0BatchedMatmulRejectsUndersizedLaneScratch() PASSED
+
+GgufQuantizedDotTest > blockMajorQ8_0RowsRequireExplicitBlockMajorActivationStorage() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0BatchDotProduct_quantizesEachQueryBlockUsingGgmlSemantics() PASSED
+
+GgufQuantizedDotTest > q6_KQ8_KBatchedKernelStrategiesMatchTheDefaultExactly() PASSED
+
+GgufQuantizedDotTest > q8_0BatchRejectsInvalidShapeAndBlockRanges() PASSED
+
+GgufQuantizedDotTest > q8_0Q8_0BatchedMatmulRejectsUndersizedScaleScratch() PASSED
+
+GgufQuantizedDotTest > q5_0Q8_0BatchedMatmulRejectsUndersizedScaleScratch() PASSED
+
+GgufQuantizedDotTest > q6_KDequantize_matchesDecodedReferenceAtOutputOffset() PASSED
+
+GgufQuantizedDotTest > q8_0BatchDotProduct_respectsRowOffsets() PASSED
+
+GgufQuantizedDotTest > q4_0Q8_0BatchedMatmulMatchesGemvReductionAcrossBlocks() PASSED
+
+PackedInt4GroupMatrixTest > rowMajorKernelMatchesAnIndependentDequantizedReference() PASSED
+
+PackedInt4GroupMatrixTest > rightHandBatchReusesWeightsAcrossIndependentInputRows() PASSED
+
+PackedInt4GroupMatrixTest > rowMajorBatchReusesWeightsAcrossIndependentInputRows() PASSED
+
+PackedInt4GroupMatrixTest > publicFacadeRejectsMalformedGeometryBeforeDispatch() PASSED
+
+PackedInt4GroupMatrixTest > rightHandKernelMatchesAnIndependentDequantizedReference() PASSED
+
+PackedInt4GroupMatrixTest > preparedInt8BatchStaysCloseToTheFullPrecisionActivationPath() PASSED
+
+GgufKQuantDequantTest > propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int, String) > maxBits=256 dequant=simd-byte PASSED
+
+Q4KColdHotDeterminismTest > q4_K128BitKernelIsBitIdenticalBeforeAndAfterCompilation() PASSED
+
+GgufKQuantDequantTest > propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int, String) > maxBits=256 dequant=simd-int PASSED
+
+Q4KColdHotDeterminismTest > q4_K256BitKernelIsBitIdenticalBeforeAndAfterCompilation() PASSED
+
+SimilarityFunctionTest > euclidean_farVectors_lowScore() PASSED
+
+SimilarityFunctionTest > segmentCompare_matchesFloatArray_allMetrics() PASSED
+
+SimilarityFunctionTest > cosine_resultInZeroOneRange() PASSED
+
+SimilarityFunctionTest > euclidean_bytes_identicalIsOne() PASSED
+
+SimilarityFunctionTest > euclidean_identicalVectors_scoreIsOne() PASSED
+
+SimilarityFunctionTest > maxInnerProduct_positiveScore() PASSED
+
+SimilarityFunctionTest > dotProduct_normalizedVectors_resultInZeroOneRange() PASSED
+
+SimilarityFunctionTest > cosine_identicalDirection_highScore() PASSED
+
+SimilarityFunctionTest > maxInnerProduct_negativeScore() PASSED
+
+SimilarityFunctionTest > euclidean_resultInZeroOneRange() PASSED
+
+SimilarityFunctionTest > segmentCompare_identicalVectors_matchesFloatArray() PASSED
+
+SimilarityFunctionTest > dotProduct_sameDirection_highScore() PASSED
+
+SimilarityFunctionTest > scaleMaxInnerProductScore_monotonicOrdering() PASSED
+
+SimilarityFunctionTest > cosine_bytes_resultInZeroOneRange() PASSED
+
+VectorSpeciesConstantStructureTest > detectorFlagsInstanceAndNonFinalStaticSpeciesFields() PASSED
+
+VectorSpeciesConstantStructureTest > noVectorSpeciesParametersOrMutableSpeciesFieldsInMainClasses() PASSED
+
+VectorSpeciesConstantStructureTest > detectorFlagsSpeciesParameter() PASSED
+
+VectorSpeciesConstantStructureTest > detectorAcceptsStaticFinalSpecies() PASSED
+
+VectorizationProviderTest > panamaActiveImpliesNoSilentFallback() PASSED
+
+VectorizationProviderTest > providerNameIsNotEmpty() PASSED
+
+VectorizationProviderTest > toggleSummaryReportsMappedKQuantLongOffsetPropertyWithoutChangingStartupPolicy() PASSED
+
+VectorizationProviderTest > toggleSummaryReportsForcedScalarProperty() PASSED
+
+VectorizationProviderTest > newScalarProviderReturnsScalar() PASSED
+
+VectorizationProviderTest > isPanamaEnabledReturnsBooleanWithoutCrashing() PASSED
+
+VectorizationProviderTest > scalarProviderProducesCorrectResults() PASSED
+
+VectorizationProviderTest > runtimeCapabilitiesExposeStructuredProviderAndExecutorFacts() PASSED
+
+VectorizationProviderTest > toggleSummaryExposesProviderAndKnobs() PASSED
+
+VectorizationProviderTest > isForcedScalarReflectsSystemProperty() PASSED
+
+VectorizationProviderTest > instanceIsNotNull() PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=8, count=1 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=8, count=3 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=8, count=4 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=8, count=7 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=8, count=64 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=64, count=1 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=64, count=3 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=64, count=4 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=64, count=7 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=64, count=64 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=128, count=1 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=128, count=3 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=128, count=4 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=128, count=7 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=128, count=64 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=768, count=1 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=768, count=3 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=768, count=4 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=768, count=7 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_floatArray_matchesPerRowCosine(int, int) > dim=768, count=64 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_zeroRow_matchesPerRowNaN() PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=8, count=1 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=8, count=3 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=8, count=4 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=8, count=7 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=8, count=64 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=64, count=1 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=64, count=3 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=64, count=4 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=64, count=7 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=64, count=64 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=128, count=1 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=128, count=3 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=128, count=4 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=128, count=7 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=128, count=64 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=768, count=1 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=768, count=3 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=768, count=4 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=768, count=7 PASSED
+
+VectorUtilBatchCosineTest > batchCosine_segments_matchPerRowCosineAndFloatArray(int, int) > dim=768, count=64 PASSED
+
+GgufKQuantDequantTest > propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int, String) > maxBits=256 dequant=simd-split PASSED
+
+GgufKQuantDequantTest > everyArmIsBitIdenticalToScalarOnAdversarialAndRandomBlocks(Arm, int) > SCALAR format=0 PASSED
+
+GgufKQuantDequantTest > everyArmIsBitIdenticalToScalarOnAdversarialAndRandomBlocks(Arm, int) > SCALAR format=1 PASSED
+
+GgufKQuantDequantTest > everyArmIsBitIdenticalToScalarOnAdversarialAndRandomBlocks(Arm, int) > SIMD_BYTE format=0 PASSED
+
+GgufKQuantDequantTest > everyArmIsBitIdenticalToScalarOnAdversarialAndRandomBlocks(Arm, int) > SIMD_BYTE format=1 PASSED
+
+GgufKQuantDequantTest > everyArmIsBitIdenticalToScalarOnAdversarialAndRandomBlocks(Arm, int) > SIMD_INT format=0 PASSED
+
+GgufKQuantDequantTest > everyArmIsBitIdenticalToScalarOnAdversarialAndRandomBlocks(Arm, int) > SIMD_INT format=1 PASSED
+
+GgufKQuantDequantTest > everyArmIsBitIdenticalToScalarOnAdversarialAndRandomBlocks(Arm, int) > SIMD_SPLIT format=0 PASSED
+
+GgufKQuantDequantTest > everyArmIsBitIdenticalToScalarOnAdversarialAndRandomBlocks(Arm, int) > SIMD_SPLIT format=1 PASSED
+
+GgufKQuantDequantTest > fusedArmsFallBackToSplitOnlyWithoutALaneMatchedByteSpecies() PASSED
+
+GgufKQuantDequantTest > multiBlockRunsHonourSourceOffsetAndDestinationOffset(Arm, int) > SCALAR format=0 PASSED
+
+GgufKQuantDequantTest > multiBlockRunsHonourSourceOffsetAndDestinationOffset(Arm, int) > SCALAR format=1 PASSED
+
+GgufKQuantDequantTest > multiBlockRunsHonourSourceOffsetAndDestinationOffset(Arm, int) > SIMD_BYTE format=0 PASSED
+
+GgufKQuantDequantTest > multiBlockRunsHonourSourceOffsetAndDestinationOffset(Arm, int) > SIMD_BYTE format=1 PASSED
+
+GgufKQuantDequantTest > multiBlockRunsHonourSourceOffsetAndDestinationOffset(Arm, int) > SIMD_INT format=0 PASSED
+
+GgufKQuantDequantTest > multiBlockRunsHonourSourceOffsetAndDestinationOffset(Arm, int) > SIMD_INT format=1 PASSED
+
+GgufKQuantDequantTest > multiBlockRunsHonourSourceOffsetAndDestinationOffset(Arm, int) > SIMD_SPLIT format=0 PASSED
+
+GgufKQuantDequantTest > multiBlockRunsHonourSourceOffsetAndDestinationOffset(Arm, int) > SIMD_SPLIT format=1 PASSED
+
+Mxfp4MatrixTest > reusesOnePreparedQ8ActivationAcrossMatrices() PASSED
+
+Mxfp4MatrixTest > rejectsInvalidGeometryStorageAndInvocation() PASSED
+
+Mxfp4MatrixTest > decodesTheFreeTokenE2m1TableInLowThenHighNibbleOrder() PASSED
+
+Mxfp4MatrixTest > q8ActivationKernelStaysCloseToF32ActivationReference() PASSED
+
+Mxfp4MatrixTest > multipliesPackedRowsWithOneE8m0ScalePerThirtyTwoColumns() PASSED
+
+Mxfp4MatrixTest > appliesIndependentScalesToConsecutiveBlocks() PASSED
+
+Mxfp4MatrixTest > slicesRowsWithoutCopying() PASSED
+
+Mxfp4MatrixTest > nativeStorageMatchesHeapStorageForPreparedQ8Execution() PASSED
+
+OffsetBatchCosineTest > offsetsPreserveRowOrderPaddingDuplicatesAndTails() PASSED
+
+OffsetBatchCosineTest > validatesBoundsAndKeepsScalarAndZeroVectorSemantics() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ4_0Q8_0Kernel() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ6_KFourQueryRegisterTile() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ5_KFourQueryRegisterTile() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ4_KFourQueryRegisterTile() PASSED
+
+PanamaGgufQuantizedDotTest > q6_KOneQueryBlockHelperReturnsPrimitiveSum() PASSED
+
+PanamaGgufQuantizedDotTest > q5_0Q8_0IntegerLanesDecodeHighBits() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ6_KQ8_KKernel() PASSED
+
+PanamaGgufQuantizedDotTest > q8_0BlockMajorFloatLaneAccumulatorIsDeterministicAndBoundedAcrossModelSizedInputs() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ5_KQ8_KKernel() PASSED
+
+PanamaGgufQuantizedDotTest > q8FloatLaneScratchReusesCapacityPerThread() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ4_KQ8_KKernel() PASSED
+
+PanamaGgufQuantizedDotTest > q8_0Q8_0BlockMajorPrequantizedRowRangesMatchScalarReferenceExactly() PASSED
+
+PanamaGgufQuantizedDotTest > q4_0Q8_0UnsignedPairwiseRowPreservesSplitHalfAccumulation() PASSED
+
+PanamaGgufQuantizedDotTest > q4_0Q8_0UnsignedBlockPairAccumulatesIntoCallerVectorExactly() PASSED
+
+PanamaGgufQuantizedDotTest > q4_KQ8_KKernelMatchesScalarReferenceAcrossRowsAndBlocks() PASSED
+
+PanamaGgufQuantizedDotTest > q4ShortPairwiseRequiresExplicitSelectionAvx2WidthAndModelSizedRows() PASSED
+
+PanamaGgufQuantizedDotTest > q4_0UnsignedBlockPairsStayNumericallyCloseToGemvForOddAndEvenBlockCounts() PASSED
+
+PanamaGgufQuantizedDotTest > q5_0Q8_0BatchedKernelMatchesScalarReferenceExactly() PASSED
+
+PanamaGgufQuantizedDotTest > explicitQ4KernelSelectionCannotBypassHardwareEligibility() PASSED
+
+PanamaGgufQuantizedDotTest > q8_0QuantizationProducesExactQ4ZeroPointCorrections() PASSED
+
+PanamaGgufQuantizedDotTest > q4_0Q8_0KernelMatchesScalarReferenceAcrossRowsAndBlocks() PASSED
+
+PanamaGgufQuantizedDotTest > q6_KQ8_KIntegerDotDecodesPackedWeightsAndSignedScales() PASSED
+
+PanamaGgufQuantizedDotTest > q8_0Q8_0PrequantizedRowRangesMatchScalarReferenceExactly() PASSED
+
+PanamaGgufQuantizedDotTest > q5_KQ8_KKernelMatchesScalarReferenceAcrossRowsAndBlocks() PASSED
+
+PanamaGgufQuantizedDotTest > q6_KTwoQueryBlockHelperPacksPrimitiveSums() PASSED
+
+PanamaGgufQuantizedDotTest > q5_0Q8_0KernelMatchesScalarReferenceAcrossRowsAndBlocks() PASSED
+
+PanamaGgufQuantizedDotTest > q6_KQ8_KKernelMatchesScalarReferenceAcrossRowsAndBlocks() PASSED
+
+PanamaGgufQuantizedDotTest > q5_KQ8_KIntegerDotDecodesPerElementHighBits() PASSED
+
+PanamaGgufQuantizedDotTest > q4_KFourQueryRegisterTileRequiresMeasuredX86VectorEnvelope() PASSED
+
+PanamaGgufQuantizedDotTest > q4_0Q8_0UnsignedPairwiseBatchedMatmulUsesIntegerHalvesOrTheSupportedFallback() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ6_KQ8_KBatchedKernel() PASSED
+
+PanamaGgufQuantizedDotTest > q8_0BlockMajorRowAccumulatorMatchesScalarSplitRangeExactly() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ8_0Q8_0Kernel() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ5_KQ8_KBatchedKernel() PASSED
+
+PanamaGgufQuantizedDotTest > q4HighNibblesDecodeEveryUnsignedByteWithoutCrossLaneBits() PASSED
+
+PanamaGgufQuantizedDotTest > q5_KFourQueryRegisterTileRequiresMeasuredX86VectorEnvelope() PASSED
+
+PanamaGgufQuantizedDotTest > q4_0Q8_0ShortPairwiseIntegerLanesMatchWidenedKernelExactly() PASSED
+
+PanamaGgufQuantizedDotTest > q8_0Q8_0KernelMatchesScalarReferenceAcrossRowsAndBlocks() PASSED
+
+PanamaGgufQuantizedDotTest > q4_KQ8_KIntegerDotDecodesBothNibbleHalves() PASSED
+
+PanamaGgufQuantizedDotTest > q4_0Q8_0IntegerLanesSumFourProductsPerLane() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ4_KQ8_KBatchedKernel() PASSED
+
+PanamaGgufQuantizedDotTest > q6_KFourQueryRegisterTileRequiresMeasuredX86VectorEnvelope() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ8_0Q8_0BatchedKernel() PASSED
+
+PanamaGgufQuantizedDotTest > panamaProviderOwnsQ5_0Q8_0Kernel() PASSED
+
+PanamaGgufQuantizedDotTest > q8_0BatchQuantizationCombinesQ4HalfCorrections() PASSED
+
+PanamaGgufQuantizedDotTest > kQuantPackedDotHelpersReturnPrimitivesToPreserveScalarReplacement() PASSED
+
+PanamaGgufQuantizedDotTest > unsignedPairwiseFallbackDoesNotComputeUnusedCorrections() PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [1] maxBits=64, rows=48, columns=5120 PASSED
+
+Q5KColdHotDeterminismTest > q5_K128BitKernelIsBitIdenticalBeforeAndAfterCompilation() PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [2] maxBits=128, rows=48, columns=5120 PASSED
+
+Q5KColdHotDeterminismTest > q5_K256BitKernelIsBitIdenticalBeforeAndAfterCompilation() PASSED
+
+Q6KReductionOrderContractTest > one super-block: scalar and Panama agree bit for bit PASSED
+
+Q6KReductionOrderContractTest > two super-blocks: the cross-block fold must not change a single bit PASSED
+
+Q6KReductionOrderContractTest > control: Q4_K is bit-identical at the same widths, so the harness is sound PASSED
+
+Q6KReductionOrderContractTest > eight super-blocks: a realistic projection width stays bit-identical PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [3] maxBits=256, rows=48, columns=5120 PASSED
+
+ReproducibleActivationExpTest > specialValuesAndSampledFloatBitsMatchStrictMathExactly() PASSED
+
+ReproducibleActivationExpTest > publicSwiGluPreservesStrictFloatIntermediatesAndExactAlias() PASSED
+
+ScalarVectorUtilSupportTest > mappedF32GgufKernelReadsLittleEndianRows() PASSED
+
+ScalarVectorUtilSupportTest > byteMemoryAndBinaryKernelsReturnReferenceValues() PASSED
+
+ScalarVectorUtilSupportTest > mixedQ4_KQ6_KTripleMatmulMatchesIndependentScalarProjectionsExactly() PASSED
+
+ScalarVectorUtilSupportTest > q8_0BatchedMatmulMatchesIndependentScalarQueriesExactly() PASSED
+
+ScalarVectorUtilSupportTest > mappedBfloat16KernelHonorsActivationAndResultOffsets() PASSED
+
+ScalarVectorUtilSupportTest > fusedAndAdcBatchKernelsCoverFourRowGroupsAndTails() PASSED
+
+ScalarVectorUtilSupportTest > q4_KBatchedMatmulMatchesIndependentScalarQueriesExactly() PASSED
+
+ScalarVectorUtilSupportTest > q5_KBatchedMatmulMatchesIndependentScalarQueriesExactly() PASSED
+
+ScalarVectorUtilSupportTest > q6_KBatchedMatmulMatchesIndependentScalarQueriesExactly() PASSED
+
+ScalarVectorUtilSupportTest > mappedBfloat16KernelReadsLittleEndianRows() PASSED
+
+ScalarVectorUtilSupportTest > mappedBfloat16BatchHonorsActivationAndResultOffsets() PASSED
+
+ScalarVectorUtilSupportTest > floatArrayKernelsCoverUnrolledAndTailPaths() PASSED
+
+ScalarVectorUtilSupportTest > arithmeticAndNormalizationHandleEveryContractBranch() PASSED
+
+VectorEncodingTest > float32_bytesPerDimension() PASSED
+
+VectorEncodingTest > binary_vectorByteSize() PASSED
+
+VectorEncodingTest > float32_vectorByteSize() PASSED
+
+VectorEncodingTest > int8_bytesPerDimension() PASSED
+
+VectorEncodingTest > int8_vectorByteSize() PASSED
+
+VectorEncodingTest > binary_bytesPerDimension() PASSED
+
+VectorUtilSupportProviderTest > defaultUnavailabilityCauseIsEmpty() PASSED
+
+VectorUtilSupportProviderTest > allUnavailableFallsBackToScalarKernels() PASSED
+
+VectorUtilSupportProviderTest > builtInScalarProviderIsAlwaysAvailable() PASSED
+
+VectorUtilSupportProviderTest > emptyProviderListFallsBackToScalarKernels() PASSED
+
+VectorUtilSupportProviderTest > serviceLoaderDiscoversBothBuiltInProviders() PASSED
+
+VectorUtilSupportProviderTest > highestPriorityAvailableProviderWins() PASSED
+
+VectorUtilSupportProviderTest > providerThatThrowsOnCreateIsSkipped() PASSED
+
+VectorUtilSupportProviderTest > builtInPanamaProviderReportsAvailabilityWithoutThrowing() PASSED
+
+VectorUtilSupportProviderTest > discoveryOrderBreaksPriorityTies() PASSED
+
+VectorUtilSupportProviderTest > unavailableProvidersAreSkipped() PASSED
+
+VectorUtilSupportProviderTest > providerReturningNullIsSkipped() PASSED
+
+VectorUtilTest > assembleAndSum_unsignedByteWraparound() PASSED
+
+VectorUtilTest > squareDistance_knownValues() PASSED
+
+VectorUtilTest > cosine_parallelVectors() PASSED
+
+VectorUtilTest > addScaledInPlace_withOffsets() PASSED
+
+VectorUtilTest > causalDepthwiseConv1dSilu_updatesTapMajorHistoryAndSupportsInPlaceValues() PASSED
+
+VectorUtilTest > subInPlace_knownValues() PASSED
+
+VectorUtilTest > cosine_memorySegment_parallelVectors() PASSED
+
+VectorUtilTest > addWeightedRowsInPlace_withOffsetsAndStride() PASSED
+
+VectorUtilTest > batchAssembleAndSum_matchesScalar() PASSED
+
+VectorUtilTest > scale_knownValues() PASSED
+
+VectorUtilTest > exactBatchDotProductSupportsOffsetsAndStridedRows() PASSED
+
+VectorUtilTest > l2normalize_knownValues() PASSED
+
+VectorUtilTest > dotProduct_dimensionMismatchThrows() PASSED
+
+VectorUtilTest > addWeightedRowsInPlace_rejectsInvalidArguments() PASSED
+
+VectorUtilTest > addScaledInPlace_rejectsInvalidArguments() PASSED
+
+VectorUtilTest > assembleAndSum_knownValues() PASSED
+
+VectorUtilTest > squareDistance_dimensionMismatchThrows() PASSED
+
+VectorUtilTest > hammingDistance_knownValues() PASSED
+
+VectorUtilTest > sum_knownValues() PASSED
+
+VectorUtilTest > sigmoidAndScaledSoftplus_withOffsets() PASSED
+
+VectorUtilTest > swiGlu_supportsOutputAliasingUpInput() PASSED
+
+VectorUtilTest > byteDotProduct_knownValues() PASSED
+
+VectorUtilTest > swiGlu_withOffsets() PASSED
+
+VectorUtilTest > batchAssembleAndSum_withOffsetAndPartialCount() PASSED
+
+VectorUtilTest > cosine_orthogonalVectors() PASSED
+
+VectorUtilTest > addInPlace_knownValues() PASSED
+
+VectorUtilTest > dotProduct_knownValues() PASSED
+
+VectorUtilTest > exactBatchDotProductRejectsInvalidRangesAndAliases() PASSED
+
+VectorUtilTest > sigmoidAndScaledSoftplus_remainsFiniteForLargePositiveInputs() PASSED
+
+VectorUtilTest > cosine_zeroNormVector_isNaN() PASSED
+
+VectorUtilTest > cosine_memorySegment_matchesArrayVersion() PASSED
+
+VectorUtilTest > dotProduct_withOffset() PASSED
+
+KMeansTest > kEqualsOneReturnsSingleMeanCentroid() PASSED
+
+KMeansTest > quantizationErrorRejectsInvalidAssignments() PASSED
+
+KMeansTest > nearestCentroidAssignmentIsCorrect() PASSED
+
+KMeansTest > quantizationErrorDecreasesWithMoreIterations() PASSED
+
+KMeansTest > deterministicWithSameSeed() PASSED
+
+KMeansTest > assignRejectsMismatchedDimensions() PASSED
+
+KMeansTest > assignReturnsValidClusterIds() PASSED
+
+KMeansTest > trainRejectsRaggedDataset() PASSED
+
+KMeansTest > virtualThreadPathProducesSameResultAsSerial() PASSED
+
+KMeansTest > trainProducesKCentroids() PASSED
+
+KMeansTest > trainWithMoreClustersThanDistinctPointsReturnsFiniteCentroids() PASSED
+
+KMeansTest > centroidsLieWithinDataDistribution() PASSED
+
+KMeansTest > assignIsOptimal_forTrainedCentroids() PASSED
+
+KMeansTest > kExceedingDatasetSizeThrows() PASSED
+
+KMeansTest > eachCentroidIsClosestToAtLeastOneDataPoint() PASSED
+
+KMeansTest > emptyDatasetThrows() PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_oddDimension_matchesScalar(int) > [1] dim=1 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_oddDimension_matchesScalar(int) > [2] dim=3 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_oddDimension_matchesScalar(int) > [3] dim=5 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_oddDimension_matchesScalar(int) > [4] dim=17 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_oddDimension_matchesScalar(int) > [5] dim=33 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_oddDimension_matchesScalar(int) > [6] dim=129 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_oddDimension_matchesScalar(int) > [7] dim=257 PASSED
+
+VectorUtilSegmentBatchTest > validatesArguments() PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=1 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=3 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=4 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=7 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=64 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=1 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=3 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=4 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=7 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=64 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=1 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=3 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=4 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=7 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=64 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=1 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=3 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=4 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=7 PASSED
+
+VectorUtilSegmentBatchTest > batchDotProduct_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=64 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=1 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=3 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=4 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=7 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=8, count=64 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=1 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=3 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=4 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=7 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=64, count=64 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=1 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=3 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=4 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=7 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=128, count=64 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=1 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [4] maxBits=64, rows=5, columns=37 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=3 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=4 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=7 PASSED
+
+VectorUtilSegmentBatchTest > batchSquaredL2_segments_matchFloatArrayAndScalar(int, int) > dim=768, count=64 PASSED
+
+VectorUtilSegmentBatchTest > zeroCount_isNoOp() PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [5] maxBits=128, rows=5, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [6] maxBits=256, rows=5, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [7] maxBits=64, rows=8193, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [8] maxBits=128, rows=8193, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [9] maxBits=256, rows=8193, columns=37 PASSED

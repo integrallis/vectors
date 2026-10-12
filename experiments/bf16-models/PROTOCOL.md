@@ -30,6 +30,8 @@ The candidate and corrected control must pass: pinned Qwen Transformers logits a
 eight-token continuation and input token IDs; observable batched-prefill routing; implicit-session
 reset parity; repeated fresh
 sessions; exact full-vocabulary sequential versus 16-token prefill across a chunk boundary.
+The Bonsai oracle uses the existing native test's 64-token context and its batch-parity case
+uses 96 tokens, reproducing both native integration cases. Timing separately declares 2048.
 The native Bonsai projection route must actually be enabled. Failure is recorded and blocks
 acceptance, while independent remaining model coverage continues.
 
@@ -58,3 +60,7 @@ The frozen payload contains the exact harness and pinned artifact hashes.
 The fixture/probe output records the ordinary-row reduction branch derived from the immutable
 SVE capability used by the production dispatch. Non-SVE ARM performance is not established by
 this pair of hosts; forced widths on the SVE host establish correctness only.
+
+Final BF16 qualification uses the stable exact activation implementation from `a5511d6`.
+Rejected polynomial candidates are retained separately and are not present in this payload.
+Any later activation replacement requires fresh whole-model evidence on that changed artifact.

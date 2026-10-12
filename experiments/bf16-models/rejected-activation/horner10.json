@@ -1,0 +1,9 @@
+{
+  "status": "REJECTED_FOR_ARM_PUBLIC_API_PERFORMANCE",
+  "activationSourceRevision": "d3aae7b",
+  "activationAgentObservation": "ARM SwiGlu4096 first cohort24.7us versus stablefdlibm19.6us; final source remains unselected",
+  "evidenceOwner": "activation agent polynomial supported-host phase",
+  "vectorsJarSha256": "01049c53b6556c80a87e8af15584f9232fc2bc015f716e2c1264243dc487cb39",
+  "retainedArtifact": "/tmp/vectors-bf16-horner10-rejected.jar",
+  "limitations": "Current core suite establishes correctness only. No model timing payload uses this rejected helper."
+}

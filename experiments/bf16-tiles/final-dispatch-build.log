@@ -1,0 +1,107 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :writeReleaseDependencyManifest UP-TO-DATE
+> Task :vectors-core:compileJava
+> Task :vectors-core:spotlessJava
+> Task :vectors-core:spotlessJavaApply
+> Task :vectors-core:spotlessApply
+> Task :vectors-core:processResources UP-TO-DATE
+> Task :vectors-core:classes
+> Task :vectors-core:jar
+> Task :vectors-core:compileTestJava
+> Task :vectors-core:processTestResources UP-TO-DATE
+> Task :vectors-core:testClasses
+
+> Task :vectors-core:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+BFloat16MatrixTest > multipliesKnownBfloat16BitPatternsWithFloatAccumulation() PASSED
+
+BFloat16MatrixTest > readsFromMappedStorage(Path) PASSED
+
+BFloat16MatrixTest > multipliesLargeRowCountsWithSequentialMemoryAccess() PASSED
+
+BFloat16MatrixTest > multipliesBatchMajorActivationsIntoAnOffsetOutputRegion() PASSED
+
+BFloat16MatrixTest > slicesRowsWithoutCopyingAndReadsIndividualValues() PASSED
+
+BFloat16MatrixTest > sharedLargeBatchMatchesIndependentMatrixVectorProductsExactly() PASSED
+
+BFloat16MatrixTest > rejectsBadGeometryStorageAndInvocation() PASSED
+
+BFloat16MatrixTest > multipliesCompleteVectorBlocksAndScalarTail() PASSED
+
+BFloat16MatrixTest > preservesSubnormalAndRoundedReferenceValues() PASSED
+
+GgufParallelSupportTest > persistentExecutorRunsEveryRowExactlyOnceAcrossRepeatedDispatches() PASSED
+
+GgufParallelSupportTest > persistentExecutorSerializesConcurrentPublishersWithoutLosingRows() PASSED
+
+GgufParallelSupportTest > persistentExecutorClosesImmediatelyAfterACompletedDispatch() PASSED
+
+GgufParallelSupportTest > confinedSegmentsRemainOnTheirOwnerThread() PASSED
+
+GgufParallelSupportTest > executionModePropertyIsValidated() PASSED
+
+GgufParallelSupportTest > workCalculationDoesNotOverflowIntRange() PASSED
+
+GgufParallelSupportTest > persistentExecutorPropagatesWorkerFailureAndRemainsReusable() PASSED
+
+GgufParallelSupportTest > persistentExecutorRunsOrderedStagesWithExactRangeCoverage() PASSED
+
+GgufParallelSupportTest > persistentExecutorPropagatesStageFailureAndRemainsReusable() PASSED
+
+GgufParallelSupportTest > groupedRowsRemainOnOwnerWhenAnySegmentIsConfined() PASSED
+
+GgufParallelSupportTest > persistentExecutorSerializesConcurrentStagePublishers() PASSED
+
+GgufParallelSupportTest > parallelizesOnlyLargeMatricesWhenMultipleProcessorsAreAvailable() PASSED
+
+GgufParallelSupportTest > everyExecutionModeRunsEachRowExactlyOnce() PASSED
+
+GgufParallelSupportTest > pollBudgetIsSettableAtRunTimeAndParksWhenZero() PASSED
+
+GgufParallelSupportTest > persistentExecutorHandlesMaximumChunkConfigurationWithoutOverflow() PASSED
+
+GgufParallelSupportTest > q8ThresholdKeepsSmallMatricesSerialAndLargeMatricesParallel() PASSED
+
+BFloat16MatrixAllocationTest > compiledBatchesDoNotBoxAVectorForEveryOutputRow(Path) PASSED
+
+BFloat16MatrixDispatchTest > sharedConcurrentMatvecMatchesConfinedCallingThreadExecution() PASSED
+
+BFloat16NestedDispatchTest > nestedPlansAndProjectionsCompleteWithoutRepublishingActiveWorkers(Path) PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [1] maxBits=64, rows=48, columns=5120 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [2] maxBits=128, rows=48, columns=5120 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [3] maxBits=256, rows=48, columns=5120 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [4] maxBits=64, rows=5, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [5] maxBits=128, rows=5, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [6] maxBits=256, rows=5, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [7] maxBits=64, rows=8193, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [8] maxBits=128, rows=8193, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [9] maxBits=256, rows=8193, columns=37 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [10] maxBits=64, rows=512, columns=2048 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [11] maxBits=128, rows=512, columns=2048 PASSED
+
+BFloat16MatrixColdHotTest > projectionsAreBitIdenticalAcrossCompilationAndBatching(int, int, int, Path) > [12] maxBits=256, rows=512, columns=2048 PASSED
+
+BUILD SUCCESSFUL in 7m 29s
+10 actionable tasks: 6 executed, 4 up-to-date

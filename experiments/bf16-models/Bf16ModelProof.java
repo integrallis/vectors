@@ -105,12 +105,19 @@ public final class Bf16ModelProof {
   }
 
   static BatchInferenceBackend load(Path model, Path nativePath, int batch) throws Exception {
+    return load(model, nativePath, batch, 2048);
+  }
+
+  static BatchInferenceBackend load(Path model, Path nativePath, int batch, int context)
+      throws Exception {
     Map<String, String> settings = new HashMap<>();
-    settings.put("models.purejava.maxContextLength", "2048");
+    settings.put("models.purejava.maxContextLength", Integer.toString(context));
     if (batch > 0) settings.put("models.purejava.prefillBatchSize", Integer.toString(batch));
     var configuration =
         new BackendConfiguration(
-            Map.of("bf16-qualification-context-budget", "2048"), settings, List.of());
+            Map.of("bf16-qualification-context-budget", Integer.toString(context)),
+            settings,
+            List.of());
     return model.toString().endsWith(".gguf")
         ? RustFfmBackend.load(model, nativePath, configuration)
         : PureJavaBackend.load(model, configuration);
@@ -152,7 +159,7 @@ public final class Bf16ModelProof {
       5.7097855f,
       6.6055269f
     };
-    try (var backend = load(model, nativePath, 0)) {
+    try (var backend = load(model, nativePath, 0, bonsai ? 64 : 2048)) {
       emit(Map.of("kind", "diagnostics", "value", backend.diagnostics()));
       if (bonsai
           && !"true".equals(backend.diagnostics().environment().get("native-quantized-decode")))
@@ -228,12 +235,12 @@ public final class Bf16ModelProof {
             + " start with its own history and produce the same answer when repeated.";
     float[][] single;
     int[] tokens;
-    try (var backend = load(model, nativePath, 1)) {
+    try (var backend = load(model, nativePath, 1, bonsai ? 96 : 2048)) {
       tokens = backend.tokenizer().encode(prompt);
       if (tokens.length <= 16) throw new AssertionError("missing chunk boundary");
       single = snapshots(backend, tokens, 3);
     }
-    try (var backend = load(model, nativePath, 16)) {
+    try (var backend = load(model, nativePath, 16, bonsai ? 96 : 2048)) {
       float[][] batch = snapshots(backend, tokens, 3);
       for (int step = 0; step < 3; step++) {
         String before = digest(single[step]), after = digest(batch[step]);

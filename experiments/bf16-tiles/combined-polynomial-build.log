@@ -1,0 +1,63 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :spotlessInternalRegisterDependencies UP-TO-DATE
+> Task :writeReleaseDependencyManifest UP-TO-DATE
+> Task :vectors-core:compileJava
+> Task :vectors-core:spotlessJava
+> Task :vectors-core:spotlessJavaApply
+> Task :vectors-core:spotlessApply
+> Task :vectors-core:processResources
+> Task :vectors-core:classes
+> Task :vectors-core:jar
+> Task :vectors-core:compileTestJava
+> Task :vectors-core:processTestResources UP-TO-DATE
+> Task :vectors-core:testClasses
+
+> Task :vectors-core:test
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: Using incubator modules: jdk.incubator.vector
+
+RotatedCodebookMatrixTest > rejectsIncompatibleInputsOutputsAndPreparedActivations() PASSED
+
+RotatedCodebookMatrixTest > preparedActivationCanBeReusedByCompatibleMatrices() PASSED
+
+Mxfp4MatrixTest > reusesOnePreparedQ8ActivationAcrossMatrices() PASSED
+
+Mxfp4MatrixTest > q8ActivationKernelStaysCloseToF32ActivationReference() PASSED
+
+ReproducibleActivationExpTest > specialValuesAndSampledFloatBitsMatchStrictMathExactly() PASSED
+
+ReproducibleActivationExpTest > publicSwiGluPreservesStrictFloatIntermediatesAndExactAlias() PASSED
+
+ScalarVectorUtilSupportTest > mappedBfloat16KernelHonorsActivationAndResultOffsets() PASSED
+
+ScalarVectorUtilSupportTest > mappedBfloat16BatchHonorsActivationAndResultOffsets() PASSED
+
+ActivationColdHotTest > activationsStayStableAcrossCompilationAndConcurrentCallers() PASSED
+
+BFloat16MatrixTest > multipliesBatchMajorActivationsIntoAnOffsetOutputRegion() PASSED
+
+GgufQuantizedDotTest > q8_0BlockRangeActivationQuantizationMatchesWholeBatchExactly() PASSED
+
+GgufQuantizedDotTest > q5_KQ8_KBatchDotProduct_matchesQuantizedActivationReferenceWithMins() PASSED
+
+GgufQuantizedDotTest > blockMajorQ8_0ActivationLayoutMatchesPackedWholeAndSplitQuantizationExactly() PASSED
+
+GgufQuantizedDotTest > quantizedBatchDotRejectsAnActivationShorterThanCols() PASSED
+
+GgufQuantizedDotTest > quantizedBatchDotAcceptsAnOversizedActivationBuffer() PASSED
+
+GgufQuantizedDotTest > q4_0BlockRangeActivationQuantizationMatchesWholeBatchExactly() PASSED
+
+GgufQuantizedDotTest > blockMajorQ8_0RowsRequireExplicitBlockMajorActivationStorage() PASSED
+
+PackedInt4GroupMatrixTest > preparedInt8BatchStaysCloseToTheFullPrecisionActivationPath() PASSED
+
+BUILD SUCCESSFUL in 47s
+10 actionable tasks: 7 executed, 3 up-to-date
