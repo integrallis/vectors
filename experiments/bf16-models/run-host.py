@@ -30,8 +30,6 @@ def fetch(entry,directory,label):
  assert h.hexdigest()==entry['sha256'],entry['path']
  if 'sizeBytes' in entry:assert path.stat().st_size==entry['sizeBytes'],entry['path']
 
-status('KERNEL_GATES')
-run(['python3','run-kernel-host.py'],'kernel-matrix')
 status('BUILDING')
 for arm in ['published','corrected']:
  run(['/root/.cargo/bin/cargo','build','--locked','--release','--manifest-path',f'rust/{arm}/Cargo.toml'],'build-'+arm)
@@ -51,9 +49,13 @@ for model in config['models']:
   verify_origin(key+'-'+arm+'-fixture',arm)
   if code:failures.append({'model':key,'arm':arm,'gate':'model-fixture','exitCode':code})
   (out/'fixture-gates.json').write_text(json.dumps(failures,indent=2)+'\n')
- if any(f['model']==key and f['arm'] in ['control','candidate'] for f in failures):
-  status('TIMING_BLOCKED_BY_FIXTURE_'+key)
-  continue
+if any(f['arm'] in ['control','candidate'] for f in failures):
+ status('TIMING_BLOCKED_BY_FIXTURE')
+ raise SystemExit(1)
+status('KERNEL_GATES_AND_TIMING')
+run(['python3','run-kernel-host.py'],'kernel-matrix')
+for model in config['models']:
+ key=model['key'];path=str(Path(key)/model['entrypoint'])
  for pair in range(10):
   arms=config['arms'];order=arms[pair%len(arms):]+arms[:pair%len(arms)]
   if pair%2:order.reverse()

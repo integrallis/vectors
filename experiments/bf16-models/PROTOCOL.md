@@ -15,7 +15,12 @@ artifact inlines the four ordinary-row reductions, motivated by the previously m
 benefit, and includes the nested-executor fix. Neither previous source is represented as this
 artifact. All twelve cold/hot probes, allocation and nested dispatch run before kernel timing.
 
-Before model timing, record all existing fixture gates for all arms, retaining published failures.
+Run real-model fixture gates before the kernel timing matrix so a model failure is visible
+without waiting for the full microbenchmark. A candidate or corrected-control fixture failure
+blocks every performance measurement; complete the independent remaining fixtures, preserve
+the failure reports, and terminate the host. A published-arm failure remains historical evidence.
+
+Before timing, record all existing fixture gates for all arms, retaining published failures.
 The candidate and corrected control must pass: pinned Qwen Transformers logits at the existing
 1e-3 tolerance and winning token; pinned Prism Bonsai eight-token continuation; repeated fresh
 sessions; exact full-vocabulary sequential versus 16-token prefill across a chunk boundary.
