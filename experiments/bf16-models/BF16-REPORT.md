@@ -93,7 +93,7 @@ The candidate improves published prefill, decode, request time, peak RSS and all
 
 ## Build, harness and provenance
 
-The preceding ARM core CI ran 1,601 cases with 1,597 passes and four hardware skips. Two local forced 64-bit child timeouts under severe contention passed unchanged 180-second retries; the original failures remain retained. Frozen ae337 release dry-run 38307108275 passed. Overflow-final head a40bcb71 CI and release dry-run 38310390999 are running.
+The preceding ARM core CI ran 1,601 cases with 1,597 passes and four hardware skips. Two local forced 64-bit child timeouts under severe contention passed unchanged 180-second retries; the original failures remain retained. Frozen ae337 release dry-run 38307108275 passed. Overflow-final head a40bcb71 release dry-run 38310390999 passed. The separate full ae337 build completed all 846 tasks successfully; later source changes require their own CI results.
 
 The original macro helper retained backend-owned logit arrays. Those per-step hashes and quality labels are invalid. The model-fixture helper always cloned immediately and remains valid. Corrected macros snapshot immediately, verify ownership with a deliberately reused-buffer probe, and separately record copy time/allocation before subtracting only that measured overhead from request totals. Raw totals remain available. All arms use the corrected harness.
 
