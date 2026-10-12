@@ -1,0 +1,7 @@
+gradle.projectsEvaluated {
+    def nativeProject = gradle.rootProject.project(':backend-native')
+    nativeProject.tasks.named('bonsai2NativeSlowTest').configure {
+        classpath = nativeProject.files('/tmp/bf16-masked-pair/masked.jar') + classpath
+        jvmArgs('-XX:ActiveProcessorCount=4')
+    }
+}

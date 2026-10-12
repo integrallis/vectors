@@ -1,0 +1,1 @@
+Linux ip-172-31-9-144 6.8.0-1066-aws #69~22.04.1-Ubuntu SMP Mon Sep 21 16:29:19 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux

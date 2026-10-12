@@ -1,0 +1,6 @@
+{
+  "sourceSha256": "866580119ee3edb68ade3ceaa09a2834e9321fb5c617d85a36070e357387fb77",
+  "jarSha256": "a03d2e3d837d3998140eb0cdf6b20b0a71c9c66f7354a001257a04d8660a7949",
+  "baseSource": "292c889",
+  "change": "Inline fixed-order finishRow in interleaved matvec; two row tile"
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "name": "rotate_pair",
+    "javaSha256": "406527bfbc7aab6f55a884de9e9778af332ca8e2d021cc9e93c4ebec8e4db20c",
+    "jarSha256": "c3f1a8048eabed2a78f5280d199aa562e47d8702b43adbc8c4d0671caa84541c"
+  },
+  {
+    "name": "single_slice",
+    "javaSha256": "9d45579ffd7e450e8f146ac17309af5962e82f23061163f2ed96ca6187fbd2d7",
+    "jarSha256": "b38c46149e91f536920cdc715bb215cf9f871581d7706ff19ea76715d5d96efb"
+  },
+  {
+    "name": "sve_lanes",
+    "javaSha256": "e3382cb63b37ea5e4a70e7fbc63d281e0de2501b7473e73b9f2319c3eacf60f2",
+    "jarSha256": "30021c55bfb9e87aff307ffd0838231705b6426c30fa036af8a89c80943487f0"
+  }
+]

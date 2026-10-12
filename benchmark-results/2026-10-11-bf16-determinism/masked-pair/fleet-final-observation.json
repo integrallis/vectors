@@ -1,0 +1,205 @@
+{
+  "observedAt": "2026-10-12T17:05:53.839535+00:00",
+  "response": {
+    "Reservations": [
+      {
+        "ReservationId": "r-0d123b8ed833a9cca",
+        "OwnerId": "077051030817",
+        "Groups": [],
+        "Instances": [
+          {
+            "Architecture": "x86_64",
+            "BlockDeviceMappings": [],
+            "ClientToken": "b90ca090-f93d-4894-a7a6-7cf17b72aa39",
+            "EbsOptimized": false,
+            "EnaSupport": true,
+            "Hypervisor": "xen",
+            "NetworkInterfaces": [],
+            "RootDeviceName": "/dev/sda1",
+            "RootDeviceType": "ebs",
+            "SecurityGroups": [],
+            "StateReason": {
+              "Code": "Client.InstanceInitiatedShutdown",
+              "Message": "Client.InstanceInitiatedShutdown: Instance initiated shutdown"
+            },
+            "Tags": [
+              {
+                "Key": "delete-after",
+                "Value": "2026-10-12T17:33:01.796794+00:00"
+              },
+              {
+                "Key": "project",
+                "Value": "models-qualification"
+              },
+              {
+                "Key": "Name",
+                "Value": "models-vectors-bf16-masked-pair-v1-x86"
+              }
+            ],
+            "VirtualizationType": "hvm",
+            "CpuOptions": {
+              "CoreCount": 8,
+              "ThreadsPerCore": 2
+            },
+            "CapacityReservationSpecification": {
+              "CapacityReservationPreference": "open"
+            },
+            "HibernationOptions": {
+              "Configured": false
+            },
+            "MetadataOptions": {
+              "State": "pending",
+              "HttpTokens": "required",
+              "HttpPutResponseHopLimit": 2,
+              "HttpEndpoint": "enabled",
+              "HttpProtocolIpv6": "disabled",
+              "InstanceMetadataTags": "disabled"
+            },
+            "EnclaveOptions": {
+              "Enabled": false
+            },
+            "BootMode": "uefi-preferred",
+            "PlatformDetails": "Linux/UNIX",
+            "UsageOperation": "RunInstances",
+            "UsageOperationUpdateTime": "2026-10-12T16:33:04+00:00",
+            "MaintenanceOptions": {
+              "AutoRecovery": "default",
+              "RebootMigration": "default"
+            },
+            "CurrentInstanceBootMode": "uefi",
+            "NetworkPerformanceOptions": {
+              "BandwidthWeighting": "default"
+            },
+            "Operator": {
+              "Managed": false,
+              "HiddenByDefault": false
+            },
+            "SecondaryInterfaces": [],
+            "InstanceId": "i-039a3d8a3aaf3f036",
+            "ImageId": "ami-0045d7fc2ad003464",
+            "State": {
+              "Code": 48,
+              "Name": "terminated"
+            },
+            "PrivateDnsName": "",
+            "PublicDnsName": "",
+            "StateTransitionReason": "User initiated",
+            "KeyName": "qual-milan",
+            "AmiLaunchIndex": 0,
+            "ProductCodes": [],
+            "InstanceType": "m6a.4xlarge",
+            "LaunchTime": "2026-10-12T16:33:04+00:00",
+            "Placement": {
+              "AvailabilityZoneId": "use1-az1",
+              "GroupName": "",
+              "Tenancy": "default",
+              "AvailabilityZone": "us-east-1a"
+            },
+            "Monitoring": {
+              "State": "disabled"
+            }
+          }
+        ]
+      },
+      {
+        "ReservationId": "r-06f8f80ab8c0c0f8d",
+        "OwnerId": "077051030817",
+        "Groups": [],
+        "Instances": [
+          {
+            "Architecture": "arm64",
+            "BlockDeviceMappings": [],
+            "ClientToken": "69499220-6c12-4c2b-abf3-77dd80eb0e1e",
+            "EbsOptimized": false,
+            "EnaSupport": true,
+            "Hypervisor": "xen",
+            "NetworkInterfaces": [],
+            "RootDeviceName": "/dev/sda1",
+            "RootDeviceType": "ebs",
+            "SecurityGroups": [],
+            "StateReason": {
+              "Code": "Client.InstanceInitiatedShutdown",
+              "Message": "Client.InstanceInitiatedShutdown: Instance initiated shutdown"
+            },
+            "Tags": [
+              {
+                "Key": "Name",
+                "Value": "models-vectors-bf16-masked-pair-v1-arm"
+              },
+              {
+                "Key": "project",
+                "Value": "models-qualification"
+              },
+              {
+                "Key": "delete-after",
+                "Value": "2026-10-12T17:33:04.610772+00:00"
+              }
+            ],
+            "VirtualizationType": "hvm",
+            "CpuOptions": {
+              "CoreCount": 16,
+              "ThreadsPerCore": 1
+            },
+            "CapacityReservationSpecification": {
+              "CapacityReservationPreference": "open"
+            },
+            "HibernationOptions": {
+              "Configured": false
+            },
+            "MetadataOptions": {
+              "State": "pending",
+              "HttpTokens": "required",
+              "HttpPutResponseHopLimit": 1,
+              "HttpEndpoint": "enabled",
+              "HttpProtocolIpv6": "disabled",
+              "InstanceMetadataTags": "disabled"
+            },
+            "EnclaveOptions": {
+              "Enabled": false
+            },
+            "BootMode": "uefi",
+            "PlatformDetails": "Linux/UNIX",
+            "UsageOperation": "RunInstances",
+            "UsageOperationUpdateTime": "2026-10-12T16:33:06+00:00",
+            "MaintenanceOptions": {
+              "AutoRecovery": "default",
+              "RebootMigration": "default"
+            },
+            "CurrentInstanceBootMode": "uefi",
+            "NetworkPerformanceOptions": {
+              "BandwidthWeighting": "default"
+            },
+            "Operator": {
+              "Managed": false,
+              "HiddenByDefault": false
+            },
+            "SecondaryInterfaces": [],
+            "InstanceId": "i-0f25f67efc1ba2196",
+            "ImageId": "ami-03dac6c363b33b131",
+            "State": {
+              "Code": 48,
+              "Name": "terminated"
+            },
+            "PrivateDnsName": "",
+            "PublicDnsName": "",
+            "StateTransitionReason": "User initiated",
+            "KeyName": "qual-milan",
+            "AmiLaunchIndex": 0,
+            "ProductCodes": [],
+            "InstanceType": "m7g.4xlarge",
+            "LaunchTime": "2026-10-12T16:33:06+00:00",
+            "Placement": {
+              "AvailabilityZoneId": "use1-az1",
+              "GroupName": "",
+              "Tenancy": "default",
+              "AvailabilityZone": "us-east-1a"
+            },
+            "Monitoring": {
+              "State": "disabled"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

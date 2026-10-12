@@ -1,0 +1,31 @@
+{
+  "jdk": {
+    "x64": {
+      "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.3%2B9/OpenJDK25U-jdk_x64_linux_hotspot_25.0.3_9.tar.gz",
+      "sha256": "69264a7a211bf5029830d07bc3370f879769d62ebc5b5488e90c9343a2da0e1f"
+    },
+    "aarch64": {
+      "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.3%2B9/OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.3_9.tar.gz",
+      "sha256": "3e4287cb98870ba824ed698854bdc27cff984254caf66dd12cc291e7bfdde26b"
+    }
+  },
+  "rust": "1.96.0",
+  "runName": "vectors-bf16-masked-pair-v1",
+  "revision": "563c7a4388407064a967a69c2d2233c9c4638f70",
+  "maximumCombinedUsd": 2,
+  "maximumSecondsPerHost": 3600,
+  "files": {
+    "BFloat16Matrix.java": "e546a194e7f5a62c20d8a7319c11d7e85be6b4288e25b7addafb84d49a487b55",
+    "PROTOCOL.md": "527d833c49498925eeed33c2b5d82c87b84d240406547eac0746e66f81bcbdda",
+    "baseline.jar": "21eeae4fcaa56fa26ed45d99610142f794cdec0e1d852894e637263f5bd0b40c",
+    "benchmark.jar": "fc79846fc6103f5e5d5c6f5fe887dd65c5d2b8493d5968df08cf7eb37958c67c",
+    "candidate.json": "0384d975ad3f0d57510d46c89d609074d04a3c0b80061033d11fd47a80287123",
+    "masked.jar": "c85da482f9e61ae8afb3c77ce01d3fb5c56c7a8a457e157ebb93a674a2f1ad4f",
+    "probes.jar": "e9340fefbe47241327bb9c68952b19a6b819fd0557f95ef55b43770822a81e66",
+    "rotate.jar": "1ab158dbee881fd79c50d052033b703e34d7b051bab2f44dbedda9f5f79d712e",
+    "run-host.py": "bc58bfc7688bb0a60a924a080e380fb0ec15ca4ca8d8c34261c7d1d197283d04",
+    "sve_lanes.jar": "30021c55bfb9e87aff307ffd0838231705b6426c30fa036af8a89c80943487f0"
+  },
+  "payloadUri": "s3://models-qual-077051030817/payload/vectors-bf16-masked-pair-v1.tar.gz",
+  "payloadSha256": "835b9887074cf45fd1bb00f843dbaec4fce6f15e3d8deb1dd08ebc630f08111c"
+}

@@ -1,0 +1,132 @@
+{
+  "maximumCombinedUsd": 2,
+  "maximumSecondsPerHost": 3600,
+  "payload": {
+    "vectorsBaseRevision": "292c889bf3b0a8da17df8ff61cb8283604867401",
+    "baseline": "Central vectors-core 0.1.29",
+    "rotate": "Original fixed-tree source candidate at base revision",
+    "variants": [
+      {
+        "name": "rotate_pair",
+        "javaSha256": "406527bfbc7aab6f55a884de9e9778af332ca8e2d021cc9e93c4ebec8e4db20c",
+        "jarSha256": "c3f1a8048eabed2a78f5280d199aa562e47d8702b43adbc8c4d0671caa84541c"
+      },
+      {
+        "name": "single_slice",
+        "javaSha256": "9d45579ffd7e450e8f146ac17309af5962e82f23061163f2ed96ca6187fbd2d7",
+        "jarSha256": "b38c46149e91f536920cdc715bb215cf9f871581d7706ff19ea76715d5d96efb"
+      },
+      {
+        "name": "sve_lanes",
+        "javaSha256": "e3382cb63b37ea5e4a70e7fbc63d281e0de2501b7473e73b9f2319c3eacf60f2",
+        "jarSha256": "30021c55bfb9e87aff307ffd0838231705b6426c30fa036af8a89c80943487f0"
+      }
+    ],
+    "processors": 4,
+    "maximumCombinedUsd": 2,
+    "maximumSecondsPerHost": 3600,
+    "purpose": "Compare fixed-order reduction candidates on all six BF16 kernel/shape cases; investigate latency ratio above 1.05",
+    "files": {
+      "rotate_pair.jar": "c3f1a8048eabed2a78f5280d199aa562e47d8702b43adbc8c4d0671caa84541c",
+      "single_slice.jar": "b38c46149e91f536920cdc715bb215cf9f871581d7706ff19ea76715d5d96efb",
+      "baseline.jar": "21eeae4fcaa56fa26ed45d99610142f794cdec0e1d852894e637263f5bd0b40c",
+      "rotate.jar": "1ab158dbee881fd79c50d052033b703e34d7b051bab2f44dbedda9f5f79d712e",
+      "rotate_pair.java": "406527bfbc7aab6f55a884de9e9778af332ca8e2d021cc9e93c4ebec8e4db20c",
+      "probes.jar": "e9340fefbe47241327bb9c68952b19a6b819fd0557f95ef55b43770822a81e66",
+      "benchmark.jar": "fc79846fc6103f5e5d5c6f5fe887dd65c5d2b8493d5968df08cf7eb37958c67c",
+      "sve_lanes.jar": "30021c55bfb9e87aff307ffd0838231705b6426c30fa036af8a89c80943487f0",
+      "single_slice.java": "9d45579ffd7e450e8f146ac17309af5962e82f23061163f2ed96ca6187fbd2d7",
+      "run-host.py": "aa3581158cac1f0bc4e6d8362217f3f0ee6b709e5ab6c7703f82452f61f4a990",
+      "sve_lanes.java": "e3382cb63b37ea5e4a70e7fbc63d281e0de2501b7473e73b9f2319c3eacf60f2"
+    },
+    "payloadUri": "s3://models-qual-077051030817/payload/vectors-bf16-final-expressions-v1.tar.gz",
+    "payloadSha256": "16c83c837e2d4b3f3b5794a63bf5f183e766815bb476622aa00f4274e872b293"
+  },
+  "hosts": [
+    {
+      "arch": "x86",
+      "instanceId": "i-0d48b198414b26cca",
+      "privateDnsName": "ip-172-31-9-206.ec2.internal",
+      "instanceType": "m6a.4xlarge",
+      "priceUsdPerHour": 0.6912,
+      "deadline": "2026-10-12T02:10:28.806728+00:00",
+      "resultUri": "s3://models-qual-077051030817/results/vectors-bf16-final-expressions-v1/x86/",
+      "userDataSha256": "a1ae894a734367e884e674e3ec1eafbe06d117e9c6713d73fb166cc8e2fef733",
+      "launchCommand": [
+        "aws",
+        "ec2",
+        "run-instances",
+        "--image-id",
+        "ami-0045d7fc2ad003464",
+        "--instance-type",
+        "m6a.4xlarge",
+        "--key-name",
+        "qual-milan",
+        "--iam-instance-profile",
+        "Name=models-qual-worker",
+        "--security-group-ids",
+        "sg-0e9ff523da4140d55",
+        "--subnet-id",
+        "subnet-08fcc910aba0d5b23",
+        "--block-device-mappings",
+        "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": {\"VolumeSize\": 30, \"VolumeType\": \"gp3\", \"DeleteOnTermination\": true}}]",
+        "--instance-initiated-shutdown-behavior",
+        "terminate",
+        "--metadata-options",
+        "HttpTokens=required,HttpEndpoint=enabled",
+        "--user-data",
+        "file:///Users/briansam-bodden/Code/java-ai/projects/vectors/benchmark-results/2026-10-11-bf16-determinism/final-expressions/isolated-x86-worker.sh",
+        "--tag-specifications",
+        "ResourceType=instance,Tags=[{Key=Name,Value=vectors-bf16-x86-final-expressions},{Key=project,Value=models-qualification},{Key=delete-after,Value=2026-10-12T02:10:28.806728+00:00}]",
+        "--output",
+        "json"
+      ]
+    },
+    {
+      "arch": "arm",
+      "instanceId": "i-0cb72c420333c8ad2",
+      "privateDnsName": "ip-172-31-13-139.ec2.internal",
+      "instanceType": "m7g.4xlarge",
+      "priceUsdPerHour": 0.6528,
+      "deadline": "2026-10-12T02:10:33.840357+00:00",
+      "resultUri": "s3://models-qual-077051030817/results/vectors-bf16-final-expressions-v1/arm/",
+      "userDataSha256": "db8d40d306531cb7fa35405d99a051d9705fd281c7da34b6f37a0c490fb7f5e7",
+      "launchCommand": [
+        "aws",
+        "ec2",
+        "run-instances",
+        "--region",
+        "us-east-1",
+        "--image-id",
+        "ami-03dac6c363b33b131",
+        "--instance-type",
+        "m7g.4xlarge",
+        "--key-name",
+        "qual-milan",
+        "--iam-instance-profile",
+        "Name=models-qual-worker",
+        "--security-group-ids",
+        "sg-0e9ff523da4140d55",
+        "--subnet-id",
+        "subnet-08fcc910aba0d5b23",
+        "--block-device-mappings",
+        "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": {\"VolumeSize\": 30, \"VolumeType\": \"gp3\", \"DeleteOnTermination\": true}}]",
+        "--instance-initiated-shutdown-behavior",
+        "terminate",
+        "--metadata-options",
+        "HttpTokens=required,HttpEndpoint=enabled",
+        "--user-data",
+        "file:///Users/briansam-bodden/Code/java-ai/projects/vectors/benchmark-results/2026-10-11-bf16-determinism/final-expressions/isolated-arm-worker.sh",
+        "--tag-specifications",
+        "ResourceType=instance,Tags=[{Key=Name,Value=vectors-bf16-arm-final-expressions},{Key=project,Value=models-qualification},{Key=delete-after,Value=2026-10-12T02:10:33.840357+00:00}]",
+        "--output",
+        "json"
+      ]
+    }
+  ],
+  "quotaCheck": {
+    "quota": 192.0,
+    "usedVcpus": 0,
+    "requestedVcpus": 32
+  }
+}

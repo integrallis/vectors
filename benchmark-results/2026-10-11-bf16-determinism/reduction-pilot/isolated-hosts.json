@@ -1,0 +1,132 @@
+{
+  "maximumCombinedUsd": 2,
+  "maximumSecondsPerHost": 3600,
+  "payload": {
+    "vectorsBaseRevision": "292c889bf3b0a8da17df8ff61cb8283604867401",
+    "baseline": "Central vectors-core 0.1.29",
+    "rotate": "Original fixed-tree source candidate at base revision",
+    "variants": [
+      {
+        "name": "hybrid",
+        "javaSha256": "6343e1b23701fb383a0734acece07beee45ead2b7c1fe05503200d4c36f14d6a",
+        "jarSha256": "4f59d3e1333dbf42d401ddeb43de9449dfd85581e195e366a5a0e97c6f86ea92"
+      },
+      {
+        "name": "narrow",
+        "javaSha256": "4bf07f76711edfdc1c6443dbe5fcded5a042129d61fba437d8f52d8692987a97",
+        "jarSha256": "b4c9000c3ceae4369154a7100209d9169bad942ed499437a07e79846e07b38bf"
+      },
+      {
+        "name": "scalar_tree",
+        "javaSha256": "0a11425422a34b7c563fb6200814bb1230e6cf4cf2f78d85205ffa90e9ccd8e5",
+        "jarSha256": "0e84b8653e87e29d46221e4d1eb66402b6c080e4ff4e3e004d3fc1f7add05ddc"
+      }
+    ],
+    "processors": 4,
+    "maximumCombinedUsd": 2,
+    "maximumSecondsPerHost": 3600,
+    "purpose": "Compare exact BF16 reduction expressions; investigate all latency ratios above 1.05; no retirement or release decision from a partial shape pilot",
+    "files": {
+      "hybrid.java": "6343e1b23701fb383a0734acece07beee45ead2b7c1fe05503200d4c36f14d6a",
+      "narrow.jar": "b4c9000c3ceae4369154a7100209d9169bad942ed499437a07e79846e07b38bf",
+      "scalar_tree.java": "0a11425422a34b7c563fb6200814bb1230e6cf4cf2f78d85205ffa90e9ccd8e5",
+      "baseline.jar": "21eeae4fcaa56fa26ed45d99610142f794cdec0e1d852894e637263f5bd0b40c",
+      "rotate.jar": "1ab158dbee881fd79c50d052033b703e34d7b051bab2f44dbedda9f5f79d712e",
+      "probes.jar": "e9340fefbe47241327bb9c68952b19a6b819fd0557f95ef55b43770822a81e66",
+      "benchmark.jar": "fc79846fc6103f5e5d5c6f5fe887dd65c5d2b8493d5968df08cf7eb37958c67c",
+      "hybrid.jar": "4f59d3e1333dbf42d401ddeb43de9449dfd85581e195e366a5a0e97c6f86ea92",
+      "scalar_tree.jar": "0e84b8653e87e29d46221e4d1eb66402b6c080e4ff4e3e004d3fc1f7add05ddc",
+      "run-host.py": "0c0de8733c236cf164124d05ea9e4fadf37f5001c6362a269eabf766086214a0",
+      "narrow.java": "4bf07f76711edfdc1c6443dbe5fcded5a042129d61fba437d8f52d8692987a97"
+    },
+    "payloadUri": "s3://models-qual-077051030817/payload/vectors-bf16-reduction-pilot-v1.tar.gz",
+    "payloadSha256": "62c7510a83ca80b80ee9edd9af7bb6f40f68b4e601e98e74aacee98e778600b5"
+  },
+  "hosts": [
+    {
+      "arch": "x86",
+      "instanceId": "i-0682086d957879453",
+      "privateDnsName": "ip-172-31-8-30.ec2.internal",
+      "instanceType": "m6a.4xlarge",
+      "priceUsdPerHour": 0.6912,
+      "deadline": "2026-10-12T01:56:52.559827+00:00",
+      "resultUri": "s3://models-qual-077051030817/results/vectors-bf16-reduction-pilot-v1/x86/",
+      "userDataSha256": "2ce76148c5169791e54e0c5b2fad9ab6b124ec56e1ac5cc5acdd4512223efead",
+      "launchCommand": [
+        "aws",
+        "ec2",
+        "run-instances",
+        "--image-id",
+        "ami-0045d7fc2ad003464",
+        "--instance-type",
+        "m6a.4xlarge",
+        "--key-name",
+        "qual-milan",
+        "--iam-instance-profile",
+        "Name=models-qual-worker",
+        "--security-group-ids",
+        "sg-0e9ff523da4140d55",
+        "--subnet-id",
+        "subnet-08fcc910aba0d5b23",
+        "--block-device-mappings",
+        "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": {\"VolumeSize\": 30, \"VolumeType\": \"gp3\", \"DeleteOnTermination\": true}}]",
+        "--instance-initiated-shutdown-behavior",
+        "terminate",
+        "--metadata-options",
+        "HttpTokens=required,HttpEndpoint=enabled",
+        "--user-data",
+        "file:///Users/briansam-bodden/Code/java-ai/projects/vectors/benchmark-results/2026-10-11-bf16-determinism/reduction-pilot/isolated-x86-worker.sh",
+        "--tag-specifications",
+        "ResourceType=instance,Tags=[{Key=Name,Value=vectors-bf16-x86-reduction-pilot},{Key=project,Value=models-qualification},{Key=delete-after,Value=2026-10-12T01:56:52.559827+00:00}]",
+        "--output",
+        "json"
+      ]
+    },
+    {
+      "arch": "arm",
+      "instanceId": "i-09292497e969296a0",
+      "privateDnsName": "ip-172-31-5-252.ec2.internal",
+      "instanceType": "m7g.4xlarge",
+      "priceUsdPerHour": 0.6528,
+      "deadline": "2026-10-12T01:57:00.286042+00:00",
+      "resultUri": "s3://models-qual-077051030817/results/vectors-bf16-reduction-pilot-v1/arm/",
+      "userDataSha256": "6bce38cd0dd0c2c54dd27b4b0e1fedece52368775d99edc760a247e1ab261238",
+      "launchCommand": [
+        "aws",
+        "ec2",
+        "run-instances",
+        "--region",
+        "us-east-1",
+        "--image-id",
+        "ami-03dac6c363b33b131",
+        "--instance-type",
+        "m7g.4xlarge",
+        "--key-name",
+        "qual-milan",
+        "--iam-instance-profile",
+        "Name=models-qual-worker",
+        "--security-group-ids",
+        "sg-0e9ff523da4140d55",
+        "--subnet-id",
+        "subnet-08fcc910aba0d5b23",
+        "--block-device-mappings",
+        "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": {\"VolumeSize\": 30, \"VolumeType\": \"gp3\", \"DeleteOnTermination\": true}}]",
+        "--instance-initiated-shutdown-behavior",
+        "terminate",
+        "--metadata-options",
+        "HttpTokens=required,HttpEndpoint=enabled",
+        "--user-data",
+        "file:///Users/briansam-bodden/Code/java-ai/projects/vectors/benchmark-results/2026-10-11-bf16-determinism/reduction-pilot/isolated-arm-worker.sh",
+        "--tag-specifications",
+        "ResourceType=instance,Tags=[{Key=Name,Value=vectors-bf16-arm-reduction-pilot},{Key=project,Value=models-qualification},{Key=delete-after,Value=2026-10-12T01:57:00.286042+00:00}]",
+        "--output",
+        "json"
+      ]
+    }
+  ],
+  "quotaCheck": {
+    "quota": 192.0,
+    "usedVcpus": 0,
+    "requestedVcpus": 32
+  }
+}
