@@ -4,6 +4,17 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-10-12
+
+### Fixed
+
+- BF16 single and batched projections use a fixed addition order before and after JIT
+  compilation, preserving exact logits across prefill chunk boundaries.
+- Preserve vector weight reuse while keeping BF16 accumulation inside its array boundary
+  to avoid temporary vector allocations in model callers.
+- Protect shared row dispatch against nested pool cycles, closing from a worker callback,
+  and integer overflow at maximum row counts.
+
 ## [0.1.29] - 2026-10-10
 
 ### Fixed
