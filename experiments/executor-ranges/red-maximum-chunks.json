@@ -1,0 +1,14 @@
+{
+  "timeoutSeconds": 5,
+  "stderr": "WARNING: Using incubator modules: jdk.incubator.vector\n",
+  "command": [
+    "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+    "--add-modules",
+    "jdk.incubator.vector",
+    "-cp",
+    "/tmp/bf16-row-count-edge/probe:/tmp/vectors-final-bf16-boundary-ae337eeb/vectors-core-0.1.30.jar",
+    "com.integrallis.vectors.core.GgufMaximumRangeProbe",
+    "maximum-chunks"
+  ],
+  "wallSeconds": 5.039041772019118
+}

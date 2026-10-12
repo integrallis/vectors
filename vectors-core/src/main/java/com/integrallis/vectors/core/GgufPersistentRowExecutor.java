@@ -101,7 +101,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
       stagePlan = null;
       rows = rowCount;
       int targetChunks = (int) Math.min(rowCount, (long) parallelism * chunksPerWorker);
-      chunkSize = (rowCount + targetChunks - 1) / targetChunks;
+      chunkSize = 1 + (rowCount - 1) / targetChunks;
       nextChunk.set(0);
       failure.set(null);
 
@@ -189,16 +189,16 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     try {
       int workItems = stage.workItems();
       int targetChunks = (int) Math.min(workItems, (long) parallelism * (long) chunksPerWorker);
-      int stageChunkSize = (workItems + targetChunks - 1) / targetChunks;
+      int stageChunkSize = 1 + (workItems - 1) / targetChunks;
       while (failure.get() == null) {
         int chunk = stageNextChunks.getAndIncrement(stageIndex);
-        if (chunk >= targetChunks) {
+        if (chunk < 0 || chunk >= targetChunks) {
           return;
         }
-        int start = chunk * stageChunkSize;
-        int end = Math.min(start + stageChunkSize, workItems);
+        long start = (long) chunk * stageChunkSize;
+        int end = (int) Math.min(start + stageChunkSize, workItems);
         if (start < end) {
-          stage.operation().execute(start, end);
+          stage.operation().execute((int) start, end);
         }
       }
     } catch (Throwable thrown) {
@@ -220,12 +220,12 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     EXECUTING_CALLBACK.set(true);
     try {
       while (failure.get() == null) {
-        int start = nextChunk.getAndIncrement() * chunkSize;
-        if (start >= rows) {
+        long start = (long) nextChunk.getAndIncrement() * chunkSize;
+        if (start < 0 || start >= rows) {
           return;
         }
-        int end = Math.min(start + chunkSize, rows);
-        for (int row = start; row < end; row++) {
+        int end = (int) Math.min(start + chunkSize, rows);
+        for (int row = (int) start; row < end; row++) {
           operation.accept(row);
         }
       }

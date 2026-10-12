@@ -1,0 +1,79 @@
+{
+  "jarSha256": "79f536b453c5ad6d7339b30e41d8c8c440da3ff613caf5d1bea6f83e40ade1c7",
+  "focusedTests": {
+    "name": "com.integrallis.vectors.core.GgufParallelSupportTest",
+    "tests": "21",
+    "skipped": "0",
+    "failures": "0",
+    "errors": "0",
+    "timestamp": "2026-10-12T21:16:42.994Z",
+    "hostname": "Brians-MacBook-Pro.local",
+    "time": "9.409"
+  },
+  "actualArtifactProbes": [
+    {
+      "mode": "rows",
+      "command": [
+        "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "--add-modules",
+        "jdk.incubator.vector",
+        "-cp",
+        "/Users/briansam-bodden/Code/java-ai/projects/vectors-executor-overflow/vectors-core/build/libs/vectors-core-0.1.30.jar:vectors-core/build/classes/java/test",
+        "com.integrallis.vectors.core.GgufMaximumRangeProbe",
+        "rows"
+      ],
+      "exitCode": 0,
+      "wallSeconds": 0.43014755798503757,
+      "stdout": "",
+      "stderr": "WARNING: Using incubator modules: jdk.incubator.vector\n"
+    },
+    {
+      "mode": "stages",
+      "command": [
+        "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "--add-modules",
+        "jdk.incubator.vector",
+        "-cp",
+        "/Users/briansam-bodden/Code/java-ai/projects/vectors-executor-overflow/vectors-core/build/libs/vectors-core-0.1.30.jar:vectors-core/build/classes/java/test",
+        "com.integrallis.vectors.core.GgufMaximumRangeProbe",
+        "stages"
+      ],
+      "exitCode": 0,
+      "wallSeconds": 0.6325312440749258,
+      "stdout": "",
+      "stderr": "WARNING: Using incubator modules: jdk.incubator.vector\n"
+    },
+    {
+      "mode": "maximum-chunks",
+      "command": [
+        "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "--add-modules",
+        "jdk.incubator.vector",
+        "-cp",
+        "/Users/briansam-bodden/Code/java-ai/projects/vectors-executor-overflow/vectors-core/build/libs/vectors-core-0.1.30.jar:vectors-core/build/classes/java/test",
+        "com.integrallis.vectors.core.GgufMaximumRangeProbe",
+        "maximum-chunks"
+      ],
+      "exitCode": 0,
+      "wallSeconds": 0.4406520929187536,
+      "stdout": "",
+      "stderr": "WARNING: Using incubator modules: jdk.incubator.vector\n"
+    },
+    {
+      "mode": "normal",
+      "command": [
+        "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+        "--add-modules",
+        "jdk.incubator.vector",
+        "-cp",
+        "/Users/briansam-bodden/Code/java-ai/projects/vectors-executor-overflow/vectors-core/build/libs/vectors-core-0.1.30.jar:vectors-core/build/classes/java/test",
+        "com.integrallis.vectors.core.GgufMaximumRangeProbe",
+        "normal"
+      ],
+      "exitCode": 0,
+      "wallSeconds": 2.395160714862868,
+      "stdout": "NORMAL_RANGES_SHA256=6f0383c11fe9a0dc55c3d20c4a40282716ce5715f0b7011b9e4684b17340c9d4\n",
+      "stderr": "WARNING: Using incubator modules: jdk.incubator.vector\n"
+    }
+  ]
+}

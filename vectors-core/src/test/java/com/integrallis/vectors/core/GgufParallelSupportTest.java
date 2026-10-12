@@ -38,6 +38,21 @@ import org.junit.jupiter.api.Test;
 class GgufParallelSupportTest {
 
   @Test
+  void maximumRowCountNeverEmitsNegativeRows() {
+    assertTimeoutPreemptively(Duration.ofSeconds(5), GgufMaximumRangeProbe::maximumRows);
+  }
+
+  @Test
+  void maximumStageRangesCoverEveryRowExactlyOnce() {
+    assertTimeoutPreemptively(Duration.ofSeconds(5), GgufMaximumRangeProbe::maximumStages);
+  }
+
+  @Test
+  void maximumChunkConfigurationMakesProgressAtIntegerLimit() {
+    assertTimeoutPreemptively(Duration.ofSeconds(5), GgufMaximumRangeProbe::maximumChunks);
+  }
+
+  @Test
   void callbackCloseFailsWithoutPoisoningEitherPool() {
     assertTimeoutPreemptively(
         Duration.ofSeconds(5),
