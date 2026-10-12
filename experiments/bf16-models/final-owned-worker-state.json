@@ -1,0 +1,102 @@
+{
+  "verifiedAtUtc": "2026-10-12T22:27:17.876739+00:00",
+  "allTerminated": true,
+  "workers": [
+    {
+      "instanceId": "i-019f92a3cc748b449",
+      "state": "terminated",
+      "reason": {
+        "Code": "Client.InstanceInitiatedShutdown",
+        "Message": "Client.InstanceInitiatedShutdown: Instance initiated shutdown"
+      }
+    },
+    {
+      "instanceId": "i-085a7e7cd8581ff50",
+      "state": "terminated",
+      "reason": {
+        "Code": "Client.InstanceInitiatedShutdown",
+        "Message": "Client.InstanceInitiatedShutdown: Instance initiated shutdown"
+      }
+    },
+    {
+      "instanceId": "i-01fd342f1b4531bf9",
+      "state": "terminated",
+      "reason": {
+        "Code": "Client.InstanceInitiatedShutdown",
+        "Message": "Client.InstanceInitiatedShutdown: Instance initiated shutdown"
+      }
+    },
+    {
+      "observedAtUtc": "2026-10-12T22:15:47.327081+00:00",
+      "instanceId": "i-08e8ee153d9268ef7",
+      "region": "us-east-1",
+      "state": "terminated",
+      "stateReason": {
+        "Code": "Client.InstanceInitiatedShutdown",
+        "Message": "Client.InstanceInitiatedShutdown: Instance initiated shutdown"
+      },
+      "stateTransitionReason": "User initiated",
+      "rawStatusIsNotLivenessEvidence": true
+    },
+    {
+      "observedAtUtc": "2026-10-12T22:15:58.473828+00:00",
+      "instanceId": "i-03049eadf0ea69fab",
+      "region": "us-west-2",
+      "state": "terminated",
+      "stateReason": {
+        "Code": "Client.InstanceInitiatedShutdown",
+        "Message": "Client.InstanceInitiatedShutdown: Instance initiated shutdown"
+      },
+      "stateTransitionReason": "User initiated",
+      "rawStatusIsNotLivenessEvidence": true
+    },
+    {
+      "observedAtUtc": "2026-10-12T22:15:51.005394+00:00",
+      "instanceId": "i-0ebb81347be7d9e5f",
+      "region": "us-west-2",
+      "state": "terminated",
+      "stateReason": {
+        "Code": "Client.InstanceInitiatedShutdown",
+        "Message": "Client.InstanceInitiatedShutdown: Instance initiated shutdown"
+      },
+      "stateTransitionReason": "User initiated",
+      "rawStatusIsNotLivenessEvidence": true
+    },
+    {
+      "observedAtUtc": "2026-10-12T22:16:02.348258+00:00",
+      "instanceId": "i-0c37d50276f2b598b",
+      "region": "us-east-1",
+      "state": "terminated",
+      "stateReason": {
+        "Code": "Server.SpotInstanceTermination",
+        "Message": "Server.SpotInstanceTermination: Spot instance termination"
+      },
+      "stateTransitionReason": "Service initiated (2026-10-12 22:09:16 GMT)",
+      "rawStatusIsNotLivenessEvidence": true
+    },
+    {
+      "observedAtUtc": "2026-10-12T22:15:54.742675+00:00",
+      "instanceId": "i-06ec204eaef412e7d",
+      "region": "us-west-2",
+      "state": "terminated",
+      "stateReason": {
+        "Code": "Server.SpotInstanceTermination",
+        "Message": "Server.SpotInstanceTermination: Spot instance termination"
+      },
+      "stateTransitionReason": "Service initiated (2026-10-12 21:52:33 GMT)",
+      "rawStatusIsNotLivenessEvidence": true
+    },
+    {
+      "observedAtUtc": "2026-10-12T22:16:05.993602+00:00",
+      "instanceId": "i-0abcca3c9166a956f",
+      "region": "us-east-1",
+      "state": "terminated",
+      "stateReason": {
+        "Code": "Client.InstanceInitiatedShutdown",
+        "Message": "Client.InstanceInitiatedShutdown: Instance initiated shutdown"
+      },
+      "stateTransitionReason": "User initiated",
+      "rawStatusIsNotLivenessEvidence": true
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "scope": "Owned untracked failed/compiled scratch preserved outside worktree after qualification; no tracked source or immutable runtime artifact removed",
+  "archive": "/Users/briansam-bodden/Code/java-ai/.audit-evidence/2026-10-12-bf16-owned-scratch.tar.gz",
+  "archiveSha256": "9d3c2d183a1baf70963b526c42a4b2213eb289c817628007613a4af50e2a3933",
+  "files": {
+    "experiments/bf16-tiles/nested-initial-classpath-error.json": "20d7ee7b6d0e715bc7b9fdaac034c63eca6715e1da949ddd07caa71a537c379e",
+    "experiments/bf16-tiles/nested-probes/com/integrallis/vectors/core/GgufPersistentRowExecutor.class": "ae7e7c3bc476f7f69d2674988938ff9e3af4a57ea80abaec8ab50c9cb238c12d",
+    "experiments/bf16-tiles/nested-probes/com/integrallis/vectors/core/BFloat16NestedDispatchProbe.class": "617c8332eed0b0fa68cb43b7f4483cbfe0f9982693af0c4807b6de2fce13ea81",
+    "experiments/bf16-tiles/nested-red-startup-thread-dump.json": "45299d7da232fab2b906eb808e44512a5e2458de7d9a3b188ff419720fddd1fa",
+    "experiments/bf16-tiles/probes.jar": "8bdbcfe7a5b3a8cba552f9137467fcbfeda81f88e8deff93174cf4d1e08f757b",
+    "experiments/bf16-tiles/probes/com/integrallis/vectors/core/BFloat16MatrixColdHotProbe.class": "9e36bc4585ccee7054513555a9822be32a8a68cf6f7af7c77b43c09fa53e474f",
+    "experiments/bf16-tiles/probes/com/integrallis/vectors/core/BFloat16MatrixAllocationProbe.class": "acc495a0a69aa7caa00c12504f85406ab10fab9b00281463a95f246f5e985850",
+    "experiments/bf16-tiles/tile2parallel.jar": "eeab9fde9cb8bc6fee7cdfd4a2e6acd10ae7cddc171bd9c4fa1446e0103ddd07",
+    "experiments/bf16-tiles/tile2parallel/classes/com/integrallis/vectors/core/BFloat16Matrix.class": "c70164083cd19435f3776fef1d7ba2046ed4e4b3f93956a36cb4d20007a4d43e",
+    "experiments/bf16-tiles/tile4parallel.jar": "e38dcc9158ae40c68f8e46ca8052ab5bfedfb7b83b4cfc69f5ea0b306dbe23fc",
+    "experiments/bf16-tiles/tile4parallel/classes/com/integrallis/vectors/core/BFloat16Matrix.class": "17c68f5b11a43ee278896f8ca464882113efe629a8a5a9599bc7ffdbeac0a1ed",
+    "experiments/bf16-tiles/tile4serial.jar": "b7fca73b798f7c47d9ec58f94b4829755e3c7ce1aa67c07bd312b728217262c3",
+    "experiments/bf16-tiles/tile4serial/classes/com/integrallis/vectors/core/BFloat16Matrix.class": "3c5bd59f21c5200f7a53781470a17e791dd5acdc5fdb07fb4654c732068ff62d"
+  },
+  "archivedAtUtc": "2026-10-12T22:27:05.523326+00:00",
+  "restoration": "Extract archive at vectors-bf16-production root; member paths are relative and hashed."
+}
