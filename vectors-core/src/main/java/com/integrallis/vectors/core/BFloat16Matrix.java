@@ -204,42 +204,60 @@ public final class BFloat16Matrix {
         sum2 = accumulate(weight, sum2, evenInputs, oddInputs, base2 + byteOffset);
         sum3 = accumulate(weight, sum3, evenInputs, oddInputs, base3 + byteOffset);
       }
-      output[outputOffset + row] =
-          finishRow(
-              weight,
-              PanamaVectorUtilSupport.reduceLanesFixedTree(sum0),
-              input,
-              inputOffset,
-              columns,
-              base0,
-              vectorBound);
-      output[outputOffset + row + 1] =
-          finishRow(
-              weight,
-              PanamaVectorUtilSupport.reduceLanesFixedTree(sum1),
-              input,
-              inputOffset,
-              columns,
-              base1,
-              vectorBound);
-      output[outputOffset + row + 2] =
-          finishRow(
-              weight,
-              PanamaVectorUtilSupport.reduceLanesFixedTree(sum2),
-              input,
-              inputOffset,
-              columns,
-              base2,
-              vectorBound);
-      output[outputOffset + row + 3] =
-          finishRow(
-              weight,
-              PanamaVectorUtilSupport.reduceLanesFixedTree(sum3),
-              input,
-              inputOffset,
-              columns,
-              base3,
-              vectorBound);
+      // Keep reductions in this loop: the measured small ARM projection benefits from
+      // avoiding vector values escaping into a helper. Each row retains the fixed addition tree.
+      {
+        int lanes = sum0.length();
+        if (lanes == 16) sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+        if (lanes >= 8) sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+        if (lanes >= 4) sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+        if (lanes >= 2) sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+        float sum = sum0.lane(0);
+        for (int column = vectorBound; column < columns; column++) {
+          float value = decode(weight.get(LE_SHORT, base0 + (long) column * Short.BYTES));
+          sum = MathUtil.fma(input[inputOffset + column], value, sum);
+        }
+        output[outputOffset + row] = sum;
+      }
+      {
+        int lanes = sum1.length();
+        if (lanes == 16) sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+        if (lanes >= 8) sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+        if (lanes >= 4) sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+        if (lanes >= 2) sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+        float sum = sum1.lane(0);
+        for (int column = vectorBound; column < columns; column++) {
+          float value = decode(weight.get(LE_SHORT, base1 + (long) column * Short.BYTES));
+          sum = MathUtil.fma(input[inputOffset + column], value, sum);
+        }
+        output[outputOffset + row + 1] = sum;
+      }
+      {
+        int lanes = sum2.length();
+        if (lanes == 16) sum2 = sum2.add(sum2.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+        if (lanes >= 8) sum2 = sum2.add(sum2.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+        if (lanes >= 4) sum2 = sum2.add(sum2.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+        if (lanes >= 2) sum2 = sum2.add(sum2.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+        float sum = sum2.lane(0);
+        for (int column = vectorBound; column < columns; column++) {
+          float value = decode(weight.get(LE_SHORT, base2 + (long) column * Short.BYTES));
+          sum = MathUtil.fma(input[inputOffset + column], value, sum);
+        }
+        output[outputOffset + row + 2] = sum;
+      }
+      {
+        int lanes = sum3.length();
+        if (lanes == 16) sum3 = sum3.add(sum3.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+        if (lanes >= 8) sum3 = sum3.add(sum3.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+        if (lanes >= 4) sum3 = sum3.add(sum3.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+        if (lanes >= 2) sum3 = sum3.add(sum3.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+        float sum = sum3.lane(0);
+        for (int column = vectorBound; column < columns; column++) {
+          float value = decode(weight.get(LE_SHORT, base3 + (long) column * Short.BYTES));
+          sum = MathUtil.fma(input[inputOffset + column], value, sum);
+        }
+        output[outputOffset + row + 3] = sum;
+      }
     }
     vectorMultiplyRows(input, inputOffset, weight, rowGroup, rows, columns, output, outputOffset);
   }
