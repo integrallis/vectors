@@ -166,9 +166,23 @@ public final class Bf16ModelProof {
                       "<|im_start|>user\n"
                           + "Name one JVM language.<|im_end|>\n"
                           + "<|im_start|>assistant\n");
+      int[] pinnedTokens =
+          bonsai
+              ? new int[] {760, 3841, 13477, 37550}
+              : new int[] {
+                151644, 872, 198, 675, 825, 72379, 4128, 13, 151645, 198, 151644, 77091, 198
+              };
+      if (!Arrays.equals(tokens, pinnedTokens))
+        throw new AssertionError("pinned tokenizer mismatch");
+      if (backend.diagnostics().optimizations().stream()
+          .noneMatch(
+              o -> o.id().equals("batched-prefill") && o.status().toString().equals("ENABLED")))
+        throw new AssertionError("public batched prefill route inactive");
       List<String> initialHashes = null;
       for (int repeat = 0; repeat < 3; repeat++) {
         float[][] values = snapshots(backend, tokens, bonsai ? 8 : 3);
+        if (!bonsai && values[0].length != 151936)
+          throw new AssertionError("Qwen vocabulary mismatch");
         if (bonsai) {
           for (int step = 0; step < expected.length; step++)
             if (argmax(values[step]) != expected[step])
@@ -193,6 +207,21 @@ public final class Bf16ModelProof {
           throw new AssertionError("fresh session changed after compilation");
         initialHashes = hashes;
       }
+      String implicit = digest(backend.prefill(tokens, 0));
+      backend.reset();
+      String reset = digest(backend.prefill(tokens, 0));
+      emit(
+          Map.of(
+              "kind",
+              "implicit-reset",
+              "expected",
+              initialHashes.getFirst(),
+              "implicit",
+              implicit,
+              "reset",
+              reset));
+      if (!initialHashes.getFirst().equals(implicit) || !implicit.equals(reset))
+        throw new AssertionError("implicit session reset changed logits");
     }
     String prompt =
         "Explain why independent requests must not share recurrent state. A second request should"

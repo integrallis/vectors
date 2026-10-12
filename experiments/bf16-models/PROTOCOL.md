@@ -22,7 +22,9 @@ the failure reports, and terminate the host. A published-arm failure remains his
 
 Before timing, record all existing fixture gates for all arms, retaining published failures.
 The candidate and corrected control must pass: pinned Qwen Transformers logits at the existing
-1e-3 tolerance and winning token; pinned Prism Bonsai eight-token continuation; repeated fresh
+1e-3 tolerance, pinned ChatML token IDs, vocabulary size and winning token; pinned Prism Bonsai
+eight-token continuation and input token IDs; observable batched-prefill routing; implicit-session
+reset parity; repeated fresh
 sessions; exact full-vocabulary sequential versus 16-token prefill across a chunk boundary.
 The native Bonsai projection route must actually be enabled. Failure is recorded and blocks
 acceptance, while independent remaining model coverage continues.
@@ -44,3 +46,7 @@ Root owns the additional final Bonsai RAG and public-QA qualification and depend
 
 Two owned hosts have a two-hour deadline and combined $3.50 cap. Use the existing quota/price
 checks, immutable payload/commit receipts, periodic diagnostic upload, and confirmed termination.
+
+Oracle values are copied without changing tolerances from Models
+`Qwen2HuggingFaceBackendIntegrationTest` and `Bonsai2NativeModelFixtureSlowTest`.
+The frozen payload contains the exact harness and pinned artifact hashes.
