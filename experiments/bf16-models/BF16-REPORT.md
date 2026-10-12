@@ -2,7 +2,7 @@
 
 **Status: final whole-model qualification is running; release acceptance is not yet established.**
 
-The corrected BF16 kernel is deterministic across compilation and sequential/batched execution. Every measured kernel latency interval excludes a regression on x86, SVE ARM and NEON ARM. Earlier complete model runs exposed regressions outside the BF16 kernel; their failures are retained, and the corrected runtime is being measured with fresh samples.
+The corrected BF16 kernel is deterministic across compilation and sequential/batched execution. Every measured kernel latency interval excludes a regression on x86, SVE ARM and NEON ARM. Actual model runs expose additional regressions, including BF16 vector-object escape in the Bonsai caller context. Their failures are retained; a faster standalone kernel does not establish whole-model acceptance.
 
 ## Frozen artifacts and scope
 
@@ -20,7 +20,7 @@ The BF16 class is byte-identical across the kernel and successive macro artifact
 - BF16 accumulation now follows one reduction tree. Two input rows reuse decoded weights. Large shareable matvecs use the existing persistent pool; SVE selects its measured inline reduction layout with identical arithmetic. No additional tuning flag or pool is introduced.
 - Nested callbacks run inline across pools, preventing same-pool and A→B→A deadlocks. Closed pools reject nested execution, and closing pools from callbacks fails before a barrier cycle can form.
 - Maximum row and chunk counts use overflow-safe ceiling/range arithmetic. The old artifact emits negative rows, drops all stage work, or hangs. Four bounded actual-artifact probes pass after correction; 70 normal partition configurations retain identical old/new hashes. Twenty-one focused executor tests pass. See [executor proof](../executor-ranges/PROOF.md).
-- Exact activation retains the stable arithmetic implementation. An array boundary prevents temporary vector objects escaping when SwiGLU is compiled in a full model; see [actual-model allocation evidence](../activation-boundary/README.md).
+- Exact activation retains the stable arithmetic implementation. An array boundary removes the measured temporary-vector allocation in the tested Qwen whole-model caller; Bonsai still has excess allocation and remains a separate failed gate. See [actual-model allocation evidence](../activation-boundary/README.md).
 - Qwen BF16 and Bonsai real-weight fixtures pass pinned reference outputs, cloned full-logit repeat/reset checks, and chunk-boundary sequential/batch equality on x86, SVE ARM and NEON. All six final v9/v10/v11 hosts repeat these gates successfully: 24 candidate/control checks pass, while all 12 published-arm checks reproduce the known determinism failure. See the [complete actual-artifact fixture manifest](final-real-fixtures/manifest.json). The published stack fails fresh-session determinism; its failures remain recorded.
 - The Bonsai harness uses the CI prompt, context 96, batch 1/batch 16, native default route and three complete vocabulary snapshots. Its fixture uses explicit sessions; the separate unchanged literal JUnit method using implicit overloads passes against the overflow-fixed artifact, with zero full-vocabulary absolute/scaled error at all three continuations. [Literal test evidence](literal-bonsai-ci/provenance.json) pins the actual JARs, native binary and unchanged test source.
 
