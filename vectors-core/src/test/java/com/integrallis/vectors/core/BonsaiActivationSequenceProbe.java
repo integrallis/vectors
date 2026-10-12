@@ -24,6 +24,7 @@ final class BonsaiActivationSequenceProbe {
 
   public static void main(String[] args) {
     int bits = PanamaVectorUtilSupport.FLOAT_SPECIES.vectorBitSize();
+    boolean panama = VectorizationProvider.isPanamaEnabled();
     System.out.printf(
         "CONFIG requested=%s effective=%d preferred=%d vectorFma=%s scalarFma=%s java=%s arch=%s%n",
         System.getProperty("vectors.maxBits", "default"),
@@ -73,7 +74,7 @@ final class BonsaiActivationSequenceProbe {
             float x = alphas[step][i] + bias[i];
             expectedBeta[i] = 1f / (1f + (float) StrictMath.exp(-expectedBeta[i]));
             float softplus =
-                h < HEADS - HEADS % lanes
+                panama && h < HEADS - HEADS % lanes
                     ? (x > 20f ? x : (float) StrictMath.log(1f + (float) StrictMath.exp(x)))
                     : x > 20f
                         ? x
@@ -90,7 +91,9 @@ final class BonsaiActivationSequenceProbe {
               int index = OFFSET + tap * CHANNELS + channel;
               float previous = referenceHistory[index];
               sum =
-                  channel < CHANNELS - CHANNELS % lanes && PanamaConstants.HAS_FAST_VECTOR_FMA
+                  panama
+                          && channel < CHANNELS - CHANNELS % lanes
+                          && PanamaConstants.HAS_FAST_VECTOR_FMA
                       ? Math.fma(previous, weights[index], sum)
                       : previous * weights[index] + sum;
               if (tap > 0) referenceHistory[index - CHANNELS] = previous;

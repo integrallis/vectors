@@ -11,6 +11,9 @@ All notable changes to java-vectors are documented here.
 - Keep SwiGLU, recurrent sigmoid/softplus gates and convolution/SiLU numerically stable
   before and after JIT compilation. This corrects Bonsai 2 native sequential/batched
   prefill divergence while preserving existing float intermediates and convolution history.
+- Preserve BF16 projection reduction order across compilation states and batch shapes so
+  fresh native Bonsai sessions retain identical full-vocabulary logits, not just selected tokens.
+- Guard nested projection executor callbacks and maximum integer ranges used by BF16 row dispatch.
 - Exercise 48-head recurrent gates, persistent four-tap history, offsets, tails, aliases,
   concurrent callers, vector-width settings and disabled-FMA operation in regression checks.
 

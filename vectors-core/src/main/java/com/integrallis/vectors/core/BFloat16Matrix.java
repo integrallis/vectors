@@ -24,7 +24,12 @@ import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorShuffle;
 
-/** A row-major matrix stored as little-endian IEEE bfloat16 values. */
+/**
+ * A row-major matrix stored as little-endian IEEE bfloat16 values.
+ *
+ * <p>For a fixed provider, SIMD width and FMA configuration, single and batched products use the
+ * same summation order before and after JIT compilation.
+ */
 public final class BFloat16Matrix {
 
   private static final ValueLayout.OfShort LE_SHORT =
@@ -142,8 +147,19 @@ public final class BFloat16Matrix {
       int columns,
       float[] output,
       int outputOffset) {
-    // Four interleaved rows reuse activations for ordinary transformer projections. Very tall
-    // vocabulary matrices perform better as one sequential weight stream on both tested x86 hosts.
+    if (GgufParallelSupport.willParallelize(
+        weight, (long) rows * columns, GgufParallelSupport.DEFAULT_MIN_ELEMENTS)) {
+      GgufParallelSupport.forEachRow(
+          weight,
+          rows,
+          columns,
+          row ->
+              vectorMultiplyRows(
+                  input, inputOffset, weight, row, row + 1, columns, output, outputOffset));
+      return;
+    }
+    // The calling-thread route reuses activations across four ordinary rows and retains
+    // sequential weight streaming for very tall matrices.
     if (rows >= SEQUENTIAL_ROW_THRESHOLD) {
       vectorMultiplySequential(input, inputOffset, weight, rows, columns, output, outputOffset);
     } else {
@@ -151,6 +167,10 @@ public final class BFloat16Matrix {
     }
   }
 
+  // Keep packed loads and FMA inside this array-only boundary. Splitting these operations
+  // across vector-valued helpers lets C2 materialize temporary vectors in Bonsai's caller
+  // context, even when isolated kernel measurements look healthy. The expansion preserves
+  // each row's even/odd accumulation order; measure the actual model before refactoring it.
   private static void vectorMultiplyFourRows(
       float[] input,
       int inputOffset,
@@ -183,19 +203,173 @@ public final class BFloat16Matrix {
         FloatVector evenInputs = first.rearrange(EVEN_INPUTS, second);
         FloatVector oddInputs = first.rearrange(ODD_INPUTS, second);
         long byteOffset = (long) column * Short.BYTES;
-        sum0 = accumulate(weight, sum0, evenInputs, oddInputs, base0 + byteOffset);
-        sum1 = accumulate(weight, sum1, evenInputs, oddInputs, base1 + byteOffset);
-        sum2 = accumulate(weight, sum2, evenInputs, oddInputs, base2 + byteOffset);
-        sum3 = accumulate(weight, sum3, evenInputs, oddInputs, base3 + byteOffset);
+        {
+          IntVector packed =
+              IntVector.fromMemorySegment(
+                  PanamaVectorUtilSupport.INT_SPECIES,
+                  weight,
+                  base0 + byteOffset,
+                  ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights =
+              packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
+          if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
+            sum0 = evenWeights.fma(evenInputs, sum0);
+            sum0 = oddWeights.fma(oddInputs, sum0);
+          } else {
+            sum0 = evenWeights.mul(evenInputs).add(sum0);
+            sum0 = oddWeights.mul(oddInputs).add(sum0);
+          }
+        }
+        {
+          IntVector packed =
+              IntVector.fromMemorySegment(
+                  PanamaVectorUtilSupport.INT_SPECIES,
+                  weight,
+                  base1 + byteOffset,
+                  ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights =
+              packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
+          if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
+            sum1 = evenWeights.fma(evenInputs, sum1);
+            sum1 = oddWeights.fma(oddInputs, sum1);
+          } else {
+            sum1 = evenWeights.mul(evenInputs).add(sum1);
+            sum1 = oddWeights.mul(oddInputs).add(sum1);
+          }
+        }
+        {
+          IntVector packed =
+              IntVector.fromMemorySegment(
+                  PanamaVectorUtilSupport.INT_SPECIES,
+                  weight,
+                  base2 + byteOffset,
+                  ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights =
+              packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
+          if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
+            sum2 = evenWeights.fma(evenInputs, sum2);
+            sum2 = oddWeights.fma(oddInputs, sum2);
+          } else {
+            sum2 = evenWeights.mul(evenInputs).add(sum2);
+            sum2 = oddWeights.mul(oddInputs).add(sum2);
+          }
+        }
+        {
+          IntVector packed =
+              IntVector.fromMemorySegment(
+                  PanamaVectorUtilSupport.INT_SPECIES,
+                  weight,
+                  base3 + byteOffset,
+                  ByteOrder.LITTLE_ENDIAN);
+          FloatVector evenWeights =
+              packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+          FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
+          if (PanamaConstants.HAS_FAST_VECTOR_FMA) {
+            sum3 = evenWeights.fma(evenInputs, sum3);
+            sum3 = oddWeights.fma(oddInputs, sum3);
+          } else {
+            sum3 = evenWeights.mul(evenInputs).add(sum3);
+            sum3 = oddWeights.mul(oddInputs).add(sum3);
+          }
+        }
       }
-      output[outputOffset + row] =
-          finishRow(weight, sum0, input, inputOffset, columns, base0, vectorBound);
-      output[outputOffset + row + 1] =
-          finishRow(weight, sum1, input, inputOffset, columns, base1, vectorBound);
-      output[outputOffset + row + 2] =
-          finishRow(weight, sum2, input, inputOffset, columns, base2, vectorBound);
-      output[outputOffset + row + 3] =
-          finishRow(weight, sum3, input, inputOffset, columns, base3, vectorBound);
+      // Paired measurements select different compiler layouts: the direct reduction helper
+      // is faster on x86, while SVE benefits from keeping all four reductions in this loop.
+      // Both layouts retain the same arithmetic tree; the capability is fixed at startup.
+      if (!PanamaConstants.HAS_SVE) {
+        output[outputOffset + row] =
+            finishRow(
+                weight,
+                PanamaVectorUtilSupport.reduceLanesFixedTree(sum0),
+                input,
+                inputOffset,
+                columns,
+                base0,
+                vectorBound);
+        output[outputOffset + row + 1] =
+            finishRow(
+                weight,
+                PanamaVectorUtilSupport.reduceLanesFixedTree(sum1),
+                input,
+                inputOffset,
+                columns,
+                base1,
+                vectorBound);
+        output[outputOffset + row + 2] =
+            finishRow(
+                weight,
+                PanamaVectorUtilSupport.reduceLanesFixedTree(sum2),
+                input,
+                inputOffset,
+                columns,
+                base2,
+                vectorBound);
+        output[outputOffset + row + 3] =
+            finishRow(
+                weight,
+                PanamaVectorUtilSupport.reduceLanesFixedTree(sum3),
+                input,
+                inputOffset,
+                columns,
+                base3,
+                vectorBound);
+        continue;
+      }
+      {
+        int lanes = sum0.length();
+        if (lanes == 16) sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+        if (lanes >= 8) sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+        if (lanes >= 4) sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+        if (lanes >= 2) sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+        float sum = sum0.lane(0);
+        for (int column = vectorBound; column < columns; column++) {
+          float value = decode(weight.get(LE_SHORT, base0 + (long) column * Short.BYTES));
+          sum = MathUtil.fma(input[inputOffset + column], value, sum);
+        }
+        output[outputOffset + row] = sum;
+      }
+      {
+        int lanes = sum1.length();
+        if (lanes == 16) sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+        if (lanes >= 8) sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+        if (lanes >= 4) sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+        if (lanes >= 2) sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+        float sum = sum1.lane(0);
+        for (int column = vectorBound; column < columns; column++) {
+          float value = decode(weight.get(LE_SHORT, base1 + (long) column * Short.BYTES));
+          sum = MathUtil.fma(input[inputOffset + column], value, sum);
+        }
+        output[outputOffset + row + 1] = sum;
+      }
+      {
+        int lanes = sum2.length();
+        if (lanes == 16) sum2 = sum2.add(sum2.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+        if (lanes >= 8) sum2 = sum2.add(sum2.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+        if (lanes >= 4) sum2 = sum2.add(sum2.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+        if (lanes >= 2) sum2 = sum2.add(sum2.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+        float sum = sum2.lane(0);
+        for (int column = vectorBound; column < columns; column++) {
+          float value = decode(weight.get(LE_SHORT, base2 + (long) column * Short.BYTES));
+          sum = MathUtil.fma(input[inputOffset + column], value, sum);
+        }
+        output[outputOffset + row + 2] = sum;
+      }
+      {
+        int lanes = sum3.length();
+        if (lanes == 16) sum3 = sum3.add(sum3.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+        if (lanes >= 8) sum3 = sum3.add(sum3.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+        if (lanes >= 4) sum3 = sum3.add(sum3.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+        if (lanes >= 2) sum3 = sum3.add(sum3.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+        float sum = sum3.lane(0);
+        for (int column = vectorBound; column < columns; column++) {
+          float value = decode(weight.get(LE_SHORT, base3 + (long) column * Short.BYTES));
+          sum = MathUtil.fma(input[inputOffset + column], value, sum);
+        }
+        output[outputOffset + row + 3] = sum;
+      }
     }
     vectorMultiplyRows(input, inputOffset, weight, rowGroup, rows, columns, output, outputOffset);
   }
@@ -243,7 +417,14 @@ public final class BFloat16Matrix {
                 rowOffset + (long) column * Short.BYTES);
       }
       output[outputOffset + row] =
-          finishRow(weight, sum, input, inputOffset, columns, rowOffset, vectorBound);
+          finishRow(
+              weight,
+              PanamaVectorUtilSupport.reduceLanesFixedTree(sum),
+              input,
+              inputOffset,
+              columns,
+              rowOffset,
+              vectorBound);
     }
   }
 
@@ -265,13 +446,12 @@ public final class BFloat16Matrix {
 
   private static float finishRow(
       MemorySegment weight,
-      FloatVector vectorSum,
+      float sum,
       float[] input,
       int inputOffset,
       int columns,
       long rowOffset,
       int vectorBound) {
-    float sum = vectorSum.reduceLanes(VectorOperators.ADD);
     for (int column = vectorBound; column < columns; column++) {
       float value = decode(weight.get(LE_SHORT, rowOffset + (long) column * Short.BYTES));
       sum = MathUtil.fma(input[inputOffset + column], value, sum);
@@ -307,9 +487,105 @@ public final class BFloat16Matrix {
       float[] output,
       int outputOffset,
       int row) {
+    int batch = 0;
+    int pairedBatches = batchSize & ~1;
+    for (; batch < pairedBatches; batch += 2) {
+      vectorMultiplyBatchTile(
+          input,
+          inputOffset + batch * columns,
+          weight,
+          rows,
+          columns,
+          output,
+          outputOffset + batch * rows,
+          row);
+    }
+    vectorMultiplyBatchRemainder(
+        input, inputOffset, weight, batchSize, rows, columns, output, outputOffset, row, batch);
+  }
+
+  // Decode each weight vector once for two activations. Each result keeps the same even/odd
+  // FMA sequence and reduction order as matvec; only reuse across independent tokens changes.
+  private static void vectorMultiplyBatchTile(
+      float[] input,
+      int inputOffset,
+      MemorySegment weight,
+      int rows,
+      int columns,
+      float[] output,
+      int outputOffset,
+      int row) {
     int vectorBound = columns - columns % VALUES_PER_VECTOR;
     long rowOffset = (long) row * columns * Short.BYTES;
-    for (int batch = 0; batch < batchSize; batch++) {
+    int activation0 = inputOffset;
+    FloatVector sum0 = FloatVector.zero(PanamaVectorUtilSupport.FLOAT_SPECIES);
+    int activation1 = inputOffset + columns;
+    FloatVector sum1 = FloatVector.zero(PanamaVectorUtilSupport.FLOAT_SPECIES);
+    for (int column = 0; column < vectorBound; column += VALUES_PER_VECTOR) {
+      IntVector packed =
+          IntVector.fromMemorySegment(
+              PanamaVectorUtilSupport.INT_SPECIES,
+              weight,
+              rowOffset + (long) column * Short.BYTES,
+              ByteOrder.LITTLE_ENDIAN);
+      FloatVector evenWeights =
+          packed.lanewise(VectorOperators.LSHL, Short.SIZE).reinterpretAsFloats();
+      FloatVector oddWeights = packed.and(0xffff0000).reinterpretAsFloats();
+      FloatVector first0 =
+          FloatVector.fromArray(PanamaVectorUtilSupport.FLOAT_SPECIES, input, activation0 + column);
+      FloatVector second0 =
+          FloatVector.fromArray(
+              PanamaVectorUtilSupport.FLOAT_SPECIES,
+              input,
+              activation0 + column + PanamaVectorUtilSupport.FLOAT_SPECIES.length());
+      sum0 = PanamaVectorUtilSupport.fma(evenWeights, first0.rearrange(EVEN_INPUTS, second0), sum0);
+      sum0 = PanamaVectorUtilSupport.fma(oddWeights, first0.rearrange(ODD_INPUTS, second0), sum0);
+      FloatVector first1 =
+          FloatVector.fromArray(PanamaVectorUtilSupport.FLOAT_SPECIES, input, activation1 + column);
+      FloatVector second1 =
+          FloatVector.fromArray(
+              PanamaVectorUtilSupport.FLOAT_SPECIES,
+              input,
+              activation1 + column + PanamaVectorUtilSupport.FLOAT_SPECIES.length());
+      sum1 = PanamaVectorUtilSupport.fma(evenWeights, first1.rearrange(EVEN_INPUTS, second1), sum1);
+      sum1 = PanamaVectorUtilSupport.fma(oddWeights, first1.rearrange(ODD_INPUTS, second1), sum1);
+    }
+    if (sum0.length() >= 16)
+      sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+    if (sum0.length() >= 8)
+      sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+    if (sum0.length() >= 4)
+      sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+    if (sum0.length() >= 2)
+      sum0 = sum0.add(sum0.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+    output[outputOffset + row] =
+        finishRow(weight, sum0.lane(0), input, activation0, columns, rowOffset, vectorBound);
+    if (sum1.length() >= 16)
+      sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+    if (sum1.length() >= 8)
+      sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+    if (sum1.length() >= 4)
+      sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+    if (sum1.length() >= 2)
+      sum1 = sum1.add(sum1.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
+    output[outputOffset + rows + row] =
+        finishRow(weight, sum1.lane(0), input, activation1, columns, rowOffset, vectorBound);
+  }
+
+  private static void vectorMultiplyBatchRemainder(
+      float[] input,
+      int inputOffset,
+      MemorySegment weight,
+      int batchSize,
+      int rows,
+      int columns,
+      float[] output,
+      int outputOffset,
+      int row,
+      int firstBatch) {
+    int vectorBound = columns - columns % VALUES_PER_VECTOR;
+    long rowOffset = (long) row * columns * Short.BYTES;
+    for (int batch = firstBatch; batch < batchSize; batch++) {
       int activationOffset = inputOffset + batch * columns;
       FloatVector sum = FloatVector.zero(PanamaVectorUtilSupport.FLOAT_SPECIES);
       for (int column = 0; column < vectorBound; column += VALUES_PER_VECTOR) {
@@ -329,8 +605,12 @@ public final class BFloat16Matrix {
                 first.rearrange(ODD_INPUTS, second),
                 rowOffset + (long) column * Short.BYTES);
       }
+      if (sum.length() == 16) sum = sum.add(sum.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_8));
+      if (sum.length() >= 8) sum = sum.add(sum.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_4));
+      if (sum.length() >= 4) sum = sum.add(sum.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_2));
+      if (sum.length() >= 2) sum = sum.add(sum.rearrange(PanamaVectorUtilSupport.REDUCE_ROTATE_1));
       output[outputOffset + batch * rows + row] =
-          finishRow(weight, sum, input, activationOffset, columns, rowOffset, vectorBound);
+          finishRow(weight, sum.lane(0), input, activationOffset, columns, rowOffset, vectorBound);
     }
   }
 

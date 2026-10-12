@@ -39,7 +39,9 @@ class BonsaiActivationSequenceTest {
     "64,true",
     "128,true",
     "256,true",
-    "512,true"
+    "512,true",
+    "scalar,false",
+    "scalar,true"
   })
   void exactGateAndPersistentHistoryContractsSurviveCompilation(String width, boolean noFma)
       throws Exception {
@@ -53,7 +55,8 @@ class BonsaiActivationSequenceTest {
                 "--add-modules",
                 "jdk.incubator.vector",
                 "-Xmx256m"));
-    if (!width.equals("default")) command.add("-Dvectors.maxBits=" + width);
+    if (width.equals("scalar")) command.add("-Dvectors.forceScalar=true");
+    else if (!width.equals("default")) command.add("-Dvectors.maxBits=" + width);
     if (noFma)
       command.addAll(List.of("-Dvectors.useVectorFMA=false", "-Dvectors.useScalarFMA=false"));
     command.addAll(

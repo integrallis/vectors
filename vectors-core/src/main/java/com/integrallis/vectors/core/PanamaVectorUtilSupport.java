@@ -64,10 +64,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       PanamaConstants.preferredSpecies(IntVector.SPECIES_PREFERRED);
   static final VectorSpecies<Long> LONG_SPECIES =
       PanamaConstants.preferredSpecies(LongVector.SPECIES_PREFERRED);
-  private static final VectorShuffle<Float> REDUCE_ROTATE_1 = reductionRotation(1);
-  private static final VectorShuffle<Float> REDUCE_ROTATE_2 = reductionRotation(2);
-  private static final VectorShuffle<Float> REDUCE_ROTATE_4 = reductionRotation(4);
-  private static final VectorShuffle<Float> REDUCE_ROTATE_8 = reductionRotation(8);
+  // Shared with kernels that keep the fixed reduction inside their row loop for escape analysis.
+  static final VectorShuffle<Float> REDUCE_ROTATE_1 = reductionRotation(1);
+  static final VectorShuffle<Float> REDUCE_ROTATE_2 = reductionRotation(2);
+  static final VectorShuffle<Float> REDUCE_ROTATE_4 = reductionRotation(4);
+  static final VectorShuffle<Float> REDUCE_ROTATE_8 = reductionRotation(8);
   static final int VECTOR_BITSIZE = FLOAT_SPECIES.vectorBitSize();
   private static final ThreadLocal<float[]> ACTIVATION_LANES =
       ThreadLocal.withInitial(() -> new float[FLOAT_SPECIES.length()]);
