@@ -120,3 +120,22 @@ Every triplet stays on one host and retains its original counterbalanced order a
 resampling stays within each host stratum with its observed count. Continuations are bounded to
 one hour/$6 each ($12 total), with the campaign 22:32 UTC deadline taking precedence. No trial is
 removed based on its performance.
+
+## Revised final artifact qualification
+
+The first complete Bonsai triplet exposes roughly 2.3–2.5 times the published request allocation
+in both candidate and corrected control. It does not support release acceptance. Those d92 results
+remain historical evidence. The unlaunched v4/v5 continuations are superseded.
+
+The newly frozen runtime is ae337eebccbbae50e750b68babcd58788aeefbf8, jar SHA256
+696c2a58843181a2b02c91043208b56c9c6ebdc976e0d3f44dc051cc1f36d555. It adds an explicit callback-close
+rejection and moves exact SwiGLU vector work behind an array boundary; the arithmetic stays unchanged.
+Nineteen focused executor tests pass, and a child reproduces the old close deadlock and verifies the
+fixed rejection. The boundary's full performance and correctness qualification remains pending.
+
+Fresh v6/v7/v8 phases measure every Qwen BF16 and Bonsai triplet on the new artifact: pairs 0–3,
+4–6 and 7–9 respectively, each host preserving whole triplets and original counterbalancing. Both
+models' real fixtures run before timing. Old and new macro samples are never combined. Per-phase
+caps are 90 minutes/$4, combined $12, and the 22:32 UTC campaign deadline overrides these caps.
+The separate activation fleet runs exhaustive public SwiGLU and forced-width cold/hot probes on
+the same jar hash before its actual-model qualification.

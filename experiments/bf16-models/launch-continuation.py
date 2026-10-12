@@ -1,4 +1,4 @@
-# Bonsai continuation; each immutable phase is bounded to one hour/$6 and 22:32 UTC.
+# Bonsai continuation; each immutable phase is bounded to ninety minutes/$4 and 22:32 UTC.
 # Original launcher SHA256 cf06f4fdda0f42b657471ddec21a43d6fea8d88b63881fa8fd14dcccb96e5c78
 """Launch only this experiment's two bounded workers, with immutable payload and receipts."""
 import datetime,hashlib,json,pathlib,subprocess,sys
@@ -28,8 +28,8 @@ for arch,kind,*_ in configs:
     values={float(d['pricePerUnit']['USD']) for p in prices for term in json.loads(p)['terms']['OnDemand'].values() for d in term['priceDimensions'].values() if d['unit']=='Hrs'}
     assert len(values)==1;rates[arch]=values.pop()
 campaign_deadline=datetime.datetime(2026,10,12,22,32,tzinfo=datetime.timezone.utc)
-duration=min(meta['maximumSecondsPerHost'],3600,int((campaign_deadline-datetime.datetime.now(datetime.timezone.utc)).total_seconds()));budget=min(meta['maximumCombinedUsd'],6.0)
-assert duration>=2400, 'Insufficient time for declared continuation'
+duration=min(meta['maximumSecondsPerHost'],5400,int((campaign_deadline-datetime.datetime.now(datetime.timezone.utc)).total_seconds()));budget=min(meta['maximumCombinedUsd'],4.0)
+assert duration>=3000, 'Insufficient time for declared continuation'
 assert sum(rates.values())*duration/3600+.15<=budget
 assert aws('s3api','list-objects-v2','--bucket','models-qual-077051030817','--prefix',f'results/{runName}/'+('' if archFilter=='both' else archFilter+'/'),'--max-keys','1').get('KeyCount',0)==0
 fleet={'maximumCombinedUsd':budget,'maximumSecondsPerHost':duration,'payload':meta['payloadUri'],

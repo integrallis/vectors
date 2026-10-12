@@ -58,11 +58,11 @@ config={'arms':['published','control','candidate'],'vectorsRevision':revision,
  {'key':'bonsai2','entrypoint':'model.gguf','files':[{'path':'model.gguf','uri':'https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PTQ1_0.gguf','sha256':'53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3','sizeBytes':5946648928}]}]}
 if pair_indices:
  config['pairIndices']=pair_indices
- config['models']=[m for m in config['models'] if m['key']=='bonsai2']
- config['continuationOf']='bf16-models-v2'
+ config['supersedesMacroPhase']='bf16-models-v2'
+ config['continuationProtocol']='fresh combined runtime; disjoint paired task blocks; host-stratified bootstrap'
 (stage/'model-proof.json').write_text(json.dumps(config,indent=2)+'\n')
 meta=json.loads((central/'payload-bf16-tiles-v2.json').read_text());meta={k:meta[k] for k in ['jdk','rust']}
-meta.update(runName='gdn-proof-'+version,sourceRepository='vectors',revision=revision,maximumSecondsPerHost=3600 if pair_indices else 7200,maximumCombinedUsd=6.0 if pair_indices else 3.5,
+meta.update(runName='gdn-proof-'+version,sourceRepository='vectors',revision=revision,maximumSecondsPerHost=5400 if pair_indices else 7200,maximumCombinedUsd=4.0 if pair_indices else 3.5,
  files={str(p.relative_to(stage)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(stage.rglob('*')) if p.is_file()})
 (stage/'inputs.sha256').write_text(''.join(f'{sha}  {name}\n' for name,sha in meta['files'].items()))
 (stage/'provenance.json').write_text(json.dumps(meta,indent=2)+'\n')
