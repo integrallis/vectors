@@ -1,0 +1,85 @@
+{
+  "comparisons": [
+    {
+      "reference": "published",
+      "metric": "coldBytes",
+      "ratio": 4.218571822167368,
+      "ci95": [
+        4.210878761565364,
+        4.223308243835442
+      ]
+    },
+    {
+      "reference": "published",
+      "metric": "coldNanos",
+      "ratio": 2.889514231544949,
+      "ci95": [
+        2.7285753621940843,
+        3.0333617067973195
+      ]
+    },
+    {
+      "reference": "published",
+      "metric": "hotNanosPerCall",
+      "ratio": 0.5871842587373057,
+      "ci95": [
+        0.5664057713420027,
+        0.6127847308542891
+      ]
+    },
+    {
+      "reference": "broad",
+      "metric": "coldBytes",
+      "ratio": 0.9784010184905308,
+      "ci95": [
+        0.9766649055002066,
+        0.9795514483997445
+      ]
+    },
+    {
+      "reference": "broad",
+      "metric": "coldNanos",
+      "ratio": 0.9207067069133147,
+      "ci95": [
+        0.8421498314503271,
+        1.0112591349574152
+      ]
+    },
+    {
+      "reference": "broad",
+      "metric": "hotNanosPerCall",
+      "ratio": 0.9620860760751833,
+      "ci95": [
+        0.9019779476654087,
+        1.0285694676707602
+      ]
+    }
+  ],
+  "exactOraclePass": true,
+  "hotBytesPerCall": {
+    "published": [
+      143360.0,
+      143360.0,
+      143360.0,
+      143360.0,
+      143360.0,
+      143360.0
+    ],
+    "broad": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "candidate": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  }
+}

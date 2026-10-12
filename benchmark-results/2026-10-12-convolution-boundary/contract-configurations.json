@@ -1,0 +1,150 @@
+[
+  {
+    "configuration": "default",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  },
+  {
+    "configuration": "64",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-Dvectors.maxBits=64",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  },
+  {
+    "configuration": "128",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-Dvectors.maxBits=128",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  },
+  {
+    "configuration": "256",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-Dvectors.maxBits=256",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  },
+  {
+    "configuration": "512",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-Dvectors.maxBits=512",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  },
+  {
+    "configuration": "default-no-fma",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-Dvectors.useVectorFMA=false",
+      "-Dvectors.useScalarFMA=false",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  },
+  {
+    "configuration": "64-no-fma",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-Dvectors.maxBits=64",
+      "-Dvectors.useVectorFMA=false",
+      "-Dvectors.useScalarFMA=false",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  },
+  {
+    "configuration": "128-no-fma",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-Dvectors.maxBits=128",
+      "-Dvectors.useVectorFMA=false",
+      "-Dvectors.useScalarFMA=false",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  },
+  {
+    "configuration": "256-no-fma",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-Dvectors.maxBits=256",
+      "-Dvectors.useVectorFMA=false",
+      "-Dvectors.useScalarFMA=false",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  },
+  {
+    "configuration": "512-no-fma",
+    "command": [
+      "/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem/bin/java",
+      "--add-modules",
+      "jdk.incubator.vector",
+      "-Xmx256m",
+      "-Dvectors.maxBits=512",
+      "-Dvectors.useVectorFMA=false",
+      "-Dvectors.useScalarFMA=false",
+      "-cp",
+      "/tmp/bonsai-activation-contract-probe/classes:/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar:/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.20/7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6/slf4j-api-2.0.20.jar",
+      "com.integrallis.vectors.core.BonsaiActivationSequenceProbe"
+    ],
+    "exitCode": 0
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "kind": "local component diagnostic, not release qualification",
+  "sources": {
+    "published": "v0.1.29",
+    "broad": "6893a587d7f1d8fd2cd58e85310ef87579b42b25",
+    "candidate": "aabe00845f0e81828b7fc4992ce7515be4459d88"
+  },
+  "platform": "macOS-26.6.2-x86_64-i386-64bit-Mach-O",
+  "java": "openjdk version \"25.0.3\" 2026-04-21 LTS\nOpenJDK Runtime Environment Temurin-25.0.3+9 (build 25.0.3+9-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.3+9 (build 25.0.3+9-LTS, mixed mode)\n",
+  "artifacts": {
+    "published": {
+      "path": "/Users/briansam-bodden/.gradle/caches/modules-2/files-2.1/com.integrallis/vectors-core/0.1.29/9a9831f6b838978ea5cbca052e6045573f556390/vectors-core-0.1.29.jar",
+      "sha256": "21eeae4fcaa56fa26ed45d99610142f794cdec0e1d852894e637263f5bd0b40c"
+    },
+    "broad": {
+      "path": "/Users/briansam-bodden/Code/java-ai/projects/vectors-bf16-inline/vectors-core/build/libs/vectors-core-0.1.30.jar",
+      "sha256": "e3e7b0ab79d0630bcad65c4cbe9fd356cf589dd159eba8e6c0aa402db24bd33c"
+    },
+    "candidate": {
+      "path": "/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/build/libs/vectors-core-0.1.30.jar",
+      "sha256": "2dbac8929b77869461760730df29e36d67205e5dc32284d75c1a9614ed1bc11e"
+    }
+  }
+}

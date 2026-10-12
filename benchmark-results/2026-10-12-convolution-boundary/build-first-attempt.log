@@ -1,0 +1,36 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/Users/briansam-bodden/.gradle/wrapper/dists/gradle-9.4.1-all/eckclv9s5vi9exbmnyvpg2a3h/gradle-9.4.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :spotlessInternalRegisterDependencies
+> Task :writeReleaseDependencyManifest
+
+> Task :vectors-core:compileJava
+/Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/src/main/java/com/integrallis/vectors/core/ReproducibleActivationExp.java:240: error: variable one is already defined in method causalDepthwiseConv1dSilu(float[],int,float[],int,float[],int,int,int)
+        var one = DoubleVector.broadcast(DOUBLE_SPECIES, 1.0);
+            ^
+1 error
+
+> Task :vectors-core:compileJava FAILED
+
+[Incubating] Problems report is available at: file:///Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':vectors-core:compileJava'.
+> Compilation failed; see the compiler output below.
+  /Users/briansam-bodden/Code/java-ai/projects/vectors-convolution-boundary/vectors-core/src/main/java/com/integrallis/vectors/core/ReproducibleActivationExp.java:240: error: variable one is already defined in method causalDepthwiseConv1dSilu(float[],int,float[],int,float[],int,int,int)
+          var one = DoubleVector.broadcast(DOUBLE_SPECIES, 1.0);
+              ^
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 20s
+3 actionable tasks: 3 executed
