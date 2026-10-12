@@ -1,0 +1,14 @@
+{
+  "command": "JAVA_HOME=/Users/briansam-bodden/.sdkman/candidates/java/25.0.3-tem ./gradlew :vectors-core:spotlessCheck :vectors-core:test :vectors-core:jar --no-daemon",
+  "exitCode": 0,
+  "tests": {
+    "tests": 1585,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "jar": "vectors-core/build/libs/vectors-core-0.1.29.jar",
+  "sha256": "ef495797e8124ece6a7e1f4ce931eedfad0669b1201db8080571bfd0eaaab23c",
+  "noticeInJar": true,
+  "productionQualification": "pending same-host whole-model comparisons; this is not a release verdict"
+}

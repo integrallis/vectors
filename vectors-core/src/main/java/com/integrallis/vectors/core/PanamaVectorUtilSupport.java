@@ -6929,12 +6929,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int length) {
     int index = 0;
     int limit = FLOAT_SPECIES.loopBound(length);
-    FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
-    for (; index < limit; index += FLOAT_SPECIES.length()) {
-      FloatVector value = FloatVector.fromArray(FLOAT_SPECIES, gate, gateOffset + index);
-      FloatVector multiplier = FloatVector.fromArray(FLOAT_SPECIES, up, upOffset + index);
+    FloatVector one = FloatVector.broadcast(ReproducibleActivationExp.FLOAT_SPECIES, 1.0f);
+    for (; index < limit; index += ReproducibleActivationExp.FLOAT_SPECIES.length()) {
+      FloatVector value =
+          FloatVector.fromArray(ReproducibleActivationExp.FLOAT_SPECIES, gate, gateOffset + index);
+      FloatVector multiplier =
+          FloatVector.fromArray(ReproducibleActivationExp.FLOAT_SPECIES, up, upOffset + index);
       value
-          .div(one.add(activationExp(value.neg())))
+          .div(one.add(ReproducibleActivationExp.exp(value.neg())))
           .mul(multiplier)
           .intoArray(out, outOffset + index);
     }
@@ -7004,33 +7006,43 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     int historyLength = kernelSize - 1;
     int channel = 0;
     int limit = FLOAT_SPECIES.loopBound(channels);
-    FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
-    for (; channel < limit; channel += FLOAT_SPECIES.length()) {
-      FloatVector input = FloatVector.fromArray(FLOAT_SPECIES, values, valuesOffset + channel);
+    FloatVector one = FloatVector.broadcast(ReproducibleActivationExp.FLOAT_SPECIES, 1.0f);
+    for (; channel < limit; channel += ReproducibleActivationExp.FLOAT_SPECIES.length()) {
+      FloatVector input =
+          FloatVector.fromArray(
+              ReproducibleActivationExp.FLOAT_SPECIES, values, valuesOffset + channel);
       FloatVector convolved =
           input.mul(
               FloatVector.fromArray(
-                  FLOAT_SPECIES, weights, weightsOffset + historyLength * channels + channel));
-      FloatVector previous = FloatVector.fromArray(FLOAT_SPECIES, history, historyOffset + channel);
+                  ReproducibleActivationExp.FLOAT_SPECIES,
+                  weights,
+                  weightsOffset + historyLength * channels + channel));
+      FloatVector previous =
+          FloatVector.fromArray(
+              ReproducibleActivationExp.FLOAT_SPECIES, history, historyOffset + channel);
       convolved =
           fma(
               previous,
-              FloatVector.fromArray(FLOAT_SPECIES, weights, weightsOffset + channel),
+              FloatVector.fromArray(
+                  ReproducibleActivationExp.FLOAT_SPECIES, weights, weightsOffset + channel),
               convolved);
       for (int tap = 1; tap < historyLength; tap++) {
         int historyIndex = historyOffset + tap * channels + channel;
-        FloatVector current = FloatVector.fromArray(FLOAT_SPECIES, history, historyIndex);
+        FloatVector current =
+            FloatVector.fromArray(ReproducibleActivationExp.FLOAT_SPECIES, history, historyIndex);
         convolved =
             fma(
                 current,
                 FloatVector.fromArray(
-                    FLOAT_SPECIES, weights, weightsOffset + tap * channels + channel),
+                    ReproducibleActivationExp.FLOAT_SPECIES,
+                    weights,
+                    weightsOffset + tap * channels + channel),
                 convolved);
         current.intoArray(history, historyIndex - channels);
       }
       input.intoArray(history, historyOffset + (historyLength - 1) * channels + channel);
       convolved
-          .div(one.add(activationExp(convolved.neg())))
+          .div(one.add(ReproducibleActivationExp.exp(convolved.neg())))
           .intoArray(values, valuesOffset + channel);
     }
     for (; channel < channels; channel++) {
