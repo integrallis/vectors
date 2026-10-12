@@ -1,0 +1,50 @@
+{
+  "maximumCombinedUsd": 1.5,
+  "maximumSecondsPerHost": 900,
+  "payload": "s3://models-qual-077051030817/payload/activation-startup-v1.tar.gz",
+  "payloadSha256": "777b361009d10d1ecfa71ffac25eb73439361221f682355874a848da23934515",
+  "quota": 32.0,
+  "usedVcpus": 16,
+  "rates": {
+    "x86": 0.6912
+  },
+  "hosts": [
+    {
+      "arch": "x86",
+      "instanceId": "i-0858eac395498a7a2",
+      "instanceType": "m6a.4xlarge",
+      "deadline": "2026-10-12T21:19:40.574242+00:00",
+      "resultUri": "s3://models-qual-077051030817/results/activation-startup-v1/x86/",
+      "launchCommand": [
+        "aws",
+        "ec2",
+        "run-instances",
+        "--region",
+        "us-west-2",
+        "--image-id",
+        "ami-03d70b8354a16a8bc",
+        "--instance-type",
+        "m6a.4xlarge",
+        "--instance-market-options",
+        "{\"MarketType\": \"spot\", \"SpotOptions\": {\"SpotInstanceType\": \"one-time\", \"InstanceInterruptionBehavior\": \"terminate\", \"MaxPrice\": \"1.00\"}}",
+        "--iam-instance-profile",
+        "Name=models-qual-worker",
+        "--security-group-ids",
+        "sg-c75bb5a8",
+        "--subnet-id",
+        "subnet-d63efbbd",
+        "--block-device-mappings",
+        "[{\"DeviceName\": \"/dev/sda1\", \"Ebs\": {\"VolumeSize\": 40, \"VolumeType\": \"gp3\", \"DeleteOnTermination\": true}}]",
+        "--instance-initiated-shutdown-behavior",
+        "terminate",
+        "--metadata-options",
+        "HttpTokens=required,HttpEndpoint=enabled",
+        "--user-data",
+        "file://projects/vectors-activation-boundary/experiments/activation-startup/x86-v1-worker.sh",
+        "--tag-specifications",
+        "ResourceType=instance,Tags=[{Key=Name,Value=models-activation-startup-v1-x86},{Key=project,Value=models-qualification},{Key=delete-after,Value=2026-10-12T21:19:40.574242+00:00}]"
+      ],
+      "userDataSha256": "420bd80bfe8fcbf50a4f9c61631cbf0d45c60808ca5a4707aae7f27785b189e5"
+    }
+  ]
+}

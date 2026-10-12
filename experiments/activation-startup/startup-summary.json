@@ -1,0 +1,26 @@
+[
+  {
+    "baseline": "stable",
+    "candidate": "final",
+    "pairs": 100,
+    "metric": "modelLoadNanos",
+    "ratio": 1.0017687923951126,
+    "ci95": [
+      0.9975894836484679,
+      1.0059711507571647
+    ],
+    "resampling": "100 whole process blocks; seed724; 10000 draws"
+  },
+  {
+    "baseline": "published",
+    "candidate": "final",
+    "pairs": 100,
+    "metric": "modelLoadNanos",
+    "ratio": 1.0219802073067483,
+    "ci95": [
+      1.0178533831648564,
+      1.0260606560086778
+    ],
+    "resampling": "100 whole process blocks; seed724; 10000 draws"
+  }
+]
