@@ -1,0 +1,135 @@
+name: Bonsai ARM PTQ leaf boundary control
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/bonsai-activation]
+    paths: [.github/workflows/bonsai-arm-ptq-boundary.yml]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        host: [0, 1]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 100
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3'
+      - name: Fetch immutable external control
+        env:
+          PAYLOAD_URL: ${{ secrets.BONSAI_ARM_PTQ_PAYLOAD_URL }}
+        run: |
+          curl -fL --retry 3 "$PAYLOAD_URL" -o payload.tar.gz
+          echo 'f1a55817305cbe7c5de8a766e7447472ccfc7e2f66e12ee94b7fcac43e1559a0  payload.tar.gz' | sha256sum -c -
+          tar -xzf payload.tar.gz
+          rustup toolchain install 1.96.0 --profile minimal --component rustfmt --component clippy
+          python3 payload/fetch_weights.py "$RUNNER_TEMP/bonsai2.gguf"
+      - name: 'prepare'
+        run: python3 payload/run.py 'prepare' --host ${{ matrix.host }} --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - name: Retain complete native disassembly
+        run: |
+          for arm in control candidate instrumented; do
+            objdump -d "evidence/$arm.so" > "evidence/$arm.disassembly.txt"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arm-ptq-boundary-${{ matrix.host }}-0
+          path: |
+            evidence/
+            !evidence/build-crate/
+            !evidence/classes/
+          if-no-files-found: error
+      - name: 'fixture:control'
+        run: python3 payload/run.py 'fixture:control' --host ${{ matrix.host }} --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arm-ptq-boundary-${{ matrix.host }}-1
+          path: |
+            evidence/
+            !evidence/build-crate/
+            !evidence/classes/
+          if-no-files-found: error
+      - name: 'fixture:candidate'
+        run: python3 payload/run.py 'fixture:candidate' --host ${{ matrix.host }} --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arm-ptq-boundary-${{ matrix.host }}-2
+          path: |
+            evidence/
+            !evidence/build-crate/
+            !evidence/classes/
+          if-no-files-found: error
+      - name: 'route'
+        run: python3 payload/run.py 'route' --host ${{ matrix.host }} --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arm-ptq-boundary-${{ matrix.host }}-3
+          path: |
+            evidence/
+            !evidence/build-crate/
+            !evidence/classes/
+          if-no-files-found: error
+      - name: 'pair:0'
+        run: python3 payload/run.py 'pair:0' --host ${{ matrix.host }} --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arm-ptq-boundary-${{ matrix.host }}-4
+          path: |
+            evidence/
+            !evidence/build-crate/
+            !evidence/classes/
+          if-no-files-found: error
+      - name: 'pair:1'
+        run: python3 payload/run.py 'pair:1' --host ${{ matrix.host }} --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arm-ptq-boundary-${{ matrix.host }}-5
+          path: |
+            evidence/
+            !evidence/build-crate/
+            !evidence/classes/
+          if-no-files-found: error
+      - name: 'pair:2'
+        run: python3 payload/run.py 'pair:2' --host ${{ matrix.host }} --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arm-ptq-boundary-${{ matrix.host }}-6
+          path: |
+            evidence/
+            !evidence/build-crate/
+            !evidence/classes/
+          if-no-files-found: error
+      - name: 'pair:3'
+        run: python3 payload/run.py 'pair:3' --host ${{ matrix.host }} --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arm-ptq-boundary-${{ matrix.host }}-7
+          path: |
+            evidence/
+            !evidence/build-crate/
+            !evidence/classes/
+          if-no-files-found: error
+      - name: 'finish'
+        run: python3 payload/run.py 'finish' --host ${{ matrix.host }} --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: arm-ptq-boundary-${{ matrix.host }}-8
+          path: |
+            evidence/
+            !evidence/build-crate/
+            !evidence/classes/
+          if-no-files-found: error
