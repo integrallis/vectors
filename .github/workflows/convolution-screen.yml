@@ -54,6 +54,7 @@ jobs:
           path: |
             evidence/manifest.json
             evidence/host.txt
+            evidence/first-pair-screen.json
             evidence/segment-0/
             evidence/proof/
             evidence/compile*
@@ -68,6 +69,7 @@ jobs:
           path: |
             evidence/manifest.json
             evidence/host.txt
+            evidence/first-pair-screen.json
             evidence/segment-1/
             evidence/proof/
             evidence/compile*
@@ -82,6 +84,7 @@ jobs:
           path: |
             evidence/manifest.json
             evidence/host.txt
+            evidence/first-pair-screen.json
             evidence/segment-2/
             evidence/proof/
             evidence/compile*
@@ -96,9 +99,19 @@ jobs:
           path: |
             evidence/manifest.json
             evidence/host.txt
+            evidence/first-pair-screen.json
             evidence/segment-3/
             evidence/proof/
             evidence/compile*
+          retention-days: 30
+      - name: Exhaustive actual-artifact numerical proof
+        run: python3 candidate/scripts/convolution-screen/run.py --arch ${{ matrix.arch }} --jdk 25.0.3 --host 0 --segment 4
+      - name: Retain exhaustive proof
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-screen-proof-${{ matrix.arch }}
+          path: evidence/proof/
           retention-days: 30
       - name: Retain numerical reports and actual candidate
         if: always()

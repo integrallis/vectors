@@ -36,7 +36,7 @@ def execute(command, output, timeout=240):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--segment', type=int, required=True, choices=range(4))
+    parser.add_argument('--segment', type=int, required=True, choices=range(5))
     parser.add_argument('--arch', required=True, choices=['arm', 'x86'])
     parser.add_argument('--jdk', required=True, choices=['25.0.3'])
     parser.add_argument('--host', type=int, required=True, choices=[0])
@@ -74,19 +74,21 @@ def main():
             'java': subprocess.check_output(['java', '-version'], stderr=subprocess.STDOUT, text=True),
             'slf4jSha256': sha(slf4j)}
         (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    else:
+        manifest = json.loads((out / 'manifest.json').read_text())
+        if manifest['artifacts'] != jars:
+            raise ValueError('Runtime changed between blocks')
+    if args.segment == 4:
         java = ['java', '--add-modules', 'jdk.incubator.vector', '-XX:ActiveProcessorCount=4',
                 '-Xms256m', '-Xmx512m']
-        # Timings are separate fresh JVMs; proof work cannot pre-warm measured classes.
+        # Proof follows all timing pairs and runs in independent processes.
         for fma in [True, False]:
             options = [] if fma else ['-Dvectors.useVectorFMA=false', '-Dvectors.useScalarFMA=false']
             execute(java + options + ['-cp', classpath('candidate'),
                     'com.integrallis.vectors.core.CompiledSiluProof',
                     'com.integrallis.vectors.core.ReproducibleConvolutionSilu', 'apply', 'exhaustive'],
                     out / f'proof/exhaustive-{fma}.log', timeout=600)
-    else:
-        manifest = json.loads((out / 'manifest.json').read_text())
-        if manifest['artifacts'] != jars:
-            raise ValueError('Runtime changed between blocks')
+        return
     segment = out / f'segment-{args.segment}'
     segment.mkdir(exist_ok=True)
     for pair in [args.segment]:
@@ -105,6 +107,18 @@ def main():
             if arm == 'candidate' and (row['coldOracleMismatches'] or row['hotOracleMismatches'] or row['coldHotMismatches']):
                 raise ValueError('Candidate numerical regression')
             print(json.dumps(row), flush=True)
+        if pair == 0:
+            measured = {arm: json.loads((segment / f'{pair:03}-{arm}.json').read_text())
+                        for arm in PROTOCOL['arms']}
+            candidate, published = measured['candidate'], measured['published']
+            checks = {
+                'warmLatency': candidate['hotNanosPerCall'] <= published['hotNanosPerCall'] * PROTOCOL['latency_upper_limit'],
+                'coldAllocation': candidate['coldBytes'] <= published['coldBytes'] * PROTOCOL['cold_allocation_individual_limit'],
+                'warmAllocation': candidate['hotBytesPerCall'] <= published['hotBytesPerCall'] + PROTOCOL['warm_allocation_absolute_tolerance_bytes'],
+            }
+            (out / 'first-pair-screen.json').write_text(json.dumps(checks, indent=2) + '\n')
+            if not all(checks.values()):
+                raise ValueError('First paired screen rejected; retained both arms, no qualification claim')
 
 
 if __name__ == '__main__':

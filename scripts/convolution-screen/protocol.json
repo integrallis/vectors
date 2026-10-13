@@ -22,7 +22,8 @@
   "cold_allocation_upper_limit": 1.0,
   "cold_allocation_individual_limit": 1.0,
   "warm_allocation_absolute_tolerance_bytes": 8,
-  "scope": "Fixed four-pair exploratory screen, one host per architecture; NOT final confidence or release qualification. All same-host fresh JVM arms, counterbalanced order, no exclusions or optional stopping. Cold allocation includes first VectorUtil/Panama/helper initialization. Published output absolute tolerance 2e-6; history and candidate cold/hot repeat bits exact.",
-  "candidate_revision": "825c912e8aa318a695a64ca5792c34ad1bdcebac",
-  "candidate_sha256": "279e006dd90d67f21d344d7aaad71146b6d3164e37278dfe28732080f7a9039b"
+  "scope": "Fixed four-pair exploratory screen, one host per architecture; NOT final confidence or release qualification. All same-host fresh JVM arms, counterbalanced order, no exclusions; predeclared first-pair rejection only. Cold allocation includes first VectorUtil/Panama/helper initialization. Published output absolute tolerance 2e-6; history and candidate cold/hot repeat bits exact.",
+  "candidate_revision": "8761a8ed96fdc7ec158989dba61114c723fc535b",
+  "candidate_sha256": "e526731b64769d22173ca93175245eb32b68fa5749ac0a5b59449931e0314128",
+  "first_pair_rejection": "Reject screen immediately after retaining first complete pair if candidate warm latency, cold allocated bytes, or warm allocated bytes exceeds the unchanged limit. This stopping rule may reject only; it cannot qualify or produce a passing final confidence claim."
 }
