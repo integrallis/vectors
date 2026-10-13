@@ -1,0 +1,180 @@
+name: Convolution independent capability workers
+on:
+  workflow_call:
+    inputs:
+      attempts:
+        type: string
+        required: true
+    secrets:
+      leases:
+        required: true
+permissions:
+  contents: read
+jobs:
+  paired:
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        attempt: ${{ fromJSON(inputs.attempts) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: candidate
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3'
+      - name: Select independent frozen protocol
+        run: cp candidate/scripts/convolution-precision/protocol-avx2.json candidate/scripts/convolution-precision/protocol.json
+      - name: Admit declared SIMD capability before build or measurements
+        id: hardware
+        env:
+          CONVOLUTION_ADMISSION_LEASES: ${{ secrets.leases }}
+        run: python3 candidate/scripts/convolution-precision/admit.py ${{ 'x86' }} ${{ matrix.attempt }}
+      - name: Retain hardware admission
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-avx2-admission-${{ 'x86' }}-${{ matrix.attempt }}
+          path: evidence/hardware-admission.json
+          retention-days: 30
+      - uses: actions/checkout@v5
+        if: steps.hardware.outputs.accepted == 'true'
+        with:
+          path: published
+          ref: 1440ca7555e492ae7c2a17cde7cb3ffe6c07b7b5
+      - uses: gradle/actions/setup-gradle@v6
+        if: steps.hardware.outputs.accepted == 'true'
+      - name: Record environment
+        if: steps.hardware.outputs.accepted == 'true'
+        run: |
+          { uname -a; lscpu; java -version; java -XX:+UnlockDiagnosticVMOptions -XX:+PrintFlagsFinal -version; } > evidence/host.txt 2>&1
+      - name: Build immutable artifacts
+        if: steps.hardware.outputs.accepted == 'true'
+        run: |
+          for tree in candidate published; do
+            (cd "$tree" && ./gradlew :vectors-core:jar --max-workers=2 --no-daemon -Porg.gradle.java.installations.auto-detect=false -Porg.gradle.java.installations.auto-download=false -Porg.gradle.java.installations.paths="$JAVA_HOME")
+          done
+      - name: Fixed-count checkpoint 0
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ 'x86' }} --jdk 25.0.3 --host 0 --segment 0
+      - name: Retain checkpoint 0
+        if: always() && steps.hardware.outputs.accepted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-avx2-${{ 'x86' }}-${{ matrix.attempt }}-0
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-0/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed-count checkpoint 1
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ 'x86' }} --jdk 25.0.3 --host 0 --segment 1
+      - name: Retain checkpoint 1
+        if: always() && steps.hardware.outputs.accepted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-avx2-${{ 'x86' }}-${{ matrix.attempt }}-1
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-1/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed-count checkpoint 2
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ 'x86' }} --jdk 25.0.3 --host 0 --segment 2
+      - name: Retain checkpoint 2
+        if: always() && steps.hardware.outputs.accepted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-avx2-${{ 'x86' }}-${{ matrix.attempt }}-2
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-2/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed-count checkpoint 3
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ 'x86' }} --jdk 25.0.3 --host 0 --segment 3
+      - name: Retain checkpoint 3
+        if: always() && steps.hardware.outputs.accepted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-avx2-${{ 'x86' }}-${{ matrix.attempt }}-3
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-3/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed-count checkpoint 4
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ 'x86' }} --jdk 25.0.3 --host 0 --segment 4
+      - name: Retain checkpoint 4
+        if: always() && steps.hardware.outputs.accepted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-avx2-${{ 'x86' }}-${{ matrix.attempt }}-4
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-4/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed-count checkpoint 5
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ 'x86' }} --jdk 25.0.3 --host 0 --segment 5
+      - name: Retain checkpoint 5
+        if: always() && steps.hardware.outputs.accepted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-avx2-${{ 'x86' }}-${{ matrix.attempt }}-5
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-5/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed-count checkpoint 6
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ 'x86' }} --jdk 25.0.3 --host 0 --segment 6
+      - name: Retain checkpoint 6
+        if: always() && steps.hardware.outputs.accepted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-avx2-${{ 'x86' }}-${{ matrix.attempt }}-6
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-6/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed-count checkpoint 7
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ 'x86' }} --jdk 25.0.3 --host 0 --segment 7
+      - name: Retain checkpoint 7
+        if: always() && steps.hardware.outputs.accepted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-avx2-${{ 'x86' }}-${{ matrix.attempt }}-7
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-7/
+            evidence/compile*
+          retention-days: 30
