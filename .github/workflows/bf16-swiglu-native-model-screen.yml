@@ -1,296 +1,250 @@
-name: Bonsai combined native BF16 and SwiGLU causal screen
+name: Bonsai actual Models SPI causal screen
 on:
+  workflow_dispatch:
   push:
     branches: [fix/bonsai-activation]
     paths: [.github/workflows/bf16-swiglu-native-model-screen.yml]
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   model:
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 8
       matrix:
         include:
-          - {arch: x86, pair: 0}
-          - {arch: arm, pair: 0}
-          - {arch: x86, pair: 1}
-          - {arch: arm, pair: 1}
-          - {arch: x86, pair: 2}
-          - {arch: arm, pair: 2}
-          - {arch: x86, pair: 3}
-          - {arch: arm, pair: 3}
-    runs-on: ${{ matrix.arch == 'arm' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+          - arch: x86
+            pair: 0
+            runner: ubuntu-24.04
+          - arch: arm
+            pair: 0
+            runner: ubuntu-24.04-arm
+          - arch: x86
+            pair: 1
+            runner: ubuntu-24.04
+          - arch: arm
+            pair: 1
+            runner: ubuntu-24.04-arm
+          - arch: x86
+            pair: 2
+            runner: ubuntu-24.04
+          - arch: arm
+            pair: 2
+            runner: ubuntu-24.04-arm
+          - arch: x86
+            pair: 3
+            runner: ubuntu-24.04
+          - arch: arm
+            pair: 3
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 330
+    env:
+      ARCH: ${{ matrix.arch }}
+      PAIR: ${{ matrix.pair }}
     steps:
       - uses: actions/checkout@v5
-        with:
-          repository: integrallis/models
-          ref: 5344b5a2ff84a27548f0f2c4840c24f22d73c32d
-          path: models
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25.0.3'
       - uses: gradle/actions/setup-gradle@v6
-      - name: Fetch immutable external causal payload
+      - name: Fetch immutable external source and harness
         env:
-          PAYLOAD_URL: ${{ secrets.BF16_SWIGLU_NATIVE_MODEL_PAYLOAD_URL }}
+          PAYLOAD_URL: ${{ secrets.BF16_ACTUAL_SPI_PAYLOAD_URL }}
         run: |
-          curl --fail --location --silent --show-error "$PAYLOAD_URL" -o payload.tar.gz
-          echo '0194b8fca29a628685c42f2bb2087be6c375ae2c17db42c9116e817e92d7d258  payload.tar.gz' | sha256sum -c -
-          tar xzf payload.tar.gz
-          mkdir -p evidence
-          { uname -a; lscpu; java -version; } > evidence/host.txt 2>&1
-      - name: Install pinned Rust compiler
-        run: rustup toolchain install 1.96.0 --profile minimal --no-self-update
-      - name: Build exact Models runtime
-        working-directory: models
-        run: ./gradlew :backend-native:cargoBuildRelease :backend-native:copyPairedRuntime --init-script ../payload/scripts/bonsai-paired/runtime.init.gradle --no-daemon --max-workers=2
-      - name: prepare
-        timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
-        run: |
-          python3 payload/model-run.py "$ARCH" "$PAIR" 'prepare'
-      - name: Retain checkpoint 0
-        if: always()
-        uses: actions/upload-artifact@v7
+          curl -fL --retry 3 "$PAYLOAD_URL" -o payload.tar.gz
+          echo '59e4185e0b6e2fc3b50d62dca7585a68f13dd870500646e62d06748f14b0e704  payload.tar.gz' | sha256sum -c -
+          tar -xzf payload.tar.gz
+          python3 payload/protocol_check.py payload/protocol.json payload/matrix.json --frozen
+      - uses: actions/checkout@v5
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-0
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: plain-0
-        timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
-        run: |
-          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][0])')
-          python3 payload/model-run.py "$ARCH" "$PAIR" "plain:$arm"
-      - name: Retain checkpoint 1
-        if: always()
-        uses: actions/upload-artifact@v7
+          repository: integrallis/models
+          ref: 218daaea7b3a52e97311b56e5d950245ed917343
+          path: models-base
+      - uses: actions/checkout@v5
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-1
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: plain-1
-        timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
+          repository: integrallis/models
+          ref: 218daaea7b3a52e97311b56e5d950245ed917343
+          path: models-candidate
+      - name: Apply frozen candidate source and build exact runtimes
         run: |
-          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][1])')
-          python3 payload/model-run.py "$ARCH" "$PAIR" "plain:$arm"
-      - name: Retain checkpoint 2
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-2
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: plain-2
-        timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
+          rustup toolchain install 1.96.0 --profile minimal
+          python3 payload/apply_source.py models-candidate
+          (cd models-base && ./gradlew :backend-native:cargoBuildRelease :backend-native:copyPairedRuntime --init-script ../payload/scripts/bonsai-paired/runtime.init.gradle --no-daemon --max-workers=2)
+          (cd models-candidate && ./gradlew :backend-native:cargoBuildRelease :backend-native:copyPairedRuntime --init-script ../payload/scripts/bonsai-paired/runtime.init.gradle --no-daemon --max-workers=2)
+          python3 payload/build_instrumented.py models-candidate instrumented-source
+          cargo +1.96.0 build --release --locked --offline --manifest-path instrumented-source/backend-native/src/main/rust/model-kernels/Cargo.toml
+          python3 payload/fetch_weights.py "$RUNNER_TEMP/bonsai2.gguf"
+      - name: Prepare and verify all actual artifacts
         run: |
-          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][2])')
-          python3 payload/model-run.py "$ARCH" "$PAIR" "plain:$arm"
-      - name: Retain checkpoint 3
+          python3 payload/run_screen.py "$ARCH" "$PAIR" prepare --models-base models-base --models-candidate models-candidate --instrumented-library instrumented-source/backend-native/src/main/rust/model-kernels/target/release/libjmodels_kernels.so --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-3
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: fixture candidate
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-prepared
+          path: evidence/
+          if-no-files-found: error
+      - name: plain-order-0
         timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
         run: |
-          python3 payload/model-run.py "$ARCH" "$PAIR" 'fixture:candidate'
-      - name: Retain checkpoint 4
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][0])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "plain:$ARM"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-4
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: fixture control
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-0
+          path: evidence/
+          if-no-files-found: error
+      - name: plain-order-1
         timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
         run: |
-          python3 payload/model-run.py "$ARCH" "$PAIR" 'fixture:control'
-      - name: Retain checkpoint 5
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][1])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "plain:$ARM"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-5
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: fixture baseline
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-1
+          path: evidence/
+          if-no-files-found: error
+      - name: plain-order-2
         timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
         run: |
-          python3 payload/model-run.py "$ARCH" "$PAIR" 'fixture:baseline'
-      - name: Retain checkpoint 6
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][2])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "plain:$ARM"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-6
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: pure-reference
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-2
+          path: evidence/
+          if-no-files-found: error
+      - name: fixture:candidate
         timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
         run: |
-          python3 payload/model-run.py "$ARCH" "$PAIR" 'pure-reference'
-      - name: Retain checkpoint 7
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "fixture:candidate"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-7
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: timing-0
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-3
+          path: evidence/
+          if-no-files-found: error
+      - name: dispatch
         timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
         run: |
-          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][0])')
-          python3 payload/model-run.py "$ARCH" "$PAIR" "timing:$arm"
-      - name: Retain checkpoint 8
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "dispatch"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-8
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: timing-1
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-4
+          path: evidence/
+          if-no-files-found: error
+      - name: fixture:control
         timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
         run: |
-          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][1])')
-          python3 payload/model-run.py "$ARCH" "$PAIR" "timing:$arm"
-      - name: Retain checkpoint 9
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "fixture:control"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-9
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
-      - name: timing-2
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-5
+          path: evidence/
+          if-no-files-found: error
+      - name: fixture:baseline
         timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
         run: |
-          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][2])')
-          python3 payload/model-run.py "$ARCH" "$PAIR" "timing:$arm"
-      - name: Retain checkpoint 10
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "fixture:baseline"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-10
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-6
+          path: evidence/
+          if-no-files-found: error
+      - name: pure:control
+        timeout-minutes: 82
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "pure:control"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-7
+          path: evidence/
+          if-no-files-found: error
+      - name: pure:candidate
+        timeout-minutes: 82
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "pure:candidate"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-8
+          path: evidence/
+          if-no-files-found: error
+      - name: timing-order-0
+        timeout-minutes: 82
+        run: |
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][0])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "timing:$ARM"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-9
+          path: evidence/
+          if-no-files-found: error
+      - name: timing-order-1
+        timeout-minutes: 82
+        run: |
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][1])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "timing:$ARM"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-10
+          path: evidence/
+          if-no-files-found: error
+      - name: timing-order-2
+        timeout-minutes: 82
+        run: |
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][2])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "timing:$ARM"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-11
+          path: evidence/
+          if-no-files-found: error
       - name: finish
         timeout-minutes: 82
-        env:
-          ARCH: ${{ matrix.arch }}
-          PAIR: ${{ matrix.pair }}
         run: |
-          python3 payload/model-run.py "$ARCH" "$PAIR" 'finish'
-      - name: Retain checkpoint 11
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "finish"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: combined-native-model-${{ matrix.arch }}-${{ matrix.pair }}-11
-          path: |
-            evidence/*.json
-            evidence/*.stdout
-            evidence/*.stderr
-            evidence/*.txt
-            evidence/*.so
-            evidence/STATUS
-          retention-days: 30
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-12
+          path: evidence/
+          if-no-files-found: error
+  analyze:
+    if: always()
+    needs: model
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Fetch the same immutable analysis protocol
+        env:
+          PAYLOAD_URL: ${{ secrets.BF16_ACTUAL_SPI_PAYLOAD_URL }}
+        run: |
+          curl -fL --retry 3 "$PAYLOAD_URL" -o payload.tar.gz
+          echo '59e4185e0b6e2fc3b50d62dca7585a68f13dd870500646e62d06748f14b0e704  payload.tar.gz' | sha256sum -c -
+          tar -xzf payload.tar.gz
+          python3 payload/protocol_check.py payload/protocol.json payload/matrix.json --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: actual-spi-*-12
+          path: collected
+      - name: Require every declared host and assess all original gates
+        run: |
+          python3 payload/analyze_screen.py collected payload/protocol.json payload/matrix.json screen-analysis.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-screen-analysis
+          path: screen-analysis.json
+          if-no-files-found: error
