@@ -251,6 +251,24 @@ interface StorageBackendContract {
   }
 
   @Test
+  default void getRange_hugeOffsetCannotOverflow() throws IOException {
+    StorageBackend b = backend();
+    String key = key("range-overflow");
+    b.put(key, new byte[] {1, 2, 3});
+    assertThatThrownBy(() -> b.getRange(key, Long.MAX_VALUE, 2))
+        .isInstanceOf(IndexOutOfBoundsException.class);
+  }
+
+  @Test
+  default void getRange_zeroLengthStillChecksOffset() throws IOException {
+    StorageBackend b = backend();
+    String key = key("range-empty-bounds");
+    b.put(key, new byte[] {1, 2, 3});
+    assertThat(b.getRange(key, 3, 0)).isEmpty();
+    assertThatThrownBy(() -> b.getRange(key, 4, 0)).isInstanceOf(IndexOutOfBoundsException.class);
+  }
+
+  @Test
   default void getRange_negativeOffsetThrows() throws IOException {
     StorageBackend b = backend();
     String key = key("range-negative-offset");
