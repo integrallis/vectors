@@ -24,8 +24,7 @@ import java.nio.file.Path;
  * <p>Discovered via {@link java.util.ServiceLoader}. The first provider that returns a non-null
  * {@link CassetteStore} from {@link #create(Path)} wins; if no provider is registered, the
  * extension falls back to an {@link com.integrallis.vectors.vcr.ExactCassetteStore} over a {@link
- * com.integrallis.vectors.storage.backend.LocalFileStorageBackend} rooted at the configured {@code
- * dataDir}.
+ * com.integrallis.vectors.vcr.LocalVcrStorageBackend} rooted at the configured {@code dataDir}.
  */
 public interface CassetteStoreFactory {
 

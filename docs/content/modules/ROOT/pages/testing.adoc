@@ -34,6 +34,13 @@ dependencies {
 }
 ----
 
+The default local store encodes cassette and registry keys into portable filenames under
+`vcr-files-v1/`. Logical `vcr:...` keys remain unchanged. Existing Unix recordings with
+colon-named files remain readable and are migrated when rewritten; when both representations
+exist, the portable value takes precedence. Remote and custom storage backends keep their
+existing key format. Programmatic local stores can use
+`new ExactCassetteStore(new LocalVcrStorageBackend(dataDir))`.
+
 Annotate your test class:
 
 [source,java]

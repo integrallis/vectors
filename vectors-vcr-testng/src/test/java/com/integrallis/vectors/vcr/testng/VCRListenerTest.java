@@ -19,11 +19,11 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertTrue;
 import static org.testng.Assert.expectThrows;
 
-import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
 import com.integrallis.vectors.vcr.CassetteKey;
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
+import com.integrallis.vectors.vcr.LocalVcrStorageBackend;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -78,7 +78,7 @@ public class VCRListenerTest {
     System.setProperty(MODE_PROP, "RECORD");
     runScenario();
 
-    ExactCassetteStore exact = new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
+    ExactCassetteStore exact = new ExactCassetteStore(new LocalVcrStorageBackend(dataDir));
     CassetteKey expected =
         new CassetteKey("embedding", RecordPlaybackScenario.class.getName() + ":embeds", 1);
     CassetteKey disabled =
@@ -103,7 +103,7 @@ public class VCRListenerTest {
     testng.run();
     assertTrue(testng.getStatus() != 0, "scenario must fail after writing its cassette");
 
-    ExactCassetteStore exact = new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
+    ExactCassetteStore exact = new ExactCassetteStore(new LocalVcrStorageBackend(dataDir));
     CassetteKey writtenBeforeFailure =
         new CassetteKey(
             "embedding", FailedRecordingScenario.class.getName() + ":recordsThenFails", 1);

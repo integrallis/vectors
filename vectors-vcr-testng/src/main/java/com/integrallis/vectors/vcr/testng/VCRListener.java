@@ -15,9 +15,9 @@
  */
 package com.integrallis.vectors.vcr.testng;
 
-import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
+import com.integrallis.vectors.vcr.LocalVcrStorageBackend;
 import com.integrallis.vectors.vcr.VCRContext;
 import com.integrallis.vectors.vcr.VCRDisabled;
 import com.integrallis.vectors.vcr.VCRMode;
@@ -166,8 +166,8 @@ public final class VCRListener implements ITestListener, IInvokedMethodListener 
       String dataDirStr = (override != null && !override.isEmpty()) ? override : config.dataDir();
       Path dataDir = Path.of(dataDirStr).toAbsolutePath();
       Files.createDirectories(dataDir);
-      CassetteStore store = new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
-      VCRRegistry registry = new VCRRegistry(new LocalFileStorageBackend(dataDir));
+      CassetteStore store = new ExactCassetteStore(new LocalVcrStorageBackend(dataDir));
+      VCRRegistry registry = new VCRRegistry(new LocalVcrStorageBackend(dataDir));
       return new VCRContext(store, registry, config.mode());
     } catch (IOException e) {
       throw new RuntimeException("Failed to create VCR data directory", e);
