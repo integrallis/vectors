@@ -6989,44 +6989,32 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     int historyLength = kernelSize - 1;
     int channel = 0;
     int limit = FLOAT_SPECIES.loopBound(channels);
-    FloatVector one = FloatVector.broadcast(ReproducibleActivationExp.FLOAT_SPECIES, 1.0f);
-    for (; channel < limit; channel += ReproducibleActivationExp.FLOAT_SPECIES.length()) {
-      FloatVector input =
-          FloatVector.fromArray(
-              ReproducibleActivationExp.FLOAT_SPECIES, values, valuesOffset + channel);
+    for (; channel < limit; channel += FLOAT_SPECIES.length()) {
+      FloatVector input = FloatVector.fromArray(FLOAT_SPECIES, values, valuesOffset + channel);
       FloatVector convolved =
           input.mul(
               FloatVector.fromArray(
-                  ReproducibleActivationExp.FLOAT_SPECIES,
-                  weights,
-                  weightsOffset + historyLength * channels + channel));
-      FloatVector previous =
-          FloatVector.fromArray(
-              ReproducibleActivationExp.FLOAT_SPECIES, history, historyOffset + channel);
+                  FLOAT_SPECIES, weights, weightsOffset + historyLength * channels + channel));
+      FloatVector previous = FloatVector.fromArray(FLOAT_SPECIES, history, historyOffset + channel);
       convolved =
           fma(
               previous,
-              FloatVector.fromArray(
-                  ReproducibleActivationExp.FLOAT_SPECIES, weights, weightsOffset + channel),
+              FloatVector.fromArray(FLOAT_SPECIES, weights, weightsOffset + channel),
               convolved);
       for (int tap = 1; tap < historyLength; tap++) {
         int historyIndex = historyOffset + tap * channels + channel;
-        FloatVector current =
-            FloatVector.fromArray(ReproducibleActivationExp.FLOAT_SPECIES, history, historyIndex);
+        FloatVector current = FloatVector.fromArray(FLOAT_SPECIES, history, historyIndex);
         convolved =
             fma(
                 current,
                 FloatVector.fromArray(
-                    ReproducibleActivationExp.FLOAT_SPECIES,
-                    weights,
-                    weightsOffset + tap * channels + channel),
+                    FLOAT_SPECIES, weights, weightsOffset + tap * channels + channel),
                 convolved);
         current.intoArray(history, historyIndex - channels);
       }
       input.intoArray(history, historyOffset + (historyLength - 1) * channels + channel);
-      convolved
-          .div(one.add(ReproducibleActivationExp.exp(convolved.neg())))
-          .intoArray(values, valuesOffset + channel);
+      convolved.intoArray(values, valuesOffset + channel);
+      applyConvolutionSilu(values, valuesOffset + channel, FLOAT_SPECIES.length());
     }
     for (; channel < channels; channel++) {
       float input = values[valuesOffset + channel];
@@ -7040,7 +7028,16 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         history[historyIndex - channels] = current;
       }
       history[historyOffset + (historyLength - 1) * channels + channel] = input;
-      values[valuesOffset + channel] = convolved / (1.0f + (float) StrictMath.exp(-convolved));
+      values[valuesOffset + channel] = convolved / (1.0f + ReproducibleScalarExp.exp(-convolved));
+    }
+  }
+
+  // Finish each published-width vector group before advancing, preserving alias/update order.
+  // An array-only scalar activation avoids cold Vector API exponential wrapper allocation.
+  private static void applyConvolutionSilu(float[] values, int offset, int length) {
+    for (int index = offset; index < offset + length; index++) {
+      float value = values[index];
+      values[index] = value / (1.0f + ReproducibleScalarExp.exp(-value));
     }
   }
 

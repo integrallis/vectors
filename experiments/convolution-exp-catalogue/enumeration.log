@@ -1,0 +1,18 @@
+progress=16777218 exceptions=0 utc=2026-10-13T00:50:44.983942Z
+progress=50331650 exceptions=1 utc=2026-10-13T00:50:45.426235Z
+progress=83886082 exceptions=2 utc=2026-10-13T00:50:45.780232Z
+progress=117440514 exceptions=2 utc=2026-10-13T00:50:46.208651Z
+progress=150994946 exceptions=2 utc=2026-10-13T00:50:46.594033Z
+progress=184549378 exceptions=3 utc=2026-10-13T00:50:46.947785Z
+progress=218103810 exceptions=4 utc=2026-10-13T00:50:47.360155Z
+progress=251658242 exceptions=6 utc=2026-10-13T00:50:47.727021Z
+progress=285212674 exceptions=8 utc=2026-10-13T00:50:48.080977Z
+progress=318767106 exceptions=9 utc=2026-10-13T00:50:48.448627Z
+progress=352321538 exceptions=10 utc=2026-10-13T00:50:48.852283Z
+progress=385875970 exceptions=10 utc=2026-10-13T00:50:49.280360Z
+progress=419430402 exceptions=11 utc=2026-10-13T00:50:49.664175Z
+progress=452984834 exceptions=11 utc=2026-10-13T00:50:50.138047Z
+progress=486539266 exceptions=11 utc=2026-10-13T00:50:50.869091Z
+progress=520093698 exceptions=13 utc=2026-10-13T00:50:51.582819Z
+progress=553648130 exceptions=14 utc=2026-10-13T00:50:52.311888Z
+{"checked":580911106,"exceptions":15,"firstMagnitudeBits":"31800000","lastMagnitudeBitsInclusive":"42d00000","guardDoubleSteps":8,"elapsedNanos":8149601717,"java":"25.0.3"}
