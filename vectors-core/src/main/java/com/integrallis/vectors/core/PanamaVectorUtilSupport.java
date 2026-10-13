@@ -6986,6 +6986,15 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int weightsOffset,
       int channels,
       int kernelSize) {
+    boolean overlapsHistory =
+        values == history
+            && valuesOffset < (long) historyOffset + (long) (kernelSize - 1) * channels
+            && historyOffset < (long) valuesOffset + channels;
+    boolean overlapsWeights =
+        values == weights
+            && valuesOffset < (long) weightsOffset + (long) kernelSize * channels
+            && weightsOffset < (long) valuesOffset + channels;
+    boolean independentValues = !overlapsHistory && !overlapsWeights;
     int historyLength = kernelSize - 1;
     int channel = 0;
     int limit = FLOAT_SPECIES.loopBound(channels);
@@ -7014,7 +7023,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       }
       input.intoArray(history, historyOffset + (historyLength - 1) * channels + channel);
       convolved.intoArray(values, valuesOffset + channel);
-      applyConvolutionSilu(values, valuesOffset + channel, FLOAT_SPECIES.length());
+      if (!independentValues)
+        applyConvolutionSilu(values, valuesOffset + channel, FLOAT_SPECIES.length());
     }
     for (; channel < channels; channel++) {
       float input = values[valuesOffset + channel];
@@ -7030,6 +7040,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       history[historyOffset + (historyLength - 1) * channels + channel] = input;
       values[valuesOffset + channel] = convolved / (1.0f + (float) StrictMath.exp(-convolved));
     }
+    if (independentValues) applyConvolutionSilu(values, valuesOffset, limit);
   }
 
   // Finish each published-width vector group before advancing, preserving alias/update order.
