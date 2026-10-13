@@ -1,119 +1,151 @@
-name: BF16 compiler diagnosis
+name: BF16 final kernel verification
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  diagnose:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 35
+  verify:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - {arch: x86, host: 0, runner: ubuntu-24.04}
+          - {arch: x86, host: 1, runner: ubuntu-24.04}
+          - {arch: arm, host: 0, runner: ubuntu-24.04-arm}
+          - {arch: arm, host: 1, runner: ubuntu-24.04-arm}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 65
     steps:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25.0.3'
-      - name: Fetch frozen external diagnostic payload
+      - name: Fetch frozen external verification payload
         env:
-          PAYLOAD_URL: ${{ secrets.BF16_EXTERNAL_PAYLOAD_URL }}
+          PAYLOAD_URL: ${{ secrets.BF16_FINAL_PAYLOAD_URL }}
         run: |
           curl --fail --silent --show-error --location "$PAYLOAD_URL" -o payload.tar.gz
-          echo "67e62954d7be97b7a8279eedf5c254495545af5dda1b96c59f4788f7c9bb2cd5  payload.tar.gz" | sha256sum -c -
+          echo "c691b66eb4bac8f10bbc979e5e07950b05c27a4ec18ca118efc897f92b6b8bde  payload.tar.gz" | sha256sum -c -
           tar -xzf payload.tar.gz
           mkdir -p evidence
           { uname -a; lscpu; java -version; java -XX:+UnlockDiagnosticVMOptions -XX:+PrintFlagsFinal -version; } > evidence/host.txt 2>&1
-      - name: Fixed four-pair checkpoint 0
-        run: python3 payload/run.py evidence 0
+      - name: Fixed twelve-pair checkpoint 0
+        run: python3 payload/run.py evidence 0 ${{ matrix.arch }} ${{ matrix.host }}
       - name: Retain checkpoint 0
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bf16-row-boundary-0
+          name: bf16-final-${{ matrix.arch }}-${{ matrix.host }}-0
           path: |
             evidence/manifest.json
             evidence/host.txt
             evidence/segment-0/
           retention-days: 30
-      - name: Fixed four-pair checkpoint 1
-        run: python3 payload/run.py evidence 1
+      - name: Fixed twelve-pair checkpoint 1
+        run: python3 payload/run.py evidence 1 ${{ matrix.arch }} ${{ matrix.host }}
       - name: Retain checkpoint 1
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bf16-row-boundary-1
+          name: bf16-final-${{ matrix.arch }}-${{ matrix.host }}-1
           path: |
             evidence/manifest.json
             evidence/host.txt
             evidence/segment-1/
           retention-days: 30
-      - name: Fixed four-pair checkpoint 2
-        run: python3 payload/run.py evidence 2
+      - name: Fixed twelve-pair checkpoint 2
+        run: python3 payload/run.py evidence 2 ${{ matrix.arch }} ${{ matrix.host }}
       - name: Retain checkpoint 2
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bf16-row-boundary-2
+          name: bf16-final-${{ matrix.arch }}-${{ matrix.host }}-2
           path: |
             evidence/manifest.json
             evidence/host.txt
             evidence/segment-2/
           retention-days: 30
-      - name: Fixed four-pair checkpoint 3
-        run: python3 payload/run.py evidence 3
+      - name: Fixed twelve-pair checkpoint 3
+        run: python3 payload/run.py evidence 3 ${{ matrix.arch }} ${{ matrix.host }}
       - name: Retain checkpoint 3
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bf16-row-boundary-3
+          name: bf16-final-${{ matrix.arch }}-${{ matrix.host }}-3
           path: |
             evidence/manifest.json
             evidence/host.txt
             evidence/segment-3/
           retention-days: 30
-      - name: Fixed four-pair checkpoint 4
-        run: python3 payload/run.py evidence 4
+      - name: Fixed twelve-pair checkpoint 4
+        run: python3 payload/run.py evidence 4 ${{ matrix.arch }} ${{ matrix.host }}
       - name: Retain checkpoint 4
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bf16-row-boundary-4
+          name: bf16-final-${{ matrix.arch }}-${{ matrix.host }}-4
           path: |
             evidence/manifest.json
             evidence/host.txt
             evidence/segment-4/
           retention-days: 30
-      - name: Fixed four-pair checkpoint 5
-        run: python3 payload/run.py evidence 5
+      - name: Fixed twelve-pair checkpoint 5
+        run: python3 payload/run.py evidence 5 ${{ matrix.arch }} ${{ matrix.host }}
       - name: Retain checkpoint 5
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bf16-row-boundary-5
+          name: bf16-final-${{ matrix.arch }}-${{ matrix.host }}-5
           path: |
             evidence/manifest.json
             evidence/host.txt
             evidence/segment-5/
           retention-days: 30
-      - name: Fixed four-pair checkpoint 6
-        run: python3 payload/run.py evidence 6
+      - name: Fixed twelve-pair checkpoint 6
+        run: python3 payload/run.py evidence 6 ${{ matrix.arch }} ${{ matrix.host }}
       - name: Retain checkpoint 6
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bf16-row-boundary-6
+          name: bf16-final-${{ matrix.arch }}-${{ matrix.host }}-6
           path: |
             evidence/manifest.json
             evidence/host.txt
             evidence/segment-6/
           retention-days: 30
-      - name: Fixed four-pair checkpoint 7
-        run: python3 payload/run.py evidence 7
+      - name: Fixed twelve-pair checkpoint 7
+        run: python3 payload/run.py evidence 7 ${{ matrix.arch }} ${{ matrix.host }}
       - name: Retain checkpoint 7
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bf16-row-boundary-7
+          name: bf16-final-${{ matrix.arch }}-${{ matrix.host }}-7
           path: |
             evidence/manifest.json
             evidence/host.txt
             evidence/segment-7/
+          retention-days: 30
+  analyze:
+    if: always()
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch matching frozen analyzer
+        env:
+          PAYLOAD_URL: ${{ secrets.BF16_FINAL_PAYLOAD_URL }}
+        run: |
+          curl --fail --silent --show-error --location "$PAYLOAD_URL" -o payload.tar.gz
+          echo "c691b66eb4bac8f10bbc979e5e07950b05c27a4ec18ca118efc897f92b6b8bde  payload.tar.gz" | sha256sum -c -
+          tar -xzf payload.tar.gz
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bf16-final-*
+          path: artifacts
+      - run: python3 payload/analyze.py artifacts analysis
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: bf16-final-analysis
+          path: analysis/
           retention-days: 30
