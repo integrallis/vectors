@@ -14,6 +14,7 @@ All notable changes to java-vectors are documented here.
 - Preserve BF16 projection reduction order across compilation states and batch shapes so
   fresh native Bonsai sessions retain identical full-vocabulary logits, not just selected tokens.
 - Guard nested projection executor callbacks and maximum integer ranges used by BF16 row dispatch.
+- Avoid allocating a captured row callback for BF16 batches that execute on the calling thread.
 - Exercise 48-head recurrent gates, persistent four-tap history, offsets, tails, aliases,
   concurrent callers, vector-width settings and disabled-FMA operation in regression checks.
 
