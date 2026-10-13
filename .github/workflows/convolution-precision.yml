@@ -1,0 +1,326 @@
+name: Convolution CPU-stratified precision
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/bonsai-activation]
+    paths: [.github/workflows/convolution-precision.yml]
+permissions:
+  contents: read
+jobs:
+  paired:
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        include:
+          - target: "N2"
+            attempt: 0
+            arch: arm
+            runner: ubuntu-24.04-arm
+          - target: "7763"
+            attempt: 0
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V74"
+            attempt: 0
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 0
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "7763"
+            attempt: 1
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V74"
+            attempt: 1
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 1
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "7763"
+            attempt: 2
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V74"
+            attempt: 2
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 2
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "7763"
+            attempt: 3
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V74"
+            attempt: 3
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 3
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "7763"
+            attempt: 4
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V74"
+            attempt: 4
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 4
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "7763"
+            attempt: 5
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V74"
+            attempt: 5
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 5
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "7763"
+            attempt: 6
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V74"
+            attempt: 6
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 6
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "7763"
+            attempt: 7
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V74"
+            attempt: 7
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 7
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 8
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 9
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 10
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 11
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 12
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 13
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 14
+            arch: x86
+            runner: ubuntu-24.04
+          - target: "9V45"
+            attempt: 15
+            arch: x86
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: candidate
+      - name: Admit declared CPU before any measurements
+        id: hardware
+        run: |
+          mkdir -p evidence
+          python3 - <<'PYCODE'
+          import json,subprocess,os
+          from pathlib import Path
+          target='${{ matrix.target }}';attempt=${{ matrix.attempt }}
+          expected={'N2':'Neoverse-N2','7763':'AMD EPYC 7763 64-Core Processor','9V74':'AMD EPYC 9V74 80-Core Processor','9V45':'AMD EPYC 9V45 96-Core Processor'}[target]
+          rows=json.loads(subprocess.check_output(['lscpu','-J']))['lscpu']
+          cpu=next(r['data'] for r in rows if r['field'].rstrip(':')=='Model name');accepted=cpu==expected
+          Path('evidence/hardware-admission.json').write_text(json.dumps({'cpu':cpu,'accepted':accepted,'target':target,'attempt':attempt,'lscpu':rows},indent=2)+'\n')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('accepted='+str(accepted).lower()+'\n')
+          PYCODE
+      - uses: actions/checkout@v5
+        if: steps.hardware.outputs.accepted == 'true'
+        with:
+          path: published
+          ref: 1440ca7555e492ae7c2a17cde7cb3ffe6c07b7b5
+      - uses: actions/setup-java@v5
+        if: steps.hardware.outputs.accepted == 'true'
+        with:
+          distribution: temurin
+          java-version: '25.0.3'
+      - uses: gradle/actions/setup-gradle@v6
+        if: steps.hardware.outputs.accepted == 'true'
+      - name: Record environment
+        if: steps.hardware.outputs.accepted == 'true'
+        run: |
+          { uname -a; lscpu; java -version; java -XX:+UnlockDiagnosticVMOptions -XX:+PrintFlagsFinal -version; } > evidence/host.txt 2>&1
+      - name: Build immutable artifacts
+        if: steps.hardware.outputs.accepted == 'true'
+        run: |
+          for tree in candidate published; do
+            (cd "$tree" && ./gradlew :vectors-core:jar --max-workers=2 --no-daemon -Porg.gradle.java.installations.auto-detect=false -Porg.gradle.java.installations.auto-download=false -Porg.gradle.java.installations.paths="$JAVA_HOME")
+          done
+      - name: Fixed four-pair checkpoint 0
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ matrix.arch }} --jdk 25.0.3 --host 0 --segment 0
+      - name: Retain checkpoint 0
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-precision-${{ matrix.target }}-${{ matrix.attempt }}-0
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-0/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed four-pair checkpoint 1
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ matrix.arch }} --jdk 25.0.3 --host 0 --segment 1
+      - name: Retain checkpoint 1
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-precision-${{ matrix.target }}-${{ matrix.attempt }}-1
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-1/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed four-pair checkpoint 2
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ matrix.arch }} --jdk 25.0.3 --host 0 --segment 2
+      - name: Retain checkpoint 2
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-precision-${{ matrix.target }}-${{ matrix.attempt }}-2
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-2/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed four-pair checkpoint 3
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ matrix.arch }} --jdk 25.0.3 --host 0 --segment 3
+      - name: Retain checkpoint 3
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-precision-${{ matrix.target }}-${{ matrix.attempt }}-3
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-3/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed four-pair checkpoint 4
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ matrix.arch }} --jdk 25.0.3 --host 0 --segment 4
+      - name: Retain checkpoint 4
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-precision-${{ matrix.target }}-${{ matrix.attempt }}-4
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-4/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed four-pair checkpoint 5
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ matrix.arch }} --jdk 25.0.3 --host 0 --segment 5
+      - name: Retain checkpoint 5
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-precision-${{ matrix.target }}-${{ matrix.attempt }}-5
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-5/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed four-pair checkpoint 6
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ matrix.arch }} --jdk 25.0.3 --host 0 --segment 6
+      - name: Retain checkpoint 6
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-precision-${{ matrix.target }}-${{ matrix.attempt }}-6
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-6/
+            evidence/compile*
+          retention-days: 30
+      - name: Fixed four-pair checkpoint 7
+        if: steps.hardware.outputs.accepted == 'true'
+        run: python3 candidate/scripts/convolution-precision/run.py --arch ${{ matrix.arch }} --jdk 25.0.3 --host 0 --segment 7
+      - name: Retain checkpoint 7
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: convolution-precision-${{ matrix.target }}-${{ matrix.attempt }}-7
+          path: |
+            evidence/manifest.json
+            evidence/hardware-admission.json
+            evidence/host.txt
+            evidence/segment-7/
+            evidence/compile*
+          retention-days: 30
+  analyze:
+    if: always()
+    needs: paired
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: convolution-precision-*
+          path: artifacts
+      - run: python3 scripts/convolution-precision/analyze.py artifacts analysis
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: convolution-precision-analysis
+          path: analysis/
+          retention-days: 30
