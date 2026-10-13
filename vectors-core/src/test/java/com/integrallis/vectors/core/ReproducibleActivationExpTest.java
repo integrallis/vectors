@@ -18,15 +18,16 @@ package com.integrallis.vectors.core;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.SplittableRandom;
-import jdk.incubator.vector.FloatVector;
 import org.junit.jupiter.api.Test;
 
 class ReproducibleActivationExpTest {
   @Test
-  void specialValuesAndSampledFloatBitsMatchStrictMathExactly() {
-    var species = ReproducibleActivationExp.FLOAT_SPECIES;
+  void publicSwiGluSpecialValuesAndSampledFloatBitsMatchStrictMathExactly() {
+    var species = PanamaVectorUtilSupport.FLOAT_SPECIES;
     float[] input = new float[species.length()];
     float[] output = new float[species.length()];
+    float[] up = new float[species.length()];
+    java.util.Arrays.fill(up, 1.0f);
     float[] edges = {
       0f,
       -0f,
@@ -52,11 +53,12 @@ class ReproducibleActivationExpTest {
         int index = sample + lane;
         input[lane] = index < edges.length ? edges[index] : Float.intBitsToFloat(random.nextInt());
       }
-      ReproducibleActivationExp.exp(FloatVector.fromArray(species, input, 0)).intoArray(output, 0);
+      VectorUtil.swiGlu(output, 0, input, 0, up, 0, input.length);
       for (int lane = 0; lane < input.length; lane++) {
         assertThat(Float.floatToIntBits(output[lane]))
             .as("float input bits %08x", Float.floatToRawIntBits(input[lane]))
-            .isEqualTo(Float.floatToIntBits((float) StrictMath.exp(input[lane])));
+            .isEqualTo(
+                Float.floatToIntBits(input[lane] / (1.0f + (float) StrictMath.exp(-input[lane]))));
       }
     }
   }

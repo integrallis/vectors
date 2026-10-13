@@ -7028,17 +7028,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         history[historyIndex - channels] = current;
       }
       history[historyOffset + (historyLength - 1) * channels + channel] = input;
-      values[valuesOffset + channel] = convolved / (1.0f + ReproducibleScalarExp.exp(-convolved));
+      values[valuesOffset + channel] = convolved / (1.0f + (float) StrictMath.exp(-convolved));
     }
   }
 
   // Finish each published-width vector group before advancing, preserving alias/update order.
-  // An array-only scalar activation avoids cold Vector API exponential wrapper allocation.
+  // Primitive activation arithmetic avoids cold Vector API exponential wrapper allocation.
   private static void applyConvolutionSilu(float[] values, int offset, int length) {
-    for (int index = offset; index < offset + length; index++) {
-      float value = values[index];
-      values[index] = value / (1.0f + ReproducibleScalarExp.exp(-value));
-    }
+    ReproducibleConvolutionSilu.apply(values, offset, length);
   }
 
   @Override

@@ -48,50 +48,6 @@ final class ReproducibleActivationExp {
       VectorSpecies.of(long.class, DOUBLE_SPECIES.vectorShape());
   private static final double HI = 0x1.62e42feep-1, LO = 0x1.a39ef35793c76p-33;
 
-  private static DoubleVector expDouble(DoubleVector x) {
-    var half =
-        DoubleVector.broadcast(DOUBLE_SPECIES, .5).blend(-.5, x.compare(VectorOperators.LT, 0.0));
-    var integers =
-        (IntVector)
-            x.mul(0x1.71547652b82fep0).add(half).convertShape(VectorOperators.D2I, INT_SPECIES, 0);
-    var kd = (DoubleVector) integers.convertShape(VectorOperators.I2D, DOUBLE_SPECIES, 0);
-    var k = (LongVector) integers.convertShape(VectorOperators.I2L, LONG_SPECIES, 0);
-    var hi = x.sub(kd.mul(HI));
-    var lo = kd.mul(LO);
-    var r = hi.sub(lo);
-    var t = r.mul(r);
-    var polynomial =
-        t.mul(0x1.6376972bea4d0p-25)
-            .add(-0x1.bbd41c5d26bf1p-20)
-            .mul(t)
-            .add(0x1.1566aaf25de2cp-14)
-            .mul(t)
-            .add(-0x1.6c16c16bebd93p-9)
-            .mul(t)
-            .add(0x1.555555555553ep-3);
-    var c = r.sub(t.mul(polynomial));
-    var one = DoubleVector.broadcast(DOUBLE_SPECIES, 1.0);
-    var y = one.sub(lo.sub(r.mul(c).div(c.neg().add(2.0))).sub(hi));
-    y = y.reinterpretAsLongs().add(k.lanewise(VectorOperators.LSHL, 52)).reinterpretAsDoubles();
-    return y;
-  }
-
-  static FloatVector exp(FloatVector input) {
-    if (DOUBLE_SPECIES.length() == 1) {
-      return FloatVector.zero(FLOAT_SPECIES)
-          .withLane(0, (float) StrictMath.exp(input.lane(0)))
-          .withLane(1, (float) StrictMath.exp(input.lane(1)));
-    }
-    var bounded = input.max(-104.0f).min(89.0f);
-    var result =
-        (FloatVector)
-            expDouble((DoubleVector) bounded.convertShape(VectorOperators.F2D, DOUBLE_SPECIES, 0))
-                .convertShape(VectorOperators.D2F, FLOAT_SPECIES, 0);
-    result = result.blend(Float.POSITIVE_INFINITY, input.compare(VectorOperators.GT, 89.0f));
-    result = result.blend(0.0f, input.compare(VectorOperators.LT, -104.0f));
-    return result.blend(input.add(input), input.test(VectorOperators.IS_NAN));
-  }
-
   /** Keeps the full vector computation behind an array-only call boundary. */
   static void swiGlu(
       float[] out,
@@ -110,7 +66,10 @@ final class ReproducibleActivationExp {
       FloatVector input = value.neg();
       FloatVector result;
       if (DOUBLE_SPECIES.length() == 1) {
-        result = exp(input);
+        result =
+            FloatVector.zero(FLOAT_SPECIES)
+                .withLane(0, (float) StrictMath.exp(input.lane(0)))
+                .withLane(1, (float) StrictMath.exp(input.lane(1)));
       } else {
         var bounded = input.max(-104.0f).min(89.0f);
         DoubleVector x =

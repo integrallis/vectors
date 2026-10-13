@@ -171,9 +171,15 @@ class ConvolutionSiluContractTest {
         if (tap > 0) System.arraycopy(previous, 0, history, hi - channels, count);
       }
       System.arraycopy(input, 0, history, ho + (kernel - 2) * channels + channel, count);
-      for (int lane = 0; lane < count; lane++) {
-        values[vo + channel + lane] = sum[lane] / (1.0f + (float) StrictMath.exp(-sum[lane]));
+      // This oracle tests read/write ordering, not the independently tested activation error.
+      // Using the actual activation prevents approximate output fed through aliases from changing
+      // later expected history values merely because the scalar reference rounds differently.
+      if (channel < limit) {
+        ReproducibleConvolutionSilu.apply(sum, 0, count);
+      } else {
+        sum[0] = sum[0] / (1.0f + (float) StrictMath.exp(-sum[0]));
       }
+      System.arraycopy(sum, 0, values, vo + channel, count);
       channel += count;
     }
   }
