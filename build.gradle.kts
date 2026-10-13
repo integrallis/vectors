@@ -16,6 +16,8 @@ plugins {
 val releaseDependencyPolicy = JsonSlurper().parse(file("gradle/dependency-policy.json")) as Map<*, *>
 extra["jacksonVersion"] = releaseDependencyPolicy["jacksonBom"] as String
 extra["slf4jVersion"] = releaseDependencyPolicy["slf4j"] as String
+// Align the test agent and runtime with Models and the supported JDK 25 class-file format.
+extra["mockitoVersion"] = "5.23.0"
 extra["releaseDependencyModules"] = releaseDependencyPolicy["modules"] as Map<*, *>
 
 val notebookRepositoryUrl = providers.gradleProperty("notebookRepository")
@@ -286,7 +288,7 @@ configure(libraryProjects) {
     // ("Could not complete execution for Gradle Test Executor"). Resolve just the mockito-core jar
     // and pass it as -javaagent to every Test task; a Provider keeps it configuration-cache safe.
     val mockitoAgent = configurations.create("mockitoAgent")
-    dependencies.add("mockitoAgent", "org.mockito:mockito-core:5.15.2")?.let {
+    dependencies.add("mockitoAgent", "org.mockito:mockito-core:${rootProject.extra["mockitoVersion"]}")?.let {
         (it as ExternalModuleDependency).isTransitive = false
     }
     val mockitoAgentArg = mockitoAgent.elements.map { "-javaagent:" + it.single().asFile.absolutePath }
@@ -532,8 +534,8 @@ configure(libraryProjects) {
         // Testing
         testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
         testImplementation("org.assertj:assertj-core:3.27.2")
-        testImplementation("org.mockito:mockito-core:5.15.2")
-        testImplementation("org.mockito:mockito-junit-jupiter:5.15.2")
+        testImplementation("org.mockito:mockito-core:${rootProject.extra["mockitoVersion"]}")
+        testImplementation("org.mockito:mockito-junit-jupiter:${rootProject.extra["mockitoVersion"]}")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
         testRuntimeOnly("ch.qos.logback:logback-classic:1.5.15")
     }
