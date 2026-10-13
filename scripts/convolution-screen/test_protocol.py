@@ -16,8 +16,8 @@ class ProtocolTests(unittest.TestCase):
 
     def fixture(self, root, cold=80):
         for arch in ['x86', 'arm']:
-            for jdk in ['25', '25.0.3']:
-                for host in range(2):
+            for jdk in ['25.0.3']:
+                for host in range(1):
                     d = root / f'{arch}-{jdk}-{host}'
                     d.mkdir()
                     artifacts = {arm: {'sha256': analyze.PROTOCOL.get(arm+'_sha256', 'candidate-hash')}
@@ -26,19 +26,19 @@ class ProtocolTests(unittest.TestCase):
                         arch=arch, jdk=jdk, host=host, artifacts=artifacts,
                         harnessRevision='frozen-source', runId='one-run')))
                     segment = d/'segment-0'; segment.mkdir()
-                    for pair in range(32):
+                    for pair in range(4):
                         for arm in analyze.PROTOCOL['arms']:
                             row = dict(arch=arch, jdk=jdk, host=host, pair=pair, arm=arm,
                                 channels=10240, kernel=4, warmup=10000, measured=20000, bits=256, fma=True,
                                 sha256=artifacts[arm]['sha256'], coldBytes=cold if arm=='candidate' else 100,
                                 coldNanos=100, hotNanosPerCall=80 if arm=='candidate' else 100,
-                                hotBytesPerCall=0, coldOracleMismatches=0, hotOracleMismatches=0)
+                                hotBytesPerCall=0, coldOracleMismatches=0, hotOracleMismatches=0, coldHotMismatches=0)
                             (segment/f'{pair}-{arm}.json').write_text(json.dumps(row))
 
     def test_complete_cohort_and_reject_missing(self):
         with tempfile.TemporaryDirectory() as name, patch.dict(analyze.PROTOCOL, bootstrap_samples=40):
             root = Path(name); self.fixture(root)
-            self.assertEqual(analyze.analyze(root)['verdict'], 'PASSED')
+            self.assertEqual(analyze.analyze(root)['verdict'], 'SCREEN_NO_OBSERVED_REGRESSION')
             next(root.rglob('0-candidate.json')).unlink()
             with self.assertRaisesRegex(ValueError, 'Incomplete cohort'):
                 analyze.analyze(root)
@@ -47,7 +47,7 @@ class ProtocolTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as name, patch.dict(analyze.PROTOCOL, bootstrap_samples=40):
             root = Path(name); self.fixture(root, cold=101)
             result = analyze.analyze(root)
-            self.assertEqual(result['verdict'], 'NOT_PASSED')
+            self.assertEqual(result['verdict'], 'SCREEN_UNRESOLVED_OR_REGRESSION')
             self.assertTrue(all(not r['gates']['coldAllocation'] for r in result['results']))
 
     def test_mismatched_workload_and_mode_rejected(self):

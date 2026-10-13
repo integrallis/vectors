@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fixed three-arm cohorts; retain every process, including failures."""
+"""Fixed two-arm screens; retain every process, including failures."""
 import argparse
 import hashlib
 import json
@@ -38,8 +38,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--segment', type=int, required=True, choices=range(4))
     parser.add_argument('--arch', required=True, choices=['arm', 'x86'])
-    parser.add_argument('--jdk', required=True, choices=['25', '25.0.3'])
-    parser.add_argument('--host', type=int, required=True, choices=[0, 1])
+    parser.add_argument('--jdk', required=True, choices=['25.0.3'])
+    parser.add_argument('--host', type=int, required=True, choices=[0])
     args = parser.parse_args()
     root = Path.cwd()
     out = root / 'evidence'
@@ -53,8 +53,8 @@ def main():
         jar = matches[0]
         jars[arm] = {'path': str(jar), 'sha256': sha(jar), 'revision': subprocess.check_output(
             ['git', '-C', str(root / arm), 'rev-parse', 'HEAD'], text=True).strip()}
-        if arm != 'candidate' and (jars[arm]['sha256'] != PROTOCOL[arm + '_sha256'] or
-                                   jars[arm]['revision'] != PROTOCOL[arm + '_revision']):
+        if jars[arm]['sha256'] != PROTOCOL[arm + '_sha256'] or (
+                arm == 'published' and jars[arm]['revision'] != PROTOCOL[arm + '_revision']):
             raise ValueError(f'{arm} provenance mismatch: {jars[arm]}')
     slf4js = list((Path.home() / '.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.17').glob('*/*.jar'))
     if not slf4js:
@@ -66,7 +66,7 @@ def main():
     if args.segment == 0:
         execute(['javac', '--add-modules', 'jdk.incubator.vector', '-cp', classpath('candidate'),
                  '-d', str(classes), str(HERE / 'ConvolutionBoundaryProbe.java'),
-                 str(HERE / 'ScalarMathProof.java')], out / 'compile.log')
+                 str(HERE / 'CompiledSiluProof.java')], out / 'compile.log')
         manifest = {'protocol': PROTOCOL, 'harnessRevision': subprocess.check_output(
             ['git', '-C', str(root / 'candidate'), 'rev-parse', 'HEAD'], text=True).strip(),
             'arch': args.arch, 'jdk': args.jdk, 'host': args.host, 'platform': platform.platform(),
@@ -76,23 +76,20 @@ def main():
         (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         java = ['java', '--add-modules', 'jdk.incubator.vector', '-XX:ActiveProcessorCount=4',
                 '-Xms256m', '-Xmx512m']
-        execute(java + ['-cp', classpath('candidate'), 'com.integrallis.vectors.core.ScalarMathProof',
-                        'exhaustive'], out / 'proof/exhaustive.log', timeout=600)
-        for width in ['default', '64', '128', '256', '512']:
-            for fma in [True, False]:
-                options = ([] if width == 'default' else ['-Dvectors.maxBits=' + width])
-                if not fma:
-                    options += ['-XX:-UseFMA']
-                execute(java + options + ['-cp', classpath('candidate'),
-                         'com.integrallis.vectors.core.ScalarMathProof', 'boundaries'],
-                        out / f'proof/boundaries-{width}-{fma}.log')
+        # Timings are separate fresh JVMs; proof work cannot pre-warm measured classes.
+        for fma in [True, False]:
+            options = [] if fma else ['-XX:-UseFMA']
+            execute(java + options + ['-cp', classpath('candidate'),
+                    'com.integrallis.vectors.core.CompiledSiluProof',
+                    'com.integrallis.vectors.core.ReproducibleConvolutionSilu', 'apply', 'exhaustive'],
+                    out / f'proof/exhaustive-{fma}.log', timeout=600)
     else:
         manifest = json.loads((out / 'manifest.json').read_text())
         if manifest['artifacts'] != jars:
             raise ValueError('Runtime changed between blocks')
     segment = out / f'segment-{args.segment}'
     segment.mkdir(exist_ok=True)
-    for pair in range(args.segment * 8, (args.segment + 1) * 8):
+    for pair in [args.segment]:
         arms = PROTOCOL['arms']
         offset = (pair + args.host) % len(arms)
         order = arms[offset:] + arms[:offset]
@@ -105,7 +102,7 @@ def main():
             row.update(pair=pair, arm=arm, arch=args.arch, jdk=args.jdk, host=args.host,
                        sha256=jars[arm]['sha256'])
             (segment / f'{pair:03}-{arm}.json').write_text(json.dumps(row, indent=2) + '\n')
-            if arm == 'candidate' and (row['coldOracleMismatches'] or row['hotOracleMismatches']):
+            if arm == 'candidate' and (row['coldOracleMismatches'] or row['hotOracleMismatches'] or row['coldHotMismatches']):
                 raise ValueError('Candidate numerical regression')
             print(json.dumps(row), flush=True)
 

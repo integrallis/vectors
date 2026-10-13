@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Complete-cohort analysis with frozen host/pair bootstrap."""
+"""Complete fixed screen analysis; confidence intervals are descriptive, not qualification."""
 import json
 import math
 from pathlib import Path
@@ -34,7 +34,7 @@ def analyze(root):
             raise ValueError('Conflicting repeated manifest')
         manifests[key] = manifest
     expected_hosts = {(arch, jdk, host) for arch in ['x86', 'arm']
-                      for jdk in ['25', '25.0.3'] for host in range(2)}
+                      for jdk in ['25.0.3'] for host in range(1)}
     if set(manifests) != expected_hosts:
         raise ValueError('Incomplete host cohort')
     candidate_hashes, harnesses, runs = set(), set(), set()
@@ -44,7 +44,7 @@ def analyze(root):
         candidate_hashes.add(manifest['artifacts']['candidate']['sha256'])
         harnesses.add(manifest['harnessRevision'])
         runs.add(manifest['runId'])
-        for arm in ['published', 'regressed']:
+        for arm in ['published', 'candidate']:
             if manifest['artifacts'][arm]['sha256'] != PROTOCOL[arm+'_sha256']:
                 raise ValueError('Wrong baseline artifact')
     if len(candidate_hashes) != 1 or len(harnesses) != 1 or len(runs) != 1:
@@ -68,29 +68,29 @@ def analyze(root):
         for metric in ['coldBytes', 'coldNanos', 'hotBytesPerCall', 'hotNanosPerCall']:
             if not math.isfinite(row[metric]) or row[metric] < 0:
                 raise ValueError('Invalid measurement')
-        if row['arm'] == 'candidate' and (row['coldOracleMismatches'] or row['hotOracleMismatches']):
+        if row['arm'] == 'candidate' and (row['coldOracleMismatches'] or row['hotOracleMismatches'] or row['coldHotMismatches']):
             raise ValueError('Candidate numerical mismatch')
     expected = {(*host, pair, arm) for host in expected_hosts
-                for pair in range(32) for arm in PROTOCOL['arms']}
+                for pair in range(PROTOCOL['pairs_per_host']) for arm in PROTOCOL['arms']}
     if set(rows) != expected:
         raise ValueError(f'Incomplete cohort: {len(expected-set(rows))} missing')
     for host in expected_hosts:
-        for pair in range(32):
+        for pair in range(PROTOCOL['pairs_per_host']):
             modes = {(rows[(*host,pair,arm)]['bits'], rows[(*host,pair,arm)]['fma'])
                      for arm in PROTOCOL['arms']}
             if len(modes) != 1:
                 raise ValueError('Paired SIMD configuration mismatch')
     results = []
     for arch in ['x86', 'arm']:
-        for jdk in ['25.0.3', '25']:
+        for jdk in ['25.0.3']:
             result = {'arch': arch, 'jdk': jdk, 'comparisons': {}}
-            for control in ['published', 'regressed']:
+            for control in ['published']:
                 comparisons = {}
                 for metric in ['coldBytes', 'coldNanos', 'hotNanosPerCall', 'hotBytesPerCall']:
                     groups = {}
-                    for host in range(2):
+                    for host in range(PROTOCOL['hosts_per_configuration']):
                         groups[host] = []
-                        for pair in range(32):
+                        for pair in range(PROTOCOL['pairs_per_host']):
                             a = rows[(arch, jdk, host, pair, 'candidate')][metric]
                             b = rows[(arch, jdk, host, pair, control)][metric]
                             groups[host].append(a-b if metric == 'hotBytesPerCall' else math.log(a/b))
@@ -109,7 +109,8 @@ def analyze(root):
             }
             result['passed'] = all(result['gates'].values())
             results.append(result)
-    return {'verdict': 'PASSED' if all(r['passed'] for r in results) else 'NOT_PASSED',
+    return {'verdict': 'SCREEN_NO_OBSERVED_REGRESSION' if all(r['passed'] for r in results) else 'SCREEN_UNRESOLVED_OR_REGRESSION',
+            'qualified': False, 'scope': PROTOCOL['scope'],
             'candidateSha256': next(iter(candidate_hashes)), 'harnessRevision': next(iter(harnesses)),
             'runId': next(iter(runs)), 'processes': len(rows), 'results': results}
 
@@ -123,4 +124,4 @@ if __name__ == '__main__':
         raise
     (destination/'analysis.json').write_text(json.dumps(result, indent=2)+'\n')
     print(json.dumps(result, indent=2))
-    sys.exit(0 if result['verdict'] == 'PASSED' else 1)
+    sys.exit(0 if result['verdict'] == 'SCREEN_NO_OBSERVED_REGRESSION' else 1)

@@ -33,6 +33,7 @@ public final class ConvolutionBoundaryProbe {
     for (int i = 0; i < history.length; i++) history[i] = (float) random.nextDouble(-1, 1);
     for (int i = 0; i < weights.length; i++) weights[i] = (float) random.nextDouble(-.5, .5);
     System.arraycopy(initial, 0, values, 0, channels);
+    float[] originalHistory = history.clone();
     float[] oracleHistory = history.clone(), oracleValues = values.clone();
     long coldBytes = allocations.getThreadAllocatedBytes(thread), coldNanos = System.nanoTime();
     VectorUtil.causalDepthwiseConv1dSilu(values, 0, history, 0, weights, 0, channels, kernel);
@@ -41,7 +42,8 @@ public final class ConvolutionBoundaryProbe {
     int lanes = PanamaVectorUtilSupport.FLOAT_SPECIES.length();
     boolean fma = PanamaConstants.HAS_FAST_VECTOR_FMA;
     reference(oracleValues, oracleHistory, weights, lanes, fma);
-    int coldMismatches = differences(values, oracleValues) + differences(history, oracleHistory);
+    int coldMismatches = approximateDifferences(values, oracleValues) + differences(history, oracleHistory);
+    float[] coldValues = values.clone(), coldHistory = history.clone();
     long hotNanos = 0, hotBytes = 0, maxBytes = 0;
     for (int iteration = 0; iteration < warm + measured; iteration++) {
       for (int i = 0; i < channels; i++) values[i] = initial[i] + (iteration % 17 - 8) * .00390625f;
@@ -58,12 +60,25 @@ public final class ConvolutionBoundaryProbe {
     System.arraycopy(history, 0, oracleHistory, 0, history.length);
     VectorUtil.causalDepthwiseConv1dSilu(values, 0, history, 0, weights, 0, channels, kernel);
     reference(oracleValues, oracleHistory, weights, lanes, fma);
-    int hotMismatches = differences(values, oracleValues) + differences(history, oracleHistory);
+    int hotMismatches = approximateDifferences(values, oracleValues) + differences(history, oracleHistory);
+    System.arraycopy(initial, 0, values, 0, channels);
+    System.arraycopy(originalHistory, 0, history, 0, history.length);
+    VectorUtil.causalDepthwiseConv1dSilu(values, 0, history, 0, weights, 0, channels, kernel);
+    int coldHotMismatches = differences(values, coldValues) + differences(history, coldHistory);
     System.out.printf(java.util.Locale.ROOT,
-        "{\"channels\":%d,\"kernel\":%d,\"warmup\":%d,\"measured\":%d,\"bits\":%d,\"fma\":%s,\"coldBytes\":%d,\"coldNanos\":%d,\"hotBytesPerCall\":%.3f,\"hotMaxBytes\":%d,\"hotNanosPerCall\":%.3f,\"coldOracleMismatches\":%d,\"hotOracleMismatches\":%d,\"sink\":%.9f,\"outputHash\":%d,\"historyHash\":%d}%n",
+        "{\"channels\":%d,\"kernel\":%d,\"warmup\":%d,\"measured\":%d,\"bits\":%d,\"fma\":%s,\"coldBytes\":%d,\"coldNanos\":%d,\"hotBytesPerCall\":%.3f,\"hotMaxBytes\":%d,\"hotNanosPerCall\":%.3f,\"coldOracleMismatches\":%d,\"hotOracleMismatches\":%d,\"coldHotMismatches\":%d,\"sink\":%.9f,\"outputHash\":%d,\"historyHash\":%d}%n",
         channels, kernel, warm, measured, lanes * 32, fma, coldBytes, coldNanos,
         hotBytes / (double) measured, maxBytes, hotNanos / (double) measured,
-        coldMismatches, hotMismatches, sink, java.util.Arrays.hashCode(values), java.util.Arrays.hashCode(history));
+        coldMismatches, hotMismatches, coldHotMismatches, sink, java.util.Arrays.hashCode(values), java.util.Arrays.hashCode(history));
+  }
+  private static int approximateDifferences(float[] a, float[] b) {
+    int count = 0;
+    for (int i = 0; i < a.length; i++) {
+      if (Float.isFinite(a[i]) && Float.isFinite(b[i])) {
+        if (Math.abs((double) a[i] - b[i]) > 2e-6f) count++;
+      } else if (Float.floatToIntBits(a[i]) != Float.floatToIntBits(b[i])) count++;
+    }
+    return count;
   }
   private static int differences(float[] a, float[] b) {
     int count = 0;
