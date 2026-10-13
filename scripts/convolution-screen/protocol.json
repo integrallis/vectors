@@ -23,16 +23,16 @@
   "cold_allocation_individual_limit": 1.0,
   "warm_allocation_absolute_tolerance_bytes": 8,
   "scope": "Fixed four-pair exploratory screen, one host per architecture; NOT final confidence or release qualification. All same-host fresh JVM arms, counterbalanced order, no exclusions; predeclared first-pair rejection only. Cold allocation includes first VectorUtil/Panama/helper initialization. Published output absolute tolerance 2e-6; history and candidate cold/hot repeat bits exact.",
-  "candidate_revision": "101936ebaab3e44c22d8b1ae634f4a7f34e87403",
-  "candidate_sha256": "d31fa3e05570d83e8bbaa2bc7c7385b608389218ed947676f9179b053dde7c83",
+  "candidate_revision": "ef30f0526db24970e1c662cd719842a6f748d9db",
+  "candidate_sha256": "6102074aefb48b76537f79b7a1dc89eee5f9e5b8f2fbdcd4d5428df8914871e6",
   "first_pair_rejection": "Reject screen immediately after retaining first complete pair if candidate warm latency, cold allocated bytes, or warm allocated bytes exceeds the unchanged limit. This stopping rule may reject only; it cannot qualify or produce a passing final confidence claim.",
   "candidate_source_file_sha256": {
     "vectors-core/src/main/java/com/integrallis/vectors/core/PanamaVectorUtilSupport.java": "0ea7f779c6e4b33a40d62fece75480f73bfb2191e788ca424b00afdf2b491d3f",
-    "vectors-core/src/main/java/com/integrallis/vectors/core/ReproducibleConvolutionSilu.java": "f7287fc4e4d174cf149c059c6e6bda8ced198b5fedaa8e2516eccc6e102dc4bc"
+    "vectors-core/src/main/java/com/integrallis/vectors/core/ReproducibleConvolutionSilu.java": "88a75e38673b5df2042b4e45e3232f7db5cc8ca0f393807900bd5e67c6728bb8"
   },
   "candidate_class_bytecode_sha256": {
     "com.integrallis.vectors.core.PanamaVectorUtilSupport": "abd225a3e9ffbd7b20a678b265a93bf0d5ddbcd224eae9037d9ba7bef0bdc80c",
-    "com.integrallis.vectors.core.ReproducibleConvolutionSilu": "1190a0f36c411c3ee5934976abea963b33cbd71c65e9dfe0c4fd310e851ab094"
+    "com.integrallis.vectors.core.ReproducibleConvolutionSilu": "670db3176ac36040c8131ccae61d87f4fbf188264056b2af7eb6e916fa1a7f1b"
   },
   "ordinary_bound": 32
 }
