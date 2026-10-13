@@ -1,6 +1,4 @@
 {
-  "pairs_per_host": 32,
-  "hosts_per_configuration": 1,
   "configurations": [
     "x86-25.0.3",
     "arm-25.0.3"
@@ -22,9 +20,9 @@
   "cold_allocation_upper_limit": 1.0,
   "cold_allocation_individual_limit": 1.0,
   "warm_allocation_absolute_tolerance_bytes": 8,
-  "scope": "Prospective32balanced fresh-process pairs per admittedhost, five >=1second measured blocks perarm. Every admittedhost retained; CPUstrata assessed separately with allrequired. No prior short-cohort pooling. Fixed counts, no optional stopping, no exclusions.",
-  "candidate_revision": "ef30f0526db24970e1c662cd719842a6f748d9db",
-  "candidate_sha256": "6102074aefb48b76537f79b7a1dc89eee5f9e5b8f2fbdcd4d5428df8914871e6",
+  "scope": "Prospectively frozen capability-stratified independent-host cohort. Fixed 3328 pairs, all admitted hosts retained; original gates unchanged. Every stratum required. No pooling earlier cohorts, no optional stopping.",
+  "candidate_revision": "b0aadc8d972f3504426f6e38fcb0a4b4a97a0333",
+  "candidate_sha256": "263bff1aef74bac56d0597ba6b4d7ad52af846fac08b32e70e5d549ce5c8f099",
   "first_pair_rejection": null,
   "candidate_source_file_sha256": {
     "vectors-core/src/main/java/com/integrallis/vectors/core/PanamaVectorUtilSupport.java": "0ea7f779c6e4b33a40d62fece75480f73bfb2191e788ca424b00afdf2b491d3f",
@@ -37,15 +35,45 @@
   "ordinary_bound": 32,
   "measurement_blocks": 5,
   "minimum_measured_nanos_per_block": 1000000000,
-  "required_cpus": [
-    "AMD EPYC 7763 64-Core Processor",
-    "AMD EPYC 9V74 80-Core Processor",
-    "Neoverse-N2"
-  ],
+  "maximum_parallel_hosts": 24,
+  "cohort": "convolution-capability-2026-10-13-v1",
   "admission_attempts": {
-    "7763": 8,
-    "9V74": 8,
-    "N2": 1
+    "x86": 128,
+    "arm": 4
   },
-  "maximum_parallel_hosts": 8
+  "admission_policy": "First eight atomic conditional-put claims per x86 capability stratum; first four N2 claims. Claim occurs before build or timing. All 132 attempt receipts required; no replacement for failed admitted hosts, no selection using timing.",
+  "strata": [
+    {
+      "id": "7763-avx2",
+      "cpu": "AMD EPYC 7763 64-Core Processor",
+      "useAVX": 2,
+      "maxVectorSize": 32,
+      "hosts": 8,
+      "pairs_per_host": 128
+    },
+    {
+      "id": "9V74-avx2",
+      "cpu": "AMD EPYC 9V74 80-Core Processor",
+      "useAVX": 2,
+      "maxVectorSize": 32,
+      "hosts": 8,
+      "pairs_per_host": 128
+    },
+    {
+      "id": "9V74-avx512",
+      "cpu": "AMD EPYC 9V74 80-Core Processor",
+      "useAVX": 3,
+      "maxVectorSize": 64,
+      "hosts": 8,
+      "pairs_per_host": 128
+    },
+    {
+      "id": "N2-sve128",
+      "cpu": "Neoverse-N2",
+      "useSVE": 2,
+      "maxVectorSize": 16,
+      "hosts": 4,
+      "pairs_per_host": 64
+    }
+  ]
 }

@@ -44,6 +44,9 @@ def main():
     root = Path.cwd()
     out = root / 'evidence'
     out.mkdir(exist_ok=True)
+    hardware = json.loads((out / 'hardware-admission.json').read_text())
+    stratum = next(s for s in PROTOCOL['strata'] if s['id'] == hardware['stratum'])
+    pairs_per_segment = stratum['pairs_per_host'] // 8
     jars = {}
     for arm in PROTOCOL['arms']:
         matches = list((root / arm / 'vectors-core/build/libs').glob('vectors-core-*.jar'))
@@ -87,7 +90,7 @@ def main():
             raise ValueError('Runtime changed between blocks')
     segment = out / f'segment-{args.segment}'
     segment.mkdir(exist_ok=True)
-    for pair in range(args.segment * 4, args.segment * 4 + 4):
+    for pair in range(args.segment * pairs_per_segment, (args.segment + 1) * pairs_per_segment):
         arms = PROTOCOL['arms']
         offset = (pair + args.host) % len(arms)
         order = arms[offset:] + arms[:offset]
