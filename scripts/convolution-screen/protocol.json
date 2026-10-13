@@ -23,16 +23,16 @@
   "cold_allocation_individual_limit": 1.0,
   "warm_allocation_absolute_tolerance_bytes": 8,
   "scope": "Fixed four-pair exploratory screen, one host per architecture; NOT final confidence or release qualification. All same-host fresh JVM arms, counterbalanced order, no exclusions; predeclared first-pair rejection only. Cold allocation includes first VectorUtil/Panama/helper initialization. Published output absolute tolerance 2e-6; history and candidate cold/hot repeat bits exact.",
-  "candidate_revision": "762a91ac1b77faa1e0c102e58b0f5f9f341e9d10",
-  "candidate_sha256": "9403f34da7b0713d3e9fb1c4d507a3f11d745fe1a7b3f4620d8ad24be4c82592",
+  "candidate_revision": "101936ebaab3e44c22d8b1ae634f4a7f34e87403",
+  "candidate_sha256": "d31fa3e05570d83e8bbaa2bc7c7385b608389218ed947676f9179b053dde7c83",
   "first_pair_rejection": "Reject screen immediately after retaining first complete pair if candidate warm latency, cold allocated bytes, or warm allocated bytes exceeds the unchanged limit. This stopping rule may reject only; it cannot qualify or produce a passing final confidence claim.",
   "candidate_source_file_sha256": {
     "vectors-core/src/main/java/com/integrallis/vectors/core/PanamaVectorUtilSupport.java": "0ea7f779c6e4b33a40d62fece75480f73bfb2191e788ca424b00afdf2b491d3f",
-    "vectors-core/src/main/java/com/integrallis/vectors/core/ReproducibleConvolutionSilu.java": "1a8d31c61a8e6712f9164fdd448a2a0f023831796c3aafa0eabbd4c5cd0f1f2d"
+    "vectors-core/src/main/java/com/integrallis/vectors/core/ReproducibleConvolutionSilu.java": "f7287fc4e4d174cf149c059c6e6bda8ced198b5fedaa8e2516eccc6e102dc4bc"
   },
   "candidate_class_bytecode_sha256": {
     "com.integrallis.vectors.core.PanamaVectorUtilSupport": "abd225a3e9ffbd7b20a678b265a93bf0d5ddbcd224eae9037d9ba7bef0bdc80c",
-    "com.integrallis.vectors.core.ReproducibleConvolutionSilu": "6e8200770b501c4c26d8d39ae4aeb8dd57f9a0e250f06be0dcdb795bba2ca275",
-    "com.integrallis.vectors.core.ReproducibleConvolutionSilu$Workspace": "3c4cca02e669da886a59f13c843a9d497a3dad353822735fc38f50ed1425073f"
-  }
+    "com.integrallis.vectors.core.ReproducibleConvolutionSilu": "1190a0f36c411c3ee5934976abea963b33cbd71c65e9dfe0c4fd310e851ab094"
+  },
+  "ordinary_bound": 32
 }

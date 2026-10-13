@@ -93,7 +93,7 @@ def main():
             options = [] if fma else ['-Dvectors.useVectorFMA=false', '-Dvectors.useScalarFMA=false']
             execute(java + options + ['-cp', classpath('candidate'),
                     'com.integrallis.vectors.core.CompiledSiluProof',
-                    'com.integrallis.vectors.core.ReproducibleConvolutionSilu', 'apply', 'exhaustive'],
+                    'com.integrallis.vectors.core.ReproducibleConvolutionSilu', 'apply', 'exhaustive', str(PROTOCOL['ordinary_bound'])],
                     out / f'proof/exhaustive-{fma}.log', timeout=600)
         return
     segment = out / f'segment-{args.segment}'

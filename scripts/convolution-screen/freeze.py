@@ -39,8 +39,7 @@ def main():
     jar = jars[0]
     classes = {}
     with zipfile.ZipFile(jar) as archive:
-        for name in ['PanamaVectorUtilSupport', 'ReproducibleConvolutionSilu',
-                     'ReproducibleConvolutionSilu$Workspace']:
+        for name in ['PanamaVectorUtilSupport', 'ReproducibleConvolutionSilu']:
             qualified = 'com.integrallis.vectors.core.' + name
             code = subprocess.check_output([str(java_home / 'bin/javap'), '-classpath', str(jar),
                                             '-p', '-c', qualified])

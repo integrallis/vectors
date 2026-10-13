@@ -60,7 +60,9 @@ public final class CompiledSiluProof {
   }
 
   public static void main(String[] args) throws Throwable {
-    // helperClass helperMethod mode; fixed signature(float[],int,int), invoked on actual JAR.
+    // helperClass helperMethod mode [ordinary_bound=80]; fixed signature(float[],int,int), invoked on actual JAR.
+    float ordinaryBound = args.length > 3 ? Float.parseFloat(args[3]) : 80f;
+    if (!(ordinaryBound > 0 && Float.isFinite(ordinaryBound))) throw new IllegalArgumentException("ordinary_bound must be positive and finite");
     Class<?> helper = Class.forName(args[0]);
     Method method = helper.getDeclaredMethod(args[1], float[].class, int.class, int.class);
     method.setAccessible(true); target = MethodHandles.lookup().unreflect(method);
@@ -75,8 +77,8 @@ public final class CompiledSiluProof {
     // First invocation contains no fallback-triggering lane: independently exercises cold polynomial.
     float[] ordinaryInput = new float[lanes * 1024];
     SplittableRandom ordinaryRandom = new SplittableRandom(981299);
-    for(int i=0;i<ordinaryInput.length;i++)ordinaryInput[i]=(float)ordinaryRandom.nextDouble(-80,80);
-    ordinaryInput[0]=0f;ordinaryInput[1]=-0f;ordinaryInput[2]=80f;ordinaryInput[3]=-80f;
+    for(int i=0;i<ordinaryInput.length;i++)ordinaryInput[i]=(float)ordinaryRandom.nextDouble(-ordinaryBound,ordinaryBound);
+    ordinaryInput[0]=0f;ordinaryInput[1]=-0f;ordinaryInput[2]=ordinaryBound;ordinaryInput[3]=-ordinaryBound;
     float[] ordinaryCold=ordinaryInput.clone();target.invokeExact(ordinaryCold,0,ordinaryCold.length);
     for(int i=0;i<ordinaryCold.length;i++)check(ordinaryInput[i],ordinaryCold[i]);
     float[] coldInput = new float[lanes * 1024];
@@ -104,8 +106,8 @@ public final class CompiledSiluProof {
     for(int i=0;i<ordinaryCold.length;i++)if(Float.floatToIntBits(ordinaryCold[i])!=Float.floatToIntBits(ordinaryHot[i]))hotMismatches++;
     for(int i=0;i<cold.length;i++)if(Float.floatToIntBits(cold[i])!=Float.floatToIntBits(hot[i]))hotMismatches++;
     System.out.printf(java.util.Locale.ROOT,
-      "{\"mode\":\"%s\",\"domainCount\":%d,\"checkedIncludingEdges\":%d,\"maxAbsolute\":%.17g,\"maxAbsInputBits\":\"%08x\",\"maxAbsActual\":\"%a\",\"maxAbsExpected\":\"%a\",\"maxUlp\":%d,\"maxUlpInputBits\":\"%08x\",\"overPublishedTolerance\":%d,\"specialMismatches\":%d,\"signedZeroMismatches\":%d,\"coldHotMismatches\":%d,\"resultHash\":\"%016x\",\"bits\":%d,\"elapsedNanos\":%d}%n",
-      args[2],count,checked,maxAbsolute,maxAbsInput,maxAbsActual,maxAbsExpected,maxUlp,maxUlpInput,overPublishedTolerance,specialMismatches,signedZeroMismatches,hotMismatches,hash,lanes*32,System.nanoTime()-started);
+      "{\"mode\":\"%s\",\"ordinaryBound\":%g,\"domainCount\":%d,\"checkedIncludingEdges\":%d,\"maxAbsolute\":%.17g,\"maxAbsInputBits\":\"%08x\",\"maxAbsActual\":\"%a\",\"maxAbsExpected\":\"%a\",\"maxUlp\":%d,\"maxUlpInputBits\":\"%08x\",\"overPublishedTolerance\":%d,\"specialMismatches\":%d,\"signedZeroMismatches\":%d,\"coldHotMismatches\":%d,\"resultHash\":\"%016x\",\"bits\":%d,\"elapsedNanos\":%d}%n",
+      args[2],ordinaryBound,count,checked,maxAbsolute,maxAbsInput,maxAbsActual,maxAbsExpected,maxUlp,maxUlpInput,overPublishedTolerance,specialMismatches,signedZeroMismatches,hotMismatches,hash,lanes*32,System.nanoTime()-started);
     System.out.printf(java.util.Locale.ROOT,"PORTABLE_EXP_BOUNDARIES checks=%d maxAbsolute=%.17g violations=%d%n",portableBoundaryChecks,maxPortableAbsolute,portableViolations);
     if(overPublishedTolerance!=0||specialMismatches!=0||signedZeroMismatches!=0||hotMismatches!=0||portableViolations!=0)throw new AssertionError("published accuracy or deterministic special-value contract failed");
   }

@@ -25,3 +25,5 @@ set to the build JDK. It requires clean runtime sources, checks formatting, perf
 build, and records every source-file hash plus class and disassembled-bytecode hashes. Update
 the protocol only from this final receipt. The runner retains the full JAR hash check and also
 checks pinned runtime-source and bytecode hashes before executing any measurement.
+
+The ordinary cold proof domain is a protocol input (`ordinary_bound`), currently ±32 including both exact endpoints. Its first call contains only ordinary inputs and spans 1024 preferred vectors, so exceptional fallback cannot conceal cold polynomial behavior. Exhaustive accuracy still covers both signs from 2^-28 through104, with the original2e-6 absolute output bound.
