@@ -1,0 +1,40 @@
+name: Convolution compiler diagnostic
+on:
+  push:
+    branches: [fix/bonsai-activation]
+    paths:
+      - scripts/convolution-compiler/diagnose.py
+      - .github/workflows/convolution-compiler-diagnostic.yml
+permissions:
+  contents: read
+jobs:
+  compiler:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: candidate
+      - uses: actions/checkout@v5
+        with:
+          ref: 1440ca7555e492ae7c2a17cde7cb3ffe6c07b7b5
+          path: published
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Build candidate
+        working-directory: candidate
+        run: ./gradlew :vectors-core:jar --max-workers=4 --no-daemon -Porg.gradle.java.installations.auto-detect=false -Porg.gradle.java.installations.auto-download=false -Porg.gradle.java.installations.paths="$JAVA_HOME"
+      - name: Build published control
+        working-directory: published
+        run: ./gradlew :vectors-core:jar --max-workers=4 --no-daemon -Porg.gradle.java.installations.auto-detect=false -Porg.gradle.java.installations.auto-download=false -Porg.gradle.java.installations.paths="$JAVA_HOME"
+      - name: Inspect actual generated code and VM flags
+        run: python3 candidate/scripts/convolution-compiler/diagnose.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: convolution-compiler-diagnostic
+          path: diagnostic/
+          retention-days: 30
