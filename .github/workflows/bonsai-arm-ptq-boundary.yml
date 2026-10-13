@@ -25,7 +25,7 @@ jobs:
           PAYLOAD_URL: ${{ secrets.BONSAI_ARM_PTQ_PAYLOAD_URL }}
         run: |
           curl -fL --retry 3 "$PAYLOAD_URL" -o payload.tar.gz
-          echo 'f1a55817305cbe7c5de8a766e7447472ccfc7e2f66e12ee94b7fcac43e1559a0  payload.tar.gz' | sha256sum -c -
+          echo '13af1d03eae25fb201aca6ccb5dc55187607c6bedf4bd240f2d18b8646af87f9  payload.tar.gz' | sha256sum -c -
           tar -xzf payload.tar.gz
           rustup toolchain install 1.96.0 --profile minimal --component rustfmt --component clippy
           python3 payload/fetch_weights.py "$RUNNER_TEMP/bonsai2.gguf"
