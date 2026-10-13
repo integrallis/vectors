@@ -56,6 +56,13 @@ def main():
         if jars[arm]['sha256'] != PROTOCOL[arm + '_sha256'] or (
                 arm == 'published' and jars[arm]['revision'] != PROTOCOL[arm + '_revision']):
             raise ValueError(f'{arm} provenance mismatch: {jars[arm]}')
+    for relative, expected in PROTOCOL['candidate_source_file_sha256'].items():
+        if sha(root / 'candidate' / relative) != expected:
+            raise ValueError('Candidate source changed after artifact freeze: ' + relative)
+    for qualified, expected in PROTOCOL['candidate_class_bytecode_sha256'].items():
+        code = subprocess.check_output(['javap', '-classpath', jars['candidate']['path'], '-p', '-c', qualified])
+        if hashlib.sha256(code).hexdigest() != expected:
+            raise ValueError('Candidate bytecode changed after artifact freeze: ' + qualified)
     slf4js = list((Path.home() / '.gradle/caches/modules-2/files-2.1/org.slf4j/slf4j-api/2.0.17').glob('*/*.jar'))
     if not slf4js:
         raise ValueError('Missing pinned SLF4J')

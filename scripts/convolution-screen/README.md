@@ -19,3 +19,9 @@ cold allocation, or warm allocation exceeds its unchanged limit; early stopping 
 
 The retired three-arm scalar harness was archived outside the codebases at
 `audit-artifacts/convolution-retired-harness-825c912e`, including its SHA-256 inventory.
+
+Before pinning an artifact, run `freeze.py --output /absolute/external/archive` with JAVA_HOME
+set to the build JDK. It requires clean runtime sources, checks formatting, performs a clean core
+build, and records every source-file hash plus class and disassembled-bytecode hashes. Update
+the protocol only from this final receipt. The runner retains the full JAR hash check and also
+checks pinned runtime-source and bytecode hashes before executing any measurement.
