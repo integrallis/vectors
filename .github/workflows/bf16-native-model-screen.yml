@@ -1,0 +1,289 @@
+name: Bonsai actual native BF16 causal screen
+on:
+  push:
+    branches: [fix/bonsai-activation]
+    paths: [.github/workflows/bf16-native-model-screen.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  model:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        arch: [x86, arm]
+        pair: [0, 1, 2, 3]
+    runs-on: ${{ matrix.arch == 'arm' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: integrallis/models
+          ref: 5344b5a2ff84a27548f0f2c4840c24f22d73c32d
+          path: models
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Fetch immutable external causal payload
+        env:
+          PAYLOAD_URL: ${{ secrets.BF16_NATIVE_MODEL_PAYLOAD_URL }}
+        run: |
+          curl --fail --location --silent --show-error "$PAYLOAD_URL" -o payload.tar.gz
+          echo 'b2a77d21599ec557c214c561c54eb2a36859aa382c8947f0d587afa0e6f1a4c3  payload.tar.gz' | sha256sum -c -
+          tar xzf payload.tar.gz
+          mkdir -p evidence
+          { uname -a; lscpu; java -version; } > evidence/host.txt 2>&1
+      - name: Install pinned Rust compiler
+        run: rustup toolchain install 1.96.0 --profile minimal --no-self-update
+      - name: Build exact Models runtime
+        working-directory: models
+        run: ./gradlew :backend-native:cargoBuildRelease :backend-native:copyPairedRuntime --init-script ../payload/scripts/bonsai-paired/runtime.init.gradle --no-daemon --max-workers=2
+      - name: prepare
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          python3 payload/model-run.py "$ARCH" "$PAIR" 'prepare'
+      - name: Retain checkpoint 0
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-0
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: plain-0
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][0])')
+          python3 payload/model-run.py "$ARCH" "$PAIR" "plain:$arm"
+      - name: Retain checkpoint 1
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-1
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: plain-1
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][1])')
+          python3 payload/model-run.py "$ARCH" "$PAIR" "plain:$arm"
+      - name: Retain checkpoint 2
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-2
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: plain-2
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][2])')
+          python3 payload/model-run.py "$ARCH" "$PAIR" "plain:$arm"
+      - name: Retain checkpoint 3
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-3
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: fixture candidate
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          python3 payload/model-run.py "$ARCH" "$PAIR" 'fixture:candidate'
+      - name: Retain checkpoint 4
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-4
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: fixture control
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          python3 payload/model-run.py "$ARCH" "$PAIR" 'fixture:control'
+      - name: Retain checkpoint 5
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-5
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: fixture baseline
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          python3 payload/model-run.py "$ARCH" "$PAIR" 'fixture:baseline'
+      - name: Retain checkpoint 6
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-6
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: pure-reference
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          python3 payload/model-run.py "$ARCH" "$PAIR" 'pure-reference'
+      - name: Retain checkpoint 7
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-7
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: timing-0
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][0])')
+          python3 payload/model-run.py "$ARCH" "$PAIR" "timing:$arm"
+      - name: Retain checkpoint 8
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-8
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: timing-1
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][1])')
+          python3 payload/model-run.py "$ARCH" "$PAIR" "timing:$arm"
+      - name: Retain checkpoint 9
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-9
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: timing-2
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          arm=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][2])')
+          python3 payload/model-run.py "$ARCH" "$PAIR" "timing:$arm"
+      - name: Retain checkpoint 10
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-10
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
+      - name: finish
+        timeout-minutes: 82
+        env:
+          ARCH: ${{ matrix.arch }}
+          PAIR: ${{ matrix.pair }}
+        run: |
+          python3 payload/model-run.py "$ARCH" "$PAIR" 'finish'
+      - name: Retain checkpoint 11
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-model-${{ matrix.arch }}-${{ matrix.pair }}-11
+          path: |
+            evidence/*.json
+            evidence/*.stdout
+            evidence/*.stderr
+            evidence/*.txt
+            evidence/*.so
+            evidence/STATUS
+          retention-days: 30
