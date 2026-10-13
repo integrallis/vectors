@@ -78,7 +78,7 @@ def main():
                 '-Xms256m', '-Xmx512m']
         # Timings are separate fresh JVMs; proof work cannot pre-warm measured classes.
         for fma in [True, False]:
-            options = [] if fma else ['-XX:-UseFMA']
+            options = [] if fma else ['-Dvectors.useVectorFMA=false', '-Dvectors.useScalarFMA=false']
             execute(java + options + ['-cp', classpath('candidate'),
                     'com.integrallis.vectors.core.CompiledSiluProof',
                     'com.integrallis.vectors.core.ReproducibleConvolutionSilu', 'apply', 'exhaustive'],
