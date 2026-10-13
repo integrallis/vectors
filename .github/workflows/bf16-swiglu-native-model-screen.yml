@@ -72,7 +72,8 @@ jobs:
           rustup toolchain install 1.96.0 --profile minimal
           python3 payload/apply_source.py models-candidate
           (cd models-base && ./gradlew :backend-native:cargoBuildRelease :backend-native:copyPairedRuntime --init-script ../payload/scripts/bonsai-paired/runtime.init.gradle --no-daemon --max-workers=2)
-          (cd models-candidate && ./gradlew :backend-native:cargoBuildRelease :backend-native:copyPairedRuntime --init-script ../payload/scripts/bonsai-paired/runtime.init.gradle --no-daemon --max-workers=2)
+          (cd models-candidate && ./gradlew :backend-native:cargoBuildRelease :backend-native:copyPairedRuntime :models-runtime:jar --init-script ../payload/scripts/bonsai-paired/runtime.init.gradle --no-daemon --max-workers=2)
+          cp models-candidate/models-runtime/build/libs/models-runtime-0.3.59.jar models-candidate/backend-native/build/paired-runtime/
           python3 payload/build_instrumented.py models-candidate instrumented-source
           cargo +1.96.0 build --release --locked --offline --manifest-path instrumented-source/backend-native/src/main/rust/model-kernels/Cargo.toml
           python3 payload/fetch_weights.py "$RUNNER_TEMP/bonsai2.gguf"
