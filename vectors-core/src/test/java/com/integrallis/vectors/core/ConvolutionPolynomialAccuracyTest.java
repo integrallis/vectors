@@ -27,7 +27,7 @@ class ConvolutionPolynomialAccuracyTest {
   void publishedAccuracyAndExactColdHotStability() {
     float[] initial = new float[4096];
     SplittableRandom random = new SplittableRandom(981371);
-    for (int i = 0; i < initial.length; i++) initial[i] = (float) random.nextDouble(-80, 80);
+    for (int i = 0; i < initial.length; i++) initial[i] = (float) random.nextDouble(-32, 32);
     initial[0] = 0f;
     initial[1] = -0f;
     initial[2] = Float.MIN_VALUE;
@@ -45,6 +45,34 @@ class ConvolutionPolynomialAccuracyTest {
       System.arraycopy(initial, 0, hot, 0, initial.length);
       ReproducibleConvolutionSilu.apply(hot, 0, hot.length);
       assertThat(hot).containsExactly(cold);
+    }
+  }
+
+  @Test
+  void ordinaryIntervalBoundariesAndRecordedErrorExtremaMeetPublishedAccuracy() {
+    float[] input = {
+      -32f,
+      Math.nextUp(-32f),
+      Math.nextDown(32f),
+      32f,
+      Float.intBitsToFloat(0x4101bcc2),
+      Float.intBitsToFloat(0xc1ff30d6)
+    };
+    float[] actual = input.clone();
+    ReproducibleConvolutionSilu.apply(actual, 0, actual.length);
+    for (int i = 0; i < input.length; i++) {
+      float expected = input[i] / (1f + (float) Math.exp(-input[i]));
+      assertThat(Math.abs((double) actual[i] - expected)).isLessThanOrEqualTo(2e-6);
+    }
+    for (float outside : new float[] {Math.nextDown(-32f), Math.nextUp(32f)}) {
+      float[] mixed = {outside, Float.intBitsToFloat(0x4001b249), -0f};
+      float[] expected = mixed.clone();
+      for (int i = 0; i < expected.length; i++)
+        expected[i] = expected[i] / (1f + (float) StrictMath.exp(-expected[i]));
+      ReproducibleConvolutionSilu.apply(mixed, 0, mixed.length);
+      for (int i = 0; i < mixed.length; i++)
+        assertThat(Float.floatToRawIntBits(mixed[i]))
+            .isEqualTo(Float.floatToRawIntBits(expected[i]));
     }
   }
 
