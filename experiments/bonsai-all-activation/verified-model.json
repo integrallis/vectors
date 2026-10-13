@@ -1,9 +1,0 @@
-{
-  "path": "/Users/briansam-bodden/.jvllm/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
-  "sizeBytes": 5946648928,
-  "sha256": "53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3",
-  "ggufVersion": 3,
-  "tensorCount": 851,
-  "metadataCount": 49,
-  "general.architecture": "qwen35"
-}

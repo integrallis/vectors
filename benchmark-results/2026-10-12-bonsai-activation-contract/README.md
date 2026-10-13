@@ -1,24 +1,7 @@
-# Bonsai activation contract coverage
+# Archived experimental evidence
 
-These are local kernel correctness checks, not model qualification or performance measurements.
-The new probe covers the actual 48-head sigmoid/softplus shape and twelve consecutive four-tap
-convolution updates, including persistent history, offsets, scalar tails and untouched guards.
-It checks the first sequence against an independent scalar replay of the existing arithmetic
-contract, then repeats the sequence 2,000 times across JIT compilation.
+The experimental source and raw results were removed from this project tree. They are preserved outside the repositories in the workspace archive:
 
-The softplus oracle deliberately preserves vector float intermediates, which differ from the
-scalar-tail log1p contract for negative inputs. It does not silently change that production
-contract. Convolution replay preserves fused vector lanes and unfused scalar tails.
+`audit-artifacts/2026-10-13-rejected-experiments/vectors/benchmark-results/2026-10-12-bonsai-activation-contract`
 
-Ten fresh JVMs cover default and 64/128/256/512 width ceilings, with default FMA settings and
-both FMA toggles disabled. The recorded host prefers 256 bits: the 512 ceiling exercises 256,
-not native 512-bit execution.
-
-All ten configurations pass both the published 0.1.29 JAR and broad candidate 6893a587 on local
-Temurin 25.0.3 x86_64. This is **not** a red/green reproduction on this host. The existing Linux
-real-model failures remain separate red evidence; Linux/ARM execution of these new tests is
-still required. No compiler flags were added to manufacture a local failure.
-
-`released-receipt.json` retains exact commands and the published JAR hash. `manifest.json`
-records candidate source, compiled class hashes and evidence hashes. JUnit and per-fork logs
-retain the effective species, FMA settings, JDK and architecture.
+`ARCHIVE-MANIFEST.json` records every original file's SHA256, size and source revision (`118c0637495042c7187cfe787ba9499b4c88eafd`). This directory is a provenance pointer, not a runtime implementation or a qualification claim. Rejected or incomplete experiments do not authorize release.
