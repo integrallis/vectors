@@ -1,0 +1,251 @@
+name: Bonsai composed source repair screen
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/bonsai-activation]
+    paths: [.github/workflows/bonsai-source-repair-screen.yml]
+permissions:
+  contents: read
+jobs:
+  model:
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        include:
+          - arch: x86
+            pair: 0
+            runner: ubuntu-24.04
+          - arch: arm
+            pair: 0
+            runner: ubuntu-24.04-arm
+          - arch: x86
+            pair: 1
+            runner: ubuntu-24.04
+          - arch: arm
+            pair: 1
+            runner: ubuntu-24.04-arm
+          - arch: x86
+            pair: 2
+            runner: ubuntu-24.04
+          - arch: arm
+            pair: 2
+            runner: ubuntu-24.04-arm
+          - arch: x86
+            pair: 3
+            runner: ubuntu-24.04
+          - arch: arm
+            pair: 3
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 330
+    env:
+      ARCH: ${{ matrix.arch }}
+      PAIR: ${{ matrix.pair }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25.0.3'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Fetch immutable external source and harness
+        env:
+          PAYLOAD_URL: ${{ secrets.BONSAI_SOURCE_REPAIR_PAYLOAD_URL }}
+        run: |
+          curl -fL --retry 3 "$PAYLOAD_URL" -o payload.tar.gz
+          echo '32634f9462b40324999b0b4da13ca563604f129cb735f767cf212ebed5e8c529  payload.tar.gz' | sha256sum -c -
+          tar -xzf payload.tar.gz
+          python3 payload/protocol_check.py payload/protocol.json payload/matrix.json --frozen
+      - uses: actions/checkout@v5
+        with:
+          repository: integrallis/models
+          ref: 218daaea7b3a52e97311b56e5d950245ed917343
+          path: models-base
+      - uses: actions/checkout@v5
+        with:
+          repository: integrallis/models
+          ref: 218daaea7b3a52e97311b56e5d950245ed917343
+          path: models-candidate
+      - name: Apply frozen candidate source and build exact runtimes
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          python3 payload/apply_source.py models-candidate
+          (cd models-base && ./gradlew :backend-native:cargoBuildRelease :backend-native:copyPairedRuntime --init-script ../payload/scripts/bonsai-paired/runtime.init.gradle --no-daemon --max-workers=2)
+          (cd models-candidate && ./gradlew :backend-native:cargoBuildRelease :backend-native:copyPairedRuntime :models-runtime:jar --init-script ../payload/scripts/bonsai-paired/runtime.init.gradle --no-daemon --max-workers=2)
+          cp models-candidate/models-runtime/build/libs/models-runtime-0.3.59.jar models-candidate/backend-native/build/paired-runtime/
+          python3 payload/build_instrumented.py models-candidate instrumented-source
+          cargo +1.96.0 build --release --locked --offline --manifest-path instrumented-source/backend-native/src/main/rust/model-kernels/Cargo.toml
+          python3 payload/fetch_weights.py "$RUNNER_TEMP/bonsai2.gguf"
+      - name: Prepare and verify all actual artifacts
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" prepare --models-base models-base --models-candidate models-candidate --instrumented-library instrumented-source/backend-native/src/main/rust/model-kernels/target/release/libjmodels_kernels.so --weights "$RUNNER_TEMP/bonsai2.gguf"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-prepared
+          path: evidence/
+          if-no-files-found: error
+      - name: plain-order-0
+        timeout-minutes: 82
+        run: |
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][0])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "plain:$ARM"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-0
+          path: evidence/
+          if-no-files-found: error
+      - name: plain-order-1
+        timeout-minutes: 82
+        run: |
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][1])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "plain:$ARM"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-1
+          path: evidence/
+          if-no-files-found: error
+      - name: plain-order-2
+        timeout-minutes: 82
+        run: |
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][2])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "plain:$ARM"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-2
+          path: evidence/
+          if-no-files-found: error
+      - name: fixture:candidate
+        timeout-minutes: 82
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "fixture:candidate"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-3
+          path: evidence/
+          if-no-files-found: error
+      - name: dispatch
+        timeout-minutes: 82
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "dispatch"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-4
+          path: evidence/
+          if-no-files-found: error
+      - name: fixture:control
+        timeout-minutes: 82
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "fixture:control"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-5
+          path: evidence/
+          if-no-files-found: error
+      - name: fixture:baseline
+        timeout-minutes: 82
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "fixture:baseline"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-6
+          path: evidence/
+          if-no-files-found: error
+      - name: pure:control
+        timeout-minutes: 82
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "pure:control"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-7
+          path: evidence/
+          if-no-files-found: error
+      - name: pure:candidate
+        timeout-minutes: 82
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "pure:candidate"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-8
+          path: evidence/
+          if-no-files-found: error
+      - name: timing-order-0
+        timeout-minutes: 82
+        run: |
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][0])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "timing:$ARM"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-9
+          path: evidence/
+          if-no-files-found: error
+      - name: timing-order-1
+        timeout-minutes: 82
+        run: |
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][1])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "timing:$ARM"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-10
+          path: evidence/
+          if-no-files-found: error
+      - name: timing-order-2
+        timeout-minutes: 82
+        run: |
+          ARM=$(python3 -c 'import json,os; print(json.load(open("payload/protocol.json"))["orders"][int(os.environ["PAIR"])][2])')
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "timing:$ARM"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-11
+          path: evidence/
+          if-no-files-found: error
+      - name: finish
+        timeout-minutes: 82
+        run: |
+          python3 payload/run_screen.py "$ARCH" "$PAIR" "finish"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-${{ matrix.arch }}-${{ matrix.pair }}-12
+          path: evidence/
+          if-no-files-found: error
+  analyze:
+    if: always()
+    needs: model
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Fetch the same immutable analysis protocol
+        env:
+          PAYLOAD_URL: ${{ secrets.BONSAI_SOURCE_REPAIR_PAYLOAD_URL }}
+        run: |
+          curl -fL --retry 3 "$PAYLOAD_URL" -o payload.tar.gz
+          echo '32634f9462b40324999b0b4da13ca563604f129cb735f767cf212ebed5e8c529  payload.tar.gz' | sha256sum -c -
+          tar -xzf payload.tar.gz
+          python3 payload/protocol_check.py payload/protocol.json payload/matrix.json --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: actual-spi-*-12
+          path: collected
+      - name: Require every declared host and assess all original gates
+        run: |
+          python3 payload/analyze_screen.py collected payload/protocol.json payload/matrix.json screen-analysis.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-spi-screen-analysis
+          path: screen-analysis.json
+          if-no-files-found: error
