@@ -1031,6 +1031,13 @@ tasks.register("verifyDocumentation") {
         val landingPage = file("docs/landing/index.html").readText()
         val landingScript = file("docs/landing/assets/js/landing.js").readText()
         val releaseVersion = project.version.toString()
+        val antoraDescriptor = file("docs/content/antora.yml").readLines().map { it.trim() }
+        require("display_version: '$releaseVersion'" in antoraDescriptor) {
+            "Antora display_version must match project version $releaseVersion"
+        }
+        require("vectors-version: '$releaseVersion'" in antoraDescriptor) {
+            "Antora dependency snippets must match project version $releaseVersion"
+        }
         require("collection.search(query, 10)" !in landingPage) {
             "Landing page uses a nonexistent VectorCollection.search overload"
         }

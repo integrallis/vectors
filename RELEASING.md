@@ -14,7 +14,8 @@ Maven Central until they have independent release contracts.
 ## Cut a release
 
 1. Set a non-snapshot version in `gradle.properties`. Update the version pill and dependency
-   coordinates in `docs/landing/index.html` and `docs/landing/assets/js/landing.js` to match.
+   coordinates in `docs/landing/index.html` and `docs/landing/assets/js/landing.js`, and both
+   `display_version` and `vectors-version` in `docs/content/antora.yml`, to match.
 2. Update `CHANGELOG.md` and run `./gradlew verifyDocumentation` before committing the release
    candidate. Complete the required checks before merging to `main`.
 3. Run **Actions → Release** with `dry_run` enabled.
