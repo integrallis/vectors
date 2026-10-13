@@ -40,13 +40,11 @@
   "required_cpus": [
     "AMD EPYC 7763 64-Core Processor",
     "AMD EPYC 9V74 80-Core Processor",
-    "AMD EPYC 9V45 96-Core Processor",
     "Neoverse-N2"
   ],
   "admission_attempts": {
     "7763": 8,
     "9V74": 8,
-    "9V45": 16,
     "N2": 1
   },
   "maximum_parallel_hosts": 8

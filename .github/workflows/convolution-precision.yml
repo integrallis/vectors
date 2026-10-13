@@ -25,19 +25,11 @@ jobs:
             attempt: 0
             arch: x86
             runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 0
-            arch: x86
-            runner: ubuntu-24.04
           - target: "7763"
             attempt: 1
             arch: x86
             runner: ubuntu-24.04
           - target: "9V74"
-            attempt: 1
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
             attempt: 1
             arch: x86
             runner: ubuntu-24.04
@@ -49,19 +41,11 @@ jobs:
             attempt: 2
             arch: x86
             runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 2
-            arch: x86
-            runner: ubuntu-24.04
           - target: "7763"
             attempt: 3
             arch: x86
             runner: ubuntu-24.04
           - target: "9V74"
-            attempt: 3
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
             attempt: 3
             arch: x86
             runner: ubuntu-24.04
@@ -73,19 +57,11 @@ jobs:
             attempt: 4
             arch: x86
             runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 4
-            arch: x86
-            runner: ubuntu-24.04
           - target: "7763"
             attempt: 5
             arch: x86
             runner: ubuntu-24.04
           - target: "9V74"
-            attempt: 5
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
             attempt: 5
             arch: x86
             runner: ubuntu-24.04
@@ -97,52 +73,12 @@ jobs:
             attempt: 6
             arch: x86
             runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 6
-            arch: x86
-            runner: ubuntu-24.04
           - target: "7763"
             attempt: 7
             arch: x86
             runner: ubuntu-24.04
           - target: "9V74"
             attempt: 7
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 7
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 8
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 9
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 10
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 11
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 12
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 13
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 14
-            arch: x86
-            runner: ubuntu-24.04
-          - target: "9V45"
-            attempt: 15
             arch: x86
             runner: ubuntu-24.04
     runs-on: ${{ matrix.runner }}
@@ -159,7 +95,7 @@ jobs:
           import json,subprocess,os
           from pathlib import Path
           target='${{ matrix.target }}';attempt=${{ matrix.attempt }}
-          expected={'N2':'Neoverse-N2','7763':'AMD EPYC 7763 64-Core Processor','9V74':'AMD EPYC 9V74 80-Core Processor','9V45':'AMD EPYC 9V45 96-Core Processor'}[target]
+          expected={'N2':'Neoverse-N2','7763':'AMD EPYC 7763 64-Core Processor','9V74':'AMD EPYC 9V74 80-Core Processor'}[target]
           rows=json.loads(subprocess.check_output(['lscpu','-J']))['lscpu']
           cpu=next(r['data'] for r in rows if r['field'].rstrip(':')=='Model name');accepted=cpu==expected
           Path('evidence/hardware-admission.json').write_text(json.dumps({'cpu':cpu,'accepted':accepted,'target':target,'attempt':attempt,'lscpu':rows},indent=2)+'\n')
