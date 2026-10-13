@@ -20,7 +20,7 @@ jobs:
           PAYLOAD_URL: ${{ secrets.BONSAI_ARM_DECODE_PAYLOAD_URL }}
         run: |
           curl -fL --retry 3 "$PAYLOAD_URL" -o payload.tar.gz
-          echo '6e5d4fb933df40bafc676c9e98dbb270b4036f086434a9a9aeee55a50ddd84f2  payload.tar.gz' | sha256sum -c -
+          echo '3f1a3f5af464cdfd2ec7e8ed2ddfdc3bd0729064a6f808e3eac5799e30194d54  payload.tar.gz' | sha256sum -c -
           tar -xzf payload.tar.gz
           python3 payload/fetch_weights.py "$RUNNER_TEMP/bonsai2.gguf"
           python3 payload/run_decode.py prepare
