@@ -15,6 +15,8 @@
  */
 package com.integrallis.vectors.core;
 
+import java.lang.foreign.MemorySegment;
+
 /**
  * Reproducible SiLU arithmetic within the published float accuracy contract.
  *
@@ -31,6 +33,9 @@ final class ReproducibleConvolutionSilu {
   private static final class Workspace {
     final float[] scales = new float[TILE];
     final float[] values = new float[TILE];
+    final MemorySegment scaleBits = MemorySegment.ofArray(scales);
+    final int[] integerScales = new int[TILE];
+    final MemorySegment integerScaleBits = MemorySegment.ofArray(integerScales);
   }
 
   private static final ThreadLocal<Workspace> WORKSPACE = ThreadLocal.withInitial(Workspace::new);
@@ -38,24 +43,32 @@ final class ReproducibleConvolutionSilu {
   static void apply(float[] values, int offset, int length) {
     if (length == 0) return;
     int end = offset + length;
+    float maxAbsolute = 0f;
     for (int index = offset; index < end; index++) {
-      if (!(Math.abs(values[index]) <= 80.0f)) {
-        for (int at = offset; at < end; at++) {
-          float value = values[at];
-          values[at] = value / (1.0f + (float) StrictMath.exp(-value));
-        }
-        return;
+      maxAbsolute = Math.max(maxAbsolute, Math.abs(values[index]));
+    }
+    if (!(maxAbsolute <= 80f)) {
+      for (int at = offset; at < end; at++) {
+        float value = values[at];
+        values[at] = value / (1.0f + (float) StrictMath.exp(-value));
       }
+      return;
     }
     Workspace workspace = WORKSPACE.get();
     float[] scales = workspace.scales;
     for (int start = offset; start < end; ) {
       int count = Math.min(TILE, end - start);
       System.arraycopy(values, start, workspace.values, 0, count);
-      for (int lane = 0; lane < count; lane++) {
-        float biased = -values[start + lane] * 1.44269504088896341f + 12582912.0f;
-        scales[lane] = Float.intBitsToFloat((Float.floatToRawIntBits(biased) << 23) + 0x3f800000);
+      for (int at = 0; at < count; at++) {
+        scales[at] = -workspace.values[at] * 1.44269504088896341f + 12582912.0f;
       }
+      MemorySegment.copy(
+          workspace.scaleBits, 0, workspace.integerScaleBits, 0, (long) count * Float.BYTES);
+      for (int lane = 0; lane < count; lane++) {
+        workspace.integerScales[lane] = (workspace.integerScales[lane] << 23) + 0x3f800000;
+      }
+      MemorySegment.copy(
+          workspace.integerScaleBits, 0, workspace.scaleBits, 0, (long) count * Float.BYTES);
       applyScaled(workspace.values, count, scales);
       System.arraycopy(workspace.values, 0, values, start, count);
       start += count;
