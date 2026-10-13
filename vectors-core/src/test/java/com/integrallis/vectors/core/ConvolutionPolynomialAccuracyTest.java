@@ -56,7 +56,10 @@ class ConvolutionPolynomialAccuracyTest {
       Math.nextDown(32f),
       32f,
       Float.intBitsToFloat(0x4101bcc2),
-      Float.intBitsToFloat(0xc1ff30d6)
+      Float.intBitsToFloat(0xc1ff30d6),
+      Float.intBitsToFloat(0x416397d8),
+      Float.intBitsToFloat(0xc1fb3f57),
+      Float.intBitsToFloat(0xc1fb3f58)
     };
     float[] actual = input.clone();
     ReproducibleConvolutionSilu.apply(actual, 0, actual.length);
