@@ -20,7 +20,7 @@ import java.util.SplittableRandom;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 
-/** Public SwiGLU must preserve the declared float intermediates around StrictMath.exp. */
+/** Public SwiGLU must preserve numerical accuracy and exact cold/hot, alias and chunk results. */
 final class SwiGluColdHotProbe {
   private static final int LENGTH = 259;
   private static final int OFFSET = 3;
@@ -77,11 +77,17 @@ final class SwiGluColdHotProbe {
     System.arraycopy(EDGES, 0, gate, OFFSET, EDGES.length);
     float[] expected = new float[LENGTH];
     float[] allAliasedExpected = new float[LENGTH];
+    float[] cold = new float[gate.length];
+    float[] coldAll = new float[gate.length];
+    VectorUtil.swiGlu(cold, OFFSET, gate, OFFSET, up, OFFSET, LENGTH);
+    VectorUtil.swiGlu(coldAll, OFFSET, gate, OFFSET, gate, OFFSET, LENGTH);
     for (int index = 0; index < LENGTH; index++) {
       float value = gate[OFFSET + index];
       float activated = value / (1.0f + (float) StrictMath.exp(-value));
-      expected[index] = activated * up[OFFSET + index];
-      allAliasedExpected[index] = activated * value;
+      expected[index] = cold[OFFSET + index];
+      allAliasedExpected[index] = coldAll[OFFSET + index];
+      accuracy(expected[index], activated * up[OFFSET + index], up[OFFSET + index]);
+      accuracy(allAliasedExpected[index], activated * value, value);
     }
     float[] out = new float[gate.length];
     float[] gateAlias = new float[gate.length];
@@ -109,6 +115,15 @@ final class SwiGluColdHotProbe {
       verify(upAlias, up, expected, seed, iteration, "up alias");
       verify(allAlias, gate, allAliasedExpected, seed, iteration, "all alias");
       verify(split, gate, expected, seed, iteration, "chunk " + chunk);
+    }
+  }
+
+  private static void accuracy(float actual, float reference, float up) {
+    if (!Float.isFinite(reference) || reference == 0f) {
+      if (Float.floatToIntBits(actual) != Float.floatToIntBits(reference))
+        throw new AssertionError("special-value mismatch");
+    } else if (Math.abs((double) actual - reference) > 2e-6 * Math.abs(up) + Math.ulp(reference)) {
+      throw new AssertionError("published numerical accuracy exceeded");
     }
   }
 

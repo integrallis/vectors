@@ -24,15 +24,16 @@ import jdk.incubator.vector.VectorShape;
 import jdk.incubator.vector.VectorSpecies;
 
 /**
- * Reproduces the float cast of StrictMath.exp with unfused double-vector arithmetic.
+ * Activation arithmetic that stays stable across JVM compilation modes.
  *
- * <p>Each float input group widens into one double vector. Keeping one calculation at the call site
- * avoids the vector-object escapes observed when a second group exceeded the JIT's inlining budget.
- * The ordinary activation loop's scalar-tail boundary remains unchanged.
+ * <p>Ordinary SwiGLU uses the fixed float polynomial in {@link StableFloatSwiGlu}. Forward
+ * overlapping output aliases retain the original vector-group read/write order and its unfused
+ * double-vector exponential; this overlap path reproduces the float cast of StrictMath.exp.
  *
- * <p>Adapted from fdlibm e_exp.c, https://netlib.org/fdlibm/e_exp.c. Copyright (C) 2004 by Sun
- * Microsystems, Inc. All rights reserved. Permission to use, copy, modify, and distribute this
- * software is freely granted, provided that this notice is preserved.
+ * <p>The retained overlap exponential is adapted from fdlibm e_exp.c,
+ * https://netlib.org/fdlibm/e_exp.c. Copyright (C) 2004 by Sun Microsystems, Inc. All rights
+ * reserved. Permission to use, copy, modify, and distribute this software is freely granted,
+ * provided that this notice is preserved.
  */
 final class ReproducibleActivationExp {
   private ReproducibleActivationExp() {}
@@ -50,6 +51,20 @@ final class ReproducibleActivationExp {
 
   /** Keeps the full vector computation behind an array-only call boundary. */
   static void swiGlu(
+      float[] out,
+      int outOffset,
+      float[] gate,
+      int gateOffset,
+      float[] up,
+      int upOffset,
+      int length) {
+    if ((out == gate && outOffset > gateOffset && outOffset < gateOffset + length)
+        || (out == up && outOffset > upOffset && outOffset < upOffset + length)) {
+      swiGluAliased(out, outOffset, gate, gateOffset, up, upOffset, length);
+    } else StableFloatSwiGlu.apply(out, outOffset, gate, gateOffset, up, upOffset, length);
+  }
+
+  private static void swiGluAliased(
       float[] out,
       int outOffset,
       float[] gate,

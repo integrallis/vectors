@@ -6918,6 +6918,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return FloatVector.fromArray(FLOAT_SPECIES, lanes, 0);
   }
 
+  private static final boolean USE_PUBLISHED_ARM_ACTIVATIONS =
+      "aarch64".equals(System.getProperty("os.arch")) && FLOAT_SPECIES.vectorBitSize() == 128;
+
   @Override
   public void swiGlu(
       float[] out,
@@ -6927,6 +6930,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] up,
       int upOffset,
       int length) {
+    if (USE_PUBLISHED_ARM_ACTIVATIONS) {
+      PublishedArmActivations.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
+      return;
+    }
     ReproducibleActivationExp.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
   }
 
@@ -6943,6 +6950,21 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] scaledSoftplus,
       int scaledSoftplusOffset,
       int length) {
+    if (USE_PUBLISHED_ARM_ACTIVATIONS) {
+      PublishedArmActivations.sigmoidAndScaledSoftplus(
+          sigmoidValues,
+          sigmoidOffset,
+          softplusValues,
+          softplusOffset,
+          bias,
+          biasOffset,
+          scale,
+          scaleOffset,
+          scaledSoftplus,
+          scaledSoftplusOffset,
+          length);
+      return;
+    }
     int index = 0;
     int limit = FLOAT_SPECIES.loopBound(length);
     FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
@@ -6986,6 +7008,18 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int weightsOffset,
       int channels,
       int kernelSize) {
+    if (USE_PUBLISHED_ARM_ACTIVATIONS) {
+      PublishedArmActivations.causalDepthwiseConv1dSilu(
+          values,
+          valuesOffset,
+          history,
+          historyOffset,
+          weights,
+          weightsOffset,
+          channels,
+          kernelSize);
+      return;
+    }
     boolean overlapsHistory =
         values == history
             && valuesOffset < (long) historyOffset + (long) (kernelSize - 1) * channels

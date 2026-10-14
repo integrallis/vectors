@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 
 class ReproducibleActivationExpTest {
   @Test
-  void publicSwiGluSpecialValuesAndSampledFloatBitsMatchStrictMathExactly() {
+  void publicSwiGluSpecialValuesAndSampledFloatBitsMeetPublishedAccuracy() {
     var species = PanamaVectorUtilSupport.FLOAT_SPECIES;
     float[] input = new float[species.length()];
     float[] output = new float[species.length()];
@@ -55,16 +55,14 @@ class ReproducibleActivationExpTest {
       }
       VectorUtil.swiGlu(output, 0, input, 0, up, 0, input.length);
       for (int lane = 0; lane < input.length; lane++) {
-        assertThat(Float.floatToIntBits(output[lane]))
-            .as("float input bits %08x", Float.floatToRawIntBits(input[lane]))
-            .isEqualTo(
-                Float.floatToIntBits(input[lane] / (1.0f + (float) StrictMath.exp(-input[lane]))));
+        float expected = input[lane] / (1.0f + (float) StrictMath.exp(-input[lane]));
+        assertAccuracy(output[lane], expected, 1f);
       }
     }
   }
 
   @Test
-  void publicSwiGluPreservesStrictFloatIntermediatesAndExactAlias() {
+  void publicSwiGluPreservesAccuracyAndExactAlias() {
     SplittableRandom random = new SplittableRandom(816371);
     for (int length : new int[] {1, 2, 3, 7, 8, 9, 31, 32, 33, 259, 4096}) {
       float[] gate = new float[length + 6], up = new float[length + 6];
@@ -77,12 +75,26 @@ class ReproducibleActivationExpTest {
         float value = gate[i + 3];
         expected[i] = value / (1.0f + (float) StrictMath.exp(-value)) * up[i + 3];
       }
+      float[] separate = new float[up.length];
+      VectorUtil.swiGlu(separate, 3, gate, 3, up, 3, length);
+      for (int i = 0; i < length; i++) assertAccuracy(separate[i + 3], expected[i], up[i + 3]);
       float guard = up[0];
       VectorUtil.swiGlu(up, 3, gate, 3, up, 3, length);
       assertThat(up[0]).isEqualTo(guard);
       for (int i = 0; i < length; i++)
         assertThat(Float.floatToRawIntBits(up[i + 3]))
-            .isEqualTo(Float.floatToRawIntBits(expected[i]));
+            .isEqualTo(Float.floatToRawIntBits(separate[i + 3]));
+    }
+  }
+
+  private static void assertAccuracy(float actual, float expected, float up) {
+    if (!Float.isFinite(expected) || expected == 0f) {
+      assertThat(Float.floatToIntBits(actual)).isEqualTo(Float.floatToIntBits(expected));
+    } else {
+      // Published support tests permit 2e-6 SiLU error. Propagate the up multiplication,
+      // including its final float rounding, rather than inventing a global SwiGLU bound.
+      double tolerance = 2e-6 * Math.abs(up) + Math.ulp(expected);
+      assertThat(Math.abs((double) actual - expected)).isLessThanOrEqualTo(tolerance);
     }
   }
 }
