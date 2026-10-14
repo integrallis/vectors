@@ -119,10 +119,6 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     }
   }
 
-  int parallelism() {
-    return parallelism;
-  }
-
   @Override
   public void execute(GgufStagePlan plan) {
     Objects.requireNonNull(plan, "plan");

@@ -120,16 +120,6 @@ public final class HnswIndexAdapter implements IndexSpi {
     this.buildThreads = buildThreads;
   }
 
-  /** Returns the backing {@link HnswIndex} or {@code null} when the collection is empty. */
-  HnswIndex index() {
-    return index;
-  }
-
-  /** Returns {@code true} when no vectors have been indexed. */
-  boolean isEmpty() {
-    return size == 0 || index == null;
-  }
-
   @Override
   public void build(float[][] vectors, SimilarityFunction metric) {
     Objects.requireNonNull(vectors, "vectors must not be null");

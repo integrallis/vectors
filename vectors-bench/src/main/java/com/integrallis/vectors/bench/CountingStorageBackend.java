@@ -32,8 +32,6 @@ final class CountingStorageBackend implements StorageBackend {
   private final StorageBackend delegate;
   private final AtomicLong getCalls = new AtomicLong();
   private final AtomicLong putCalls = new AtomicLong();
-  private final AtomicLong listCalls = new AtomicLong();
-  private final AtomicLong deleteCalls = new AtomicLong();
   private final AtomicLong bytesFetched = new AtomicLong();
   private final AtomicLong bytesPut = new AtomicLong();
 
@@ -45,8 +43,6 @@ final class CountingStorageBackend implements StorageBackend {
   void reset() {
     getCalls.set(0);
     putCalls.set(0);
-    listCalls.set(0);
-    deleteCalls.set(0);
     bytesFetched.set(0);
     bytesPut.set(0);
   }
@@ -57,14 +53,6 @@ final class CountingStorageBackend implements StorageBackend {
 
   long putCalls() {
     return putCalls.get();
-  }
-
-  long listCalls() {
-    return listCalls.get();
-  }
-
-  long deleteCalls() {
-    return deleteCalls.get();
   }
 
   long bytesFetched() {
@@ -114,13 +102,11 @@ final class CountingStorageBackend implements StorageBackend {
 
   @Override
   public List<String> list(String prefix) throws IOException {
-    listCalls.incrementAndGet();
     return delegate.list(prefix);
   }
 
   @Override
   public void delete(String key) throws IOException {
-    deleteCalls.incrementAndGet();
     delegate.delete(key);
   }
 

@@ -37,10 +37,6 @@ final class PrefixedStorageBackend implements StorageBackend {
     this.root = Objects.requireNonNull(root, "root");
   }
 
-  String root() {
-    return root;
-  }
-
   @Override
   public void put(String key, byte[] value) throws IOException {
     delegate.put(root + key, value);

@@ -138,10 +138,6 @@ public final class PanamaConstants {
     return parsed;
   }
 
-  static boolean useMappedKQuantLongOffsets(MappedKQuantFormat format, boolean mapped) {
-    return mapped && MAPPED_K_QUANT_LONG_OFFSET_POLICY.enabled(format);
-  }
-
   static boolean useMappedKQuantLongOffsets(
       int runtimeFeature,
       String arch,

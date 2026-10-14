@@ -40,10 +40,6 @@ final class TopKHeap {
     this.size = 0;
   }
 
-  int size() {
-    return size;
-  }
-
   boolean isFull() {
     return size == capacity;
   }
@@ -74,8 +70,8 @@ final class TopKHeap {
 
   /**
    * Drains the heap into descending-score order in-place, returning parallel arrays {@code
-   * (ordinals, scores)} of length {@link #size()}. Subsequent heap operations are undefined;
-   * intended as a terminal operation.
+   * (ordinals, scores)} with one entry per retained element. Subsequent heap operations are
+   * undefined; intended as a terminal operation.
    */
   DrainResult drainDescending() {
     int n = size;
