@@ -204,7 +204,7 @@ class GgufKQuantDequantTest {
   void propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int maxBits, String arm) throws Exception {
     assumeTrue(VectorizationProvider.isPanamaEnabled(), "SIMD dequant requires the Vector API");
     Process process =
-        new ProcessBuilder(
+        ForkedJvmCoverage.process(
                 Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "--add-modules",
                 "jdk.incubator.vector",

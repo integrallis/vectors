@@ -29,7 +29,7 @@ class BFloat16NestedDispatchTest {
       throws Exception {
     Path log = directory.resolve("nested-dispatch.log");
     Process process =
-        new ProcessBuilder(
+        ForkedJvmCoverage.process(
                 Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "--add-modules",
                 "jdk.incubator.vector",

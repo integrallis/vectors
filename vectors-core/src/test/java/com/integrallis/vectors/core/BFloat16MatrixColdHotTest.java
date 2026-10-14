@@ -46,7 +46,7 @@ class BFloat16MatrixColdHotTest {
       int maxBits, int rows, int columns, @TempDir Path directory) throws Exception {
     Path log = directory.resolve("probe.log");
     Process process =
-        new ProcessBuilder(
+        ForkedJvmCoverage.process(
                 Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "--add-modules",
                 "jdk.incubator.vector",

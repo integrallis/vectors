@@ -252,6 +252,95 @@ class GroupedProjectionDefaultContractTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(ints = {32, 64, 256})
+  void publicGroupedQ4WrappersPreserveScratchAndOutputBoundaries(int cols) {
+    int batches = 3;
+    int[] rows = {2, 3, 5};
+    float[] input = input(batches, cols);
+    MemorySegment[] w = new MemorySegment[3];
+    float[][] expected = new float[3][];
+    float[][] out = new float[3][];
+    for (int i = 0; i < 3; i++) {
+      w[i] = weights(rows[i], cols, i, true);
+      expected[i] = dense(input, batches, rows[i], cols, i, true);
+      out[i] = guarded(batches * rows[i]);
+    }
+    byte[] q = new byte[batches * cols];
+    float[] scales = new float[batches * cols / 32];
+    int[] corrections = new int[batches * cols / 4];
+    float[] lanes = new float[batches * (rows[0] + rows[1] + rows[2]) * 8];
+    VectorUtil.ggufQ4_0Q8_0TripleBatchedMatmul(
+        input,
+        w[0],
+        rows[0],
+        out[0],
+        w[1],
+        rows[1],
+        out[1],
+        w[2],
+        rows[2],
+        out[2],
+        batches,
+        cols,
+        q,
+        scales,
+        corrections,
+        lanes);
+    for (int i = 0; i < 3; i++) verify(out[i], expected[i]);
+    for (float[] a : out) Arrays.fill(a, -991f);
+    VectorUtil.ggufQ4_0Q8_0DualBatchedMatmul(
+        input,
+        w[0],
+        rows[0],
+        out[0],
+        w[1],
+        rows[1],
+        out[1],
+        batches,
+        cols,
+        q,
+        scales,
+        corrections,
+        lanes);
+    for (int i = 0; i < 2; i++) verify(out[i], expected[i]);
+    float[][] single = {guarded(rows[0]), guarded(rows[1]), guarded(rows[2])};
+    VectorUtil.ggufQ4_0Q8_0TripleBatchDotProduct(
+        input,
+        w[0],
+        rows[0],
+        single[0],
+        w[1],
+        rows[1],
+        single[1],
+        w[2],
+        rows[2],
+        single[2],
+        cols,
+        q,
+        scales,
+        corrections);
+    for (int i = 0; i < 3; i++) verify(single[i], Arrays.copyOf(expected[i], rows[i]));
+    for (float[] a : single) Arrays.fill(a, -991f);
+    VectorUtil.ggufQ4_0Q8_0DualBatchDotProduct(
+        input, w[0], rows[0], single[0], w[1], rows[1], single[1], cols, q, scales, corrections);
+    for (int i = 0; i < 2; i++) verify(single[i], Arrays.copyOf(expected[i], rows[i]));
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {256, 512})
+  void publicQ4KConvenienceProjectionReadsOnlyDeclaredQueryPrefix(int cols) {
+    int rows = 5;
+    float[] input = input(1, cols), prefix = Arrays.copyOf(input, cols + 7);
+    Arrays.fill(prefix, cols, prefix.length, Float.NaN);
+    MemorySegment weights = kWeights(rows, cols, 0);
+    float[] expected = dense(input, 1, rows, cols, 0, true), out = guarded(rows);
+    VectorUtil.ggufQ4_KBatchDotProduct(prefix, weights, rows, cols, out);
+    verify(out, expected);
+    VectorizationProvider.newScalarProvider().ggufQ4_KMatVecDot(prefix, weights, rows, cols, out);
+    verify(out, expected);
+  }
+
   private static MemorySegment kWeights(int rows, int cols, int matrix) {
     byte[] data = new byte[rows * cols / 256 * 144];
     MemorySegment w = MemorySegment.ofArray(data);

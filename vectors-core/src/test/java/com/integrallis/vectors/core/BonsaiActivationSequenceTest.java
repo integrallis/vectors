@@ -65,7 +65,7 @@ class BonsaiActivationSequenceTest {
             System.getProperty("java.class.path"),
             BonsaiActivationSequenceProbe.class.getName()));
     Process process =
-        new ProcessBuilder(command)
+        ForkedJvmCoverage.process(command)
             .redirectErrorStream(true)
             .redirectOutput(output.toFile())
             .start();

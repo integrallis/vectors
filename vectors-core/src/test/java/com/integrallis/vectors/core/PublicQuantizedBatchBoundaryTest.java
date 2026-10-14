@@ -33,6 +33,9 @@ class PublicQuantizedBatchBoundaryTest {
       for (String fault :
           new String[] {
             "batch",
+            "negative-batch",
+            "overflow-batch",
+            "negative-columns",
             "rows",
             "columns",
             "query",
@@ -72,10 +75,26 @@ class PublicQuantizedBatchBoundaryTest {
     float[] scales = new float[batches * columns / block];
     Arrays.fill(scales, 31f);
     MemorySegment weight = MemorySegment.ofArray(new byte[rows * columns / block * bytes]);
-    int[] corrections = new int[batches * columns / 16];
+    int[] corrections = new int[batches * columns / 4];
     Arrays.fill(corrections, 17);
     short[] sums = new short[batches * columns / 16];
     Arrays.fill(sums, (short) 19);
+    // Admit the unfaulted public request first so an unrelated invalid scratch size cannot
+    // satisfy a malformed-request assertion accidentally.
+    float[] control = new float[out.length];
+    invoke(
+        format,
+        input,
+        weight,
+        batches,
+        rows,
+        columns,
+        control,
+        new byte[quants.length],
+        new float[scales.length],
+        new int[corrections.length],
+        new short[sums.length]);
+    assertThat(control).containsOnly(0f);
     float[] passedInput =
         fault.equals("query")
             ? Arrays.copyOf(input, input.length - 1)
@@ -93,9 +112,18 @@ class PublicQuantizedBatchBoundaryTest {
         fault.equals("weights")
             ? weight.asSlice(0, weight.byteSize() - 1)
             : fault.equals("null-weights") ? null : weight;
-    int passedBatch = fault.equals("batch") ? 0 : batches;
-    int passedRows = fault.equals("rows") ? 0 : rows;
-    int passedColumns = fault.equals("columns") ? columns - 1 : columns;
+    int passedBatch =
+        switch (fault) {
+          case "batch" -> 0;
+          case "negative-batch" -> -1;
+          case "overflow-batch" -> Integer.MAX_VALUE;
+          default -> batches;
+        };
+    int passedRows = fault.equals("rows") ? -1 : rows;
+    int passedColumns =
+        fault.equals("columns")
+            ? columns - 1
+            : fault.equals("negative-columns") ? -columns : columns;
     assertThatThrownBy(
             () ->
                 invoke(

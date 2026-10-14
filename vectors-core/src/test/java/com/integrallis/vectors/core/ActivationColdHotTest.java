@@ -32,7 +32,7 @@ class ActivationColdHotTest {
     for (int bits : new int[] {128, 256}) {
       Path output = temporary.resolve("activation-" + bits + ".log");
       Process process =
-          new ProcessBuilder(
+          ForkedJvmCoverage.process(
                   Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                   "--add-modules",
                   "jdk.incubator.vector",

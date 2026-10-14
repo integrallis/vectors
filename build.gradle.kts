@@ -479,8 +479,49 @@ configure(libraryProjects) {
         enabled = false
     }
 
+    // Preserve the primary compilation-state tests' original, uninstrumented child JVMs.
+    // A separate mandatory run accounts for the same supported functional routes in coverage.
+    // These observations are not substituted for the original cold/hot regression gate.
+    val functionalForkCoverage = layout.buildDirectory.dir("jacoco/functional-forks")
+    if (project.name == "vectors-core") {
+        tasks.register<Test>("functionalForkCoverageTest") {
+            description = "Account for existing functional child JVMs after their uninstrumented gate"
+            group = "verification"
+            testClassesDirs = sourceSets["test"].output.classesDirs
+            classpath = sourceSets["test"].runtimeClasspath
+            useJUnitPlatform()
+            filter {
+                includeTestsMatching("com.integrallis.vectors.core.ActivationColdHotTest")
+                includeTestsMatching("com.integrallis.vectors.core.BFloat16MatrixColdHotTest")
+                includeTestsMatching("com.integrallis.vectors.core.BFloat16NestedDispatchTest")
+                includeTestsMatching("com.integrallis.vectors.core.BonsaiActivationSequenceTest")
+                includeTestsMatching("com.integrallis.vectors.core.F32ExecutionMatrixColdHotTest")
+                includeTestsMatching("com.integrallis.vectors.core.GgufBandGemmTest")
+                includeTestsMatching("com.integrallis.vectors.core.GgufBatchDispatchTest")
+                includeTestsMatching("com.integrallis.vectors.core.GgufKQuantDequantTest")
+                includeTestsMatching("com.integrallis.vectors.core.Q4KColdHotDeterminismTest")
+                includeTestsMatching("com.integrallis.vectors.core.Q5KColdHotDeterminismTest")
+                includeTestsMatching("com.integrallis.vectors.core.Q6KColdHotDeterminismTest")
+                includeTestsMatching("com.integrallis.vectors.core.Q8ColdHotDeterminismTest")
+                includeTestsMatching("com.integrallis.vectors.core.SwiGluColdHotTest")
+            }
+            mustRunAfter(tasks.test)
+            systemProperty(
+                "vectors.test.forkCoverageDir",
+                functionalForkCoverage.get().asFile.absolutePath
+            )
+            outputs.dir(functionalForkCoverage).withPropertyName("functionalForkCoverage")
+            doFirst { delete(functionalForkCoverage) }
+        }
+    }
+
     tasks.jacocoTestReport {
         dependsOn(tasks.test)
+        if (project.name == "vectors-core") {
+            dependsOn(tasks.named("functionalForkCoverageTest"))
+            executionData(layout.buildDirectory.file("jacoco/functionalForkCoverageTest.exec"))
+            executionData(fileTree(functionalForkCoverage) { include("*.exec") })
+        }
         reports {
             xml.required = true
             html.required = true
@@ -489,6 +530,11 @@ configure(libraryProjects) {
 
     tasks.jacocoTestCoverageVerification {
         dependsOn(tasks.test)
+        if (project.name == "vectors-core") {
+            dependsOn(tasks.named("functionalForkCoverageTest"))
+            executionData(layout.buildDirectory.file("jacoco/functionalForkCoverageTest.exec"))
+            executionData(fileTree(functionalForkCoverage) { include("*.exec") })
+        }
         enabled = project in publishedProjects
         violationRules {
             rule {
