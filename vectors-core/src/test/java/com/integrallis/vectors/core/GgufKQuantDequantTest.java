@@ -203,7 +203,6 @@ class GgufKQuantDequantTest {
   @MethodSource("freshJvmCases")
   void propertySelectsArmAndItIsBitIdenticalInAFreshJvm(int maxBits, String arm) throws Exception {
     assumeTrue(VectorizationProvider.isPanamaEnabled(), "SIMD dequant requires the Vector API");
-    assumeTrue(maxBits <= PanamaConstants.PREFERRED_BITS, "host lacks this width");
     Process process =
         new ProcessBuilder(
                 Path.of(System.getProperty("java.home"), "bin", "java").toString(),
@@ -221,7 +220,8 @@ class GgufKQuantDequantTest {
     String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
     assertThat(completed).as("probe timed out; output:%n%s", output).isTrue();
     assertThat(process.exitValue()).as("probe output:%n%s", output).isZero();
-    int lanes = maxBits / Float.SIZE;
+    // maxBits is a cap, not a demand for unsupported physical lanes.
+    int lanes = Math.min(maxBits, PanamaConstants.PREFERRED_BITS) / Float.SIZE;
     String effective = lanes == 4 && arm.matches("simd-(byte|int)") ? "simd-split" : arm;
     assertThat(output)
         .contains(
