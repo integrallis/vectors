@@ -133,6 +133,9 @@ public final class GgufQ8_0F32Matrix {
 
   /**
    * Multiplies consecutive batch-major F32 activations into consecutive batch-major output rows.
+   *
+   * <p>Input and output ranges must not overlap. Disjoint ranges of the same array are supported.
+   * Invalid overlapping ranges are rejected before any output is written.
    */
   public void multiplyBatch(
       float[] input, int inputOffset, int batchSize, float[] output, int outputOffset) {
@@ -143,6 +146,11 @@ public final class GgufQ8_0F32Matrix {
     int outputElements = Math.multiplyExact(batchSize, rows);
     requireArrayRange(input.length, inputOffset, inputElements, "input");
     requireArrayRange(output.length, outputOffset, outputElements, "output");
+    if (input == output
+        && inputOffset < (long) outputOffset + outputElements
+        && outputOffset < (long) inputOffset + inputElements) {
+      throw new IllegalArgumentException("input and output ranges must not overlap");
+    }
 
     // Parallelization is by output row. Include all batch activations in the work estimate so a
     // short, wide, high-batch projection does not accidentally take the serial path.
