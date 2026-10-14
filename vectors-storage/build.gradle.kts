@@ -4,7 +4,7 @@ description = "Off-heap memory, mmap, arena-based storage, and on-disk formats"
 // Pin to a specific LocalStack image version to avoid Docker Hub auth requirements
 // introduced in March 2026 for localstack/localstack:latest.
 val testcontainersVersion = "1.21.4"
-val awsSdkVersion = "2.55.14"
+val awsSdkVersion = "2.55.16"
 
 dependencies {
     api(project(":vectors-core"))

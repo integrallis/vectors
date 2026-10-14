@@ -5,7 +5,7 @@ val governedDependencies = rootProject.extra["releaseDependencyModules"] as Map<
 dependencies {
     api(platform("io.netty:netty-bom:4.1.139.Final"))
     api(project(":vectors-storage"))
-    api("software.amazon.awssdk:s3:2.55.14")
+    api("software.amazon.awssdk:s3:2.55.16")
 
     // Maven does not propagate this library's BOM to the SDK's transitive dependencies.
     // Declare the existing Netty runtime closure directly so Maven consumers get the same
