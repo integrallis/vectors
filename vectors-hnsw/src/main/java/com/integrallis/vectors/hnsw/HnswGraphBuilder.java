@@ -89,11 +89,6 @@ public final class HnswGraphBuilder {
     return graph;
   }
 
-  /** Returns the graph (package-private, for testing). */
-  HnswGraph getGraph() {
-    return graph;
-  }
-
   private void insertNode(int nodeId) {
     int level = levelGenerator.nextLevel();
     graph.initNode(nodeId, level);
