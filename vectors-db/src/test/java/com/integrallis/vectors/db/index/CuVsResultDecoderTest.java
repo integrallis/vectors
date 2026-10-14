@@ -25,6 +25,8 @@ import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /**
  * Unit tests for {@link CuVsResultDecoder}: distance-to-similarity transform per metric, descending
@@ -39,10 +41,10 @@ class CuVsResultDecoderTest {
   }
 
   @Nested
-  class DistanceNegation {
+  class ScoreNormalization {
 
     @Test
-    void euclideanDistancesAreNegated() {
+    void squaredEuclideanDistancesBecomeNormalizedScores() {
       Map<Integer, Float> row = new LinkedHashMap<>();
       row.put(7, 1.0f);
       row.put(3, 0.25f);
@@ -51,13 +53,13 @@ class CuVsResultDecoderTest {
       IndexSpi.SearchOutcome out =
           CuVsResultDecoder.decode(fixture(row), SimilarityFunction.EUCLIDEAN);
 
-      // Smallest distance (0.25) becomes the largest score (-0.25), sorted descending.
+      // Smallest squared distance becomes the largest normalized score.
       assertThat(out.ordinals()).containsExactly(3, 7, 11);
-      assertThat(out.scores()).containsExactly(-0.25f, -1.0f, -4.0f);
+      assertThat(out.scores()).containsExactly(0.8f, 0.5f, 0.2f);
     }
 
     @Test
-    void cosineDistancesAreNegated() {
+    void cosineDistancesBecomeNormalizedScores() {
       Map<Integer, Float> row = new LinkedHashMap<>();
       row.put(1, 0.9f);
       row.put(2, 0.1f);
@@ -67,11 +69,11 @@ class CuVsResultDecoderTest {
           CuVsResultDecoder.decode(fixture(row), SimilarityFunction.COSINE);
 
       assertThat(out.ordinals()).containsExactly(2, 3, 1);
-      assertThat(out.scores()).containsExactly(-0.1f, -0.5f, -0.9f);
+      assertThat(out.scores()).containsExactly(0.95f, 0.75f, 0.55f);
     }
 
     @Test
-    void dotProductIsPassedThroughAsScore() {
+    void dotProductsBecomeNormalizedScores() {
       Map<Integer, Float> row = new LinkedHashMap<>();
       row.put(1, 0.3f);
       row.put(2, 0.9f);
@@ -80,13 +82,13 @@ class CuVsResultDecoderTest {
       IndexSpi.SearchOutcome out =
           CuVsResultDecoder.decode(fixture(row), SimilarityFunction.DOT_PRODUCT);
 
-      // Higher inner products already correspond to higher similarity — no negation.
+      // The score transform preserves the ordering of inner products.
       assertThat(out.ordinals()).containsExactly(2, 3, 1);
-      assertThat(out.scores()).containsExactly(0.9f, 0.6f, 0.3f);
+      assertThat(out.scores()).containsExactly(0.95f, 0.8f, 0.65f);
     }
 
     @Test
-    void maximumInnerProductIsPassedThroughAsScore() {
+    void maximumInnerProductsUseThePublicPiecewiseScore() {
       Map<Integer, Float> row = new LinkedHashMap<>();
       row.put(1, -2.0f);
       row.put(2, 3.5f);
@@ -96,7 +98,30 @@ class CuVsResultDecoderTest {
           CuVsResultDecoder.decode(fixture(row), SimilarityFunction.MAXIMUM_INNER_PRODUCT);
 
       assertThat(out.ordinals()).containsExactly(2, 3, 1);
-      assertThat(out.scores()).containsExactly(3.5f, 1.1f, -2.0f);
+      assertThat(out.scores()).containsExactly(4.5f, 2.1f, 1f / 3f);
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(SimilarityFunction.class)
+  void decodedScoresMatchCpuScoresForTheSameVectors(SimilarityFunction metric) {
+    float[] query = {1f, 0f};
+    float[][] vectors = {{1f, 0f}, {0f, 1f}, {-1f, 0f}};
+    // Exact raw distances for the same, orthogonal, and opposite unit vectors.
+    float[] raw =
+        switch (metric) {
+          case EUCLIDEAN -> new float[] {0f, 2f, 4f};
+          case COSINE -> new float[] {0f, 1f, 2f};
+          case DOT_PRODUCT, MAXIMUM_INNER_PRODUCT -> new float[] {1f, 0f, -1f};
+        };
+    Map<Integer, Float> row = new LinkedHashMap<>();
+    for (int i = vectors.length - 1; i >= 0; i--) row.put(i, raw[i]);
+
+    IndexSpi.SearchOutcome result = CuVsResultDecoder.decode(fixture(row), metric);
+
+    assertThat(result.ordinals()).containsExactly(0, 1, 2);
+    for (int i = 0; i < vectors.length; i++) {
+      assertThat(result.scores()[i]).isEqualTo(metric.compare(query, vectors[i]));
     }
   }
 
@@ -122,7 +147,7 @@ class CuVsResultDecoderTest {
           CuVsResultDecoder.decode(fixture(row), SimilarityFunction.EUCLIDEAN);
 
       assertThat(out.ordinals()).containsExactly(42);
-      assertThat(out.scores()).containsExactly(-1.5f);
+      assertThat(out.scores()).containsExactly(0.4f);
     }
 
     @Test
@@ -136,7 +161,7 @@ class CuVsResultDecoderTest {
           CuVsResultDecoder.decode(fixture(row), SimilarityFunction.EUCLIDEAN);
 
       assertThat(out.ordinals()).hasSize(3).containsOnly(1, 2, 3);
-      assertThat(out.scores()).containsExactly(-2.0f, -2.0f, -2.0f);
+      assertThat(out.scores()).containsExactly(1f / 3f, 1f / 3f, 1f / 3f);
     }
   }
 }
