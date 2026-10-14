@@ -16,7 +16,9 @@
 package com.integrallis.vectors.core;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -94,19 +96,20 @@ public final class BuiltinRecipeCodec implements RecipeCodec {
   @Override
   public EmbeddingRecipe decode(String text) throws IOException {
     try {
+      Map<String, Object> document = new JsonReader(text).document();
       return new EmbeddingRecipe(
-          string(text, "modelId"),
-          string(text, "modelVersion"),
-          optional(text, "modelDigest"),
-          integer(text, "dimension"),
-          SimilarityFunction.valueOf(string(text, "metric")),
-          Boolean.parseBoolean(raw(text, "normalized")),
-          EmbeddingRecipe.Pooling.valueOf(string(text, "pooling")),
-          optional(text, "documentPrefix"),
-          optional(text, "queryPrefix"),
-          integer(text, "maxInputTokens"),
-          EmbeddingRecipe.Truncation.valueOf(string(text, "truncation")),
-          extra(text));
+          string(document, "modelId"),
+          string(document, "modelVersion"),
+          optional(document, "modelDigest"),
+          integer(document, "dimension"),
+          SimilarityFunction.valueOf(string(document, "metric")),
+          bool(document, "normalized"),
+          EmbeddingRecipe.Pooling.valueOf(string(document, "pooling")),
+          optional(document, "documentPrefix"),
+          optional(document, "queryPrefix"),
+          integer(document, "maxInputTokens"),
+          EmbeddingRecipe.Truncation.valueOf(string(document, "truncation")),
+          extra(document));
     } catch (RuntimeException malformed) {
       throw new IOException("malformed recipe document: " + malformed.getMessage(), malformed);
     }
@@ -115,7 +118,7 @@ public final class BuiltinRecipeCodec implements RecipeCodec {
   @Override
   public int schemaVersionOf(String text) throws IOException {
     try {
-      return integer(text, "schemaVersion");
+      return integer(new JsonReader(text).document(), "schemaVersion");
     } catch (RuntimeException malformed) {
       throw new IOException("recipe document has no readable schemaVersion", malformed);
     }
@@ -123,69 +126,6 @@ public final class BuiltinRecipeCodec implements RecipeCodec {
 
   private static void field(StringBuilder out, String key, String value, boolean last) {
     out.append("  ").append(quote(key)).append(": ").append(value).append(last ? "\n" : ",\n");
-  }
-
-  /**
-   * Parses the {@code extra} object.
-   *
-   * <p>Quote-aware by necessity: an earlier version split the block on commas, which silently
-   * corrupted any value that contained one — and values are arbitrary user strings. Splitting
-   * structured text on a delimiter that can appear inside it is the classic version of this bug,
-   * and the codec contract test carries a fixture with a comma, a quote, a backslash and a newline
-   * in one value precisely so it cannot come back.
-   */
-  private static Map<String, String> extra(String text) {
-    Map<String, String> extra = new LinkedHashMap<>();
-    int start = text.indexOf("\"extra\": {");
-    if (start < 0) {
-      return extra;
-    }
-    int at = start + "\"extra\": {".length();
-    while (at < text.length()) {
-      int keyOpen = text.indexOf('"', at);
-      if (keyOpen < 0) {
-        break;
-      }
-      // A closing brace before the next quote means the object ended.
-      int brace = text.indexOf('}', at);
-      if (brace >= 0 && brace < keyOpen) {
-        break;
-      }
-      int keyClose = closingQuote(text, keyOpen);
-      if (keyClose < 0) {
-        break;
-      }
-      int colon = text.indexOf(':', keyClose);
-      if (colon < 0) {
-        break;
-      }
-      int valueOpen = text.indexOf('"', colon);
-      if (valueOpen < 0) {
-        break;
-      }
-      int valueClose = closingQuote(text, valueOpen);
-      if (valueClose < 0) {
-        break;
-      }
-      extra.put(
-          unquote(text.substring(keyOpen, keyClose + 1)),
-          unquote(text.substring(valueOpen, valueClose + 1)));
-      at = valueClose + 1;
-    }
-    return extra;
-  }
-
-  /** Index of the quote closing the string opened at {@code open}, honouring backslash escapes. */
-  private static int closingQuote(String text, int open) {
-    for (int index = open + 1; index < text.length(); index++) {
-      char c = text.charAt(index);
-      if (c == '\\') {
-        index++;
-      } else if (c == '"') {
-        return index;
-      }
-    }
-    return -1;
   }
 
   private static String quote(String value) {
@@ -210,86 +150,205 @@ public final class BuiltinRecipeCodec implements RecipeCodec {
     return out.append('"').toString();
   }
 
-  private static String unquote(String quoted) {
-    String trimmed = quoted.trim();
-    if (trimmed.startsWith("\"")) {
-      trimmed = trimmed.substring(1);
-    }
-    if (trimmed.endsWith("\"")) {
-      trimmed = trimmed.substring(0, trimmed.length() - 1);
-    }
-    StringBuilder out = new StringBuilder(trimmed.length());
-    for (int index = 0; index < trimmed.length(); index++) {
-      char c = trimmed.charAt(index);
-      if (c != '\\' || index + 1 >= trimmed.length()) {
-        out.append(c);
-        continue;
-      }
-      char next = trimmed.charAt(++index);
-      switch (next) {
-        case 'n' -> out.append('\n');
-        case 'r' -> out.append('\r');
-        case 't' -> out.append('\t');
-        case 'u' -> {
-          out.append((char) Integer.parseInt(trimmed.substring(index + 1, index + 5), 16));
-          index += 4;
-        }
-        default -> out.append(next);
-      }
-    }
-    return out.toString();
+  private static String string(Map<String, Object> document, String name) {
+    Object value = document.get(name);
+    if (value instanceof String string) return string;
+    throw new IllegalArgumentException("field " + name + " must be a string");
   }
+
+  private static Optional<String> optional(Map<String, Object> document, String name) {
+    return document.get(name) == null ? Optional.empty() : Optional.of(string(document, name));
+  }
+
+  private static boolean bool(Map<String, Object> document, String name) {
+    Object value = document.get(name);
+    if (value instanceof Boolean bool) return bool;
+    throw new IllegalArgumentException("field " + name + " must be a boolean");
+  }
+
+  private static int integer(Map<String, Object> document, String name) {
+    Object value = document.get(name);
+    if (value instanceof JsonNumber number) return Integer.parseInt(number.text());
+    throw new IllegalArgumentException("field " + name + " must be an integer");
+  }
+
+  private static Map<String, String> extra(Map<String, Object> document) {
+    Object value = document.get("extra");
+    if (value == null) return Map.of();
+    if (!(value instanceof Map<?, ?> fields)) {
+      throw new IllegalArgumentException("field extra must be an object");
+    }
+    Map<String, String> extra = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : fields.entrySet()) {
+      if (!(entry.getValue() instanceof String string)) {
+        throw new IllegalArgumentException("extra values must be strings");
+      }
+      // JsonReader only creates objects with string keys.
+      extra.put((String) entry.getKey(), string);
+    }
+    return extra;
+  }
+
+  /** Retains number spelling so schema integers cannot silently truncate fractions or overflow. */
+  private record JsonNumber(String text) {}
 
   /**
-   * The raw text of a field's value.
-   *
-   * <p>Tolerant of whitespace around the colon. The first version demanded exactly {@code ": "},
-   * which meant a document written by a different codec -- or hand-edited by an auditor, which this
-   * format invites -- failed to parse for a reason that had nothing to do with its contents.
+   * Structural JSON reader for a small recipe document, including unknown future values. Duplicate
+   * keys are rejected rather than choosing an ambiguous recipe identity. The nesting bound prevents
+   * an unknown field from exhausting the Java stack; no external JSON dependency is required.
    */
-  private static String raw(String text, String name) {
-    String key = '"' + name + '"';
-    int at = text.indexOf(key);
-    if (at < 0) {
-      throw new IllegalArgumentException("missing field " + name);
+  private static final class JsonReader {
+    private static final int MAX_DEPTH = 128;
+    private final String text;
+    private int at;
+
+    private JsonReader(String text) {
+      this.text = java.util.Objects.requireNonNull(text, "text");
     }
-    int cursor = at + key.length();
-    while (cursor < text.length() && Character.isWhitespace(text.charAt(cursor))) {
-      cursor++;
+
+    private Map<String, Object> document() {
+      whitespace();
+      Map<String, Object> result = object(0);
+      whitespace();
+      if (at != text.length()) throw error("trailing content");
+      return result;
     }
-    if (cursor >= text.length() || text.charAt(cursor) != ':') {
-      throw new IllegalArgumentException("field " + name + " is not followed by a colon");
+
+    private Map<String, Object> object(int depth) {
+      require('{');
+      Map<String, Object> result = new LinkedHashMap<>();
+      whitespace();
+      if (take('}')) return result;
+      do {
+        whitespace();
+        String key = string();
+        whitespace();
+        require(':');
+        if (result.containsKey(key)) throw error("duplicate field " + key);
+        result.put(key, value(depth + 1));
+        whitespace();
+        if (take('}')) return result;
+        require(',');
+      } while (true);
     }
-    cursor++;
-    while (cursor < text.length() && Character.isWhitespace(text.charAt(cursor))) {
-      cursor++;
+
+    private List<Object> array(int depth) {
+      require('[');
+      List<Object> result = new ArrayList<>();
+      whitespace();
+      if (take(']')) return result;
+      do {
+        result.add(value(depth + 1));
+        whitespace();
+        if (take(']')) return result;
+        require(',');
+      } while (true);
     }
-    int end = cursor;
-    boolean inString = false;
-    while (end < text.length()) {
-      char c = text.charAt(end);
-      if (c == '\\' && inString) {
-        end++;
-      } else if (c == '"') {
-        inString = !inString;
-      } else if (!inString && (c == ',' || c == '\n' || c == '}')) {
-        break;
+
+    private Object value(int depth) {
+      if (depth > MAX_DEPTH) throw error("JSON nesting exceeds " + MAX_DEPTH);
+      whitespace();
+      if (at == text.length()) throw error("missing value");
+      return switch (text.charAt(at)) {
+        case '{' -> object(depth);
+        case '[' -> array(depth);
+        case '"' -> string();
+        case 't' -> literal("true", Boolean.TRUE);
+        case 'f' -> literal("false", Boolean.FALSE);
+        case 'n' -> literal("null", null);
+        default -> number();
+      };
+    }
+
+    private Object literal(String token, Object value) {
+      if (!text.startsWith(token, at)) throw error("invalid literal");
+      at += token.length();
+      return value;
+    }
+
+    private JsonNumber number() {
+      int start = at;
+      take('-');
+      if (!take('0')) digits();
+      if (take('.')) digits();
+      if (take('e') || take('E')) {
+        if (!take('+')) take('-');
+        digits();
       }
-      end++;
+      return new JsonNumber(text.substring(start, at));
     }
-    return text.substring(cursor, end).trim();
-  }
 
-  private static String string(String text, String name) {
-    return unquote(raw(text, name));
-  }
+    private void digits() {
+      int start = at;
+      while (at < text.length() && text.charAt(at) >= '0' && text.charAt(at) <= '9') at++;
+      if (start == at) throw error("expected digit");
+    }
 
-  private static Optional<String> optional(String text, String name) {
-    String value = raw(text, name);
-    return "null".equals(value) ? Optional.empty() : Optional.of(unquote(value));
-  }
+    private String string() {
+      require('"');
+      StringBuilder result = new StringBuilder();
+      while (at < text.length()) {
+        char c = text.charAt(at++);
+        if (c == '"') return result.toString();
+        if (c < 0x20) throw error("unescaped control character");
+        if (c != '\\') {
+          result.append(c);
+          continue;
+        }
+        if (at == text.length()) throw error("incomplete string escape");
+        switch (text.charAt(at++)) {
+          case '"' -> result.append('"');
+          case '\\' -> result.append('\\');
+          case '/' -> result.append('/');
+          case 'b' -> result.append('\b');
+          case 'f' -> result.append('\f');
+          case 'n' -> result.append('\n');
+          case 'r' -> result.append('\r');
+          case 't' -> result.append('\t');
+          case 'u' -> result.append(unicodeEscape());
+          default -> throw error("invalid string escape");
+        }
+      }
+      throw error("unterminated string");
+    }
 
-  private static int integer(String text, String name) {
-    return Integer.parseInt(raw(text, name));
+    private char unicodeEscape() {
+      int value = 0;
+      for (int i = 0; i < 4; i++) {
+        if (at == text.length()) throw error("incomplete unicode escape");
+        char c = text.charAt(at++);
+        int digit =
+            c >= '0' && c <= '9'
+                ? c - '0'
+                : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+        if (digit < 0) throw error("invalid unicode escape");
+        value = value * 16 + digit;
+      }
+      return (char) value;
+    }
+
+    private void whitespace() {
+      while (at < text.length()) {
+        char c = text.charAt(at);
+        if (c != ' ' && c != '\t' && c != '\r' && c != '\n') break;
+        at++;
+      }
+    }
+
+    private boolean take(char c) {
+      if (at < text.length() && text.charAt(at) == c) {
+        at++;
+        return true;
+      }
+      return false;
+    }
+
+    private void require(char c) {
+      if (!take(c)) throw error("expected " + c);
+    }
+
+    private IllegalArgumentException error(String message) {
+      return new IllegalArgumentException(message + " at character " + at);
+    }
   }
 }
