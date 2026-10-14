@@ -75,54 +75,69 @@ final class ReproducibleActivationExp {
     int index = 0;
     int limit = PanamaVectorUtilSupport.FLOAT_SPECIES.loopBound(length);
     FloatVector oneFloat = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
-    for (; index < limit; index += FLOAT_SPECIES.length()) {
-      FloatVector value = FloatVector.fromArray(FLOAT_SPECIES, gate, gateOffset + index);
-      FloatVector multiplier = FloatVector.fromArray(FLOAT_SPECIES, up, upOffset + index);
-      FloatVector input = value.neg();
-      FloatVector result;
-      if (DOUBLE_SPECIES.length() == 1) {
-        result =
-            FloatVector.zero(FLOAT_SPECIES)
-                .withLane(0, (float) StrictMath.exp(input.lane(0)))
-                .withLane(1, (float) StrictMath.exp(input.lane(1)));
-      } else {
-        var bounded = input.max(-104.0f).min(89.0f);
-        DoubleVector x =
-            (DoubleVector) bounded.convertShape(VectorOperators.F2D, DOUBLE_SPECIES, 0);
-        var half =
-            DoubleVector.broadcast(DOUBLE_SPECIES, .5)
-                .blend(-.5, x.compare(VectorOperators.LT, 0.0));
-        var integers =
-            (IntVector)
-                x.mul(0x1.71547652b82fep0)
-                    .add(half)
-                    .convertShape(VectorOperators.D2I, INT_SPECIES, 0);
-        var kd = (DoubleVector) integers.convertShape(VectorOperators.I2D, DOUBLE_SPECIES, 0);
-        var k = (LongVector) integers.convertShape(VectorOperators.I2L, LONG_SPECIES, 0);
-        var hi = x.sub(kd.mul(HI));
-        var lo = kd.mul(LO);
-        var r = hi.sub(lo);
-        var t = r.mul(r);
-        var polynomial =
-            t.mul(0x1.6376972bea4d0p-25)
-                .add(-0x1.bbd41c5d26bf1p-20)
-                .mul(t)
-                .add(0x1.1566aaf25de2cp-14)
-                .mul(t)
-                .add(-0x1.6c16c16bebd93p-9)
-                .mul(t)
-                .add(0x1.555555555553ep-3);
-        var c = r.sub(t.mul(polynomial));
-        var one = DoubleVector.broadcast(DOUBLE_SPECIES, 1.0);
-        var y = one.sub(lo.sub(r.mul(c).div(c.neg().add(2.0))).sub(hi));
-        y = y.reinterpretAsLongs().add(k.lanewise(VectorOperators.LSHL, 52)).reinterpretAsDoubles();
+    for (; index < limit; index += PanamaVectorUtilSupport.FLOAT_SPECIES.length()) {
+      // Capture the complete published read group before writing any overlapping output.
+      FloatVector gateGroup =
+          FloatVector.fromArray(PanamaVectorUtilSupport.FLOAT_SPECIES, gate, gateOffset + index);
+      FloatVector upGroup =
+          FloatVector.fromArray(PanamaVectorUtilSupport.FLOAT_SPECIES, up, upOffset + index);
+      for (int part = 0;
+          part < PanamaVectorUtilSupport.FLOAT_SPECIES.length() / FLOAT_SPECIES.length();
+          part++) {
+        FloatVector value = (FloatVector) gateGroup.reinterpretShape(FLOAT_SPECIES, part);
+        FloatVector multiplier = (FloatVector) upGroup.reinterpretShape(FLOAT_SPECIES, part);
+        FloatVector input = value.neg();
+        FloatVector result;
+        if (DOUBLE_SPECIES.length() == 1) {
+          result =
+              FloatVector.zero(FLOAT_SPECIES)
+                  .withLane(0, (float) StrictMath.exp(input.lane(0)))
+                  .withLane(1, (float) StrictMath.exp(input.lane(1)));
+        } else {
+          var bounded = input.max(-104.0f).min(89.0f);
+          DoubleVector x =
+              (DoubleVector) bounded.convertShape(VectorOperators.F2D, DOUBLE_SPECIES, 0);
+          var half =
+              DoubleVector.broadcast(DOUBLE_SPECIES, .5)
+                  .blend(-.5, x.compare(VectorOperators.LT, 0.0));
+          var integers =
+              (IntVector)
+                  x.mul(0x1.71547652b82fep0)
+                      .add(half)
+                      .convertShape(VectorOperators.D2I, INT_SPECIES, 0);
+          var kd = (DoubleVector) integers.convertShape(VectorOperators.I2D, DOUBLE_SPECIES, 0);
+          var k = (LongVector) integers.convertShape(VectorOperators.I2L, LONG_SPECIES, 0);
+          var hi = x.sub(kd.mul(HI));
+          var lo = kd.mul(LO);
+          var r = hi.sub(lo);
+          var t = r.mul(r);
+          var polynomial =
+              t.mul(0x1.6376972bea4d0p-25)
+                  .add(-0x1.bbd41c5d26bf1p-20)
+                  .mul(t)
+                  .add(0x1.1566aaf25de2cp-14)
+                  .mul(t)
+                  .add(-0x1.6c16c16bebd93p-9)
+                  .mul(t)
+                  .add(0x1.555555555553ep-3);
+          var c = r.sub(t.mul(polynomial));
+          var one = DoubleVector.broadcast(DOUBLE_SPECIES, 1.0);
+          var y = one.sub(lo.sub(r.mul(c).div(c.neg().add(2.0))).sub(hi));
+          y =
+              y.reinterpretAsLongs()
+                  .add(k.lanewise(VectorOperators.LSHL, 52))
+                  .reinterpretAsDoubles();
 
-        result = (FloatVector) y.convertShape(VectorOperators.D2F, FLOAT_SPECIES, 0);
-        result = result.blend(Float.POSITIVE_INFINITY, input.compare(VectorOperators.GT, 89.0f));
-        result = result.blend(0.0f, input.compare(VectorOperators.LT, -104.0f));
-        result = result.blend(input.add(input), input.test(VectorOperators.IS_NAN));
+          result = (FloatVector) y.convertShape(VectorOperators.D2F, FLOAT_SPECIES, 0);
+          result = result.blend(Float.POSITIVE_INFINITY, input.compare(VectorOperators.GT, 89.0f));
+          result = result.blend(0.0f, input.compare(VectorOperators.LT, -104.0f));
+          result = result.blend(input.add(input), input.test(VectorOperators.IS_NAN));
+        }
+        value
+            .div(oneFloat.add(result))
+            .mul(multiplier)
+            .intoArray(out, outOffset + index + part * FLOAT_SPECIES.length());
       }
-      value.div(oneFloat.add(result)).mul(multiplier).intoArray(out, outOffset + index);
     }
     for (; index < length; index++) {
       float value = gate[gateOffset + index];

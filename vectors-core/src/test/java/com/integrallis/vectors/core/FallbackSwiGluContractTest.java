@@ -106,7 +106,7 @@ class FallbackSwiGluContractTest {
   @ValueSource(ints = {0, 1, 2})
   void forwardOverlapRetainsFirstGroupAccuracyAndColdHotHistory(int alias) {
     int length = PanamaVectorUtilSupport.FLOAT_SPECIES.length() * 3 + 1;
-    int firstGroup = ReproducibleActivationExp.FLOAT_SPECIES.length();
+    int firstGroup = PanamaVectorUtilSupport.FLOAT_SPECIES.length();
     float[] gate = new float[length + 3], up = new float[length + 3];
     float[] values = {-110f, -12.5f, -0f, 0f, 80f, 100f, Float.NaN};
     for (int i = 0; i < gate.length; i++) {
@@ -133,6 +133,50 @@ class FallbackSwiGluContractTest {
       ReproducibleActivationExp.swiGlu(output, 1, gate, 0, up, 0, length);
       for (int i = 0; i < output.length; i++)
         bits(cold[i], output[i], "repeat " + repeat + " lane " + i);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, 1, 2})
+  void forwardOverlapPreservesCompletePublishedReadGroups(int alias) {
+    int lanes = PanamaVectorUtilSupport.FLOAT_SPECIES.length();
+    for (int length : new int[] {1, lanes - 1, lanes, lanes + 1, 3 * lanes + 1, 67}) {
+      for (int shift = 1; shift <= lanes + 2 && shift < length; shift++) {
+        float[] gate = new float[length + shift + 5], up = new float[gate.length];
+        for (int i = 0; i < gate.length; i++) {
+          gate[i] = .25f * (i % 13 - 5);
+          up[i] = .5f + (i % 3) * .125f;
+        }
+        if (alias == 2) up = gate;
+        float[] expectedGate = gate.clone(), expectedUp = alias == 2 ? expectedGate : up.clone();
+        float[] output = alias == 1 ? up : gate;
+        float[] expected = alias == 1 ? expectedUp : expectedGate;
+        int inputOffset = 2, outputOffset = inputOffset + shift;
+        int i = 0, limit = length - length % lanes;
+        for (; i < limit; i += lanes) {
+          float[] groupGate =
+              Arrays.copyOfRange(expectedGate, inputOffset + i, inputOffset + i + lanes);
+          float[] groupUp =
+              Arrays.copyOfRange(expectedUp, inputOffset + i, inputOffset + i + lanes);
+          for (int j = 0; j < lanes; j++) {
+            float g = groupGate[j];
+            expected[outputOffset + i + j] = g / (1f + (float) StrictMath.exp(-g)) * groupUp[j];
+          }
+        }
+        for (; i < length; i++) {
+          float g = expectedGate[inputOffset + i];
+          expected[outputOffset + i] =
+              g / (1f + (float) StrictMath.exp(-g)) * expectedUp[inputOffset + i];
+        }
+        ReproducibleActivationExp.swiGlu(
+            output, outputOffset, gate, inputOffset, up, inputOffset, length);
+        for (i = 0; i < output.length; i++) {
+          bits(
+              expected[i],
+              output[i],
+              "alias=" + alias + " shift=" + shift + " length=" + length + " index=" + i);
+        }
+      }
     }
   }
 

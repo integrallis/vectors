@@ -8,6 +8,13 @@ All notable changes to java-vectors are documented here.
 
 ### Fixed
 
+- Preserve complete SIMD input groups before SwiGLU writes overlapping output; the narrower
+  exponential calculation no longer overwrites inputs needed by the same group.
+- Preserve recipe metadata and identity when reading compact JSON; reject malformed or ambiguous
+  documents with a bounded structural parser, without adding a runtime dependency.
+- Reject overlapping input/output ranges before matrix multiplication can corrupt activations.
+  Q8-to-F32, F32, BF16 and direct MXFP4 projections retain support for valid separate buffers;
+  batch APIs continue to support disjoint ranges within one array.
 - Keep SwiGLU, recurrent sigmoid/softplus gates and convolution/SiLU numerically stable
   before and after JIT compilation. This corrects Bonsai 2 native sequential/batched
   prefill divergence while preserving existing float intermediates and convolution history.
