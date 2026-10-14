@@ -114,7 +114,11 @@ public final class F32ExecutionMatrix {
     multiplyBatch(input, 0, batchSize, output, 0);
   }
 
-  /** Multiplies consecutive batch-major inputs into consecutive batch-major output rows. */
+  /**
+   * Multiplies consecutive batch-major inputs into consecutive batch-major output rows.
+   *
+   * @throws IllegalArgumentException if input and output ranges overlap in the same array
+   */
   public void multiplyBatch(
       float[] input, int inputOffset, int batchSize, float[] output, int outputOffset) {
     Objects.requireNonNull(input, "input");
@@ -124,6 +128,11 @@ public final class F32ExecutionMatrix {
     int outputElements = Math.multiplyExact(batchSize, rows);
     requireArrayRange(input.length, inputOffset, inputElements, "input");
     requireArrayRange(output.length, outputOffset, outputElements, "output");
+    if (input == output
+        && inputOffset < (long) outputOffset + outputElements
+        && outputOffset < (long) inputOffset + inputElements) {
+      throw new IllegalArgumentException("input and output ranges must not overlap");
+    }
 
     if (batchSize == 1) {
       multiplySingle(input, inputOffset, output, outputOffset);

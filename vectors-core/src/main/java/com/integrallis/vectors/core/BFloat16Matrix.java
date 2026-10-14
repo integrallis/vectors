@@ -78,7 +78,11 @@ public final class BFloat16Matrix {
     return columns;
   }
 
-  /** Multiplies this matrix by one F32 activation using F32 accumulation. */
+  /**
+   * Multiplies this matrix by one F32 activation using F32 accumulation.
+   *
+   * @throws IllegalArgumentException if input and output are the same array
+   */
   public void multiply(float[] input, float[] output) {
     Objects.requireNonNull(input, "input");
     Objects.requireNonNull(output, "output");
@@ -91,19 +95,32 @@ public final class BFloat16Matrix {
           "output length must be at least matrix rows " + rows + "; got " + output.length);
     }
 
+    if (input == output) {
+      throw new IllegalArgumentException("input and output ranges must not overlap");
+    }
+
     VECTOR_SUPPORT.bfloat16MatVecDot(input, data, rows, columns, output);
   }
 
   /**
    * Multiplies consecutive batch-major F32 activations without copying them into temporary arrays.
+   *
+   * @throws IllegalArgumentException if input and output ranges overlap in the same array
    */
   public void multiplyBatch(
       float[] input, int inputOffset, int batchSize, float[] output, int outputOffset) {
     Objects.requireNonNull(input, "input");
     Objects.requireNonNull(output, "output");
     requirePositive(batchSize, "batchSize");
-    requireArrayRange(input.length, inputOffset, Math.multiplyExact(batchSize, columns), "input");
-    requireArrayRange(output.length, outputOffset, Math.multiplyExact(batchSize, rows), "output");
+    int inputElements = Math.multiplyExact(batchSize, columns);
+    int outputElements = Math.multiplyExact(batchSize, rows);
+    requireArrayRange(input.length, inputOffset, inputElements, "input");
+    requireArrayRange(output.length, outputOffset, outputElements, "output");
+    if (input == output
+        && inputOffset < (long) outputOffset + outputElements
+        && outputOffset < (long) inputOffset + inputElements) {
+      throw new IllegalArgumentException("input and output ranges must not overlap");
+    }
 
     VECTOR_SUPPORT.bfloat16BatchedMatmul(
         input, inputOffset, data, batchSize, rows, columns, output, outputOffset);
