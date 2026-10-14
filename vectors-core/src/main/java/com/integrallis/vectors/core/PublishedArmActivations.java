@@ -49,7 +49,7 @@ import jdk.incubator.vector.VectorOperators;
  * DEALINGS IN THE SOFTWARE.
  */
 final class PublishedArmActivations {
-  static final float RLOG2 = 1.442695040888963407359924681001892137426645954152985934135449406931f;
+  static final float RLOG2 = 0x1.715476p0f;
   static final float C5 = (float) 0.000198527617612853646278381;
   static final float C4 = (float) 0.00139304355252534151077271;
   static final float C3 = (float) 0.00833336077630519866943359;
