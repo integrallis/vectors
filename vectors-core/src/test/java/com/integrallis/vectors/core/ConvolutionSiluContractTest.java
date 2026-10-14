@@ -174,7 +174,14 @@ class ConvolutionSiluContractTest {
       // This oracle tests read/write ordering, not the independently tested activation error.
       // Using the actual activation prevents approximate output fed through aliases from changing
       // later expected history values merely because the scalar reference rounds differently.
-      if (channel < limit) {
+      if (ArmActivationReference.applies()) {
+        // The ARM recipe uses the same explicit exponential for full groups and scalar tails.
+        // Replay it independently; calling the previous activation implementation here would
+        // test a different numerical contract and then contaminate subsequent aliased history.
+        for (int lane = 0; lane < count; lane++) {
+          sum[lane] = sum[lane] / (1.0f + ArmActivationReference.exp(-sum[lane]));
+        }
+      } else if (channel < limit) {
         ReproducibleConvolutionSilu.apply(sum, 0, count);
       } else {
         sum[0] = sum[0] / (1.0f + (float) StrictMath.exp(-sum[0]));

@@ -25,6 +25,7 @@ final class BonsaiActivationSequenceProbe {
   public static void main(String[] args) {
     int bits = PanamaVectorUtilSupport.FLOAT_SPECIES.vectorBitSize();
     boolean panama = VectorizationProvider.isPanamaEnabled();
+    boolean armRecipe = ArmActivationReference.applies();
     System.out.printf(
         "CONFIG requested=%s effective=%d preferred=%d vectorFma=%s scalarFma=%s java=%s arch=%s%n",
         System.getProperty("vectors.maxBits", "default"),
@@ -72,15 +73,22 @@ final class BonsaiActivationSequenceProbe {
           for (int h = 0; h < HEADS; h++) {
             int i = OFFSET + h;
             float x = alphas[step][i] + bias[i];
-            expectedBeta[i] = 1f / (1f + (float) StrictMath.exp(-expectedBeta[i]));
+            expectedBeta[i] =
+                1f
+                    / (1f
+                        + (armRecipe
+                            ? ArmActivationReference.exp(-expectedBeta[i])
+                            : (float) StrictMath.exp(-expectedBeta[i])));
             float softplus =
-                panama && h < HEADS - HEADS % lanes
-                    ? (x > 20f ? x : (float) StrictMath.log(1f + (float) StrictMath.exp(x)))
-                    : x > 20f
-                        ? x
-                        : x < -20f
-                            ? (float) StrictMath.exp(x)
-                            : (float) StrictMath.log1p(StrictMath.exp(x));
+                armRecipe
+                    ? (x > 20f ? x : ArmActivationReference.log(1f + ArmActivationReference.exp(x)))
+                    : panama && h < HEADS - HEADS % lanes
+                        ? (x > 20f ? x : (float) StrictMath.log(1f + (float) StrictMath.exp(x)))
+                        : x > 20f
+                            ? x
+                            : x < -20f
+                                ? (float) StrictMath.exp(x)
+                                : (float) StrictMath.log1p(StrictMath.exp(x));
             expectedDecay[i] = scale[i] * softplus;
           }
           float[] expectedValues = inputs[step].clone();
