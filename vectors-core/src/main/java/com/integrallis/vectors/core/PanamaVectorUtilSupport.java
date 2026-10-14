@@ -6900,24 +6900,6 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
   }
 
-  // Vector EXP/LOG can change rounding when HotSpot intrinsifies the call. Recurrent models
-  // amplify that cold/hot difference. Preserve the float intermediates around reproducible
-  // StrictMath operations; scratch is reused per caller thread, with no per-vector array
-  // allocation.
-  private static FloatVector activationExp(FloatVector input) {
-    float[] lanes = ACTIVATION_LANES.get();
-    input.intoArray(lanes, 0);
-    for (int i = 0; i < lanes.length; i++) lanes[i] = (float) StrictMath.exp(lanes[i]);
-    return FloatVector.fromArray(FLOAT_SPECIES, lanes, 0);
-  }
-
-  private static FloatVector activationLog(FloatVector input) {
-    float[] lanes = ACTIVATION_LANES.get();
-    input.intoArray(lanes, 0);
-    for (int i = 0; i < lanes.length; i++) lanes[i] = (float) StrictMath.log(lanes[i]);
-    return FloatVector.fromArray(FLOAT_SPECIES, lanes, 0);
-  }
-
   private static final boolean USE_PUBLISHED_ARM_ACTIVATIONS =
       "aarch64".equals(System.getProperty("os.arch")) && FLOAT_SPECIES.vectorBitSize() == 128;
 
@@ -6934,7 +6916,22 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       PublishedArmActivations.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
       return;
     }
-    ReproducibleActivationExp.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
+
+    int index = 0;
+    int limit = FLOAT_SPECIES.loopBound(length);
+    FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
+    for (; index < limit; index += FLOAT_SPECIES.length()) {
+      FloatVector value = FloatVector.fromArray(FLOAT_SPECIES, gate, gateOffset + index);
+      FloatVector multiplier = FloatVector.fromArray(FLOAT_SPECIES, up, upOffset + index);
+      value
+          .div(one.add(value.neg().lanewise(VectorOperators.EXP)))
+          .mul(multiplier)
+          .intoArray(out, outOffset + index);
+    }
+    for (; index < length; index++) {
+      float value = gate[gateOffset + index];
+      out[outOffset + index] = value / (1.0f + (float) Math.exp(-value)) * up[upOffset + index];
+    }
   }
 
   @Override
@@ -6965,6 +6962,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           length);
       return;
     }
+
     int index = 0;
     int limit = FLOAT_SPECIES.loopBound(length);
     FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
@@ -6972,12 +6970,13 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     for (; index < limit; index += FLOAT_SPECIES.length()) {
       FloatVector sigmoid =
           FloatVector.fromArray(FLOAT_SPECIES, sigmoidValues, sigmoidOffset + index);
-      one.div(one.add(activationExp(sigmoid.neg())))
+      one.div(one.add(sigmoid.neg().lanewise(VectorOperators.EXP)))
           .intoArray(sigmoidValues, sigmoidOffset + index);
       FloatVector value =
           FloatVector.fromArray(FLOAT_SPECIES, softplusValues, softplusOffset + index)
               .add(FloatVector.fromArray(FLOAT_SPECIES, bias, biasOffset + index));
-      FloatVector softplus = activationLog(one.add(activationExp(value)));
+      FloatVector softplus =
+          one.add(value.lanewise(VectorOperators.EXP)).lanewise(VectorOperators.LOG);
       softplus = softplus.blend(value, value.compare(VectorOperators.GT, threshold));
       softplus
           .mul(FloatVector.fromArray(FLOAT_SPECIES, scale, scaleOffset + index))
@@ -6986,14 +6985,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     for (; index < length; index++) {
       int sigmoidIndex = sigmoidOffset + index;
       float sigmoidValue = sigmoidValues[sigmoidIndex];
-      sigmoidValues[sigmoidIndex] = 1.0f / (1.0f + (float) StrictMath.exp(-sigmoidValue));
+      sigmoidValues[sigmoidIndex] = 1.0f / (1.0f + (float) Math.exp(-sigmoidValue));
       float softplusValue = softplusValues[softplusOffset + index] + bias[biasOffset + index];
       float softplus =
           softplusValue > 20.0f
               ? softplusValue
               : softplusValue < -20.0f
-                  ? (float) StrictMath.exp(softplusValue)
-                  : (float) StrictMath.log1p(StrictMath.exp(softplusValue));
+                  ? (float) Math.exp(softplusValue)
+                  : (float) Math.log1p(Math.exp(softplusValue));
       scaledSoftplus[scaledSoftplusOffset + index] = scale[scaleOffset + index] * softplus;
     }
   }
@@ -7020,18 +7019,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
           kernelSize);
       return;
     }
-    boolean overlapsHistory =
-        values == history
-            && valuesOffset < (long) historyOffset + (long) (kernelSize - 1) * channels
-            && historyOffset < (long) valuesOffset + channels;
-    boolean overlapsWeights =
-        values == weights
-            && valuesOffset < (long) weightsOffset + (long) kernelSize * channels
-            && weightsOffset < (long) valuesOffset + channels;
-    boolean independentValues = !overlapsHistory && !overlapsWeights;
+
     int historyLength = kernelSize - 1;
     int channel = 0;
     int limit = FLOAT_SPECIES.loopBound(channels);
+    FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
     for (; channel < limit; channel += FLOAT_SPECIES.length()) {
       FloatVector input = FloatVector.fromArray(FLOAT_SPECIES, values, valuesOffset + channel);
       FloatVector convolved =
@@ -7056,9 +7048,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         current.intoArray(history, historyIndex - channels);
       }
       input.intoArray(history, historyOffset + (historyLength - 1) * channels + channel);
-      convolved.intoArray(values, valuesOffset + channel);
-      if (!independentValues)
-        applyConvolutionSilu(values, valuesOffset + channel, FLOAT_SPECIES.length());
+      convolved
+          .div(one.add(convolved.neg().lanewise(VectorOperators.EXP)))
+          .intoArray(values, valuesOffset + channel);
     }
     for (; channel < channels; channel++) {
       float input = values[valuesOffset + channel];
@@ -7072,15 +7064,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         history[historyIndex - channels] = current;
       }
       history[historyOffset + (historyLength - 1) * channels + channel] = input;
-      values[valuesOffset + channel] = convolved / (1.0f + (float) StrictMath.exp(-convolved));
+      values[valuesOffset + channel] = convolved / (1.0f + (float) Math.exp(-convolved));
     }
-    if (independentValues) applyConvolutionSilu(values, valuesOffset, limit);
-  }
-
-  // Finish each published-width vector group before advancing, preserving alias/update order.
-  // Primitive activation arithmetic avoids cold Vector API exponential wrapper allocation.
-  private static void applyConvolutionSilu(float[] values, int offset, int length) {
-    ReproducibleConvolutionSilu.apply(values, offset, length);
   }
 
   @Override
