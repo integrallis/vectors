@@ -19,7 +19,7 @@ import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.IntVector;
 import jdk.incubator.vector.VectorOperators;
 
-/** External diagnostic: published ARM128 recipes with explicit warmed SLEEF math. */
+/** ARM128 activation recipes with explicit, compilation-stable SLEEF arithmetic. */
 /*
  * Generated source-order SLEEF 3.6.1 EXP/LOG array kernels.
  * Copyright Naoki Shibata and contributors 2010 - 2021.

@@ -21,6 +21,6 @@ Modifications: Java Vector API port of the polynomial and fixed coefficients;
 nearest-even range reduction; checked input-domain and alias validation;
 fused SiLU and up multiplication. Unsupported inputs remain on the Java path.
 
-External diagnostic includes source-order ports of SLEEF 3.6.1 expf/logf advsimd routines.
+ARM128 activations include source-order ports of SLEEF 3.6.1 expf/logf advsimd routines.
 Copyright Naoki Shibata and contributors 2010-2021. Boost Software License1.0.
 See licenses/sleef-boost.txt.
