@@ -15,9 +15,9 @@
  */
 package com.integrallis.vectors.vcr.junit5;
 
-import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
+import com.integrallis.vectors.vcr.LocalVcrStorageBackend;
 import com.integrallis.vectors.vcr.VCRContext;
 import com.integrallis.vectors.vcr.VCRDisabled;
 import com.integrallis.vectors.vcr.VCRMode;
@@ -67,7 +67,7 @@ public final class VCRExtension
     Files.createDirectories(dataDir);
 
     CassetteStore store = buildStore(dataDir);
-    VCRRegistry registry = new VCRRegistry(new LocalFileStorageBackend(dataDir));
+    VCRRegistry registry = new VCRRegistry(new LocalVcrStorageBackend(dataDir));
     VCRContext vcrContext = new VCRContext(store, registry, config.mode());
     ctx.getStore(NAMESPACE).put(CTX_KEY, vcrContext);
   }
@@ -179,7 +179,7 @@ public final class VCRExtension
         return store;
       }
     }
-    return new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
+    return new ExactCassetteStore(new LocalVcrStorageBackend(dataDir));
   }
 
   private static void wrapAnnotatedFields(

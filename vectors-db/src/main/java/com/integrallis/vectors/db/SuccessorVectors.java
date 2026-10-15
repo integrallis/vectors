@@ -116,10 +116,6 @@ final class SuccessorVectors {
     return carriedCount + staged.size();
   }
 
-  int dimension() {
-    return dimension;
-  }
-
   /** Length of {@code vectors.bin}, which is no longer bounded by the heap or by 2 GiB. */
   long length() {
     return length;

@@ -39,7 +39,7 @@ class Q8ColdHotDeterminismTest {
 
   private static void runProbe(int maxBits) throws Exception {
     Process process =
-        new ProcessBuilder(
+        ForkedJvmCoverage.process(
                 javaExecutable(),
                 "--add-modules",
                 "jdk.incubator.vector",

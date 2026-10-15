@@ -18,11 +18,11 @@ package com.integrallis.vectors.vcr.junit5;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
 import com.integrallis.vectors.vcr.CassetteKey;
 import com.integrallis.vectors.vcr.CassetteRecord;
 import com.integrallis.vectors.vcr.CassetteStore;
 import com.integrallis.vectors.vcr.ExactCassetteStore;
+import com.integrallis.vectors.vcr.LocalVcrStorageBackend;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -90,7 +90,7 @@ class VCRExtensionEngineTest {
             .testEvents();
     record.assertStatistics(stats -> stats.succeeded(2).failed(0));
 
-    ExactCassetteStore exact = new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
+    ExactCassetteStore exact = new ExactCassetteStore(new LocalVcrStorageBackend(dataDir));
     CassetteKey expected =
         new CassetteKey("embedding", RecordPlaybackScenario.class.getName() + ":embeds", 1);
     CassetteKey disabled =
@@ -119,7 +119,7 @@ class VCRExtensionEngineTest {
             .testEvents();
     failed.assertStatistics(stats -> stats.succeeded(0).failed(1));
 
-    ExactCassetteStore exact = new ExactCassetteStore(new LocalFileStorageBackend(dataDir));
+    ExactCassetteStore exact = new ExactCassetteStore(new LocalVcrStorageBackend(dataDir));
     CassetteKey writtenBeforeFailure =
         new CassetteKey(
             "embedding", FailedRecordingScenario.class.getName() + ":recordsThenFails", 1);

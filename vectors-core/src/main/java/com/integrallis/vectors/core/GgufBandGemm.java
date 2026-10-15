@@ -433,22 +433,9 @@ final class GgufBandGemm {
   // (GgufKQuantDequant; scalar reference loops below) or the scalar Q8_0 loop ----
 
   /**
-   * Dequantizes {@code blocks} whole blocks starting at byte {@code offset} of {@code weights} into
-   * {@code dst[dst0 ..]} with the configured K-quant dequant arm. Public to the package so the
-   * benchmark can time dequantization alone.
+   * Dequantizes whole blocks from the given byte offset into the destination, using the explicit
+   * K-quant arm (ignored for Q8_0). Package-private for the dequantization benchmark.
    */
-  static void dequantize(
-      int format,
-      MemorySegment weights,
-      long offset,
-      int blocks,
-      byte[] raw,
-      float[] dst,
-      int dst0) {
-    dequantize(GgufKQuantDequant.ACTIVE, format, weights, offset, blocks, raw, dst, dst0);
-  }
-
-  /** As above with an explicit K-quant dequant arm (ignored for Q8_0). */
   static void dequantize(
       GgufKQuantDequant.Arm arm,
       int format,

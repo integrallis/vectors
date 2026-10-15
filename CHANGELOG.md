@@ -4,6 +4,35 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-10-12
+
+### Fixed
+
+- Preserve recipe metadata and identity when reading compact JSON; reject malformed or ambiguous
+  documents with a bounded structural parser, without adding a runtime dependency.
+- Reject overlapping input/output ranges before matrix multiplication can corrupt activations.
+  Q8-to-F32, F32, BF16 and direct MXFP4 projections retain support for valid separate buffers;
+  batch APIs continue to support disjoint ranges within one array.
+- Keep SwiGLU, recurrent sigmoid/softplus gates and convolution/SiLU numerically stable before
+  and after JIT compilation **on aarch64 with a 128-bit float species**, correcting Bonsai 2
+  native sequential/batched prefill divergence there while preserving existing float intermediates
+  and convolution history.
+
+  On every other configuration -- all x86, and aarch64 at other vector widths -- activation
+  arithmetic is **unchanged from 0.1.29** and continues to use the platform vector exponential.
+  Output is therefore identical to the previous release on those targets, and the cold/hot
+  activation guarantee does not extend to them. A deterministic substitute was implemented and
+  measured, and it cost task quality on x86 (JEVBench 76/120 against 75/120 on a fixed
+  148-case comparison), so it was not adopted. The quantized and F32 matrix paths keep their
+  existing cold/hot guarantees on all targets.
+- Preserve BF16 projection reduction order across compilation states and batch shapes so
+  fresh native Bonsai sessions retain identical full-vocabulary logits, not just selected tokens.
+- Guard nested projection executor callbacks and maximum integer ranges used by BF16 row dispatch.
+- Avoid allocating a captured row callback for BF16 batches that execute on the calling thread.
+- Remove unread quantization builder state and an unused RAG demo tab constant.
+- Exercise 48-head recurrent gates, persistent four-tap history, offsets, tails, aliases,
+  concurrent callers, vector-width settings and disabled-FMA operation in regression checks.
+
 ## [0.1.29] - 2026-10-10
 
 ### Fixed

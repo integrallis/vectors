@@ -229,7 +229,7 @@ class GgufBandGemmTest {
       throws Exception {
     assumeTrue(VectorizationProvider.isPanamaEnabled(), "band arm requires the Vector API");
     Process process =
-        new ProcessBuilder(
+        ForkedJvmCoverage.process(
                 Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                 "--add-modules",
                 "jdk.incubator.vector",

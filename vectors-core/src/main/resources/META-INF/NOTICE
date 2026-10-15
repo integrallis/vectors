@@ -1,0 +1,26 @@
+ReproducibleActivationExp contains an adaptation of fdlibm e_exp.c:
+https://netlib.org/fdlibm/e_exp.c
+
+Copyright (C) 2004 by Sun Microsystems, Inc. All rights reserved.
+
+Permission to use, copy, modify, and distribute this
+software is freely granted, provided that this notice
+is preserved.
+
+
+The float SwiGLU exponential polynomial is adapted from Arm optimized-routines.
+Copyright (c) 2019-2026, Arm Limited.
+SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
+
+Upstream: https://github.com/ARM-software/optimized-routines
+Revision: 69d38dd8e3ee8bdde2f674ecc2d99af10fd27996
+File: math/aarch64/advsimd/expf.c
+License text: META-INF/licenses/arm-optimized-routines.txt
+
+Modifications: Java Vector API port of the polynomial and fixed coefficients;
+nearest-even range reduction; checked input-domain and alias validation;
+fused SiLU and up multiplication. Unsupported inputs remain on the Java path.
+
+ARM128 activations include source-order ports of SLEEF 3.6.1 expf/logf advsimd routines.
+Copyright Naoki Shibata and contributors 2010-2021. Boost Software License1.0.
+See licenses/sleef-boost.txt.

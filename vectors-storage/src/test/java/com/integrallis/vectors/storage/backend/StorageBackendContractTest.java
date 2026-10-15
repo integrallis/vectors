@@ -63,6 +63,30 @@ class LocalFileStorageBackendContractTest implements StorageBackendContract {
   }
 
   @Test
+  void localFileWriteFailureIsNotMistakenForUnsupportedDirectorySync() throws IOException {
+    StorageBackend b = backend();
+    b.put("preserved", new byte[] {1, 2, 3});
+    // A directory at the temporary-file path makes FileChannel.open fail before the atomic move.
+    Files.createDirectory(tmpDir.resolve("preserved.tmp"));
+    assertThatThrownBy(() -> b.put("preserved", new byte[] {9})).isInstanceOf(IOException.class);
+    assertThat(b.get("preserved")).isEqualTo(new byte[] {1, 2, 3});
+  }
+
+  @Test
+  void deletingMissingNestedKeyDoesNotOpenAbsentParent() throws IOException {
+    backend().delete("absent/parent/entry");
+    assertThat(Files.exists(tmpDir.resolve("absent"))).isFalse();
+  }
+
+  @Test
+  void hugeRangeOffsetCannotOverflowBoundsCheck() throws IOException {
+    StorageBackend b = backend();
+    b.put("range", new byte[] {1, 2, 3});
+    assertThatThrownBy(() -> b.getRange("range", Long.MAX_VALUE, 2))
+        .isInstanceOf(IndexOutOfBoundsException.class);
+  }
+
+  @Test
   void localFileStoresEtagAndValueAtomicallyInOneFile() throws IOException {
     StorageBackend b = backend();
     String key = key("atomic");

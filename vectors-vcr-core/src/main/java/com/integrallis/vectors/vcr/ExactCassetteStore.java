@@ -113,18 +113,4 @@ public final class ExactCassetteStore implements CassetteStore {
     }
     return result;
   }
-
-  /**
-   * @return the backing storage (package-private for diagnostics/tests)
-   */
-  StorageBackend backend() {
-    return backend;
-  }
-
-  /**
-   * @return the serializer (package-private for diagnostics/tests)
-   */
-  CassetteSerializer serializer() {
-    return serializer;
-  }
 }

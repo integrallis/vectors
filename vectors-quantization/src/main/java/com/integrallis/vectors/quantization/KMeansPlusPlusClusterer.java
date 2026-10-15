@@ -49,29 +49,19 @@ final class KMeansPlusPlusClusterer {
   private KMeansPlusPlusClusterer() {}
 
   /**
-   * Clusters a set of sub-vectors into k centroids using unweighted k-means++.
-   *
-   * @param data the sub-vectors to cluster, stored as a flat array: {@code data[i * dim + d]} is
-   *     dimension d of point i
-   * @param numPoints the number of sub-vectors
-   * @param dim the dimensionality of each sub-vector
-   * @param k the number of clusters (centroids)
-   * @param maxIterations maximum Lloyd's iterations
-   * @param rng random number generator for initialization
-   * @return centroids as a flat array: {@code centroids[c * dim + d]}, size k * dim
-   */
-  static float[] cluster(
-      float[] data, int numPoints, int dim, int k, int maxIterations, Random rng) {
-    return cluster(data, numPoints, dim, k, maxIterations, 0, UNWEIGHTED, rng);
-  }
-
-  /**
    * Clusters a set of sub-vectors into k centroids with optional anisotropic refinement.
    *
    * <p>When {@code anisotropicThreshold >= 0}, runs {@code maxIterations} unweighted Lloyd's
    * iterations first, then {@code anisotropicIterations} weighted iterations that penalise errors
    * parallel to the data vector direction (ScaNN / AVQ, Guo et al. 2020).
    *
+   * @param data the sub-vectors as a flat array: {@code data[i * dim + d]}
+   * @param numPoints the number of sub-vectors
+   * @param dim the dimensionality of each sub-vector
+   * @param k the number of clusters
+   * @param maxIterations maximum unweighted Lloyd's iterations
+   * @param rng random number generator for initialization
+   * @return centroids as a flat array: {@code centroids[c * dim + d]}, size k * dim
    * @param anisotropicIterations weighted-refinement iterations (0 to disable)
    * @param anisotropicThreshold the T parameter from AVQ \u00a73.4 (typical values 0.1\u20130.3);
    *     pass {@link #UNWEIGHTED} to disable anisotropic refinement entirely

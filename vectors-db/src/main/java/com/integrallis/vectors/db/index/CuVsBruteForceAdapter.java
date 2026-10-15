@@ -45,9 +45,6 @@ import java.util.Objects;
  */
 public final class CuVsBruteForceAdapter implements IndexSpi {
 
-  @SuppressWarnings("unused") // Reserved for future tunables (writer threads, metric overrides).
-  private final VectorCollectionConfig.CuVsParams.BruteForce params;
-
   private final Object lock = new Object();
 
   private CuVSResources resources;
@@ -57,7 +54,7 @@ public final class CuVsBruteForceAdapter implements IndexSpi {
   private SimilarityFunction metric;
 
   public CuVsBruteForceAdapter(VectorCollectionConfig.CuVsParams.BruteForce params) {
-    this.params = Objects.requireNonNull(params, "params must not be null");
+    Objects.requireNonNull(params, "params must not be null");
   }
 
   @Override

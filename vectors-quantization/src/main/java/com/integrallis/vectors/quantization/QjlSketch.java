@@ -73,11 +73,6 @@ final class QjlSketch {
     return seed;
   }
 
-  /** The working (padded) dimension. */
-  int dimension() {
-    return dimension;
-  }
-
   /** Number of bytes needed to store the {@code dimension} sign bits. */
   int bitBytes() {
     return (dimension + 7) / 8;

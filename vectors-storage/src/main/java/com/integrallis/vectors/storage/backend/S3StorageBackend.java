@@ -258,7 +258,7 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
 
   @Override
   public byte[] getRange(String key, long offset, int length) throws IOException {
-    if (offset < 0 || length < 0) {
+    if (offset < 0 || length < 0 || offset > Long.MAX_VALUE - length) {
       throw new IndexOutOfBoundsException(
           "getRange(" + key + ", offset=" + offset + ", length=" + length + ")");
     }
@@ -266,9 +266,14 @@ public final class S3StorageBackend implements StorageBackend, Closeable {
       // Avoid issuing a zero-byte Range request (some S3 implementations reject it).
       // Still verify the key exists so missing keys return null per the contract.
       try {
-        s3.headObject(b -> b.bucket(bucket).key(key));
-      } catch (NoSuchKeyException e) {
-        return null;
+        long size = s3.headObject(b -> b.bucket(bucket).key(key)).contentLength();
+        if (offset > size) {
+          throw new IndexOutOfBoundsException(
+              "getRange(" + key + ", offset=" + offset + ", length=0) size=" + size);
+        }
+      } catch (S3Exception e) {
+        if (e.statusCode() == 404) return null;
+        throw new IOException("S3 head failed for key: " + key, e);
       } catch (SdkException e) {
         throw new IOException("S3 head failed for key: " + key, e);
       }

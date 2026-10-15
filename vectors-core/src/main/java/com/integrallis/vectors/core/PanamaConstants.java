@@ -138,10 +138,6 @@ public final class PanamaConstants {
     return parsed;
   }
 
-  static boolean useMappedKQuantLongOffsets(MappedKQuantFormat format, boolean mapped) {
-    return mapped && MAPPED_K_QUANT_LONG_OFFSET_POLICY.enabled(format);
-  }
-
   static boolean useMappedKQuantLongOffsets(
       int runtimeFeature,
       String arch,
@@ -202,10 +198,11 @@ public final class PanamaConstants {
    * false}; that is the correct "no SVE path here" answer and existing fixed-species kernels are
    * unaffected.
    *
-   * <p>This is detection-only scaffolding (P3.5): no kernel currently dispatches on it. A future
-   * predicated/scalable-vector kernel can branch on {@code HAS_SVE} to enter the SVE path while
-   * falling back to the selected fixed-width species elsewhere. Can be forced via {@code
-   * -Dvectors.forceSve=true|false} for testing.
+   * <p>BF16 ordinary-row projections use this capability to select the measured reduction compiler
+   * layout: inline reductions on SVE and direct helper calls elsewhere. Both layouts preserve the
+   * same arithmetic tree and selected fixed-width species. Can be forced via {@code
+   * -Dvectors.forceSve=true|false} for testing; a forced width or capability does not establish
+   * performance on different hardware.
    */
   public static final boolean HAS_SVE = detectSve();
 

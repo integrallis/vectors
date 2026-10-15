@@ -103,9 +103,16 @@ public final class Mxfp4Matrix {
     return columns;
   }
 
-  /** Multiplies this matrix by one F32 activation using F32 accumulation. */
+  /**
+   * Multiplies this matrix by one F32 activation using F32 accumulation.
+   *
+   * @throws IllegalArgumentException if input and output are the same array
+   */
   public void multiply(float[] input, float[] output) {
     checkMultiplyArguments(input, output);
+    if (input == output) {
+      throw new IllegalArgumentException("input and output ranges must not overlap");
+    }
 
     for (int row = 0; row < rows; row++) {
       float sum = 0.0f;

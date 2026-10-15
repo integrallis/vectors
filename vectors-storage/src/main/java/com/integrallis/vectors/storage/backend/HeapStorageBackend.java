@@ -20,7 +20,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -55,7 +54,10 @@ public final class HeapStorageBackend implements StorageBackend {
   public byte[] getRange(String key, long offset, int length) {
     Entry entry = store.get(key);
     if (entry == null) return null;
-    if (offset < 0 || length < 0 || offset + length > entry.value.length) {
+    if (offset < 0
+        || length < 0
+        || offset > entry.value.length
+        || length > entry.value.length - offset) {
       throw new IndexOutOfBoundsException(
           "getRange("
               + key
@@ -116,14 +118,6 @@ public final class HeapStorageBackend implements StorageBackend {
     } catch (NoSuchAlgorithmException e) {
       throw new ExceptionInInitializerError(e);
     }
-  }
-
-  /** Returns a read-only snapshot of the internal store (for diagnostics / tests). */
-  Map<String, byte[]> snapshot() {
-    return store.entrySet().stream()
-        .collect(
-            java.util.stream.Collectors.toUnmodifiableMap(
-                Map.Entry::getKey, entry -> entry.getValue().valueCopy()));
   }
 
   private record Entry(byte[] value, String etag) {

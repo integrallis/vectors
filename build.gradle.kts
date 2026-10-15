@@ -16,6 +16,8 @@ plugins {
 val releaseDependencyPolicy = JsonSlurper().parse(file("gradle/dependency-policy.json")) as Map<*, *>
 extra["jacksonVersion"] = releaseDependencyPolicy["jacksonBom"] as String
 extra["slf4jVersion"] = releaseDependencyPolicy["slf4j"] as String
+// Align the test agent and runtime with Models and the supported JDK 25 class-file format.
+extra["mockitoVersion"] = "5.23.0"
 extra["releaseDependencyModules"] = releaseDependencyPolicy["modules"] as Map<*, *>
 
 val notebookRepositoryUrl = providers.gradleProperty("notebookRepository")
@@ -286,7 +288,7 @@ configure(libraryProjects) {
     // ("Could not complete execution for Gradle Test Executor"). Resolve just the mockito-core jar
     // and pass it as -javaagent to every Test task; a Provider keeps it configuration-cache safe.
     val mockitoAgent = configurations.create("mockitoAgent")
-    dependencies.add("mockitoAgent", "org.mockito:mockito-core:5.15.2")?.let {
+    dependencies.add("mockitoAgent", "org.mockito:mockito-core:${rootProject.extra["mockitoVersion"]}")?.let {
         (it as ExternalModuleDependency).isTransitive = false
     }
     val mockitoAgentArg = mockitoAgent.elements.map { "-javaagent:" + it.single().asFile.absolutePath }
@@ -477,8 +479,49 @@ configure(libraryProjects) {
         enabled = false
     }
 
+    // Preserve the primary compilation-state tests' original, uninstrumented child JVMs.
+    // A separate mandatory run accounts for the same supported functional routes in coverage.
+    // These observations are not substituted for the original cold/hot regression gate.
+    val functionalForkCoverage = layout.buildDirectory.dir("jacoco/functional-forks")
+    if (project.name == "vectors-core") {
+        tasks.register<Test>("functionalForkCoverageTest") {
+            description = "Account for existing functional child JVMs after their uninstrumented gate"
+            group = "verification"
+            testClassesDirs = sourceSets["test"].output.classesDirs
+            classpath = sourceSets["test"].runtimeClasspath
+            useJUnitPlatform()
+            filter {
+                includeTestsMatching("com.integrallis.vectors.core.ActivationColdHotTest")
+                includeTestsMatching("com.integrallis.vectors.core.BFloat16MatrixColdHotTest")
+                includeTestsMatching("com.integrallis.vectors.core.BFloat16NestedDispatchTest")
+                includeTestsMatching("com.integrallis.vectors.core.BonsaiActivationSequenceTest")
+                includeTestsMatching("com.integrallis.vectors.core.F32ExecutionMatrixColdHotTest")
+                includeTestsMatching("com.integrallis.vectors.core.GgufBandGemmTest")
+                includeTestsMatching("com.integrallis.vectors.core.GgufBatchDispatchTest")
+                includeTestsMatching("com.integrallis.vectors.core.GgufKQuantDequantTest")
+                includeTestsMatching("com.integrallis.vectors.core.Q4KColdHotDeterminismTest")
+                includeTestsMatching("com.integrallis.vectors.core.Q5KColdHotDeterminismTest")
+                includeTestsMatching("com.integrallis.vectors.core.Q6KColdHotDeterminismTest")
+                includeTestsMatching("com.integrallis.vectors.core.Q8ColdHotDeterminismTest")
+                includeTestsMatching("com.integrallis.vectors.core.SwiGluColdHotTest")
+            }
+            mustRunAfter(tasks.test)
+            systemProperty(
+                "vectors.test.forkCoverageDir",
+                functionalForkCoverage.get().asFile.absolutePath
+            )
+            outputs.dir(functionalForkCoverage).withPropertyName("functionalForkCoverage")
+            doFirst { delete(functionalForkCoverage) }
+        }
+    }
+
     tasks.jacocoTestReport {
         dependsOn(tasks.test)
+        if (project.name == "vectors-core") {
+            dependsOn(tasks.named("functionalForkCoverageTest"))
+            executionData(layout.buildDirectory.file("jacoco/functionalForkCoverageTest.exec"))
+            executionData(fileTree(functionalForkCoverage) { include("*.exec") })
+        }
         reports {
             xml.required = true
             html.required = true
@@ -487,6 +530,11 @@ configure(libraryProjects) {
 
     tasks.jacocoTestCoverageVerification {
         dependsOn(tasks.test)
+        if (project.name == "vectors-core") {
+            dependsOn(tasks.named("functionalForkCoverageTest"))
+            executionData(layout.buildDirectory.file("jacoco/functionalForkCoverageTest.exec"))
+            executionData(fileTree(functionalForkCoverage) { include("*.exec") })
+        }
         enabled = project in publishedProjects
         violationRules {
             rule {
@@ -532,8 +580,8 @@ configure(libraryProjects) {
         // Testing
         testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
         testImplementation("org.assertj:assertj-core:3.27.2")
-        testImplementation("org.mockito:mockito-core:5.15.2")
-        testImplementation("org.mockito:mockito-junit-jupiter:5.15.2")
+        testImplementation("org.mockito:mockito-core:${rootProject.extra["mockitoVersion"]}")
+        testImplementation("org.mockito:mockito-junit-jupiter:${rootProject.extra["mockitoVersion"]}")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
         testRuntimeOnly("ch.qos.logback:logback-classic:1.5.15")
     }
@@ -1031,6 +1079,13 @@ tasks.register("verifyDocumentation") {
         val landingPage = file("docs/landing/index.html").readText()
         val landingScript = file("docs/landing/assets/js/landing.js").readText()
         val releaseVersion = project.version.toString()
+        val antoraDescriptor = file("docs/content/antora.yml").readLines().map { it.trim() }
+        require("display_version: '$releaseVersion'" in antoraDescriptor) {
+            "Antora display_version must match project version $releaseVersion"
+        }
+        require("vectors-version: '$releaseVersion'" in antoraDescriptor) {
+            "Antora dependency snippets must match project version $releaseVersion"
+        }
         require("collection.search(query, 10)" !in landingPage) {
             "Landing page uses a nonexistent VectorCollection.search overload"
         }

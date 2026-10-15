@@ -29,18 +29,18 @@ baseline fixture verifies that unrelated compile-only compatibility dependencies
 `python3 scripts/test-published-consumers.py` verifies matching Maven/Gradle metadata, then changes
 only the POM: Gradle must still resolve the expected version and the Maven consumer must reject it.
 
-## Reviewed selection, 2026-10-10
+## Reviewed selection, 2026-10-14
 
 | Dependency | Selection and basis |
 | --- | --- |
 | Jackson 2 | BOM 2.22.3; annotations 2.22 as specified by that BOM. [Release notes](https://github.com/FasterXML/jackson/wiki/Jackson-Release-2.22.3). Jackson 3 uses different packages and requires a separate migration. |
 | SLF4J | Stable 2.0.20. The metadata's 2.1.0-alpha1 is a prerelease. [Publisher news](https://www.slf4j.org/news.html). |
 | Netty | 4.1.139.Final security patch for the supported 4.1 line. [Release notes](https://netty.io/news/2026/10/06/4-1-139-Final.html). 4.2 is a separate transport migration; 4.1 support ends July 2027. |
-| AWS SDK | 2.55.14, [published 2026-10-09](https://github.com/aws/aws-sdk-java-v2/releases/tag/2.55.14). S3 integration tests must cover the changed checksum defaults introduced after the old 2.29 baseline. |
-| Caffeine | 3.3.0, including its matching JCache integration. [Release notes](https://github.com/ben-manes/caffeine/releases/tag/v3.3.0). |
+| AWS SDK | 2.55.16, including the failed CRT upload completion fix. [Release notes](https://github.com/aws/aws-sdk-java-v2/releases/tag/2.55.16). The intervening [2.55.15](https://github.com/aws/aws-sdk-java-v2/releases/tag/2.55.15) adds version resources and corrects negative fractional DynamoDB durations. S3 integration tests retain coverage of checksum defaults introduced after the old 2.29 baseline. |
+| Caffeine | 3.3.1, including its matching JCache integration and reusable ForkJoinTask correction. [Release notes](https://github.com/ben-manes/caffeine/releases/tag/v3.3.1). |
 | Avaje JSON | 3.15, the latest verifiable source tag and release notes. Central advertises 3.16, but neither source tag nor release notes were available during this review; defer that artifact pending provenance review. [Releases](https://github.com/avaje/avaje-jsonb/releases). |
 | Arrow | 19.0.0, current Java release. [Publisher release](https://arrow.apache.org/blog/2026/03/16/arrow-java-19.0.0/). |
-| Commons Codec | 1.22.1; encoding and decoding corrections since Arrow's transitive 1.21.0. [Release notes](https://commons.apache.org/proper/commons-codec/changes.html). |
+| Commons Codec | 1.23.0; decoding strictness and size-limit corrections. [Release notes](https://commons.apache.org/proper/commons-codec/changes.html). |
 | Apache HttpClient / HttpCore | Stable 5.6.5 / 5.4.4; connection cleanup, async decompression and interrupted-write fixes. Newer 5.7-alpha / 5.5-beta lines are prereleases. [Client notes](https://github.com/apache/httpcomponents-client/blob/rel/v5.6.5/RELEASE_NOTES.txt), [Core notes](https://github.com/apache/httpcomponents-core/blob/rel/v5.4.4/RELEASE_NOTES.txt). |
 | JCache, reactive streams, FlatBuffers, AWS eventstream | Existing 1.1.1, 1.0.4, 25.2.10, 1.0.1 remain current in Maven Central. |
 

@@ -17,6 +17,8 @@ package com.integrallis.vectors.demo.vcre2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
+import com.integrallis.vectors.vcr.LocalVcrStorageBackend;
 import com.integrallis.vectors.vcr.VCRMode;
 import com.integrallis.vectors.vcr.VCRModel;
 import com.integrallis.vectors.vcr.junit5.VCRTest;
@@ -24,8 +26,14 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -44,15 +52,39 @@ import org.junit.jupiter.api.Test;
  *
  * <pre>
  *   ./gradlew :demos:vcr-e2e:test   # strict playback; committed cassettes are required
- *   VCR_MODE=RECORD ./gradlew :demos:vcr-e2e:test   # deliberately refresh cassettes
+ *   VCR_MODE=RECORD ./gradlew :demos:vcr-e2e:test   # record into build/vcr-data for review
  * </pre>
  */
-@VCRTest(mode = VCRMode.PLAYBACK, dataDir = "src/test/resources/vcr-data")
+@VCRTest(mode = VCRMode.PLAYBACK, dataDir = "build/vcr-data")
 public class VcrE2eDemo {
 
   static final AtomicInteger realEmbedderCalls = new AtomicInteger();
 
   @VCRModel EmbeddingModel embedder = new FakeBackend();
+
+  // Keep Git resource paths short on Windows; only the runtime store uses encoded logical keys.
+  @BeforeAll
+  static void installCommittedCassettes() throws IOException {
+    Path seed = Path.of("build/vcr-fixture-seed");
+    Files.createDirectories(seed);
+    var keys = new Properties();
+    try (var in = VcrE2eDemo.class.getResourceAsStream("/vcr-fixtures/keys.properties")) {
+      if (in == null) throw new IOException("Missing committed cassette manifest");
+      keys.load(in);
+    }
+    var source = new LocalFileStorageBackend(seed);
+    var destination =
+        new LocalVcrStorageBackend(Path.of(System.getProperty("vcr.dataDir", "build/vcr-data")));
+    for (String resource : keys.stringPropertyNames()) {
+      if (!resource.matches("[a-z]+\\.vlfs"))
+        throw new IOException("Invalid fixture resource name");
+      try (var in = VcrE2eDemo.class.getResourceAsStream("/vcr-fixtures/" + resource)) {
+        if (in == null) throw new IOException("Missing committed cassette: " + resource);
+        Files.copy(in, seed.resolve(resource), StandardCopyOption.REPLACE_EXISTING);
+      }
+      destination.put(keys.getProperty(resource), source.get(resource));
+    }
+  }
 
   @Test
   void embedsSingleText() {

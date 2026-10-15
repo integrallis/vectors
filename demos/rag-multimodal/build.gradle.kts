@@ -44,10 +44,10 @@ dependencies {
     implementation("io.github.palexdev:materialfx:11.17.0")
 
     // Test
+    testImplementation("org.mockito:mockito-core:${rootProject.extra["mockitoVersion"]}")
+    testImplementation("org.mockito:mockito-junit-jupiter:${rootProject.extra["mockitoVersion"]}")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testImplementation("org.assertj:assertj-core:3.27.2")
-    testImplementation("org.mockito:mockito-core:5.15.2")
-    testImplementation("org.mockito:mockito-junit-jupiter:5.15.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

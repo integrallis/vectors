@@ -24,9 +24,9 @@ import java.util.Map;
  * distance) into an {@link IndexSpi.SearchOutcome} (parallel {@code int[]} ordinals and {@code
  * float[]} scores, descending).
  *
- * <p>cuVS reports raw distances where <em>lower is closer</em>. The rest of java-vectors orders
- * search results by descending similarity, so L2 and cosine are negated and inner-product scores
- * are returned as-is (cuVS already returns them as similarities).
+ * <p>Convert cuVS squared L2 distances, cosine distances, and inner products to the same normalized
+ * scores as {@link SimilarityFunction}. Collection score thresholds must retain their meaning when
+ * an application changes index implementations.
  */
 final class CuVsResultDecoder {
 
@@ -53,8 +53,10 @@ final class CuVsResultDecoder {
 
   private static float toScore(SimilarityFunction metric, float rawDistance) {
     return switch (metric) {
-      case EUCLIDEAN, COSINE -> -rawDistance;
-      case DOT_PRODUCT, MAXIMUM_INNER_PRODUCT -> rawDistance;
+      case EUCLIDEAN -> 1f / (1f + rawDistance);
+      case COSINE -> (2f - rawDistance) / 2f;
+      case DOT_PRODUCT -> (1f + rawDistance) / 2f;
+      case MAXIMUM_INNER_PRODUCT -> SimilarityFunction.scaleMaxInnerProductScore(rawDistance);
     };
   }
 

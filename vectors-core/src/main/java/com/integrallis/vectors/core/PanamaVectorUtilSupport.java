@@ -64,11 +64,14 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       PanamaConstants.preferredSpecies(IntVector.SPECIES_PREFERRED);
   static final VectorSpecies<Long> LONG_SPECIES =
       PanamaConstants.preferredSpecies(LongVector.SPECIES_PREFERRED);
-  private static final VectorShuffle<Float> REDUCE_ROTATE_1 = reductionRotation(1);
-  private static final VectorShuffle<Float> REDUCE_ROTATE_2 = reductionRotation(2);
-  private static final VectorShuffle<Float> REDUCE_ROTATE_4 = reductionRotation(4);
-  private static final VectorShuffle<Float> REDUCE_ROTATE_8 = reductionRotation(8);
+  // Shared with kernels that keep the fixed reduction inside their row loop for escape analysis.
+  static final VectorShuffle<Float> REDUCE_ROTATE_1 = reductionRotation(1);
+  static final VectorShuffle<Float> REDUCE_ROTATE_2 = reductionRotation(2);
+  static final VectorShuffle<Float> REDUCE_ROTATE_4 = reductionRotation(4);
+  static final VectorShuffle<Float> REDUCE_ROTATE_8 = reductionRotation(8);
   static final int VECTOR_BITSIZE = FLOAT_SPECIES.vectorBitSize();
+  private static final ThreadLocal<float[]> ACTIVATION_LANES =
+      ThreadLocal.withInitial(() -> new float[FLOAT_SPECIES.length()]);
   private static final boolean Q4_K_FOUR_QUERY_TILE_SUPPORTED =
       useQ4KFourQueryTile(System.getProperty("os.arch", ""), VECTOR_BITSIZE, 4);
   private static final boolean Q5_K_FOUR_QUERY_TILE_SUPPORTED =
@@ -6897,6 +6900,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     }
   }
 
+  private static final boolean USE_PUBLISHED_ARM_ACTIVATIONS =
+      "aarch64".equals(System.getProperty("os.arch")) && FLOAT_SPECIES.vectorBitSize() == 128;
+
   @Override
   public void swiGlu(
       float[] out,
@@ -6906,6 +6912,11 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] up,
       int upOffset,
       int length) {
+    if (USE_PUBLISHED_ARM_ACTIVATIONS) {
+      PublishedArmActivations.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
+      return;
+    }
+
     int index = 0;
     int limit = FLOAT_SPECIES.loopBound(length);
     FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
@@ -6936,6 +6947,22 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] scaledSoftplus,
       int scaledSoftplusOffset,
       int length) {
+    if (USE_PUBLISHED_ARM_ACTIVATIONS) {
+      PublishedArmActivations.sigmoidAndScaledSoftplus(
+          sigmoidValues,
+          sigmoidOffset,
+          softplusValues,
+          softplusOffset,
+          bias,
+          biasOffset,
+          scale,
+          scaleOffset,
+          scaledSoftplus,
+          scaledSoftplusOffset,
+          length);
+      return;
+    }
+
     int index = 0;
     int limit = FLOAT_SPECIES.loopBound(length);
     FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
@@ -6980,6 +7007,19 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int weightsOffset,
       int channels,
       int kernelSize) {
+    if (USE_PUBLISHED_ARM_ACTIVATIONS) {
+      PublishedArmActivations.causalDepthwiseConv1dSilu(
+          values,
+          valuesOffset,
+          history,
+          historyOffset,
+          weights,
+          weightsOffset,
+          channels,
+          kernelSize);
+      return;
+    }
+
     int historyLength = kernelSize - 1;
     int channel = 0;
     int limit = FLOAT_SPECIES.loopBound(channels);

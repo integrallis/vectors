@@ -56,7 +56,6 @@ import javafx.stage.FileChooser;
 public class ChatController extends BorderPane {
 
   private static final int SETTINGS_TAB = 0;
-  private static final int ROUTER_TAB = 1;
   private static final int LOG_TAB = 2;
 
   private final ObservableList<ChatMessage> messages = FXCollections.observableArrayList();

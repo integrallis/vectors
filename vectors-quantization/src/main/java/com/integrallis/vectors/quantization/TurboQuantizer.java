@@ -388,11 +388,6 @@ public final class TurboQuantizer implements Quantizer<TurboQuantizedVectors> {
     return rotation;
   }
 
-  /** Returns the Lloyd-Max codebook. */
-  LloydMaxCodebook codebook() {
-    return codebook;
-  }
-
   /** Returns the padded dimension (next multiple of 64 at or above {@code dimension}). */
   public int paddedDimension() {
     return paddedDimension;

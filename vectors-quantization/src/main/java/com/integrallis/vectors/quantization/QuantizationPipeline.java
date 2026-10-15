@@ -206,7 +206,6 @@ public final class QuantizationPipeline {
 
     private QuantizerType type = QuantizerType.SCALAR_INT8;
     private SimilarityFunction similarity = SimilarityFunction.EUCLIDEAN;
-    private ScalarBits scalarBits = ScalarBits.INT8;
     private float confidence = 0.99f;
     private int subspaces = 8;
     private int clusters = 256;

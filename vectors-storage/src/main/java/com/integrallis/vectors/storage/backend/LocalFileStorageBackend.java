@@ -16,9 +16,9 @@
 package com.integrallis.vectors.storage.backend;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -46,8 +46,19 @@ public final class LocalFileStorageBackend implements StorageBackend {
   private static final int HEADER_FIXED_BYTES = Integer.BYTES * 3 + Long.BYTES;
 
   private final Path root;
+  private final ChannelOpener channels;
+
+  @FunctionalInterface
+  interface ChannelOpener {
+    FileChannel open(Path path, java.nio.file.OpenOption... options) throws IOException;
+  }
 
   public LocalFileStorageBackend(Path root) throws IOException {
+    this(root, FileChannel::open);
+  }
+
+  LocalFileStorageBackend(Path root, ChannelOpener channels) throws IOException {
+    this.channels = java.util.Objects.requireNonNull(channels, "channels");
     this.root = root.toAbsolutePath().normalize();
     Files.createDirectories(this.root);
   }
@@ -86,7 +97,7 @@ public final class LocalFileStorageBackend implements StorageBackend {
       FramedHeader header = readFramedHeader(ch, target);
       long valueOffset = header == null ? 0 : header.valueOffset();
       long size = header == null ? ch.size() : header.valueLength();
-      if (offset < 0 || length < 0 || offset + length > size) {
+      if (offset < 0 || length < 0 || offset > size || length > size - offset) {
         throw new IndexOutOfBoundsException(
             "getRange(" + key + ", offset=" + offset + ", length=" + length + ") size=" + size);
       }
@@ -114,9 +125,9 @@ public final class LocalFileStorageBackend implements StorageBackend {
   @Override
   public void delete(String key) throws IOException {
     Path target = resolve(key);
-    Files.deleteIfExists(target);
-    Files.deleteIfExists(legacyEtagPath(key));
-    forceDirectory(target.getParent());
+    boolean removed = Files.deleteIfExists(target);
+    removed |= Files.deleteIfExists(legacyEtagPath(key));
+    if (removed) forceDirectory(target.getParent());
   }
 
   @Override
@@ -163,7 +174,7 @@ public final class LocalFileStorageBackend implements StorageBackend {
     return readFramed(p).etag();
   }
 
-  private static void writeFramed(Path file, String etag, byte[] value) throws IOException {
+  private void writeFramed(Path file, String etag, byte[] value) throws IOException {
     byte[] etagBytes = etag.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     ByteBuffer header = ByteBuffer.allocate(HEADER_FIXED_BYTES + etagBytes.length);
     header.putInt(MAGIC);
@@ -173,7 +184,7 @@ public final class LocalFileStorageBackend implements StorageBackend {
     header.put(etagBytes);
     header.flip();
     try (FileChannel ch =
-        FileChannel.open(
+        channels.open(
             file,
             StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING,
@@ -278,15 +289,25 @@ public final class LocalFileStorageBackend implements StorageBackend {
     }
   }
 
-  private static void forceDirectory(Path dir) throws IOException {
-    try (FileChannel ch = FileChannel.open(dir, StandardOpenOption.READ)) {
+  private void forceDirectory(Path dir) throws IOException {
+    FileChannel directory;
+    try {
+      directory = channels.open(dir, StandardOpenOption.READ);
+    } catch (AccessDeniedException e) {
+      // The Windows provider rejects opening directories as FileChannels. Only this known
+      // unsupported open is best-effort; file writes and every actual force failure still throw.
+      if (dir.getFileSystem().getSeparator().equals("\\") && Files.isDirectory(dir)) {
+        LOG.debug("forceDirectory({}) skipped: Windows directory channels are unsupported", dir);
+        return;
+      }
+      throw e;
+    } catch (UnsupportedOperationException e) {
+      LOG.debug(
+          "forceDirectory({}) skipped: directory channels are unsupported: {}", dir, e.toString());
+      return;
+    }
+    try (FileChannel ch = directory) {
       ch.force(true);
-    } catch (UnsupportedOperationException | UncheckedIOException e) {
-      // Some filesystems do not allow opening directories as channels. The value file itself has
-      // already been forced; directory fsync is best-effort on those platforms. We log at DEBUG
-      // so a non-fsync'ing platform is visible to anyone running with debug logging on (audit
-      // recommended against the previous empty-catch which made this invisible).
-      LOG.debug("forceDirectory({}) skipped: {}", dir, e.toString());
     }
   }
 
