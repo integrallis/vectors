@@ -35,6 +35,10 @@ with different options. Responses containing tool calls and streaming responses
 are not cached.
 
 ```kotlin
-implementation("com.integrallis:vectors-cache-semantic-spring-ai:0.1.9")
-implementation("com.integrallis:vectors-cache-semantic-db:0.1.9")
+val vectorsVersion = providers.gradleProperty("vectorsVersion").get()
+
+dependencies {
+    implementation("com.integrallis:vectors-cache-semantic-spring-ai:$vectorsVersion")
+    implementation("com.integrallis:vectors-cache-semantic-db:$vectorsVersion")
+}
 ```

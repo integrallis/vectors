@@ -1061,6 +1061,58 @@ tasks.register("verifyDocumentation") {
             "README must link to the executable notebooks"
         }
 
+        // Every other place that names a coordinate or a doc-site version, not just this README.
+        //
+        // AUDITED 2026-10-23: vectors-cache-semantic-spring-ai/README.md told a reader to depend
+        // on 0.1.9 while both modules it names publish at 0.1.30, and nothing checked it. There
+        // was no documentation version check in this repository at all. A literal is permitted
+        // only where interpolation is impossible -- an Antora attribute, an HTML or JavaScript
+        // snippet -- and then it must equal the project version; Markdown uses the version
+        // property, which is what this README does.
+        val currentVersion = version.toString()
+        val staleVersionCitations = mutableListOf<String>()
+        val coordinateUse =
+            Regex("""com\.integrallis:(vectors[A-Za-z0-9.-]*):(\d+\.\d+\.\d+)""")
+        val attributeUse =
+            Regex("""(?:vectors-version|display_version):\s*'(\d+\.\d+\.\d+)'""")
+        val versionedDocs =
+            fileTree(projectDir) {
+                include("README.md", "*/README.md", "docs/**", "notebooks/**/*.md")
+                exclude(
+                    "**/build/**",
+                    "**/node_modules/**",
+                    "**/.gradle/**",
+                    "docs/ui/**",
+                    "**/*.zip",
+                    "**/*.png",
+                    "**/*.svg",
+                )
+            }
+        versionedDocs.files.filter { it.isFile }.forEach { file ->
+            val text = file.readText()
+            val where = file.relativeTo(projectDir)
+            coordinateUse.findAll(text).forEach { match ->
+                if (match.groupValues[2] != currentVersion) {
+                    staleVersionCitations +=
+                        "$where: ${match.groupValues[1]} ${match.groupValues[2]} " +
+                            "(current $currentVersion)"
+                }
+            }
+            if (file.name.endsWith(".yml") || file.name.endsWith(".yaml")) {
+                attributeUse.findAll(text).forEach { match ->
+                    if (match.groupValues[1] != currentVersion) {
+                        staleVersionCitations +=
+                            "$where: ${match.value.trim()} (current $currentVersion)"
+                    }
+                }
+            }
+        }
+        require(staleVersionCitations.isEmpty()) {
+            "Documentation cites versions that are not the current ones. Use the version property " +
+                "where the file can interpolate, or the current version where it cannot:\n  " +
+                staleVersionCitations.sorted().joinToString("\n  ")
+        }
+
         val docsIndex = file("docs/content/modules/ROOT/pages/index.adoc").readText()
         publishedModuleNames.forEach { module ->
             require("`$module`" in docsIndex) {
