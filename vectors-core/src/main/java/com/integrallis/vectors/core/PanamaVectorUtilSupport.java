@@ -167,6 +167,52 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return vector.lane(0);
   }
 
+  /**
+   * Horizontal float sum whose addition order is written here rather than chosen by the compiler,
+   * and which allocates nothing.
+   *
+   * <p>{@code reduceLanes(ADD)} is not stable across JIT tiers. Measured on an x86_64 AVX2 host,
+   * one 4096-element dot product accumulated in a vector and reduced with it returns {@code
+   * bfcb7854} while the method is interpreted and {@code bfcb7853} once C2 compiles it: one change,
+   * at the compilation, then stable. A model's first forward pass therefore produced different
+   * logits from every later one, which is what made the pure-Java determinism audit fail on
+   * HuatuoGPT-o1-7B -- trial one diverged and trials two and three agreed. Whether it was caught
+   * depended on whether C2 arrived before the first prefill finished, so the same commit on the
+   * same JDK passed on an AMD runner and failed on an Intel one, and it sat latent in every
+   * release.
+   *
+   * <p>The lanes are read at constant indices and summed as a written-out pairwise tree. Two
+   * earlier shapes were rejected by this repository's own tests. Caching rotate shuffles in a map
+   * keyed by species made a species a method parameter, which is not intrinsified, and {@code
+   * VectorSpeciesConstantStructureTest} refuses it. Rotating and adding allocated an intermediate
+   * vector per step, and called as a shared helper rather than inlined in a row loop escape
+   * analysis stopped removing them: a 40,001-row cosine scan allocated 2.5 MB where its budget is
+   * nothing, which {@code ParallelFlatScanTest} caught. A constant lane index is intrinsified to an
+   * extract, so this creates no vector at all, and the order is in the source rather than in the
+   * compiler's choice.
+   */
+  static float reduceFloatLanes(FloatVector vector) {
+    return switch (vector.length()) {
+      case 1 -> vector.lane(0);
+      case 2 -> vector.lane(0) + vector.lane(1);
+      case 4 -> (vector.lane(0) + vector.lane(1)) + (vector.lane(2) + vector.lane(3));
+      case 8 ->
+          ((vector.lane(0) + vector.lane(1)) + (vector.lane(2) + vector.lane(3)))
+              + ((vector.lane(4) + vector.lane(5)) + (vector.lane(6) + vector.lane(7)));
+      case 16 ->
+          (((vector.lane(0) + vector.lane(1)) + (vector.lane(2) + vector.lane(3)))
+                  + ((vector.lane(4) + vector.lane(5)) + (vector.lane(6) + vector.lane(7))))
+              + (((vector.lane(8) + vector.lane(9)) + (vector.lane(10) + vector.lane(11)))
+                  + ((vector.lane(12) + vector.lane(13)) + (vector.lane(14) + vector.lane(15))));
+      default ->
+          throw new IllegalArgumentException(
+              "no fixed-order reduction for "
+                  + vector.length()
+                  + " lanes; write one out rather than falling back to reduceLanes(ADD), which is"
+                  + " not tier-stable");
+    };
+  }
+
   private static VectorShuffle<Float> reductionRotation(int distance) {
     int mask = FLOAT_SPECIES.length() - 1;
     return VectorShuffle.fromOp(FLOAT_SPECIES, lane -> (lane + distance) & mask);
@@ -7491,10 +7537,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                 acc3);
       }
 
-      float sum0 = acc0.reduceLanes(VectorOperators.ADD);
-      float sum1 = acc1.reduceLanes(VectorOperators.ADD);
-      float sum2 = acc2.reduceLanes(VectorOperators.ADD);
-      float sum3 = acc3.reduceLanes(VectorOperators.ADD);
+      float sum0 = reduceFloatLanes(acc0);
+      float sum1 = reduceFloatLanes(acc1);
+      float sum2 = reduceFloatLanes(acc2);
+      float sum3 = reduceFloatLanes(acc3);
       for (int col = limit; col < cols; col++) {
         float queryValue = query[col];
         long byteOffset = (long) col * Float.BYTES;
@@ -7524,7 +7570,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
                     ByteOrder.LITTLE_ENDIAN),
                 accumulator);
       }
-      float sum = accumulator.reduceLanes(VectorOperators.ADD);
+      float sum = reduceFloatLanes(accumulator);
       for (int col = limit; col < cols; col++) {
         sum =
             MathUtil.fma(
