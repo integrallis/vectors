@@ -6917,21 +6917,12 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       return;
     }
 
-    int index = 0;
-    int limit = FLOAT_SPECIES.loopBound(length);
-    FloatVector one = FloatVector.broadcast(FLOAT_SPECIES, 1.0f);
-    for (; index < limit; index += FLOAT_SPECIES.length()) {
-      FloatVector value = FloatVector.fromArray(FLOAT_SPECIES, gate, gateOffset + index);
-      FloatVector multiplier = FloatVector.fromArray(FLOAT_SPECIES, up, upOffset + index);
-      value
-          .div(one.add(value.neg().lanewise(VectorOperators.EXP)))
-          .mul(multiplier)
-          .intoArray(out, outOffset + index);
-    }
-    for (; index < length; index++) {
-      float value = gate[gateOffset + index];
-      out[outOffset + index] = value / (1.0f + (float) Math.exp(-value)) * up[upOffset + index];
-    }
+    // EXPERIMENT ONLY -- the single variable under test. v0.1.30 ships
+    // `value.neg().lanewise(VectorOperators.EXP)` here, whose rounding changes once HotSpot
+    // intrinsifies the call, so the first forward pass differs from every later one. This arm
+    // substitutes the reproducible double-precision exp and changes nothing else in 0.1.30, which
+    // isolates the activation from the BF16 inline accumulation it was previously bundled with.
+    ReproducibleActivationExp.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
   }
 
   @Override
