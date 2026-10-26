@@ -19,7 +19,6 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.Objects;
 import jdk.incubator.vector.FloatVector;
-import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
 
 /**
@@ -191,10 +190,10 @@ public final class GgufQ8_0F32Matrix {
             PanamaVectorUtilSupport.fma(
                 weight, FloatVector.fromArray(SPECIES, input, input3 + column), sum3);
       }
-      float scalar0 = sum0.reduceLanes(VectorOperators.ADD);
-      float scalar1 = sum1.reduceLanes(VectorOperators.ADD);
-      float scalar2 = sum2.reduceLanes(VectorOperators.ADD);
-      float scalar3 = sum3.reduceLanes(VectorOperators.ADD);
+      float scalar0 = PanamaVectorUtilSupport.reduceFloatLanes(sum0);
+      float scalar1 = PanamaVectorUtilSupport.reduceFloatLanes(sum1);
+      float scalar2 = PanamaVectorUtilSupport.reduceFloatLanes(sum2);
+      float scalar3 = PanamaVectorUtilSupport.reduceFloatLanes(sum3);
       for (; column < columns; column++) {
         float weight = weights[weightOffset + column];
         scalar0 = MathUtil.fma(weight, input[input0 + column], scalar0);
@@ -220,7 +219,7 @@ public final class GgufQ8_0F32Matrix {
             PanamaVectorUtilSupport.fma(
                 weight, FloatVector.fromArray(SPECIES, input, activationOffset + column), sum);
       }
-      float scalar = sum.reduceLanes(VectorOperators.ADD);
+      float scalar = PanamaVectorUtilSupport.reduceFloatLanes(sum);
       for (; column < columns; column++) {
         scalar =
             MathUtil.fma(weights[weightOffset + column], input[activationOffset + column], scalar);
