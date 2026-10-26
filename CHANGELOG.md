@@ -4,6 +4,29 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.31] - 2026-10-26
+
+### Fixed
+
+- Give the F32 reductions on the GGUF model-inference paths an order the compiler cannot choose, so
+  a projection produces the same bits before and after HotSpot compiles the method. `reduceLanes`
+  leaves the association order to the JIT, and float addition is not associative, so the first
+  forward pass through a model could disagree with every later one.
+
+  Scope is deliberately narrow: ten call sites in `ggufF32MatVecDot` and the Q8-to-F32 matrix, all
+  of which inline. Cosine similarity is **not** changed -- the arithmetic oracle in
+  `CosineAllocationTest` caught a one-ULP difference there, so that path keeps its previous
+  reduction. Integer, short and long reductions are untouched throughout, because integer addition
+  is already associative and therefore already exact.
+
+  Activation arithmetic is **unchanged** in this release. The platform vector exponential is still
+  used everywhere except aarch64 at a 128-bit float species, exactly as in 0.1.30.
+
+### Changed
+
+- Hold every document to the current release version and check that it is held, so the landing
+  page, the Antora descriptor and the published coordinate cannot drift apart silently.
+
 ## [0.1.30] - 2026-10-12
 
 ### Fixed
