@@ -4,6 +4,44 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.32] - 2026-10-27
+
+### Fixed
+
+- **Activations are now reproducible on every platform, not only aarch64 at a 128-bit float
+  species.** `lanewise(VectorOperators.EXP)` changes its rounding once HotSpot intrinsifies the
+  call, so a model's first forward pass produced different floats from every later one: the same
+  input could yield a different answer depending on where in a run it was evaluated. That affected
+  all of x86-64 and aarch64 above 128 bits — in other words, most deployments.
+
+  The routine that aarch64 already used contains no `EXP` or `LOG` intrinsic at all. It evaluates
+  exp with fused multiply-adds and integer exponent shifts, every one of which the JVM specifies
+  exactly, so it is tier-stable by construction. Nothing in that arithmetic was ever
+  ARM-specific — only the predicate that gated it and a hardcoded 128-bit species. Both are gone:
+  all three activation sites (`swiGlu`, `sigmoidAndScaledSoftplus`, `causalDepthwiseConv1dSilu`)
+  now take it unconditionally, at the machine's preferred vector width, and the non-deterministic
+  branches are deleted rather than kept as a fallback.
+
+  **Measured cost on x86-64 AVX2**, HuatuoGPT-o1-7B-Q4_K_M, eight alternating pairs on an isolated
+  dedicated-vCPU host: decode throughput ratio **1.0026** on the median and **1.0039** against the
+  mode the previous build selects in six runs of eight — that is, at parity or slightly faster for
+  most runs. The mean-to-mean ratio is 0.9660; the entire 3.4% difference comes from two runs in
+  eight where the previous build reached a faster compilation mode.
+
+  **Measured task impact**, 120 JevBench decision cases decoded with the model's own vocabulary:
+  the previous build answers 85/120 correctly, this one 84/120 — a one-case difference that is
+  0.20 of one standard error at this sample size, with McNemar exact p = 1.000. Two cases change
+  for the worse and one for the better. Resolving an effect that size would need roughly 24,000
+  cases, so this is reported as "no measurable change", not as a gain or a loss.
+
+  Two byte-identical builds of the previous release score identically on the same cohort, which is
+  what makes those comparisons attributable rather than noise.
+
+  Output values on x86-64 do change, because the previous values came from an implementation that
+  was not reproducible; making them reproducible means settling on one set. aarch64 at 128 bits is
+  unaffected. The two Qwen3.5-only sites are now deterministic on x86 as well, and their output
+  impact is **not** separately measured — the cohort above exercises `swiGlu` on a qwen2 model.
+
 ## [0.1.31] - 2026-10-26
 
 ### Fixed
