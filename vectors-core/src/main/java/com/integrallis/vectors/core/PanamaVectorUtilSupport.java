@@ -6955,7 +6955,7 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] up,
       int upOffset,
       int length) {
-      PublishedArmActivations.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
+    PublishedArmActivations.swiGlu(out, outOffset, gate, gateOffset, up, upOffset, length);
   }
 
   @Override
@@ -6971,18 +6971,18 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       float[] scaledSoftplus,
       int scaledSoftplusOffset,
       int length) {
-      PublishedArmActivations.sigmoidAndScaledSoftplus(
-          sigmoidValues,
-          sigmoidOffset,
-          softplusValues,
-          softplusOffset,
-          bias,
-          biasOffset,
-          scale,
-          scaleOffset,
-          scaledSoftplus,
-          scaledSoftplusOffset,
-          length);
+    PublishedArmActivations.sigmoidAndScaledSoftplus(
+        sigmoidValues,
+        sigmoidOffset,
+        softplusValues,
+        softplusOffset,
+        bias,
+        biasOffset,
+        scale,
+        scaleOffset,
+        scaledSoftplus,
+        scaledSoftplusOffset,
+        length);
   }
 
   @Override
@@ -6995,15 +6995,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int weightsOffset,
       int channels,
       int kernelSize) {
-      PublishedArmActivations.causalDepthwiseConv1dSilu(
-          values,
-          valuesOffset,
-          history,
-          historyOffset,
-          weights,
-          weightsOffset,
-          channels,
-          kernelSize);
+    PublishedArmActivations.causalDepthwiseConv1dSilu(
+        values, valuesOffset, history, historyOffset, weights, weightsOffset, channels, kernelSize);
   }
 
   @Override

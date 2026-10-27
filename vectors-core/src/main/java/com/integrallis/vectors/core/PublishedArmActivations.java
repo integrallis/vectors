@@ -55,16 +55,17 @@ final class PublishedArmActivations {
    * The float species these routines evaluate at: the machine's preferred width.
    *
    * <p>This was written against a 128-bit species because that is the only width it was reachable
-   * from. Every operation in it is lane-wise and the integer exponent work goes through
-   * {@code reinterpretAsInts} and a same-size {@code F2I} convert, both shape preserving, so the
-   * width is free. At 128 bits on a 256-bit machine the routine measured 12% slower than the
-   * platform vector exponential it replaces; at the preferred width it measures at parity, and
-   * faster than the mode the released build selects in three runs out of four.
+   * from. Every operation in it is lane-wise and the integer exponent work goes through {@code
+   * reinterpretAsInts} and a same-size {@code F2I} convert, both shape preserving, so the width is
+   * free. At 128 bits on a 256-bit machine the routine measured 12% slower than the platform vector
+   * exponential it replaces; at the preferred width it measures at parity, and faster than the mode
+   * the released build selects in three runs out of four.
    *
    * <p>A static final field is what {@code VectorSpeciesConstantStructureTest} requires: that rule
    * forbids species parameters and mutable species fields, not wider species.
    */
   private static final VectorSpecies<Float> SPECIES = FloatVector.SPECIES_PREFERRED;
+
   static final float RLOG2 = 0x1.715476p0f;
   static final float C5 = (float) 0.000198527617612853646278381;
   static final float C4 = (float) 0.00139304355252534151077271;
@@ -142,8 +143,7 @@ final class PublishedArmActivations {
     FloatVector one = FloatVector.broadcast(SPECIES, 1.0f);
     FloatVector threshold = FloatVector.broadcast(SPECIES, 20.0f);
     for (; index < limit; index += SPECIES.length()) {
-      FloatVector sigmoid =
-          FloatVector.fromArray(SPECIES, sigmoidValues, sigmoidOffset + index);
+      FloatVector sigmoid = FloatVector.fromArray(SPECIES, sigmoidValues, sigmoidOffset + index);
       FloatVector sigmoidExp;
       {
         FloatVector d = sigmoid.neg();
@@ -292,16 +292,12 @@ final class PublishedArmActivations {
     int limit = SPECIES.loopBound(channels);
     FloatVector one = FloatVector.broadcast(SPECIES, 1.0f);
     for (; channel < limit; channel += SPECIES.length()) {
-      FloatVector input =
-          FloatVector.fromArray(SPECIES, values, valuesOffset + channel);
+      FloatVector input = FloatVector.fromArray(SPECIES, values, valuesOffset + channel);
       FloatVector convolved =
           input.mul(
               FloatVector.fromArray(
-                  SPECIES,
-                  weights,
-                  weightsOffset + historyLength * channels + channel));
-      FloatVector previous =
-          FloatVector.fromArray(SPECIES, history, historyOffset + channel);
+                  SPECIES, weights, weightsOffset + historyLength * channels + channel));
+      FloatVector previous = FloatVector.fromArray(SPECIES, history, historyOffset + channel);
       convolved =
           PanamaVectorUtilSupport.fma(
               previous,
@@ -313,8 +309,7 @@ final class PublishedArmActivations {
         convolved =
             PanamaVectorUtilSupport.fma(
                 current,
-                FloatVector.fromArray(
-                    SPECIES, weights, weightsOffset + tap * channels + channel),
+                FloatVector.fromArray(SPECIES, weights, weightsOffset + tap * channels + channel),
                 convolved);
         current.intoArray(history, historyIndex - channels);
       }
