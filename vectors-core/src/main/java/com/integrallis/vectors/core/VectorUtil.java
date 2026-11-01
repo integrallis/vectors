@@ -244,6 +244,44 @@ public final class VectorUtil {
         length);
   }
 
+  /**
+   * Causal B/C-gated short convolution without an activation. Projected tokens contain B,C,X
+   * chunks; weights and history are tap-major (oldest tap first). Advances caller-owned history.
+   */
+  public static void gatedShortConv1d(
+      float[] out,
+      int outOffset,
+      float[] projected,
+      int projectedOffset,
+      int tokens,
+      int channels,
+      float[] weights,
+      float[] history,
+      int kernelSize) {
+    Objects.requireNonNull(out);
+    Objects.requireNonNull(projected);
+    Objects.requireNonNull(weights);
+    Objects.requireNonNull(history);
+    if (tokens < 1
+        || channels < 1
+        || kernelSize < 2
+        || outOffset < 0
+        || projectedOffset < 0
+        || (long) outOffset + (long) tokens * channels > out.length
+        || (long) projectedOffset + 3L * tokens * channels > projected.length
+        || (long) kernelSize * channels > weights.length
+        || (long) (kernelSize - 1) * channels > history.length)
+      throw new IllegalArgumentException("invalid gated short-convolution shape");
+    if (out == projected
+        || out == weights
+        || out == history
+        || history == projected
+        || history == weights)
+      throw new IllegalArgumentException("gated short-convolution buffers must not alias");
+    IMPL.gatedShortConv1d(
+        out, outOffset, projected, projectedOffset, tokens, channels, weights, history, kernelSize);
+  }
+
   /** Applies a tap-major causal depthwise convolution and SiLU, updating history in place. */
   public static void causalDepthwiseConv1dSilu(
       float[] values,

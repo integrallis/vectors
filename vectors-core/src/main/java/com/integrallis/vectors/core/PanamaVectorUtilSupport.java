@@ -6986,6 +6986,21 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
   }
 
   @Override
+  public void gatedShortConv1d(
+      float[] out,
+      int outAt,
+      float[] p,
+      int pAt,
+      int tokens,
+      int channels,
+      float[] weights,
+      float[] history,
+      int width) {
+    GatedShortConvolution.vector(
+        out, outAt, p, pAt, tokens, channels, weights, history, width, FLOAT_SPECIES);
+  }
+
+  @Override
   public void causalDepthwiseConv1dSilu(
       float[] values,
       int valuesOffset,

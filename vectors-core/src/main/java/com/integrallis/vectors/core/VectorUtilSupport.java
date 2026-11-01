@@ -166,6 +166,24 @@ public interface VectorUtilSupport {
       int scaledSoftplusOffset,
       int length);
 
+  /**
+   * Causal B/C-gated short convolution without an activation. Projected tokens contain B,C,X
+   * chunks; weights and history are tap-major (oldest tap first). Advances caller-owned history.
+   */
+  default void gatedShortConv1d(
+      float[] out,
+      int outOffset,
+      float[] projected,
+      int projectedOffset,
+      int tokens,
+      int channels,
+      float[] weights,
+      float[] history,
+      int kernelSize) {
+    GatedShortConvolution.scalar(
+        out, outOffset, projected, projectedOffset, tokens, channels, weights, history, kernelSize);
+  }
+
   /** Applies a tap-major causal depthwise convolution and SiLU, updating history in place. */
   void causalDepthwiseConv1dSilu(
       float[] values,
