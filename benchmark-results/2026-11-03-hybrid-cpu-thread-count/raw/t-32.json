@@ -1,0 +1,7 @@
+{
+  "machine": "machine: Linux amd64, 32 available processors, JVM 25.0.3+9-LTS, max heap 24112 MiB",
+  "marker": "org.modeljars.huggingface:qwen.qwen2.5-1.5b-instruct-gguf.q4_k_m:2.5.0-q4_k_m.1",
+  "arms": [
+    {"arm": "in-process", "route": "rust-ffm", "openMs": 1004.4, "firstMs": 3138.6, "p50Ms": 2505.98, "p95Ms": 3186.36, "meanMs": 2594.05, "agreed": 11, "messages": 15}
+  ]
+}

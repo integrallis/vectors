@@ -105,13 +105,15 @@ class GgufParallelSupportTest {
   @Test
   void executionModePropertyIsValidated() {
     assertThat(GgufParallelSupport.ExecutionMode.parse(null))
-        .isEqualTo(GgufParallelSupport.ExecutionMode.PERSISTENT);
+        .isEqualTo(GgufParallelSupport.ExecutionMode.COUNTDOWN);
     assertThat(GgufParallelSupport.ExecutionMode.parse("common"))
         .isEqualTo(GgufParallelSupport.ExecutionMode.COMMON);
     assertThat(GgufParallelSupport.ExecutionMode.parse("dedicated"))
         .isEqualTo(GgufParallelSupport.ExecutionMode.DEDICATED);
     assertThat(GgufParallelSupport.ExecutionMode.parse("persistent"))
         .isEqualTo(GgufParallelSupport.ExecutionMode.PERSISTENT);
+    assertThat(GgufParallelSupport.ExecutionMode.parse("countdown"))
+        .isEqualTo(GgufParallelSupport.ExecutionMode.COUNTDOWN);
     assertThatThrownBy(() -> GgufParallelSupport.ExecutionMode.parse("unknown"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("vectors.gguf.executor");

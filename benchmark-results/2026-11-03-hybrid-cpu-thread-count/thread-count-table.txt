@@ -1,0 +1,12 @@
+Qwen2.5-1.5B-Instruct Q4_K_M, one typed decision, p50 of 15 messages
+i9-14900HX (8 P-cores/16 threads + 16 E-cores, 32 logical), governor=powersave
+
+ threads     p50 ms                 repeats      mean
+------------------------------------------------------
+      32     2506.0  2506.0, 2540.6, 2542.7    2529.8  <- availableProcessors()
+      16     1145.4                  1145.4    1145.4
+       8      885.4     885.4, 882.5, 863.8     877.2  <- computeThreads()
+       4     1022.3                  1022.3    1022.3
+
+32 -> 8 threads: 2530 ms -> 877 ms = 2.88x faster
+Accuracy identical in every arm (11/15): thread count cannot change the answer.

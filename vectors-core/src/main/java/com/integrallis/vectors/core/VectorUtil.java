@@ -63,6 +63,27 @@ public final class VectorUtil {
     GgufPersistentRowExecutor.setPollMillis(millis);
   }
 
+  /**
+   * How many threads this machine can run compute-bound kernel work on: physical cores, capped by
+   * the JVM's own processor budget so a CPU-limited container is not handed its host's core count.
+   *
+   * <p>Public because a caller that runs its own compute pool beside this one -- the Models native
+   * kernel pool is the case this exists for -- has to size that pool from the same number. Two
+   * pools each sized to {@code availableProcessors()} put twice the machine's threads on it, and on
+   * an SMT machine {@code availableProcessors()} is already twice the cores that can do the
+   * arithmetic.
+   *
+   * @return physical cores, or {@code availableProcessors()} where topology cannot be read
+   */
+  public static int computeThreads() {
+    return CpuTopology.computeThreads();
+  }
+
+  /** Physical cores as detected, or {@code -1} when this platform does not report them. */
+  public static int physicalCores() {
+    return CpuTopology.physicalCores();
+  }
+
   // --- Float distance operations ---
 
   /** Computes the dot product of two float vectors of equal length. */

@@ -24,6 +24,7 @@ import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
@@ -47,7 +48,20 @@ public class GgufStagePlanBenchmark {
   private static final int FIRST_WORK_ITEMS = 152;
   private static final int SECOND_WORK_ITEMS = 1024;
 
-  private GgufPersistentRowExecutor executor;
+  /**
+   * Which publication mechanism runs the stages.
+   *
+   * <p>The stage path is the one where this can matter: unlike the row path, which refuses to go
+   * parallel below a mebibyte of weights and so only ever dispatches work far larger than its own
+   * handshake, a stage plan has no size gate and pays a barrier between every pair of stages.
+   */
+  @Param({"persistent", "countdown"})
+  public String executorMode;
+
+  @Param({"1", "2", "4", "8"})
+  public int parallelism;
+
+  private GgufRowExecutor executor;
   private GgufStagePlan plan;
   private int[] firstOutput;
   private int[] secondOutput;
@@ -60,7 +74,12 @@ public class GgufStagePlanBenchmark {
     secondOutput = new int[SECOND_WORK_ITEMS];
     firstOperation = item -> firstOutput[item]++;
     secondOperation = item -> secondOutput[item] += firstOutput[item % FIRST_WORK_ITEMS];
-    executor = new GgufPersistentRowExecutor(8, 2, "vectors-stage-bench");
+    executor =
+        GgufParallelSupport.newExecutor(
+            GgufParallelSupport.ExecutionMode.parse(executorMode),
+            parallelism,
+            2,
+            "vectors-stage-bench");
     plan =
         GgufStagePlan.of(
             GgufStagePlan.stage(FIRST_WORK_ITEMS, this::runFirstRange),
