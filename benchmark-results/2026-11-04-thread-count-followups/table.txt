@@ -1,0 +1,36 @@
+
+### rockhopper -- i9-14900HX, hybrid
+
+| threads | n | median p50 | min | max | spread | accuracy | route |
+|--------:|--:|-----------:|----:|----:|-------:|:---------|:------|
+| 8 | 7 | **890.0** | 667.8 | 906.9 | 27% | 11/15 | rust-ffm/countdown |
+| 10 | 1 | **976.9** | 976.9 | 976.9 | 0% | 11/15 | rust-ffm/countdown |
+| 12 | 1 | **932.4** | 932.4 | 932.4 | 0% | 11/15 | rust-ffm/countdown |
+| 16 | 7 | **906.6** | 825.7 | 986.1 | 18% | 11/15 | rust-ffm/countdown |
+| 24 | 7 | **919.8** | 879.7 | 1004.8 | 14% | 11/15 | rust-ffm/countdown |
+| 32 | 2 | **2562.9** | 2516.1 | 2609.7 | 4% | 11/15 | rust-ffm/countdown |
+
+Best median: 890.0 ms.
+- 8 threads: 1.00x the best, repeats 667.8 736.0 889.7 890.0 893.6 896.2 906.9
+- 10 threads: 1.10x the best, repeats 976.9
+- 12 threads: 1.05x the best, repeats 932.4
+- 16 threads: 1.02x the best, repeats 825.7 840.2 900.9 906.6 913.6 945.0 986.1
+- 24 threads: 1.03x the best, repeats 879.7 915.8 919.3 919.8 941.2 968.8 1004.8
+- 32 threads: 2.88x the best, repeats 2516.1 2609.7
+
+### threadsweep VPS -- AMD EPYC-Milan ccx33, 4 cores x 2 SMT
+
+| threads | n | median p50 | min | max | spread | accuracy | route |
+|--------:|--:|-----------:|----:|----:|-------:|:---------|:------|
+| 1 | 1 | **3844.8** | 3844.8 | 3844.8 | 0% | 11/15 | rust-ffm/countdown |
+| 2 | 3 | **1917.0** | 1861.1 | 2062.4 | 11% | 11/15 | rust-ffm/countdown |
+| 4 | 4 | **1188.8** | 1072.0 | 1228.1 | 13% | 11/15 | rust-ffm/countdown |
+| 6 | 3 | **1303.2** | 1295.0 | 1328.4 | 3% | 11/15 | rust-ffm/countdown |
+| 8 | 4 | **1329.7** | 1210.5 | 1361.9 | 11% | 11/15 | rust-ffm/countdown |
+
+Best median: 1188.8 ms.
+- 1 threads: 3.23x the best, repeats 3844.8
+- 2 threads: 1.61x the best, repeats 1861.1 1917.0 2062.4
+- 4 threads: 1.00x the best, repeats 1072.0 1168.2 1209.3 1228.1
+- 6 threads: 1.10x the best, repeats 1295.0 1303.2 1328.4
+- 8 threads: 1.12x the best, repeats 1210.5 1309.9 1349.5 1361.9
