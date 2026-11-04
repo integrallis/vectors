@@ -1,0 +1,12 @@
+| threads | n | prompt tokens | prefill tok/s (median) | range | decode tok/s (median) | range |
+|--------:|--:|--------------:|-----------------------:|:------|----------------------:|:------|
+| 8 | 2 | 3215 | **90.5** | 88.3-92.7 | **14.65** | 14.32-14.98 |
+| 16 | 2 | 3215 | **90.5** | 84.3-96.8 | **13.16** | 12.61-13.71 |
+| 24 | 2 | 3215 | **87.7** | 86.3-89.1 | **12.84** | 12.77-12.90 |
+| 32 | 2 | 3215 | **50.8** | 50.6-51.0 | **2.24** | 2.20-2.28 |
+
+Best prefill 90.5 tok/s, best decode 14.65 tok/s.
+- 8 threads: prefill 1.00x of best, decode 1.00x of best
+- 16 threads: prefill 1.00x of best, decode 0.90x of best
+- 24 threads: prefill 0.97x of best, decode 0.88x of best
+- 32 threads: prefill 0.56x of best, decode 0.15x of best

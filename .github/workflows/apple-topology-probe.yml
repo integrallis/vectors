@@ -1,0 +1,70 @@
+# Does a virtualised Apple Silicon host expose its performance/efficiency split?
+#
+# This decides whether closing the Apple Silicon gap needs bare metal. CpuTopology reads
+# hw.nperflevels and hw.perflevel0.physicalcpu; if a VM guest reports those honestly, the
+# detection path can be tested on free and cheap virtualised Macs. If it does not, the test
+# needs a whole Mac mini and costs money, and this run still tells us the fallback behaves.
+#
+# Free on this repository: GitHub's macOS arm64 runners carry no charge for public repositories.
+name: Apple topology probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [exp/thread-count-followups]
+
+jobs:
+  probe:
+    runs-on: macos-15
+    steps:
+      - name: Report the host's own view of its topology
+        run: |
+          echo "=== uname / machine ==="
+          uname -m
+          sysctl -n machdep.cpu.brand_string || echo "(no brand string)"
+          echo
+          echo "=== the keys CpuTopology reads ==="
+          for k in hw.nperflevels hw.perflevel0.physicalcpu hw.perflevel0.logicalcpu \
+                   hw.perflevel1.physicalcpu hw.perflevel1.logicalcpu \
+                   hw.physicalcpu hw.logicalcpu hw.ncpu; do
+            printf '%-32s %s\n' "$k" "$(sysctl -n $k 2>/dev/null || echo '(absent)')"
+          done
+          echo
+          echo "=== virtualisation hint ==="
+          sysctl -n kern.hv_vmm_present 2>/dev/null || echo "(kern.hv_vmm_present absent)"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: What the shipped policy resolves to here
+        run: |
+          mkdir -p probe && cd probe
+          cat > pom.xml <<'POM'
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>probe</groupId><artifactId>topology</artifactId><version>1</version>
+            <properties><maven.compiler.release>25</maven.compiler.release></properties>
+            <dependencies>
+              <dependency>
+                <groupId>com.integrallis</groupId><artifactId>vectors-core</artifactId>
+                <version>0.1.33</version>
+              </dependency>
+            </dependencies>
+          </project>
+          POM
+          cat > Topo.java <<'JAVA'
+          import com.integrallis.vectors.core.VectorUtil;
+          public class Topo {
+            public static void main(String[] a) {
+              System.out.println("availableProcessors = " + Runtime.getRuntime().availableProcessors());
+              System.out.println("physicalCores       = " + VectorUtil.physicalCores());
+              System.out.println("computeThreads      = " + VectorUtil.computeThreads());
+            }
+          }
+          JAVA
+          mvn -q -B dependency:build-classpath -Dmdep.outputFile=cp.txt
+          javac --add-modules=jdk.incubator.vector -cp "$(cat cp.txt)" -d classes Topo.java
+          java --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED \
+               -cp "$(cat cp.txt):classes" Topo
