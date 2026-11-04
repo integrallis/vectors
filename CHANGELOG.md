@@ -4,6 +4,46 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.33] - 2026-11-04
+
+### Changed
+
+- **GGUF worker pools are sized from the machine's performance cores instead of
+  `Runtime.availableProcessors()`.** One typed decision on Qwen2.5-1.5B Q4_K_M cost 2530 ms on an
+  i9-14900HX (8 performance cores with 2 threads each plus 16 efficiency cores, 32 logical) and
+  877 ms on the same machine at eight threads: **2.88x**, reproducible to within 1% over three
+  repeats, with identical accuracy in every arm. The optimum is exactly that CPU's
+  performance-core count, and four threads is worse again, so the figure that mattered was the
+  number rather than the direction.
+
+  `availableProcessors()` counts efficiency cores as equals and counts two hardware threads of one
+  core as two cores. A pool that divides work evenly and meets at a barrier then costs whatever its
+  slowest member costs, so one efficiency-core thread held up all thirty-two. `CpuTopology` now
+  resolves performance physical cores, **clamped to `availableProcessors()`** so a CPU-limited
+  container is not handed its host's core count, reading Linux typed cpulists, then
+  maximum-frequency clustering, then ARM `cpu_capacity`, then `hw.perflevel0.physicalcpu` on macOS.
+  `VectorUtil.computeThreads()` exposes the same number so a caller running its own compute pool
+  beside this one can size it from the same figure.
+
+  Two details were wrong on the first attempt and are now tested against a synthetic tree shaped
+  like the real CPU: `/sys/devices/system/cpu/types` does not exist on the i9-14900HX's own kernel,
+  so the typed read answered -1 on exactly the hardware it was written for; and frequencies must be
+  clustered rather than maximised, because that part reports three groups and taking the top one
+  answers two cores where the right answer is eight.
+
+- **The persistent GGUF executor publishes a job with a generation counter and a completion
+  countdown on separate cache lines, in place of a `Phaser`.** A Phaser keeps the arrival count and
+  the release signal in one word that every party both CASes and polls, so the handshake grew with
+  thread count: publishing a stage plan to eight threads cost 3.09x what publishing to one cost,
+  against 1.28x for the new path, and 2.59x faster in absolute terms at eight threads. On the
+  row-matmul path, which refuses to go parallel below a mebibyte of weights, the two are
+  indistinguishable — published as a null, since a 2 us handshake cannot show beside 450 us of
+  arithmetic.
+
+  Both executors are held to one parameterized contract suite, so the comparison is between two
+  implementations of a single contract rather than two sets of tests.
+
+
 ## [0.1.32] - 2026-10-27
 
 ### Fixed
