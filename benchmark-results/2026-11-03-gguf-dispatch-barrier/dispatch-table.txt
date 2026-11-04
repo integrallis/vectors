@@ -1,0 +1,33 @@
+
+## emptyDispatch  (us/op)
+
+threads              persistent               countdown    ratio  verdict
+-------  ----------------------  ----------------------  -------  -------
+      1         0.079 +- 0.001           0.033 +- 0.001       2.36  countdown faster 2.36x
+      2         0.425 +- 0.009           0.313 +- 0.008       1.36  countdown faster 1.36x
+      4         1.160 +- 0.002           0.512 +- 0.004       2.27  countdown faster 2.27x
+      6         1.831 +- 0.023           0.593 +- 0.009       3.09  countdown faster 3.09x
+      8         2.666 +- 0.038           0.738 +- 0.009       3.61  countdown faster 3.61x
+     12         9.043 +- 0.042           6.637 +- 0.141       1.36  countdown faster 1.36x
+
+## projectionDispatch  (us/op)
+
+threads              persistent               countdown    ratio  verdict
+-------  ----------------------  ----------------------  -------  -------
+      1      3469.746 +- 2.481        3466.669 +- 1.370       1.00  no difference resolved
+      2      1737.368 +- 0.695        1736.263 +- 0.824       1.00  no difference resolved
+      4       872.890 +- 0.589         872.002 +- 0.353       1.00  no difference resolved
+      6       599.620 +- 0.160         599.333 +- 0.361       1.00  no difference resolved
+      8       453.193 +- 1.509         452.183 +- 1.395       1.00  no difference resolved
+     12       462.944 +- 1.722         460.777 +- 3.519       1.00  no difference resolved
+
+## smallDispatch  (us/op)
+
+threads              persistent               countdown    ratio  verdict
+-------  ----------------------  ----------------------  -------  -------
+      1         0.100 +- 0.001           0.049 +- 0.000       2.02  countdown faster 2.02x
+      2         0.524 +- 0.006           0.412 +- 0.011       1.27  countdown faster 1.27x
+      4         1.257 +- 0.027           0.654 +- 0.010       1.92  countdown faster 1.92x
+      6         1.945 +- 0.008           0.806 +- 0.004       2.41  countdown faster 2.41x
+      8         2.807 +- 0.003           0.873 +- 0.019       3.22  countdown faster 3.22x
+     12         9.259 +- 0.052           6.555 +- 0.376       1.41  countdown faster 1.41x

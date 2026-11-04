@@ -41,10 +41,6 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   private final int chunksPerWorker;
   private final Phaser phase;
   private final ReentrantLock publicationLock = new ReentrantLock();
-  // Both the publishing caller and workers execute callbacks. Nested callbacks must not
-  // publish another pool: its workers could reenter this pool and form a cross-pool cycle.
-  private static final ThreadLocal<Boolean> EXECUTING_CALLBACK =
-      ThreadLocal.withInitial(() -> false);
   private final AtomicInteger nextChunk = new AtomicInteger();
   private final AtomicReference<Throwable> failure = new AtomicReference<>();
   private final Thread[] workers;
@@ -88,7 +84,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     if (rowCount == 0) {
       return;
     }
-    if (EXECUTING_CALLBACK.get()) {
+    if (GgufCallbackScope.active()) {
       ensureOpen();
       for (int row = 0; row < rowCount; row++) rowOperation.accept(row);
       return;
@@ -122,7 +118,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   @Override
   public void execute(GgufStagePlan plan) {
     Objects.requireNonNull(plan, "plan");
-    if (EXECUTING_CALLBACK.get()) {
+    if (GgufCallbackScope.active()) {
       ensureOpen();
       plan.executeSerially();
       return;
@@ -167,14 +163,14 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   }
 
   private void executePublishedPlan(GgufStagePlan plan) {
-    EXECUTING_CALLBACK.set(true);
+    GgufCallbackScope.enter();
     try {
       for (int stageIndex = 0; stageIndex < plan.stageCount(); stageIndex++) {
         executeStage(plan.stage(stageIndex), stageIndex);
         awaitAdvancePolling();
       }
     } finally {
-      EXECUTING_CALLBACK.set(false);
+      GgufCallbackScope.leave();
     }
   }
 
@@ -213,7 +209,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   }
 
   private void executePublishedOperation() {
-    EXECUTING_CALLBACK.set(true);
+    GgufCallbackScope.enter();
     try {
       while (failure.get() == null) {
         long start = (long) nextChunk.getAndIncrement() * chunkSize;
@@ -228,7 +224,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
     } catch (Throwable thrown) {
       failure.compareAndSet(null, thrown);
     } finally {
-      EXECUTING_CALLBACK.set(false);
+      GgufCallbackScope.leave();
     }
   }
 
@@ -264,6 +260,11 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
       }
       Thread.onSpinWait();
     }
+  }
+
+  /** Current barrier poll budget in nanoseconds, shared with the other persistent executors. */
+  static long pollNanos() {
+    return pollNanos;
   }
 
   /** Current barrier poll budget in milliseconds (0 parks immediately). */
@@ -321,7 +322,7 @@ final class GgufPersistentRowExecutor implements GgufRowExecutor {
   public void close() {
     // A callback cannot wait for a publication/barrier that includes itself. Cross-pool
     // callbacks can form the same cycle, so closing must happen outside all row callbacks.
-    if (EXECUTING_CALLBACK.get()) {
+    if (GgufCallbackScope.active()) {
       throw new IllegalStateException("cannot close an executor from a row callback");
     }
     publicationLock.lock();

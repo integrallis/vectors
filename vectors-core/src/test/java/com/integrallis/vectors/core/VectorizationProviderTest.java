@@ -45,7 +45,7 @@ class VectorizationProviderTest {
     assertThat(summary).contains("fastVectorFMA=");
     assertThat(summary).contains("fastScalarFMA=");
     assertThat(summary).contains("sve=");
-    assertThat(summary).contains("ggufExecutor=persistent");
+    assertThat(summary).contains("ggufExecutor=countdown");
     assertThat(summary).contains("ggufThreads=" + GgufParallelSupport.parallelism());
     assertThat(summary).contains("ggufChunksPerThread=2");
     assertThat(summary).contains("mappedKQuantLongOffsets=auto(");
@@ -129,7 +129,7 @@ class VectorizationProviderTest {
     assertThat(capabilities.activeVectorBits())
         .isEqualTo(
             VectorizationProvider.isPanamaEnabled() ? PanamaVectorUtilSupport.VECTOR_BITSIZE : 0);
-    assertThat(capabilities.ggufExecutor()).isEqualTo("persistent");
+    assertThat(capabilities.ggufExecutor()).isEqualTo("countdown");
     assertThat(capabilities.q4ShortPairwiseSupported())
         .isEqualTo(
             VectorizationProvider.isPanamaEnabled()

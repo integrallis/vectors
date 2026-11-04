@@ -22,6 +22,31 @@
   under one comment to keep the file scannable.
 -->
 <FindBugsFilter>
+    <!-- CpuTopology reads the operating system's own CPU topology, which lives at fixed absolute -->
+    <!-- paths: /sys/devices/system/cpu for Linux core types, frequencies and thread siblings, and -->
+    <!-- /proc/cpuinfo as the fallback for kernels that do not publish the sysfs topology. These -->
+    <!-- are kernel ABI locations rather than configuration, so there is nothing to parameterise; -->
+    <!-- every read is already guarded by isReadable/isDirectory and falls back to -->
+    <!-- availableProcessors() when absent, which is what makes the class safe on a platform that -->
+    <!-- has neither. The detection entry points additionally take an explicit root so the tests -->
+    <!-- exercise them against a synthetic tree rather than the host. -->
+    <Match>
+        <Class name="com.integrallis.vectors.core.CpuTopology"/>
+        <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME"/>
+    </Match>
+
+    <!-- GgufCountdownRowExecutor.Worker.inCallback is thread-confined: GgufCallbackScope only ever -->
+    <!-- resolves it through Thread.currentThread(), so the sole thread that can read or write it -->
+    <!-- is the one it belongs to. SpotBugs sees a plain field on a Thread subclass and assumes -->
+    <!-- cross-thread publication. Marking it volatile would add ordering nothing needs and would -->
+    <!-- imply other threads touch it; carrying it as a field instead of a ThreadLocal is the point -->
+    <!-- of the class, since it removes a ThreadLocalMap probe and write from both sides of every -->
+    <!-- chunk run. -->
+    <Match>
+        <Class name="com.integrallis.vectors.core.GgufCountdownRowExecutor$Worker"/>
+        <Bug pattern="AT_STALE_THREAD_WRITE_OF_PRIMITIVE"/>
+    </Match>
+
     <!-- SemanticCachingChatModel rejects a cache that cannot store entry attributes from its -->
     <!-- constructor. Without attributes the decorator cannot tell which request options produced -->
     <!-- an entry and would serve completions across temperatures, so failing at wiring time is -->

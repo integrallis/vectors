@@ -1,0 +1,6 @@
+physicalCores                24
+performanceCores             8
+computeThreads               8
+heterogeneous                true
+simultaneousMultithreading   true
+availableProcessors          32

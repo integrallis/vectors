@@ -1,0 +1,18 @@
+
+## separateDispatches  (us/op)
+
+threads              persistent               countdown    ratio  verdict
+-------  ----------------------  ----------------------  -------  -------
+      1         1.560 +- 0.002           1.475 +- 0.002       1.06  countdown faster 1.06x
+      2         1.897 +- 0.037           1.727 +- 0.014       1.10  countdown faster 1.10x
+      4         2.696 +- 0.013           1.850 +- 0.004       1.46  countdown faster 1.46x
+      8         5.583 +- 0.008           2.024 +- 0.008       2.76  countdown faster 2.76x
+
+## stagedDispatch  (us/op)
+
+threads              persistent               countdown    ratio  verdict
+-------  ----------------------  ----------------------  -------  -------
+      1         1.441 +- 0.132           1.340 +- 0.106       1.08  no difference resolved
+      2         1.718 +- 0.020           1.657 +- 0.040       1.04  countdown faster 1.04x
+      4         2.476 +- 0.011           1.579 +- 0.005       1.57  countdown faster 1.57x
+      8         4.453 +- 0.056           1.721 +- 0.002       2.59  countdown faster 2.59x
