@@ -2851,6 +2851,21 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
+  private static final ThreadLocal<int[]> Q4K_SCALE_SCRATCH =
+      ThreadLocal.withInitial(() -> new int[8]);
+  private static final ThreadLocal<int[]> Q4K_MIN_SCRATCH =
+      ThreadLocal.withInitial(() -> new int[8]);
+
+  /**
+   * Pure-Java Q4_K by Q8_K row dot product.
+   *
+   * <p><b>Dead-code notice:</b> This path is maintained for the long-term vision of a 100%
+   * pure-Java stack, but the <i>current</i> production hot path goes through native Rust kernels
+   * ({@code backend-native}). When the JVM Vector API catches up, this path will become the default
+   * again.
+   *
+   * <p>The implementation respects {@link PanamaConstants#USE_Q4K_BATCH_UNPACK}.
+   */
   private static float ggufQ4_KQ8_KVectorRowDot(
       MemorySegment qWeight,
       long rowOffset,
@@ -2858,6 +2873,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    int[] scales = Q4K_SCALE_SCRATCH.get();
+    int[] mins = Q4K_MIN_SCRATCH.get();
     float sum = 0.0f;
     for (int block = 0; block < blocks; block++) {
       long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
@@ -2871,9 +2888,19 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int quantizedSum = 0;
       int minimumSum = 0;
 
+      if (PanamaConstants.USE_Q4K_BATCH_UNPACK) {
+        GgufQuantizationSupport.qKUnpackScalesAndMins(qWeight, scalesOffset, scales, mins);
+      }
       for (int group = 0; group < 8; group++) {
-        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
-        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+        int scale;
+        int min;
+        if (PanamaConstants.USE_Q4K_BATCH_UNPACK) {
+          scale = scales[group];
+          min = mins[group];
+        } else {
+          scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+          min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+        }
         long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
         int shift = (group & 1) * 4;
         int groupActivationOffset = activationOffset + group * 32;
@@ -2890,6 +2917,12 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
     return sum;
   }
 
+  /**
+   * Pure-Java Q4_K by Q8_K row dot product with long offsets.
+   *
+   * <p><b>Dead-code notice:</b> See {@link #ggufQ4_KQ8_KVectorRowDot}. Respects {@link
+   * PanamaConstants#USE_Q4K_BATCH_UNPACK}.
+   */
   static float ggufQ4_KQ8_KLongOffsetRowDot(
       MemorySegment qWeight,
       long rowOffset,
@@ -2897,6 +2930,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    int[] scales = Q4K_SCALE_SCRATCH.get();
+    int[] mins = Q4K_MIN_SCRATCH.get();
     float sum = 0.0f;
     int block = 0;
     long rowLimit = rowOffset + rowBytes;
@@ -2913,9 +2948,19 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int quantizedSum = 0;
       int minimumSum = 0;
 
+      if (PanamaConstants.USE_Q4K_BATCH_UNPACK) {
+        GgufQuantizationSupport.qKUnpackScalesAndMins(qWeight, scalesOffset, scales, mins);
+      }
       for (int group = 0; group < 8; group++) {
-        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
-        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+        int scale;
+        int min;
+        if (PanamaConstants.USE_Q4K_BATCH_UNPACK) {
+          scale = scales[group];
+          min = mins[group];
+        } else {
+          scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
+          min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+        }
         long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
         int shift = (group & 1) * 4;
         int groupActivationOffset = activationOffset + group * 32;

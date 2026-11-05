@@ -77,6 +77,22 @@ public final class PanamaConstants {
   static final boolean USE_MAPPED_Q6_K_LONG_OFFSETS = MAPPED_K_QUANT_LONG_OFFSET_POLICY.q6();
 
   /**
+   * Toggle for the Q4_K batch scale/min unpack optimization.
+   *
+   * <p>When {@code true} (default), the Panama SIMD path uses a single vectorized unpack per
+   * 256-element block. When {@code false}, the legacy scalar per-group extraction path is used for
+   * parity testing.
+   *
+   * <p>Override with {@code -Dvectors.gguf.q4k.useBatchUnpack=false}.
+   *
+   * <p><b>Note:</b> This path is currently "dead code" from a product perspective — the hot path
+   * goes through native Rust kernels. It is maintained because the long-term goal is a 100%
+   * pure-Java stack, and this optimization brings the pure-Java path within 1.83x of the
+   * previously-slower scalar baseline.
+   */
+  static final boolean USE_Q4K_BATCH_UNPACK = resolveQ4KBatchUnpack();
+
+  /**
    * The resolved SIMD register-width ceiling in bits. Defaults to {@link #DEFAULT_MAX_BITS};
    * override with {@code -Dvectors.maxBits=<64|128|256|512>}. The effective species width is {@code
    * min(MAX_BITS, hardware-preferred)} — this never widens beyond what the platform prefers, it
@@ -318,6 +334,14 @@ public final class PanamaConstants {
     } catch (IOException e) {
       throw new UncheckedIOException("failed to read " + LINUX_CPUINFO, e);
     }
+  }
+
+  private static boolean resolveQ4KBatchUnpack() {
+    String override = System.getProperty("vectors.gguf.q4k.useBatchUnpack");
+    if (override != null) {
+      return Boolean.parseBoolean(override);
+    }
+    return true; // default: use the optimized batch unpack
   }
 
   private static boolean hasCpuFlag(String flags, String expected) {
