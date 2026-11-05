@@ -2851,6 +2851,9 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
         });
   }
 
+  private static final ThreadLocal<int[]> Q4K_SCALE_SCRATCH = ThreadLocal.withInitial(() -> new int[8]);
+  private static final ThreadLocal<int[]> Q4K_MIN_SCRATCH = ThreadLocal.withInitial(() -> new int[8]);
+
   private static float ggufQ4_KQ8_KVectorRowDot(
       MemorySegment qWeight,
       long rowOffset,
@@ -2858,6 +2861,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    int[] scales = Q4K_SCALE_SCRATCH.get();
+    int[] mins = Q4K_MIN_SCRATCH.get();
     float sum = 0.0f;
     for (int block = 0; block < blocks; block++) {
       long blockOffset = rowOffset + (long) block * GGUF_Q4_K_BLOCK_BYTES;
@@ -2871,9 +2876,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int quantizedSum = 0;
       int minimumSum = 0;
 
+      GgufQuantizationSupport.qKUnpackScalesAndMins(qWeight, scalesOffset, scales, mins);
       for (int group = 0; group < 8; group++) {
-        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
-        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+        int scale = scales[group];
+        int min = mins[group];
         long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
         int shift = (group & 1) * 4;
         int groupActivationOffset = activationOffset + group * 32;
@@ -2897,6 +2903,8 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       byte[] q8Quants,
       float[] q8Scales,
       short[] q8Sums) {
+    int[] scales = Q4K_SCALE_SCRATCH.get();
+    int[] mins = Q4K_MIN_SCRATCH.get();
     float sum = 0.0f;
     int block = 0;
     long rowLimit = rowOffset + rowBytes;
@@ -2913,9 +2921,10 @@ final class PanamaVectorUtilSupport implements VectorUtilSupport {
       int quantizedSum = 0;
       int minimumSum = 0;
 
+      GgufQuantizationSupport.qKUnpackScalesAndMins(qWeight, scalesOffset, scales, mins);
       for (int group = 0; group < 8; group++) {
-        int scale = GgufQuantizationSupport.qKScale(qWeight, scalesOffset, group);
-        int min = GgufQuantizationSupport.qKMin(qWeight, scalesOffset, group);
+        int scale = scales[group];
+        int min = mins[group];
         long packedOffset = quantsOffset + (long) (group >>> 1) * 32;
         int shift = (group & 1) * 4;
         int groupActivationOffset = activationOffset + group * 32;
