@@ -162,6 +162,28 @@ class EmbeddingRecipeLifecycleTest {
   }
 
   @Test
+  @DisplayName("closing an empty collection with a recipe leaves the sidecar so reopening succeeds")
+  void recipeSidecarExistsWhenEmptyCollectionIsClosed(@TempDir Path root) throws Exception {
+    EmbeddingRecipe original = recipe("1.5");
+    try (VectorCollection collection = base(root).embeddingRecipe(original).build()) {
+      // No add(), no commit() — closed while empty.
+      // Touch the collection so the compiler sees a reference — the close() is what we test.
+      assertEquals(0, collection.size());
+    }
+    assertTrue(
+        Files.exists(root.resolve(FileFormat.RECIPE_FILE)),
+        "recipe sidecar must exist even when the collection never committed");
+
+    // Reopening must succeed: the manifest anchors the recipe hash, and the sidecar matches it.
+    try (VectorCollection reopened = base(root).build()) {
+      assertEquals(
+          Optional.of(original.recipeHash()),
+          reopened.config().recipe().map(EmbeddingRecipe::recipeHash),
+          "reopening an empty collection must recover its recipe");
+    }
+  }
+
+  @Test
   @DisplayName("the manifest anchors the recipe hash, so the sidecar cannot be swapped unnoticed")
   void manifestAnchorsTheRecipe(@TempDir Path root) throws Exception {
     EmbeddingRecipe original = recipe("1.5");
