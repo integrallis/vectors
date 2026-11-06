@@ -976,6 +976,20 @@ public final class VectorCollectionBuilder {
     }
     if (storageRoot != null) {
       config = reconcileStoredRecipe(config, storageRoot);
+      // Write the recipe sidecar when a recipe is present so that an empty collection (closed
+      // before its first commit) still carries the recipe that its manifest anchors. Otherwise
+      // reopening would find the hash in the manifest but no file on disk.
+      //
+      // The commit path also writes this, ordering the sidecar before the manifest that
+      // references it; writing here is idempotent because the same bytes go to the same path.
+      if (config.recipe().isPresent()) {
+        try {
+          com.integrallis.vectors.db.storage.RecipeStore.write(storageRoot, config.recipe().get());
+        } catch (java.io.IOException e) {
+          throw new java.io.UncheckedIOException(
+              "failed to write " + com.integrallis.vectors.db.storage.FileFormat.RECIPE_FILE, e);
+        }
+      }
     }
     java.util.List<GenerationSubscriber> effectiveSubscribers = subscribers;
     if (objectStoreBackend != null) {
