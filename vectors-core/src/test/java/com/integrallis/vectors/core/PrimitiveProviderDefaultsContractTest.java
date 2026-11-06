@@ -72,6 +72,12 @@ class PrimitiveProviderDefaultsContractTest {
 
   private static final class PrimitiveProvider implements VectorUtilSupport {
     @Override
+    public void addScaledInPlace(
+        float[] out, int outOffset, float[] vector, int vectorOffset, int length, float scale) {
+      scalar.addScaledInPlace(out, outOffset, vector, vectorOffset, length, scale);
+    }
+
+    @Override
     public void swiGlu(
         float[] out,
         int outOffset,
