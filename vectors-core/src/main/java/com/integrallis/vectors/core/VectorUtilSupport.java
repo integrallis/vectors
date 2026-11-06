@@ -33,7 +33,8 @@ public interface VectorUtilSupport
         ByteDistanceKernel,
         SegmentDistanceKernel,
         BinaryDistanceKernel,
-        VectorArithmeticKernel {
+        VectorArithmeticKernel,
+        GgufKernel {
 
   ValueLayout.OfShort GGUF_LE_SHORT =
       ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
