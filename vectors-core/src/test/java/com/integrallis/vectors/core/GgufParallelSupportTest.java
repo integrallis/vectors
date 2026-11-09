@@ -456,6 +456,25 @@ class GgufParallelSupportTest {
       assertThatThrownBy(() -> GgufParallelSupport.resolveParallelism(4))
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("must be positive");
+
+      System.setProperty("vectors.gguf.threads", "-2");
+      assertThatThrownBy(() -> GgufParallelSupport.resolveParallelism(4))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("must be positive");
+
+      System.setProperty("vectors.gguf.threads", "four");
+      assertThatThrownBy(() -> GgufParallelSupport.resolveParallelism(4))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("must be an integer");
+
+      // A single-core machine clamps to one rather than to the processor count, which is the
+      // case the old cap got most wrong: a container pinned to one core still built an
+      // eight-thread barrier-synchronised pool.
+      System.setProperty("vectors.gguf.threads", "8");
+      assertThat(GgufParallelSupport.resolveParallelism(1)).isEqualTo(1);
+
+      // Equality is not clamped away.
+      assertThat(GgufParallelSupport.resolveParallelism(8)).isEqualTo(8);
     } finally {
       if (previous == null) {
         System.clearProperty("vectors.gguf.threads");
@@ -463,5 +482,18 @@ class GgufParallelSupportTest {
         System.setProperty("vectors.gguf.threads", previous);
       }
     }
+  }
+
+  @Test
+  void parallelismReportsTheEffectiveCountNotTheRequestedOne() {
+    // A receipt that records the requested property rather than this value misreports what ran.
+    // Asserted against the same clamp the constant is built from, because PARALLELISM is read once
+    // in the class initialiser and no test can vary it after that.
+    assertThat(GgufParallelSupport.parallelism())
+        .as("the effective pool size is observable")
+        .isEqualTo(GgufParallelSupport.resolveParallelism(CpuTopology.computeThreads()));
+    assertThat(GgufParallelSupport.parallelism())
+        .as("and never exceeds the machine's compute-thread count")
+        .isLessThanOrEqualTo(CpuTopology.computeThreads());
   }
 }
