@@ -31,7 +31,6 @@ final class GgufParallelSupport {
       Boolean.parseBoolean(System.getProperty("vectors.gguf.parallel", "true"));
   private static final long MIN_ELEMENTS =
       Math.max(1L, Long.getLong("vectors.gguf.parallelThreshold", DEFAULT_MIN_ELEMENTS));
-  private static final int PROCESSORS = Runtime.getRuntime().availableProcessors();
 
   /**
    * Default worker count: physical cores, not hardware threads.
@@ -43,11 +42,28 @@ final class GgufParallelSupport {
    * hardware threads sharing one core's vector units do not do two cores of matmul, but they do
    * each arrive at every barrier and contend for the same units.
    *
-   * <p>{@code vectors.gguf.threads} still overrides it, and is still capped at the processor count:
-   * the point is that the default is derived from the machine instead of waiting to be discovered.
+   * <p>{@code vectors.gguf.threads} still overrides it, but the override is capped at the same
+   * compute-thread count rather than at the processor count. An override above the physical core
+   * count was never faster in anything we have measured, and is measurably slower: on a
+   * 4-physical-core / 8-processor box, LLaVA 1.5 7B Q4_K_S decode through the native kernel runs
+   * 10.13 tok/s at four threads and 7.20 tok/s at eight, a 29% loss, and the 16-core/32-thread EPYC
+   * sweep cited above says the same at the other end of the range. Capping at the processor count
+   * let a caller pinning "8" on a four-core machine silently buy that loss.
+   *
+   * <p>{@link #parallelism()} reports the effective count, which is what a receipt should record:
+   * the requested value is a request, not what ran.
    */
-  private static final int PARALLELISM =
-      positiveIntProperty("vectors.gguf.threads", CpuTopology.computeThreads(), PROCESSORS);
+  private static final int PARALLELISM = resolveParallelism(CpuTopology.computeThreads());
+
+  /**
+   * Visible for testing: the clamp, separated from the class initialiser that reads it once.
+   *
+   * @param computeThreads the machine's compute-thread count, already reduced to physical or
+   *     performance cores, or the processor count on a platform that does not report either
+   */
+  static int resolveParallelism(int computeThreads) {
+    return positiveIntProperty("vectors.gguf.threads", computeThreads, computeThreads);
+  }
 
   private static final int CHUNKS_PER_THREAD =
       positiveIntProperty("vectors.gguf.chunksPerThread", 2, Integer.MAX_VALUE);
