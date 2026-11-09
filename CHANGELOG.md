@@ -4,6 +4,36 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.34] - 2026-11-09
+
+### Fixed
+
+- **An explicit `vectors.gguf.threads` override is capped at the compute-thread count instead of
+  the processor count.** The default pool size already came from `CpuTopology.computeThreads()`,
+  which reduces to performance or physical cores, but the override was clamped at
+  `availableProcessors()`. So the default protected against an SMT-oversubscribed,
+  barrier-synchronised pool and an explicit request did not: a caller pinning a thread count for
+  reproducibility bought the oversubscription silently.
+
+  Measured on an AMD EPYC-Milan box with **8 logical / 4 physical** cores
+  (`Thread(s) per core: 2`, `Core(s) per socket: 4`), LLaVA 1.5 7B Q4_K_S decode through the
+  native kernel: **10.13 tok/s at four threads, 7.20 tok/s at eight — a 29% loss** from honouring
+  the request literally. That is the second independent measurement of the effect; the 0.1.33 entry
+  above records the first, on a 16-core/32-thread EPYC where sixteen threads beat thirty-two.
+
+  The clamp is now the same quantity as the default, so `computeThreads()` keeps its existing
+  fallback: on a platform that reports neither performance nor physical cores it is the processor
+  count, and the cap lands exactly where it did before. A single-core container now builds a
+  one-thread pool rather than an eight-thread one.
+
+  `parallelism()` reports the effective count, which is the value a receipt should record — the
+  requested property is a request, not what ran.
+
+  One measurement note worth keeping, because it cost real time: the same thread change on the
+  **pure-Java** Panama path moves decode only 2.23 to 2.03 tok/s, a 9% difference. The 29% appears
+  only on the route the product runs, so any thread-count conclusion drawn without the native
+  kernel understates it threefold.
+
 ## [0.1.33] - 2026-11-04
 
 ### Changed

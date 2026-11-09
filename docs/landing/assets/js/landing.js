@@ -77,20 +77,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- Dependency coordinates (build-system tabs) ----------------------
   const COORDS = {
     'gradle-kts': {
-      copy: 'implementation("com.integrallis:vectors:0.1.33")',
-      show: 'implementation("com.integrallis:vectors:0.1.33")',
+      copy: 'implementation("com.integrallis:vectors:0.1.34")',
+      show: 'implementation("com.integrallis:vectors:0.1.34")',
     },
     'gradle-groovy': {
-      copy: "implementation 'com.integrallis:vectors:0.1.33'",
-      show: "implementation 'com.integrallis:vectors:0.1.33'",
+      copy: "implementation 'com.integrallis:vectors:0.1.34'",
+      show: "implementation 'com.integrallis:vectors:0.1.34'",
     },
     maven: {
-      copy: '<dependency>\n  <groupId>com.integrallis</groupId>\n  <artifactId>vectors</artifactId>\n  <version>0.1.33</version>\n</dependency>',
-      show: '<dependency>\n  <groupId>com.integrallis</groupId>\n  <artifactId>vectors</artifactId>\n  <version>0.1.33</version>\n</dependency>',
+      copy: '<dependency>\n  <groupId>com.integrallis</groupId>\n  <artifactId>vectors</artifactId>\n  <version>0.1.34</version>\n</dependency>',
+      show: '<dependency>\n  <groupId>com.integrallis</groupId>\n  <artifactId>vectors</artifactId>\n  <version>0.1.34</version>\n</dependency>',
     },
     sbt: {
-      copy: 'libraryDependencies += "com.integrallis" % "vectors" % "0.1.33"',
-      show: 'libraryDependencies += "com.integrallis" % "vectors" % "0.1.33"',
+      copy: 'libraryDependencies += "com.integrallis" % "vectors" % "0.1.34"',
+      show: 'libraryDependencies += "com.integrallis" % "vectors" % "0.1.34"',
     },
   };
   // Build-system tabs are the .install-tab buttons that carry a data-target.
