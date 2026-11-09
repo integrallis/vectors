@@ -427,4 +427,41 @@ class GgufParallelSupportTest {
       VectorUtil.setGgufPollMillis(before);
     }
   }
+
+  @Test
+  void capsAnExplicitThreadOverrideAtTheComputeThreadCount() {
+    // A request above the physical core count was never faster in anything measured and is
+    // measurably slower: LLaVA 1.5 7B Q4_K_S decode through the native kernel on a
+    // 4-physical-core / 8-processor box runs 10.13 tok/s at four threads and 7.20 at eight.
+    // Capping at the processor count let a caller pinning "8" there buy that 29% loss.
+    String previous = System.getProperty("vectors.gguf.threads");
+    try {
+      System.setProperty("vectors.gguf.threads", "8");
+      assertThat(GgufParallelSupport.resolveParallelism(4))
+          .as("an override above the compute-thread count is clamped to it")
+          .isEqualTo(4);
+      assertThat(GgufParallelSupport.resolveParallelism(16))
+          .as("an override below it is honoured unchanged")
+          .isEqualTo(8);
+
+      System.setProperty("vectors.gguf.threads", "3");
+      assertThat(GgufParallelSupport.resolveParallelism(4)).isEqualTo(3);
+
+      System.clearProperty("vectors.gguf.threads");
+      assertThat(GgufParallelSupport.resolveParallelism(4))
+          .as("with no override the compute-thread count is the default")
+          .isEqualTo(4);
+
+      System.setProperty("vectors.gguf.threads", "0");
+      assertThatThrownBy(() -> GgufParallelSupport.resolveParallelism(4))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("must be positive");
+    } finally {
+      if (previous == null) {
+        System.clearProperty("vectors.gguf.threads");
+      } else {
+        System.setProperty("vectors.gguf.threads", previous);
+      }
+    }
+  }
 }
