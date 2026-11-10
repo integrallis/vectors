@@ -49,7 +49,7 @@ jobs:
             <dependencies>
               <dependency>
                 <groupId>com.integrallis</groupId><artifactId>vectors-core</artifactId>
-                <version>0.1.33</version>
+                <version>0.1.34</version>
               </dependency>
             </dependencies>
           </project>
