@@ -60,6 +60,13 @@ public final class VamanaSearcher {
   private final float[] bulkScores = new float[BULK_BATCH];
 
   /**
+   * Optional SSD prefetch hook — called for each neighbor id before the scoring loop to submit
+   * async touch-reads. {@code null} means no prefetching (default). Mirrors {@link
+   * com.integrallis.vectors.hnsw.HnswSearcher#setPrefetchHook}.
+   */
+  private java.util.function.IntConsumer prefetchHook;
+
+  /**
    * Creates a searcher with a custom {@link NodeScorerFactory}.
    *
    * <p>The {@code vectors} and {@code similarityFunction} are retained for full-precision rescoring
@@ -105,6 +112,18 @@ public final class VamanaSearcher {
    */
   VamanaSearcher(VamanaTopology graph, RandomAccessVectors vectors, SimilarityFunction sim) {
     this(graph, vectors, sim, defaultFullPrecisionFactory(vectors, sim));
+  }
+
+  /**
+   * Sets (or clears) the SSD prefetch hook.
+   *
+   * <p>When non-null, the hook is called for every neighbor id before the neighbor scoring pass.
+   * Thread safety: this method is only called by the thread that owns this {@code VamanaSearcher}.
+   *
+   * @param hook the prefetch consumer, or {@code null} to disable prefetching
+   */
+  void setPrefetchHook(java.util.function.IntConsumer hook) {
+    this.prefetchHook = hook;
   }
 
   /**
@@ -230,6 +249,14 @@ public final class VamanaSearcher {
         break;
       }
 
+      // SSD prefetch pass: issue async touch-reads for all neighbors before scoring.
+      if (prefetchHook != null) {
+        int prefetchN = graph.neighbors(candidateId, neighborScratch);
+        for (int i = 0; i < prefetchN; i++) {
+          prefetchHook.accept(neighborScratch[i]);
+        }
+      }
+
       // Expand neighbors — gather unvisited into a batch, then fused-score in one call. The
       // topology fills neighborScratch in stored order (heap copy or a paged read from the mmap).
       int n = graph.neighbors(candidateId, neighborScratch);
@@ -305,6 +332,14 @@ public final class VamanaSearcher {
 
       if (results.size() >= L && candidateScore < NodeQueue.score(results.peek())) {
         break;
+      }
+
+      // SSD prefetch pass: issue async touch-reads for all neighbors before scoring.
+      if (prefetchHook != null) {
+        int prefetchN = graph.neighbors(candidateId, neighborScratch);
+        for (int i = 0; i < prefetchN; i++) {
+          prefetchHook.accept(neighborScratch[i]);
+        }
       }
 
       int n = graph.neighbors(candidateId, neighborScratch);
