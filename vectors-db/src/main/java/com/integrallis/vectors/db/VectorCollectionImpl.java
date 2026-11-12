@@ -404,6 +404,14 @@ final class VectorCollectionImpl implements VectorCollection {
   /** Shorter bound for {@link #close()} so a wedged writer can't block JVM shutdown forever. */
   private static final long CLOSE_LOCK_TIMEOUT_MILLIS = 5_000L;
 
+  /**
+   * Per-thread scratch for cosine-normalized queries. Eliminates the per-search {@code
+   * request.query().clone()} allocation when {@link #normalizeForCosine} is true. Sized lazily to
+   * the largest dimension seen on this thread; overwritten on every call, which is safe because the
+   * normalized query is consumed synchronously and never escapes the search method.
+   */
+  private static final ThreadLocal<float[]> QUERY_NORMALIZE_SCRATCH = new ThreadLocal<>();
+
   /** Staging buffer, guarded exclusively by {@link #writerLock}. */
   private final StagingBuffer staging = new StagingBuffer();
 
@@ -2361,13 +2369,23 @@ final class VectorCollectionImpl implements VectorCollection {
     boolean hasFilter = filter != null && !(filter instanceof Filter.All);
 
     // #A: when the collection normalizes for cosine, the index scores with DOT over unit vectors,
-    // so the query must be unit-normalized to match. Normalize a COPY — never mutate the caller's
-    // array. The resulting (1+dot)/2 score equals the true (1+cosine)/2 cosine score exactly.
-    // Zero-norm queries are left as-is (l2normalize(..., false)).
-    float[] query =
-        normalizeForCosine
-            ? VectorUtil.l2normalize(request.query().clone(), false)
-            : request.query();
+    // so the query must be unit-normalized to match. Use a per-thread scratch buffer to avoid
+    // allocating a new float[] per search call; the normalized query is consumed synchronously and
+    // never escapes this method, so reuse is safe.
+    float[] query;
+    if (normalizeForCosine) {
+      float[] scratch = QUERY_NORMALIZE_SCRATCH.get();
+      int dim = request.query().length;
+      if (scratch == null || scratch.length != dim) {
+        scratch = new float[dim];
+        QUERY_NORMALIZE_SCRATCH.set(scratch);
+      }
+      System.arraycopy(request.query(), 0, scratch, 0, dim);
+      VectorUtil.l2normalize(scratch, false);
+      query = scratch;
+    } else {
+      query = request.query();
+    }
 
     // QvCache: only cache results that do not embed vectors (ids + scores + text + metadata are
     // stable across snapshots; vectors require mmap reads that callers may store separately).
