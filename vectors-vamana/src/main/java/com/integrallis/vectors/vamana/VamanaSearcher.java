@@ -83,9 +83,13 @@ public final class VamanaSearcher {
         Objects.requireNonNull(similarityFunction, "similarityFunction must not be null");
     this.scorerFactory = Objects.requireNonNull(scorerFactory, "scorerFactory must not be null");
     this.dimension = vectors.dimension();
-    int initialCapacity = Math.max(64, graph.size());
-    this.candidates = new NodeQueue(initialCapacity, false); // max-heap
-    this.results = new NodeQueue(initialCapacity, true); // min-heap
+    // Size heaps based on graph degree (not graph.size(), which over-allocates massively for
+    // large graphs). The candidate frontier rarely exceeds ~4×maxDegree; results are bounded
+    // by searchListSize (typically 64-200).
+    int candCap = Math.max(256, graph.maxDegree() * 4);
+    int resCap = Math.max(128, graph.maxDegree() * 2);
+    this.candidates = new NodeQueue(candCap, false); // max-heap
+    this.results = new NodeQueue(resCap, true); // min-heap
     this.rescoreHeap = new NodeQueue(64, true); // min-heap, grows as needed
     this.visited = new BitSet(Math.max(1, graph.size()));
     this.neighborScratch = new int[Math.max(1, graph.maxDegree())];
