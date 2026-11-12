@@ -2371,14 +2371,21 @@ final class VectorCollectionImpl implements VectorCollection {
 
     // QvCache: only cache results that do not embed vectors (ids + scores + text + metadata are
     // stable across snapshots; vectors require mmap reads that callers may store separately).
-    // Build the key once (quantize + filter-hash) and reuse it for both the get and the put below,
-    // instead of recomputing it on each side.
+    // Use the scratch-based get first: on a hit there is zero allocation. On a miss, build a
+    // permanent key only once for the put that follows the search.
     boolean cacheEligible = !request.includeVector() && queryCache.isEnabled();
     QvCacheKey cacheKey = null;
     if (cacheEligible) {
-      // Fold the score cutoff and field projection into the key: the cached SearchResult bakes in
-      // minScore and the text/metadata projection, so requests differing only in those must not
-      // share a cache entry.
+      var cached =
+          queryCache.get(
+              query,
+              request.k(),
+              filter,
+              request.minScore(),
+              request.includeText(),
+              request.includeMetadata());
+      if (cached.isPresent()) return cached.get();
+      // Miss: build a permanent key for the put that follows the search.
       cacheKey =
           queryCache.buildKey(
               query,
@@ -2387,8 +2394,6 @@ final class VectorCollectionImpl implements VectorCollection {
               request.minScore(),
               request.includeText(),
               request.includeMetadata());
-      var cached = queryCache.get(cacheKey);
-      if (cached.isPresent()) return cached.get();
     }
 
     Generation gen = acquireReadSnapshot();

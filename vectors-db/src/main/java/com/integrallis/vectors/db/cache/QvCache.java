@@ -127,6 +127,41 @@ public final class QvCache {
   }
 
   /**
+   * Looks up a cached result using a scratch buffer for quantization, avoiding the {@code byte[]}
+   * allocation on a cache hit. On a miss the scratch is discarded; callers that need a permanent
+   * key for {@link #put(QvCacheKey, SearchResult)} should call {@link #buildKey} after the miss.
+   *
+   * @param query full-precision query vector
+   * @param k number of results requested
+   * @param filter filter predicate (may be {@code null})
+   * @param minScore the request's minimum-score cutoff
+   * @param includeText whether the cached documents carry their text
+   * @param includeMetadata whether the cached documents carry their metadata
+   * @return the cached result, or {@link Optional#empty()} on a miss
+   */
+  public Optional<SearchResult> get(
+      float[] query,
+      int k,
+      Filter filter,
+      float minScore,
+      boolean includeText,
+      boolean includeMetadata) {
+    if (maxEntries == 0) return Optional.empty();
+    byte[] scratch = getScratch(query.length);
+    quantize(query, scratch);
+    long filterHash = FilterHasher.hash(filter);
+    Entry e =
+        store.get(new QvCacheKey(scratch, k, filterHash, minScore, includeText, includeMetadata));
+    if (e != null) {
+      if (!e.referenced) e.referenced = true;
+      hits.incrementAndGet();
+      return Optional.of(e.value);
+    }
+    misses.incrementAndGet();
+    return Optional.empty();
+  }
+
+  /**
    * Looks up a cached result by a pre-built key. Lock-free: a {@link ConcurrentHashMap#get} plus,
    * on a hit, a single volatile write of the entry's reference bit.
    *
@@ -278,23 +313,47 @@ public final class QvCache {
   }
 
   /**
-   * Quantizes a float query vector to signed int8 (one byte per dimension) using max-absolute-value
-   * normalization. Vectors that are proportionally identical map to the same byte array, grouping
-   * semantically similar queries under the same cache key.
+   * Quantizes a float query vector to signed int8 (one byte per dimension) using max-absolute-
+   * value normalization, writing the result into the caller-provided {@code out} array.
+   *
+   * @param v the input float vector
+   * @param out the output byte array; must be at least {@code v.length}
    */
-  public static byte[] quantize(float[] v) {
-    // Find max absolute value for normalizing to [-127, 127]
+  public static void quantize(float[] v, byte[] out) {
+    if (out.length < v.length) {
+      throw new IllegalArgumentException(
+          "out.length (" + out.length + ") < v.length (" + v.length + ")");
+    }
     float maxAbs = 1e-9f; // avoid division by zero
     for (float f : v) {
       float a = Math.abs(f);
       if (a > maxAbs) maxAbs = a;
     }
-    byte[] out = new byte[v.length];
     float scale = 127.0f / maxAbs;
     for (int i = 0; i < v.length; i++) {
       out[i] = (byte) Math.round(v[i] * scale);
     }
+  }
+
+  public static byte[] quantize(float[] v) {
+    byte[] out = new byte[v.length];
+    quantize(v, out);
     return out;
+  }
+
+  /**
+   * Per-thread scratch for the allocation-free {@link #get(float[], int, Filter, float, boolean,
+   * boolean)} path.
+   */
+  private static final ThreadLocal<byte[]> QUANTIZE_SCRATCH = new ThreadLocal<>();
+
+  private static byte[] getScratch(int dim) {
+    byte[] scratch = QUANTIZE_SCRATCH.get();
+    if (scratch == null || scratch.length < dim) {
+      scratch = new byte[dim];
+      QUANTIZE_SCRATCH.set(scratch);
+    }
+    return scratch;
   }
 
   // ---------------------------------------------------------------------------
