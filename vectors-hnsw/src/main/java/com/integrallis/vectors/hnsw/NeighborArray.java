@@ -32,6 +32,9 @@ public final class NeighborArray {
   private final float[] scores;
   private int size;
 
+  /** Threshold below which linear scan insertion beats binary search + System.arraycopy. */
+  private static final int LINEAR_SCAN_THRESHOLD = 64;
+
   /** Creates an empty array with the given maximum capacity. */
   public NeighborArray(int maxSize) {
     if (maxSize <= 0) {
@@ -115,6 +118,10 @@ public final class NeighborArray {
       }
     }
 
+    if (nodes.length <= LINEAR_SCAN_THRESHOLD) {
+      return insertLinear(nodeId, score);
+    }
+
     // Find insertion position via binary search (descending order)
     int pos = findInsertPosition(score);
 
@@ -143,12 +150,63 @@ public final class NeighborArray {
   }
 
   /**
+   * Linear-scan insertion for small arrays. Scans backwards from the end — for descending-order
+   * arrays that are mostly full, new scores are typically worse than existing ones, so the
+   * insertion point is near the end and the backwards scan terminates quickly with good branch
+   * prediction.
+   */
+  private boolean insertLinear(int nodeId, float score) {
+    // Find insertion point scanning backwards
+    int pos = size;
+    while (pos > 0 && scores[pos - 1] <= score) {
+      pos--;
+    }
+
+    if (size < nodes.length) {
+      // Shift elements from pos to size-1 one position to the right
+      for (int i = size; i > pos; i--) {
+        nodes[i] = nodes[i - 1];
+        scores[i] = scores[i - 1];
+      }
+      nodes[pos] = nodeId;
+      scores[pos] = score;
+      size++;
+      return true;
+    }
+    // Full
+    if (score <= scores[size - 1]) {
+      return false;
+    }
+    for (int i = size - 1; i > pos; i--) {
+      nodes[i] = nodes[i - 1];
+      scores[i] = scores[i - 1];
+    }
+    nodes[pos] = nodeId;
+    scores[pos] = score;
+    return true;
+  }
+
+  /**
    * Inserts into available capacity when the caller has proved the ID is absent. Diversity
    * selection filters distinct candidate IDs into disjoint accepted and blocked sets, so its result
    * does not need another duplicate scan. Public insertion retains duplicate protection.
    */
   void insertDistinct(int nodeId, float score) {
     if (size == nodes.length) throw new IllegalStateException("Neighbor array is full");
+    if (nodes.length <= LINEAR_SCAN_THRESHOLD) {
+      int pos = size;
+      while (pos > 0 && scores[pos - 1] <= score) {
+        pos--;
+      }
+      for (int i = size; i > pos; i--) {
+        nodes[i] = nodes[i - 1];
+        scores[i] = scores[i - 1];
+      }
+      nodes[pos] = nodeId;
+      scores[pos] = score;
+      size++;
+      return;
+    }
     int pos = findInsertPosition(score);
     System.arraycopy(nodes, pos, nodes, pos + 1, size - pos);
     System.arraycopy(scores, pos, scores, pos + 1, size - pos);
