@@ -173,6 +173,33 @@ public final class VamanaIndex {
   }
 
   /**
+   * SSD-aware search with asynchronous prefetching.
+   *
+   * <p>Before scoring each candidate's neighbor array, {@code prefetcher} is called for every
+   * neighbor ordinal. For mmap-backed vector stores this causes the OS to page-in relevant pages
+   * into the page cache concurrently with scoring, hiding I/O latency.
+   *
+   * <p>Thread safety: the prefetch hook is set and cleared within this call on the calling thread's
+   * own {@link VamanaSearcher} instance, so no cross-thread sharing occurs.
+   *
+   * @param query the query vector
+   * @param k number of results to return
+   * @param searchListSize beam width L
+   * @param prefetcher the async prefetch consumer; must not be {@code null}
+   * @return search results sorted by score descending
+   */
+  public SearchResult searchWithPrefetch(
+      float[] query, int k, int searchListSize, java.util.function.IntConsumer prefetcher) {
+    VamanaSearcher searcher = threadLocalSearcher.get();
+    searcher.setPrefetchHook(prefetcher);
+    try {
+      return searcher.search(query, k, searchListSize);
+    } finally {
+      searcher.setPrefetchHook(null);
+    }
+  }
+
+  /**
    * Two-pass search: fast quantized coarse pass followed by full-precision rescore.
    *
    * <p>If no quantization is enabled, falls back to the full-precision searcher running the same
