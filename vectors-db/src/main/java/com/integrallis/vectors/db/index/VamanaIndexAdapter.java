@@ -158,10 +158,7 @@ public final class VamanaIndexAdapter implements IndexSpi {
       // Single-pass full-precision search.
       result = index.search(query, k, searchL);
     }
-    // Defensive clone — SearchResult arrays are documented as "must not be mutated", but the
-    // SearchOutcome contract does not constrain its ordinals/scores, and downstream callers
-    // (post-filter, rescore) may mutate them in-place.
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    return new SearchOutcome(result.nodeIds(), result.scores());
   }
 
   @Override
@@ -187,7 +184,7 @@ public final class VamanaIndexAdapter implements IndexSpi {
     // does not apply here — the predicate already constrains results inline).
     int searchL = Math.max(searchListSize, k);
     SearchResult result = index.searchFiltered(query, k, searchL, predicate);
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    return new SearchOutcome(result.nodeIds(), result.scores());
   }
 
   @Override

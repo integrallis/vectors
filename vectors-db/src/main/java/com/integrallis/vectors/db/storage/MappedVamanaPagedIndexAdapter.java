@@ -99,7 +99,7 @@ public final class MappedVamanaPagedIndexAdapter implements IndexSpi {
     } else {
       result = index.search(query, k, searchL);
     }
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    return new SearchOutcome(result.nodeIds(), result.scores());
   }
 
   @Override
@@ -124,7 +124,7 @@ public final class MappedVamanaPagedIndexAdapter implements IndexSpi {
     // ACORN pre-filter over the paged graph: full-precision filtered traversal.
     int searchL = Math.max(searchListSize, k);
     SearchResult result = index.searchFiltered(query, k, searchL, predicate);
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    return new SearchOutcome(result.nodeIds(), result.scores());
   }
 
   /**
