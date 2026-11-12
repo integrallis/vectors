@@ -59,6 +59,23 @@ final class RobustPruner {
       RandomAccessVectors vectors,
       SimilarityFunction sim,
       NeighborArray result) {
+    robustPrune(baseNode, candidates, maxDegree, targetAlpha, vectors, sim, result, null, null);
+  }
+
+  /**
+   * Overload allowing callers to supply reusable scratch buffers, eliminating per-call allocations
+   * on the hot build path.
+   */
+  static void robustPrune(
+      int baseNode,
+      NeighborArray candidates,
+      int maxDegree,
+      float targetAlpha,
+      RandomAccessVectors vectors,
+      SimilarityFunction sim,
+      NeighborArray result,
+      float[] candidateScratch,
+      boolean[] eligibleScratch) {
 
     result.clear();
 
@@ -68,7 +85,8 @@ final class RobustPruner {
 
     int n = candidates.size();
     // Track which candidates are still eligible (not pruned and not baseNode)
-    boolean[] eligible = new boolean[n];
+    boolean[] eligible =
+        eligibleScratch != null && eligibleScratch.length >= n ? eligibleScratch : new boolean[n];
     int eligibleCount = 0;
     for (int i = 0; i < n; i++) {
       if (candidates.node(i) != baseNode) {
@@ -87,7 +105,9 @@ final class RobustPruner {
     // first. Stable-array stores (InMemoryVectors) compare against getVector(selectedNode)
     // directly.
     boolean sharedBuffer = vectors.sharesReturnBuffer();
-    float[] candidateScratch = sharedBuffer ? new float[vectors.dimension()] : null;
+    if (candidateScratch == null && sharedBuffer) {
+      candidateScratch = new float[vectors.dimension()];
+    }
 
     // Single-pass: scan candidates in score order (best first), check coverage at targetAlpha
     for (int i = 0; i < n; i++) {
