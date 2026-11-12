@@ -22,7 +22,6 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -424,35 +423,46 @@ public final class HnswSearcher {
   }
 
   /**
-   * Spawns one virtual-thread worker per seed, each running a fresh {@link HnswSearcher}'s layer-0
-   * beam search, then merges their {@link NeighborArray} outputs into a single top-{@code k} {@link
-   * SearchResult} using a size-bounded min-heap and a de-dup {@link BitSet}.
+   * Spawns up to {@code availableProcessors} virtual-thread workers, each owning a single {@link
+   * HnswSearcher} instance that processes a chunk of seeds sequentially. Workers reuse their
+   * scratch buffers (visitedTag, candidate/result heaps) across seeds in the same chunk, and use
+   * {@link #beamSearchFreshResult} so the returned {@link NeighborArray} is a fresh allocation (not
+   * the worker's reusableResult). The orchestrator flattens per-seed results and merges them into a
+   * single top-{@code k} {@link SearchResult} using a size-bounded min-heap and a generation-
+   * stamped dedup pass over this searcher's visitedTag scratch.
    */
   private SearchResult runParallelBeams(float[] query, int k, int efSearch, int[] seeds) {
+    int parallelism = Math.min(seeds.length, Runtime.getRuntime().availableProcessors());
+    int chunkSize = (seeds.length + parallelism - 1) / parallelism;
+
     List<NeighborArray> perWorker = new ArrayList<>(seeds.length);
     try (var exec = Executors.newVirtualThreadPerTaskExecutor()) {
-      List<Future<NeighborArray>> futures = new ArrayList<>(seeds.length);
-      for (int seed : seeds) {
-        final int s = seed;
+      List<Future<List<NeighborArray>>> futures = new ArrayList<>(parallelism);
+      for (int t = 0; t < parallelism; t++) {
+        int from = t * chunkSize;
+        int to = Math.min(from + chunkSize, seeds.length);
+        if (from >= seeds.length) break;
         futures.add(
             exec.submit(
                 () -> {
-                  // Each worker owns its scratch. When this searcher uses the default (stateful,
-                  // scratch-bound) scorer, the worker MUST build its own default scorer via the
-                  // 3-arg constructor — never share this searcher's query segment / pool across
-                  // threads. Pluggable factories are stateless per query, so they are shared.
+                  // One worker per task — scratch is reused across seeds in this chunk.
                   HnswSearcher worker =
                       usesDefaultScorer
                           ? new HnswSearcher(graph, vectors, similarityFunction)
                           : new HnswSearcher(graph, vectors, similarityFunction, scorerFactory);
                   NodeScorer ws = worker.scorerFactory.scorer(query);
-                  worker.singleEntry[0] = s;
-                  return worker.beamSearch(worker.singleEntry, efSearch, 0, ws);
+                  List<NeighborArray> chunkResults = new ArrayList<>(to - from);
+                  for (int s = from; s < to; s++) {
+                    worker.singleEntry[0] = seeds[s];
+                    chunkResults.add(
+                        worker.beamSearchFreshResult(worker.singleEntry, efSearch, 0, ws));
+                  }
+                  return chunkResults;
                 }));
       }
-      for (Future<NeighborArray> f : futures) {
+      for (Future<List<NeighborArray>> f : futures) {
         try {
-          perWorker.add(f.get());
+          perWorker.addAll(f.get());
         } catch (ExecutionException e) {
           // Cancel outstanding workers eagerly so the try-with-resources close() does not block
           // draining virtual threads that are no longer needed.
@@ -673,6 +683,20 @@ public final class HnswSearcher {
 
   /** Beam search at a given layer using candidate max-heap and result min-heap. */
   NeighborArray beamSearch(int[] entryPoints, int ef, int layer, NodeScorer scorer) {
+    return beamSearch0(entryPoints, ef, layer, scorer, true);
+  }
+
+  /**
+   * Same as {@link #beamSearch} but always allocates a fresh result {@link NeighborArray} instead
+   * of reusing the instance's {@link #reusableResult}. Safe for sequential calls on the same
+   * searcher instance (e.g., multi-start workers processing multiple seeds).
+   */
+  NeighborArray beamSearchFreshResult(int[] entryPoints, int ef, int layer, NodeScorer scorer) {
+    return beamSearch0(entryPoints, ef, layer, scorer, false);
+  }
+
+  private NeighborArray beamSearch0(
+      int[] entryPoints, int ef, int layer, NodeScorer scorer, boolean reuseResult) {
     nextVisitedGeneration();
     candidates.clear();
     results.clear();
@@ -754,10 +778,13 @@ public final class HnswSearcher {
 
     // Convert results min-heap to sorted NeighborArray (descending).
     int resultSize = results.size();
-    NeighborArray resultArray = obtainResultArray(resultSize == 0 ? 1 : resultSize);
-    resultArray.drainResultsFrom(results);
-
-    return resultArray;
+    if (reuseResult) {
+      NeighborArray resultArray = obtainResultArray(resultSize == 0 ? 1 : resultSize);
+      resultArray.drainResultsFrom(results);
+      return resultArray;
+    } else {
+      return NeighborArray.drainResults(results);
+    }
   }
 
   /**
