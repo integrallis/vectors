@@ -18,7 +18,6 @@ package com.integrallis.vectors.vamana;
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
@@ -137,7 +136,8 @@ public final class ConcurrentVamanaGraphBuilder {
   // ---------------------------------------------------------------------------
 
   private static final class WorkContext {
-    final BitSet visited;
+    final int[] visitedTag;
+    int visitedGen;
     final NodeQueue candidates;
     final NodeQueue results;
     final int[] tmpIds;
@@ -152,7 +152,8 @@ public final class ConcurrentVamanaGraphBuilder {
     final float[] queryScratch;
 
     WorkContext(int maxNodes, int searchListSize, int maxDegree, int dim, boolean sharedBuffer) {
-      visited = new BitSet(maxNodes);
+      visitedTag = new int[maxNodes];
+      visitedGen = 1;
       candidates = new NodeQueue(Math.max(64, searchListSize * 2), false);
       results = new NodeQueue(Math.max(64, searchListSize * 2), true);
       tmpIds = new int[maxDegree + 1];
@@ -161,6 +162,14 @@ public final class ConcurrentVamanaGraphBuilder {
       backlinkCandidates = new NeighborArray(maxDegree + 1);
       backlinkResult = new NeighborArray(maxDegree + 1);
       queryScratch = sharedBuffer ? new float[dim] : null;
+    }
+  }
+
+  /** Begins a new visited generation in O(1) time (replaces O(N/64) BitSet.clear()). */
+  private static void nextVisitedGeneration(WorkContext ctx) {
+    if (++ctx.visitedGen == 0) {
+      Arrays.fill(ctx.visitedTag, 0);
+      ctx.visitedGen = 1;
     }
   }
 
@@ -293,12 +302,12 @@ public final class ConcurrentVamanaGraphBuilder {
     int L = searchListSize;
     ctx.candidates.clear();
     ctx.results.clear();
-    ctx.visited.clear();
+    nextVisitedGeneration(ctx);
 
     float entryScore = sim.compare(query, vectors.getVector(entryPoint));
     ctx.candidates.add(entryPoint, entryScore);
     ctx.results.add(entryPoint, entryScore);
-    ctx.visited.set(entryPoint);
+    ctx.visitedTag[entryPoint] = ctx.visitedGen;
 
     while (!ctx.candidates.isEmpty()) {
       long top = ctx.candidates.poll();
@@ -311,8 +320,8 @@ public final class ConcurrentVamanaGraphBuilder {
       int nCount = snapshotNeighbors(candId, graph, locks, ctx.tmpIds);
       for (int i = 0; i < nCount; i++) {
         int nbr = ctx.tmpIds[i];
-        if (ctx.visited.get(nbr)) continue;
-        ctx.visited.set(nbr);
+        if (ctx.visitedTag[nbr] == ctx.visitedGen) continue;
+        ctx.visitedTag[nbr] = ctx.visitedGen;
         float score = sim.compare(query, vectors.getVector(nbr));
         // Single sift-down eviction; only explore the neighbor if it entered the result beam.
         if (ctx.results.insertWithOverflow(nbr, score, L)) {
