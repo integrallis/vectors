@@ -160,6 +160,7 @@ final class VectorCollectionImpl implements VectorCollection {
    */
   private static final class Generation {
     final IndexSpi spi;
+    final boolean supportsPreFilter;
     final IdMapper idMapper;
     final MetadataStore metadataStore;
     final int physicalCount;
@@ -197,6 +198,11 @@ final class VectorCollectionImpl implements VectorCollection {
         Path directory,
         MemorySegmentVectors mappedVectors) {
       this.spi = spi;
+      this.supportsPreFilter =
+          spi instanceof HnswIndexAdapter
+              || spi instanceof MappedHnswIndexAdapter
+              || spi instanceof VamanaIndexAdapter
+              || spi instanceof MappedVamanaPagedIndexAdapter;
       this.idMapper = idMapper;
       this.metadataStore = metadataStore;
       this.physicalCount = physicalCount;
@@ -2392,12 +2398,7 @@ final class VectorCollectionImpl implements VectorCollection {
       // ACORN pre-filter: HNSW and Vamana SPI implementations navigate non-matching nodes for
       // routing but only collect matching ones in the result set — avoids recall collapse on
       // selective filters without expanding the candidate pool.
-      boolean supportsPreFilter =
-          gen.spi instanceof HnswIndexAdapter
-              || gen.spi instanceof MappedHnswIndexAdapter
-              || gen.spi instanceof VamanaIndexAdapter
-              || gen.spi instanceof MappedVamanaPagedIndexAdapter;
-      boolean preFilterActive = hasFilter && supportsPreFilter;
+      boolean preFilterActive = hasFilter && gen.supportsPreFilter;
 
       int candidateK = request.k();
       int candidateSearchListSize = request.searchListSize();
