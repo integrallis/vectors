@@ -549,18 +549,20 @@ final class VectorCollectionImpl implements VectorCollection {
   }
 
   /**
-   * #A: when {@link #normalizeForCosine}, returns a Document whose vector is an L2-unit-normalized
-   * <i>copy</i> of the input (the caller's array is never mutated; zero-norm vectors are left
-   * as-is). Otherwise returns the document unchanged. Applied at the single ingest choke point so
-   * the persisted {@code vectors.bin}, the in-memory arrays, and {@code get}/{@code search}
-   * projections all hold unit vectors.
+   * #A: returns a Document whose vector is an isolated copy of the input. When {@link
+   * #normalizeForCosine} the copy is L2-unit-normalised (zero-norm vectors are left as-is).
+   * Otherwise the copy is unmodified. Applied at the single ingest choke point so callers are free
+   * to mutate their original arrays while the stored version remains isolated.
    */
   private Document maybeNormalizeForCosine(Document doc) {
-    if (!normalizeForCosine || doc.vector() == null) {
+    if (doc.vector() == null) {
       return doc;
     }
-    float[] normalized = VectorUtil.l2normalize(doc.vector().clone(), false);
-    return new Document(doc.id(), normalized, doc.text(), doc.metadata());
+    float[] copy = doc.vector().clone();
+    if (normalizeForCosine) {
+      VectorUtil.l2normalize(copy, false);
+    }
+    return new Document(doc.id(), copy, doc.text(), doc.metadata());
   }
 
   private IndexSpi newInMemoryAdapter() {
