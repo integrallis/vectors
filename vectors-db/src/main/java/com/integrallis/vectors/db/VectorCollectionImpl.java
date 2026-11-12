@@ -2348,13 +2348,8 @@ final class VectorCollectionImpl implements VectorCollection {
         if (stored == null) continue;
         float[] vector =
             request.includeVector() ? hydrateVector(gen, ordinal, stored).vector() : null;
-        Document projected =
-            new Document(
-                stored.id(),
-                vector,
-                request.includeText() ? stored.text() : null,
-                request.includeMetadata() ? stored.metadata() : null);
-        hits.add(new SearchResult.Hit(stored.id(), score, projected));
+        hits.add(
+            new SearchResult.Hit(stored.id(), score, projectDocument(stored, vector, request)));
       }
       results.add(new SearchResult(hits, System.nanoTime() - start));
     }
@@ -2515,13 +2510,8 @@ final class VectorCollectionImpl implements VectorCollection {
                 config.dimension());
           }
         }
-        Document projected =
-            new Document(
-                stored.id(),
-                vector,
-                request.includeText() ? stored.text() : null,
-                request.includeMetadata() ? stored.metadata() : null);
-        hits.add(new SearchResult.Hit(stored.id(), score, projected));
+        hits.add(
+            new SearchResult.Hit(stored.id(), score, projectDocument(stored, vector, request)));
       }
 
       if (hasFilter && hits.size() < request.k() && gen.liveCount() >= request.k()) {
@@ -2573,6 +2563,26 @@ final class VectorCollectionImpl implements VectorCollection {
     MemorySegment.copy(
         gen.mappedVectors.vectorSlice(ord), ValueLayout.JAVA_FLOAT, 0L, v, 0, config.dimension());
     return new Document(doc.id(), v, doc.text(), doc.metadata());
+  }
+
+  /**
+   * Projects a stored document according to the request's include flags, reusing the stored
+   * document reference when the projection would be identical (common all-fields-included case).
+   * This eliminates one {@code Document} allocation per hit on the hot search path.
+   */
+  private static Document projectDocument(Document stored, float[] vector, SearchRequest request) {
+    // If the vector reference is the same (no hydration happened) and the request asks for every
+    // field that is non-null in the stored document, the stored document is already the projection.
+    if (vector == stored.vector()
+        && (request.includeText() || stored.text() == null)
+        && (request.includeMetadata() || stored.metadata() == null)) {
+      return stored;
+    }
+    return new Document(
+        stored.id(),
+        vector,
+        request.includeText() ? stored.text() : null,
+        request.includeMetadata() ? stored.metadata() : null);
   }
 
   @Override
