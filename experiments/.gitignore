@@ -1,0 +1,2 @@
+# Build artifacts that may be generated during local microbenchmarking
+*.class
