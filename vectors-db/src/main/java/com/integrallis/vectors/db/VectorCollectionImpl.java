@@ -892,10 +892,11 @@ final class VectorCollectionImpl implements VectorCollection {
   @Override
   public void add(Document doc) {
     validateForInsert(doc);
+    Document normalized = maybeNormalizeForCosine(doc);
     acquireWriterLockOrThrow("add");
     try {
       ensureOpenUnderLock();
-      stageUnderLock(doc);
+      stageUnderLock(normalized);
       maybeAutoCommit();
     } finally {
       writerLock.unlock();
@@ -908,13 +909,15 @@ final class VectorCollectionImpl implements VectorCollection {
     if (docs.isEmpty()) {
       return;
     }
+    java.util.List<Document> normalized = new java.util.ArrayList<>(docs.size());
     for (Document d : docs) {
       validateForInsert(d);
+      normalized.add(maybeNormalizeForCosine(d));
     }
     acquireWriterLockOrThrow("addAll");
     try {
       ensureOpenUnderLock();
-      for (Document d : docs) {
+      for (Document d : normalized) {
         stageUnderLock(d);
       }
       maybeAutoCommit();
@@ -951,7 +954,7 @@ final class VectorCollectionImpl implements VectorCollection {
     if (liveAndNotTombstoned || staging.contains(id)) {
       throw new IllegalArgumentException("Duplicate id: " + id);
     }
-    staging.append(maybeNormalizeForCosine(doc));
+    staging.append(doc);
   }
 
   private void maybeAutoCommit() {
