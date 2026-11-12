@@ -140,6 +140,8 @@ public final class ConcurrentVamanaGraphBuilder {
     int visitedGen;
     final NodeQueue candidates;
     final NodeQueue results;
+    final int[] searchNodeIds;
+    final float[] searchScores;
     final int[] tmpIds;
     final NeighborArray pruneCandidates;
     final NeighborArray pruneResult;
@@ -156,6 +158,8 @@ public final class ConcurrentVamanaGraphBuilder {
       visitedGen = 1;
       candidates = new NodeQueue(Math.max(64, searchListSize * 2), false);
       results = new NodeQueue(Math.max(64, searchListSize * 2), true);
+      searchNodeIds = new int[searchListSize];
+      searchScores = new float[searchListSize];
       tmpIds = new int[maxDegree + 1];
       pruneCandidates = new NeighborArray(searchListSize + maxDegree + 1);
       pruneResult = new NeighborArray(maxDegree + 1);
@@ -330,16 +334,14 @@ public final class ConcurrentVamanaGraphBuilder {
       }
     }
 
-    // Drain min-heap to descending arrays
+    // Drain min-heap to descending arrays — reuse per-thread scratch.
     int sz = ctx.results.size();
-    int[] nodeIds = new int[sz];
-    float[] scores = new float[sz];
     for (int i = sz - 1; i >= 0; i--) {
       long e = ctx.results.poll();
-      nodeIds[i] = NodeQueue.nodeId(e);
-      scores[i] = NodeQueue.score(e);
+      ctx.searchNodeIds[i] = NodeQueue.nodeId(e);
+      ctx.searchScores[i] = NodeQueue.score(e);
     }
-    return new SearchResult(nodeIds, scores);
+    return new SearchResult(ctx.searchNodeIds, ctx.searchScores);
   }
 
   private int snapshotNeighbors(int nodeId, VamanaGraph graph, ReentrantLock[] locks, int[] dest) {
