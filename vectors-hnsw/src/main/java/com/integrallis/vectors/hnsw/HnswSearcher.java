@@ -466,15 +466,21 @@ public final class HnswSearcher {
       }
     }
 
-    // Merge: size-bounded min-heap + BitSet de-dup. NodeQueue requires non-negative scores, so we
-    // use insertWithOverflow which already guards the bound; duplicates across workers are skipped.
+    // Merge: size-bounded min-heap + generation-stamped dedup (reuses this searcher's visitedTag
+    // scratch — the orchestrator instance is idle during worker searches, so its tag array is
+    // free).
     NodeQueue resultHeap = new NodeQueue(Math.max(1, k), true);
-    BitSet sink = new BitSet(graph.size());
+    int dedupGen = ++visitedGen;
+    if (dedupGen <= 0) {
+      java.util.Arrays.fill(visitedTag, 0);
+      visitedGen = 1;
+      dedupGen = 1;
+    }
     for (NeighborArray na : perWorker) {
       for (int i = 0; i < na.size(); i++) {
         int id = na.node(i);
-        if (sink.get(id)) continue;
-        sink.set(id);
+        if (visitedTag[id] == dedupGen) continue;
+        visitedTag[id] = dedupGen;
         resultHeap.insertWithOverflow(id, na.score(i), k);
       }
     }
