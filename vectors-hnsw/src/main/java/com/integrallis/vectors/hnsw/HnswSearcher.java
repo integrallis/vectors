@@ -105,6 +105,10 @@ public final class HnswSearcher {
   // Reusable single-entry-point array — avoids the per-search new int[]{ep} allocation in search /
   // searchFiltered / pickSeeds / per-worker seeding. Set [0] immediately before each call.
   private final int[] singleEntry = new int[1];
+  // Reusable seed array for multi-start pickSeeds (typical nStarts 4-8, cap at 32). Falls back to
+  // allocation only when the caller requests more seeds than this.
+  private static final int MAX_SEEDS = 32;
+  private final int[] seedsScratch = new int[MAX_SEEDS];
   // Reusable beam-search result array (grow-if-needed + clear per call).
   //
   // SAFETY INVARIANT: the array returned by beamSearch/beamSearchFiltered is fully consumed (by
@@ -399,16 +403,18 @@ public final class HnswSearcher {
    */
   int[] pickSeeds(int entry, NodeScorer scorer, int nStarts) {
     if (graph.maxLevel() < 1) {
-      return new int[] {entry};
+      singleEntry[0] = entry;
+      return singleEntry;
     }
     int seedEf = Math.max(2, 2 * nStarts);
     singleEntry[0] = entry;
     NeighborArray seedResults = beamSearch(singleEntry, seedEf, 1, scorer);
     int count = Math.min(nStarts, seedResults.size());
     if (count <= 0) {
-      return new int[] {entry};
+      singleEntry[0] = entry;
+      return singleEntry;
     }
-    int[] seeds = new int[count];
+    int[] seeds = count <= MAX_SEEDS ? seedsScratch : new int[count];
     for (int i = 0; i < count; i++) {
       seeds[i] = seedResults.node(i);
     }
