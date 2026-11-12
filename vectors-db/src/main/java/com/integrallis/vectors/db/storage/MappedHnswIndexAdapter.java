@@ -127,7 +127,7 @@ public final class MappedHnswIndexAdapter implements IndexSpi {
     } else {
       result = index.search(query, k, efSearch);
     }
-    SearchOutcome outcome = new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    SearchOutcome outcome = new SearchOutcome(result.nodeIds(), result.scores());
     if (event.shouldCommit()) {
       event.k = k;
       event.efSearch = efSearch;
@@ -170,7 +170,7 @@ public final class MappedHnswIndexAdapter implements IndexSpi {
     }
     int efSearch = Math.max(searchListSize, k);
     SearchResult result = index.searchMultiStart(query, k, efSearch, searchMultiStart);
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    return new SearchOutcome(result.nodeIds(), result.scores());
   }
 
   /**
@@ -203,7 +203,7 @@ public final class MappedHnswIndexAdapter implements IndexSpi {
     }
     int efSearch = Math.max(searchListSize, k);
     SearchResult result = index.searchFiltered(query, k, efSearch, predicate);
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    return new SearchOutcome(result.nodeIds(), result.scores());
   }
 
   @Override

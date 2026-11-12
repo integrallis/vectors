@@ -174,10 +174,7 @@ public final class HnswIndexAdapter implements IndexSpi {
       // Single-pass full-precision search.
       result = index.search(query, k, efSearch);
     }
-    // Defensive clone — SearchResult arrays are documented as "must not be mutated", but the
-    // SearchOutcome contract does not constrain its ordinals/scores, and downstream callers
-    // (post-filter, rescore) may mutate them in-place.
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    return new SearchOutcome(result.nodeIds(), result.scores());
   }
 
   /**
@@ -208,7 +205,7 @@ public final class HnswIndexAdapter implements IndexSpi {
     }
     int efSearch = Math.max(searchListSize, k);
     SearchResult result = index.searchMultiStart(query, k, efSearch, searchMultiStart);
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    return new SearchOutcome(result.nodeIds(), result.scores());
   }
 
   /**
@@ -228,7 +225,7 @@ public final class HnswIndexAdapter implements IndexSpi {
     }
     int efSearch = Math.max(searchListSize, k);
     SearchResult result = index.searchFiltered(query, k, efSearch, predicate);
-    return new SearchOutcome(result.nodeIds().clone(), result.scores().clone());
+    return new SearchOutcome(result.nodeIds(), result.scores());
   }
 
   @Override
