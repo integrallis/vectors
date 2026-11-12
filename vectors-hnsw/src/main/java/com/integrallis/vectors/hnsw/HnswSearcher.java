@@ -183,7 +183,7 @@ public final class HnswSearcher {
     this.candidates = new NodeQueue(candCap, false); // max-heap, beam-search frontier
     this.results = new NodeQueue(resCap, true); // min-heap, current top-k by score
     // Rescore is bounded by k (typically <= 100), so a small starting capacity is enough.
-    this.rescoreHeap = new NodeQueue(64, true); // min-heap, grows as needed
+    this.rescoreHeap = new NodeQueue(256, true); // min-heap, grows as needed
     // Fit the widest possible layer-0 neighbor list (2M+1 upper bound) but never below BULK_BATCH.
     this.bulkCapacity = Math.max(BULK_BATCH, graph.maxConnections0() + 2);
     this.bulkIds = new int[bulkCapacity];

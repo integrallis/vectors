@@ -90,7 +90,7 @@ public final class VamanaSearcher {
     int resCap = Math.max(128, graph.maxDegree() * 2);
     this.candidates = new NodeQueue(candCap, false); // max-heap
     this.results = new NodeQueue(resCap, true); // min-heap
-    this.rescoreHeap = new NodeQueue(64, true); // min-heap, grows as needed
+    this.rescoreHeap = new NodeQueue(256, true); // min-heap, grows as needed
     this.visited = new BitSet(Math.max(1, graph.size()));
     this.neighborScratch = new int[Math.max(1, graph.maxDegree())];
   }
