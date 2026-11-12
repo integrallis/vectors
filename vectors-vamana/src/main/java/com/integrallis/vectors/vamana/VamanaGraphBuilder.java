@@ -244,6 +244,9 @@ public final class VamanaGraphBuilder {
     // stores (InMemoryVectors) skip the copy. RobustPruner already guards the same way.
     boolean sharedBuffer = vectors.sharesReturnBuffer();
     float[] queryScratch = sharedBuffer ? new float[vectors.dimension()] : null;
+    // Reusable scratch for RobustPruner to avoid per-call allocation.
+    float[] candidateScratch = sharedBuffer ? new float[vectors.dimension()] : null;
+    boolean[] eligibleScratch = new boolean[searchListSize + maxDegree + 1];
 
     for (int iter = 0; iter < n; iter++) {
       int node = order[iter];
@@ -278,7 +281,15 @@ public final class VamanaGraphBuilder {
 
       // Robust prune
       RobustPruner.robustPrune(
-          node, pruneCandidates, maxDegree, passAlpha, vectors, sim, pruneResult);
+          node,
+          pruneCandidates,
+          maxDegree,
+          passAlpha,
+          vectors,
+          sim,
+          pruneResult,
+          candidateScratch,
+          eligibleScratch);
 
       // Replace node's neighbor list with pruned result
       existingNeighbors.clear();
@@ -307,7 +318,15 @@ public final class VamanaGraphBuilder {
             backlinkCandidates.sort();
 
             RobustPruner.robustPrune(
-                neighbor, backlinkCandidates, maxDegree, passAlpha, vectors, sim, backlinkResult);
+                neighbor,
+                backlinkCandidates,
+                maxDegree,
+                passAlpha,
+                vectors,
+                sim,
+                backlinkResult,
+                candidateScratch,
+                eligibleScratch);
 
             neighborNeighbors.clear();
             neighborNeighbors.copyFrom(backlinkResult);

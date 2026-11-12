@@ -152,6 +152,9 @@ public final class ConcurrentVamanaGraphBuilder {
     // calls getVector() repeatedly) aliases it. Null for stable float[][] stores. Each thread owns
     // its own WorkContext, so this row is never shared across threads.
     final float[] queryScratch;
+    // Reusable scratch for RobustPruner (eliminates per-call allocation on the hot build path).
+    final float[] candidateScratch;
+    final boolean[] eligibleScratch;
 
     WorkContext(int maxNodes, int searchListSize, int maxDegree, int dim, boolean sharedBuffer) {
       visitedTag = new int[maxNodes];
@@ -166,6 +169,8 @@ public final class ConcurrentVamanaGraphBuilder {
       backlinkCandidates = new NeighborArray(maxDegree + 1);
       backlinkResult = new NeighborArray(maxDegree + 1);
       queryScratch = sharedBuffer ? new float[dim] : null;
+      candidateScratch = sharedBuffer ? new float[dim] : null;
+      eligibleScratch = new boolean[searchListSize + maxDegree + 1];
     }
   }
 
@@ -248,7 +253,15 @@ public final class ConcurrentVamanaGraphBuilder {
 
     // Robust prune → store result in ctx.pruneResult
     RobustPruner.robustPrune(
-        node, ctx.pruneCandidates, maxDegree, passAlpha, vectors, sim, ctx.pruneResult);
+        node,
+        ctx.pruneCandidates,
+        maxDegree,
+        passAlpha,
+        vectors,
+        sim,
+        ctx.pruneResult,
+        ctx.candidateScratch,
+        ctx.eligibleScratch);
 
     // Replace node's neighbor list (lock own node)
     locks[node].lock();
@@ -286,7 +299,9 @@ public final class ConcurrentVamanaGraphBuilder {
                 passAlpha,
                 vectors,
                 sim,
-                ctx.backlinkResult);
+                ctx.backlinkResult,
+                ctx.candidateScratch,
+                ctx.eligibleScratch);
             nNbrs.clear();
             nNbrs.copyFrom(ctx.backlinkResult);
           }
