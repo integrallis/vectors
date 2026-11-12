@@ -1144,9 +1144,12 @@ final class VectorCollectionImpl implements VectorCollection {
     int stagedCount = staging.size();
     int newPhysicalCount = oldPhysicalCount + stagedCount;
 
-    // Copy the old generation's tombstones and apply pending ones.
-    BitSet newTombstones = (BitSet) oldGen.tombstones.clone();
-    for (String id : staging.pendingTombstones()) {
+    // Apply tombstones. For the common append-only case (no pending tombstones), share the
+    // predecessor's BitSet by reference — saves an O(N/8) clone of the live-cardinality bitmap.
+    java.util.Set<String> pendingTombstones = staging.pendingTombstones();
+    BitSet newTombstones =
+        pendingTombstones.isEmpty() ? oldGen.tombstones : (BitSet) oldGen.tombstones.clone();
+    for (String id : pendingTombstones) {
       int ord = oldGen.idMapper.ordinalOf(id);
       if (ord >= 0) {
         newTombstones.set(ord);
@@ -1258,9 +1261,12 @@ final class VectorCollectionImpl implements VectorCollection {
     int newPhysicalCount = oldPhysicalCount + stagedCount;
     int dim = config.dimension();
 
-    // Apply tombstones.
-    BitSet newTombstones = (BitSet) oldGen.tombstones.clone();
-    for (String id : staging.pendingTombstones()) {
+    // Apply tombstones. Share the predecessor BitSet when there are no pending tombstones
+    // (common append-only case) to avoid an O(N/8) clone of the live-cardinality bitmap.
+    java.util.Set<String> pendingTombstones = staging.pendingTombstones();
+    BitSet newTombstones =
+        pendingTombstones.isEmpty() ? oldGen.tombstones : (BitSet) oldGen.tombstones.clone();
+    for (String id : pendingTombstones) {
       int ord = oldGen.idMapper.ordinalOf(id);
       if (ord >= 0) {
         newTombstones.set(ord);
