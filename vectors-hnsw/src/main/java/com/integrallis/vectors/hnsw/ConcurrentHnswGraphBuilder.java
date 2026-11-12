@@ -21,7 +21,7 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
-import java.util.BitSet;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -501,7 +501,8 @@ public final class ConcurrentHnswGraphBuilder {
   // ---------------------------------------------------------------------------
 
   private static final class WorkContext {
-    final BitSet visited;
+    final int[] visitedTag;
+    int visitedGen;
     final NodeQueue candidates; // max-heap
     final NodeQueue results; // min-heap
     final int[] tmpIds; // snapshot buffer for neighbor reads under lock
@@ -528,7 +529,8 @@ public final class ConcurrentHnswGraphBuilder {
         boolean useSegments,
         boolean sharesReturnBuffer) {
       queryScratch = !useSegments && sharesReturnBuffer ? new float[dimension] : null;
-      visited = new BitSet(maxNodes);
+      visitedTag = new int[maxNodes];
+      visitedGen = 1;
       candidates = new NodeQueue(ef * 2, false);
       results = new NodeQueue(ef * 2, true);
       tmpIds = new int[maxNeighbors];
@@ -545,6 +547,14 @@ public final class ConcurrentHnswGraphBuilder {
         this.queryScratchSeg = null;
         this.rowSegs = null;
       }
+    }
+  }
+
+  /** Begins a new visited generation in O(1) time (replaces O(N/64) BitSet.clear()). */
+  private static void nextVisitedGeneration(WorkContext ctx) {
+    if (++ctx.visitedGen == 0) {
+      Arrays.fill(ctx.visitedTag, 0);
+      ctx.visitedGen = 1;
     }
   }
 
@@ -713,14 +723,15 @@ public final class ConcurrentHnswGraphBuilder {
       WorkContext ctx,
       int self) {
 
-    ctx.visited.clear();
+    nextVisitedGeneration(ctx);
     ctx.candidates.clear();
     ctx.results.clear();
-    ctx.visited.set(self); // never admit the node being inserted into its own neighbour set
+    ctx.visitedTag[self] =
+        ctx.visitedGen; // never admit the node being inserted into its own neighbour set
 
     for (int ep : entryPoints) {
-      if (!ctx.visited.get(ep)) {
-        ctx.visited.set(ep);
+      if (ctx.visitedTag[ep] != ctx.visitedGen) {
+        ctx.visitedTag[ep] = ctx.visitedGen;
         float score = scoreNode(query, ctx, ep);
         ctx.candidates.add(ep, score);
         ctx.results.add(ep, score);
@@ -747,8 +758,8 @@ public final class ConcurrentHnswGraphBuilder {
       int batch = 0;
       for (int i = 0; i < nCount; i++) {
         int nbr = ctx.tmpIds[i];
-        if (ctx.visited.get(nbr)) continue;
-        ctx.visited.set(nbr);
+        if (ctx.visitedTag[nbr] == ctx.visitedGen) continue;
+        ctx.visitedTag[nbr] = ctx.visitedGen;
         ctx.batchIds[batch] = nbr;
         if (useSegments) ctx.rowSegs[batch] = vectors.vectorSegment(nbr);
         else if (useBulk) ctx.pool[batch] = vectors.getVector(nbr);
