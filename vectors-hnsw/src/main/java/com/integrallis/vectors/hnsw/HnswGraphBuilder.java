@@ -16,7 +16,7 @@
 package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.SimilarityFunction;
-import java.util.BitSet;
+import java.util.Arrays;
 
 /**
  * Single-threaded HNSW graph builder implementing Algorithm 1 from the original paper.
@@ -36,13 +36,15 @@ public final class HnswGraphBuilder {
   private final RandomLevelGenerator levelGenerator;
 
   // Scratch buffers reused across insertions
-  private final BitSet visited;
+  private final int[] visitedTag;
+  private int visitedGen;
   private final float[] queryScratch;
   private final ExactScoreCache scoreCache = new ExactScoreCache();
   private final NodeQueue candidates;
   private final NodeQueue results;
   // Reusable scratch for pruning calls inside NeighborSelector (eliminates per-call allocation).
   private final NeighborArray pruneResult;
+  private final NeighborArray searchResults;
 
   private HnswGraphBuilder(
       int maxConnections,
@@ -58,11 +60,13 @@ public final class HnswGraphBuilder {
     this.levelGenerator = new RandomLevelGenerator(maxConnections, seed);
 
     // Pre-allocate scratch buffers
-    this.visited = new BitSet(vectors.size());
+    this.visitedTag = new int[vectors.size()];
+    this.visitedGen = 1;
     this.queryScratch = vectors.sharesReturnBuffer() ? new float[vectors.dimension()] : null;
     this.candidates = new NodeQueue(efConstruction * 2, false); // max-heap
     this.results = new NodeQueue(efConstruction * 2, true); // min-heap
     this.pruneResult = new NeighborArray(Math.max(graph.maxConnections0(), maxConnections));
+    this.searchResults = new NeighborArray(efConstruction);
   }
 
   /** Creates a builder with a specific seed for deterministic construction. */
@@ -191,6 +195,14 @@ public final class HnswGraphBuilder {
     return current;
   }
 
+  // Begins a new visited generation in O(1) time.
+  private void nextVisitedGeneration() {
+    if (++visitedGen == 0) {
+      Arrays.fill(visitedTag, 0);
+      visitedGen = 1;
+    }
+  }
+
   /**
    * Beam search at a given layer. Uses candidate max-heap and result min-heap with visited bitset.
    *
@@ -201,14 +213,14 @@ public final class HnswGraphBuilder {
    * @return a NeighborArray of results sorted by score descending
    */
   NeighborArray searchLayer(float[] query, int[] entryPoints, int ef, int layer) {
-    visited.clear();
+    nextVisitedGeneration();
     candidates.clear();
     results.clear();
 
     // Seed with entry points
     for (int ep : entryPoints) {
-      if (!visited.get(ep)) {
-        visited.set(ep);
+      if (visitedTag[ep] != visitedGen) {
+        visitedTag[ep] = visitedGen;
         float score = similarityFunction.compare(query, vectors.getVector(ep));
         candidates.add(ep, score);
         results.add(ep, score);
@@ -234,8 +246,8 @@ public final class HnswGraphBuilder {
 
       for (int i = 0; i < neighbors.size(); i++) {
         int neighborId = neighbors.node(i);
-        if (visited.get(neighborId)) continue;
-        visited.set(neighborId);
+        if (visitedTag[neighborId] == visitedGen) continue;
+        visitedTag[neighborId] = visitedGen;
 
         float score = similarityFunction.compare(query, vectors.getVector(neighborId));
 
@@ -246,7 +258,9 @@ public final class HnswGraphBuilder {
       }
     }
 
-    return NeighborArray.drainResults(results);
+    searchResults.clear();
+    searchResults.drainResultsFrom(results);
+    return searchResults;
   }
 
   /** Extracts the top-n node IDs from a NeighborArray (best-first). */
