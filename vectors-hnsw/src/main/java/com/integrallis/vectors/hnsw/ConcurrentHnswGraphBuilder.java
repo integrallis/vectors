@@ -517,6 +517,8 @@ public final class ConcurrentHnswGraphBuilder {
     final float[] queryScratch;
     final MemorySegment queryScratchSeg;
     final MemorySegment[] rowSegs;
+    // Reusable scratch for pruning calls inside NeighborSelector (eliminates per-call allocation).
+    final NeighborArray pruneResult;
 
     WorkContext(
         int maxNodes,
@@ -534,6 +536,7 @@ public final class ConcurrentHnswGraphBuilder {
       kernelOut = new float[maxNeighbors];
       batchIds = new int[maxNeighbors];
       batchScores = new float[maxNeighbors];
+      pruneResult = new NeighborArray(maxNeighbors);
       if (useSegments) {
         // Arena.ofAuto(): GC-managed, lives as long as this per-thread WorkContext. Allocated ONCE.
         this.queryScratchSeg = Arena.ofAuto().allocate((long) dimension * Float.BYTES);
@@ -606,7 +609,15 @@ public final class ConcurrentHnswGraphBuilder {
         }
         if (nodeList.size() > maxConn) {
           NeighborArray pruned =
-              NeighborSelector.selectDiverse(nodeList, maxConn, vectors, similarityFunction);
+              NeighborSelector.selectDiverseWithScratch(
+                  nodeList,
+                  maxConn,
+                  vectors,
+                  similarityFunction,
+                  null,
+                  ctx.pruneResult,
+                  null,
+                  null);
           nodeList.copyFrom(pruned);
         }
       } finally {
@@ -626,7 +637,15 @@ public final class ConcurrentHnswGraphBuilder {
             nList.insert(nodeId, score);
             if (nList.size() > maxConn) {
               NeighborArray pruned =
-                  NeighborSelector.selectDiverse(nList, maxConn, vectors, similarityFunction);
+                  NeighborSelector.selectDiverseWithScratch(
+                      nList,
+                      maxConn,
+                      vectors,
+                      similarityFunction,
+                      null,
+                      ctx.pruneResult,
+                      null,
+                      null);
               nList.copyFrom(pruned);
             }
           }

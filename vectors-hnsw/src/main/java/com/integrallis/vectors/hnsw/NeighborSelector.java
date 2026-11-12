@@ -17,6 +17,7 @@ package com.integrallis.vectors.hnsw;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import java.lang.foreign.MemorySegment;
+import java.util.Arrays;
 
 /**
  * Diversity-based neighbor selection (Algorithm 4 from the HNSW paper). Selects up to {@code
@@ -203,6 +204,190 @@ final class NeighborSelector {
     }
 
     // keepPruned=true: fill remaining slots with blocked candidates
+    for (int i = 0; i < candidates.size() && result.size() < maxConnections; i++) {
+      if (blocked[i]) {
+        result.insert(candidates.node(i), candidates.score(i));
+      }
+    }
+
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scratch-reuse overloads — identical logic to the public methods above,
+  // but callers supply pre-allocated buffers to eliminate per-call allocation.
+  // ---------------------------------------------------------------------------
+
+  // Uncached variant with reusable scratch buffers.
+  static NeighborArray selectDiverseWithScratch(
+      NeighborArray candidates,
+      int maxConnections,
+      RandomAccessVectors vectors,
+      SimilarityFunction similarityFunction,
+      NeighborArray resultOut,
+      float[] scratch,
+      boolean[] blockedScratch) {
+
+    NeighborArray result =
+        (resultOut != null && resultOut.maxSize() >= maxConnections)
+            ? resultOut
+            : new NeighborArray(maxConnections);
+    result.clear();
+
+    if (candidates.size() == 0) {
+      return result;
+    }
+
+    if (candidates.size() <= maxConnections) {
+      result.copyFrom(candidates);
+      return result;
+    }
+
+    boolean useSegments = vectors.supportsSegments();
+    boolean sharedBuffer = vectors.sharesReturnBuffer();
+    int dim = vectors.dimension();
+    float[] useScratch =
+        (!useSegments && sharedBuffer)
+            ? (scratch != null && scratch.length >= dim ? scratch : new float[dim])
+            : null;
+
+    boolean[] blocked;
+    if (blockedScratch != null && blockedScratch.length >= candidates.size()) {
+      blocked = blockedScratch;
+      Arrays.fill(blocked, 0, candidates.size(), false);
+    } else {
+      blocked = new boolean[candidates.size()];
+    }
+
+    for (int i = 0; i < candidates.size() && result.size() < maxConnections; i++) {
+      int candidateId = candidates.node(i);
+      float scoreToQuery = candidates.score(i);
+
+      MemorySegment candidateSeg = useSegments ? vectors.vectorSegment(candidateId) : null;
+      float[] candidateVec = null;
+      if (!useSegments) {
+        candidateVec = vectors.getVector(candidateId);
+        if (sharedBuffer) {
+          System.arraycopy(candidateVec, 0, useScratch, 0, dim);
+          candidateVec = useScratch;
+        }
+      }
+
+      boolean isBlocked = false;
+      for (int j = 0; j < result.size(); j++) {
+        int selectedId = result.node(j);
+        float scoreER =
+            useSegments
+                ? similarityFunction.compare(candidateSeg, vectors.vectorSegment(selectedId), dim)
+                : similarityFunction.compare(candidateVec, vectors.getVector(selectedId));
+
+        if (scoreER >= scoreToQuery) {
+          isBlocked = true;
+          blocked[i] = true;
+          break;
+        }
+      }
+
+      if (!isBlocked) {
+        result.insertDistinct(candidateId, scoreToQuery);
+      }
+    }
+
+    for (int i = 0; i < candidates.size() && result.size() < maxConnections; i++) {
+      if (blocked[i]) {
+        result.insertDistinct(candidates.node(i), candidates.score(i));
+      }
+    }
+
+    return result;
+  }
+
+  // Cached variant with reusable scratch buffers.
+  static NeighborArray selectDiverseWithScratch(
+      NeighborArray candidates,
+      int maxConnections,
+      RandomAccessVectors vectors,
+      SimilarityFunction similarityFunction,
+      ExactScoreCache cache,
+      NeighborArray resultOut,
+      float[] scratch,
+      boolean[] blockedScratch) {
+
+    NeighborArray result =
+        (resultOut != null && resultOut.maxSize() >= maxConnections)
+            ? resultOut
+            : new NeighborArray(maxConnections);
+    result.clear();
+
+    if (candidates.size() == 0) {
+      return result;
+    }
+
+    if (candidates.size() <= maxConnections) {
+      result.copyFrom(candidates);
+      return result;
+    }
+
+    boolean useSegments = vectors.supportsSegments();
+    boolean sharedBuffer = vectors.sharesReturnBuffer();
+    int dim = vectors.dimension();
+    float[] useScratch =
+        (!useSegments && sharedBuffer)
+            ? (scratch != null && scratch.length >= dim ? scratch : new float[dim])
+            : null;
+
+    boolean[] blocked;
+    if (blockedScratch != null && blockedScratch.length >= candidates.size()) {
+      blocked = blockedScratch;
+      Arrays.fill(blocked, 0, candidates.size(), false);
+    } else {
+      blocked = new boolean[candidates.size()];
+    }
+
+    for (int i = 0; i < candidates.size() && result.size() < maxConnections; i++) {
+      int candidateId = candidates.node(i);
+      float scoreToQuery = candidates.score(i);
+
+      MemorySegment candidateSeg = null;
+      float[] candidateVec = null;
+      boolean loaded = false;
+
+      boolean isBlocked = false;
+      for (int j = 0; j < result.size(); j++) {
+        int selectedId = result.node(j);
+        long pair = cache == null ? 0L : ExactScoreCache.key(candidateId, selectedId);
+        float scoreER = cache == null ? -1f : cache.get(pair);
+        if (scoreER < 0f) {
+          if (!loaded) {
+            if (useSegments) candidateSeg = vectors.vectorSegment(candidateId);
+            else {
+              candidateVec = vectors.getVector(candidateId);
+              if (sharedBuffer) {
+                System.arraycopy(candidateVec, 0, useScratch, 0, dim);
+                candidateVec = useScratch;
+              }
+            }
+            loaded = true;
+          }
+          scoreER =
+              useSegments
+                  ? similarityFunction.compare(candidateSeg, vectors.vectorSegment(selectedId), dim)
+                  : similarityFunction.compare(candidateVec, vectors.getVector(selectedId));
+          if (cache != null) cache.put(pair, scoreER);
+        }
+
+        if (scoreER >= scoreToQuery) {
+          isBlocked = true;
+          blocked[i] = true;
+          break;
+        }
+      }
+
+      if (!isBlocked) {
+        result.insert(candidateId, scoreToQuery);
+      }
+    }
+
     for (int i = 0; i < candidates.size() && result.size() < maxConnections; i++) {
       if (blocked[i]) {
         result.insert(candidates.node(i), candidates.score(i));

@@ -41,6 +41,8 @@ public final class HnswGraphBuilder {
   private final ExactScoreCache scoreCache = new ExactScoreCache();
   private final NodeQueue candidates;
   private final NodeQueue results;
+  // Reusable scratch for pruning calls inside NeighborSelector (eliminates per-call allocation).
+  private final NeighborArray pruneResult;
 
   private HnswGraphBuilder(
       int maxConnections,
@@ -60,6 +62,7 @@ public final class HnswGraphBuilder {
     this.queryScratch = vectors.sharesReturnBuffer() ? new float[vectors.dimension()] : null;
     this.candidates = new NodeQueue(efConstruction * 2, false); // max-heap
     this.results = new NodeQueue(efConstruction * 2, true); // min-heap
+    this.pruneResult = new NeighborArray(Math.max(graph.maxConnections0(), maxConnections));
   }
 
   /** Creates a builder with a specific seed for deterministic construction. */
@@ -142,11 +145,11 @@ public final class HnswGraphBuilder {
         NeighborArray nList = graph.getNeighbors(neighborId, layer);
         nList.insert(nodeId, score);
 
-        // Prune if over limit
+        // Prune if over limit. Result consumed immediately via copyFrom — reuse scratch.
         if (nList.size() > maxConn) {
           NeighborArray pruned =
-              NeighborSelector.selectDiverse(
-                  nList, maxConn, vectors, similarityFunction, scoreCache);
+              NeighborSelector.selectDiverseWithScratch(
+                  nList, maxConn, vectors, similarityFunction, scoreCache, pruneResult, null, null);
           nList.copyFrom(pruned);
         }
       }
