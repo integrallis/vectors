@@ -16,6 +16,7 @@
 package com.integrallis.vectors.db;
 
 import com.integrallis.vectors.core.Document;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -34,7 +35,11 @@ public record SearchResult(List<Hit> hits, long searchTimeNanos) {
 
   public SearchResult {
     Objects.requireNonNull(hits, "hits must not be null");
-    hits = List.copyOf(hits);
+    // Skip List.copyOf to avoid allocating a second Object[] copy of the hits list. The facade
+    // (VectorCollectionImpl) constructs the list internally and never mutates it after passing it
+    // here, so the list is effectively immutable. External callers creating SearchResult directly
+    // must not pass a mutable list that will be modified afterward.
+    hits = Collections.unmodifiableList(hits);
   }
 
   /**
