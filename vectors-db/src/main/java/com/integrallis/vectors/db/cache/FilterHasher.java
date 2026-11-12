@@ -45,13 +45,12 @@ public final class FilterHasher {
     if (filter == null) return 0L;
     return switch (filter) {
       case Filter.All ignored -> 0L;
-      case Filter.Eq eq -> mix(1, Objects.hash(eq.field(), eq.value()));
+      case Filter.Eq eq -> mix(1, hash2(eq.field(), eq.value()));
       case Filter.NumericRange nr ->
           mix(
               2,
-              Objects.hash(
-                  nr.field(), nr.lower(), nr.lowerInclusive(), nr.upper(), nr.upperInclusive()));
-      case Filter.In in -> mix(3, Objects.hash(in.field(), in.values()));
+              hash5(nr.field(), nr.lower(), nr.lowerInclusive(), nr.upper(), nr.upperInclusive()));
+      case Filter.In in -> mix(3, hash2(in.field(), in.values()));
       case Filter.And and -> mix(4, hashList(and.children()));
       case Filter.Or or -> mix(5, hashList(or.children()));
       case Filter.Not not -> mix(6, (int) hash(not.child()));
@@ -69,6 +68,25 @@ public final class FilterHasher {
     h *= 0x100000001b3L;
     h ^= (inner & 0xFFFFFFFFL);
     h *= 0x100000001b3L;
+    return h;
+  }
+
+  /** Computes a hash of two objects without allocating a varargs array. */
+  private static int hash2(Object a, Object b) {
+    int h = 1;
+    h = 31 * h + Objects.hashCode(a);
+    h = 31 * h + Objects.hashCode(b);
+    return h;
+  }
+
+  /** Computes a hash of five objects without allocating a varargs array. */
+  private static int hash5(Object a, Object b, Object c, Object d, Object e) {
+    int h = 1;
+    h = 31 * h + Objects.hashCode(a);
+    h = 31 * h + Objects.hashCode(b);
+    h = 31 * h + Objects.hashCode(c);
+    h = 31 * h + Objects.hashCode(d);
+    h = 31 * h + Objects.hashCode(e);
     return h;
   }
 
