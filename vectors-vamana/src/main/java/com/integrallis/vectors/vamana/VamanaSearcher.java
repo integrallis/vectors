@@ -17,7 +17,7 @@ package com.integrallis.vectors.vamana;
 
 import com.integrallis.vectors.core.FusedSimilarity;
 import com.integrallis.vectors.core.SimilarityFunction;
-import java.util.BitSet;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -43,7 +43,10 @@ public final class VamanaSearcher {
   private final NodeQueue results; // min-heap: worst result on top for eviction
   // Scratch buffer for rescore(): avoids allocating a new NodeQueue on every two-pass call.
   private final NodeQueue rescoreHeap;
-  private BitSet visited;
+  // Version-stamped visited set: a node is "visited" iff visitedTag[id] == visitedGen.
+  // Resetting between searches is an O(1) generation bump, not an O(graph.size()) BitSet.clear().
+  private final int[] visitedTag;
+  private int visitedGen;
   // Reusable buffer holding one node's neighbour ids, sized to the graph degree R. Lets the
   // topology fill ids without allocating (and lets a paged topology read straight from the mmap).
   private final int[] neighborScratch;
@@ -98,7 +101,8 @@ public final class VamanaSearcher {
     this.candidates = new NodeQueue(candCap, false); // max-heap
     this.results = new NodeQueue(resCap, true); // min-heap
     this.rescoreHeap = new NodeQueue(256, true); // min-heap, grows as needed
-    this.visited = new BitSet(Math.max(1, graph.size()));
+    this.visitedTag = new int[Math.max(1, graph.size())];
+    this.visitedGen = 1;
     this.neighborScratch = new int[Math.max(1, graph.maxDegree())];
   }
 
@@ -124,6 +128,18 @@ public final class VamanaSearcher {
    */
   void setPrefetchHook(java.util.function.IntConsumer hook) {
     this.prefetchHook = hook;
+  }
+
+  /**
+   * Begins a new visited generation in O(1) amortized time (replacing an O(graph.size())
+   * BitSet.clear()). On the rare {@code int} wraparound, resets the tag array so a stale tag cannot
+   * alias the new generation.
+   */
+  private void nextVisitedGeneration() {
+    if (++visitedGen == 0) {
+      Arrays.fill(visitedTag, 0);
+      visitedGen = 1;
+    }
   }
 
   /**
@@ -218,16 +234,9 @@ public final class VamanaSearcher {
     int L = Math.max(searchListSize, k);
 
     // Reset scratch buffers.
-    // Use visited.size() (allocated capacity, stable after clear()) NOT visited.length()
-    // (logical size = index of highest set bit + 1, which returns 0 after clear() and
-    // would trigger a new BitSet allocation on every search call after the first).
     candidates.clear();
     results.clear();
-    if (visited.size() < graph.size()) {
-      visited = new BitSet(graph.size());
-    } else {
-      visited.clear();
-    }
+    nextVisitedGeneration();
 
     NodeScorer scorer = scorerFactory.scorer(query);
 
@@ -236,7 +245,7 @@ public final class VamanaSearcher {
     float entryScore = scorer.score(entryPoint);
     candidates.add(entryPoint, entryScore);
     results.add(entryPoint, entryScore);
-    visited.set(entryPoint);
+    visitedTag[entryPoint] = visitedGen;
 
     // Beam search
     while (!candidates.isEmpty()) {
@@ -263,8 +272,8 @@ public final class VamanaSearcher {
       int batchCount = 0;
       for (int i = 0; i < n; i++) {
         int neighborId = neighborScratch[i];
-        if (visited.get(neighborId)) continue;
-        visited.set(neighborId);
+        if (visitedTag[neighborId] == visitedGen) continue;
+        visitedTag[neighborId] = visitedGen;
         bulkIds[batchCount++] = neighborId;
         if (batchCount == BULK_BATCH) {
           scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
@@ -305,11 +314,7 @@ public final class VamanaSearcher {
 
     candidates.clear();
     results.clear();
-    if (visited.size() < graph.size()) {
-      visited = new BitSet(graph.size());
-    } else {
-      visited.clear();
-    }
+    nextVisitedGeneration();
 
     NodeScorer scorer = scorerFactory.scorer(query);
 
@@ -318,7 +323,7 @@ public final class VamanaSearcher {
       return new SearchResult(new int[0], new float[0]); // empty graph
     }
     float entryScore = scorer.score(entryPoint);
-    visited.set(entryPoint);
+    visitedTag[entryPoint] = visitedGen;
     // The medoid always routes; it only enters results if it matches the predicate.
     candidates.add(entryPoint, entryScore);
     if (predicate.test(entryPoint)) {
@@ -346,8 +351,8 @@ public final class VamanaSearcher {
       int batchCount = 0;
       for (int i = 0; i < n; i++) {
         int neighborId = neighborScratch[i];
-        if (visited.get(neighborId)) continue;
-        visited.set(neighborId);
+        if (visitedTag[neighborId] == visitedGen) continue;
+        visitedTag[neighborId] = visitedGen;
         bulkIds[batchCount++] = neighborId;
         if (batchCount == BULK_BATCH) {
           scorer.bulkScore(bulkIds, 0, batchCount, bulkScores);
