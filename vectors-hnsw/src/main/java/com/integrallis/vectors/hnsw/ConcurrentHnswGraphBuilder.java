@@ -505,6 +505,7 @@ public final class ConcurrentHnswGraphBuilder {
     int visitedGen;
     final NodeQueue candidates; // max-heap
     final NodeQueue results; // min-heap
+    final NeighborArray searchResults; // reusable drain target for beam-search output
     final int[] tmpIds; // snapshot buffer for neighbor reads under lock
     // Fused-GEMV scratch: aliased row pool + kernel output + per-batch ids/scores.
     final float[][] pool;
@@ -531,6 +532,7 @@ public final class ConcurrentHnswGraphBuilder {
       visitedGen = 1;
       candidates = new NodeQueue(ef * 2, false);
       results = new NodeQueue(ef * 2, true);
+      searchResults = new NeighborArray(ef);
       tmpIds = new int[maxNeighbors];
       pool = new float[maxNeighbors][];
       kernelOut = new float[maxNeighbors];
@@ -775,7 +777,9 @@ public final class ConcurrentHnswGraphBuilder {
       }
     }
 
-    return drainResults(ctx.results);
+    ctx.searchResults.clear();
+    ctx.searchResults.drainResultsFrom(ctx.results);
+    return ctx.searchResults;
   }
 
   /** Converts the distinct result heap into the pruning candidate order. */
