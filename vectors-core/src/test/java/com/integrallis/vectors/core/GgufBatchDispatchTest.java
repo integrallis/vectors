@@ -261,9 +261,9 @@ class GgufBatchDispatchTest {
     assertThat(output)
         .contains("ggufBatchedMatmulKernel=dispatch(band-at-batch>=Q4_K:4,Q6_K:32,Q8_0:4;band=")
         .contains("vectors-gguf-batched-matmul-routing mode=dispatch")
-        .contains("Q4_K integer=1/3 band=1/4")
-        .contains("Q6_K integer=2/34 band=1/32")
-        .contains("Q8_0 integer=1/3 band=1/4");
+        .containsPattern("Q4_K integer=1/3/[\\d.n/a]+ band=1/4/[\\d.n/a]+")
+        .containsPattern("Q6_K integer=2/34/[\\d.n/a]+ band=1/32/[\\d.n/a]+")
+        .containsPattern("Q8_0 integer=1/3/[\\d.n/a]+ band=1/4/[\\d.n/a]+");
   }
 
   static float[] gaussian(Random random, int size) {
@@ -403,5 +403,48 @@ class GgufBatchDispatchTest {
 
   static String readAll(Process process) throws IOException {
     return new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+  }
+
+  // --- Latency recording tests ---
+
+  @Test
+  void latencyRecording_isQueryAndResettable() {
+    GgufBatchedMatmulKernel.resetRoutingCounts();
+    // Simulate two calls: Q4_K band, 1000 ns and 2000 ns
+    GgufBatchedMatmulKernel.recordLatency(GgufBatchedMatmulKernel.FORMAT_Q4_K, true, 1_000);
+    GgufBatchedMatmulKernel.recordLatency(GgufBatchedMatmulKernel.FORMAT_Q4_K, true, 2_000);
+    double[] latency = GgufBatchedMatmulKernel.latencySummary(GgufBatchedMatmulKernel.FORMAT_Q4_K);
+    // summary: {integerTotal, integerCount, meanInteger, bandTotal, bandCount, meanBand}
+    assertThat(latency[3]).isEqualTo(3_000.0); // band total nanos
+    assertThat(latency[4]).isEqualTo(2.0); // band count
+    assertThat(latency[5]).isEqualTo(1_500.0); // mean band nanos
+    assertThat(latency[0]).isEqualTo(0.0);
+    assertThat(latency[1]).isEqualTo(0.0);
+
+    GgufBatchedMatmulKernel.resetRoutingCounts();
+    double[] cleared = GgufBatchedMatmulKernel.latencySummary(GgufBatchedMatmulKernel.FORMAT_Q4_K);
+    assertThat(cleared[3]).isEqualTo(0.0);
+    assertThat(cleared[4]).isEqualTo(0.0);
+    assertThat(cleared[5]).isEqualTo(0.0);
+  }
+
+  @Test
+  void routingReport_includesMeanLatency_whenPresent() {
+    GgufBatchedMatmulKernel.resetRoutingCounts();
+    GgufBatchedMatmulKernel.record(GgufBatchedMatmulKernel.FORMAT_Q8_0, false, 4);
+    GgufBatchedMatmulKernel.recordLatency(GgufBatchedMatmulKernel.FORMAT_Q8_0, false, 4_000);
+    String report = GgufBatchedMatmulKernel.routingReport();
+    // report contains "integer=1/4/4.0" (1 call, 4 rows, mean 4.0 us from 4000 ns)
+    assertThat(report).contains("integer=1/4/4.0");
+  }
+
+  @Test
+  void routingReport_showsNa_whenNoLatencyRecorded() {
+    GgufBatchedMatmulKernel.resetRoutingCounts();
+    // Record a call but no latency (simulates legacy callers that don't use withRoutedTiming)
+    GgufBatchedMatmulKernel.record(GgufBatchedMatmulKernel.FORMAT_Q6_K, true, 8);
+    String report = GgufBatchedMatmulKernel.routingReport();
+    // band should show "n/a" for latency because no latency was recorded
+    assertThat(report).contains("band=1/8/n/a");
   }
 }
