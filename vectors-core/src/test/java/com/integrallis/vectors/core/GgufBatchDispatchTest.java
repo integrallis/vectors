@@ -447,4 +447,23 @@ class GgufBatchDispatchTest {
     // band should show "n/a" for latency because no latency was recorded
     assertThat(report).contains("band=1/8/n/a");
   }
+
+  @Test
+  void groupedRecording_isQueryableAndResettable() {
+    GgufBatchedMatmulKernel.resetRoutingCounts();
+    // Simulate one grouped dual call with batch=4 for Q8_0
+    GgufBatchedMatmulKernel.recordGrouped(GgufBatchedMatmulKernel.FORMAT_Q8_0, 4);
+    long[] grouped = GgufBatchedMatmulKernel.groupedCounts(GgufBatchedMatmulKernel.FORMAT_Q8_0);
+    assertThat(grouped[0]).isEqualTo(1); // grouped calls
+    assertThat(grouped[1]).isEqualTo(4); // grouped rows
+
+    long[] empty = GgufBatchedMatmulKernel.groupedCounts(GgufBatchedMatmulKernel.FORMAT_Q4_K);
+    assertThat(empty[0]).isEqualTo(0);
+    assertThat(empty[1]).isEqualTo(0);
+
+    GgufBatchedMatmulKernel.resetRoutingCounts();
+    long[] cleared = GgufBatchedMatmulKernel.groupedCounts(GgufBatchedMatmulKernel.FORMAT_Q8_0);
+    assertThat(cleared[0]).isEqualTo(0);
+    assertThat(cleared[1]).isEqualTo(0);
+  }
 }
