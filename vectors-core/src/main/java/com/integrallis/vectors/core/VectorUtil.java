@@ -1663,6 +1663,7 @@ public final class VectorUtil {
     checkGgufQ8KSums(q8Sums, activationEntries);
     boolean firstBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
     boolean secondBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
+    GgufBatchedMatmulKernel.recordGrouped(GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
     if (firstBand && secondBand) {
       GgufBandGemm.ggufQ4_K(queries, firstWeight, batchSize, firstRows, cols, firstOut);
       GgufBandGemm.ggufQ4_K(queries, secondWeight, batchSize, secondRows, cols, secondOut);
@@ -1987,6 +1988,8 @@ public final class VectorUtil {
     boolean firstBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
     boolean secondBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
     boolean thirdBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q6_K, batchSize);
+    GgufBatchedMatmulKernel.recordGrouped(GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
+    GgufBatchedMatmulKernel.recordGrouped(GgufBatchedMatmulKernel.FORMAT_Q6_K, batchSize);
     if (firstBand || thirdBand) {
       if (firstBand && secondBand) {
         GgufBandGemm.ggufQ4_K(queries, firstWeight, batchSize, firstRows, cols, firstOut);
@@ -2697,6 +2700,7 @@ public final class VectorUtil {
         q8Quants, q8Scales, activationEntries, VectorUtilSupport.GGUF_Q_BLOCK_SIZE);
     boolean firstBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
     boolean secondBand = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
+    GgufBatchedMatmulKernel.recordGrouped(GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
     if (firstBand && secondBand) {
       GgufBandGemm.ggufQ8_0(queries, firstWeight, batchSize, firstRows, cols, firstOut);
       GgufBandGemm.ggufQ8_0(queries, secondWeight, batchSize, secondRows, cols, secondOut);
@@ -2800,6 +2804,7 @@ public final class VectorUtil {
     boolean band = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
     routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
     routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
+    GgufBatchedMatmulKernel.recordGrouped(GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
     if (band) {
       GgufBandGemm.ggufQ8_0(queries, firstWeight, batchSize, firstRows, cols, firstOut);
       GgufBandGemm.ggufQ8_0(queries, secondWeight, batchSize, secondRows, cols, secondOut);
