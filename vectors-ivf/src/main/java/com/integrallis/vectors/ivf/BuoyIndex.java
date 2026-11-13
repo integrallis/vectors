@@ -17,6 +17,7 @@ package com.integrallis.vectors.ivf;
 
 import com.integrallis.vectors.core.SimilarityFunction;
 import com.integrallis.vectors.core.cluster.CentroidIndex;
+import com.integrallis.vectors.core.cluster.EMeans;
 import com.integrallis.vectors.core.cluster.KMeans;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -68,7 +69,8 @@ public final class BuoyIndex {
    */
   public static BuoyIndex train(
       float[][] dataset, int k, SimilarityFunction metric, boolean buildSoar, long seed) {
-    float[][] centroids = KMeans.train(dataset, k, 50, seed);
+    // E-means: ~5 epochs instead of 50 Lloyd iterations, same or lower loss.
+    float[][] centroids = EMeans.train(dataset, k, 5.0f, seed);
     int[] assignments = KMeans.assign(dataset, centroids);
 
     int[] sizes = new int[k];
