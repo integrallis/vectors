@@ -16,6 +16,10 @@
 package com.integrallis.vectors.core;
 
 import java.util.Locale;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
@@ -71,8 +75,21 @@ public enum GgufBatchedMatmulKernel {
   /** System property printing {@link #routingReport()} to standard error at JVM exit. */
   public static final String REPORT_PROPERTY = "vectors.gguf.batchedMatmulKernel.report";
 
+  /**
+   * System property enabling a periodic routing-and-latency report printed to standard error. The
+   * value is the interval in milliseconds; {@code 0} disables periodic reporting.
+   */
+  public static final String REPORT_INTERVAL_PROPERTY =
+      "vectors.gguf.batchedMatmulKernel.reportIntervalMs";
+
   /** {integer calls, integer rows, band calls, band rows} per format. */
   private static final LongAdder[] ROUTING = newAdders(FORMAT_NAMES.length * 4);
+
+  /**
+   * {integer latency nanos, integer latency count, band latency nanos, band latency count} per
+   * format.
+   */
+  private static final LongAdder[] LATENCY = newAdders(FORMAT_NAMES.length * 4);
 
   /** System property selecting the process default. */
   public static final String PROPERTY = "vectors.gguf.batchedMatmulKernel";
@@ -84,6 +101,18 @@ public enum GgufBatchedMatmulKernel {
       Runtime.getRuntime()
           .addShutdownHook(
               new Thread(() -> System.err.println(routingReport()), "vectors-gguf-routing-report"));
+    }
+    long intervalMs = Long.getLong(REPORT_INTERVAL_PROPERTY, 0L);
+    if (intervalMs > 0) {
+      ThreadFactory daemonFactory =
+          r -> {
+            Thread t = new Thread(r, "vectors-gguf-routing-interval");
+            t.setDaemon(true);
+            return t;
+          };
+      ScheduledExecutorService scheduler = new ScheduledThreadPoolExecutor(1, daemonFactory);
+      scheduler.scheduleAtFixedRate(
+          () -> System.err.println(routingReport()), intervalMs, intervalMs, TimeUnit.MILLISECONDS);
     }
   }
 
@@ -136,17 +165,51 @@ public enum GgufBatchedMatmulKernel {
     for (LongAdder adder : ROUTING) {
       adder.reset();
     }
+    for (LongAdder adder : LATENCY) {
+      adder.reset();
+    }
+  }
+
+  /** Records one completed kernel execution. nanos >= 0. */
+  static void recordLatency(int format, boolean band, long nanos) {
+    if (nanos < 0) {
+      return;
+    }
+    int base = format * 4 + (band ? 2 : 0);
+    LATENCY[base].add(nanos);
+    LATENCY[base + 1].increment();
   }
 
   /**
-   * One line: the active mode and, per format, {@code integer=calls/rows band=calls/rows} counted
-   * over every Q4_K/Q6_K/Q8_0 batched matmul matrix routed since start (or the last reset).
+   * Returns latency summary for {@code format}: {@code {integerTotalNanos, integerCount,
+   * meanIntegerNanos, bandTotalNanos, bandCount, meanBandNanos}}.
+   */
+  static double[] latencySummary(int format) {
+    long intTotal = LATENCY[format * 4].sum();
+    long intCount = LATENCY[format * 4 + 1].sum();
+    long bandTotal = LATENCY[format * 4 + 2].sum();
+    long bandCount = LATENCY[format * 4 + 3].sum();
+    double[] summary = new double[6];
+    summary[0] = intTotal;
+    summary[1] = intCount;
+    summary[2] = intCount > 0 ? (double) intTotal / intCount : 0.0;
+    summary[3] = bandTotal;
+    summary[4] = bandCount;
+    summary[5] = bandCount > 0 ? (double) bandTotal / bandCount : 0.0;
+    return summary;
+  }
+
+  /**
+   * One line: the active mode and, per format, {@code integer=calls/rows/mean_us
+   * band=calls/rows/mean_us} counted over every Q4_K/Q6_K/Q8_0 batched matmul matrix routed since
+   * start (or the last reset).
    */
   public static String routingReport() {
     StringBuilder report =
         new StringBuilder("vectors-gguf-batched-matmul-routing mode=").append(modeName(active()));
     for (int format = 0; format < FORMAT_NAMES.length; format++) {
       long[] counts = routingCounts(format);
+      double[] latency = latencySummary(format);
       report
           .append(' ')
           .append(FORMAT_NAMES[format])
@@ -154,12 +217,24 @@ public enum GgufBatchedMatmulKernel {
           .append(counts[0])
           .append('/')
           .append(counts[1])
+          .append('/')
+          .append(formatLatency(latency[2]))
           .append(" band=")
           .append(counts[2])
           .append('/')
-          .append(counts[3]);
+          .append(counts[3])
+          .append('/')
+          .append(formatLatency(latency[5]));
     }
     return report.toString();
+  }
+
+  /** Formats mean latency in microseconds with one decimal place, or "n/a" when zero. */
+  private static String formatLatency(double meanNanos) {
+    if (meanNanos <= 0) {
+      return "n/a";
+    }
+    return String.format(Locale.ROOT, "%.1f", meanNanos / 1_000.0);
   }
 
   private static String modeName(GgufBatchedMatmulKernel kernel) {

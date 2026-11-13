@@ -1575,12 +1575,20 @@ public final class VectorUtil {
       throw new IllegalArgumentException(
           "q8Sums.length must be >= batch Q8_K sums: " + q8Sums.length + " < " + sumEntries);
     }
-    if (routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize)) {
-      GgufBandGemm.ggufQ4_K(queries, qWeight, batchSize, rows, cols, out);
+    boolean band = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q4_K, batchSize);
+    if (band) {
+      withRoutedTiming(
+          GgufBatchedMatmulKernel.FORMAT_Q4_K,
+          band,
+          () -> GgufBandGemm.ggufQ4_K(queries, qWeight, batchSize, rows, cols, out));
       return;
     }
-    IMPL.ggufQ4_KQ8_KBatchedMatmul(
-        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, q8Sums);
+    withRoutedTiming(
+        GgufBatchedMatmulKernel.FORMAT_Q4_K,
+        band,
+        () ->
+            IMPL.ggufQ4_KQ8_KBatchedMatmul(
+                queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, q8Sums));
   }
 
   /**
@@ -2462,12 +2470,20 @@ public final class VectorUtil {
               + " < "
               + scaleEntries);
     }
-    if (routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize)) {
-      GgufBandGemm.ggufQ8_0(queries, qWeight, batchSize, rows, cols, out);
+    boolean band = routeBand(kernel, GgufBatchedMatmulKernel.FORMAT_Q8_0, batchSize);
+    if (band) {
+      withRoutedTiming(
+          GgufBatchedMatmulKernel.FORMAT_Q8_0,
+          band,
+          () -> GgufBandGemm.ggufQ8_0(queries, qWeight, batchSize, rows, cols, out));
       return;
     }
-    IMPL.ggufQ8_0Q8_0BatchedMatmul(
-        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales);
+    withRoutedTiming(
+        GgufBatchedMatmulKernel.FORMAT_Q8_0,
+        band,
+        () ->
+            IMPL.ggufQ8_0Q8_0BatchedMatmul(
+                queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales));
   }
 
   /**
@@ -3070,12 +3086,20 @@ public final class VectorUtil {
               + " < "
               + scaleEntries);
     }
-    if (routeBand(arithmetic, GgufBatchedMatmulKernel.FORMAT_Q6_K, batchSize)) {
-      GgufBandGemm.ggufQ6_K(queries, qWeight, batchSize, rows, cols, out);
+    boolean band = routeBand(arithmetic, GgufBatchedMatmulKernel.FORMAT_Q6_K, batchSize);
+    if (band) {
+      withRoutedTiming(
+          GgufBatchedMatmulKernel.FORMAT_Q6_K,
+          band,
+          () -> GgufBandGemm.ggufQ6_K(queries, qWeight, batchSize, rows, cols, out));
       return;
     }
-    IMPL.ggufQ6_KQ8_KBatchedMatmul(
-        queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, kernel);
+    withRoutedTiming(
+        GgufBatchedMatmulKernel.FORMAT_Q6_K,
+        band,
+        () ->
+            IMPL.ggufQ6_KQ8_KBatchedMatmul(
+                queries, qWeight, batchSize, rows, cols, out, q8Quants, q8Scales, kernel));
   }
 
   /**
@@ -3762,5 +3786,15 @@ public final class VectorUtil {
       throw new IllegalArgumentException(label + " exceeds maximum Java array length: " + product);
     }
     return (int) product;
+  }
+
+  /** Instruments the body of a routed dispatch block with latency recording. */
+  static void withRoutedTiming(int format, boolean band, Runnable work) {
+    long start = System.nanoTime();
+    try {
+      work.run();
+    } finally {
+      GgufBatchedMatmulKernel.recordLatency(format, band, System.nanoTime() - start);
+    }
   }
 }
