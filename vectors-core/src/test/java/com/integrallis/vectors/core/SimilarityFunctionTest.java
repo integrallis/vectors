@@ -195,4 +195,65 @@ class SimilarityFunctionTest {
     MemorySegment.copy(v, 0, seg, ValueLayout.JAVA_FLOAT, 0L, v.length);
     return seg;
   }
+
+  // --- Public contract: raw vs transformed score relationships ---
+
+  @Test
+  void cosine_unitVectors_atKnownAngles() {
+    // 0 degrees (same direction): raw cosine = 1, score = 1
+    float[] same = {1.0f, 0.0f};
+    assertThat(SimilarityFunction.COSINE.compare(same, same)).isCloseTo(1.0f, within(1e-5f));
+
+    // 60 degrees: raw cosine = 0.5, score = 0.75
+    float[] a60 = {1.0f, 0.0f};
+    float[] b60 = {0.5f, (float) Math.sqrt(3) / 2.0f};
+    assertThat(SimilarityFunction.COSINE.compare(a60, b60)).isCloseTo(0.75f, within(1e-4f));
+
+    // 90 degrees (orthogonal): raw cosine = 0, score = 0.5
+    float[] orth = {0.0f, 1.0f};
+    assertThat(SimilarityFunction.COSINE.compare(same, orth)).isCloseTo(0.5f, within(1e-5f));
+
+    // 180 degrees (opposite): raw cosine = -1, score = 0
+    float[] opposite = {-1.0f, 0.0f};
+    assertThat(SimilarityFunction.COSINE.compare(same, opposite)).isCloseTo(0.0f, within(1e-5f));
+  }
+
+  @Test
+  void cosine_orthogonalByteVectors_scoreIsOneHalf() {
+    byte[] a = {127, 0, 0};
+    byte[] b = {0, 127, 0};
+    float score = SimilarityFunction.COSINE.compare(a, b);
+    // Orthogonal byte vectors: raw cosine = 0, transformed score = (1+0)/2 = 0.5
+    assertThat(score).isCloseTo(0.5f, within(1e-4f));
+  }
+
+  @Test
+  void dotProduct_byteScaling_formulaMatchesDocumentedTransform() {
+    int dim = 3;
+    byte[] a = {127, 0, 0};
+    byte[] b = {0, 127, 0};
+    float rawDot = VectorUtil.dotProduct(a, b); // = 0 (orthogonal)
+    float expected = 0.5f + rawDot / (float) (2 * dim * 127 * 127);
+    assertThat(SimilarityFunction.DOT_PRODUCT.compare(a, b)).isCloseTo(expected, within(1e-5f));
+  }
+
+  @Test
+  void euclidean_byteTransform_isSameAsFloatTransform() {
+    // Byte EUCLIDEAN applies the same 1/(1+sqDist) as float, unlike the old documentation
+    byte[] a = {10, 20};
+    byte[] b = {10, 25};
+    float sqDist = (5 * 5); // = 25
+    float expected = 1f / (1f + sqDist); // = 1/26 ≈ 0.0385
+    assertThat(SimilarityFunction.EUCLIDEAN.compare(a, b)).isCloseTo(expected, within(1e-4f));
+  }
+
+  @Test
+  void maxInnerProduct_byteSameAsFloatTransform() {
+    byte[] a = {10, 20};
+    byte[] b = {5, -3};
+    float raw = VectorUtil.dotProduct(a, b); // 10*5 + 20*(-3) = 50 - 60 = -10
+    float expected = SimilarityFunction.scaleMaxInnerProductScore(raw);
+    assertThat(SimilarityFunction.MAXIMUM_INNER_PRODUCT.compare(a, b))
+        .isCloseTo(expected, within(1e-4f));
+  }
 }
