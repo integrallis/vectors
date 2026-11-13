@@ -214,94 +214,129 @@ public final class HnswSearcher {
       this.scorerMatrix = null;
       this.scorerOffsets = null;
     }
-    this.scorerFactory = useDefaultScorer ? this::defaultScorer : factory;
+    this.reusableScorer = useDefaultScorer ? createReusableScorer() : null;
+    this.scorerFactory = useDefaultScorer ? this::prepareDefaultScorer : factory;
   }
 
   /**
-   * Default full-precision scorer bound to this searcher's reusable scratch (segment path: the
-   * once-allocated {@link #queryScratchSeg}; fused path: {@link #scorerPool} / {@link #scorerOut}).
-   * This replaces the former per-query allocation of an {@code Arena}/{@code float[64][]} pool.
-   *
-   * <p>When the underlying {@link RandomAccessVectors} returns stable references (i.e. {@code
-   * !sharesReturnBuffer()} and no segments), the returned scorer overrides {@link
-   * NodeScorer#bulkScore} with a fused GEMV path (via {@link FusedSimilarity}) that aliases
-   * neighbor references into the reusable pool — amortising query loads across 4 rows at a time.
-   *
-   * <p>Not thread-safe: this scorer aliases searcher-owned scratch, so it must only be used by the
-   * thread that owns this searcher. Multi-start workers build their own via their own searcher.
+   * Internal interface for scorers that can have their query swapped in-place (zero allocation).
    */
-  private NodeScorer defaultScorer(float[] query) {
-    final SimilarityFunction sim = similarityFunction;
-    final RandomAccessVectors v = vectors;
-    if (scorerMatrix != null) {
-      return preparedCosineScorer(query);
-    }
-    if (v.supportsSegments()) {
-      // Zero-copy path: SIMD-score directly from the mmap slice, no per-neighbor float[] copy. The
-      // QUERY is uploaded into the searcher's reusable off-heap segment exactly ONCE per query
-      // here (NOT inside score()), then every neighbor score reads the query segment plus a
-      // zero-copy vectorSegment() view of the stored vector.
-      final int dim = v.dimension();
-      final MemorySegment qs = queryScratchSeg;
-      MemorySegment.copy(query, 0, qs, ValueLayout.JAVA_FLOAT, 0L, dim);
-      final MemorySegment[] rows = scorerRows;
-      final float[] scratch = scorerOut;
-      return new NodeScorer() {
-        @Override
-        public float score(int nodeId) {
-          // Greedy/single path: score directly from the mmap slice, no float[] copy.
-          return sim.compare(qs, v.vectorSegment(nodeId), dim);
-        }
-
-        @Override
-        public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
-          // Gather zero-copy row slices into the reusable per-searcher scratch (no per-call
-          // allocation), then fused-GEMV score all of them with the query loaded once per 4 rows.
-          for (int i = 0; i < count; i++) rows[i] = v.vectorSegment(nodeIds[offset + i]);
-          FusedSimilarity.bulkCompareSegments(sim, query, rows, dim, scratch, outScores, count);
-        }
-      };
-    }
-    if (v.sharesReturnBuffer()) {
-      // Shared-buffer impls can't safely be pooled for fused scoring; fall back to scalar.
-      return nodeId -> sim.compare(query, v.getVector(nodeId));
-    }
-    final float[][] pool = scorerPool;
-    final float[] out = scorerOut;
-    return new NodeScorer() {
-      @Override
-      public float score(int nodeId) {
-        return sim.compare(query, v.getVector(nodeId));
-      }
-
-      @Override
-      public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
-        for (int i = 0; i < count; i++) pool[i] = v.getVector(nodeIds[offset + i]);
-        FusedSimilarity.bulkCompare(sim, query, pool, out, outScores, count);
-      }
-    };
+  private interface MutableNodeScorer extends NodeScorer {
+    void setQuery(float[] query);
   }
 
-  /** Score contiguous segment rows without allocating a view object for each neighbor. */
-  private NodeScorer preparedCosineScorer(float[] query) {
-    final float norm = VectorUtil.batchCosineQueryNorm(query);
-    final int dim = vectors.dimension();
-    MemorySegment.copy(query, 0, queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dim);
-    return new NodeScorer() {
-      @Override
-      public float score(int nodeId) {
-        return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
-      }
+  // -- Reusable scorer instances (one per searcher, eliminates per-search allocation) --
 
-      @Override
-      public void bulkScore(int[] ids, int offset, int count, float[] out) {
-        for (int i = 0; i < count; i++)
-          scorerOffsets[i] = vectors.vectorSegmentOffset(ids[offset + i]);
-        VectorUtil.batchCosineWithQueryNorm(
-            query, scorerMatrix, scorerOffsets, dim, norm, out, count);
-        for (int i = 0; i < count; i++) out[i] = (1f + out[i]) * 0.5f;
-      }
-    };
+  private final class FusedScorer implements MutableNodeScorer {
+    private float[] query;
+
+    @Override
+    public void setQuery(float[] q) {
+      this.query = q;
+    }
+
+    @Override
+    public float score(int nodeId) {
+      return similarityFunction.compare(query, vectors.getVector(nodeId));
+    }
+
+    @Override
+    public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+      for (int i = 0; i < count; i++) scorerPool[i] = vectors.getVector(nodeIds[offset + i]);
+      FusedSimilarity.bulkCompare(
+          similarityFunction, query, scorerPool, scorerOut, outScores, count);
+    }
+  }
+
+  private final class SimpleScorer implements MutableNodeScorer {
+    private float[] query;
+
+    @Override
+    public void setQuery(float[] q) {
+      this.query = q;
+    }
+
+    @Override
+    public float score(int nodeId) {
+      return similarityFunction.compare(query, vectors.getVector(nodeId));
+    }
+  }
+
+  private final class SegmentScorer implements MutableNodeScorer {
+    private final int dim;
+    private float[] query;
+
+    SegmentScorer(int dim) {
+      this.dim = dim;
+    }
+
+    @Override
+    public void setQuery(float[] q) {
+      this.query = q;
+      MemorySegment.copy(q, 0, queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dim);
+    }
+
+    @Override
+    public float score(int nodeId) {
+      return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
+    }
+
+    @Override
+    public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+      for (int i = 0; i < count; i++) scorerRows[i] = vectors.vectorSegment(nodeIds[offset + i]);
+      FusedSimilarity.bulkCompareSegments(
+          similarityFunction, query, scorerRows, dim, scorerOut, outScores, count);
+    }
+  }
+
+  private final class CosineSegmentScorer implements MutableNodeScorer {
+    private final int dim;
+    private float[] query;
+    private float norm;
+
+    CosineSegmentScorer(int dim) {
+      this.dim = dim;
+    }
+
+    @Override
+    public void setQuery(float[] q) {
+      this.query = q;
+      this.norm = VectorUtil.batchCosineQueryNorm(q);
+      MemorySegment.copy(q, 0, queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dim);
+    }
+
+    @Override
+    public float score(int nodeId) {
+      return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
+    }
+
+    @Override
+    public void bulkScore(int[] ids, int offset, int count, float[] out) {
+      for (int i = 0; i < count; i++)
+        scorerOffsets[i] = vectors.vectorSegmentOffset(ids[offset + i]);
+      VectorUtil.batchCosineWithQueryNorm(
+          query, scorerMatrix, scorerOffsets, dim, norm, out, count);
+      for (int i = 0; i < count; i++) out[i] = (1f + out[i]) * 0.5f;
+    }
+  }
+
+  private final MutableNodeScorer reusableScorer;
+
+  private MutableNodeScorer createReusableScorer() {
+    if (scorerMatrix != null) return new CosineSegmentScorer(vectors.dimension());
+    if (vectors.supportsSegments()) return new SegmentScorer(vectors.dimension());
+    if (vectors.sharesReturnBuffer()) return new SimpleScorer();
+    return new FusedScorer();
+  }
+
+  /**
+   * Prepares the reusable default scorer for the given query. Zero-allocation: the same {@link
+   * MutableNodeScorer} instance is returned on every call; only its captured query reference is
+   * updated.
+   */
+  private NodeScorer prepareDefaultScorer(float[] query) {
+    reusableScorer.setQuery(query);
+    return reusableScorer;
   }
 
   /**
