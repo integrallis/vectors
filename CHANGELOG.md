@@ -4,6 +4,40 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`SimilarityFunction.rawScoreOf(float)`**: reconstructs the raw similarity/distance value from a
+  transformed score. Every metric (COSINE, DOT_PRODUCT, EUCLIDEAN, MAXIMUM_INNER_PRODUCT) has a
+  well-defined inverse formula documented on the method. Completes the raw-score API requested in
+  #117. `SearchResult` now carries an optional `SimilarityFunction metric` component and exposes
+  `rawScoreOf(Hit)` for callers that need the untransformed value.
+
+- **Runtime-queryable GGUF dispatch counters and latency histograms.** `GgufBatchedMatmulKernel` now
+  tracks per-format per-route (INTEGER vs BAND_F32) wall-clock latency via `LongAdder`-backed
+  nanosecond totals and call counts. Query at runtime with `latencySummary(int)`; the existing
+  `routingReport()` includes mean latency in microseconds. A new property
+  `vectors.gguf.batchedMatmulKernel.reportIntervalMs` prints rolling reports to stderr at a fixed
+  interval. This gives Models the observability it needs to attribute embedding time to specific
+  kernel routes without waiting for JVM exit (#184).
+
+- **`GgufCrossShapeParityTest`** (#119 deliverable): verifies that Q6_K and Q8_0 batched grouped
+  projection produces the same results as N independent single-row projections, for batch sizes
+  1/2/4/8 and non-power-of-two tails 3/5/7/9.
+
+### Fixed
+
+- **`PanamaVectorUtilSupportProvider.isAvailable()`** now probes `jdk.incubator.vector` module
+  availability with `Class.forName("jdk.incubator.vector.FloatVector")` before touching
+  `PanamaConstants`, producing an actionable `IllegalStateException` that names
+  `--add-modules=jdk.incubator.vector` instead of a cryptic `NoClassDefFoundError` (#116).
+
+### Changed
+
+- **`SimilarityFunction` Javadoc** corrected the incorrect class-level claim that byte vectors
+  return raw scores. Every enum member now documents float formula, byte formula, and range
+  explicitly. `SearchResult.Hit#score` documents the transform semantics and references
+  `SimilarityFunction` (#117).
+
 ## [0.1.34] - 2026-11-09
 
 ### Fixed
