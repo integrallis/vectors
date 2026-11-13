@@ -91,6 +91,14 @@ public enum GgufBatchedMatmulKernel {
    */
   private static final LongAdder[] LATENCY = newAdders(FORMAT_NAMES.length * 4);
 
+  /**
+   * {grouped calls, grouped rows} per format. Counts one grouped (dual or triple) batched matmul
+   * call. The individual matrices within the group are also counted in ROUTING; this counter exists
+   * so callers can distinguish "two matrices from one grouped call" from "two independent
+   * single-matrix calls".
+   */
+  private static final LongAdder[] GROUPED = newAdders(FORMAT_NAMES.length * 2);
+
   /** System property selecting the process default. */
   public static final String PROPERTY = "vectors.gguf.batchedMatmulKernel";
 
@@ -172,6 +180,24 @@ public enum GgufBatchedMatmulKernel {
     for (LongAdder adder : LATENCY) {
       adder.reset();
     }
+    for (LongAdder adder : GROUPED) {
+      adder.reset();
+    }
+  }
+
+  /**
+   * Records one grouped (dual or triple) batched matmul call of {@code batch} rows for {@code
+   * format}.
+   */
+  static void recordGrouped(int format, int batch) {
+    int base = format * 2;
+    GROUPED[base].increment();
+    GROUPED[base + 1].add(batch);
+  }
+
+  /** {grouped calls, grouped rows} for {@code format}. */
+  static long[] groupedCounts(int format) {
+    return new long[] {GROUPED[format * 2].sum(), GROUPED[format * 2 + 1].sum()};
   }
 
   /** Records one completed kernel execution. nanos >= 0. */
