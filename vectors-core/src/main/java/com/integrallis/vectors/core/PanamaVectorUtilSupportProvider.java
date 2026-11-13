@@ -23,12 +23,20 @@ import java.util.logging.Logger;
  * jdk.incubator.vector}) SIMD kernels. Highest-priority of the two built-ins, so SIMD stays the
  * default when available.
  *
- * <p>Availability is probed by actually constructing {@link PanamaVectorUtilSupport} (the only
- * reliable signal that the incubator module is present and the static SIMD constants initialise).
+ * <p>Availability is probed in three stages:
+ *
+ * <ol>
+ *   <li>Can the {@code jdk.incubator.vector} module resolve at all? This catches the common mistake
+ *       of launching without {@code --add-modules=jdk.incubator.vector} and produces an actionable
+ *       error message early.
+ *   <li>Can {@link PanamaVectorUtilSupport} instantiate? This catches ClassDefNotFoundError, module
+ *       removals after a JDK upgrade, etc.
+ * </ol>
+ *
  * The probe instance is discarded; {@link #create()} builds a fresh one, which is cheap because the
  * heavy SIMD constants live in static fields computed once at class-load.
  */
-public final class PanamaVectorUtilSupportProvider implements VectorUtilSupportProvider {
+public class PanamaVectorUtilSupportProvider implements VectorUtilSupportProvider {
 
   private static final Logger LOG =
       Logger.getLogger(PanamaVectorUtilSupportProvider.class.getName());
@@ -53,8 +61,23 @@ public final class PanamaVectorUtilSupportProvider implements VectorUtilSupportP
     if (failure != null) {
       return false;
     }
+    // Stage 1: Explicit module check. Without --add-modules=jdk.incubator.vector the JVM simply
+    // refuses to resolve FloatVector. Detecting this before touching PanamaConstants produces an
+    // actionable startup error instead of a mysterious NoClassDefFoundError inside class-init.
     try {
-      // Probe only — a successful construction proves the incubator module loaded.
+      Class.forName("jdk.incubator.vector.FloatVector");
+    } catch (ClassNotFoundException e) {
+      failure =
+          new IllegalStateException(
+              "jdk.incubator.vector module is not available. "
+                  + "Launch with --add-modules=jdk.incubator.vector, or disable SIMD with "
+                  + "-Dvectors.forceScalar=true",
+              e);
+      return false;
+    }
+    // Stage 2: Full construction probe. This catches module removals after a JDK upgrade or
+    // architectural mismatches.
+    try {
       VectorUtilSupport probe = new PanamaVectorUtilSupport();
       LOG.fine(
           () ->

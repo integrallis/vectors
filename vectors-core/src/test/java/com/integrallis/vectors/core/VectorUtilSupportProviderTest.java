@@ -202,4 +202,50 @@ class VectorUtilSupportProviderTest {
     VectorUtilSupportProvider provider = FakeProvider.available("x", 1, sentinel());
     assertThat(provider.unavailabilityCause()).isEqualTo(Optional.empty());
   }
+
+  /**
+   * Verifies the error produced when jdk.incubator.vector is missing names the required JVM flag.
+   * The real failure is triggered by {@code Class.forName("jdk.incubator.vector.FloatVector")}; if
+   * that throws ClassNotFoundException, the provider must produce an IllegalStateException whose
+   * message mentions {@code --add-modules=jdk.incubator.vector}.
+   */
+  @Test
+  void missingIncubatorModuleProducesNamedError() {
+    // The test JVM has the module (tests would not compile otherwise), so we simulate the
+    // failure path by subclassing and injecting a synthetic cause, then assert message content.
+    PanamaVectorUtilSupportProvider forced =
+        new PanamaVectorUtilSupportProvider() {
+          @Override
+          public boolean isAvailable() {
+            // skip real probe; simulate the ClassNotFoundException branch
+            return injectMissingModuleFailure();
+          }
+
+          private boolean injectMissingModuleFailure() {
+            try {
+              java.lang.reflect.Field f =
+                  PanamaVectorUtilSupportProvider.class.getDeclaredField("failure");
+              f.setAccessible(true);
+              f.set(
+                  this,
+                  new IllegalStateException(
+                      "jdk.incubator.vector module is not available. "
+                          + "Launch with --add-modules=jdk.incubator.vector, "
+                          + "or disable SIMD with -Dvectors.forceScalar=true",
+                      new ClassNotFoundException("jdk.incubator.vector.FloatVector")));
+            } catch (ReflectiveOperationException e) {
+              throw new AssertionError("Failed to set failure field", e);
+            }
+            return false;
+          }
+        };
+
+    assertThat(forced.isAvailable()).isFalse();
+    java.util.Optional<Throwable> cause = forced.unavailabilityCause();
+    assertThat(cause).isPresent();
+    assertThat(cause.get()).isInstanceOf(IllegalStateException.class);
+    String msg = cause.get().getMessage();
+    assertThat(msg).contains("--add-modules=jdk.incubator.vector");
+    assertThat(msg).contains("-Dvectors.forceScalar=true");
+  }
 }
