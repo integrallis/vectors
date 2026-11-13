@@ -2356,7 +2356,7 @@ final class VectorCollectionImpl implements VectorCollection {
         hits.add(
             new SearchResult.Hit(stored.id(), score, projectDocument(stored, vector, request)));
       }
-      results.add(new SearchResult(hits, System.nanoTime() - start));
+      results.add(new SearchResult(hits, System.nanoTime() - start, config.metric()));
     }
     return results;
   }
@@ -2528,7 +2528,7 @@ final class VectorCollectionImpl implements VectorCollection {
       }
 
       long elapsed = System.nanoTime() - start;
-      SearchResult result = new SearchResult(hits, elapsed);
+      SearchResult result = new SearchResult(hits, elapsed, config.metric());
       if (cacheEligible) {
         queryCache.put(cacheKey, result);
       }

@@ -16,6 +16,7 @@
 package com.integrallis.vectors.db;
 
 import com.integrallis.vectors.core.Document;
+import com.integrallis.vectors.core.SimilarityFunction;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -31,7 +32,16 @@ import java.util.Objects;
  * @param hits ranked hits, descending by score
  * @param searchTimeNanos end-to-end elapsed time for the search in nanoseconds
  */
-public record SearchResult(List<Hit> hits, long searchTimeNanos) {
+public record SearchResult(List<Hit> hits, long searchTimeNanos, SimilarityFunction metric) {
+
+  /**
+   * Backward-compatible constructor for callers that do not supply a metric. The metric defaults to
+   * {@code null}; raw-score accessors will throw {@link IllegalStateException} until a metric is
+   * set.
+   */
+  public SearchResult(List<Hit> hits, long searchTimeNanos) {
+    this(hits, searchTimeNanos, null);
+  }
 
   public SearchResult {
     Objects.requireNonNull(hits, "hits must not be null");
@@ -40,6 +50,25 @@ public record SearchResult(List<Hit> hits, long searchTimeNanos) {
     // here, so the list is effectively immutable. External callers creating SearchResult directly
     // must not pass a mutable list that will be modified afterward.
     hits = Collections.unmodifiableList(hits);
+  }
+
+  /**
+   * Returns the raw (untransformed) similarity/distance value for the given hit, computed by
+   * applying the inverse of this result's configured metric.
+   *
+   * <p>The returned value is reconstructed from the transformed score using {@link
+   * SimilarityFunction#rawScoreOf(float)}. Quantization and rounding errors in the forward
+   * transform are preserved.
+   *
+   * @throws IllegalStateException if this result was created without a metric
+   * @see SimilarityFunction#rawScoreOf(float)
+   */
+  public float rawScoreOf(Hit hit) {
+    if (metric == null) {
+      throw new IllegalStateException(
+          "metric not available on this SearchResult; raw scores require a metric");
+    }
+    return metric.rawScoreOf(hit.score());
   }
 
   /**
