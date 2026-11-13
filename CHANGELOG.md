@@ -24,6 +24,18 @@ All notable changes to java-vectors are documented here.
   projection produces the same results as N independent single-row projections, for batch sizes
   1/2/4/8 and non-power-of-two tails 3/5/7/9.
 
+- **`GgufBatchedMatmulKernel` grouped call counters.** `recordGrouped(format, batch)` and
+  `groupedCounts(format)` distinguish grouped (dual/triple) batched matmul calls from independent
+  single-matrix calls. Source-code audit of the Models embedding backend (documented in
+  `experiments/grouped-projection-audit/README.md`) shows: encoder-only models never reach grouped
+  projection; decoder-based embedding models reach it inside the generative forward pass. Closes
+  #186.
+
+- **`EmbedKernelShapesBenchmark`** (#185 deliverable): JMH benchmark measuring the Vectors kernel
+  portion of embedding model forward passes with conditional batching (single-document vs
+  LAST_TOKEN batched). Shapes cover MiniLM (384-dim) and standard (768-dim) encoder transformer
+  roles (FFN up/down, QKV) at token counts 1/4/8/16/32.
+
 ### Fixed
 
 - **`PanamaVectorUtilSupportProvider.isAvailable()`** now probes `jdk.incubator.vector` module
