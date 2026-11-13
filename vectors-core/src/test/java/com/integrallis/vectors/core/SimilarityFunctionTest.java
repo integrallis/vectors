@@ -256,4 +256,74 @@ class SimilarityFunctionTest {
     assertThat(SimilarityFunction.MAXIMUM_INNER_PRODUCT.compare(a, b))
         .isCloseTo(expected, within(1e-4f));
   }
+
+  // --- Raw-score reconstruction (rawScoreOf) ---
+
+  @Test
+  void cosine_rawScoreOf_invertsTransform() {
+    assertThat(SimilarityFunction.COSINE.rawScoreOf(1.0f)).isCloseTo(1.0f, within(1e-5f));
+    assertThat(SimilarityFunction.COSINE.rawScoreOf(0.5f)).isCloseTo(0.0f, within(1e-5f));
+    assertThat(SimilarityFunction.COSINE.rawScoreOf(0.0f)).isCloseTo(-1.0f, within(1e-5f));
+  }
+
+  @Test
+  void dotProduct_rawScoreOf_invertsTransform() {
+    assertThat(SimilarityFunction.DOT_PRODUCT.rawScoreOf(1.0f)).isCloseTo(1.0f, within(1e-5f));
+    assertThat(SimilarityFunction.DOT_PRODUCT.rawScoreOf(0.5f)).isCloseTo(0.0f, within(1e-5f));
+    assertThat(SimilarityFunction.DOT_PRODUCT.rawScoreOf(0.0f)).isCloseTo(-1.0f, within(1e-5f));
+  }
+
+  @Test
+  void euclidean_rawScoreOf_invertsTransform() {
+    assertThat(SimilarityFunction.EUCLIDEAN.rawScoreOf(1.0f)).isCloseTo(0.0f, within(1e-5f));
+    assertThat(SimilarityFunction.EUCLIDEAN.rawScoreOf(0.5f)).isCloseTo(1.0f, within(1e-5f));
+    assertThat(SimilarityFunction.EUCLIDEAN.rawScoreOf(0.0f)).isEqualTo(Float.POSITIVE_INFINITY);
+  }
+
+  @Test
+  void maxInnerProduct_rawScoreOf_invertsTransform() {
+    // score >= 1: raw = score - 1
+    assertThat(SimilarityFunction.MAXIMUM_INNER_PRODUCT.rawScoreOf(5.0f))
+        .isCloseTo(4.0f, within(1e-5f));
+    // 0 < score < 1: raw = 1 - 1/score
+    assertThat(SimilarityFunction.MAXIMUM_INNER_PRODUCT.rawScoreOf(0.5f))
+        .isCloseTo(-1.0f, within(1e-5f));
+    // score <= 0: NaN
+    assertThat(SimilarityFunction.MAXIMUM_INNER_PRODUCT.rawScoreOf(0.0f)).isNaN();
+    assertThat(SimilarityFunction.MAXIMUM_INNER_PRODUCT.rawScoreOf(-1.0f)).isNaN();
+  }
+
+  @Test
+  void rawScoreOf_roundTrip_withRandomScores() {
+    Random rnd = new Random(42L);
+    for (SimilarityFunction sim : SimilarityFunction.values()) {
+      for (int i = 0; i < 100; i++) {
+        // Generate raw values in the physically meaningful domain for each metric
+        float raw =
+            switch (sim) {
+              case EUCLIDEAN -> rnd.nextFloat() * 10f; // squared distance >= 0
+              case DOT_PRODUCT -> rnd.nextFloat() * 4f - 2f; // unbounded, but [-2, 2] for test
+              case COSINE -> rnd.nextFloat() * 2f - 1f; // cosine in [-1, 1]
+              case MAXIMUM_INNER_PRODUCT -> rnd.nextFloat() * 4f - 2f; // unbounded
+            };
+        // Compute what the transform would produce for this raw value
+        float transformed =
+            switch (sim) {
+              case EUCLIDEAN -> 1f / (1f + raw); // raw is d^2
+              case DOT_PRODUCT -> (1f + raw) / 2f;
+              case COSINE -> (1f + raw) / 2f;
+              case MAXIMUM_INNER_PRODUCT -> {
+                if (raw >= 0) yield raw + 1f;
+                else yield 1f / (1f - raw);
+              }
+            };
+        // Reconstruct raw from transformed
+        float reconstructed = sim.rawScoreOf(transformed);
+        float tol = Math.max(1e-4f, Math.abs(raw) * 1e-3f);
+        assertThat(reconstructed)
+            .as("round-trip %s raw=%f -> transformed=%f", sim, raw, transformed)
+            .isCloseTo(raw, within(tol));
+      }
+    }
+  }
 }

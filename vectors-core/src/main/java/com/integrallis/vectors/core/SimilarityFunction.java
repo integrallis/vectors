@@ -60,6 +60,14 @@ public enum SimilarityFunction {
     public float compare(MemorySegment v1, MemorySegment v2, int dimensions) {
       return 1f / (1f + VectorUtil.squareDistance(v1, v2, dimensions));
     }
+
+    @Override
+    public float rawScoreOf(float score) {
+      if (score <= 0) {
+        return Float.POSITIVE_INFINITY;
+      }
+      return 1f / score - 1f;
+    }
   },
 
   /**
@@ -84,6 +92,11 @@ public enum SimilarityFunction {
       float dot = VectorUtil.dotProduct(v1, v2);
       // Byte vectors: scale by max possible magnitude (127*127*dims)
       return 0.5f + dot / (float) (2 * v1.length * 127 * 127);
+    }
+
+    @Override
+    public float rawScoreOf(float score) {
+      return 2f * score - 1f;
     }
 
     @Override
@@ -114,6 +127,11 @@ public enum SimilarityFunction {
     @Override
     public float compare(MemorySegment v1, MemorySegment v2, int dimensions) {
       return (1f + VectorUtil.cosine(v1, v2, dimensions)) / 2f;
+    }
+
+    @Override
+    public float rawScoreOf(float score) {
+      return 2f * score - 1f;
     }
   },
 
@@ -148,6 +166,17 @@ public enum SimilarityFunction {
       float dot = VectorUtil.dotProduct(v1, v2, dimensions);
       return scaleMaxInnerProductScore(dot);
     }
+
+    @Override
+    public float rawScoreOf(float score) {
+      if (score >= 1f) {
+        return score - 1f;
+      }
+      if (score > 0f) {
+        return 1f - 1f / score;
+      }
+      return Float.NaN;
+    }
   };
 
   /**
@@ -178,6 +207,30 @@ public enum SimilarityFunction {
    * @return the similarity score (higher means more similar)
    */
   public abstract float compare(MemorySegment v1, MemorySegment v2, int dimensions);
+
+  /**
+   * Reconstructs the raw similarity/distance value from a transformed score. This is the inverse of
+   * the {@code compare} transform, with well-defined results for every metric:
+   *
+   * <ul>
+   *   <li>{@code COSINE}: raw cosine = {@code 2 * score - 1}, range {@code [-1, 1]}
+   *   <li>{@code DOT_PRODUCT} (float): raw dot = {@code 2 * score - 1}; assumes unit vectors
+   *   <li>{@code EUCLIDEAN}: raw squared distance = {@code 1 / score - 1}; returns {@code +∞} when
+   *       {@code score = 0}
+   *   <li>{@code MAXIMUM_INNER_PRODUCT}: piecewise inverse — if {@code score >= 1}: raw dot =
+   *       {@code score - 1}; if {@code 0 < score < 1}: raw dot = {@code 1 - 1 / score}; if {@code
+   *       score <= 0}: raw dot is undefined (returns {@code NaN})
+   * </ul>
+   *
+   * <p><b>Reconstructed, not measured.</b> The returned value is computed from the transformed
+   * score using the inverse of the metric's formula. Quantization and rounding errors in the
+   * forward transform are preserved. Do not label a reconstructed squared Euclidean distance as
+   * cosine similarity.
+   *
+   * @param score a transformed score produced by this metric's {@code compare} methods
+   * @return the raw underlying value, or {@code NaN} when the inverse is undefined
+   */
+  public abstract float rawScoreOf(float score);
 
   /**
    * Scales a raw inner product score to a non-negative value. Piecewise function ensures monotonic
