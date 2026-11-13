@@ -43,10 +43,31 @@ public record SearchResult(List<Hit> hits, long searchTimeNanos) {
   }
 
   /**
-   * A single ranked result.
+   * A single ranked result from a {@link SearchResult}.
+   *
+   * <p><b>Score semantics.</b> {@code score} is a <em>transformed</em> normalized value where
+   * higher means more similar. The exact transform depends on the {@link
+   * com.integrallis.vectors.core.SimilarityFunction} configured on the collection and the vector
+   * encoding (float or byte):
+   *
+   * <ul>
+   *   <li>{@code COSINE}: {@code (1 + raw_cosine) / 2}; float range {@code [0, 1]}, byte same.
+   *   <li>{@code DOT_PRODUCT} (float): {@code (1 + raw_dot) / 2}; expects unit vectors, range
+   *       {@code [0, 1]}.
+   *   <li>{@code DOT_PRODUCT} (byte): {@code 0.5 + raw_dot / (2 * dim * 127 * 127)}; range
+   *       approximately {@code [0, 1]}.
+   *   <li>{@code EUCLIDEAN}: {@code 1 / (1 + squared_distance)}; range {@code (0, 1]}.
+   *   <li>{@code MAXIMUM_INNER_PRODUCT}: piecewise monotone transform; range {@code (0, +∞)}.
+   * </ul>
+   *
+   * <p>The transformed score preserves ranking (monotonic with respect to the raw metric) but does
+   * <b>not</b> equal the raw cosine, dot product, or distance. Use {@code score} for ranking and
+   * thresholding; if you need the raw underlying value, compute it from the stored vector via
+   * {@link com.integrallis.vectors.core.SimilarityFunction} directly.
    *
    * @param id the document id
-   * @param score similarity score
+   * @param score transformed similarity score (higher = more similar); range and semantics depend
+   *     on the collection's configured metric and encoding
    * @param document the backing document (with vector / text / metadata honouring the request's
    *     include flags)
    */

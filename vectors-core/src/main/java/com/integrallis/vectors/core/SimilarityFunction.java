@@ -21,8 +21,15 @@ import java.lang.foreign.MemorySegment;
  * Similarity scoring functions that convert raw distance/similarity values to a normalized score
  * where higher values indicate greater similarity.
  *
- * <p>For float vectors, scores are normalized to a non-negative range. For byte vectors, the raw
- * score is returned (callers should normalize as needed).
+ * <p>For <b>float</b> vectors, scores are normalized to a non-negative range. For <b>byte</b>
+ * vectors, scores are also transformed, but the specific transform depends on the metric and
+ * encoding (see individual enum members for formulas and ranges). The class-level claim that byte
+ * scores are returned raw is <b>incorrect</b> — byte EUCLIDEAN, COSINE, and MAXIMUM_INNER_PRODUCT
+ * use the same transform as their float counterparts, and byte DOT_PRODUCT uses a
+ * dimension-dependent scaling.
+ *
+ * <p>All transforms are monotonic with respect to the underlying raw value, so ranking and recall
+ * are preserved even though the absolute score values differ from the raw metric.
  *
  * <p>Modeled after Lucene's {@code VectorSimilarityFunction} and JVector's {@code
  * VectorSimilarityFunction}.
@@ -30,8 +37,13 @@ import java.lang.foreign.MemorySegment;
 public enum SimilarityFunction {
 
   /**
-   * Euclidean distance: higher scores for closer vectors. Score = 1 / (1 + squareDistance). Result
-   * range: (0, 1] where 1 means identical.
+   * Euclidean distance: higher scores for closer vectors.
+   *
+   * <p>Float vector formula: {@code score = 1 / (1 + squareDistance)}. Range: {@code (0, 1]} where
+   * 1 means identical.
+   *
+   * <p>Byte vector formula: same as float ({@code 1 / (1 + squareDistance)}), so byte scores are
+   * also transformed. Range: {@code (0, 1]}.
    */
   EUCLIDEAN {
     @Override
@@ -51,8 +63,15 @@ public enum SimilarityFunction {
   },
 
   /**
-   * Dot product similarity: assumes vectors are normalized (unit length). Score = (1 + dotProduct)
-   * / 2. Result range: [0, 1] for normalized vectors.
+   * Dot product similarity. Assumes float vectors are normalized (unit length).
+   *
+   * <p>Float vector formula: {@code score = (1 + dotProduct) / 2}. Range: {@code [0, 1]} for
+   * normalized vectors.
+   *
+   * <p>Byte vector formula: {@code score = 0.5 + dot / (2 * dim * 127 * 127)}. This scales the raw
+   * byte dot product by the maximum possible magnitude ({@code 127 * 127 * dim}) so the result is
+   * centered at 0.5 and remains in {@code [0, 1]}. Not identical to the float transform, but
+   * preserves monotonic order.
    */
   DOT_PRODUCT {
     @Override
@@ -74,8 +93,12 @@ public enum SimilarityFunction {
   },
 
   /**
-   * Cosine similarity: direction-based similarity ignoring magnitude. Score = (1 + cosine) / 2.
-   * Result range: [0, 1] where 1 means same direction.
+   * Cosine similarity: direction-based similarity ignoring magnitude.
+   *
+   * <p>Float vector formula: {@code score = (1 + cosine) / 2}. Range: {@code [0, 1]} where 1 means
+   * same direction.
+   *
+   * <p>Byte vector formula: identical to float ({@code (1 + cosine) / 2}). Range: {@code [0, 1]}.
    */
   COSINE {
     @Override
@@ -95,9 +118,17 @@ public enum SimilarityFunction {
   },
 
   /**
-   * Maximum inner product: for non-normalized vectors where larger dot products are better. Score
-   * uses a piecewise function to map to non-negative range: if dot >= 0: score = dot + 1; if dot
-   * &lt; 0: score = 1 / (1 - dot).
+   * Maximum inner product: for non-normalized vectors where larger dot products are better.
+   *
+   * <p>Both float and byte vectors use the same piecewise transform. Formula:
+   *
+   * <ul>
+   *   <li>If {@code dot >= 0}: {@code score = dot + 1}
+   *   <li>If {@code dot < 0}: {@code score = 1 / (1 - dot)}
+   * </ul>
+   *
+   * The piecewise function ensures monotonic ordering (larger raw dot products always produce
+   * larger scores) and maps to a non-negative range.
    */
   MAXIMUM_INNER_PRODUCT {
     @Override
