@@ -136,6 +136,14 @@
         <Class name="com.integrallis.vectors.bench.GgufBatchedMatmulBenchmark"/>
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
+    <!-- vectors-bench: EmbedKernelShapesBenchmark reuses one fixed-seed Random in @Setup to
+         generate every activation and quantized weight block across nested loops.
+         SpotBugs reports the allocation as one-shot; deterministic seeds are required
+         for reproducible JMH forks and cross-host comparison. -->
+    <Match>
+        <Class name="com.integrallis.vectors.bench.EmbedKernelShapesBenchmark"/>
+        <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+    </Match>
     <!-- vectors-bench: the rotated-codebook and BF16 matrix benchmarks each reuse one fixed-seed
          Random throughout @Setup to generate every weight and activation. SpotBugs reports the
          loop-contained calls as one-shot uses, but deterministic data is required for comparable

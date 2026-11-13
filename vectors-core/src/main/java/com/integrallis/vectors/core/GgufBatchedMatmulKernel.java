@@ -161,7 +161,11 @@ public enum GgufBatchedMatmulKernel {
     return counts;
   }
 
-  static void resetRoutingCounts() {
+  /**
+   * Resets all routing and latency counters to zero. Public so benchmarks can isolate per-fork
+   * counts.
+   */
+  public static void resetRoutingCounts() {
     for (LongAdder adder : ROUTING) {
       adder.reset();
     }
