@@ -1,0 +1,198 @@
+diff --git a/vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/HnswSearcher.java b/vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/HnswSearcher.java
+index 7bdc45a5..8eadea23 100644
+--- a/vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/HnswSearcher.java
++++ b/vectors-hnsw/src/main/java/com/integrallis/vectors/hnsw/HnswSearcher.java
+@@ -226,10 +226,27 @@ public final class HnswSearcher {
+   }
+ 
+   // -- Reusable scorer instances (one per searcher, eliminates per-search allocation) --
+-
+-  private final class FusedScorer implements MutableNodeScorer {
++  //
++  // Static nested classes holding their own final references, deliberately not inner classes
++  // reading the enclosing searcher's fields. The anonymous scorers these replaced captured the
++  // similarity function and the vector source as finals; routing every score() call through
++  // HnswSearcher.this instead adds a dependent load per call, which measured as a ~3% loss on
++  // AnnSearchBenchmark.searchHnsw (2000x128) between 0.1.34 and 0.1.35.
++
++  private static final class FusedScorer implements MutableNodeScorer {
++    private final SimilarityFunction sim;
++    private final RandomAccessVectors v;
++    private final float[][] pool;
++    private final float[] out;
+     private float[] query;
+ 
++    FusedScorer(SimilarityFunction sim, RandomAccessVectors v, float[][] pool, float[] out) {
++      this.sim = sim;
++      this.v = v;
++      this.pool = pool;
++      this.out = out;
++    }
++
+     @Override
+     public void setQuery(float[] q) {
+       this.query = q;
+@@ -237,20 +254,26 @@ public final class HnswSearcher {
+ 
+     @Override
+     public float score(int nodeId) {
+-      return similarityFunction.compare(query, vectors.getVector(nodeId));
++      return sim.compare(query, v.getVector(nodeId));
+     }
+ 
+     @Override
+     public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+-      for (int i = 0; i < count; i++) scorerPool[i] = vectors.getVector(nodeIds[offset + i]);
+-      FusedSimilarity.bulkCompare(
+-          similarityFunction, query, scorerPool, scorerOut, outScores, count);
++      for (int i = 0; i < count; i++) pool[i] = v.getVector(nodeIds[offset + i]);
++      FusedSimilarity.bulkCompare(sim, query, pool, out, outScores, count);
+     }
+   }
+ 
+-  private final class SimpleScorer implements MutableNodeScorer {
++  private static final class SimpleScorer implements MutableNodeScorer {
++    private final SimilarityFunction sim;
++    private final RandomAccessVectors v;
+     private float[] query;
+ 
++    SimpleScorer(SimilarityFunction sim, RandomAccessVectors v) {
++      this.sim = sim;
++      this.v = v;
++    }
++
+     @Override
+     public void setQuery(float[] q) {
+       this.query = q;
+@@ -258,64 +281,93 @@ public final class HnswSearcher {
+ 
+     @Override
+     public float score(int nodeId) {
+-      return similarityFunction.compare(query, vectors.getVector(nodeId));
++      return sim.compare(query, v.getVector(nodeId));
+     }
+   }
+ 
+-  private final class SegmentScorer implements MutableNodeScorer {
++  private static final class SegmentScorer implements MutableNodeScorer {
++    private final SimilarityFunction sim;
++    private final RandomAccessVectors v;
+     private final int dim;
++    private final MemorySegment querySeg;
++    private final MemorySegment[] rows;
++    private final float[] scratch;
+     private float[] query;
+ 
+-    SegmentScorer(int dim) {
++    SegmentScorer(
++        SimilarityFunction sim,
++        RandomAccessVectors v,
++        int dim,
++        MemorySegment querySeg,
++        MemorySegment[] rows,
++        float[] scratch) {
++      this.sim = sim;
++      this.v = v;
+       this.dim = dim;
++      this.querySeg = querySeg;
++      this.rows = rows;
++      this.scratch = scratch;
+     }
+ 
+     @Override
+     public void setQuery(float[] q) {
+       this.query = q;
+-      MemorySegment.copy(q, 0, queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dim);
++      MemorySegment.copy(q, 0, querySeg, ValueLayout.JAVA_FLOAT, 0L, dim);
+     }
+ 
+     @Override
+     public float score(int nodeId) {
+-      return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
++      return sim.compare(querySeg, v.vectorSegment(nodeId), dim);
+     }
+ 
+     @Override
+     public void bulkScore(int[] nodeIds, int offset, int count, float[] outScores) {
+-      for (int i = 0; i < count; i++) scorerRows[i] = vectors.vectorSegment(nodeIds[offset + i]);
+-      FusedSimilarity.bulkCompareSegments(
+-          similarityFunction, query, scorerRows, dim, scorerOut, outScores, count);
++      for (int i = 0; i < count; i++) rows[i] = v.vectorSegment(nodeIds[offset + i]);
++      FusedSimilarity.bulkCompareSegments(sim, query, rows, dim, scratch, outScores, count);
+     }
+   }
+ 
+-  private final class CosineSegmentScorer implements MutableNodeScorer {
++  private static final class CosineSegmentScorer implements MutableNodeScorer {
++    private final SimilarityFunction sim;
++    private final RandomAccessVectors v;
+     private final int dim;
++    private final MemorySegment querySeg;
++    private final MemorySegment matrix;
++    private final long[] offsets;
+     private float[] query;
+     private float norm;
+ 
+-    CosineSegmentScorer(int dim) {
++    CosineSegmentScorer(
++        SimilarityFunction sim,
++        RandomAccessVectors v,
++        int dim,
++        MemorySegment querySeg,
++        MemorySegment matrix,
++        long[] offsets) {
++      this.sim = sim;
++      this.v = v;
+       this.dim = dim;
++      this.querySeg = querySeg;
++      this.matrix = matrix;
++      this.offsets = offsets;
+     }
+ 
+     @Override
+     public void setQuery(float[] q) {
+       this.query = q;
+       this.norm = VectorUtil.batchCosineQueryNorm(q);
+-      MemorySegment.copy(q, 0, queryScratchSeg, ValueLayout.JAVA_FLOAT, 0L, dim);
++      MemorySegment.copy(q, 0, querySeg, ValueLayout.JAVA_FLOAT, 0L, dim);
+     }
+ 
+     @Override
+     public float score(int nodeId) {
+-      return similarityFunction.compare(queryScratchSeg, vectors.vectorSegment(nodeId), dim);
++      return sim.compare(querySeg, v.vectorSegment(nodeId), dim);
+     }
+ 
+     @Override
+     public void bulkScore(int[] ids, int offset, int count, float[] out) {
+-      for (int i = 0; i < count; i++)
+-        scorerOffsets[i] = vectors.vectorSegmentOffset(ids[offset + i]);
+-      VectorUtil.batchCosineWithQueryNorm(
+-          query, scorerMatrix, scorerOffsets, dim, norm, out, count);
++      for (int i = 0; i < count; i++) offsets[i] = v.vectorSegmentOffset(ids[offset + i]);
++      VectorUtil.batchCosineWithQueryNorm(query, matrix, offsets, dim, norm, out, count);
+       for (int i = 0; i < count; i++) out[i] = (1f + out[i]) * 0.5f;
+     }
+   }
+@@ -323,10 +375,17 @@ public final class HnswSearcher {
+   private final MutableNodeScorer reusableScorer;
+ 
+   private MutableNodeScorer createReusableScorer() {
+-    if (scorerMatrix != null) return new CosineSegmentScorer(vectors.dimension());
+-    if (vectors.supportsSegments()) return new SegmentScorer(vectors.dimension());
+-    if (vectors.sharesReturnBuffer()) return new SimpleScorer();
+-    return new FusedScorer();
++    final int dim = vectors.dimension();
++    if (scorerMatrix != null) {
++      return new CosineSegmentScorer(
++          similarityFunction, vectors, dim, queryScratchSeg, scorerMatrix, scorerOffsets);
++    }
++    if (vectors.supportsSegments()) {
++      return new SegmentScorer(
++          similarityFunction, vectors, dim, queryScratchSeg, scorerRows, scorerOut);
++    }
++    if (vectors.sharesReturnBuffer()) return new SimpleScorer(similarityFunction, vectors);
++    return new FusedScorer(similarityFunction, vectors, scorerPool, scorerOut);
+   }
+ 
+   /**

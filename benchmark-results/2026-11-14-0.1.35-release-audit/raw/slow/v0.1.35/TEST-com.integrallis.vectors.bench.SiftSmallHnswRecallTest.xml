@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.integrallis.vectors.bench.SiftSmallHnswRecallTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-14T18:17:40.370Z" hostname="ip-172-31-13-61" time="4.344">
+  <properties/>
+  <testcase name="fullPrecision_ef128_recall10_above95()" classname="com.integrallis.vectors.bench.SiftSmallHnswRecallTest" time="0.132"/>
+  <testcase name="twoPassSq8_ef128_recall10_above93()" classname="com.integrallis.vectors.bench.SiftSmallHnswRecallTest" time="0.147"/>
+  <testcase name="fullPrecision_ef200_recall10_above98()" classname="com.integrallis.vectors.bench.SiftSmallHnswRecallTest" time="0.021"/>
+  <testcase name="fullPrecision_ef64_recall10_above90()" classname="com.integrallis.vectors.bench.SiftSmallHnswRecallTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Nov 14, 2026 6:17:40 PM com.integrallis.vectors.core.PanamaVectorUtilSupportProvider create
+INFO: vectors-core: Using Panama Vector API SIMD provider (vector bits: 256)
+Nov 14, 2026 6:17:40 PM com.integrallis.vectors.core.VectorizationProvider logActiveToggles
+INFO: vectors-core: provider=PanamaVectorUtilSupport panama=true maxBits=256 preferredBits=256 fastVectorFMA=true fastScalarFMA=true sve=false ggufParallel=true ggufParallelThreshold=1048576 ggufExecutor=countdown ggufThreads=8 ggufChunksPerThread=2 mappedKQuantLongOffsets=auto(q4=true,q5=false,q6=false) q4ShortPairwiseSupported=true q4UnsignedPairwiseSupported=true toggles=[(defaults — no -Dvectors.* overrides)]
+]]></system-err>
+</testsuite>

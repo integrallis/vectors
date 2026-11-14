@@ -1,0 +1,724 @@
+[
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.batched",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "1",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 0.10813109771443599,
+            "scoreError" : 0.007708663042102579,
+            "scoreConfidence" : [
+                0.10042243467233342,
+                0.11583976075653857
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.1047434768038538,
+                "50.0" : 0.10747783599905775,
+                "90.0" : 0.12075786375844803,
+                "95.0" : 0.1222093902737048,
+                "99.0" : 0.1222093902737048,
+                "99.9" : 0.1222093902737048,
+                "99.99" : 0.1222093902737048,
+                "99.999" : 0.1222093902737048,
+                "99.9999" : 0.1222093902737048,
+                "100.0" : 0.1222093902737048
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    0.10768355189491817,
+                    0.10768871888458226,
+                    0.10754972053763441,
+                    0.10769412512113707,
+                    0.1074059514604811
+                ],
+                [
+                    0.10633010013819497,
+                    0.1047434768038538,
+                    0.1222093902737048,
+                    0.10514638772077375,
+                    0.10485955430907948
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.batched",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "2",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 0.24278269476306152,
+            "scoreError" : 0.005522496071007797,
+            "scoreConfidence" : [
+                0.23726019869205373,
+                0.24830519083406932
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.2400089702423806,
+                "50.0" : 0.24163141052023052,
+                "90.0" : 0.2505332314939119,
+                "95.0" : 0.25083392151454365,
+                "99.0" : 0.25083392151454365,
+                "99.9" : 0.25083392151454365,
+                "99.99" : 0.25083392151454365,
+                "99.999" : 0.25083392151454365,
+                "99.9999" : 0.25083392151454365,
+                "100.0" : 0.25083392151454365
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    0.24038822686854122,
+                    0.24121483072100314,
+                    0.24022262560038424,
+                    0.2402472543838578,
+                    0.2400089702423806
+                ],
+                [
+                    0.24288605099562893,
+                    0.2420479903194579,
+                    0.24215005567659162,
+                    0.24782702130822595,
+                    0.25083392151454365
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.batched",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "4",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 0.3071374017956055,
+            "scoreError" : 0.004815875983570222,
+            "scoreConfidence" : [
+                0.3023215258120353,
+                0.3119532777791757
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.3053773263125763,
+                "50.0" : 0.30615546667755056,
+                "90.0" : 0.31517536515468425,
+                "95.0" : 0.3160170508688784,
+                "99.0" : 0.3160170508688784,
+                "99.9" : 0.3160170508688784,
+                "99.99" : 0.3160170508688784,
+                "99.999" : 0.3160170508688784,
+                "99.9999" : 0.3160170508688784,
+                "100.0" : 0.3160170508688784
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    0.3065741590560834,
+                    0.3059863988987458,
+                    0.30760019372693725,
+                    0.3064627754289216,
+                    0.30562483287503817
+                ],
+                [
+                    0.30573728881418094,
+                    0.30632453445635527,
+                    0.3160170508688784,
+                    0.3056694575183374,
+                    0.3053773263125763
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.batched",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "8",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 0.6143808738673757,
+            "scoreError" : 0.00456344330262112,
+            "scoreConfidence" : [
+                0.6098174305647546,
+                0.6189443171699969
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.6099616042682927,
+                "50.0" : 0.6146266968646791,
+                "90.0" : 0.6190376092169356,
+                "95.0" : 0.619206786509901,
+                "99.0" : 0.619206786509901,
+                "99.9" : 0.619206786509901,
+                "99.99" : 0.619206786509901,
+                "99.999" : 0.619206786509901,
+                "99.9999" : 0.619206786509901,
+                "100.0" : 0.619206786509901
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    0.6115548245721272,
+                    0.6145174023341523,
+                    0.6120580691131499,
+                    0.6115897047677261,
+                    0.6099616042682927
+                ],
+                [
+                    0.617515013580247,
+                    0.619206786509901,
+                    0.6167843119605425,
+                    0.6158850301724138,
+                    0.6147359913952058
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.batched",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "32",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 2.4454747060553004,
+            "scoreError" : 0.0773575674758886,
+            "scoreConfidence" : [
+                2.3681171385794118,
+                2.522832273531189
+            ],
+            "scorePercentiles" : {
+                "0.0" : 2.4087412091346154,
+                "50.0" : 2.434682771522807,
+                "90.0" : 2.566644853908667,
+                "95.0" : 2.57578211311054,
+                "99.0" : 2.57578211311054,
+                "99.9" : 2.57578211311054,
+                "99.99" : 2.57578211311054,
+                "99.999" : 2.57578211311054,
+                "99.9999" : 2.57578211311054,
+                "100.0" : 2.57578211311054
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    2.4111457204819278,
+                    2.4100351445783135,
+                    2.4087412091346154,
+                    2.4140750578313255,
+                    2.4844095210918113
+                ],
+                [
+                    2.432291808252427,
+                    2.4389919756691,
+                    2.57578211311054,
+                    2.442200775609756,
+                    2.4370737347931875
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.independent",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "1",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 0.10412422713152918,
+            "scoreError" : 0.001688948300706475,
+            "scoreConfidence" : [
+                0.1024352788308227,
+                0.10581317543223565
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.1031981542509286,
+                "50.0" : 0.10392480476289967,
+                "90.0" : 0.10664633417970443,
+                "95.0" : 0.10688641637276905,
+                "99.0" : 0.10688641637276905,
+                "99.9" : 0.10688641637276905,
+                "99.99" : 0.10688641637276905,
+                "99.999" : 0.10688641637276905,
+                "99.9999" : 0.10688641637276905,
+                "100.0" : 0.10688641637276905
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    0.10444705419799499,
+                    0.10444397869674185,
+                    0.1043371019194659,
+                    0.10688641637276905,
+                    0.10448559444212285
+                ],
+                [
+                    0.10333935230912285,
+                    0.1031981542509286,
+                    0.10328413258983891,
+                    0.10351250760633343,
+                    0.10330797892997315
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.independent",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "2",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 0.21110885795548917,
+            "scoreError" : 0.00655422576503711,
+            "scoreConfidence" : [
+                0.20455463219045206,
+                0.21766308372052628
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.20713458852764546,
+                "50.0" : 0.21060961732947975,
+                "90.0" : 0.2188831171408989,
+                "95.0" : 0.21944651930671347,
+                "99.0" : 0.21944651930671347,
+                "99.9" : 0.21944651930671347,
+                "99.99" : 0.21944651930671347,
+                "99.999" : 0.21944651930671347,
+                "99.9999" : 0.21944651930671347,
+                "100.0" : 0.21944651930671347
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    0.21944651930671347,
+                    0.21381249764856777,
+                    0.21372787713675215,
+                    0.21378371147681127,
+                    0.21368533133945739
+                ],
+                [
+                    0.2071797551781276,
+                    0.20713458852764546,
+                    0.20753390331950208,
+                    0.2075107114107884,
+                    0.2072736842105263
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.independent",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "4",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 0.4199284596901083,
+            "scoreError" : 0.009550102893215597,
+            "scoreConfidence" : [
+                0.41037835679689266,
+                0.4294785625833239
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.4161759043261231,
+                "50.0" : 0.4173344899315017,
+                "90.0" : 0.43488049094629155,
+                "95.0" : 0.43582447843137256,
+                "99.0" : 0.43582447843137256,
+                "99.9" : 0.43582447843137256,
+                "99.99" : 0.43582447843137256,
+                "99.999" : 0.43582447843137256,
+                "99.9999" : 0.43582447843137256,
+                "100.0" : 0.43582447843137256
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    0.4263846035805627,
+                    0.41797074341830337,
+                    0.4161759043261231,
+                    0.43582447843137256,
+                    0.4167481491666667
+                ],
+                [
+                    0.41759023716075155,
+                    0.4170136723634848,
+                    0.416874105,
+                    0.41707874270225187,
+                    0.41762396075156577
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.independent",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "8",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 0.8390774761592559,
+            "scoreError" : 8.806016161217921E-4,
+            "scoreConfidence" : [
+                0.8381968745431341,
+                0.8399580777753777
+            ],
+            "scorePercentiles" : {
+                "0.0" : 0.8382724262981575,
+                "50.0" : 0.8391949052013423,
+                "90.0" : 0.8399753363483256,
+                "95.0" : 0.8400120302267002,
+                "99.0" : 0.8400120302267002,
+                "99.9" : 0.8400120302267002,
+                "99.99" : 0.8400120302267002,
+                "99.999" : 0.8400120302267002,
+                "99.9999" : 0.8400120302267002,
+                "100.0" : 0.8400120302267002
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    0.8382771775544389,
+                    0.8392190343959731,
+                    0.8396450914429531,
+                    0.8395372541946309,
+                    0.8386000092204526
+                ],
+                [
+                    0.8391707760067114,
+                    0.8392379672818792,
+                    0.8388029949706622,
+                    0.8400120302267002,
+                    0.8382724262981575
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.36",
+        "benchmark" : "com.integrallis.vectors.bench.GgufQ4KBatchedMatmulBenchmark.independent",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 2,
+        "jvm" : "/usr/lib/jvm/temurin-25-jdk-amd64/bin/java",
+        "jvmArgs" : [
+            "--add-modules",
+            "jdk.incubator.vector",
+            "--add-modules",
+            "jdk.incubator.vector",
+            "-Xmx8g",
+            "-Xms8g",
+            "-XX:+AlwaysPreTouch",
+            "-XX:+UseG1GC",
+            "-XX:MaxGCPauseMillis=100"
+        ],
+        "jdkVersion" : "25.0.5",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.5+8-LTS",
+        "warmupIterations" : 3,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 5,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "batchSize" : "32",
+            "cols" : "2048",
+            "rows" : "1024"
+        },
+        "primaryMetric" : {
+            "score" : 3.4460373420012416,
+            "scoreError" : 0.23159949154183568,
+            "scoreConfidence" : [
+                3.2144378504594058,
+                3.6776368335430774
+            ],
+            "scorePercentiles" : {
+                "0.0" : 3.3332480598006646,
+                "50.0" : 3.4248559880546074,
+                "90.0" : 3.824622738771355,
+                "95.0" : 3.8680659266409267,
+                "99.0" : 3.8680659266409267,
+                "99.9" : 3.8680659266409267,
+                "99.99" : 3.8680659266409267,
+                "99.999" : 3.8680659266409267,
+                "99.9999" : 3.8680659266409267,
+                "100.0" : 3.8680659266409267
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    3.33937962,
+                    3.3332480598006646,
+                    3.3694483602693603,
+                    3.8680659266409267,
+                    3.406730829931973
+                ],
+                [
+                    3.433549904109589,
+                    3.4336340479452057,
+                    3.4246701979522185,
+                    3.4266046952054796,
+                    3.4250417781569964
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    }
+]
+
+
