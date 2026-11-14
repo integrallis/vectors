@@ -433,6 +433,10 @@ configure(libraryProjects) {
         // One heavy, deterministic test class — no intra-task forking, and forward the mode flag.
         maxParallelForks = 1
         systemProperty("recall.gate.mode", System.getProperty("recall.gate.mode", "verify"))
+        // A gate that can be satisfied from the build cache gates nothing: both 0.1.35 release runs
+        // and the push CI of the release commit restored this task FROM-CACHE. Always execute it.
+        outputs.cacheIf("the recall gate must execute on every build it gates") { false }
+        outputs.upToDateWhen { false }
         testLogging {
             events("passed", "skipped", "failed")
             showStandardStreams = true
