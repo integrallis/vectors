@@ -126,15 +126,193 @@ including with the unconditional `nanoTime` pair per call. **The one regression 
 4. **A cacheable release gate.** `recallGate` (`build.gradle.kts:423`) has no `cacheIf`/`upToDateWhen`;
    see *Quality*.
 
-## HNSW search regression — bisect
+## HNSW search "regression" — attribution, and the null it became
 
-_pending: `derived/staircase.md` (25-point first-parent staircase over the commits touching
-`vectors-hnsw`/`vectors-db` main sources, `scripts/stair.sh`) and `derived/confirm.md`
-(`v0.1.34` / `v0.1.35` / `fixA` / `fixB` on `searchHnsw` and `buildHnsw`, `scripts/confirm.sh`)._
+Phase 1 read `searchHnsw` (2000×128) at 0.971× throughput with every 0.1.35 fork at or under the 0.1.34
+median, and phase 2 read `searchRawHnsw` 100k×128 at 1.080× latency with non-overlapping ranges. Three
+runs on a second, identical instance (`i-00702a64cc9989197`) tried to attribute it to a commit.
 
-## Phase 2 (facade and IVF search at 10k/100k × 128/768) and phase 3 (k-means vs e-means training cost)
+### Staircase — 25 first-parent points, `searchHnsw` 2000×128, fork=2 × 2 rounds (`scripts/stair.sh`)
 
-_pending: `scripts/vecjmh2.sh`, `scripts/vecjmh3.sh`; derived into `derived/all.md`._
+Round 1 walked the chain oldest→newest, round 2 newest→oldest.
+
+| # | point | r1 forks | r2 forks | median | vs v0.1.34 | step | subject |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | v0.1.34 | 23.35, 24.60 | 24.59, 22.96 | 23.97 | 1.000 | +0.0% | Merge pull request #123 from integrallis/release/0.1.34 |
+| 1 | 871dafcc | 23.58, 23.70 | 24.15, 24.45 | 23.93 | 0.998 | -0.2% | perf(hnsw): eliminate per-search allocation in pickSeeds |
+| 2 | ef814631 | 23.38, 22.90 | 24.48, 24.12 | 23.75 | 0.991 | -0.7% | perf(hnsw): reuse NeighborSelector scratch buffers on pruning path |
+| 3 | 686864b4 | 23.47, 24.43 | 24.37, 22.92 | 23.92 | 0.998 | +0.7% | perf(builder): generation-stamped int[] visited set in concurrent buil |
+| 4 | 73bcc1b8 | 23.92, 24.11 | 23.12, 23.88 | 23.90 | 0.997 | -0.1% | perf(searcher): size scratch heaps by graph degree instead of fixed 25 |
+| 5 | 97579da4 | 24.32, 24.28 | 23.72, 24.14 | 24.21 | 1.010 | +1.3% | perf(neighbor): linear-scan insertion for small NeighborArray (capacit |
+| 6 | a5fbaef4 | 23.32, 25.32 | 22.68, 22.99 | 23.16 | 0.966 | -4.4% | perf(adapter): remove unnecessary defensive array clones on search pat |
+| 7 | d43220ee | 23.15, 24.68 | 23.94, 24.55 | 24.25 | 1.011 | +4.7% | perf(builder): reuse search-result arrays in concurrent graph builders |
+| 8 | e128b7b5 | 22.97, 23.28 | 24.87, 23.40 | 23.34 | 0.974 | -3.7% | perf(search): cache ACORN pre-filter flag in Generation |
+| 9 | d79e41be | 24.67, 23.37 | 23.01, 22.82 | 23.19 | 0.968 | -0.6% | perf(searcher): size rescore heap to 256 to avoid mid-rescore growth |
+| 10 | 1b82abfd | 24.12, 24.03 | 24.19, 24.59 | 24.16 | 1.008 | +4.1% | perf(hnsw): generation-stamped int[] visited set + reusable result dra |
+| 11 | d54794d2 | 24.03, 24.62 | 24.77, 23.65 | 24.32 | 1.015 | +0.7% | perf(hnsw): generation-stamped dedup for searchMultiStart merge |
+| 12 | 07d02399 | 23.03, 24.62 | 24.63, 24.90 | 24.62 | 1.027 | +1.2% | perf(cache): eliminate varargs Object[] allocations in FilterHasher |
+| 13 | e7fe344e | 23.13, 23.78 | 24.94, 22.26 | 23.46 | 0.978 | -4.7% | perf(hnsw): cap multi-start worker creation at availableProcessors |
+| 14 | 0ba0417c | 24.12, 24.55 | 24.69, 24.42 | 24.49 | 1.021 | +4.4% | perf(cache): zero-allocation QvCache lookup on cache hit |
+| 15 | dda9381a | 24.67, 23.47 | 24.25, 23.41 | 23.86 | 0.995 | -2.6% | perf(db): reuse thread-local scratch for cosine query normalization |
+| 16 | 8b2d0b51 | 24.23, 24.86 | 23.74, 23.38 | 23.99 | 1.001 | +0.5% | perf(db): skip BitSet.clone() on append-only commits (#167) |
+| 17 | 25a38733 | 23.73, 23.54 | 22.80, 23.47 | 23.50 | 0.980 | -2.0% | perf(db): reuse stored Document on search when projection is identical |
+| 18 | ca2de0d9 | 24.57, 23.67 | 25.15, 24.02 | 24.30 | 1.014 | +3.4% | perf(db): normalize vectors outside the write lock on ingest |
+| 19 | dc0cff0e | 22.84, 23.06 | 24.71, 23.75 | 23.41 | 0.976 | -3.7% | perf(db): eliminate List.copyOf allocation in SearchResult constructor |
+| 20 | 29a28e0f | 23.33, 23.01 | 24.92, 23.53 | 23.43 | 0.978 | +0.1% | perf(db): eliminate double vector clone on ingest |
+| 21 | b500e86e | 22.32, 24.40 | 24.56, 23.09 | 23.75 | 0.991 | +1.3% | perf(hnsw): eliminate per-search default-scorer allocation (#177) |
+| 22 | b575aad0 | 24.35, 24.54 | 23.34, 22.64 | 23.85 | 0.995 | +0.4% | Merge pull request #181 from integrallis/docs/score-scale-explicit |
+| 23 | 4b22ff0c | 24.84, 22.86 | 23.38, 24.36 | 23.87 | 0.996 | +0.1% | feat: expose raw scores via SearchResult.rawScoreOf() and SimilarityFu |
+| 24 | v0.1.35 | 22.92, 24.54 | 23.75, 23.30 | 23.52 | 0.981 | -1.5% | docs: bump version pills and antora config to 0.1.35 |
+
+No step stands out of the point-to-point swings (±4% with four forks per point).
+
+### Confirm — four arms, `searchHnsw` + `buildHnsw`, fork=2 × 2 rounds (`scripts/confirm.sh`)
+
+`fixA` = static nested scorer classes with final `sim`/`vectors` references (the b500e86e inner classes
+read them through `HnswSearcher.this`); `fixB` = fixA plus the query copied into a final scratch array.
+Patches in `raw/confirm/`.
+
+AnnSearchBenchmark_searchHnsw{dim=128,k=10,n=2000}  (thrpt, ops/ms; per-fork medians, n per arm)
+| arm | median | forks | vs v0.1.34 | vs v0.1.35 |
+| --- | --- | --- | --- | --- |
+| v0.1.34 | 23.951 | 24.34, 23.57, 23.49, 24.38 | 1.000 (+0.0%) | 1.012 (+1.2%) |
+| v0.1.35 | 23.662 | 22.86, 24.16, 24.43, 23.17 | 0.988 (-1.2%) | 1.000 (+0.0%) |
+| fixA | 23.868 | 24.02, 23.72, 24.65, 23.44 | 0.997 (-0.3%) | 1.009 (+0.9%) |
+| fixB | 24.176 | 23.13, 24.77, 24.32, 24.03 | 1.009 (+0.9%) | 1.022 (+2.2%) |
+
+IndexBuildBenchmark_buildHnsw{dim=128,n=1000}  (ss, ms/op; per-fork medians, n per arm)
+| arm | median | forks | vs v0.1.34 | vs v0.1.35 |
+| --- | --- | --- | --- | --- |
+| v0.1.34 | 294.887 | 298.52, 293.44, 294.46, 295.31 | 1.000 (+0.0%) | 1.077 (-7.7%) |
+| v0.1.35 | 273.788 | 268.51, 277.96, 272.29, 275.29 | 0.928 (+7.2%) | 1.000 (+0.0%) |
+| fixA | 272.558 | 279.19, 271.21, 270.61, 273.91 | 0.924 (+7.6%) | 0.996 (+0.4%) |
+| fixB | 276.144 | 269.19, 281.46, 272.37, 279.92 | 0.936 (+6.4%) | 1.009 (-0.9%) |
+
+IndexBuildBenchmark_buildHnsw{dim=128,n=5000}  (ss, ms/op; per-fork medians, n per arm)
+| arm | median | forks | vs v0.1.34 | vs v0.1.35 |
+| --- | --- | --- | --- | --- |
+| v0.1.34 | 2658.238 | 2693.66, 2634.12, 2643.14, 2673.33 | 1.000 (+0.0%) | 1.029 (-2.9%) |
+| v0.1.35 | 2584.002 | 2566.21, 2687.99, 2581.11, 2586.90 | 0.972 (+2.8%) | 1.000 (+0.0%) |
+| fixA | 2630.666 | 2573.27, 2668.39, 2663.01, 2598.32 | 0.990 (+1.0%) | 1.018 (-1.8%) |
+| fixB | 2570.709 | 2609.49, 2554.19, 2562.11, 2579.31 | 0.967 (+3.3%) | 0.995 (+0.5%) |
+
+Everything within ±2% on four forks; `buildHnsw` is 3–8% faster on every 0.1.35-based arm regardless.
+
+### Attribution — `searchRawHnsw` 10k×128, 15 forks per arm (`scripts/revert.sh`)
+
+v0.1.35 minus one commit each (`git revert --no-commit` on a v0.1.35 worktree; `73bcc1b8` conflicted and
+was skipped), plus both tags and fixA. `fork=5 × 3 interleaved rounds`.
+
+searchRawHnsw {dim=128,n=10000} (avgt us/op, lower is better; per-fork medians)
+| arm | forks | median | min | max | vs v0.1.34 | vs v0.1.35 | P(fork faster than a v0.1.35 fork) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| v0.1.34 | 15 | 73.89 | 67.37 | 76.09 | 1.000 | 1.091 | 0.07 |
+| v0.1.35 | 15 | 67.72 | 65.03 | 72.15 | 0.917 | 1.000 | 0.47 |
+| fixA | 15 | 70.51 | 64.60 | 72.54 | 0.954 | 1.041 | 0.36 |
+| rev-871dafcc | 15 | 67.28 | 65.52 | 72.16 | 0.911 | 0.993 | 0.51 |
+| rev-97579da4 | 15 | 70.82 | 65.65 | 73.21 | 0.958 | 1.046 | 0.33 |
+| rev-b500e86e | 15 | 67.34 | 64.48 | 72.74 | 0.911 | 0.994 | 0.53 |
+
+**Reading.** With fifteen forks per arm, **0.1.35 is 0.917× the latency of 0.1.34 — 8% faster** — and
+the probability that a 0.1.34 fork beats a 0.1.35 fork is 0.07. No revert moves the result:
+`rev-871dafcc` and `rev-b500e86e` sit on 0.1.35 (0.993, 0.994); `rev-97579da4` and `fixA` are 4–5%
+*slower* than 0.1.35, i.e. removing the linear neighbour insertion or changing the scorer costs. The
+same build's fork medians span 65–76 µs (±6%), which is exactly the band the phase-1 (−2.9%, four
+forks per arm) and phase-2 (+8%, one fork per arm per round) readings fell in. **The regression did not
+survive statistical power; the fix branch is not merged.** The 100k×128 shape is being re-measured at
+fifteen forks per arm (`scripts/power100k.sh`) so no claim about it rests on two forks.
+
+A fork=5 × 3-round run at n=2000 and n=50000 (`scripts/power.sh`) was started and aborted after one of
+nine runs to give the attribution run the box; its single artifact is in `raw/power-aborted/` and is not
+used anywhere.
+
+**Method lesson, recorded for the comparison script:** on this host a JMH fork-to-fork spread of ±6%
+on a 70 µs search is normal; `fork=2 × 2 rounds` cannot resolve a 2–5% question, and single-fork cells
+cannot resolve 8%. `experiments/benchmark-comparison.sh` now defaults to five forks.
+
+## Phase 2 — facade and raw HNSW search, IVF search at 10k/100k × 128/768
+
+`fork=1` (each parameter combination rebuilds its index in `@Setup`), 2 interleaved rounds, so n = 10 iterations
+per cell and single-fork noise applies: read the ranges, not just the medians. Raw = `HnswIndex` directly;
+facade = `VectorCollection.search` through `vectors-db`.
+
+| benchmark | mode | v0.1.34 median [min..max] | v0.1.35 median [min..max] | 0.1.35 / 0.1.34 | reading |
+| --- | --- | --- | --- | --- | --- |
+| IvfSearchBenchmark.searchIvf{dim=128,n=10000,nprobe=16} | avgt (us/op) | 38.694 [37.564..39.797] (n=10) | 42.878 [41.299..44.208] (n=10) | 1.108 | slower by 10.8% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=10000,nprobe=1} | avgt (us/op) | 2.791 [2.753..2.828] (n=10) | 3.141 [3.073..3.202] (n=10) | 1.125 | slower by 12.5% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=10000,nprobe=2} | avgt (us/op) | 4.375 [4.230..4.841] (n=10) | 5.708 [5.581..5.875] (n=10) | 1.305 | slower by 30.5% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=10000,nprobe=32} | avgt (us/op) | 77.270 [72.000..82.600] (n=10) | 79.073 [75.067..82.848] (n=10) | 1.023 | slower by 2.3% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=10000,nprobe=4} | avgt (us/op) | 9.944 [9.905..10.631] (n=10) | 12.192 [11.606..12.381] (n=10) | 1.226 | slower by 22.6% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=10000,nprobe=8} | avgt (us/op) | 19.256 [18.548..20.646] (n=10) | 25.546 [24.008..26.724] (n=10) | 1.327 | slower by 32.7% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=100000,nprobe=16} | avgt (us/op) | 152.927 [149.611..155.645] (n=10) | 146.979 [138.520..155.572] (n=10) | 0.961 | faster by 3.9% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=100000,nprobe=1} | avgt (us/op) | 10.788 [10.424..11.178] (n=10) | 10.162 [10.149..10.416] (n=10) | 0.942 | faster by 5.8% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=100000,nprobe=2} | avgt (us/op) | 18.944 [18.358..19.505] (n=10) | 20.596 [19.356..21.882] (n=10) | 1.087 | slower by 8.7% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=100000,nprobe=32} | avgt (us/op) | 280.281 [264.509..294.911] (n=10) | 287.802 [270.395..307.002] (n=10) | 1.027 | slower by 2.7% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=100000,nprobe=4} | avgt (us/op) | 35.562 [33.446..37.691] (n=10) | 37.177 [35.415..39.369] (n=10) | 1.045 | slower by 4.5% |
+| IvfSearchBenchmark.searchIvf{dim=128,n=100000,nprobe=8} | avgt (us/op) | 73.533 [68.109..77.801] (n=10) | 74.422 [70.631..78.275] (n=10) | 1.012 | slower by 1.2% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=10000,nprobe=16} | avgt (us/op) | 219.413 [218.466..220.409] (n=10) | 167.619 [167.279..168.158] (n=10) | 0.764 | faster by 23.6% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=10000,nprobe=1} | avgt (us/op) | 16.816 [16.281..17.046] (n=10) | 11.083 [10.081..12.190] (n=10) | 0.659 | faster by 34.1% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=10000,nprobe=2} | avgt (us/op) | 32.599 [32.495..32.773] (n=10) | 17.962 [16.346..19.498] (n=10) | 0.551 | faster by 44.9% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=10000,nprobe=32} | avgt (us/op) | 470.357 [466.187..474.256] (n=10) | 331.358 [329.832..335.721] (n=10) | 0.704 | faster by 29.6% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=10000,nprobe=4} | avgt (us/op) | 70.855 [68.973..72.838] (n=10) | 42.276 [42.039..42.493] (n=10) | 0.597 | faster by 40.3% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=10000,nprobe=8} | avgt (us/op) | 155.658 [142.534..169.203] (n=10) | 89.601 [80.912..97.358] (n=10) | 0.576 | faster by 42.4% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=100000,nprobe=16} | avgt (us/op) | 715.988 [711.258..721.609] (n=10) | 769.478 [759.250..780.096] (n=10) | 1.075 | slower by 7.5% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=100000,nprobe=1} | avgt (us/op) | 42.907 [37.904..45.944] (n=10) | 52.290 [48.020..56.714] (n=10) | 1.219 | slower by 21.9% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=100000,nprobe=2} | avgt (us/op) | 92.055 [91.697..92.340] (n=10) | 93.471 [91.698..96.422] (n=10) | 1.015 | slower by 1.5% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=100000,nprobe=32} | avgt (us/op) | 2187.297 [2163.554..2208.196] (n=10) | 2118.924 [2088.733..2152.516] (n=10) | 0.969 | faster by 3.1% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=100000,nprobe=4} | avgt (us/op) | 155.073 [153.520..156.480] (n=10) | 172.825 [161.399..184.629] (n=10) | 1.114 | slower by 11.4% |
+| IvfSearchBenchmark.searchIvf{dim=768,n=100000,nprobe=8} | avgt (us/op) | 323.571 [322.751..324.790] (n=10) | 308.268 [306.088..313.107] (n=10) | 0.953 | faster by 4.7% |
+| VectorDbBenchmark.searchFacadeHnsw{dim=128,n=100000} | avgt (us/op) | 118.398 [117.326..118.654] (n=10) | 117.692 [116.581..118.725] (n=10) | 0.994 | faster by 0.6% |
+| VectorDbBenchmark.searchFacadeHnsw{dim=128,n=10000} | avgt (us/op) | 73.691 [72.739..74.175] (n=10) | 73.863 [70.729..77.756] (n=10) | 1.002 | slower by 0.2% |
+| VectorDbBenchmark.searchFacadeHnsw{dim=768,n=100000} | avgt (us/op) | 323.950 [320.934..328.418] (n=10) | 266.556 [263.806..269.307] (n=10) | 0.823 | faster by 17.7% |
+| VectorDbBenchmark.searchFacadeHnsw{dim=768,n=10000} | avgt (us/op) | 221.610 [207.237..236.024] (n=10) | 235.341 [234.083..237.335] (n=10) | 1.062 | slower by 6.2% |
+| VectorDbBenchmark.searchRawHnsw{dim=128,n=100000} | avgt (us/op) | 114.136 [111.868..116.429] (n=10) | 123.321 [122.217..125.075] (n=10) | 1.080 | slower by 8.0% |
+| VectorDbBenchmark.searchRawHnsw{dim=128,n=10000} | avgt (us/op) | 70.852 [67.230..74.405] (n=10) | 69.006 [67.026..71.295] (n=10) | 0.974 | faster by 2.6% |
+| VectorDbBenchmark.searchRawHnsw{dim=768,n=100000} | avgt (us/op) | 302.278 [278.349..326.028] (n=10) | 301.066 [277.933..318.757] (n=10) | 0.996 | faster by 0.4% |
+| VectorDbBenchmark.searchRawHnsw{dim=768,n=10000} | avgt (us/op) | 239.692 [234.984..243.879] (n=10) | 204.358 [202.857..206.232] (n=10) | 0.853 | faster by 14.7% |
+
+Reading. **`searchRawHnsw` at dim = 128, n = 100k is 1.080× latency with non-overlapping ranges** —
+the regression phase 1 saw on a 2000-node graph, at scale; at 10k the two rounds disagree (+5.5% then
+−2.6%), which is what one fork per cell looks like. dim = 768 is faster raw at 10k (0.853×) and flat at
+100k; the facade is flat at dim = 128 and 0.823× at 768×100k. IVF search latency at a *fixed* nprobe
+swings −9% to +24% (128) and −50% to +20% (768) in both directions: the e-means partitions differ from
+the k-means ones, so the same nprobe scans different cluster sizes. That is not a speed verdict either
+way; the recall-versus-latency curves below are the comparison that holds.
+
+## Phase 3 — the e-means default's training cost against the k-means it replaced
+
+`KMeansEMeansBenchmark` exists only from 0.1.35; it trains both algorithms on the same data on the same
+host, with the iteration counts `BuoyIndex` used before and after (`KMeans.train(…, 50, …)` vs
+`EMeans.train(…, 5.0f, …)`). Annotated `fork=1 warmup=2 iterations=3`.
+
+| n | dim | k | trainKMeans ms | trainEMeans ms | e-means / k-means |
+| --- | --- | --- | --- | --- | --- |
+| 10,000 | 64 | 64 | 171.5 | 32.4 | 0.189 |
+| 10,000 | 64 | 256 | 285.6 | 120.9 | 0.423 |
+| 10,000 | 64 | 1024 | 1113.2 | 433.6 | 0.390 |
+| 10,000 | 128 | 64 | 186.3 | 58.0 | 0.311 |
+| 10,000 | 128 | 256 | 390.0 | 214.1 | 0.549 |
+| 10,000 | 128 | 1024 | 1170.4 | 835.5 | 0.714 |
+| 50,000 | 64 | 64 | 864.9 | 231.3 | 0.267 |
+| 50,000 | 64 | 256 | 3282.5 | 820.6 | 0.250 |
+| 50,000 | 64 | 1024 | 9284.5 | 3384.0 | 0.364 |
+| 50,000 | 128 | 64 | 1400.3 | 456.3 | 0.326 |
+| 50,000 | 128 | 256 | 5260.5 | 1697.2 | 0.323 |
+| 50,000 | 128 | 1024 | 14390.3 | 6795.8 | 0.472 |
+| 100,000 | 64 | 64 | 1773.3 | 561.0 | 0.316 |
+| 100,000 | 64 | 256 | 6664.7 | 2101.4 | 0.315 |
+| 100,000 | 64 | 1024 | 26251.8 | 8183.4 | 0.312 |
+| 100,000 | 128 | 64 | 3682.3 | 1021.2 | 0.277 |
+| 100,000 | 128 | 256 | 11955.5 | 3856.2 | 0.323 |
+| 100,000 | 128 | 1024 | 53632.8 | 15246.8 | 0.284 |
+
+ratio range 0.189..0.714, median 0.319 over 18 shapes
+
+## IVF recall versus latency (both tags, identical corpus) and real data
+
+_pending: `derived/ivf-curves.md` from `scripts/ivfcurve.sh` (TieredIvfRecallQpsBenchmark, 200k×128 and
+100k×768, nprobe 1–64, two rounds) and `scripts/realivf.sh` (RecallQpsBenchmark on fashion-mnist-784,
+`ivf_flat`, nlist √n / 2√n / 4√n)._
 
 ## Verdict
 
