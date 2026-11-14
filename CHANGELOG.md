@@ -8,6 +8,17 @@ All notable changes to java-vectors are documented here.
 
 ### Fixed
 
+- **A persistent recipe collection can be built at a storage path that does not exist yet.**
+  0.1.34 began writing `recipe.json` at build time so that an empty collection reopens
+  (`f38e2547`), but wrote it before anything had created the storage root — the only
+  `Files.createDirectories(storageRoot)` ran at the first commit — so `VectorCollection.builder()
+  …storagePath(fresh).embeddingRecipe(r).build()` failed with `UncheckedIOException: failed to
+  write recipe.json` (`NoSuchFileException: …/recipe.json.tmp`). Surfaced by
+  `integrallis/memory`'s `RecipeAnchorTrapTest` on its first build against 0.1.34. The builder now
+  creates the root before the sidecar write; `EmbeddingRecipeLifecycleTest
+  .recipeCollectionCanBeBuiltAtAFreshPath` reproduces the failure on the unfixed code and passes
+  on the fix.
+
 - **Upstream notice for the FAISS e-means port.** `com.integrallis.vectors.core.cluster.EMeans` is a
   Java port of the FAISS `contrib/e_means` CPU reference (MIT). 0.1.35 shipped it under the project's
   Apache header alone. The MIT notice is now reproduced in the class, `META-INF/NOTICE` records the

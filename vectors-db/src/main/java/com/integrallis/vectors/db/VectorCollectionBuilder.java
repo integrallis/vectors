@@ -982,8 +982,13 @@ public final class VectorCollectionBuilder {
       //
       // The commit path also writes this, ordering the sidecar before the manifest that
       // references it; writing here is idempotent because the same bytes go to the same path.
+      //
+      // The storage root may not exist yet: before 0.1.34 nothing touched it until the first
+      // commit created it (GenerationDirectory), and callers relied on that. Create it here, or
+      // the sidecar write fails with NoSuchFileException on a fresh path.
       if (config.recipe().isPresent()) {
         try {
+          java.nio.file.Files.createDirectories(storageRoot);
           com.integrallis.vectors.db.storage.RecipeStore.write(storageRoot, config.recipe().get());
         } catch (java.io.IOException e) {
           throw new java.io.UncheckedIOException(
