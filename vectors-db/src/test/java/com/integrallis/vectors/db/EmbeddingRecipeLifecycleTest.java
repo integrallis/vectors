@@ -16,6 +16,7 @@
 package com.integrallis.vectors.db;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -180,6 +181,26 @@ class EmbeddingRecipeLifecycleTest {
           Optional.of(original.recipeHash()),
           reopened.config().recipe().map(EmbeddingRecipe::recipeHash),
           "reopening an empty collection must recover its recipe");
+    }
+  }
+
+  @Test
+  @DisplayName("a recipe collection can be built at a storage path that does not exist yet")
+  void recipeCollectionCanBeBuiltAtAFreshPath(@TempDir Path parent) throws Exception {
+    // 0.1.34 started writing recipe.json at build time (so an empty collection reopens) but wrote
+    // it before anything had created the directory; callers that relied on lazy creation of the
+    // storage root, as every pre-0.1.34 persistent collection could, got NoSuchFileException.
+    Path root = parent.resolve("fresh").resolve("collection");
+    assertFalse(Files.exists(root), "the storage root must not exist before the build");
+    EmbeddingRecipe original = recipe("1.5");
+    try (VectorCollection collection = base(root).embeddingRecipe(original).build()) {
+      assertEquals(0, collection.size());
+      assertTrue(Files.exists(root.resolve(FileFormat.RECIPE_FILE)));
+    }
+    try (VectorCollection reopened = base(root).build()) {
+      assertEquals(
+          Optional.of(original.recipeHash()),
+          reopened.config().recipe().map(EmbeddingRecipe::recipeHash));
     }
   }
 

@@ -4,6 +4,48 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.36] - 2026-11-14
+
+### Fixed
+
+- **A persistent recipe collection can be built at a storage path that does not exist yet.**
+  0.1.34 began writing `recipe.json` at build time so that an empty collection reopens
+  (`f38e2547`), but wrote it before anything had created the storage root — the only
+  `Files.createDirectories(storageRoot)` ran at the first commit — so `VectorCollection.builder()
+  …storagePath(fresh).embeddingRecipe(r).build()` failed with `UncheckedIOException: failed to
+  write recipe.json` (`NoSuchFileException: …/recipe.json.tmp`). Surfaced by
+  `integrallis/memory`'s `RecipeAnchorTrapTest` on its first build against 0.1.34. The builder now
+  creates the root before the sidecar write; `EmbeddingRecipeLifecycleTest
+  .recipeCollectionCanBeBuiltAtAFreshPath` reproduces the failure on the unfixed code and passes
+  on the fix.
+
+- **Upstream notice for the FAISS e-means port.** `com.integrallis.vectors.core.cluster.EMeans` is a
+  Java port of the FAISS `contrib/e_means` CPU reference (MIT). 0.1.35 shipped it under the project's
+  Apache header alone. The MIT notice is now reproduced in the class, `META-INF/NOTICE` records the
+  upstream revision (`2b648f0605f2ef3d14c4705350f8a0b214463878`), files and modifications, and the
+  license text ships as `META-INF/licenses/faiss.txt`.
+
+- **`recallGate` always executes.** The task is no longer cacheable or up-to-date
+  (`outputs.cacheIf { false }`, `outputs.upToDateWhen { false }`). Both 0.1.35 release runs and the
+  push CI of the release commit restored it `FROM-CACHE`; a gate that can be satisfied from the build
+  cache gates nothing.
+
+- **`experiments/benchmark-comparison.sh` produces results.** It passed `-Pjmh.includes="^Class.method$"`
+  (JMH matches includes against fully-qualified names with `find()`, so this never matched) and
+  `-Pjmh.output=json` / `build/reports/jmh` (not what `vectors-bench/build.gradle.kts` reads or
+  writes), so it had never produced a number. It now uses `-Pjmh.resultFormat=JSON` and
+  `build/results/jmh/results.json`, checks both refs out as detached worktrees instead of
+  `git stash`/`git checkout` in the caller's tree, interleaves baseline and candidate per benchmark
+  and round, and takes `BASELINE`/`CANDIDATE`/`ROUNDS`/`JMH_*` from the environment.
+
+### Changed
+
+- **CHANGELOG.** The 0.1.35 entries, which were published under `[Unreleased]`, now sit under their
+  own heading together with the two changes that heading was missing (the IVF training default and
+  the performance commits), with the measurements taken after the release.
+
+## [0.1.35] - 2026-11-13
+
 ### Added
 
 - **`SimilarityFunction.rawScoreOf(float)`**: reconstructs the raw similarity/distance value from a
@@ -49,6 +91,36 @@ All notable changes to java-vectors are documented here.
   return raw scores. Every enum member now documents float formula, byte formula, and range
   explicitly. `SearchResult.Hit#score` documents the transform semantics and references
   `SimilarityFunction` (#117).
+
+- **IVF centroid training defaults to e-means.** `BuoyIndex.train` calls
+  `EMeans.train(dataset, k, 5.0f, seed)` where it called `KMeans.train(dataset, k, 50, seed)`
+  (`vectors-ivf/.../BuoyIndex.java:73`; e-means after Bessa et al. 2026, ported from FAISS
+  `contrib/e_means`). This changes every IVF index built from 0.1.35 on. It was not measured before
+  publication. Measured afterwards against 0.1.34 on one host, same seeds
+  (`benchmark-results/2026-11-14-0.1.35-release-audit`): recall@10 on the gate's 10k×128 corpus
+  IVF_FLAT nprobe=8 0.3615 → 0.3650, IVF_PQ nprobe=8 0.3050 → 0.3070 (over-query 1.0) and
+  0.7160 → 0.7335 (over-query 4.0); `IndexBuildBenchmark.buildIvfFlat` n=5000 76.5 → 34.7 ms
+  (0.454×), n=1000 unchanged; training alone (`KMeansEMeansBenchmark`, 18 shapes from 10k×64×64 to
+  100k×128×1024) takes 0.19–0.71× of the 50-iteration k-means time, median 0.32×. Search latency at a *fixed* nprobe moves both ways (−9% to +24% at
+  10k–100k×128) because the partitions differ; the audit's recall-versus-latency curves are the
+  comparison that holds.
+
+### Performance
+
+- **Twenty-five `perf(...)` commits** across the HNSW and Vamana searchers and builders, the commit
+  pipeline, the caches and the db ingest/search path (`871dafcc`..`b500e86e`; each has an
+  `experiments/perf-*/README.md` stating its hypothesis). None was measured against the released
+  0.1.34 before publication. Measured afterwards on an EPYC 7R13 (Temurin 25), both tags as
+  detached worktrees, interleaved per benchmark, JMH `fork=2 × 5 iterations × 2 rounds` (n = 20 per
+  arm; `benchmark-results/2026-11-14-0.1.35-release-audit/derived/phase1.md`): Vamana search
+  1.128× throughput; HNSW build 0.935× / 0.958× time (n = 1000 / 5000); commit `copyOfAndStage`
+  0.969–1.011×; GGUF batched matmul 0.986–1.045× across 16 shapes, so the unconditional per-call
+  latency counters added in this release cost nothing measurable. **HNSW search**: the first reads (0.971× throughput on a 2000-node graph at four forks per arm;
+  1.080× latency raw at 100k with one fork per round) suggested a dim = 128 regression; a 15-fork
+  attribution run at 10k×128 (`derived/revert.md`) measures 0.1.35 at **0.917× the latency of 0.1.34**
+  (8% faster, P(0.1.34 fork faster) = 0.07) with no single commit moving it, and the same build's forks
+  spread ±6% — the earlier readings were fork noise. dim = 768 is faster (0.853× latency at 10k raw,
+  0.823× at 100k through the facade). No HNSW code changes in 0.1.36.
 
 ## [0.1.34] - 2026-11-09
 

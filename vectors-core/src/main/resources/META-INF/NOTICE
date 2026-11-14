@@ -24,3 +24,19 @@ fused SiLU and up multiplication. Unsupported inputs remain on the Java path.
 ARM128 activations include source-order ports of SLEEF 3.6.1 expf/logf advsimd routines.
 Copyright Naoki Shibata and contributors 2010-2021. Boost Software License1.0.
 See licenses/sleef-boost.txt.
+
+
+EMeans (com.integrallis.vectors.core.cluster.EMeans) is a Java port of the FAISS e-means CPU
+reference implementation.
+Copyright (c) Meta Platforms, Inc. and affiliates.
+SPDX-License-Identifier: MIT
+
+Upstream: https://github.com/facebookresearch/faiss
+Revision: 2b648f0605f2ef3d14c4705350f8a0b214463878 (last change to contrib/e_means before the port
+was committed on 2026-11-13)
+Files: contrib/e_means/e_means.py, contrib/e_means/base.py
+License text: META-INF/licenses/faiss.txt
+
+Modifications: Java port of Algorithm 1 (recipe resolution, mini-batch EMA update with cosine
+schedule, dead-cluster revival, closing-mean finalisation); batch assignment through
+VectorUtil.batchSquaredL2 instead of the NumPy/FAISS assignment call.

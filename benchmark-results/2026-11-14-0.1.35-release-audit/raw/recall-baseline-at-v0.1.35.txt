@@ -1,0 +1,23 @@
+# recall-baseline.txt — P1.1 recall@10 regression gate
+#
+# Persistent (committed-then-reopened) collection path; see RecallGateTest. A measured drop greater
+# than the per-row tolerance fails the build; an improvement never fails. Re-baseline an intentional
+# algorithm change with: ./gradlew :vectors-bench:recallGate -Drecall.gate.mode=record  then commit
+# the printed values here (alongside the recall delta in the PR diff).
+#
+# Recorded on: Intel Core i9-14900HX (x86-64, AVX2 256-bit; P1.5 caps all x86 runners to 256-bit
+#   lanes so this baseline is portable to the x86 ubuntu-latest CI runner), JDK 25 (Zulu 25.0.3).
+# corpus: n=10000 dim=128 queries=200 k=10 seed=42 metric=EUCLIDEAN
+# tolerance: 0.005 (global; an optional 4th column overrides per row)
+# format: <index> <params> <recall@10> [<tolerance>]
+#
+# Note: IVF recall is low here because the corpus is random-uniform (no cluster structure) and only
+# 8 of 64 clusters are probed — the gate tracks DRIFT, not absolute quality. IVF_PQ at oq=4.0
+# (0.7160) vs oq=1.0 (0.3050) confirms over-query lifts recall on the persistent path (P1.3a).
+HNSW efSearch=128 0.9145
+HNSW efSearch=200 0.9635
+VAMANA L=128 0.9705
+VAMANA L=200 0.9830
+IVF_FLAT nprobe=8,oq=1.0 0.3615
+IVF_PQ nprobe=8,m=16,rescore=4,oq=1.0 0.3050
+IVF_PQ nprobe=8,m=16,rescore=4,oq=4.0 0.7160
