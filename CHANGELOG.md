@@ -89,7 +89,8 @@ All notable changes to java-vectors are documented here.
   (`benchmark-results/2026-11-14-0.1.35-release-audit`): recall@10 on the gate's 10k×128 corpus
   IVF_FLAT nprobe=8 0.3615 → 0.3650, IVF_PQ nprobe=8 0.3050 → 0.3070 (over-query 1.0) and
   0.7160 → 0.7335 (over-query 4.0); `IndexBuildBenchmark.buildIvfFlat` n=5000 76.5 → 34.7 ms
-  (0.454×), n=1000 unchanged. Search latency at a *fixed* nprobe moves both ways (−9% to +24% at
+  (0.454×), n=1000 unchanged; training alone (`KMeansEMeansBenchmark`, 18 shapes from 10k×64×64 to
+  100k×128×1024) takes 0.19–0.71× of the 50-iteration k-means time, median 0.32×. Search latency at a *fixed* nprobe moves both ways (−9% to +24% at
   10k–100k×128) because the partitions differ; the audit's recall-versus-latency curves are the
   comparison that holds.
 
@@ -103,11 +104,12 @@ All notable changes to java-vectors are documented here.
   arm; `benchmark-results/2026-11-14-0.1.35-release-audit/derived/phase1.md`): Vamana search
   1.128× throughput; HNSW build 0.935× / 0.958× time (n = 1000 / 5000); commit `copyOfAndStage`
   0.969–1.011×; GGUF batched matmul 0.986–1.045× across 16 shapes, so the unconditional per-call
-  latency counters added in this release cost nothing measurable. **HNSW search at dim = 128 is
-  slower**: 0.971× throughput on a 2000-node graph and 1.080× latency on the raw 100k index
-  (`VectorDbBenchmark.searchRawHnsw`, non-overlapping ranges), while dim = 768 is faster (0.853×
-  latency at 10k raw, 0.823× at 100k through the facade). The dim = 128 regression is attributed per
-  commit in the audit; the fix, if one is isolated, ships in 0.1.36 or the release after.
+  latency counters added in this release cost nothing measurable. **HNSW search**: the first reads (0.971× throughput on a 2000-node graph at four forks per arm;
+  1.080× latency raw at 100k with one fork per round) suggested a dim = 128 regression; a 15-fork
+  attribution run at 10k×128 (`derived/revert.md`) measures 0.1.35 at **0.917× the latency of 0.1.34**
+  (8% faster, P(0.1.34 fork faster) = 0.07) with no single commit moving it, and the same build's forks
+  spread ±6% — the earlier readings were fork noise. dim = 768 is faster (0.853× latency at 10k raw,
+  0.823× at 100k through the facade). No HNSW code changes in 0.1.36.
 
 ## [0.1.34] - 2026-11-09
 

@@ -7,7 +7,7 @@
 # Usage:
 #   cd /path/to/vectors
 #   BASELINE=v0.1.35 CANDIDATE=main ./experiments/benchmark-comparison.sh [output_dir]
-#   (ROUNDS, JMH_FORK, JMH_WARMUP, JMH_ITERATIONS override the defaults 2 / 2 / 3 / 5)
+#   (ROUNDS, JMH_FORK, JMH_WARMUP, JMH_ITERATIONS override the defaults 2 / 5 / 3 / 5)
 #
 # The script:
 #  1. Records machine specs
@@ -59,7 +59,9 @@ BENCHMARKS=(
   "GgufBatchedMatmulBenchmark.batched"
 )
 ROUNDS="${ROUNDS:-2}"
-JMH_ARGS=(-Pjmh.resultFormat=JSON -Pjmh.fork="${JMH_FORK:-2}" -Pjmh.warmup="${JMH_WARMUP:-3}" -Pjmh.iterations="${JMH_ITERATIONS:-5}")
+# Five forks by default: on the 2026-11-14 audit host the fork-to-fork spread of a 70 us HNSW search was
+# +-6% on the same build, so two forks cannot resolve a 2-5% question (benchmark-results/2026-11-14-0.1.35-release-audit).
+JMH_ARGS=(-Pjmh.resultFormat=JSON -Pjmh.fork="${JMH_FORK:-5}" -Pjmh.warmup="${JMH_WARMUP:-3}" -Pjmh.iterations="${JMH_ITERATIONS:-5}")
 
 include_regex() {
   local bench="$1"
