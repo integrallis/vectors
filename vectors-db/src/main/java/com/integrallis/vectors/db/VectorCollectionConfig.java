@@ -599,9 +599,16 @@ public record VectorCollectionConfig(
         throw new IllegalArgumentException("gamma must be in [0, 1]: " + gamma);
     }
 
-    /** Default: nprobe = max(1, k/4), maxIter = 30, no SOAR, seed = 42. */
+    /**
+     * Default: nprobe = max(1, k/4), maxIter = 50, no SOAR, seed = 42.
+     *
+     * <p>Through 0.1.35 {@code BuoyIndex} ran a fixed 50 Lloyd iterations and ignored this value;
+     * 0.1.36 honours it, so the default moves from the never-applied 30 to the 50 that every
+     * collection was actually built with. Default behaviour is unchanged; an explicit {@code
+     * ivfMaxIter} now takes effect.
+     */
     public static IvfParams defaults(int k) {
-      return new IvfParams(k, Math.max(1, k / 4), 30, 0f, false, 42L);
+      return new IvfParams(k, Math.max(1, k / 4), 50, 0f, false, 42L);
     }
   }
 

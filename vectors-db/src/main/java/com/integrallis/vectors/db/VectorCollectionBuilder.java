@@ -104,7 +104,10 @@ public final class VectorCollectionBuilder {
   public static final int DEFAULT_IVF_NPROBE = 4;
 
   /** Default IVF KMeans max iterations. */
-  public static final int DEFAULT_IVF_MAX_ITER = 30;
+  public // 50, not 30: BuoyIndex ran a fixed 50 iterations through 0.1.35 and ignored this value;
+  // honouring it
+  // from 0.1.36 must not change what every collection was built with (see CHANGELOG 0.1.36).
+  static final int DEFAULT_IVF_MAX_ITER = 50;
 
   /** Default IVF KMeans seed. */
   public static final long DEFAULT_IVF_SEED = 42L;

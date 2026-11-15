@@ -28,6 +28,13 @@ All notable changes to java-vectors are documented here.
 
 ### Fixed
 
+- **`IvfBuildParams.maxIter` and `VectorCollectionBuilder.ivfMaxIter` take effect.** Through 0.1.35
+  `BuoyIndex.train` ran a fixed 50 Lloyd iterations and ignored the value every caller passed, so
+  the db layer's documented default of 30 never applied. The parameter is honoured now, and the db
+  default moves from the never-applied 30 to the 50 every collection was actually built with:
+  default behaviour is unchanged (the recall gate records the committed k-means rows exactly) and
+  an explicit `ivfMaxIter` finally does what it says.
+
 - **A persistent recipe collection can be built at a storage path that does not exist yet.**
   0.1.34 began writing `recipe.json` at build time so that an empty collection reopens
   (`f38e2547`), but wrote it before anything had created the storage root — the only
