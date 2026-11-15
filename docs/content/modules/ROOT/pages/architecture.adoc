@@ -26,6 +26,9 @@ Arena-scoped allocation, mmap file I/O, storage backend abstraction.
 | `vectors-storage-s3`
 | Opt-in AWS SDK runtime for `S3StorageBackend`.
 
+| `vectors-storage-azure`
+| Opt-in Azure SDK runtime for `AzureBlobStorageBackend` (JDK `HttpClient` transport, no Netty).
+
 | `vectors-quantization`
 | Scalar (int8/int4), product (PQ), binary (BQ/BBQ), RaBitQ, extended RaBitQ, TurboQuant, and NVQ quantizers.
 Training, encoding, and asymmetric distance estimation.
@@ -136,6 +139,7 @@ vectors
     └── vectors-ivf ────────────────> core, storage, quantization
 
 vectors-storage-s3 ─────────────────> vectors-storage, AWS SDK S3
+vectors-storage-azure ──────────────> vectors-storage, Azure SDK Blob
 vectors-db-arrow ───────────────────> vectors-db, Apache Arrow
 
 vectors-hybrid ─────────────────────> vectors-core
