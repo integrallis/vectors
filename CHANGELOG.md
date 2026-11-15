@@ -4,6 +4,8 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.37] - 2026-11-15
+
 ### Added
 
 - **Azure Blob Storage as a durable tier.** `AzureBlobStorageBackend` (`vectors-storage`) implements
