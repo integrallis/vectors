@@ -16,6 +16,7 @@ plugins {
 val releaseDependencyPolicy = JsonSlurper().parse(file("gradle/dependency-policy.json")) as Map<*, *>
 extra["jacksonVersion"] = releaseDependencyPolicy["jacksonBom"] as String
 extra["slf4jVersion"] = releaseDependencyPolicy["slf4j"] as String
+extra["jacksonAnnotationsVersion"] = releaseDependencyPolicy["jacksonAnnotations"] as String
 // Align the test agent and runtime with Models and the supported JDK 25 class-file format.
 extra["mockitoVersion"] = "5.23.0"
 extra["releaseDependencyModules"] = releaseDependencyPolicy["modules"] as Map<*, *>
