@@ -12,6 +12,7 @@ dependencies {
     api(project(":vectors-core"))
     api(project(":vectors-hybrid"))
     implementation(project(":vectors-storage-s3"))
+    implementation(project(":vectors-storage-azure"))
     runtimeOnly(project(":vectors-text-h2"))
 
     implementation(platform("io.helidon:helidon-dependencies:$helidonVersion"))

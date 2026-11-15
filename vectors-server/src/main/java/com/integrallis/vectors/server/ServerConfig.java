@@ -34,8 +34,8 @@ import java.util.Objects;
  *     {@code shutdownGracePeriod}
  * @param apiKey bearer token required for protected API routes; {@code null} disables
  *     authentication
- * @param objectStore object-storage durable floor (S3 / R2 / GCS / MinIO) for collections; {@code
- *     null} keeps persistence on the local {@link #dataDir} only
+ * @param objectStore object-storage durable floor (S3-compatible or Azure Blob) for collections;
+ *     {@code null} keeps persistence on the local {@link #dataDir} only
  */
 public record ServerConfig(
     int port,
@@ -49,19 +49,31 @@ public record ServerConfig(
   public static final int DEFAULT_PORT = 8287;
 
   /**
-   * Object-storage durable-floor configuration for the server's collections. An {@code endpoint} of
-   * {@code null} targets AWS S3 with the default credential chain; a non-null endpoint (with {@code
-   * accessKey}/{@code secretKey}) targets an S3-compatible service — Cloudflare R2, MinIO, or any
-   * other. Each collection lives under {@code prefix + name + "/"}.
+   * Object-storage durable-floor configuration for the server's collections. Each collection lives
+   * under {@code prefix + name + "/"}.
    *
-   * @param endpoint S3-compatible endpoint URI, or {@code null} for AWS S3
-   * @param bucket bucket name
-   * @param region region (e.g. {@code us-east-1}; {@code auto} for R2)
-   * @param accessKey access key, or {@code null} to use the AWS default credential chain
-   * @param secretKey secret key, or {@code null} to use the AWS default credential chain
+   * <p>With {@link Provider#S3}: an {@code endpoint} of {@code null} targets AWS S3 with the
+   * default credential chain; a non-null endpoint (with {@code accessKey}/{@code secretKey})
+   * targets an S3-compatible service — Cloudflare R2, SeaweedFS, RustFS, or any other.
+   *
+   * <p>With {@link Provider#AZURE}: {@code bucket} is the blob container, {@code accessKey} the
+   * storage account name and {@code secretKey} the storage account key (both required); {@code
+   * endpoint} is an optional blob-service endpoint override (Azurite, sovereign clouds), {@code
+   * null} meaning {@code https://<account>.blob.core.windows.net}; {@code region} is unused.
+   *
+   * @param provider which object-storage API the fields describe
+   * @param endpoint S3-compatible endpoint URI or Azure blob endpoint, or {@code null} for the
+   *     provider's public default
+   * @param bucket bucket name (S3) or container name (Azure)
+   * @param region region (e.g. {@code us-east-1}; {@code auto} for R2); unused by Azure
+   * @param accessKey access key (S3, {@code null} for the AWS default credential chain) or storage
+   *     account name (Azure)
+   * @param secretKey secret key (S3, {@code null} for the AWS default credential chain) or storage
+   *     account key (Azure)
    * @param prefix key prefix shared by all collections (may be empty)
    */
   public record ObjectStore(
+      Provider provider,
       String endpoint,
       String bucket,
       String region,
@@ -69,9 +81,56 @@ public record ServerConfig(
       String secretKey,
       String prefix) {
     public ObjectStore {
+      Objects.requireNonNull(provider, "provider must not be null");
       Objects.requireNonNull(bucket, "bucket must not be null");
-      Objects.requireNonNull(region, "region must not be null");
+      switch (provider) {
+        case S3 -> Objects.requireNonNull(region, "region must not be null");
+        case AZURE -> {
+          region = region == null ? "" : region;
+          Objects.requireNonNull(
+              accessKey, "accessKey (the storage account name) must not be null");
+          Objects.requireNonNull(secretKey, "secretKey (the storage account key) must not be null");
+        }
+      }
       prefix = prefix == null ? "" : prefix;
+    }
+
+    /** S3-compatible configuration: the shape this record had before providers existed. */
+    public ObjectStore(
+        String endpoint,
+        String bucket,
+        String region,
+        String accessKey,
+        String secretKey,
+        String prefix) {
+      this(Provider.S3, endpoint, bucket, region, accessKey, secretKey, prefix);
+    }
+  }
+
+  /** Object-storage APIs the server can back collections with. */
+  public enum Provider {
+    /** Amazon S3 or any S3-compatible service. */
+    S3,
+    /** Azure Blob Storage (not S3-compatible; needs the {@code vectors-storage-azure} runtime). */
+    AZURE;
+
+    /**
+     * Parses a provider name case-insensitively. {@code null} or blank means {@link #S3}; {@code
+     * az} is accepted for {@link #AZURE}.
+     *
+     * @throws IllegalArgumentException for any other value
+     */
+    public static Provider parse(String value) {
+      if (value == null || value.isBlank()) {
+        return S3;
+      }
+      return switch (value.trim().toLowerCase(java.util.Locale.ROOT)) {
+        case "s3" -> S3;
+        case "azure", "az" -> AZURE;
+        default ->
+            throw new IllegalArgumentException(
+                "unknown object-store provider '" + value + "' (expected s3 or azure)");
+      };
     }
   }
 

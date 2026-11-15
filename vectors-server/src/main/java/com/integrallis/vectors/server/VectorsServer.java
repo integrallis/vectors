@@ -74,6 +74,14 @@ public final class VectorsServer implements Callable<Integer> {
   private String apiKey;
 
   @Option(
+      names = "--object-store-provider",
+      description =
+          "Object-storage API behind the --s3-* flags: s3 (default) or azure, where --s3-bucket"
+              + " is the blob container, --s3-access-key the storage account name and"
+              + " --s3-secret-key the account key (env VECTORS_OBJECT_STORE_PROVIDER)")
+  private String objectStoreProvider;
+
+  @Option(
       names = "--s3-bucket",
       description =
           "Object-storage bucket; setting it backs collections with an S3-compatible durable"
@@ -148,6 +156,8 @@ public final class VectorsServer implements Callable<Integer> {
       return null;
     }
     return new ServerConfig.ObjectStore(
+        ServerConfig.Provider.parse(
+            firstNonBlank(objectStoreProvider, System.getenv("VECTORS_OBJECT_STORE_PROVIDER"))),
         firstNonBlank(s3Endpoint, System.getenv("VECTORS_S3_ENDPOINT")),
         bucket,
         firstNonBlank(s3Region, System.getenv("VECTORS_S3_REGION"), "us-east-1"),
