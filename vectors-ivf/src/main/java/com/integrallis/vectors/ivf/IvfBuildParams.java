@@ -34,6 +34,8 @@ package com.integrallis.vectors.ivf;
  *     #pqSubspaces} is 0. Default when PQ is enabled: 256.
  * @param pqAnisotropicThreshold ScaNN / AVQ anisotropic refinement threshold. Pass {@code -1f} for
  *     standard (unweighted) PQ. Typical non-negative values: 0.1–0.3. Ignored when PQ is disabled.
+ * @param trainer how the routing centroids are trained; {@link CentroidTrainer#K_MEANS} unless a
+ *     caller opts into {@link CentroidTrainer#E_MEANS}
  */
 public record IvfBuildParams(
     int k,
@@ -44,10 +46,12 @@ public record IvfBuildParams(
     int harmonyKeyDims,
     int pqSubspaces,
     int pqClusters,
-    float pqAnisotropicThreshold) {
+    float pqAnisotropicThreshold,
+    CentroidTrainer trainer) {
 
   /** Validates parameters at construction time. */
   public IvfBuildParams {
+    if (trainer == null) throw new IllegalArgumentException("trainer must not be null");
     if (k < 1) throw new IllegalArgumentException("k must be >= 1, got " + k);
     if (maxIter < 1) throw new IllegalArgumentException("maxIter must be >= 1, got " + maxIter);
     if (gamma < 0f) throw new IllegalArgumentException("gamma must be >= 0, got " + gamma);
@@ -66,12 +70,57 @@ public record IvfBuildParams(
   }
 
   /**
-   * Backward-compatible 6-arg constructor: product quantization disabled. Existing IVF-flat callers
-   * continue to compile unchanged.
+   * Backward-compatible 9-arg constructor: k-means training. Callers written before {@link
+   * CentroidTrainer} existed continue to compile unchanged and keep the trainer they always had.
+   */
+  public IvfBuildParams(
+      int k,
+      int maxIter,
+      float gamma,
+      boolean buildSoar,
+      long seed,
+      int harmonyKeyDims,
+      int pqSubspaces,
+      int pqClusters,
+      float pqAnisotropicThreshold) {
+    this(
+        k,
+        maxIter,
+        gamma,
+        buildSoar,
+        seed,
+        harmonyKeyDims,
+        pqSubspaces,
+        pqClusters,
+        pqAnisotropicThreshold,
+        CentroidTrainer.K_MEANS);
+  }
+
+  /**
+   * Backward-compatible 6-arg constructor: product quantization disabled, k-means training.
+   * Existing IVF-flat callers continue to compile unchanged.
    */
   public IvfBuildParams(
       int k, int maxIter, float gamma, boolean buildSoar, long seed, int harmonyKeyDims) {
-    this(k, maxIter, gamma, buildSoar, seed, harmonyKeyDims, 0, 256, -1f);
+    this(k, maxIter, gamma, buildSoar, seed, harmonyKeyDims, 0, 256, -1f, CentroidTrainer.K_MEANS);
+  }
+
+  /**
+   * Returns a copy of these params training centroids with {@code trainer}. {@link
+   * CentroidTrainer#E_MEANS} is the opt-in; see its documentation for what was measured.
+   */
+  public IvfBuildParams withTrainer(CentroidTrainer trainer) {
+    return new IvfBuildParams(
+        k,
+        maxIter,
+        gamma,
+        buildSoar,
+        seed,
+        harmonyKeyDims,
+        pqSubspaces,
+        pqClusters,
+        pqAnisotropicThreshold,
+        trainer);
   }
 
   /** Returns {@code true} when product quantization is enabled for this build. */
@@ -85,7 +134,7 @@ public record IvfBuildParams(
    */
   public static IvfBuildParams defaults(int n) {
     int k = Math.max(1, (int) Math.ceil(Math.sqrt(n)));
-    return new IvfBuildParams(k, 50, 0.2f, true, 42L, 0, 0, 256, -1f);
+    return new IvfBuildParams(k, 50, 0.2f, true, 42L, 0, 0, 256, -1f, CentroidTrainer.K_MEANS);
   }
 
   /**
@@ -105,7 +154,8 @@ public record IvfBuildParams(
         keyDims,
         pqSubspaces,
         pqClusters,
-        pqAnisotropicThreshold);
+        pqAnisotropicThreshold,
+        trainer);
   }
 
   /**
@@ -139,6 +189,7 @@ public record IvfBuildParams(
         harmonyKeyDims,
         subspaces,
         clusters,
-        anisotropicThreshold);
+        anisotropicThreshold,
+        trainer);
   }
 }

@@ -69,8 +69,43 @@ public final class BuoyIndex {
    */
   public static BuoyIndex train(
       float[][] dataset, int k, SimilarityFunction metric, boolean buildSoar, long seed) {
-    // E-means: ~5 epochs instead of 50 Lloyd iterations, same or lower loss.
-    float[][] centroids = EMeans.train(dataset, k, 5.0f, seed);
+    return train(
+        dataset, k, metric, buildSoar, seed, DEFAULT_KMEANS_ITERATIONS, CentroidTrainer.K_MEANS);
+  }
+
+  /**
+   * Lloyd iterations used by the five-argument {@link #train} and by {@link
+   * IvfBuildParams#defaults}.
+   */
+  public static final int DEFAULT_KMEANS_ITERATIONS = 50;
+
+  /** Epochs e-means trains for when opted in: the FAISS reference implementation's default. */
+  public static final float E_MEANS_EPOCHS = 5.0f;
+
+  /**
+   * Trains {@code k} buoys with an explicit trainer.
+   *
+   * <p>{@link CentroidTrainer#K_MEANS} runs Lloyd's algorithm for {@code maxIter} iterations — the
+   * trainer every index through 0.1.34 was built with and the one the committed recall baseline was
+   * recorded against. {@link CentroidTrainer#E_MEANS} is opt-in: 0.1.35 made it the default without
+   * a measurement and 0.1.36 restored k-means after one (see {@link CentroidTrainer}).
+   *
+   * @param maxIter Lloyd iterations for {@link CentroidTrainer#K_MEANS}; ignored by e-means, which
+   *     trains for {@link #E_MEANS_EPOCHS}
+   */
+  public static BuoyIndex train(
+      float[][] dataset,
+      int k,
+      SimilarityFunction metric,
+      boolean buildSoar,
+      long seed,
+      int maxIter,
+      CentroidTrainer trainer) {
+    float[][] centroids =
+        switch (trainer) {
+          case K_MEANS -> KMeans.train(dataset, k, maxIter, seed);
+          case E_MEANS -> EMeans.train(dataset, k, E_MEANS_EPOCHS, seed);
+        };
     int[] assignments = KMeans.assign(dataset, centroids);
 
     int[] sizes = new int[k];

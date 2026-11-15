@@ -104,7 +104,15 @@ public final class IvfIndex implements Closeable {
     int n = vectors.length;
     int k = Math.min(params.k(), n);
 
-    BuoyIndex buoy = BuoyIndex.train(vectors, k, metric, params.buildSoar(), params.seed());
+    BuoyIndex buoy =
+        BuoyIndex.train(
+            vectors,
+            k,
+            metric,
+            params.buildSoar(),
+            params.seed(),
+            params.maxIter(),
+            params.trainer());
     int[] assignments = assignAll(vectors, buoy);
 
     // Build posting lists

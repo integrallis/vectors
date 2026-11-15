@@ -28,6 +28,20 @@ if cur.is_dir():
         for tag in ("v0.1.34", "v0.1.35"):
             b = {x for arms in rows.values() for t, d in arms.items() if t == tag for x in d["build"]}
             for x in sorted(b): print(f"    {tag}: {x}")
+        # Matched-recall comparison: two different partitions are only comparable at equal recall.
+        # For each 0.1.34 (nprobe, recall) point, interpolate 0.1.35's latency at that recall along its
+        # own curve (linear between the two bracketing nprobes); marked "interpolated".
+        curve35 = sorted((statistics.median(a["v0.1.35"]["recall"]), statistics.median(a["v0.1.35"]["lat"])) for a in rows.values() if "v0.1.35" in a)
+        print("\n| 0.1.34 nprobe | recall | 0.1.34 latency | 0.1.35 latency at that recall (interpolated) | 0.1.35/0.1.34 at matched recall |")
+        print("| --- | --- | --- | --- | --- |")
+        for np_, arms in sorted(rows.items()):
+            if "v0.1.34" not in arms: continue
+            r = statistics.median(arms["v0.1.34"]["recall"]); l = statistics.median(arms["v0.1.34"]["lat"])
+            lo = max((c for c in curve35 if c[0] <= r), default=None); hi = min((c for c in curve35 if c[0] >= r), default=None)
+            if lo is None or hi is None:
+                print(f"| {np_} | {r:.4f} | {l:.1f} | outside 0.1.35's measured range | – |"); continue
+            l35 = lo[1] if hi[0] == lo[0] else lo[1] + (hi[1] - lo[1]) * (r - lo[0]) / (hi[0] - lo[0])
+            print(f"| {np_} | {r:.4f} | {l:.1f} | {l35:.1f} | {l35/l:.3f} |")
 real = root / "realivf"
 if real.is_dir():
     tbl = {}

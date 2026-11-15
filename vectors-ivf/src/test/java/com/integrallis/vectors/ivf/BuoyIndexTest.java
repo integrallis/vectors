@@ -238,4 +238,49 @@ class BuoyIndexTest {
     // Encoded size: 4+4+UTF(metric)+1024*128*4 floats + 3*(1024*4) ints/floats ≈ 536KB
     assertThat(encoded.length).isLessThan(600 * 1024); // 600 KB generous upper bound
   }
+
+  @Test
+  void defaultTrainerIsFiftyIterationKMeans() {
+    float[][] data = randomVecs(N, DIM, 7L);
+    BuoyIndex buoy = BuoyIndex.train(data, K, SimilarityFunction.EUCLIDEAN, true, 42L);
+    float[][] kmeans =
+        com.integrallis.vectors.core.cluster.KMeans.train(
+            data, K, BuoyIndex.DEFAULT_KMEANS_ITERATIONS, 42L);
+    org.junit.jupiter.api.Assertions.assertArrayEquals(
+        kmeans, buoy.buoyVectors(), "the five-argument train must be k-means, 50 iterations");
+    float[][] emeans =
+        com.integrallis.vectors.core.cluster.EMeans.train(data, K, BuoyIndex.E_MEANS_EPOCHS, 42L);
+    org.junit.jupiter.api.Assertions.assertFalse(
+        java.util.Arrays.deepEquals(emeans, buoy.buoyVectors()), "the default must not be e-means");
+  }
+
+  @Test
+  void eMeansIsOptIn() {
+    float[][] data = randomVecs(N, DIM, 8L);
+    BuoyIndex buoy =
+        BuoyIndex.train(
+            data, K, SimilarityFunction.EUCLIDEAN, true, 42L, 50, CentroidTrainer.E_MEANS);
+    float[][] emeans =
+        com.integrallis.vectors.core.cluster.EMeans.train(data, K, BuoyIndex.E_MEANS_EPOCHS, 42L);
+    org.junit.jupiter.api.Assertions.assertArrayEquals(emeans, buoy.buoyVectors());
+  }
+
+  @Test
+  void buildParamsDefaultToKMeansAndCarryTheTrainerThroughCopies() {
+    IvfBuildParams defaults = IvfBuildParams.defaults(1000);
+    org.junit.jupiter.api.Assertions.assertEquals(CentroidTrainer.K_MEANS, defaults.trainer());
+    org.junit.jupiter.api.Assertions.assertEquals(
+        CentroidTrainer.K_MEANS, new IvfBuildParams(8, 30, 0f, false, 1L, 0).trainer());
+    org.junit.jupiter.api.Assertions.assertEquals(
+        CentroidTrainer.K_MEANS,
+        new IvfBuildParams(8, 30, 0f, false, 1L, 0, 0, 256, -1f).trainer());
+    IvfBuildParams opted = defaults.withTrainer(CentroidTrainer.E_MEANS);
+    org.junit.jupiter.api.Assertions.assertEquals(CentroidTrainer.E_MEANS, opted.trainer());
+    org.junit.jupiter.api.Assertions.assertEquals(
+        CentroidTrainer.E_MEANS, opted.withHarmony(8).trainer());
+    org.junit.jupiter.api.Assertions.assertEquals(
+        CentroidTrainer.E_MEANS, opted.withPq(4).trainer());
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalArgumentException.class, () -> defaults.withTrainer(null));
+  }
 }
