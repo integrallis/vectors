@@ -22,7 +22,6 @@ dependencies {
         runtimeOnly("com.fasterxml.jackson.core:$it:$jacksonVersion")
     }
     runtimeOnly("com.fasterxml.jackson.core:jackson-annotations:$jacksonAnnotationsVersion")
-    runtimeOnly("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:$jacksonVersion")
     runtimeOnly("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
     runtimeOnly("org.slf4j:slf4j-api:$slf4jVersion")
 }
