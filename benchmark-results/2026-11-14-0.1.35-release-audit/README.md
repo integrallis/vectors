@@ -219,8 +219,21 @@ the probability that a 0.1.34 fork beats a 0.1.35 fork is 0.07. No revert moves 
 *slower* than 0.1.35, i.e. removing the linear neighbour insertion or changing the scorer costs. The
 same build's fork medians span 65–76 µs (±6%), which is exactly the band the phase-1 (−2.9%, four
 forks per arm) and phase-2 (+8%, one fork per arm per round) readings fell in. **The regression did not
-survive statistical power; the fix branch is not merged.** The 100k×128 shape is being re-measured at
-fifteen forks per arm (`scripts/power100k.sh`) so no claim about it rests on two forks.
+survive statistical power; the fix branch is not merged.**
+
+### 100k×128 at fifteen forks per arm (`scripts/power100k.sh`)
+
+`VectorDbBenchmark.searchRawHnsw`, n = 100,000, dim = 128, `fork=5 × 3 interleaved rounds`, both tags
+(the facade method was dropped after round 1 to finish in time; its single round is in `raw/power100k/`
+and is not used):
+
+| benchmark (100k x 128) | v0.1.34 median [min..max] (forks) | v0.1.35 median [min..max] (forks) | 0.1.35 / 0.1.34 | P(0.1.35 fork faster) |
+| --- | --- | --- | --- | --- |
+| searchRawHnsw{dim=128,n=100000} | 115.53 [111.74..125.47] (15) | 115.91 [113.47..125.25] (15) | 1.003 | 0.45 |
+
+**Parity.** The phase-2 reading of 1.080× at this shape came from one fork per round; at fifteen forks the
+two tags are indistinguishable (0.45 probability that a 0.1.35 fork is the faster one). Together with
+10k×128 (0.917×, 0.1.35 faster) and n = 2000 inside the fork spread, 0.1.35 has no HNSW search regression.
 
 A fork=5 × 3-round run at n=2000 and n=50000 (`scripts/power.sh`) was started and aborted after one of
 nine runs to give the attribution run the box; its single artifact is in `raw/power-aborted/` and is not
@@ -389,10 +402,9 @@ the 100k HNSW measurement. It is the one open measurement the e-means decision w
    intrinsic dimension) is above where `IvfBuildParams.defaults` puts most indexes (k = ⌈√n⌉);
    FAISS itself does not default to it. Real-data confirmation (fashion-mnist, SIFT-1M at k = 4√N)
    is the open measurement, not a blocker for restoring the previous default.
-2. **No HNSW change.** The dim-128 "regression" did not survive fifteen forks per arm (0.917× latency
-   at 10k×128, i.e. 0.1.35 faster; no reverted commit moves it). The 100k×128 raw shape is being
-   re-measured at fifteen forks (`scripts/power100k.sh`) and its table is appended to this directory
-   when it lands; nothing in 0.1.36 depends on it.
+2. **No HNSW change.** The dim-128 "regression" did not survive fifteen forks per arm: 0.917× latency
+   at 10k×128 (0.1.35 faster), 1.003× at 100k×128 (parity), n = 2000 inside the fork spread; no
+   reverted commit moves it.
 3. **0.1.36 also carries**: the FAISS MIT notice the e-means port shipped without; a build-time fix
    so a persistent recipe collection can be created at a path that does not exist yet (0.1.34
    regression found by `integrallis/memory`); an uncacheable `recallGate`; a comparison script that
