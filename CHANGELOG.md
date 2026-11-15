@@ -6,7 +6,34 @@ All notable changes to java-vectors are documented here.
 
 ## [0.1.36] - 2026-11-14
 
+### Changed
+
+- **IVF centroid training defaults to k-means again; e-means is opt-in.** 0.1.35 switched
+  `BuoyIndex.train` — the routing layer of every `IvfIndex`, `SubBuoyTree` and
+  `DistributedVectorCollection` — from 50-iteration Lloyd k-means to the FAISS e-means port with
+  no measurement. Measured afterwards on one host with both tags over an identical corpus
+  (`benchmark-results/2026-11-14-0.1.35-release-audit`, "IVF recall versus latency"): at any fixed
+  `nprobe` up to 16, e-means partitions reach lower recall (−0.012 to −0.033 at 200k×128, −0.016 to
+  −0.058 at 100k×768) while scanning faster, and **at matched recall are 2–6% (128-d) and 2–16%
+  (768-d) slower**; the full tiered build was 583 → 591 s and 370 → 327 s. The method's own authors
+  fitted its scaling laws for n ≥ 10⁵, k ≥ 256 and high intrinsic dimension and call it "not optimal
+  on very low-dimensional and tiny datasets"; FAISS keeps it in `contrib/` and does not train its own
+  IVF indexes with it; the one independent adopter found (infino) made it opt-in. `BuoyIndex.train`
+  therefore runs Lloyd's algorithm for `IvfBuildParams.maxIter()` iterations by default, exactly as
+  through 0.1.34 (`BuoyIndexTest.defaultTrainerIsFiftyIterationKMeans` pins the centroids to
+  `KMeans.train`'s output), and e-means is selected explicitly:
+  `IvfBuildParams.defaults(n).withTrainer(CentroidTrainer.E_MEANS)`. The record gains a `trainer`
+  component; the 6- and 9-argument constructors keep their meaning. The `EMeans` port, its notice and
+  `KMeansEMeansBenchmark` remain.
+
 ### Fixed
+
+- **`IvfBuildParams.maxIter` and `VectorCollectionBuilder.ivfMaxIter` take effect.** Through 0.1.35
+  `BuoyIndex.train` ran a fixed 50 Lloyd iterations and ignored the value every caller passed, so
+  the db layer's documented default of 30 never applied. The parameter is honoured now, and the db
+  default moves from the never-applied 30 to the 50 every collection was actually built with:
+  default behaviour is unchanged (the recall gate records the committed k-means rows exactly) and
+  an explicit `ivfMaxIter` finally does what it says.
 
 - **A persistent recipe collection can be built at a storage path that does not exist yet.**
   0.1.34 began writing `recipe.json` at build time so that an empty collection reopens
@@ -92,7 +119,7 @@ All notable changes to java-vectors are documented here.
   explicitly. `SearchResult.Hit#score` documents the transform semantics and references
   `SimilarityFunction` (#117).
 
-- **IVF centroid training defaults to e-means.** `BuoyIndex.train` calls
+- **IVF centroid training defaults to e-means** *(reverted in 0.1.36; e-means is opt-in there)*. `BuoyIndex.train` calls
   `EMeans.train(dataset, k, 5.0f, seed)` where it called `KMeans.train(dataset, k, 50, seed)`
   (`vectors-ivf/.../BuoyIndex.java:73`; e-means after Bessa et al. 2026, ported from FAISS
   `contrib/e_means`). This changes every IVF index built from 0.1.35 on. It was not measured before

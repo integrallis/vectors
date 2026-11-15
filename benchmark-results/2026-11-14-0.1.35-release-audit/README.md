@@ -308,15 +308,100 @@ host, with the iteration counts `BuoyIndex` used before and after (`KMeans.train
 
 ratio range 0.189..0.714, median 0.319 over 18 shapes
 
-## IVF recall versus latency (both tags, identical corpus) and real data
+## IVF recall versus latency — both tags, identical corpus
 
-_pending: `derived/ivf-curves.md` from `scripts/ivfcurve.sh` (TieredIvfRecallQpsBenchmark, 200k×128 and
-100k×768, nprobe 1–64, two rounds) and `scripts/realivf.sh` (RecallQpsBenchmark on fashion-mnist-784,
-`ivf_flat`, nlist √n / 2√n / 4√n)._
+`TieredIvfRecallQpsBenchmark` (`BuoyIndex` routing, the path whose trainer changed) on its own
+mixture-of-Gaussians corpus (16 centres, seed `0xC0FFEE`), nprobe 1–64, two rounds per tag, medians.
+Both tags see the same vectors and queries; only the trainer differs (`KMeans.train(…, 50, …)` vs
+`EMeans.train(…, 5.0f, …)`). Two partitions are only comparable at equal recall, so each table is
+followed by 0.1.35's latency **interpolated at 0.1.34's recall** along 0.1.35's own curve.
+
+### Tiered IVF (BuoyIndex) synthetic mixture-of-Gaussians, dim=128 n=200,000, recall@10 vs median latency (us), both rounds
+| nprobe | recall 0.1.34 | recall 0.1.35 | Δrecall | latency 0.1.34 | latency 0.1.35 | 0.1.35/0.1.34 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.1087 | 0.0966 | -0.0121 | 40.9 | 37.5 | 0.916 |
+| 2 | 0.1898 | 0.1712 | -0.0186 | 75.8 | 67.8 | 0.894 |
+| 4 | 0.3134 | 0.2873 | -0.0261 | 141.9 | 129.2 | 0.911 |
+| 8 | 0.4885 | 0.4552 | -0.0333 | 275.1 | 250.1 | 0.909 |
+| 16 | 0.6921 | 0.6682 | -0.0239 | 521.5 | 485.8 | 0.931 |
+| 32 | 0.8309 | 0.8271 | -0.0038 | 949.5 | 935.0 | 0.985 |
+| 64 | 0.9038 | 0.9085 | +0.0047 | 1852.8 | 1849.0 | 0.998 |
+    v0.1.34: built tiered IVF (k=448) in 583.45s
+    v0.1.34: built tiered IVF (k=448) in 583.86s
+    v0.1.35: built tiered IVF (k=448) in 591.03s
+    v0.1.35: built tiered IVF (k=448) in 591.18s
+
+| 0.1.34 nprobe | recall | 0.1.34 latency | 0.1.35 latency at that recall (interpolated) | 0.1.35/0.1.34 at matched recall |
+| --- | --- | --- | --- | --- |
+| 1 | 0.1087 | 40.9 | 42.4 | 1.036 |
+| 2 | 0.1898 | 75.8 | 77.6 | 1.024 |
+| 4 | 0.3134 | 141.9 | 148.0 | 1.044 |
+| 8 | 0.4885 | 275.1 | 286.9 | 1.043 |
+| 16 | 0.6921 | 521.5 | 553.3 | 1.061 |
+| 32 | 0.8309 | 949.5 | 977.7 | 1.030 |
+| 64 | 0.9038 | 1852.8 | 1796.2 | 0.969 |
+
+### Tiered IVF (BuoyIndex) synthetic mixture-of-Gaussians, dim=768 n=100,000, recall@10 vs median latency (us), both rounds
+| nprobe | recall 0.1.34 | recall 0.1.35 | Δrecall | latency 0.1.34 | latency 0.1.35 | 0.1.35/0.1.34 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.0506 | 0.0348 | -0.0158 | 107.2 | 80.6 | 0.752 |
+| 2 | 0.0912 | 0.0694 | -0.0218 | 198.6 | 148.1 | 0.746 |
+| 4 | 0.1564 | 0.1130 | -0.0434 | 377.4 | 295.8 | 0.784 |
+| 8 | 0.2518 | 0.1940 | -0.0578 | 691.8 | 548.9 | 0.793 |
+| 16 | 0.3370 | 0.3102 | -0.0268 | 1126.2 | 1058.0 | 0.939 |
+| 32 | 0.4278 | 0.4376 | +0.0098 | 1966.4 | 2080.2 | 1.058 |
+| 64 | 0.5702 | 0.5830 | +0.0128 | 3705.1 | 3917.0 | 1.057 |
+    v0.1.34: built tiered IVF (k=317) in 369.89s
+    v0.1.34: built tiered IVF (k=317) in 377.61s
+    v0.1.35: built tiered IVF (k=317) in 326.85s
+    v0.1.35: built tiered IVF (k=317) in 327.50s
+
+| 0.1.34 nprobe | recall | 0.1.34 latency | 0.1.35 latency at that recall (interpolated) | 0.1.35/0.1.34 at matched recall |
+| --- | --- | --- | --- | --- |
+| 1 | 0.0506 | 107.2 | 111.4 | 1.040 |
+| 2 | 0.0912 | 198.6 | 221.9 | 1.117 |
+| 4 | 0.1564 | 377.4 | 431.4 | 1.143 |
+| 8 | 0.2518 | 691.8 | 802.1 | 1.159 |
+| 16 | 0.3370 | 1126.2 | 1273.0 | 1.130 |
+| 32 | 0.4278 | 1966.4 | 2001.5 | 1.018 |
+| 64 | 0.5702 | 3705.1 | 3755.3 | 1.014 |
+
+Reading. At any fixed nprobe up to 16, **0.1.35 reaches lower recall** (−0.012 to −0.033 at 200k×128,
+−0.016 to −0.058 at 100k×768) **and lower latency** (0.89–0.93× and 0.75–0.79×): the e-means partition
+is less balanced, so probing the same number of lists scans fewer vectors and finds fewer true
+neighbours. At nprobe ≥ 32 the two meet. **At matched recall, 0.1.35 is 2–6% slower at 200k×128 and
+2–16% slower at 100k×768** (nprobe 2–16), the opposite sign from the 10k×128 gate corpus, where recall
+rose. The full tiered build was 583 → 591 s at 200k×128 and 370 → 327 s at 100k×768 — the training
+speed-up of phase 3 is diluted by everything else the build does. Absolute recall on this synthetic
+corpus is low by design (the benchmark's own README calls it illustrative); the comparison across
+tags on the same corpus is what this section claims.
+
+**Real data was not measured.** `scripts/realivf.sh` (RecallQpsBenchmark, fashion-mnist-784, three
+`nlist` values, both tags) was started and stopped after 35 minutes without a completed row —
+single-threaded 50-iteration k-means on 60k×784 for three `nlist` values, twice — to give the box to
+the 100k HNSW measurement. It is the one open measurement the e-means decision would benefit from.
 
 ## Verdict
 
-_pending._
+1. **The e-means IVF default is reverted in 0.1.36** (`CentroidTrainer.K_MEANS` by default,
+   `E_MEANS` opt-in). It was shipped unmeasured; measured, it trades recall for scan speed and is
+   2–16% slower at matched recall on this corpus; its validated regime (n ≥ 10⁵, k ≥ 256, high
+   intrinsic dimension) is above where `IvfBuildParams.defaults` puts most indexes (k = ⌈√n⌉);
+   FAISS itself does not default to it. Real-data confirmation (fashion-mnist, SIFT-1M at k = 4√N)
+   is the open measurement, not a blocker for restoring the previous default.
+2. **No HNSW change.** The dim-128 "regression" did not survive fifteen forks per arm (0.917× latency
+   at 10k×128, i.e. 0.1.35 faster; no reverted commit moves it). The 100k×128 raw shape is being
+   re-measured at fifteen forks (`scripts/power100k.sh`) and its table is appended to this directory
+   when it lands; nothing in 0.1.36 depends on it.
+3. **0.1.36 also carries**: the FAISS MIT notice the e-means port shipped without; a build-time fix
+   so a persistent recipe collection can be created at a path that does not exist yet (0.1.34
+   regression found by `integrallis/memory`); an uncacheable `recallGate`; a comparison script that
+   runs; the 0.1.35 CHANGELOG section that was missing, with these measurements.
+4. **Process findings** recorded for the next release: perf commits need a measured before/after
+   against the released tag (the comparison script now defaults to five forks because two cannot
+   resolve a 2–5% question); a default change is a user-facing change and needs a measurement on the
+   workload it changes, at the scales users run; a release gate must execute, not be restored from
+   cache.
 
 ## Reproduce
 

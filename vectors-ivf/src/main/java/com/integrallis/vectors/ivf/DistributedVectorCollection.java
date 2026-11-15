@@ -230,7 +230,15 @@ public final class DistributedVectorCollection implements AutoCloseable {
     int k = Math.min(params.k(), n);
 
     // Train routing index
-    BuoyIndex routingIndex = BuoyIndex.train(vectors, k, metric, params.buildSoar(), params.seed());
+    BuoyIndex routingIndex =
+        BuoyIndex.train(
+            vectors,
+            k,
+            metric,
+            params.buildSoar(),
+            params.seed(),
+            params.maxIter(),
+            params.trainer());
 
     // Assign initial vectors to clusters
     List<List<Integer>> clusterOrdinals = new ArrayList<>(k);

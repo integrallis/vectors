@@ -84,7 +84,15 @@ public final class SubBuoyTree {
     int k = Math.min(params.k(), n);
 
     // Step 1: train root BuoyIndex
-    BuoyIndex rootBuoy = BuoyIndex.train(vectors, k, metric, params.buildSoar(), params.seed());
+    BuoyIndex rootBuoy =
+        BuoyIndex.train(
+            vectors,
+            k,
+            metric,
+            params.buildSoar(),
+            params.seed(),
+            params.maxIter(),
+            params.trainer());
 
     // Step 2: assign vectors to root clusters
     int[] assignments = new int[n];
