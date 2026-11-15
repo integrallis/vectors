@@ -4,6 +4,21 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Azure Blob Storage as a durable tier.** `AzureBlobStorageBackend` (`vectors-storage`) implements
+  `StorageBackend` on the Azure SDK with the same semantics as `S3StorageBackend`, including the
+  compare-and-swap the object-storage manifest commit relies on (`If-None-Match: *` for create,
+  `If-Match: "<etag>"` for update; 412/409/404 map to a failed conditional put). Azure Blob is not
+  S3-compatible, so an endpoint override was never an option for it. The Azure SDK is opt-in: add
+  `vectors-storage-azure` (azure-sdk-bom 1.3.10, azure-storage-blob 12.37.2) at runtime; the base
+  `vectors-storage` artifact still carries neither the AWS nor the Azure SDK. Clients built by the
+  backend use the JDK `HttpClient` transport (`azure-core-http-jdk-httpclient`), and the runtime
+  module excludes the SDK's default Netty transport: no native libraries, and the Netty client
+  hung indefinitely before sending its first request on macOS with JDK 25 during development. The full storage
+  contract runs against a real container or Azurite through `AzureBlobLiveStorageBackendIT`
+  (`VECTORS_LIVE_AZURE_CONNECTION_STRING`, `VECTORS_LIVE_AZURE_CONTAINER`).
+
 ## [0.1.36] - 2026-11-14
 
 ### Changed

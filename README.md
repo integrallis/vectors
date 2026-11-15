@@ -128,7 +128,8 @@ dependencies {
 }
 ```
 
-`vectors-storage-s3` supplies the AWS SDK used by `S3StorageBackend`.
+`vectors-storage-s3` supplies the AWS SDK used by `S3StorageBackend`; `vectors-storage-azure` supplies the
+Azure SDK (JDK `HttpClient` transport) used by `AzureBlobStorageBackend`.
 `vectors-db-jackson` supplies a Jackson-backed `RecipeCodec`, so an embedding recipe can be
 serialised with the JSON stack an application already standardises on. It is optional: the core
 library carries no JSON dependency and uses a built-in codec unless this module is on the classpath.
@@ -210,7 +211,7 @@ Published to Maven Central (Apache-2.0):
 
 - Entry point: `vectors` (umbrella dependency)
 - Core: `vectors-core`, `vectors-storage`, `vectors-quantization`
-- Optional runtimes: `vectors-storage-s3`, `vectors-db-arrow`, `vectors-db-jackson`
+- Optional runtimes: `vectors-storage-s3`, `vectors-storage-azure`, `vectors-db-arrow`, `vectors-db-jackson`
 - Indexes & database: `vectors-hnsw`, `vectors-vamana`, `vectors-ivf`, `vectors-db`,
   `vectors-hybrid`
 - Frameworks: `vectors-spring-ai`, `vectors-langchain4j`, `vectors-spring-boot-starter`,

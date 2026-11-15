@@ -12,6 +12,7 @@ rootProject.name = "vectors"
 include("vectors-core")
 include("vectors-storage")
 include("vectors-storage-s3")
+include("vectors-storage-azure")
 include("vectors-quantization")
 include("vectors-hnsw")
 include("vectors-vamana")

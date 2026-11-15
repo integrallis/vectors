@@ -45,6 +45,28 @@ Maven::
 ----
 ====
 
+== Add the Azure Blob runtime
+
+Azure Blob Storage is not S3-compatible, so it has its own backend, `AzureBlobStorageBackend`, with
+the same semantics (including conditional put). The Azure SDK is opt-in as well: add
+`vectors-storage-azure` when the application uses it.
+
+[source,kotlin,subs="attributes+"]
+----
+dependencies {
+    implementation("com.integrallis:vectors:{vectors-version}")
+    implementation("com.integrallis:vectors-storage-azure:{vectors-version}")
+}
+----
+
+[source,java]
+----
+StorageBackend store = AzureBlobStorageBackend.create(connectionString, "vectors"); // container must exist
+----
+
+Pass a pre-built `BlobContainerClient` to the constructor to authenticate with `azure-identity`
+credentials instead of a connection string.
+
 == Configure a backend
 
 `S3StorageBackend` supports AWS S3 and compatible endpoints such as Cloudflare R2, Google Cloud
