@@ -30,6 +30,30 @@ cd vectors
 
 Default port: 8287.
 
+### Object storage (durable floor)
+
+Setting a bucket backs every collection with object storage; `--data-dir` becomes the local cache
+in front of it. Each flag has an environment variable fallback.
+
+| Flag | Env | S3 / S3-compatible | Azure Blob (`--object-store-provider azure`) |
+|------|-----|--------------------|-----------------------------------------------|
+| `--object-store-provider` | `VECTORS_OBJECT_STORE_PROVIDER` | `s3` (default) | `azure` |
+| `--s3-bucket` | `VECTORS_S3_BUCKET` | bucket | blob container |
+| `--s3-endpoint` | `VECTORS_S3_ENDPOINT` | endpoint URI; omit for AWS S3 | blob endpoint override (Azurite, sovereign clouds); omit for `https://<account>.blob.core.windows.net` |
+| `--s3-region` | `VECTORS_S3_REGION` | region (`auto` for R2) | unused |
+| `--s3-access-key` | `VECTORS_S3_ACCESS_KEY` | access key; omit for the AWS default credential chain | storage account name (required) |
+| `--s3-secret-key` | `VECTORS_S3_SECRET_KEY` | secret key; omit for the AWS default credential chain | storage account key (required) |
+| `--s3-prefix` | `VECTORS_S3_PREFIX` | key prefix shared by all collections | same |
+
+```bash
+# Azure Blob container "vectors" on storage account "acct"
+./gradlew :vectors-server:run --args="--data-dir /var/lib/vectors --object-store-provider azure \
+  --s3-bucket vectors --s3-access-key acct --s3-secret-key $AZURE_STORAGE_KEY"
+```
+
+Both runtimes (`vectors-storage-s3`, `vectors-storage-azure`) ship inside the server; the Azure
+client uses the JDK `HttpClient` transport.
+
 ## Dependencies
 
 - `vectors-db` — VectorCollection, Document, SearchRequest, SearchResult

@@ -4,6 +4,17 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`vectors-server` can back collections with Azure Blob Storage.** `ServerConfig.ObjectStore`
+  gains a `Provider` (`S3`, the default, or `AZURE`); the six-argument constructor keeps meaning S3.
+  `ObjectStoreSupport.open` dispatches on it, opening `AzureBlobStorageBackend` for `AZURE` with the
+  container in `bucket`, the storage account name in `accessKey`, the account key in `secretKey`
+  and an optional blob-endpoint override in `endpoint` (Azurite, sovereign clouds). The CLI exposes
+  it as `--object-store-provider azure` / `VECTORS_OBJECT_STORE_PROVIDER`, reusing the `--s3-*`
+  flags for the values; the server distribution now carries `vectors-storage-azure` next to
+  `vectors-storage-s3`.
+
 ## [0.1.37] - 2026-11-15
 
 ### Added
