@@ -19,6 +19,7 @@ package com.integrallis.vectors.server.routing;
 import com.integrallis.vectors.server.CollectionRegistry;
 import com.integrallis.vectors.server.ServerConfig;
 import io.helidon.webserver.http.HttpRouting;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -31,14 +32,29 @@ public final class ApiRouting {
 
   private final CollectionRegistry registry;
   private final ServerConfig config;
+  private final List<MetricsContributor> metricsContributors;
 
   /**
    * @param registry the collection registry backing the API
    * @param config server configuration (used by collection-creation routes)
    */
   public ApiRouting(CollectionRegistry registry, ServerConfig config) {
+    this(registry, config, List.of());
+  }
+
+  /**
+   * @param registry the collection registry backing the API
+   * @param config server configuration (used by collection-creation routes)
+   * @param metricsContributors lines an embedding process adds to {@code GET /v1/metrics}
+   */
+  public ApiRouting(
+      CollectionRegistry registry,
+      ServerConfig config,
+      List<MetricsContributor> metricsContributors) {
     this.registry = Objects.requireNonNull(registry, "registry");
     this.config = Objects.requireNonNull(config, "config");
+    this.metricsContributors =
+        List.copyOf(Objects.requireNonNull(metricsContributors, "metricsContributors"));
   }
 
   /**
@@ -48,7 +64,7 @@ public final class ApiRouting {
     if (config.authEnabled()) {
       builder.addFilter(new BearerAuthFilter(config.apiKey()));
     }
-    builder.register(new AdminRoutes(registry));
+    builder.register(new AdminRoutes(registry, metricsContributors));
     builder.register(new CollectionsRoutes(registry, config));
     builder.register(new DocumentsRoutes(registry));
     builder.register(new SearchRoutes(registry));

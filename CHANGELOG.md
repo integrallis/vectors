@@ -4,6 +4,13 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`MetricsContributor` for embedders of `vectors-server`.** `ApiRouting(registry, config,
+  contributors)` / `AdminRoutes(registry, contributors)` append each contributor's Prometheus lines
+  after the engine's own on every `GET /v1/metrics`; a contributor that throws is skipped for that
+  scrape and the engine's metrics still serve. The two-argument constructors are unchanged.
+
 ## [0.1.39] - 2026-11-16
 
 ### Added

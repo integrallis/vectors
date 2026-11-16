@@ -26,6 +26,7 @@ import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
 import java.lang.management.ManagementFactory;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -49,9 +50,19 @@ public final class AdminRoutes implements HttpService {
   private static final Logger LOG = LoggerFactory.getLogger(AdminRoutes.class);
 
   private final CollectionRegistry registry;
+  private final List<MetricsContributor> contributors;
 
   public AdminRoutes(CollectionRegistry registry) {
+    this(registry, List.of());
+  }
+
+  /**
+   * @param registry the collection registry backing the API
+   * @param contributors extra metrics appended after the engine's own on every scrape
+   */
+  public AdminRoutes(CollectionRegistry registry, List<MetricsContributor> contributors) {
     this.registry = Objects.requireNonNull(registry, "registry");
+    this.contributors = List.copyOf(Objects.requireNonNull(contributors, "contributors"));
   }
 
   @Override
@@ -153,6 +164,19 @@ public final class AdminRoutes implements HttpService {
           .append("\"} ")
           .append(registry.epoch(name))
           .append('\n');
+    }
+
+    for (MetricsContributor contributor : contributors) {
+      int mark = sb.length();
+      try {
+        contributor.appendTo(sb);
+        if (sb.length() > mark && sb.charAt(sb.length() - 1) != '\n') {
+          sb.append('\n');
+        }
+      } catch (RuntimeException e) {
+        sb.setLength(mark);
+        LOG.warn("metrics contributor {} skipped: {}", contributor, e.toString());
+      }
     }
 
     res.headers().set(HeaderNames.CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8");
