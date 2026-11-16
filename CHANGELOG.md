@@ -4,6 +4,24 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`vectors-server` `file` object-store provider.** `--object-store-provider file` /
+  `VECTORS_OBJECT_STORE_PROVIDER=file` backs collections with `LocalFileStorageBackend` rooted at the
+  absolute directory given as `--s3-bucket`, for development and single-machine deployments; endpoint,
+  region and credentials are rejected for this provider. `ServerConfig.Provider.FILE`.
+
+### Changed
+
+- **`LocalFileStorageBackend` is a filesystem sandbox.** Every key is validated before the filesystem
+  is touched: non-empty, no NUL, relative, no empty / `.` / `..` segments, and not ending in the
+  backend's reserved `.tmp` / `.etag` suffixes (such keys previously collided with the backend's own
+  files or vanished from `list`). The resolved path must lie under the root's *real* directory, so a
+  symbolic link planted inside the root can no longer redirect a read or write outside it; an object
+  that is itself a symbolic link is refused. Malformed keys now fail with `IOException` instead of
+  leaking `InvalidPathException`. A symlinked root is resolved once at construction. `list` no longer
+  reports legacy `.etag` sidecar files as objects.
+
 ## [0.1.38] - 2026-11-15
 
 ### Added

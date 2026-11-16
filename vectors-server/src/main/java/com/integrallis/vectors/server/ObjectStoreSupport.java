@@ -17,6 +17,7 @@
 package com.integrallis.vectors.server;
 
 import com.integrallis.vectors.storage.backend.AzureBlobStorageBackend;
+import com.integrallis.vectors.storage.backend.LocalFileStorageBackend;
 import com.integrallis.vectors.storage.backend.S3StorageBackend;
 import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.net.URI;
@@ -39,7 +40,17 @@ public final class ObjectStoreSupport {
     return switch (cfg.provider()) {
       case S3 -> openS3(cfg);
       case AZURE -> AzureBlobStorageBackend.create(azureConnectionString(cfg), cfg.bucket());
+      case FILE -> openFile(cfg);
     };
+  }
+
+  private static StorageBackend openFile(ServerConfig.ObjectStore cfg) {
+    try {
+      return new LocalFileStorageBackend(java.nio.file.Path.of(cfg.bucket()));
+    } catch (java.io.IOException e) {
+      throw new java.io.UncheckedIOException(
+          "cannot open the local object store at " + cfg.bucket(), e);
+    }
   }
 
   private static StorageBackend openS3(ServerConfig.ObjectStore cfg) {

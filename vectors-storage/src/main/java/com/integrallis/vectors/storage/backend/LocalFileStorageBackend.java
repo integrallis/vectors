@@ -46,6 +46,7 @@ public final class LocalFileStorageBackend implements StorageBackend {
   private static final int HEADER_FIXED_BYTES = Integer.BYTES * 3 + Long.BYTES;
 
   private final Path root;
+  private final Path realRoot;
   private final ChannelOpener channels;
 
   @FunctionalInterface
@@ -61,6 +62,7 @@ public final class LocalFileStorageBackend implements StorageBackend {
     this.channels = java.util.Objects.requireNonNull(channels, "channels");
     this.root = root.toAbsolutePath().normalize();
     Files.createDirectories(this.root);
+    this.realRoot = this.root.toRealPath();
   }
 
   @Override
@@ -116,7 +118,7 @@ public final class LocalFileStorageBackend implements StorageBackend {
       stream
           .filter(Files::isRegularFile)
           .map(p -> root.relativize(p).toString().replace(java.io.File.separatorChar, '/'))
-          .filter(k -> !k.endsWith(".tmp") && k.startsWith(prefix))
+          .filter(k -> !k.endsWith(".tmp") && !k.endsWith(".etag") && k.startsWith(prefix))
           .forEach(result::add);
     }
     return result;
@@ -144,28 +146,88 @@ public final class LocalFileStorageBackend implements StorageBackend {
 
   // --- internals ---
 
+  /**
+   * Maps a caller-supplied key to a file under the root, or throws {@link IOException}. A key may
+   * not name the backend's own {@code .tmp} / {@code .etag} files; see {@link #resolveUnchecked}
+   * for the sandbox rules every key must pass.
+   */
   private Path resolve(String key) throws IOException {
+    Path resolved = resolveUnchecked(key);
+    String name = resolved.getFileName().toString();
+    if (name.endsWith(".tmp") || name.endsWith(".etag")) {
+      throw new IOException(
+          "storage key must not end in a backend-reserved suffix (.tmp, .etag): " + key);
+    }
+    return resolved;
+  }
+
+  /**
+   * The sandbox: validates the key (non-empty, no NUL, relative, no empty / {@code .} / {@code ..}
+   * segments), maps it under the root, and proves the mapping cannot leave the root's <em>real</em>
+   * directory even through a symbolic link planted inside it. The object itself may never be a
+   * symbolic link. Every public operation goes through here before touching the filesystem.
+   */
+  private Path resolveUnchecked(String key) throws IOException {
     if (key == null || key.isEmpty()) {
       throw new IOException("storage key must be non-empty");
     }
-    Path keyPath = Path.of(key.replace('/', java.io.File.separatorChar));
-    if (keyPath.isAbsolute()) {
+    if (key.indexOf('\0') >= 0) {
+      throw new IOException("storage key must not contain NUL");
+    }
+    if (key.startsWith("/")) {
       throw new IOException("storage key must be relative: " + key);
     }
-    for (Path part : keyPath) {
-      if ("..".equals(part.toString())) {
-        throw new IOException("storage key must not contain '..': " + key);
+    for (String segment : key.split("/", -1)) {
+      if (segment.isEmpty()) {
+        throw new IOException("storage key must not contain empty segments: " + key);
       }
+      if (".".equals(segment) || "..".equals(segment)) {
+        throw new IOException("storage key must not contain '.' or '..' segments: " + key);
+      }
+    }
+    Path keyPath;
+    try {
+      keyPath = Path.of(key.replace('/', java.io.File.separatorChar));
+    } catch (java.nio.file.InvalidPathException e) {
+      throw new IOException("storage key is not a valid path: " + key, e);
+    }
+    if (keyPath.isAbsolute()) {
+      throw new IOException("storage key must be relative: " + key);
     }
     Path resolved = root.resolve(keyPath).normalize();
     if (!resolved.startsWith(root)) {
       throw new IOException("storage key escapes root: " + key);
     }
+    requireInsideRealRoot(resolved, key);
     return resolved;
   }
 
+  private void requireInsideRealRoot(Path resolved, String key) throws IOException {
+    if (Files.isSymbolicLink(resolved)) {
+      throw new IOException("storage key resolves to a symbolic link, refused: " + key);
+    }
+    Path probe = resolved;
+    while (probe != null && !Files.exists(probe, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+      probe = probe.getParent();
+    }
+    if (probe == null) {
+      throw new IOException("storage key escapes root: " + key);
+    }
+    Path real = probe.toRealPath();
+    if (!real.startsWith(realRoot)) {
+      throw new IOException(
+          "storage key resolves outside the root: "
+              + key
+              + " ("
+              + real
+              + " is outside "
+              + realRoot
+              + ")");
+    }
+  }
+
   private Path legacyEtagPath(String key) throws IOException {
-    return resolve(key + ".etag");
+    return resolveUnchecked(key + ".etag");
   }
 
   private String readEtag(String key) throws IOException {

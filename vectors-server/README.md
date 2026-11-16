@@ -54,6 +54,13 @@ in front of it. Each flag has an environment variable fallback.
 Both runtimes (`vectors-storage-s3`, `vectors-storage-azure`) ship inside the server; the Azure
 client uses the JDK `HttpClient` transport.
 
+A third provider, `--object-store-provider file`, is for development and single-machine use:
+`--s3-bucket` is then an **absolute directory** used as the object store (`LocalFileStorageBackend`,
+the same storage contract as S3 and Azure); endpoint, region and keys are unused and the keys must be
+unset. The backend is a filesystem sandbox: keys may not be absolute, contain empty, `.` or `..`
+segments or NUL, may not name the backend's own `.tmp` / `.etag` files, and a key that resolves outside
+the directory's real path (for example through a symbolic link placed inside it) is refused.
+
 ## Dependencies
 
 - `vectors-db` — VectorCollection, Document, SearchRequest, SearchResult

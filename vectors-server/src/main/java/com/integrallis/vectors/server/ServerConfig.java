@@ -61,6 +61,11 @@ public record ServerConfig(
    * endpoint} is an optional blob-service endpoint override (Azurite, sovereign clouds), {@code
    * null} meaning {@code https://<account>.blob.core.windows.net}; {@code region} is unused.
    *
+   * <p>With {@link Provider#FILE} (development and single-machine use): {@code bucket} is an
+   * <em>absolute</em> directory used as the object store through {@code LocalFileStorageBackend};
+   * {@code endpoint}, {@code accessKey} and {@code secretKey} must be unset and {@code region} is
+   * unused.
+   *
    * @param provider which object-storage API the fields describe
    * @param endpoint S3-compatible endpoint URI or Azure blob endpoint, or {@code null} for the
    *     provider's public default
@@ -91,6 +96,19 @@ public record ServerConfig(
               accessKey, "accessKey (the storage account name) must not be null");
           Objects.requireNonNull(secretKey, "secretKey (the storage account key) must not be null");
         }
+        case FILE -> {
+          region = "";
+          if (!java.nio.file.Path.of(bucket).isAbsolute()) {
+            throw new IllegalArgumentException(
+                "bucket must be an absolute directory for the file provider: " + bucket);
+          }
+          if (endpoint != null && !endpoint.isBlank()) {
+            throw new IllegalArgumentException("endpoint is not used by the file provider");
+          }
+          if (accessKey != null || secretKey != null) {
+            throw new IllegalArgumentException("credentials are not used by the file provider");
+          }
+        }
       }
       prefix = prefix == null ? "" : prefix;
     }
@@ -112,11 +130,13 @@ public record ServerConfig(
     /** Amazon S3 or any S3-compatible service. */
     S3,
     /** Azure Blob Storage (not S3-compatible; needs the {@code vectors-storage-azure} runtime). */
-    AZURE;
+    AZURE,
+    /** A local directory, for development and single-machine deployments. */
+    FILE;
 
     /**
      * Parses a provider name case-insensitively. {@code null} or blank means {@link #S3}; {@code
-     * az} is accepted for {@link #AZURE}.
+     * az} is accepted for {@link #AZURE}; {@code file} selects {@link #FILE}.
      *
      * @throws IllegalArgumentException for any other value
      */
@@ -127,9 +147,10 @@ public record ServerConfig(
       return switch (value.trim().toLowerCase(java.util.Locale.ROOT)) {
         case "s3" -> S3;
         case "azure", "az" -> AZURE;
+        case "file" -> FILE;
         default ->
             throw new IllegalArgumentException(
-                "unknown object-store provider '" + value + "' (expected s3 or azure)");
+                "unknown object-store provider '" + value + "' (expected s3, azure or file)");
       };
     }
   }

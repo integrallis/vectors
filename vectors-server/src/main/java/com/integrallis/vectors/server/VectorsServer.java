@@ -76,9 +76,10 @@ public final class VectorsServer implements Callable<Integer> {
   @Option(
       names = "--object-store-provider",
       description =
-          "Object-storage API behind the --s3-* flags: s3 (default) or azure, where --s3-bucket"
+          "Object-storage API behind the --s3-* flags: s3 (default); azure, where --s3-bucket"
               + " is the blob container, --s3-access-key the storage account name and"
-              + " --s3-secret-key the account key (env VECTORS_OBJECT_STORE_PROVIDER)")
+              + " --s3-secret-key the account key; or file, where --s3-bucket is an absolute"
+              + " directory (development and single-machine use) (env VECTORS_OBJECT_STORE_PROVIDER)")
   private String objectStoreProvider;
 
   @Option(
