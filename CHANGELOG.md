@@ -4,6 +4,8 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.39] - 2026-11-16
+
 ### Added
 
 - **`vectors-server` `file` object-store provider.** `--object-store-provider file` /
