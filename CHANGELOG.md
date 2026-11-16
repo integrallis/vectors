@@ -4,6 +4,8 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.38] - 2026-11-15
+
 ### Added
 
 - **`vectors-server` can back collections with Azure Blob Storage.** `ServerConfig.ObjectStore`
