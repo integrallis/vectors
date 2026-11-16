@@ -4,6 +4,8 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.40] - 2026-11-16
+
 ### Added
 
 - **`MetricsContributor` for embedders of `vectors-server`.** `ApiRouting(registry, config,
