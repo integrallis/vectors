@@ -52,6 +52,44 @@ class ObjectStoreSupportTest {
   }
 
   @Test
+  void aProvidedBackendIsOpenedAsItselfAndNothingElseMayCarryOne() throws Exception {
+    java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("provided-store-");
+    com.integrallis.vectors.storage.backend.LocalFileStorageBackend backend =
+        new com.integrallis.vectors.storage.backend.LocalFileStorageBackend(dir);
+    try {
+      ObjectStore cfg = ObjectStore.provided(backend, "tenant");
+      assertThat(cfg.provider()).isEqualTo(Provider.PROVIDED);
+      assertThat(cfg.bucket()).isEqualTo("provided");
+      assertThat(cfg.region()).isEmpty();
+      assertThat(cfg.prefix()).isEqualTo("tenant");
+      // the same instance every time: the server opens the store in more than one place and a
+      // provided backend has one life, owned by whoever provided it
+      assertThat(ObjectStoreSupport.open(cfg)).isSameAs(backend);
+      assertThat(ObjectStoreSupport.open(cfg)).isSameAs(backend);
+      assertThat(ObjectStoreSupport.keyPrefixFor(cfg, "docs")).isEqualTo("tenant/docs/");
+      assertThat(ObjectStore.provided(backend, null).prefix()).isEmpty();
+      // a provided store without a backend, and a backend on any other provider, are refused
+      assertThatThrownBy(
+              () -> new ObjectStore(Provider.PROVIDED, null, "x", null, null, null, "", null))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("backend");
+      assertThatThrownBy(
+              () -> new ObjectStore(Provider.S3, null, "b", "us-east-1", null, null, "", backend))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("provided");
+      assertThatThrownBy(() -> ObjectStore.provided(null, ""))
+          .isInstanceOf(NullPointerException.class);
+      // the seven-field shape still works and carries no backend
+      assertThat(new ObjectStore(Provider.S3, null, "b", "us-east-1", null, null, "p").backend())
+          .isNull();
+    } finally {
+      try (var walk = java.nio.file.Files.walk(dir)) {
+        walk.sorted(java.util.Comparator.reverseOrder()).forEach(f -> f.toFile().delete());
+      }
+    }
+  }
+
+  @Test
   void azureOpensBlobBackend() {
     ObjectStore cfg =
         new ObjectStore(Provider.AZURE, null, "container", null, "acct", "a2V5", "tenant/");

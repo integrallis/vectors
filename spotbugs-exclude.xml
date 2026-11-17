@@ -80,6 +80,22 @@
         <Bug pattern="EI_EXPOSE_REP"/>
     </Match>
 
+    <!-- ServerConfig.ObjectStore.backend() returns the StorageBackend the embedding application -->
+    <!-- itself provided (Provider.PROVIDED): the reference is already the caller's, the server -->
+    <!-- must use that one instance, and a StorageBackend is live storage that cannot be copied. -->
+    <!-- Patterns: EI_EXPOSE_REP (accessor), EI_EXPOSE_REP2 (canonical constructor). -->
+    <Match>
+        <Class name="com.integrallis.vectors.server.ServerConfig$ObjectStore"/>
+        <Or>
+            <Method name="backend"/>
+            <Method name="&lt;init&gt;"/>
+        </Or>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
     <!-- VectorizationProvider.getInstance() returns an immutable interface reference -->
     <!-- (the singleton holder field is never reassigned after class init). -->
     <!-- See: vectors-core/src/main/java/.../VectorizationProvider.java -->

@@ -41,6 +41,7 @@ public final class ObjectStoreSupport {
       case S3 -> openS3(cfg);
       case AZURE -> AzureBlobStorageBackend.create(azureConnectionString(cfg), cfg.bucket());
       case FILE -> openFile(cfg);
+      case PROVIDED -> cfg.backend();
     };
   }
 

@@ -16,6 +16,7 @@
  */
 package com.integrallis.vectors.server;
 
+import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.nio.file.Path;
 import java.util.Objects;
 
@@ -66,6 +67,11 @@ public record ServerConfig(
    * {@code endpoint}, {@code accessKey} and {@code secretKey} must be unset and {@code region} is
    * unused.
    *
+   * <p>With {@link Provider#PROVIDED}: the embedding application hands the server an open {@code
+   * StorageBackend} of its own ({@link #provided(StorageBackend, String)}); the server uses that
+   * one instance everywhere it would otherwise open the store, and never closes it. {@code bucket}
+   * is the word {@code provided}; the connection fields are unused.
+   *
    * @param provider which object-storage API the fields describe
    * @param endpoint S3-compatible endpoint URI or Azure blob endpoint, or {@code null} for the
    *     provider's public default
@@ -76,6 +82,8 @@ public record ServerConfig(
    * @param secretKey secret key (S3, {@code null} for the AWS default credential chain) or storage
    *     account key (Azure)
    * @param prefix key prefix shared by all collections (may be empty)
+   * @param backend the open store a {@link Provider#PROVIDED} configuration carries; {@code null}
+   *     for every other provider
    */
   public record ObjectStore(
       Provider provider,
@@ -84,10 +92,15 @@ public record ServerConfig(
       String region,
       String accessKey,
       String secretKey,
-      String prefix) {
+      String prefix,
+      StorageBackend backend) {
     public ObjectStore {
       Objects.requireNonNull(provider, "provider must not be null");
       Objects.requireNonNull(bucket, "bucket must not be null");
+      if (provider != Provider.PROVIDED && backend != null) {
+        throw new IllegalArgumentException(
+            "a backend instance is carried only by the provided provider, not " + provider);
+      }
       switch (provider) {
         case S3 -> Objects.requireNonNull(region, "region must not be null");
         case AZURE -> {
@@ -109,8 +122,40 @@ public record ServerConfig(
             throw new IllegalArgumentException("credentials are not used by the file provider");
           }
         }
+        case PROVIDED -> {
+          Objects.requireNonNull(backend, "backend must not be null for the provided provider");
+          region = "";
+        }
       }
       prefix = prefix == null ? "" : prefix;
+    }
+
+    /** The shape this record had before a backend could be provided: no backend. */
+    public ObjectStore(
+        Provider provider,
+        String endpoint,
+        String bucket,
+        String region,
+        String accessKey,
+        String secretKey,
+        String prefix) {
+      this(provider, endpoint, bucket, region, accessKey, secretKey, prefix, null);
+    }
+
+    /**
+     * A store the embedding application opened itself. The server uses this one instance wherever
+     * it would open the store and never closes it; the caller owns its life.
+     */
+    public static ObjectStore provided(StorageBackend backend, String prefix) {
+      return new ObjectStore(
+          Provider.PROVIDED,
+          null,
+          "provided",
+          null,
+          null,
+          null,
+          prefix,
+          Objects.requireNonNull(backend, "backend"));
     }
 
     /** S3-compatible configuration: the shape this record had before providers existed. */
@@ -132,7 +177,12 @@ public record ServerConfig(
     /** Azure Blob Storage (not S3-compatible; needs the {@code vectors-storage-azure} runtime). */
     AZURE,
     /** A local directory, for development and single-machine deployments. */
-    FILE;
+    FILE,
+    /**
+     * An open {@code StorageBackend} the embedding application provides; not selectable by name,
+     * see {@link ObjectStore#provided(StorageBackend, String)}.
+     */
+    PROVIDED;
 
     /**
      * Parses a provider name case-insensitively. {@code null} or blank means {@link #S3}; {@code
