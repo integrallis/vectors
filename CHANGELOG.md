@@ -4,6 +4,8 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.42] - 2026-11-17
+
 ### Added
 
 - **`ServerConfig.Provider.PROVIDED`.** An embedding application can hand the server an open
