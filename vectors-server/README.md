@@ -61,6 +61,11 @@ unset. The backend is a filesystem sandbox: keys may not be absolute, contain em
 segments or NUL, may not name the backend's own `.tmp` / `.etag` files, and a key that resolves outside
 the directory's real path (for example through a symbolic link placed inside it) is refused.
 
+A fourth provider, `PROVIDED`, is not selectable by name: an application that embeds the server hands
+it an open `StorageBackend` of its own through `ServerConfig.ObjectStore.provided(backend, prefix)`,
+and the server uses that one instance wherever it would otherwise open the object store, never
+closing it. DartVault's replicated cluster store is the first such backend.
+
 ## Dependencies
 
 - `vectors-db` — VectorCollection, Document, SearchRequest, SearchResult

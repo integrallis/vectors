@@ -4,6 +4,15 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`ServerConfig.Provider.PROVIDED`.** An embedding application can hand the server an open
+  `StorageBackend` of its own (`ServerConfig.ObjectStore.provided(backend, prefix)`); the server uses
+  that one instance wherever it would otherwise open the object store, and never closes it. Not
+  selectable by name: the provider exists for applications that compose the server (DartVault's
+  replicated cluster store is the first). The seven-field `ObjectStore` constructor still works and
+  carries no backend.
+
 ## [0.1.41] - 2026-11-17
 
 ### Added
