@@ -29,6 +29,9 @@ Arena-scoped allocation, mmap file I/O, storage backend abstraction.
 | `vectors-storage-azure`
 | Opt-in Azure SDK runtime for `AzureBlobStorageBackend` (JDK `HttpClient` transport, no Netty).
 
+| `vectors-storage-testkit`
+| The `StorageBackend` contract (`StorageBackendContract`, JUnit 5 + AssertJ) for backends implemented elsewhere.
+
 | `vectors-quantization`
 | Scalar (int8/int4), product (PQ), binary (BQ/BBQ), RaBitQ, extended RaBitQ, TurboQuant, and NVQ quantizers.
 Training, encoding, and asymmetric distance estimation.

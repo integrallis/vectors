@@ -36,4 +36,6 @@ dependencies {
     // MinIO) load credentials from a gitignored .env file at the repo root. dotenv-java
     // is dependency-free and only used in test scope.
     testImplementation("io.github.cdimascio:dotenv-java:3.2.0")
+    // The StorageBackend contract lives in the test kit so backends outside this repository can run it.
+    testImplementation(project(":vectors-storage-testkit"))
 }

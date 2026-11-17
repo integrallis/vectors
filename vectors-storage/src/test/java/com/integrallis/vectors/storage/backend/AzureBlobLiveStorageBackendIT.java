@@ -17,6 +17,7 @@ package com.integrallis.vectors.storage.backend;
 
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobContainerClientBuilder;
+import com.integrallis.vectors.storage.testkit.StorageBackendContract;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 

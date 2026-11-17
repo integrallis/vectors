@@ -18,6 +18,7 @@ package com.integrallis.vectors.storage.backend;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.integrallis.vectors.storage.testkit.StorageBackendContract;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
