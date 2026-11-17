@@ -4,6 +4,14 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`LocalFileStorageBackend.SyncPolicy`.** `EVERY_WRITE` (the default, unchanged) forces the object
+  file and its directory on every put and delete; `REPLICATED` forces nothing and leaves durability
+  to a caller that replicates the object to other machines. The atomic rename still rules out a torn
+  object. Measured on DartVault's HC4 gate: the per-object fsync is the whole cost of a replicated
+  write on a laptop SSD.
+
 ## [0.1.42] - 2026-11-17
 
 ### Added
