@@ -4,6 +4,14 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`LocalFileStorageBackend.list` during concurrent writes.** The listing walked the directory
+  with `Files.walk` and threw `UncheckedIOException(NoSuchFileException)` when an entry it had
+  listed was gone before its attributes were read (a temporary file renamed away, an object
+  deleted by another thread). It now walks with a visitor that leaves such entries out. Found by
+  DartVault's cluster store, where a backup is listed while replica writes are in flight.
+
 ## [0.1.42] - 2026-11-17
 
 ### Added
