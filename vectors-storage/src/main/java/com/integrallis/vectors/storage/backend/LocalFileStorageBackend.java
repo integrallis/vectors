@@ -114,13 +114,34 @@ public final class LocalFileStorageBackend implements StorageBackend {
   public List<String> list(String prefix) throws IOException {
     List<String> result = new ArrayList<>();
     if (!Files.exists(root)) return result;
-    try (var stream = Files.walk(root)) {
-      stream
-          .filter(Files::isRegularFile)
-          .map(p -> root.relativize(p).toString().replace(java.io.File.separatorChar, '/'))
-          .filter(k -> !k.endsWith(".tmp") && !k.endsWith(".etag") && k.startsWith(prefix))
-          .forEach(result::add);
-    }
+    // A walk sees the directory as it is; an entry that another writer removes between the
+    // directory read and the attribute read (a temporary file renamed away, an object deleted) is
+    // simply not listed, instead of taking the whole listing down.
+    Files.walkFileTree(
+        root,
+        new java.nio.file.SimpleFileVisitor<>() {
+          @Override
+          public java.nio.file.FileVisitResult visitFile(
+              Path file, java.nio.file.attribute.BasicFileAttributes attrs) {
+            if (attrs.isRegularFile()) {
+              String key =
+                  root.relativize(file).toString().replace(java.io.File.separatorChar, '/');
+              if (!key.endsWith(".tmp") && !key.endsWith(".etag") && key.startsWith(prefix)) {
+                result.add(key);
+              }
+            }
+            return java.nio.file.FileVisitResult.CONTINUE;
+          }
+
+          @Override
+          public java.nio.file.FileVisitResult visitFileFailed(Path file, IOException e)
+              throws IOException {
+            if (e instanceof java.nio.file.NoSuchFileException) {
+              return java.nio.file.FileVisitResult.CONTINUE;
+            }
+            throw e;
+          }
+        });
     return result;
   }
 

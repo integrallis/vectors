@@ -133,4 +133,50 @@ class LocalFileStorageBackendSandboxTest {
     assertThatThrownBy(() -> backend.put("a.tmp", new byte[] {1})).isInstanceOf(IOException.class);
     assertThatThrownBy(() -> backend.put("a.etag", new byte[] {1})).isInstanceOf(IOException.class);
   }
+
+  /**
+   * A listing that runs while another thread writes and removes objects must never throw: the
+   * writer's temporary files appear and vanish between the directory read and the attribute read,
+   * and a walk that trips on one takes the whole listing down (seen on DartVault's HC4 harness on
+   * 2026-11-17: a backup listed while a replica put was in flight).
+   */
+  @Test
+  void listingWhileAnotherThreadWritesAndRemovesNeverThrows() throws Exception {
+    java.nio.file.Path root = java.nio.file.Files.createTempDirectory("list-race-");
+    LocalFileStorageBackend backend = new LocalFileStorageBackend(root);
+    java.util.concurrent.atomic.AtomicBoolean on =
+        new java.util.concurrent.atomic.AtomicBoolean(true);
+    java.util.concurrent.atomic.AtomicReference<Throwable> writerFailure =
+        new java.util.concurrent.atomic.AtomicReference<>();
+    Thread writer =
+        new Thread(
+            () -> {
+              byte[] v = new byte[64];
+              int i = 0;
+              try {
+                while (on.get()) {
+                  String key = "race/coll/obj" + (i++ % 8);
+                  backend.put(key, v);
+                  backend.delete(key);
+                }
+              } catch (Throwable t) {
+                writerFailure.set(t);
+              }
+            },
+            "list-race-writer");
+    writer.start();
+    long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+    int listings = 0;
+    try {
+      while (System.nanoTime() < deadline) {
+        backend.list("race/");
+        listings++;
+      }
+    } finally {
+      on.set(false);
+      writer.join(5_000);
+    }
+    org.assertj.core.api.Assertions.assertThat(writerFailure.get()).isNull();
+    org.assertj.core.api.Assertions.assertThat(listings).isPositive();
+  }
 }
