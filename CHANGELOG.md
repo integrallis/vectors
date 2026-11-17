@@ -4,6 +4,8 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.43] - 2026-11-17
+
 ### Added
 
 - **`LocalFileStorageBackend.SyncPolicy`.** `EVERY_WRITE` (the default, unchanged) forces the object
