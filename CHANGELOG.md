@@ -4,6 +4,13 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`vectors-storage-testkit`.** The 26-check `StorageBackend` contract (`StorageBackendContract`, now
+  `com.integrallis.vectors.storage.testkit`) as a published Apache module, so a backend implemented
+  outside this repository is held to the same checks as the ones inside it: a test class implements the
+  interface and supplies the backend. The in-repository backend tests now use it from there.
+
 ## [0.1.40] - 2026-11-16
 
 ### Added

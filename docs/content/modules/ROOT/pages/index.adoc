@@ -90,6 +90,9 @@ NOTE: Requires JDK 25 with `--add-modules jdk.incubator.vector` at compile and r
 |`vectors-storage-azure`
 |Opt-in Azure SDK runtime for `AzureBlobStorageBackend` and Azure Blob Storage object stores.
 
+|`vectors-storage-testkit`
+|The `StorageBackend` contract as a test kit: a backend written outside this repository implements `StorageBackendContract` in a test class and is held to the same checks as the built-in backends.
+
 |`vectors-quantization`
 |Scalar, product, binary, RaBitQ, NVQ, and TurboQuant quantizers.
 

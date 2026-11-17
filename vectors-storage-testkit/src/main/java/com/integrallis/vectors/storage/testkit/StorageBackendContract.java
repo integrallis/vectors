@@ -13,19 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.integrallis.vectors.storage.backend;
+package com.integrallis.vectors.storage.testkit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.integrallis.vectors.storage.backend.StorageBackend;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
-interface StorageBackendContract {
+public interface StorageBackendContract {
 
   StorageBackend backend() throws IOException;
 
@@ -36,7 +38,7 @@ interface StorageBackendContract {
   @Test
   default void putAndGetRoundTrip() throws IOException {
     StorageBackend b = backend();
-    byte[] value = "hello world".getBytes();
+    byte[] value = "hello world".getBytes(StandardCharsets.UTF_8);
     String key = key("mykey");
     b.put(key, value);
     assertThat(b.get(key)).isEqualTo(value);
@@ -221,7 +223,7 @@ interface StorageBackendContract {
   default void getRange_offsetZeroLengthEqualsSize_returnsFullValue() throws IOException {
     StorageBackend b = backend();
     String key = key("range-full");
-    byte[] full = "the quick brown fox".getBytes();
+    byte[] full = "the quick brown fox".getBytes(StandardCharsets.UTF_8);
     b.put(key, full);
 
     assertThat(b.getRange(key, 0, full.length)).isEqualTo(full);

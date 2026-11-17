@@ -59,6 +59,9 @@ val publishedModuleNames = setOf(
     "vectors-storage",
     "vectors-storage-s3",
     "vectors-storage-azure",
+    // The storage contract as a library, so a backend written outside this repository (DartVault's
+    // cluster backend first) proves itself against the same checks as the ones inside it.
+    "vectors-storage-testkit",
     "vectors-quantization",
     "vectors-hnsw",
     "vectors-vamana",
@@ -832,6 +835,14 @@ tasks.register("verifyStagedPublications") {
                             "<artifactId>azure-storage-blob</artifactId>" in pom
                     ) {
                         "vectors-storage-azure must publish both storage and Azure Blob dependencies"
+                    }
+                "vectors-storage-testkit" ->
+                    require(
+                        "<artifactId>vectors-storage</artifactId>" in pom &&
+                            "<artifactId>junit-jupiter-api</artifactId>" in pom &&
+                            "<artifactId>assertj-core</artifactId>" in pom
+                    ) {
+                        "vectors-storage-testkit must publish the storage, JUnit and AssertJ dependencies"
                     }
                 "vectors-db-arrow" ->
                     require(

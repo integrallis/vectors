@@ -15,6 +15,7 @@
  */
 package com.integrallis.vectors.storage.backend;
 
+import com.integrallis.vectors.storage.testkit.StorageBackendContract;
 import java.net.URI;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;

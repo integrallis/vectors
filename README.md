@@ -212,6 +212,7 @@ Published to Maven Central (Apache-2.0):
 - Entry point: `vectors` (umbrella dependency)
 - Core: `vectors-core`, `vectors-storage`, `vectors-quantization`
 - Optional runtimes: `vectors-storage-s3`, `vectors-storage-azure`, `vectors-db-arrow`, `vectors-db-jackson`
+- Test kit: `vectors-storage-testkit` (the `StorageBackend` contract for backends written elsewhere)
 - Indexes & database: `vectors-hnsw`, `vectors-vamana`, `vectors-ivf`, `vectors-db`,
   `vectors-hybrid`
 - Frameworks: `vectors-spring-ai`, `vectors-langchain4j`, `vectors-spring-boot-starter`,
