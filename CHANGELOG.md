@@ -4,6 +4,8 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.41] - 2026-11-17
+
 ### Added
 
 - **`vectors-storage-testkit`.** The 26-check `StorageBackend` contract (`StorageBackendContract`, now
