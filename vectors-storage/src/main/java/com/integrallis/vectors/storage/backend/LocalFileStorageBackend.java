@@ -45,9 +45,28 @@ public final class LocalFileStorageBackend implements StorageBackend {
   private static final int VERSION = 1;
   private static final int HEADER_FIXED_BYTES = Integer.BYTES * 3 + Long.BYTES;
 
+  /** When the backend forces what it wrote to the disk. */
+  public enum SyncPolicy {
+    /** Force the object file and its directory on every put and delete; the default. */
+    EVERY_WRITE,
+    /**
+     * Force nothing: durability is the caller's, by replicating the object to other machines
+     * (DartVault's cluster store acknowledges at a majority of nodes). The atomic rename still
+     * rules out a torn object; what a power loss can take is the last writes that reached only the
+     * page cache, on every node that lost power at once.
+     */
+    REPLICATED
+  }
+
   private final Path root;
   private final Path realRoot;
   private final ChannelOpener channels;
+  private final SyncPolicy syncPolicy;
+
+  /** When this backend forces what it wrote to the disk. */
+  public SyncPolicy syncPolicy() {
+    return syncPolicy;
+  }
 
   @FunctionalInterface
   interface ChannelOpener {
@@ -55,11 +74,21 @@ public final class LocalFileStorageBackend implements StorageBackend {
   }
 
   public LocalFileStorageBackend(Path root) throws IOException {
-    this(root, FileChannel::open);
+    this(root, FileChannel::open, SyncPolicy.EVERY_WRITE);
+  }
+
+  public LocalFileStorageBackend(Path root, SyncPolicy syncPolicy) throws IOException {
+    this(root, FileChannel::open, syncPolicy);
   }
 
   LocalFileStorageBackend(Path root, ChannelOpener channels) throws IOException {
+    this(root, channels, SyncPolicy.EVERY_WRITE);
+  }
+
+  LocalFileStorageBackend(Path root, ChannelOpener channels, SyncPolicy syncPolicy)
+      throws IOException {
     this.channels = java.util.Objects.requireNonNull(channels, "channels");
+    this.syncPolicy = java.util.Objects.requireNonNull(syncPolicy, "syncPolicy");
     this.root = root.toAbsolutePath().normalize();
     Files.createDirectories(this.root);
     this.realRoot = this.root.toRealPath();
@@ -73,7 +102,9 @@ public final class LocalFileStorageBackend implements StorageBackend {
     String etag = computeEtag(value);
     writeFramed(tmp, etag, value);
     Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-    forceDirectory(target.getParent());
+    if (syncPolicy == SyncPolicy.EVERY_WRITE) {
+      forceDirectory(target.getParent());
+    }
   }
 
   @Override
@@ -150,7 +181,7 @@ public final class LocalFileStorageBackend implements StorageBackend {
     Path target = resolve(key);
     boolean removed = Files.deleteIfExists(target);
     removed |= Files.deleteIfExists(legacyEtagPath(key));
-    if (removed) forceDirectory(target.getParent());
+    if (removed && syncPolicy == SyncPolicy.EVERY_WRITE) forceDirectory(target.getParent());
   }
 
   @Override
@@ -274,7 +305,9 @@ public final class LocalFileStorageBackend implements StorageBackend {
             StandardOpenOption.WRITE)) {
       writeFully(ch, header);
       writeFully(ch, ByteBuffer.wrap(value));
-      ch.force(true);
+      if (syncPolicy == SyncPolicy.EVERY_WRITE) {
+        ch.force(true);
+      }
     }
   }
 
