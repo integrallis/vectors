@@ -18,6 +18,10 @@ package com.integrallis.vectors.storage.backend;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobContainerClientBuilder;
 import com.integrallis.vectors.storage.testkit.StorageBackendContract;
+import java.io.IOException;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 
@@ -36,12 +40,48 @@ import org.junit.jupiter.api.Tag;
  * # A real storage account: the connection string from the portal, same variables.
  * </pre>
  *
- * The container is created if it does not exist (a test convenience; the backend itself never
+ * <p><strong>Container hygiene:</strong> Every key the contract writes is prefixed with {@code
+ * storage-contract-it/<run-uuid>/} (override with {@code VECTORS_LIVE_AZURE_PREFIX}). After all
+ * tests finish, an {@code @AfterAll} lists every key under that prefix and deletes them. This still
+ * requires a <em>dedicated test container</em> — do not run against a container that holds
+ * production data.
+ *
+ * <p>The container is created if it does not exist (a test convenience; the backend itself never
  * creates containers).
  */
 @Tag("live-object-store")
 class AzureBlobLiveStorageBackendIT implements StorageBackendContract {
+
+  private static final String RUN_UUID = UUID.randomUUID().toString();
+  private static final String RUN_PREFIX;
+
+  static {
+    String configured = System.getenv("VECTORS_LIVE_AZURE_PREFIX");
+    if (configured != null && !configured.isBlank()) {
+      RUN_PREFIX = configured.endsWith("/") ? configured : configured + "/";
+    } else {
+      RUN_PREFIX = "storage-contract-it/" + RUN_UUID + "/";
+    }
+  }
+
   private static volatile StorageBackend sharedBackend;
+
+  @Override
+  public String key(String suffix) {
+    return RUN_PREFIX + suffix + "-" + UUID.randomUUID();
+  }
+
+  @AfterAll
+  static void deleteRunPrefix() throws IOException {
+    StorageBackend b = sharedBackend;
+    if (b == null) {
+      return;
+    }
+    List<String> keys = b.list(RUN_PREFIX);
+    for (String key : keys) {
+      b.delete(key);
+    }
+  }
 
   @Override
   public StorageBackend backend() {

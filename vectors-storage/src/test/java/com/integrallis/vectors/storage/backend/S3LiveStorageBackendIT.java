@@ -16,7 +16,11 @@
 package com.integrallis.vectors.storage.backend;
 
 import com.integrallis.vectors.storage.testkit.StorageBackendContract;
+import java.io.IOException;
 import java.net.URI;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 
@@ -41,13 +45,47 @@ import org.junit.jupiter.api.Tag;
  *     ./gradlew :vectors-storage:test --tests '*S3LiveStorageBackendIT*'
  * }</pre>
  *
- * <p>The target bucket must already exist. The contract namespaces every key with a UUID, so runs
- * never collide, but it does not delete the bucket itself.
+ * <p><strong>Bucket hygiene:</strong> Every key the contract writes is prefixed with {@code
+ * storage-contract-it/<run-uuid>/} (override with {@code VECTORS_LIVE_S3_PREFIX}). After all tests
+ * finish, an {@code @AfterAll} lists every key under that prefix and deletes them. This still
+ * requires a <em>dedicated test bucket</em> — do not run against a bucket that holds production
+ * data.
+ *
+ * <p>The target bucket must already exist. The contract does not delete the bucket itself.
  */
 @Tag("live-object-store")
 class S3LiveStorageBackendIT implements StorageBackendContract {
 
+  private static final String RUN_UUID = UUID.randomUUID().toString();
+  private static final String RUN_PREFIX;
+
+  static {
+    String configured = System.getenv("VECTORS_LIVE_S3_PREFIX");
+    if (configured != null && !configured.isBlank()) {
+      RUN_PREFIX = configured.endsWith("/") ? configured : configured + "/";
+    } else {
+      RUN_PREFIX = "storage-contract-it/" + RUN_UUID + "/";
+    }
+  }
+
   private static volatile StorageBackend sharedBackend;
+
+  @Override
+  public String key(String suffix) {
+    return RUN_PREFIX + suffix + "-" + UUID.randomUUID();
+  }
+
+  @AfterAll
+  static void deleteRunPrefix() throws IOException {
+    StorageBackend b = sharedBackend;
+    if (b == null) {
+      return;
+    }
+    List<String> keys = b.list(RUN_PREFIX);
+    for (String key : keys) {
+      b.delete(key);
+    }
+  }
 
   @Override
   public StorageBackend backend() {
