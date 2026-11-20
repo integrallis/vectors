@@ -145,6 +145,57 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
     }
   }
 
+  /**
+   * Upsert pre-embedded documents. Spring AI 2.1 introduces {@code upsert(List<EmbeddedDocument>)}
+   * as a default method on {@code VectorStore}; the default throws {@code
+   * UnsupportedOperationException}. This implementation accepts the list reflectively so the same
+   * class file works against every supported Spring AI line.
+   *
+   * <p>Each entry is expected to expose {@code document()} returning a {@link Document} and {@code
+   * embedding()} returning a {@code float[]}. This exactly matches Spring AI 2.1's {@code
+   * EmbeddedDocument} record shape; callers on earlier lines can pass any object with the same
+   * accessors.
+   */
+  @SuppressWarnings("rawtypes")
+  public void upsert(List entries) {
+    if (entries == null || entries.isEmpty()) {
+      return;
+    }
+    for (Object entry : entries) {
+      Document springDoc;
+      float[] embedding;
+      try {
+        // EmbeddedDocument.document() → Document
+        java.lang.reflect.Method docMethod = entry.getClass().getMethod("document");
+        springDoc = (Document) docMethod.invoke(entry);
+        // EmbeddedDocument.embedding() → float[]
+        java.lang.reflect.Method embMethod = entry.getClass().getMethod("embedding");
+        embedding = (float[]) embMethod.invoke(entry);
+      } catch (NoSuchMethodException e) {
+        throw new IllegalArgumentException(
+            "upsert entries must expose document() and embedding() methods: " + entry.getClass(),
+            e);
+      } catch (ReflectiveOperationException e) {
+        throw new IllegalArgumentException("Failed to extract document/embedding from entry", e);
+      }
+      Map<String, MetadataValue> jvMetadata =
+          MetadataConverter.toJavaVectors(springDoc.getMetadata());
+      var recipe = collection.config().recipe();
+      String embeddedInput =
+          recipe.map(r -> r.documentInput(springDoc.getText())).orElse(springDoc.getText());
+      collection.upsert(
+          new com.integrallis.vectors.core.Document(
+              springDoc.getId(),
+              embedding,
+              springDoc.getText(),
+              jvMetadata,
+              embeddedInput == null ? null : ContentHash.of(embeddedInput)));
+    }
+    if (commitAfterAdd) {
+      collection.commit();
+    }
+  }
+
   @Override
   public void doDelete(List<String> idList) {
     if (idList == null || idList.isEmpty()) {
@@ -160,12 +211,6 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
 
   @Override
   public List<Document> doSimilaritySearch(SearchRequest request) {
-    // Apply the collection's query prefix. Instruction-tuned embedders are asymmetric -- Nomic
-    // wants
-    // "search_query: " here and "search_document: " at ingest -- so embedding a query bare against
-    // documents embedded with a prefix is a silent quality loss, not an error anyone sees. The
-    // recipe
-    // is what makes this fixable here rather than depending on every caller remembering.
     String queryText =
         collection
             .config()
@@ -173,9 +218,24 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
             .map(recipe -> recipe.queryInput(request.getQuery()))
             .orElse(request.getQuery());
     float[] queryEmbedding = this.embeddingModel.embed(queryText);
+    return similaritySearchInternal(queryEmbedding, request);
+  }
+
+  /**
+   * Search with a caller-supplied query embedding. Skips re-embedding the query text.
+   *
+   * <p>Spring AI 2.1 introduces this overload as a default method on {@code VectorStoreRetriever};
+   * the default throws {@code UnsupportedOperationException}. This implementation allows a caller
+   * that already has an embedding (e.g. from a cache or an external embedder) to search without the
+   * adapter calling its configured {@code EmbeddingModel} again.
+   */
+  public List<Document> similaritySearch(float[] queryEmbedding, SearchRequest request) {
+    return similaritySearchInternal(queryEmbedding, request);
+  }
+
+  private List<Document> similaritySearchInternal(float[] queryEmbedding, SearchRequest request) {
     int topK = request.getTopK();
     boolean useMmr = mmrLambda != null;
-    // With MMR on, over-fetch a larger candidate pool, then diversify down to topK.
     int fetch = useMmr ? Math.multiplyExact(topK, mmrFetchMultiplier) : topK;
 
     var jvRequestBuilder = com.integrallis.vectors.db.SearchRequest.builder(queryEmbedding, fetch);
