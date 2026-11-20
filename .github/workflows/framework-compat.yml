@@ -41,6 +41,8 @@ jobs:
             micrometer: "1.14.4"
           - version: "2.0.0"      # new major (Spring Framework 7 / Jackson 3)
             micrometer: "1.15.4"
+          - version: "2.1.0"      # GA, adds upsert() and similaritySearch(float[], …)
+            micrometer: "1.15.4"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
