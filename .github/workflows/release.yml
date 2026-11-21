@@ -17,6 +17,8 @@ on:
 
 permissions:
   contents: write
+  # Read access to workflow runs, for the green-CI gate below.
+  actions: read
 
 jobs:
   release:
@@ -71,6 +73,27 @@ jobs:
             echo "::error::Release tag $GITHUB_REF does not match project version v$VERSION"
             exit 1
           fi
+
+      # Nothing is published without a changelog entry for exactly this version. 0.1.44 went out
+      # on a tag push with no entry and no review of what it contained; a tag push has no other
+      # checkpoint, so the entry is the one thing a release cannot be cut without writing.
+      - name: Require a changelog entry for this version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if ! grep -qE "^## \[${VERSION//./\\.}\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$VERSION] - YYYY-MM-DD' entry; refusing to release."
+            exit 1
+          fi
+
+      # Nothing is published unless every workflow is green: all runs for this commit, and the
+      # latest run of every workflow on main (which is what catches a path-filtered or scheduled
+      # workflow left red by an earlier commit). Applies to tag pushes and dispatches, dry or not.
+      - name: Require green CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          scripts/require-green-ci.sh "$GITHUB_REPOSITORY" main "$GITHUB_SHA" "$GITHUB_RUN_ID"
 
       - name: Prepare staged-release notebook classpath
         env:

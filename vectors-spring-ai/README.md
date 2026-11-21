@@ -25,20 +25,19 @@ Spring AI `VectorStore` implementation backed by a java-vectors `VectorCollectio
 
 ## Spring AI version support
 
-One artifact across all supported lines; the application's BOM chooses the framework version at runtime.
+One artifact across all supported lines; the application's BOM chooses the framework version at
+runtime. The jar is compiled against the 1.1.x baseline, and CI runs those baseline-compiled classes
+on 2.1 as well as recompiling per line.
 
 | Spring AI line | Status | Notes |
 |----------------|--------|-------|
 | 1.0.x – 1.1.x | supported | Baseline compilation target |
 | 2.0.x | supported | Spring Framework 7 / Jackson 3 |
-| 2.1.x | supported | Adds `upsert()` and `similaritySearch(float[], …)`; both implemented |
+| 2.1.x | supported | `VectorStore.upsert(List<EmbeddedDocument>)` and `similaritySearch(float[], SearchRequest)` are supported |
 
-## Key types
-
-- `JavaVectorsVectorStore` — main adapter (builder pattern)
-  - `add(List<Document>)` — embeds documents via configured `EmbeddingModel`
-  - `upsert(List)` — accepts pre-embedded entries reflecting Spring AI 2.1's `EmbeddedDocument` shape
-  - `similaritySearch(SearchRequest)` — embeds the query, then searches
-  - `similaritySearch(float[], SearchRequest)` — caller-supplied embedding; skips re-embedding (Spring AI 2.1)
-- `MetadataConverter` — lossless type mapping for String, Number, Boolean, List
-- `FilterConverter` — translates EQ, NE, GT, GTE, LT, LTE, IN, NIN, AND, OR, NOT
+On 2.1 both additions go through Spring AI's own observed template methods: the store implements
+the `doUpsert` and `doSimilaritySearch(float[], SearchRequest)` hooks and reports
+`supportsUpsert()` / `supportsQueryEmbeddingSearch()`, so they are observed and validated like
+`add` and text search. Neither calls the configured `EmbeddingModel`, and a query vector is used as
+given: the collection's query prefix is not applied to it. On lines before 2.1 these two operations
+do not exist.

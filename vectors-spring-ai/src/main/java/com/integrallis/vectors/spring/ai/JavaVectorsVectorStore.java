@@ -146,50 +146,87 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
   }
 
   /**
-   * Upsert pre-embedded documents. Spring AI 2.1 introduces {@code upsert(List<EmbeddedDocument>)}
-   * as a default method on {@code VectorStore}; the default throws {@code
-   * UnsupportedOperationException}. This implementation accepts the list reflectively so the same
-   * class file works against every supported Spring AI line.
+   * Reports that this store accepts caller-supplied vectors. Spring AI 2.1's observed {@code
+   * upsert} template method consults this before delegating to {@link #doUpsert(List)}; it is
+   * declared without {@code @Override} because the method does not exist on earlier lines, where
+   * nothing calls it.
+   */
+  protected boolean supportsUpsert() {
+    return true;
+  }
+
+  /**
+   * Reports that this store can search with a caller-supplied query vector. The Spring AI 2.1
+   * counterpart of {@link #supportsUpsert()} for {@code similaritySearch(float[], SearchRequest)}.
+   */
+  protected boolean supportsQueryEmbeddingSearch() {
+    return true;
+  }
+
+  /**
+   * Writes documents whose vectors the caller computed, replacing any document with the same id.
+   * The configured {@code EmbeddingModel} is not called.
    *
-   * <p>Each entry is expected to expose {@code document()} returning a {@link Document} and {@code
-   * embedding()} returning a {@code float[]}. This exactly matches Spring AI 2.1's {@code
-   * EmbeddedDocument} record shape; callers on earlier lines can pass any object with the same
-   * accessors.
+   * <p>This is the hook behind Spring AI 2.1's {@code VectorStore.upsert(List<EmbeddedDocument>)}.
+   * The framework's template method owns the public entry point (the empty-list check, the
+   * text-only validation and the observation) and calls this. The parameter is a raw {@code List}
+   * because {@code EmbeddedDocument} does not exist on the baseline this class is compiled against;
+   * the erased signature is the one 2.1 dispatches to. On lines before 2.1 the method is
+   * unreachable.
+   *
+   * <p>Every entry is read and checked against the collection's dimension before anything is
+   * written, so a bad entry rejects the batch rather than leaving part of it behind.
    */
   @SuppressWarnings("rawtypes")
-  public void upsert(List entries) {
+  protected void doUpsert(List entries) {
     if (entries == null || entries.isEmpty()) {
       return;
     }
+    List<Document> documents = new ArrayList<>(entries.size());
+    List<float[]> embeddings = new ArrayList<>(entries.size());
     for (Object entry : entries) {
-      Document springDoc;
-      float[] embedding;
-      try {
-        // EmbeddedDocument.document() → Document
-        java.lang.reflect.Method docMethod = entry.getClass().getMethod("document");
-        springDoc = (Document) docMethod.invoke(entry);
-        // EmbeddedDocument.embedding() → float[]
-        java.lang.reflect.Method embMethod = entry.getClass().getMethod("embedding");
-        embedding = (float[]) embMethod.invoke(entry);
-      } catch (NoSuchMethodException e) {
+      documents.add(EmbeddedDocumentAccess.document(entry));
+      embeddings.add(EmbeddedDocumentAccess.embedding(entry));
+    }
+    upsertEmbedded(documents, embeddings);
+  }
+
+  /**
+   * Writes {@code documents} with the caller's {@code embeddings}, index for index, replacing any
+   * document with the same id. This is all of {@link #doUpsert(List)} except reading Spring AI
+   * 2.1's {@code EmbeddedDocument}, kept apart so it is exercised on every supported line rather
+   * than only where that class exists.
+   */
+  void upsertEmbedded(List<Document> documents, List<float[]> embeddings) {
+    int dimension = collection.config().dimension();
+    var recipe = collection.config().recipe();
+    List<com.integrallis.vectors.core.Document> jvDocs = new ArrayList<>(documents.size());
+    for (int i = 0; i < documents.size(); i++) {
+      Document springDoc = documents.get(i);
+      float[] embedding = embeddings.get(i);
+      if (embedding == null || embedding.length != dimension) {
         throw new IllegalArgumentException(
-            "upsert entries must expose document() and embedding() methods: " + entry.getClass(),
-            e);
-      } catch (ReflectiveOperationException e) {
-        throw new IllegalArgumentException("Failed to extract document/embedding from entry", e);
+            "Document '"
+                + springDoc.getId()
+                + "' vector dimension "
+                + (embedding == null ? "null" : embedding.length)
+                + " does not match collection dimension "
+                + dimension);
       }
-      Map<String, MetadataValue> jvMetadata =
-          MetadataConverter.toJavaVectors(springDoc.getMetadata());
-      var recipe = collection.config().recipe();
+      // Same content hash as doAdd: it covers the text as the collection's recipe would have
+      // embedded it, so a later "would re-embedding change this" check compares like with like.
       String embeddedInput =
           recipe.map(r -> r.documentInput(springDoc.getText())).orElse(springDoc.getText());
-      collection.upsert(
+      jvDocs.add(
           new com.integrallis.vectors.core.Document(
               springDoc.getId(),
               embedding,
               springDoc.getText(),
-              jvMetadata,
+              MetadataConverter.toJavaVectors(springDoc.getMetadata()),
               embeddedInput == null ? null : ContentHash.of(embeddedInput)));
+    }
+    for (com.integrallis.vectors.core.Document jvDoc : jvDocs) {
+      collection.upsert(jvDoc);
     }
     if (commitAfterAdd) {
       collection.commit();
@@ -211,6 +248,11 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
 
   @Override
   public List<Document> doSimilaritySearch(SearchRequest request) {
+    // Apply the collection's query prefix. Instruction-tuned embedders are asymmetric -- Nomic
+    // wants "search_query: " here and "search_document: " at ingest -- so embedding a query bare
+    // against documents embedded with a prefix is a silent quality loss, not an error anyone sees.
+    // The recipe is what makes this fixable here rather than depending on every caller
+    // remembering.
     String queryText =
         collection
             .config()
@@ -222,20 +264,22 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
   }
 
   /**
-   * Search with a caller-supplied query embedding. Skips re-embedding the query text.
+   * Searches with a query vector the caller computed. The configured {@code EmbeddingModel} is not
+   * called and the collection's query prefix does not apply: the caller owns how the vector was
+   * produced.
    *
-   * <p>Spring AI 2.1 introduces this overload as a default method on {@code VectorStoreRetriever};
-   * the default throws {@code UnsupportedOperationException}. This implementation allows a caller
-   * that already has an embedding (e.g. from a cache or an external embedder) to search without the
-   * adapter calling its configured {@code EmbeddingModel} again.
+   * <p>This is the hook behind Spring AI 2.1's {@code similaritySearch(float[], SearchRequest)};
+   * the framework's template method owns the public entry point and its observation. Declared
+   * without {@code @Override} for the same reason as {@link #doUpsert(List)}.
    */
-  public List<Document> similaritySearch(float[] queryEmbedding, SearchRequest request) {
+  protected List<Document> doSimilaritySearch(float[] queryEmbedding, SearchRequest request) {
     return similaritySearchInternal(queryEmbedding, request);
   }
 
   private List<Document> similaritySearchInternal(float[] queryEmbedding, SearchRequest request) {
     int topK = request.getTopK();
     boolean useMmr = mmrLambda != null;
+    // With MMR on, over-fetch a larger candidate pool, then diversify down to topK.
     int fetch = useMmr ? Math.multiplyExact(topK, mmrFetchMultiplier) : topK;
 
     var jvRequestBuilder = com.integrallis.vectors.db.SearchRequest.builder(queryEmbedding, fetch);
@@ -304,6 +348,50 @@ public class JavaVectorsVectorStore extends AbstractObservationVectorStore
   @Override
   public void close() {
     collection.close();
+  }
+
+  /**
+   * Reads Spring AI 2.1's {@code EmbeddedDocument} record without a compile-time reference to it.
+   * Resolved once, on first use, which only happens on a line that has the class.
+   */
+  private static final class EmbeddedDocumentAccess {
+    private static final java.lang.reflect.Method DOCUMENT;
+    private static final java.lang.reflect.Method EMBEDDING;
+
+    static {
+      try {
+        Class<?> type =
+            Class.forName(
+                "org.springframework.ai.vectorstore.EmbeddedDocument",
+                false,
+                JavaVectorsVectorStore.class.getClassLoader());
+        DOCUMENT = type.getMethod("document");
+        EMBEDDING = type.getMethod("embedding");
+      } catch (ReflectiveOperationException e) {
+        throw new ExceptionInInitializerError(e);
+      }
+    }
+
+    static Document document(Object entry) {
+      return (Document) read(DOCUMENT, entry);
+    }
+
+    static float[] embedding(Object entry) {
+      return (float[]) read(EMBEDDING, entry);
+    }
+
+    private static Object read(java.lang.reflect.Method accessor, Object entry) {
+      if (!accessor.getDeclaringClass().isInstance(entry)) {
+        throw new IllegalArgumentException(
+            "upsert entries must be Spring AI EmbeddedDocument instances, got "
+                + (entry == null ? "null" : entry.getClass().getName()));
+      }
+      try {
+        return accessor.invoke(entry);
+      } catch (ReflectiveOperationException e) {
+        throw new IllegalStateException("could not read " + accessor.getName() + "()", e);
+      }
+    }
   }
 
   private enum DefaultEmbeddingOptions implements EmbeddingOptions {

@@ -16,7 +16,6 @@
 package com.integrallis.vectors.spring.ai;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -469,136 +468,228 @@ class JavaVectorsVectorStoreTest {
 
   @Nested
   @Tag("unit")
-  class PrecomputedEmbeddingSearch {
+  class CloseAndLifecycle {
 
     @Test
-    void similaritySearchWithPrecomputedEmbeddingSkipsReEmbedding() {
+    void closeIsIdempotent() {
       createStore(IndexType.FLAT, true);
-      when(embeddingModel.embed(any(Document.class)))
-          .thenAnswer(
-              inv -> {
-                Document doc = inv.getArgument(0);
-                return switch (doc.getId()) {
-                  case "d1" -> new float[] {1f, 0f, 0f, 0f};
-                  case "d2" -> new float[] {0f, 1f, 0f, 0f};
-                  default -> throw new IllegalArgumentException("unexpected doc: " + doc.getId());
-                };
-              });
-
-      store.add(
-          List.of(
-              new Document("d1", "exact match", Map.of()),
-              new Document("d2", "orthogonal match", Map.of())));
-
-      // Pre-computed query embedding: exact match with d1
-      float[] queryEmbedding = {1f, 0f, 0f, 0f};
-      List<Document> results =
-          store.similaritySearch(
-              queryEmbedding, SearchRequest.builder().query("ignored").topK(10).build());
-
-      assertThat(results).hasSize(2);
-      assertThat(results.get(0).getId()).isEqualTo("d1");
-      assertThat(results.get(0).getScore()).isGreaterThan(0.99);
-    }
-
-    @Test
-    void precomputedEmbeddingRespectsTopKAndFilter() {
-      createStore(IndexType.FLAT, true);
-      when(embeddingModel.embed(any(Document.class)))
-          .thenAnswer(
-              inv -> {
-                Document doc = inv.getArgument(0);
-                return switch (doc.getId()) {
-                  case "d1" -> new float[] {1f, 0f, 0f, 0f};
-                  case "d2" -> new float[] {0.9f, 0.1f, 0f, 0f};
-                  case "d3" -> new float[] {0f, 1f, 0f, 0f};
-                  default -> throw new IllegalArgumentException("unexpected doc: " + doc.getId());
-                };
-              });
-
-      store.add(
-          List.of(
-              new Document("d1", "alpha", Map.of("tag", "a")),
-              new Document("d2", "beta", Map.of("tag", "a")),
-              new Document("d3", "gamma", Map.of("tag", "b"))));
-
-      float[] queryEmbedding = {1f, 0f, 0f, 0f};
-
-      // topK=1
-      List<Document> top1 =
-          store.similaritySearch(
-              queryEmbedding, SearchRequest.builder().query("ignored").topK(1).build());
-      assertThat(top1).hasSize(1);
-      assertThat(top1.get(0).getId()).isEqualTo("d1");
-
-      // With filter expression
-      List<Document> filtered =
-          store.similaritySearch(
-              queryEmbedding,
-              SearchRequest.builder()
-                  .query("ignored")
-                  .topK(10)
-                  .filterExpression("tag == 'b'")
-                  .build());
-      assertThat(filtered).extracting(Document::getId).containsExactly("d3");
+      store.close();
+      store.close(); // should not throw
+      store = null; // prevent double close in tearDown
     }
   }
 
+  /**
+   * The logic behind the Spring AI 2.1 hooks, called directly so it runs on every supported line.
+   * That 2.1 actually reaches these through {@code VectorStore.upsert} and {@code
+   * similaritySearch(float[], SearchRequest)}, observed and validated, is {@code
+   * SpringAi21ContractTest}'s job; a test here cannot show it.
+   */
   @Nested
   @Tag("unit")
-  class UpsertWithEmbeddedDocument {
+  class CallerSuppliedVectors {
 
-    /** Stand-in for Spring AI 2.1's {@code EmbeddedDocument} record. */
-    record MockEmbeddedDocument(Document document, float[] embedding) {}
+    private SearchRequest top(int k) {
+      return SearchRequest.builder().query("unused").topK(k).build();
+    }
 
-    @Test
-    void upsertSkipsReEmbeddingAndStoresPreEmbeddedDocuments() {
-      createStore(IndexType.FLAT, true);
-      // No embedding model calls expected for upsert
-
-      Document springDoc = new Document("u1", "upserted text", Map.of("key", "val"));
-      float[] embedding = {1f, 0f, 0f, 0f};
-
-      store.upsert(List.of(new MockEmbeddedDocument(springDoc, embedding)));
-
-      // Search for the upserted document using the same embedding
-      List<Document> results =
-          store.similaritySearch(
-              embedding.clone(), SearchRequest.builder().query("ignored").topK(1).build());
-
-      assertThat(results).hasSize(1);
-      assertThat(results.get(0).getId()).isEqualTo("u1");
-      assertThat(results.get(0).getText()).isEqualTo("upserted text");
-      assertThat(results.get(0).getMetadata()).containsEntry("key", "val");
+    private void verifyEmbedderNeverAskedToEmbed() {
+      verify(embeddingModel, never()).embed(any(String.class));
+      verify(embeddingModel, never()).embed(any(Document.class));
+      verify(embeddingModel, never())
+          .embed(anyList(), any(EmbeddingOptions.class), any(BatchingStrategy.class));
     }
 
     @Test
-    void upsertReplacesExistingDocumentById() {
+    void theStoreReportsBothCapabilities() {
       createStore(IndexType.FLAT, true);
-      // Seed with initial document
-      Document initial = new Document("same-id", "initial text", Map.of("v", "1"));
-      when(embeddingModel.embed(initial)).thenReturn(new float[] {0f, 1f, 0f, 0f});
-      store.add(List.of(initial));
 
-      // Upsert with new text and metadata, same id
-      Document replacement = new Document("same-id", "replaced text", Map.of("v", "2"));
-      float[] newEmbedding = {1f, 0f, 0f, 0f};
-      store.upsert(List.of(new MockEmbeddedDocument(replacement, newEmbedding)));
-
-      // Search with the new embedding — should find the replaced document
-      List<Document> results =
-          store.similaritySearch(
-              newEmbedding.clone(), SearchRequest.builder().query("ignored").topK(1).build());
-
-      assertThat(results).hasSize(1);
-      assertThat(results.get(0).getText()).isEqualTo("replaced text");
-      assertThat(results.get(0).getMetadata()).containsEntry("v", "2");
+      assertThat(store.supportsUpsert()).isTrue();
+      assertThat(store.supportsQueryEmbeddingSearch()).isTrue();
     }
 
     @Test
-    void upsertWithEmptyListIsNoOp() {
+    void upsertAndQueryVectorSearchNeverCallTheEmbedder() {
       createStore(IndexType.FLAT, true);
-      assertThatNoException().isThrownBy(() -> store.upsert(List.of()));
+
+      store.upsertEmbedded(
+          List.of(
+              new Document("a", "alpha", Map.of("k", "a")),
+              new Document("b", "beta", Map.of("k", "b"))),
+          List.of(new float[] {1, 0, 0, 0}, new float[] {0, 1, 0, 0}));
+      List<Document> hits = store.doSimilaritySearch(new float[] {0, 1, 0, 0}, top(1));
+
+      assertThat(hits).extracting(Document::getId).containsExactly("b");
+      assertThat(hits.get(0).getText()).isEqualTo("beta");
+      assertThat(hits.get(0).getMetadata()).containsEntry("k", "b");
+      verifyEmbedderNeverAskedToEmbed();
+    }
+
+    @Test
+    void upsertReplacesAnExistingId() {
+      createStore(IndexType.FLAT, true);
+
+      store.upsertEmbedded(
+          List.of(new Document("a", "first", Map.of())), List.of(new float[] {1, 0, 0, 0}));
+      store.upsertEmbedded(
+          List.of(new Document("a", "second", Map.of())), List.of(new float[] {0, 1, 0, 0}));
+
+      List<Document> hits = store.doSimilaritySearch(new float[] {0, 1, 0, 0}, top(10));
+      assertThat(hits).hasSize(1);
+      assertThat(hits.get(0).getText()).isEqualTo("second");
+    }
+
+    @Test
+    void aBatchWithAWrongDimensionOrMissingVectorWritesNothing() {
+      createStore(IndexType.FLAT, false);
+      List<Document> docs =
+          List.of(new Document("good", "fine", Map.of()), new Document("bad", "wide", Map.of()));
+
+      assertThatThrownBy(
+              () -> store.upsertEmbedded(docs, List.of(new float[] {1, 0, 0, 0}, new float[8])))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("'bad'")
+          .hasMessageContaining("8");
+      List<float[]> withNull = new java.util.ArrayList<>();
+      withNull.add(new float[] {1, 0, 0, 0});
+      withNull.add(null);
+      assertThatThrownBy(() -> store.upsertEmbedded(docs, withNull))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("'bad'");
+
+      collection.commit();
+      assertThat(store.doSimilaritySearch(new float[] {1, 0, 0, 0}, top(10))).isEmpty();
+    }
+
+    @Test
+    void upsertFollowsTheCommitAfterAddSetting() {
+      createStore(IndexType.FLAT, false);
+
+      store.upsertEmbedded(
+          List.of(new Document("a", "alpha", Map.of())), List.of(new float[] {1, 0, 0, 0}));
+
+      assertThat(store.doSimilaritySearch(new float[] {1, 0, 0, 0}, top(1))).isEmpty();
+      collection.commit();
+      assertThat(store.doSimilaritySearch(new float[] {1, 0, 0, 0}, top(1))).hasSize(1);
+    }
+
+    @Test
+    void queryVectorSearchHonoursTopKThresholdAndFilter() {
+      createStore(IndexType.FLAT, true);
+      store.upsertEmbedded(
+          List.of(
+              new Document("a", "alpha", Map.of("tag", "x")),
+              new Document("b", "beta", Map.of("tag", "x")),
+              new Document("c", "gamma", Map.of("tag", "y"))),
+          List.of(
+              // b is at cosine 0.6 to the query: inside topK, outside the 0.99 threshold.
+              new float[] {1, 0, 0, 0}, new float[] {0.6f, 0.8f, 0, 0}, new float[] {0, 1, 0, 0}));
+      float[] query = {1, 0, 0, 0};
+
+      assertThat(store.doSimilaritySearch(query, top(1)))
+          .extracting(Document::getId)
+          .containsExactly("a");
+      assertThat(
+              store.doSimilaritySearch(
+                  query,
+                  SearchRequest.builder()
+                      .query("unused")
+                      .topK(10)
+                      .similarityThreshold(0.99)
+                      .build()))
+          .extracting(Document::getId)
+          .containsExactly("a");
+      assertThat(
+              store.doSimilaritySearch(
+                  query,
+                  SearchRequest.builder()
+                      .query("unused")
+                      .topK(10)
+                      .filterExpression("tag == 'y'")
+                      .build()))
+          .extracting(Document::getId)
+          .containsExactly("c");
+    }
+  }
+
+  /**
+   * A collection that declares an embedding recipe: prefixes on text, none on supplied vectors.
+   *
+   * <p>Not asserted here: the content hash. The adapter passes the hash of the prefixed input, but
+   * the collection re-derives it from the bare text on read-back (#216), so there is nothing true
+   * to assert about it through this API yet.
+   */
+  @Nested
+  @Tag("unit")
+  class WithAnEmbeddingRecipe {
+
+    private void createStoreWithRecipe() {
+      collection =
+          VectorCollection.builder()
+              .dimension(DIMENSION)
+              .metric(SimilarityFunction.COSINE)
+              .indexType(IndexType.FLAT)
+              .autoCommitThreshold(Integer.MAX_VALUE)
+              .embeddingRecipe(
+                  new com.integrallis.vectors.core.EmbeddingRecipe(
+                      "nomic-embed-text",
+                      "1.5",
+                      java.util.Optional.of("e".repeat(64)),
+                      DIMENSION,
+                      SimilarityFunction.COSINE,
+                      true,
+                      com.integrallis.vectors.core.EmbeddingRecipe.Pooling.MEAN,
+                      java.util.Optional.of("search_document: "),
+                      java.util.Optional.of("search_query: "),
+                      8192,
+                      com.integrallis.vectors.core.EmbeddingRecipe.Truncation.REJECT,
+                      Map.of()))
+              .build();
+      store =
+          JavaVectorsVectorStore.builder(embeddingModel, collection)
+              .batchingStrategy(docs -> List.of(docs))
+              .build();
+    }
+
+    @Test
+    void addEmbedsThePrefixedTextAndStoresTheOriginal() {
+      createStoreWithRecipe();
+      List<String> embedded = new java.util.ArrayList<>();
+      when(embeddingModel.embed(any(Document.class)))
+          .thenAnswer(
+              inv -> {
+                embedded.add(((Document) inv.getArgument(0)).getText());
+                return new float[] {1, 0, 0, 0};
+              });
+
+      store.add(List.of(new Document("a", "alpha", Map.of())));
+
+      assertThat(embedded).containsExactly("search_document: alpha");
+      assertThat(collection.get("a").text()).isEqualTo("alpha");
+    }
+
+    @Test
+    void textSearchEmbedsThePrefixedQuery() {
+      createStoreWithRecipe();
+
+      store.similaritySearch(SearchRequest.builder().query("fox").topK(1).build());
+
+      verify(embeddingModel).embed("search_query: fox");
+    }
+
+    @Test
+    void aSuppliedVectorIsStoredAsGivenAndTheQueryVectorGetsNoPrefix() {
+      createStoreWithRecipe();
+
+      store.upsertEmbedded(
+          List.of(new Document("a", "alpha", Map.of())), List.of(new float[] {1, 0, 0, 0}));
+      List<Document> hits =
+          store.doSimilaritySearch(
+              new float[] {1, 0, 0, 0}, SearchRequest.builder().query("fox").topK(1).build());
+
+      assertThat(collection.get("a").text()).isEqualTo("alpha");
+      assertThat(hits).extracting(Document::getId).containsExactly("a");
+      verify(embeddingModel, never()).embed(any(String.class));
     }
   }
 

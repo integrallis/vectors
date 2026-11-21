@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   spring-ai:
-    name: Spring AI ${{ matrix.version }}
+    name: Spring AI ${{ matrix.version }}${{ matrix.compile && format(' (compiled on {0})', matrix.compile) || '' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -43,6 +43,12 @@ jobs:
             micrometer: "1.15.4"
           - version: "2.1.0"      # GA, adds upsert() and similaritySearch(float[], …)
             micrometer: "1.15.4"
+          # What an application actually loads: the published jar is compiled against the 1.1.4
+          # baseline. This cell compiles main on 1.1.4 and runs the tests on 2.1.0, so a method
+          # that only links when recompiled per line cannot pass.
+          - version: "2.1.0"
+            micrometer: "1.15.4"
+            compile: "1.1.4"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -56,6 +62,7 @@ jobs:
           ./gradlew :vectors-spring-ai:test
           -PspringAiVersion=${{ matrix.version }}
           -PmicrometerObservationVersion=${{ matrix.micrometer }}
+          ${{ matrix.compile && format('-PspringAiCompileVersion={0}', matrix.compile) || '' }}
           --write-locks --console=plain
 
   langchain4j:
