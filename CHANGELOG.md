@@ -4,6 +4,11 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+## [0.1.45] - 2026-11-20
+
+Corrects the Spring AI 2.1 support published in 0.1.44. Upgrade from 0.1.44 if you use
+`vectors-spring-ai`; nothing else in the library changed.
+
 ### Fixed
 
 - **`vectors-spring-ai` on Spring AI 2.1: `upsert` and query-vector search now go through the
@@ -37,8 +42,8 @@ All notable changes to java-vectors are documented here.
 ## [0.1.44] - 2026-11-20
 
 Released without a changelog entry; this one was written afterwards. **If you use
-`vectors-spring-ai` on Spring AI 2.1, prefer the next release**: see the first two entries under
-Unreleased for what is wrong with this one.
+`vectors-spring-ai` on Spring AI 2.1, use 0.1.45 instead**: see its Fixed entries for what is wrong
+with this one.
 
 ### Added
 
@@ -53,8 +58,8 @@ Unreleased for what is wrong with this one.
 
 ### Removed
 
-- The `closeIsIdempotent` test of `JavaVectorsVectorStore` was deleted by mistake; restored in the
-  next release.
+- The `closeIsIdempotent` test of `JavaVectorsVectorStore` was deleted by mistake; restored in
+  0.1.45.
 
 ## [0.1.43] - 2026-11-17
 
