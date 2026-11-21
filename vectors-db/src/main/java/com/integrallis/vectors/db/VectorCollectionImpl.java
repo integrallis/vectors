@@ -562,7 +562,39 @@ final class VectorCollectionImpl implements VectorCollection {
     if (normalizeForCosine) {
       VectorUtil.l2normalize(copy, false);
     }
-    return new Document(doc.id(), copy, doc.text(), doc.metadata());
+    return withIngestedVector(doc, copy);
+  }
+
+  /**
+   * Whether this collection holds a content hash that is not the SHA-256 of its document's stored
+   * text: one supplied for content kept elsewhere, or one covering an embedding recipe's prefix.
+   * Such a hash cannot be re-derived on read, so once this is set {@code metadata.bin} is written
+   * in the version that stores hashes ({@link FileFormat#VERSION_METADATA_WITH_HASHES}); until then
+   * the version 1 file is written, byte for byte as before. It only ever turns on: at ingest
+   * ({@link #withIngestedVector}) or when a generation that already stores hashes is opened.
+   */
+  private volatile boolean storeContentHashes;
+
+  /**
+   * {@code doc} with {@code vector} in place of its own, keeping the hash the caller gave it
+   * (#216).
+   *
+   * <p>Telling a supplied hash from a derived one would normally mean hashing the text a second
+   * time. It does not here, because this method always rebuilt the document through the constructor
+   * that derives the hash: that derivation is the comparison. So an ordinary document costs exactly
+   * what it did, and once the collection is known to hold supplied hashes the hash is passed
+   * through and nothing is derived at all.
+   */
+  private Document withIngestedVector(Document doc, float[] vector) {
+    if (storeContentHashes) {
+      return new Document(doc.id(), vector, doc.text(), doc.metadata(), doc.contentHash());
+    }
+    Document derived = new Document(doc.id(), vector, doc.text(), doc.metadata());
+    if (Objects.equals(derived.contentHash(), doc.contentHash())) {
+      return derived;
+    }
+    storeContentHashes = true;
+    return new Document(doc.id(), vector, doc.text(), doc.metadata(), doc.contentHash());
   }
 
   private IndexSpi newInMemoryAdapter() {
@@ -675,8 +707,13 @@ final class VectorCollectionImpl implements VectorCollection {
                   manifest.dimension(),
                   arena);
       IdMapper idMapper = MappedIdMapper.open(genDir.resolve(FileFormat.IDMAP_FILE), arena);
-      MetadataStore metadataStore =
+      MappedMetadataStore metadataStore =
           MappedMetadataStore.open(genDir.resolve(FileFormat.METADATA_FILE), arena);
+      if (metadataStore.storesContentHashes()) {
+        // This generation holds hashes that cannot be re-derived; the next commit must store them
+        // too or they are gone.
+        storeContentHashes = true;
+      }
 
       // Load tombstones if present.
       BitSet tombstones;
@@ -1354,10 +1391,10 @@ final class VectorCollectionImpl implements VectorCollection {
       // documents. Metadata carries each document's stored text, so it is the one that grows.
       idmapBin = MappedIdMapper.Writer.toBytes(newIds);
       if (appendOnly) {
-        metadataImage = new MappedMetadataStore.Writer.Image(newDocs);
+        metadataImage = new MappedMetadataStore.Writer.Image(newDocs, storeContentHashes);
         metadataBin = null;
       } else {
-        metadataBin = MappedMetadataStore.Writer.toBytes(newDocs);
+        metadataBin = MappedMetadataStore.Writer.toBytes(newDocs, storeContentHashes);
       }
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to serialize commit payload", e);
@@ -1750,7 +1787,7 @@ final class VectorCollectionImpl implements VectorCollection {
     byte[] metadataBin;
     try {
       idmapBin = MappedIdMapper.Writer.toBytes(newIds);
-      metadataBin = MappedMetadataStore.Writer.toBytes(newDocs);
+      metadataBin = MappedMetadataStore.Writer.toBytes(newDocs, storeContentHashes);
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to serialize compact payload", e);
     }
@@ -2567,7 +2604,7 @@ final class VectorCollectionImpl implements VectorCollection {
     float[] v = new float[config.dimension()];
     MemorySegment.copy(
         gen.mappedVectors.vectorSlice(ord), ValueLayout.JAVA_FLOAT, 0L, v, 0, config.dimension());
-    return new Document(doc.id(), v, doc.text(), doc.metadata());
+    return new Document(doc.id(), v, doc.text(), doc.metadata(), doc.contentHash());
   }
 
   /**
@@ -2583,11 +2620,14 @@ final class VectorCollectionImpl implements VectorCollection {
         && (request.includeMetadata() || stored.metadata() == null)) {
       return stored;
     }
+    // The hash goes with the document whatever the projection leaves out: it identifies what the
+    // vector was produced from, and dropping the text is exactly when it cannot be re-derived.
     return new Document(
         stored.id(),
         vector,
         request.includeText() ? stored.text() : null,
-        request.includeMetadata() ? stored.metadata() : null);
+        request.includeMetadata() ? stored.metadata() : null,
+        stored.contentHash());
   }
 
   @Override

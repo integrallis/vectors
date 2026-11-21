@@ -6,6 +6,27 @@ All notable changes to java-vectors are documented here.
 
 ### Fixed
 
+- **A supplied content hash survives the collection (#216).** `VectorCollection` rebuilt documents
+  through the constructor that derives the hash from text, and `metadata.bin` had no field for it,
+  so a hash that was not the SHA-256 of the stored text was replaced on read-back, and a document
+  stored without its source (`Document.withHash`) came back with no hash at all: in memory, on
+  disk, and after a reopen. The hash is now kept on every read path, including a search projection
+  that leaves the text out, and persisted when it cannot be derived.
+
+### Changed
+
+- **`metadata.bin` format version 2, written only when needed.** A collection keeps writing
+  version 1, byte for byte, until it holds a hash that cannot be derived from stored text; from
+  its next commit it writes version 2, which stores each document's hash (32 bytes per document).
+  Both versions are read. Checked against the published 0.1.44 jars: a collection holding only
+  derivable hashes, written by this release, opens in 0.1.44; a collection that has moved to
+  version 2 is refused by 0.1.44 with `metadata version mismatch: expected 1, got 2`, including
+  when an earlier generation of it is version 1, so **a collection that stores supplied hashes
+  cannot be opened by an older release**. Documents written before this release keep the hash
+  they were read back with; nothing is rewritten.
+
+### Fixed
+
 - **`vectors-spring-ai` on Spring AI 2.1: `upsert` and query-vector search now go through the
   framework's template methods.** 0.1.44 overrode the public `upsert(List)` and
   `similaritySearch(float[], SearchRequest)` instead of the `doUpsert` /
