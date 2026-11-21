@@ -93,8 +93,20 @@ public final class FileFormat {
   /** Current idmap format version. */
   public static final int VERSION_IDMAP = 1;
 
-  /** Current metadata format version. */
+  /**
+   * The metadata format a collection writes unless it holds a content hash that cannot be derived
+   * from stored text. Still the only version most collections ever write.
+   */
   public static final int VERSION_METADATA = 1;
+
+  /**
+   * Metadata format that stores each document's content hash beside it. Written only by a
+   * collection that holds at least one hash that is not the SHA-256 of the document's stored text:
+   * a hash supplied for content kept elsewhere ({@code Document.withHash}), or one that covers an
+   * embedding recipe's prefix. Readers accept both versions; a reader that only knows version 1
+   * refuses this one by its version number.
+   */
+  public static final int VERSION_METADATA_WITH_HASHES = 2;
 
   /** Current HNSW graph.bin format version (see {@link HnswGraphCodec}). */
   public static final int VERSION_GRAPH = 1;

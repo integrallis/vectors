@@ -79,6 +79,32 @@ On startup, the library performs walk-back recovery:
 
 This ensures that a crash during `commit()` never leaves the collection in an inconsistent state.
 
+== Content Hashes
+
+Every document carries a content hash: the SHA-256 of the input its vector was produced from.
+It is what makes staleness decidable.
+
+For a document added with text and nothing else, the hash is the SHA-256 of that text.
+It is not stored; it is recomputed when the collection is opened.
+
+A hash can also be supplied, and then it is stored and returned exactly as given:
+
+* `Document.withHash(...)` -- the source is held elsewhere, so there is no text to derive from.
+* A hash that covers an embedding recipe's prefix (`EmbeddingRecipe.documentInput`), which differs from the hash of the bare text.
+
+[source,java]
+----
+collection.add(Document.withHash("img-7", vector, sha256OfTheImage, metadata));
+collection.commit();
+// ... close, reopen ...
+collection.get("img-7").contentHash();   // the hash that was supplied
+----
+
+`metadata.bin` has two format versions.
+A collection writes version 1 until it holds a hash that cannot be derived from stored text; from its next commit it writes version 2, which stores every document's hash.
+Version 1 files are byte-for-byte what earlier releases wrote, and earlier releases open them.
+A release older than 0.1.45 refuses a version 2 file with `metadata version mismatch: expected 1, got 2`.
+
 == Deletion and Tombstones
 
 Deletes mark documents as tombstoned -- a bit is flipped in a `BitSet`, but the physical data remains:

@@ -47,7 +47,8 @@ import java.util.Objects;
  * Offset  Size  Field                         Notes
  * ------  ----  ----------------------------  --------------------------------
  *   0      4    magic                         {@link FileFormat#MAGIC_METADATA} ("VMDB")
- *   4      4    version                       {@link FileFormat#VERSION_METADATA}
+ *   4      4    version                       {@link FileFormat#VERSION_METADATA}, or {@link
+ *                                             FileFormat#VERSION_METADATA_WITH_HASHES}
  *   8      4    count                         number of documents
  *  12      4    heap byte length              total size of the document heap
  *  16      8*N  offset table                  int64 per ordinal: offset into heap
@@ -58,10 +59,19 @@ import java.util.Objects;
  *
  * <pre>
  *   varint len(id)   / utf8 bytes(id)
- *   byte has-text    / (varint len(text) / utf8 bytes(text))?
+ *   byte flags       / (varint len(text) / utf8 bytes(text))?   bit 0: text follows
+ *                    / (32 bytes: SHA-256 content hash)?         bit 1: hash follows (version 2)
  *   varint metadataEntryCount
  *   [ varint len(key) / utf8 bytes(key) / byte tag / payload ]*
  * </pre>
+ *
+ * <p><b>Content hash.</b> Version 1 does not store it: a document's hash is the SHA-256 of its
+ * stored text, recomputed on read, and absent when there is no text. That is lossless only while
+ * every hash is derivable. Version 2 is identical except that the flags byte may set bit 1, in
+ * which case the 32 raw bytes of the hash follow the text; in a version 2 file every document that
+ * has a hash stores it, and none is recomputed. Which version to write is the caller's decision
+ * (see {@link Writer#toBytes(List, boolean)}); a file with no stored hashes is byte-for-byte a
+ * version 1 file.
  *
  * <p>Tag values: {@code 1 = Str}, {@code 2 = Num}, {@code 3 = Bool}, {@code 4 = Tags}. Payload
  * format per tag:
@@ -116,12 +126,32 @@ public final class MappedMetadataStore implements MetadataStore {
   private static final ValueLayout.OfDouble DOUBLE_LE =
       ValueLayout.JAVA_DOUBLE_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
+  /** Flags-byte bit: the document's text follows. */
+  private static final int FLAG_TEXT = 0x1;
+
+  /** Flags-byte bit: the document's 32-byte content hash follows the text. Version 2 only. */
+  private static final int FLAG_HASH = 0x2;
+
+  /** Bytes in a stored content hash: SHA-256, raw. */
+  private static final int HASH_BYTES = 32;
+
   private final int count;
   private final Document[] byOrdinal;
+  private final boolean storesContentHashes;
 
-  private MappedMetadataStore(int count, Document[] byOrdinal) {
+  private MappedMetadataStore(int count, Document[] byOrdinal, boolean storesContentHashes) {
     this.count = count;
     this.byOrdinal = byOrdinal;
+    this.storesContentHashes = storesContentHashes;
+  }
+
+  /**
+   * Whether this file stores content hashes ({@link FileFormat#VERSION_METADATA_WITH_HASHES}). A
+   * collection that opens such a file must keep writing that version, or the hashes are lost at its
+   * next commit.
+   */
+  public boolean storesContentHashes() {
+    return storesContentHashes;
   }
 
   /**
@@ -155,13 +185,17 @@ public final class MappedMetadataStore implements MetadataStore {
               FileFormat.MAGIC_METADATA, magic));
     }
     int version = seg.get(INT_LE, 4);
-    if (version != FileFormat.VERSION_METADATA) {
+    if (version != FileFormat.VERSION_METADATA
+        && version != FileFormat.VERSION_METADATA_WITH_HASHES) {
       throw new IOException(
           "metadata version mismatch: expected "
               + FileFormat.VERSION_METADATA
+              + " or "
+              + FileFormat.VERSION_METADATA_WITH_HASHES
               + ", got "
               + version);
     }
+    boolean hashes = version == FileFormat.VERSION_METADATA_WITH_HASHES;
     int count = seg.get(INT_LE, 8);
     int heapByteLength = seg.get(INT_LE, 12);
     if (count < 0) {
@@ -190,13 +224,14 @@ public final class MappedMetadataStore implements MetadataStore {
         throw new IOException(
             "metadata heap offset out of range for ordinal " + i + ": " + heapOff);
       }
-      docs[i] = readDocument(seg, heapStart + heapOff, heapEnd, i);
+      docs[i] = readDocument(seg, heapStart + heapOff, heapEnd, i, hashes);
     }
 
-    return new MappedMetadataStore(count, docs);
+    return new MappedMetadataStore(count, docs, hashes);
   }
 
-  private static Document readDocument(MemorySegment seg, long startOffset, long heapEnd, int ord)
+  private static Document readDocument(
+      MemorySegment seg, long startOffset, long heapEnd, int ord, boolean hashes)
       throws IOException {
     long offset = startOffset;
 
@@ -213,14 +248,21 @@ public final class MappedMetadataStore implements MetadataStore {
     String id = new String(idBytes, StandardCharsets.UTF_8);
     offset += idLen;
 
-    // has-text flag + optional text
+    // flags byte, then the optional text and the optional content hash
     if (offset >= heapEnd) {
       throw new IOException("metadata truncated before has-text flag for ordinal " + ord);
     }
-    byte hasText = seg.get(ValueLayout.JAVA_BYTE, offset);
+    byte flags = seg.get(ValueLayout.JAVA_BYTE, offset);
     offset += 1;
+    int allowed = hashes ? (FLAG_TEXT | FLAG_HASH) : FLAG_TEXT;
+    if ((flags & ~allowed) != 0) {
+      throw new IOException(
+          hashes
+              ? "metadata flags must be 0..3 for ordinal " + ord + ": " + flags
+              : "metadata has-text flag must be 0 or 1 for ordinal " + ord + ": " + flags);
+    }
     String text = null;
-    if (hasText == 1) {
+    if ((flags & FLAG_TEXT) != 0) {
       packed = FileFormat.readVarIntFromSegment(seg, offset);
       int textLen = (int) packed;
       varintBytes = (int) (packed >>> 32);
@@ -232,9 +274,16 @@ public final class MappedMetadataStore implements MetadataStore {
       MemorySegment.copy(seg, ValueLayout.JAVA_BYTE, offset, textBytes, 0, textLen);
       text = new String(textBytes, StandardCharsets.UTF_8);
       offset += textLen;
-    } else if (hasText != 0) {
-      throw new IOException(
-          "metadata has-text flag must be 0 or 1 for ordinal " + ord + ": " + hasText);
+    }
+    String contentHash = null;
+    if ((flags & FLAG_HASH) != 0) {
+      if (offset + HASH_BYTES > heapEnd) {
+        throw new IOException("metadata content hash out of range for ordinal " + ord);
+      }
+      byte[] hashBytes = new byte[HASH_BYTES];
+      MemorySegment.copy(seg, ValueLayout.JAVA_BYTE, offset, hashBytes, 0, HASH_BYTES);
+      contentHash = java.util.HexFormat.of().formatHex(hashBytes);
+      offset += HASH_BYTES;
     }
 
     // metadata entries
@@ -338,7 +387,27 @@ public final class MappedMetadataStore implements MetadataStore {
       }
     }
 
-    return new Document(id, null, text, metadata);
+    // Version 1: the hash is derived from the text by the record. Version 2: a document has
+    // exactly the hash that was stored, including none, so nothing is derived behind its back.
+    return hashes
+        ? storedDocument(id, text, metadata, contentHash)
+        : new Document(id, null, text, metadata);
+  }
+
+  /**
+   * A document exactly as a version 2 file recorded it. The five-component constructor derives a
+   * hash from the text when given none, which is right for a caller and wrong here: a version 2
+   * file that stored no hash for a text-bearing document cannot have come from this writer, so it
+   * is refused rather than quietly given one.
+   */
+  private static Document storedDocument(
+      String id, String text, Map<String, MetadataValue> metadata, String contentHash)
+      throws IOException {
+    if (contentHash == null && text != null) {
+      throw new IOException(
+          "metadata version 2 stores no content hash for text-bearing document '" + id + "'");
+    }
+    return new Document(id, null, text, metadata, contentHash);
   }
 
   @Override
@@ -421,12 +490,23 @@ public final class MappedMetadataStore implements MetadataStore {
       private static final int CHUNK_BYTES = 1 << 20;
 
       private final List<Document> documents;
+      private final boolean storeContentHashes;
       private final int[] lengths;
       private long heapSize = -1;
       private long heapCrc;
 
+      /** A version 1 image: hashes are not stored. See {@link #Image(List, boolean)}. */
       public Image(List<Document> documents) {
+        this(documents, false);
+      }
+
+      /**
+       * @param storeContentHashes whether to write {@link FileFormat#VERSION_METADATA_WITH_HASHES};
+       *     see {@link Writer#toBytes(List, boolean)}
+       */
+      public Image(List<Document> documents, boolean storeContentHashes) {
         this.documents = Objects.requireNonNull(documents, "documents must not be null");
+        this.storeContentHashes = storeContentHashes;
         this.lengths = new int[documents.size()];
       }
 
@@ -471,7 +551,7 @@ public final class MappedMetadataStore implements MetadataStore {
             if (doc == null) {
               throw new IOException("metadata documents[" + i + "] is null");
             }
-            byte[] entry = encodeDocument(doc);
+            byte[] entry = encodeDocument(doc, storeContentHashes);
             lengths[i] = entry.length;
             heap += entry.length;
             crc.update(entry);
@@ -517,7 +597,7 @@ public final class MappedMetadataStore implements MetadataStore {
           if (doc == null) {
             throw new IOException("metadata documents[" + i + "] is null");
           }
-          byte[] entry = encodeDocument(doc);
+          byte[] entry = encodeDocument(doc, storeContentHashes);
           lengths[i] = entry.length;
           heap += entry.length;
           crc.update(entry);
@@ -535,7 +615,7 @@ public final class MappedMetadataStore implements MetadataStore {
             ByteBuffer.allocate(HEADER_SIZE + lengths.length * Long.BYTES)
                 .order(ByteOrder.LITTLE_ENDIAN);
         buf.putInt(FileFormat.MAGIC_METADATA);
-        buf.putInt(FileFormat.VERSION_METADATA);
+        buf.putInt(version(storeContentHashes));
         buf.putInt(lengths.length);
         buf.putInt((int) heapSize);
         long offset = 0;
@@ -567,6 +647,20 @@ public final class MappedMetadataStore implements MetadataStore {
      * @throws IOException if the heap or total size exceeds 2 GiB or any document is null
      */
     public static byte[] toBytes(List<Document> documents) throws IOException {
+      return toBytes(documents, false);
+    }
+
+    /**
+     * {@link #toBytes(List)} with the choice of format.
+     *
+     * @param storeContentHashes {@code false} writes version 1, in which hashes are not stored and
+     *     are re-derived from text on read; that loses any hash that is not the SHA-256 of the
+     *     stored text. {@code true} writes version 2, in which every document that has a hash
+     *     stores it. The caller decides because only the caller knows, without hashing every text
+     *     again, whether any of its hashes was supplied rather than derived.
+     */
+    public static byte[] toBytes(List<Document> documents, boolean storeContentHashes)
+        throws IOException {
       Objects.requireNonNull(documents, "documents must not be null");
 
       int count = documents.size();
@@ -577,7 +671,7 @@ public final class MappedMetadataStore implements MetadataStore {
         if (doc == null) {
           throw new IOException("metadata documents[" + i + "] is null");
         }
-        byte[] entry = encodeDocument(doc);
+        byte[] entry = encodeDocument(doc, storeContentHashes);
         heapEntries[i] = entry;
         heapSize += entry.length;
       }
@@ -596,7 +690,7 @@ public final class MappedMetadataStore implements MetadataStore {
       byte[] out = new byte[(int) totalSize];
       ByteBuffer buf = ByteBuffer.wrap(out).order(ByteOrder.LITTLE_ENDIAN);
       buf.putInt(FileFormat.MAGIC_METADATA);
-      buf.putInt(FileFormat.VERSION_METADATA);
+      buf.putInt(version(storeContentHashes));
       buf.putInt(count);
       buf.putInt((int) heapSize);
 
@@ -627,8 +721,16 @@ public final class MappedMetadataStore implements MetadataStore {
      *     null
      */
     public static void writeTo(Path path, List<Document> documents) throws IOException {
+      writeTo(path, documents, false);
+    }
+
+    /**
+     * {@link #writeTo(Path, List)} with the choice of format; see {@link #toBytes(List, boolean)}.
+     */
+    public static void writeTo(Path path, List<Document> documents, boolean storeContentHashes)
+        throws IOException {
       Objects.requireNonNull(path, "path must not be null");
-      byte[] out = toBytes(documents);
+      byte[] out = toBytes(documents, storeContentHashes);
       writeBytesAndFsync(path, out);
     }
 
@@ -650,7 +752,13 @@ public final class MappedMetadataStore implements MetadataStore {
       }
     }
 
-    private static byte[] encodeDocument(Document doc) {
+    private static int version(boolean storeContentHashes) {
+      return storeContentHashes
+          ? FileFormat.VERSION_METADATA_WITH_HASHES
+          : FileFormat.VERSION_METADATA;
+    }
+
+    private static byte[] encodeDocument(Document doc, boolean storeContentHashes) {
       ByteArrayOutputStream baos = new ByteArrayOutputStream(64);
 
       // id
@@ -658,14 +766,16 @@ public final class MappedMetadataStore implements MetadataStore {
       FileFormat.writeVarInt(baos, idBytes.length);
       baos.writeBytes(idBytes);
 
-      // text
+      // flags, then text, then (version 2) the content hash
+      boolean hash = storeContentHashes && doc.contentHash() != null;
+      baos.write((doc.text() != null ? FLAG_TEXT : 0) | (hash ? FLAG_HASH : 0));
       if (doc.text() != null) {
-        baos.write(1);
         byte[] textBytes = doc.text().getBytes(StandardCharsets.UTF_8);
         FileFormat.writeVarInt(baos, textBytes.length);
         baos.writeBytes(textBytes);
-      } else {
-        baos.write(0);
+      }
+      if (hash) {
+        baos.writeBytes(java.util.HexFormat.of().parseHex(doc.contentHash()));
       }
 
       // metadata entries

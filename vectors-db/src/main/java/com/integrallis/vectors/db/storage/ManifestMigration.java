@@ -37,6 +37,9 @@ import java.util.zip.CRC32;
  * changed format at all</b> — {@code VERSION_METADATA}, {@code VERSION_IDMAP}, {@code
  * VERSION_QUANTIZED}, {@code VERSION_GRAPH} and {@code VERSION_TOMBSTONES} are all still 1, and the
  * content hash that version 5 introduced is derived from stored text on read rather than persisted.
+ * (That stayed true of this migration, which never writes a payload file. Since then a collection
+ * that holds a hash it cannot derive from stored text writes {@code metadata.bin} in {@code
+ * VERSION_METADATA_WITH_HASHES}; see {@link MappedMetadataStore}.)
  *
  * <p>So the upgrade is a few hundred bytes per generation, not a rebuild. That distinction matters
  * because the alternative is re-running an embedding model over the whole corpus: migrating the

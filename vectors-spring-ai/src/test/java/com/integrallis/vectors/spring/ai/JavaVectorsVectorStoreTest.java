@@ -615,9 +615,8 @@ class JavaVectorsVectorStoreTest {
   /**
    * A collection that declares an embedding recipe: prefixes on text, none on supplied vectors.
    *
-   * <p>Not asserted here: the content hash. The adapter passes the hash of the prefixed input, but
-   * the collection re-derives it from the bare text on read-back (#216), so there is nothing true
-   * to assert about it through this API yet.
+   * <p>The content hash covers the prefixed input, as {@code Document} requires, and is what the
+   * collection gives back (#216).
    */
   @Nested
   @Tag("unit")
@@ -666,6 +665,8 @@ class JavaVectorsVectorStoreTest {
 
       assertThat(embedded).containsExactly("search_document: alpha");
       assertThat(collection.get("a").text()).isEqualTo("alpha");
+      assertThat(collection.get("a").contentHash())
+          .isEqualTo(com.integrallis.vectors.core.ContentHash.of("search_document: alpha"));
     }
 
     @Test
@@ -678,7 +679,7 @@ class JavaVectorsVectorStoreTest {
     }
 
     @Test
-    void aSuppliedVectorIsStoredAsGivenAndTheQueryVectorGetsNoPrefix() {
+    void aSuppliedVectorGetsTheSameContentHashAsAddAndNoPrefixOnTheQuery() {
       createStoreWithRecipe();
 
       store.upsertEmbedded(
@@ -688,6 +689,8 @@ class JavaVectorsVectorStoreTest {
               new float[] {1, 0, 0, 0}, SearchRequest.builder().query("fox").topK(1).build());
 
       assertThat(collection.get("a").text()).isEqualTo("alpha");
+      assertThat(collection.get("a").contentHash())
+          .isEqualTo(com.integrallis.vectors.core.ContentHash.of("search_document: alpha"));
       assertThat(hits).extracting(Document::getId).containsExactly("a");
       verify(embeddingModel, never()).embed(any(String.class));
     }

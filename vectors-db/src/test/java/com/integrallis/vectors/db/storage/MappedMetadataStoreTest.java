@@ -385,4 +385,167 @@ class MappedMetadataStoreTest {
       }
     }
   }
+
+  /**
+   * #216. Version 1 does not store content hashes and re-derives them from text; version 2 stores
+   * them. Version 1 output must not move by a byte, because it is what every existing collection
+   * holds and what a collection with nothing but derivable hashes keeps writing.
+   */
+  @Nested
+  class ContentHashes {
+
+    private static final String SUPPLIED = "ab".repeat(32);
+    private static final String OTHER = "0123456789abcdef".repeat(4);
+
+    private List<Document> mixed() {
+      return List.of(
+          new Document("derived", null, "alpha", Map.of()),
+          new Document("supplied", null, "alpha", Map.of(), SUPPLIED),
+          Document.withHash("sourceless", null, OTHER, Map.of("k", new MetadataValue.Str("v"))),
+          new Document("bare", null, null, Map.of()));
+    }
+
+    private int version(byte[] file) {
+      return ByteBuffer.wrap(file).order(ByteOrder.LITTLE_ENDIAN).getInt(4);
+    }
+
+    @Test
+    void theLegacyWriterStillProducesVersionOneAndTheSameBytesAsTheExplicitForm()
+        throws IOException {
+      byte[] legacy = MappedMetadataStore.Writer.toBytes(mixed());
+
+      assertThat(version(legacy)).isEqualTo(1);
+      assertThat(MappedMetadataStore.Writer.toBytes(mixed(), false)).isEqualTo(legacy);
+    }
+
+    @Test
+    void versionOneIsByteForByteTheLayoutItAlwaysWas() throws IOException {
+      // One document, id "a", text "hi", no metadata, laid out by hand from the format's
+      // documentation: header (magic, version 1, count 1, heap length 7), one offset, then the
+      // seven heap bytes: len(id)=1 'a', has-text=1, len(text)=2 'h' 'i', metadata count 0.
+      ByteBuffer expected = ByteBuffer.allocate(16 + 8 + 7).order(ByteOrder.LITTLE_ENDIAN);
+      expected.putInt(FileFormat.MAGIC_METADATA).putInt(1).putInt(1).putInt(7).putLong(0L);
+      expected.put(new byte[] {1, 'a', 1, 2, 'h', 'i', 0});
+
+      assertThat(
+              MappedMetadataStore.Writer.toBytes(List.of(new Document("a", null, "hi", Map.of()))))
+          .isEqualTo(expected.array());
+    }
+
+    @Test
+    void versionOneDropsASuppliedHashWhichIsWhyTheCallerMustChooseVersionTwo(@TempDir Path tmp)
+        throws IOException {
+      Path file = tmp.resolve("metadata.bin");
+      MappedMetadataStore.Writer.writeTo(file, mixed());
+      try (Arena arena = Arena.ofConfined()) {
+        MappedMetadataStore store = MappedMetadataStore.open(file, arena);
+
+        assertThat(store.storesContentHashes()).isFalse();
+        assertThat(store.get(1).contentHash()).isEqualTo(store.get(0).contentHash());
+        assertThat(store.get(2).contentHash()).isNull();
+      }
+    }
+
+    @Test
+    void versionTwoGivesBackExactlyTheHashEachDocumentHad(@TempDir Path tmp) throws IOException {
+      Path file = tmp.resolve("metadata.bin");
+      MappedMetadataStore.Writer.writeTo(file, mixed(), true);
+      try (Arena arena = Arena.ofConfined()) {
+        MappedMetadataStore store = MappedMetadataStore.open(file, arena);
+
+        assertThat(version(Files.readAllBytes(file))).isEqualTo(2);
+        assertThat(store.storesContentHashes()).isTrue();
+        assertThat(store.get(0).contentHash())
+            .isEqualTo(com.integrallis.vectors.core.ContentHash.of("alpha"));
+        assertThat(store.get(1).contentHash()).isEqualTo(SUPPLIED);
+        assertThat(store.get(1).text()).isEqualTo("alpha");
+        assertThat(store.get(2).contentHash()).isEqualTo(OTHER);
+        assertThat(store.get(2).text()).isNull();
+        assertThat(store.get(2).metadata()).containsEntry("k", new MetadataValue.Str("v"));
+        assertThat(store.get(3).contentHash()).isNull();
+        assertThat(store.get(3).text()).isNull();
+      }
+    }
+
+    @Test
+    void theStreamingImageWritesTheSameVersionTwoBytes(@TempDir Path tmp) throws IOException {
+      Path file = tmp.resolve("metadata.bin");
+      byte[] buffered = MappedMetadataStore.Writer.toBytes(mixed(), true);
+      MappedMetadataStore.Writer.Image image = new MappedMetadataStore.Writer.Image(mixed(), true);
+
+      image.writeTo(file);
+
+      assertThat(Files.readAllBytes(file)).isEqualTo(buffered);
+      assertThat(image.length()).isEqualTo(buffered.length);
+      java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+      crc.update(buffered);
+      assertThat(image.crc32()).isEqualTo(crc.getValue());
+      assertThat(new MappedMetadataStore.Writer.Image(mixed(), true).crc32())
+          .isEqualTo(crc.getValue());
+      assertThat(new MappedMetadataStore.Writer.Image(mixed()).length())
+          .isEqualTo(MappedMetadataStore.Writer.toBytes(mixed()).length);
+    }
+
+    @Test
+    void aHashFlagInAVersionOneFileIsRefused(@TempDir Path tmp) throws IOException {
+      Path file = tmp.resolve("metadata.bin");
+      byte[] bytes = MappedMetadataStore.Writer.toBytes(mixed(), true);
+      ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putInt(4, 1);
+      Files.write(file, bytes);
+      try (Arena arena = Arena.ofConfined()) {
+        assertThatIOException()
+            .isThrownBy(() -> MappedMetadataStore.open(file, arena))
+            .withMessageContaining("has-text flag must be 0 or 1");
+      }
+    }
+
+    @Test
+    void anUnknownFlagBitInAVersionTwoFileIsRefused(@TempDir Path tmp) throws IOException {
+      Path file = tmp.resolve("metadata.bin");
+      byte[] bytes =
+          MappedMetadataStore.Writer.toBytes(
+              List.of(new Document("a", null, null, Map.of())), true);
+      // header 16 + one offset 8, then len(id)=1, 'a', flags
+      bytes[16 + 8 + 2] = 4;
+      Files.write(file, bytes);
+      try (Arena arena = Arena.ofConfined()) {
+        assertThatIOException()
+            .isThrownBy(() -> MappedMetadataStore.open(file, arena))
+            .withMessageContaining("flags must be 0..3");
+      }
+    }
+
+    @Test
+    void aHashCutOffByTheEndOfTheHeapIsRefused(@TempDir Path tmp) throws IOException {
+      Path file = tmp.resolve("metadata.bin");
+      byte[] whole =
+          MappedMetadataStore.Writer.toBytes(
+              List.of(Document.withHash("a", null, SUPPLIED, Map.of())), true);
+      // Drop the metadata count and the last 10 bytes of the hash, and shrink the declared heap.
+      byte[] cut = java.util.Arrays.copyOf(whole, whole.length - 11);
+      ByteBuffer.wrap(cut).order(ByteOrder.LITTLE_ENDIAN).putInt(12, cut.length - 16 - 8);
+      Files.write(file, cut);
+      try (Arena arena = Arena.ofConfined()) {
+        assertThatIOException()
+            .isThrownBy(() -> MappedMetadataStore.open(file, arena))
+            .withMessageContaining("content hash out of range");
+      }
+    }
+
+    @Test
+    void aVersionTwoFileWithATextDocumentAndNoHashIsRefused(@TempDir Path tmp) throws IOException {
+      Path file = tmp.resolve("metadata.bin");
+      // A version 1 body relabelled as version 2: text present, no stored hash. This writer never
+      // produces that, so reading it must not invent a hash for the document.
+      byte[] bytes =
+          MappedMetadataStore.Writer.toBytes(List.of(new Document("a", null, "hi", Map.of())));
+      ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putInt(4, 2);
+      Files.write(file, bytes);
+      try (Arena arena = Arena.ofConfined()) {
+        assertThatIOException()
+            .isThrownBy(() -> MappedMetadataStore.open(file, arena))
+            .withMessageContaining("stores no content hash");
+      }
+    }
+  }
 }
