@@ -4,6 +4,58 @@ All notable changes to java-vectors are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`vectors-spring-ai` on Spring AI 2.1: `upsert` and query-vector search now go through the
+  framework's template methods.** 0.1.44 overrode the public `upsert(List)` and
+  `similaritySearch(float[], SearchRequest)` instead of the `doUpsert` /
+  `doSimilaritySearch(float[], SearchRequest)` hooks. Measured on 2.1.0 with an observation
+  registry attached: `add` and text search each produced an observation, `upsert` and
+  query-vector search produced none; `supportsUpsert()` and `supportsQueryEmbeddingSearch()`
+  returned `false`; and the framework's text-only validation never ran. The store now implements
+  the hooks and reports both capabilities. A batch containing a vector of the wrong dimension is
+  rejected before anything is written.
+- **Live object-store contract tests cannot delete keys they did not write.** With
+  `VECTORS_LIVE_S3_PREFIX` / `VECTORS_LIVE_AZURE_PREFIX` set, the cleanup added in 0.1.44 deleted
+  everything under the configured prefix. The run UUID is now always appended beneath it.
+
+### Removed
+
+- **`JavaVectorsVectorStore.upsert(List)` and the public `similaritySearch(float[], SearchRequest)`
+  override, both added in 0.1.44.** On Spring AI 2.1 the same calls keep working through the
+  `VectorStore` interface. On lines before 2.1 they are no longer callable; the operations are 2.1
+  API. `upsert` no longer accepts arbitrary objects with `document()`/`embedding()` accessors,
+  which only worked for classes the adapter's package could reach.
+
+### Build
+
+- `-PspringAiCompileVersion` compiles the adapter against one Spring AI line and tests it on
+  another; the framework-compatibility matrix gains a cell that runs baseline-compiled (1.1.4)
+  classes on 2.1.0, which is what the published jar is.
+- The release workflow refuses to publish a version with no `CHANGELOG.md` entry.
+
+## [0.1.44] - 2026-11-20
+
+Released without a changelog entry; this one was written afterwards. **If you use
+`vectors-spring-ai` on Spring AI 2.1, prefer the next release**: see the first two entries under
+Unreleased for what is wrong with this one.
+
+### Added
+
+- `vectors-spring-ai`: Spring AI 2.1.0 in the framework-compatibility matrix, with `upsert` and
+  query-vector `similaritySearch` implemented (by overriding the public methods, which bypasses
+  the framework's observation and validation on 2.1).
+
+### Changed
+
+- `S3LiveStorageBackendIT` and `AzureBlobLiveStorageBackendIT` write under a per-run prefix and
+  delete it afterwards (#195).
+
+### Removed
+
+- The `closeIsIdempotent` test of `JavaVectorsVectorStore` was deleted by mistake; restored in the
+  next release.
+
 ## [0.1.43] - 2026-11-17
 
 ### Added

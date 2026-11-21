@@ -56,12 +56,15 @@ class AzureBlobLiveStorageBackendIT implements StorageBackendContract {
   private static final String RUN_PREFIX;
 
   static {
+    // A configured prefix is a parent, never the thing that gets deleted: the run's own UUID is
+    // always appended, so the cleanup below can only remove keys this run wrote. Pointing the
+    // variable at a prefix that already holds objects is therefore safe.
     String configured = System.getenv("VECTORS_LIVE_AZURE_PREFIX");
-    if (configured != null && !configured.isBlank()) {
-      RUN_PREFIX = configured.endsWith("/") ? configured : configured + "/";
-    } else {
-      RUN_PREFIX = "storage-contract-it/" + RUN_UUID + "/";
-    }
+    String parent =
+        configured == null || configured.isBlank()
+            ? "storage-contract-it/"
+            : (configured.endsWith("/") ? configured : configured + "/");
+    RUN_PREFIX = parent + RUN_UUID + "/";
   }
 
   private static volatile StorageBackend sharedBackend;
