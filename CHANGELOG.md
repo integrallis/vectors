@@ -6,8 +6,9 @@ All notable changes to java-vectors are documented here.
 
 ## [0.1.45] - 2026-11-20
 
-Corrects the Spring AI 2.1 support published in 0.1.44. Upgrade from 0.1.44 if you use
-`vectors-spring-ai`; nothing else in the library changed.
+Corrects the Spring AI 2.1 support published in 0.1.44, and makes a supplied content hash survive
+the collection, which adds a second `metadata.bin` format version. Upgrade from 0.1.44 if you use
+`vectors-spring-ai`. Read the Changed entry before upgrading a deployment that mixes releases.
 
 ### Fixed
 
@@ -17,20 +18,6 @@ Corrects the Spring AI 2.1 support published in 0.1.44. Upgrade from 0.1.44 if y
   stored without its source (`Document.withHash`) came back with no hash at all: in memory, on
   disk, and after a reopen. The hash is now kept on every read path, including a search projection
   that leaves the text out, and persisted when it cannot be derived.
-
-### Changed
-
-- **`metadata.bin` format version 2, written only when needed.** A collection keeps writing
-  version 1, byte for byte, until it holds a hash that cannot be derived from stored text; from
-  its next commit it writes version 2, which stores each document's hash (32 bytes per document).
-  Both versions are read. Checked against the published 0.1.44 jars: a collection holding only
-  derivable hashes, written by this release, opens in 0.1.44; a collection that has moved to
-  version 2 is refused by 0.1.44 with `metadata version mismatch: expected 1, got 2`, including
-  when an earlier generation of it is version 1, so **a collection that stores supplied hashes
-  cannot be opened by an older release**. Documents written before this release keep the hash
-  they were read back with; nothing is rewritten.
-
-### Fixed
 
 - **`vectors-spring-ai` on Spring AI 2.1: `upsert` and query-vector search now go through the
   framework's template methods.** 0.1.44 overrode the public `upsert(List)` and
@@ -44,6 +31,18 @@ Corrects the Spring AI 2.1 support published in 0.1.44. Upgrade from 0.1.44 if y
 - **Live object-store contract tests cannot delete keys they did not write.** With
   `VECTORS_LIVE_S3_PREFIX` / `VECTORS_LIVE_AZURE_PREFIX` set, the cleanup added in 0.1.44 deleted
   everything under the configured prefix. The run UUID is now always appended beneath it.
+
+### Changed
+
+- **`metadata.bin` format version 2, written only when needed.** A collection keeps writing
+  version 1, byte for byte, until it holds a hash that cannot be derived from stored text; from
+  its next commit it writes version 2, which stores each document's hash (32 bytes per document).
+  Both versions are read. Checked against the published 0.1.44 jars: a collection holding only
+  derivable hashes, written by this release, opens in 0.1.44; a collection that has moved to
+  version 2 is refused by 0.1.44 with `metadata version mismatch: expected 1, got 2`, including
+  when an earlier generation of it is version 1, so **a collection that stores supplied hashes
+  cannot be opened by an older release**. Documents written before this release keep the hash
+  they were read back with; nothing is rewritten.
 
 ### Removed
 
